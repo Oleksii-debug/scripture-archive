@@ -3,7 +3,8 @@
 **Repository:** `Oleksii-debug/scripture-archive`  
 **Project phase:** textual pre-production only  
 **Platform decision:** intentionally deferred  
-**Current baseline:** Game Design Bible v1.0 — 17 August 2026
+**Current baseline:** Game Design Bible v1.0 — 17 August 2026  
+**Canonical content schema:** v1.1 — 17 August 2026
 
 ## Non-negotiable scope
 
@@ -43,7 +44,7 @@ The player acts as a researcher/investigator. Missions require direct work with 
 
 ## Current baseline content
 
-Game Design Bible v1.0 currently establishes:
+Game Design Bible v1.0 establishes:
 
 - 20 task/mechanic families;
 - 8 branching types;
@@ -58,12 +59,27 @@ Game Design Bible v1.0 currently establishes:
 - monetization principles;
 - canonical mission data model;
 - 500-mission macro spine from Genesis to Revelation;
-- fully developed pilot campaign **«Остання ніч» / “The Last Night”** with 72 task nodes;
-- second demonstration campaign **«Дорога Павла» / “The Road of Paul”** with 32 task nodes.
+- pilot campaign outline **«Остання ніч» / “The Last Night”** with 72 baseline task-node concepts;
+- second demonstration campaign outline **«Дорога Павла» / “The Road of Paul”** with 32 baseline task-node concepts.
 
-Current explicit task-node total in detailed campaigns: **104**.
+The v1.0 baseline therefore references **104 task-node concepts**, but this number must not be confused with fully migrated canonical mission files.
 
-The 500-mission structure is a macro-design spine, not yet 500 fully authored and source-audited missions. Further pre-production must convert the spine into complete mission specifications and question banks.
+## Canonical authored content now in repository
+
+As of 2026-08-17:
+
+- `docs/spec/CONTENT_NODE_SCHEMA_v1.1.md` — canonical campaign/mission/task-node authoring schema;
+- `docs/campaigns/LN/LN-01_PREPARATION_v1.0.md` — first fully migrated mission specification;
+- `LN-01` contains 13 required task nodes plus 1 optional evidence node;
+- `LN-01` status: `MISSION_COMPLETE / SOURCE_AUDITED`;
+- explicit source corpus: Matthew 26:17–19; Mark 14:12–16; Luke 22:7–13.
+
+This distinction is now canonical:
+
+- **baseline task-node concept** — exists in design planning but may not yet satisfy the current schema;
+- **AUTHOR_COMPLETE node** — has prompt, answers, evidence, feedback, hints, branches, mastery and accessibility fields;
+- **SOURCE_AUDITED node** — answer-bearing claims checked against cited sources;
+- **MISSION_COMPLETE** — all required nodes meet the authoring standard and all valid branches can resolve.
 
 ## Pilot campaign principle
 
@@ -90,6 +106,18 @@ The game must not silently present one interpretation as if it were the biblical
 
 The software must never score a user’s “faith”, “spirituality”, “holiness”, or “closeness to God”. It may measure only knowledge/mastery of defined learning domains.
 
+## Source-confidence model
+
+Canonical source labels introduced in schema v1.1:
+
+- `T1` — direct scriptural statement;
+- `T2` — direct comparison of explicit scriptural statements;
+- `C1` — historical/contextual claim requiring an external source;
+- `I1` — interpretation;
+- `D1` — disputed or not responsibly reducible to one forced answer.
+
+Later authoring must preserve these distinctions.
+
 ## AI boundary
 
 AI is not a theological authority and should not function as an oracle. In a future implementation it may support evaluation, adaptive hints, retrieval, classification and tutoring only when responses are grounded in approved source material and traceable to evidence.
@@ -106,12 +134,22 @@ Accessibility is a first-class requirement, not a later patch. Any future interf
 - NVDA-compatible status and feedback;
 - accessible error and success announcements.
 
+The first canonical mission specifies linear heading-based parallel-text comparison, accessible ordering controls and structured claim → source → status alternatives for any future evidence-board visualization.
+
 ## Platform neutrality
 
 No platform is canonical at this stage. Content and game rules must remain separable from presentation so the same design can later support Web/Netlify, WordPress embedding, PWA, Windows/Tauri or another client without rewriting the authored game.
 
 ## Current production objective
 
-Continue textual pre-production until the project contains a coherent, source-audited and internally consistent final game specification, with missions and question banks developed deeply enough that software implementation does not need to invent core gameplay.
+Continue migrating the pilot campaign into canonical full mission specifications under schema v1.1, then expand the 500-mission spine into coherent, source-audited campaigns.
+
+Immediate priority order:
+
+1. author and source-audit `LN-02 — За столом`;
+2. continue LN campaign migration through `LN-12`;
+3. migrate `PA` demonstration campaign;
+4. expand the macro spine campaign by campaign;
+5. continuously audit system rules, branching, mastery, theological transparency and accessibility.
 
 Do **not** start website or application implementation until the platform decision is explicitly made by the project owner.

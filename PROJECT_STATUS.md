@@ -4,7 +4,8 @@
 **Project phase:** textual pre-production only  
 **Platform decision:** intentionally deferred  
 **Current baseline:** Game Design Bible v1.0 — 17 August 2026  
-**Canonical content schema:** v1.1 — 17 August 2026
+**Canonical content schema:** v1.1 — 17 August 2026  
+**Textual-variant policy:** v1.0 — 17 August 2026
 
 ## Non-negotiable scope
 
@@ -27,6 +28,7 @@ The canonical pre-production work must define the product from A to Z before pla
 - daily and seasonal content;
 - cooperative/group modes;
 - theological transparency;
+- textual-transmission transparency;
 - AI boundaries;
 - accessibility, including keyboard and screen-reader use;
 - monetization boundaries;
@@ -69,12 +71,19 @@ The v1.0 baseline therefore references **104 task-node concepts**, but this numb
 As of 2026-08-17:
 
 - `docs/spec/CONTENT_NODE_SCHEMA_v1.1.md` — canonical campaign/mission/task-node authoring schema;
+- `docs/spec/TEXTUAL_VARIANT_POLICY_v1.0.md` — canonical policy for meaningful manuscript/translation variation;
 - `docs/campaigns/LN/LN-01_PREPARATION_v1.0.md` — first fully migrated mission specification;
 - `LN-01` contains 13 required task nodes plus 1 optional evidence node;
 - `LN-01` status: `MISSION_COMPLETE / SOURCE_AUDITED`;
-- explicit source corpus: Matthew 26:17–19; Mark 14:12–16; Luke 22:7–13.
+- `LN-01` corpus: Matthew 26:17–19; Mark 14:12–16; Luke 22:7–13;
+- `docs/campaigns/LN/LN-02_AT_THE_TABLE_v1.0.md` — second fully migrated mission specification;
+- `LN-02` contains 12 required task nodes plus 2 optional/conditional evidence nodes;
+- `LN-02` status: `MISSION_COMPLETE / SOURCE_AUDITED`;
+- `LN-02` primary corpus: Matthew 26:20, 26–29; Mark 14:17, 22–25; Luke 22:14–20; optional cross-reference 1 Corinthians 11:23–26.
 
-This distinction is now canonical:
+Current canonical migrated total in campaign LN: **25 required task nodes + 3 optional/conditional nodes across 2 completed missions**.
+
+This distinction remains canonical:
 
 - **baseline task-node concept** — exists in design planning but may not yet satisfy the current schema;
 - **AUTHOR_COMPLETE node** — has prompt, answers, evidence, feedback, hints, branches, mastery and accessibility fields;
@@ -92,6 +101,7 @@ The first vertical slice is built around the final night before Jesus’ arrest 
 - hints;
 - branching;
 - final synthesis;
+- textual-variant/source-limit transparency;
 - whether a player actually reads Scripture during play.
 
 ## Theological integrity
@@ -116,6 +126,8 @@ Canonical source labels introduced in schema v1.1:
 - `I1` — interpretation;
 - `D1` — disputed or not responsibly reducible to one forced answer.
 
+`TEXTUAL_VARIANT_POLICY_v1.0` adds `TX1` as an adjunct note when a direct-scripture task is materially affected by textual-transmission variation. `TX1` does not replace the main confidence label.
+
 Later authoring must preserve these distinctions.
 
 ## AI boundary
@@ -132,9 +144,10 @@ Accessibility is a first-class requirement, not a later patch. Any future interf
 - text alternatives for maps/evidence boards;
 - no essential drag-and-drop-only mechanics;
 - NVDA-compatible status and feedback;
-- accessible error and success announcements.
+- accessible error and success announcements;
+- textual-variant/footnote information exposed as readable text, not color or visual symbols only.
 
-The first canonical mission specifies linear heading-based parallel-text comparison, accessible ordering controls and structured claim → source → status alternatives for any future evidence-board visualization.
+LN-01 and LN-02 both specify linear heading-based parallel-text comparison and keyboard-complete ordering/classification alternatives.
 
 ## Platform neutrality
 
@@ -146,10 +159,12 @@ Continue migrating the pilot campaign into canonical full mission specifications
 
 Immediate priority order:
 
-1. author and source-audit `LN-02 — За столом`;
+1. author and source-audit `LN-03 — Зрадник за столом`;
 2. continue LN campaign migration through `LN-12`;
 3. migrate `PA` demonstration campaign;
 4. expand the macro spine campaign by campaign;
-5. continuously audit system rules, branching, mastery, theological transparency and accessibility.
+5. continuously audit system rules, branching, mastery, theological transparency, textual-transmission transparency and accessibility.
+
+`LN-03` should compare Matthew 26:21–25, Mark 14:18–21, Luke 22:21–23 and John 13:18–30, explicitly handling witness-specific identification details and chronology/order differences without false harmonization.
 
 Do **not** start website or application implementation until the platform decision is explicitly made by the project owner.

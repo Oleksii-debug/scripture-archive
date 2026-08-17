@@ -35,9 +35,10 @@ As of 2026-08-17:
 - `docs/spec/TEXTUAL_VARIANT_POLICY_v1.0.md` — textual-variation policy;
 - `docs/campaigns/LN/LN-01_PREPARATION_v1.0.md` — `MISSION_COMPLETE / SOURCE_AUDITED`, 13 required + 1 optional node; corpus Mt 26:17–19; Mk 14:12–16; Lk 22:7–13;
 - `docs/campaigns/LN/LN-02_AT_THE_TABLE_v1.0.md` — `MISSION_COMPLETE / SOURCE_AUDITED`, 12 required + 2 optional/conditional nodes; primary corpus Mt 26:20,26–29; Mk 14:17,22–25; Lk 22:14–20; optional 1 Cor 11:23–26;
-- `docs/campaigns/LN/LN-03_BETRAYER_AT_THE_TABLE_v1.0.md` — `MISSION_COMPLETE / SOURCE_AUDITED`, 13 required + 2 optional nodes; corpus Mt 26:21–25; Mk 14:18–21; Lk 22:21–23; Jn 13:18–30; optional Ps 41:9.
+- `docs/campaigns/LN/LN-03_BETRAYER_AT_THE_TABLE_v1.0.md` — `MISSION_COMPLETE / SOURCE_AUDITED`, 13 required + 2 optional nodes; corpus Mt 26:21–25; Mk 14:18–21; Lk 22:21–23; Jn 13:18–30; optional Ps 41:9;
+- `docs/campaigns/LN/LN-04_PETER_WARNING_v1.0.md` — `MISSION_COMPLETE / SOURCE_AUDITED`, 13 required + 2 optional nodes; corpus Mt 26:30–35; Mk 14:26–31; Lk 22:31–34; Jn 13:36–38; optional Zech 13:7; explicit `TX1` handling for Mark 14:30 rooster-count variation.
 
-Current canonical migrated total in campaign LN: **38 required task nodes + 5 optional/conditional nodes across 3 completed missions**.
+Current canonical migrated total in campaign LN: **51 required task nodes + 7 optional/conditional nodes across 4 completed missions**.
 
 Canonical distinctions remain:
 - baseline task-node concept — planning only;
@@ -45,16 +46,24 @@ Canonical distinctions remain:
 - `SOURCE_AUDITED` — answer-bearing claims checked;
 - `MISSION_COMPLETE` — all required nodes meet the standard and valid branches resolve.
 
-## New design result from LN-03
+## Reusable design results established so far
 
-LN-03 establishes a reusable **anti-false-harmonization pattern** for parallel narratives:
+### Anti-false-harmonization pattern
+Established in LN-03 and reused in LN-04:
 1. identify the narrow common core;
 2. classify witness-specific details;
-3. test explicit naming vs knowledge imported from elsewhere;
+3. test explicit naming/wording vs knowledge imported from elsewhere;
 4. reconstruct local chronology only where a witness supplies it;
 5. finish with a synthesis that explicitly states the limit of cross-witness chronological certainty.
 
-This pattern should be reused in later Gospel-parallel cases.
+### Prediction-to-fulfilment retrieval pattern
+Established in LN-04:
+- author prediction evidence separately from later fulfilment evidence;
+- store exact prediction anchors for later retrieval;
+- in the fulfilment mission, require the player to recall the earlier prediction before comparing it with later events;
+- do not rewrite the prediction text from hindsight.
+
+For Peter, the mandatory LN-09 retrieval anchors are: three predicted denials; rooster marker; Peter's stated confidence/readiness; Mark's `TX1` second-crow caution.
 
 ## Theological integrity
 
@@ -64,7 +73,7 @@ The game never scores faith, spirituality, holiness or closeness to God; only de
 
 ## Accessibility baseline
 
-Accessibility is first-class: keyboard-complete interaction, meaningful screen-reader labels, logical headings/focus, text alternatives for visual mechanics, no essential drag-only/color-only/spatial-only information, accessible feedback and textual-variant notes. LN-01 through LN-03 each specify nonvisual equivalents.
+Accessibility is first-class: keyboard-complete interaction, meaningful screen-reader labels, logical headings/focus, text alternatives for visual mechanics, no essential drag-only/color-only/spatial-only information, accessible feedback and textual-variant notes. LN-01 through LN-04 each specify nonvisual equivalents.
 
 ## Platform neutrality
 
@@ -75,9 +84,9 @@ No platform is canonical. Content and game rules remain separable from presentat
 Continue canonical migration of pilot campaign LN, then PA, then expand the 500-mission spine campaign by campaign while auditing branching, mastery, theology, textual transmission and accessibility.
 
 Immediate priority:
-1. author and source-audit `LN-04` according to the baseline campaign sequence;
+1. author and source-audit `LN-05 — Гефсиманія: молитва і сон` according to the baseline campaign sequence;
 2. continue through `LN-12`;
 3. migrate PA demonstration campaign;
 4. expand macro spine campaign by campaign.
 
-Before authoring LN-04, read the baseline index/available Game Design Bible material to preserve the intended mission identity and sequence rather than inventing a conflicting title.
+Before authoring each new mission, read the baseline index and current canonical status to preserve mission identity, sequence, retrieval dependencies and existing design safeguards.

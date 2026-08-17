@@ -18,19 +18,22 @@ Working title: **Архів Писання / Scripture Archive**.
 The player acts as a researcher/investigator. Missions require direct work with biblical texts and distinguish evidence from inference and interpretation.
 
 ## Current baseline content
-Game Design Bible v1.0 establishes 20 task/mechanic families, 8 branching types, 7 hint levels, 6 difficulty levels, mastery and adaptive repetition, theological-source and AI policies, accessibility requirements, group/cooperative modes, monetization principles, a canonical mission data model, a 500-mission macro spine, 72 baseline task-node concepts for «Остання ніч», and 32 for «Дорога Павла». These **104 baseline concepts** are planning material and must not be confused with fully migrated canonical nodes.
+Game Design Bible v1.0 establishes 20 task/mechanic families, 8 branching types, 7 hint levels, 6 difficulty levels, mastery and adaptive repetition, theological-source and AI policies, accessibility requirements, group/cooperative modes, monetization principles, a canonical mission data model, a 500-mission macro spine, 72 baseline task-node concepts for «Остання ніч», and 32 for «Дорога Павла». These **104 baseline concepts** are planning material and must not be confused with fully migrated canonical nodes. Canonical authoring may expand a baseline concept into several source-audited nodes when needed for evidence discipline, accessibility or retrieval design.
 
 ## Canonical authored content now in repository
-As of 2026-08-17:
+As of 2026-08-18:
 - `docs/spec/CONTENT_NODE_SCHEMA_v1.1.md` — canonical authoring schema;
 - `docs/spec/TEXTUAL_VARIANT_POLICY_v1.0.md` — textual-variation policy;
 - `LN-01_PREPARATION_v1.0.md` — `MISSION_COMPLETE / SOURCE_AUDITED`, 13 required + 1 optional;
 - `LN-02_AT_THE_TABLE_v1.0.md` — `MISSION_COMPLETE / SOURCE_AUDITED`, 12 required + 2 optional/conditional;
 - `LN-03_BETRAYER_AT_THE_TABLE_v1.0.md` — `MISSION_COMPLETE / SOURCE_AUDITED`, 13 required + 2 optional;
 - `LN-04_PETER_WARNING_v1.0.md` — `MISSION_COMPLETE / SOURCE_AUDITED`, 13 required + 2 optional; includes Mark 14:30 `TX1` handling;
-- `LN-05_GETHSEMANE_PRAYER_AND_SLEEP_v1.0.md` — `MISSION_COMPLETE / SOURCE_AUDITED`, 13 required + 2 optional; corpus Mt 26:36–46; Mk 14:32–42; Lk 22:39–46; explicit `TX1` handling for Lk 22:43–44.
+- `LN-05_GETHSEMANE_PRAYER_AND_SLEEP_v1.0.md` — `MISSION_COMPLETE / SOURCE_AUDITED`, 13 required + 2 optional; corpus Mt 26:36–46; Mk 14:32–42; Lk 22:39–46; explicit `TX1` handling for Lk 22:43–44;
+- `LN-06_ARREST_v1.0.md` — `MISSION_COMPLETE / SOURCE_AUDITED`, 14 required + 2 optional; corpus Mt 26:47–56; Mk 14:43–52; Lk 22:47–53; Jn 18:2–12; explicit witness-provenance handling for kiss/sign, Peter, Malchus, healing and local chronology.
 
-Current canonical migrated total in campaign LN: **64 required task nodes + 9 optional/conditional nodes across 5 completed missions**.
+Current canonical migrated total in campaign LN: **78 required task nodes + 11 optional/conditional nodes across 6 completed missions**.
+
+Campaign mission completion: **6/12 = 50%**. This percentage is mission-count completion, not total editorial effort for the entire 500-mission game.
 
 Canonical distinctions:
 - baseline task-node concept — planning only;
@@ -48,11 +51,14 @@ Established in LN-04: author prediction evidence separately; store exact anchors
 ### Textual-variant-in-play pattern
 Strengthened in LN-05: when a gameplay-relevant verse is materially textually variable, the variant note must be available before grading; a responsible translation that brackets/omits the variant cannot be treated as player error. Lk 22:43–44 is the current exemplar.
 
+### Witness-provenance matrix
+Established explicitly in LN-06: in multi-Gospel scenes, every important name, action and ordering claim must retain its witness provenance. A detail known from one Gospel may inform synthesis but cannot be graded as though every parallel passage directly states it. LN-06 exemplars: Simon Peter and Malchus are directly named in Jn 18:10; the healing of the ear is directly narrated in Lk 22:51; the agreed kiss-sign is explicit in Matthew/Mark; Mark alone supplies the unnamed young man in 14:51–52.
+
 ## Theological integrity
 Claims use: `T1` direct scriptural statement; `T2` direct comparison; `C1` historical/contextual; `I1` interpretation; `D1` disputed/not responsibly reducible to one forced answer. `TX1` is an adjunct for material textual-transmission variation. The game never scores faith, spirituality, holiness or closeness to God; only defined knowledge/mastery domains.
 
 ## Accessibility baseline
-Keyboard-complete interaction, meaningful screen-reader labels, logical headings/focus, text alternatives for visual mechanics, no essential drag-only/color-only/spatial-only information, accessible feedback and textual-variant notes. LN-01 through LN-05 each specify nonvisual equivalents.
+Keyboard-complete interaction, meaningful screen-reader labels, logical headings/focus, text alternatives for visual mechanics, no essential drag-only/color-only/spatial-only information, accessible feedback and textual-variant notes. LN-01 through LN-06 each specify nonvisual equivalents. Multi-witness comparison must have a linear text mode `witness → claim → verse → confidence`; visual evidence boards are never the only representation.
 
 ## Platform neutrality
 No platform is canonical. Content and game rules remain separable from presentation. Do not start website or application implementation until explicitly authorized by the project owner.
@@ -61,9 +67,10 @@ No platform is canonical. Content and game rules remain separable from presentat
 Continue canonical migration of pilot campaign LN, then PA, then expand the 500-mission spine campaign by campaign while auditing branching, mastery, theology, textual transmission and accessibility.
 
 Immediate priority:
-1. read baseline identity and author/source-audit `LN-06`;
-2. continue through `LN-12`;
-3. migrate PA demonstration campaign;
-4. expand macro spine campaign by campaign.
+1. author/source-audit `LN-07 — Анна, Каяфа і нічний допит` from the canonical baseline;
+2. preserve Jn 18:12–24 local order (`arrest/bind → Annas first`) separately from Synoptic high-priest/night material and do not force a false single chronology;
+3. continue through `LN-12`;
+4. migrate PA demonstration campaign;
+5. expand macro spine campaign by campaign.
 
 Before each new mission, read baseline index and current canonical status to preserve identity, sequence, retrieval dependencies and safeguards.

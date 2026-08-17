@@ -29,11 +29,12 @@ As of 2026-08-18:
 - `LN-03_BETRAYER_AT_THE_TABLE_v1.0.md` — `MISSION_COMPLETE / SOURCE_AUDITED`, 13 required + 2 optional;
 - `LN-04_PETER_WARNING_v1.0.md` — `MISSION_COMPLETE / SOURCE_AUDITED`, 13 required + 2 optional; includes Mark 14:30 `TX1` handling;
 - `LN-05_GETHSEMANE_PRAYER_AND_SLEEP_v1.0.md` — `MISSION_COMPLETE / SOURCE_AUDITED`, 13 required + 2 optional; corpus Mt 26:36–46; Mk 14:32–42; Lk 22:39–46; explicit `TX1` handling for Lk 22:43–44;
-- `LN-06_ARREST_v1.0.md` — `MISSION_COMPLETE / SOURCE_AUDITED`, 14 required + 2 optional; corpus Mt 26:47–56; Mk 14:43–52; Lk 22:47–53; Jn 18:2–12; explicit witness-provenance handling for kiss/sign, Peter, Malchus, healing and local chronology.
+- `LN-06_ARREST_v1.0.md` — `MISSION_COMPLETE / SOURCE_AUDITED`, 14 required + 2 optional; corpus Mt 26:47–56; Mk 14:43–52; Lk 22:47–53; Jn 18:2–12; witness-provenance handling for kiss/sign, Peter, Malchus, healing and local chronology;
+- `LN-07_ANNAS_CAIAPHAS_NIGHT_QUESTIONING_v1.0.md` — `MISSION_COMPLETE / SOURCE_AUDITED`, 13 required + 2 optional; corpus Jn 18:12–24; Mt 26:57–58; Mk 14:53–54; Lk 22:54–65; preserves John local order `bound → Annas first → questioning → sent bound to Caiaphas` and Luke explicit daybreak boundary at 22:66.
 
-Current canonical migrated total in campaign LN: **78 required task nodes + 11 optional/conditional nodes across 6 completed missions**.
+Current canonical migrated total in campaign LN: **91 required task nodes + 13 optional/conditional nodes across 7 completed missions**.
 
-Campaign mission completion: **6/12 = 50%**. This percentage is mission-count completion, not total editorial effort for the entire 500-mission game.
+Campaign mission completion: **7/12 = 58.3%**. This percentage is mission-count completion, not total editorial effort for the entire 500-mission game.
 
 Canonical distinctions:
 - baseline task-node concept — planning only;
@@ -52,13 +53,19 @@ Established in LN-04: author prediction evidence separately; store exact anchors
 Strengthened in LN-05: when a gameplay-relevant verse is materially textually variable, the variant note must be available before grading; a responsible translation that brackets/omits the variant cannot be treated as player error. Lk 22:43–44 is the current exemplar.
 
 ### Witness-provenance matrix
-Established explicitly in LN-06: in multi-Gospel scenes, every important name, action and ordering claim must retain its witness provenance. A detail known from one Gospel may inform synthesis but cannot be graded as though every parallel passage directly states it. LN-06 exemplars: Simon Peter and Malchus are directly named in Jn 18:10; the healing of the ear is directly narrated in Lk 22:51; the agreed kiss-sign is explicit in Matthew/Mark; Mark alone supplies the unnamed young man in 14:51–52.
+Established explicitly in LN-06: in multi-Gospel scenes, every important name, action and ordering claim must retain its witness provenance. A detail known from one Gospel may inform synthesis but cannot be graded as though every parallel passage directly states it.
+
+### Local-chronology / daybreak boundary safeguard
+Strengthened in LN-07: a witness-specific order may be graded as T1 only inside that witness. John explicitly supports `Annas first → questioning/strike → sent bound to Caiaphas`; Matthew explicitly names Caiaphas at its entry point; Mark and Luke do not supply the same personal-name sequence in their corresponding opening verses. Luke 22:66 explicitly marks the council gathering as occurring when day came, so this marker must not be silently moved into a generic undifferentiated “night trial.”
+
+### Mission-boundary partitioning
+LN-07 establishes a production safeguard for overlapping Gospel scenes: adjacent missions must declare what evidence belongs to the current mission and what is intentionally deferred. LN-07 owns post-arrest route, identities, John 18:19–24 questioning and Luke 22:63–65 custody/mockery; LN-08 owns witnesses, temple accusation, Christ/Son questioning and accusation/condemnation synthesis. This reduces duplication and contradictory grading.
 
 ## Theological integrity
 Claims use: `T1` direct scriptural statement; `T2` direct comparison; `C1` historical/contextual; `I1` interpretation; `D1` disputed/not responsibly reducible to one forced answer. `TX1` is an adjunct for material textual-transmission variation. The game never scores faith, spirituality, holiness or closeness to God; only defined knowledge/mastery domains.
 
 ## Accessibility baseline
-Keyboard-complete interaction, meaningful screen-reader labels, logical headings/focus, text alternatives for visual mechanics, no essential drag-only/color-only/spatial-only information, accessible feedback and textual-variant notes. LN-01 through LN-06 each specify nonvisual equivalents. Multi-witness comparison must have a linear text mode `witness → claim → verse → confidence`; visual evidence boards are never the only representation.
+Keyboard-complete interaction, meaningful screen-reader labels, logical headings/focus, text alternatives for visual mechanics, no essential drag-only/color-only/spatial-only information, accessible feedback and textual-variant notes. LN-01 through LN-07 each specify nonvisual equivalents. Multi-witness comparison must have a linear text mode `witness → claim → verse → confidence`; visual evidence boards are never the only representation.
 
 ## Platform neutrality
 No platform is canonical. Content and game rules remain separable from presentation. Do not start website or application implementation until explicitly authorized by the project owner.
@@ -67,10 +74,10 @@ No platform is canonical. Content and game rules remain separable from presentat
 Continue canonical migration of pilot campaign LN, then PA, then expand the 500-mission spine campaign by campaign while auditing branching, mastery, theology, textual transmission and accessibility.
 
 Immediate priority:
-1. author/source-audit `LN-07 — Анна, Каяфа і нічний допит` from the canonical baseline;
-2. preserve Jn 18:12–24 local order (`arrest/bind → Annas first`) separately from Synoptic high-priest/night material and do not force a false single chronology;
-3. continue through `LN-12`;
-4. migrate PA demonstration campaign;
-5. expand macro spine campaign by campaign.
+1. author/source-audit `LN-08 — Свідчення і звинувачення` from the canonical baseline;
+2. use primary corpus Mt 26:59–68; Mk 14:55–65; Lk 22:66–71, with Jn 18:19–24 only as a provenance contrast rather than treating John as narrating the same false-witness sequence;
+3. keep Luke's explicit daybreak council marker visible;
+4. do not let LN-08 absorb the three-denial fulfilment reserved for LN-09;
+5. continue through `LN-12`, then migrate PA and expand the macro spine.
 
 Before each new mission, read baseline index and current canonical status to preserve identity, sequence, retrieval dependencies and safeguards.

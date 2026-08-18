@@ -12,7 +12,6 @@
 **Pilot editorial status:** `PILOT_AUDIT_IN_PROGRESS`
 
 ## Non-negotiable scope
-
 Current work develops the game itself, not a website, WordPress plugin, Windows/mobile application or production code. Platform choice remains deferred until explicitly authorized.
 
 Product principle:
@@ -21,7 +20,6 @@ Product principle:
 The game evaluates defined knowledge/mastery, never faith, holiness, spirituality or closeness to God.
 
 ## Parallel production mode — ACTIVE
-
 Direct product-owner instruction on 18 August 2026 supersedes the previous sequential stopping rule. LN pilot closure remains mandatory, but it no longer blocks independently safe pre-production in later lanes.
 
 Canonical workflow: `docs/workflow/PARALLEL_PRODUCTION_PLAN_v1.0.md`.
@@ -30,13 +28,10 @@ Five concurrent lanes are active:
 1. **LN pilot closure** — normalization, retrieval/variant closure, TX1, translation neutrality, NVDA and branch regression.
 2. **PA «Дорога Павла»** — migrate and author the eight canonical PA missions under schema v1.2 from the start.
 3. **Large-scale Scripture corpus map** — build the versioned architecture for thousands of cases without artificial duplicates.
-4. **Evidence and cross-reference corpus** — reusable provenance-grounded people/event/place/promise/cross-testament evidence infrastructure.
+4. **Evidence and cross-reference corpus** — reusable provenance-grounded evidence infrastructure.
 5. **Task variants, mastery, accessibility and session-scale system** — safe novelty, player memory, mastery transitions, simulations and NVDA acceptance matrices.
 
-Parallel lanes should normally write only to their owned paths. Shared files are integration-controlled and must be refetched before every update.
-
 ## Scale direction
-
 Historical v1.0 `500-mission` spine is preserved only as an early planning artifact, not a target or ceiling.
 
 Current architecture envelope:
@@ -44,140 +39,138 @@ Current architecture envelope:
 - approximately **30,000–100,000+ source-audited canonical task nodes/variants**;
 - no artificial duplicates merely to reach a count.
 
-Canonical macro-scale document remains `docs/BASELINE_INDEX_v1.1.md`; its old sequential order is overridden only on workflow sequencing by `PARALLEL_PRODUCTION_PLAN_v1.0.md`.
-
 ## Player memory and adaptive repetition
-
 Pure random is not the standard scheduler. Per-player state must persist campaign checkpoint, exact node history, passage exposure, concept mastery, mistakes/attempts/hints, due state, weak areas and recent content/task-family fatigue.
 
-Canonical repetition relations:
-- `EXACT`;
-- `VARIANT`;
-- `PASSAGE_REVISIT`;
-- `CROSS_CONTEXT`;
-- `SYNTHESIS`;
-- `NONE` where no safe alternate exists.
+Canonical repetition relations: `EXACT`, `VARIANT`, `PASSAGE_REVISIT`, `CROSS_CONTEXT`, `SYNTHESIS`, `NONE`.
 
 After successful completion an exact task may not randomly recur in the adjacent daily session. Wording-only paraphrases are still EXACT. Weak knowledge may return sooner, preferably through a registered audited alternative. If none exists, choose other content rather than fabricate novelty with an LLM.
 
-Canonical documents:
-- `docs/spec/PLAYER_MEMORY_AND_SESSION_SCHEDULING_v1.0.md`;
-- `docs/audits/LN_VARIANT_RELATION_REGISTER_v0.1.md`.
-
 ## LN pilot authored content
-
 Campaign «Остання ніч» has 12 completed, source-audited missions, LN-01 through LN-12.
 
 Current authored total: **160 required + 25 optional/conditional = 185 authored nodes**.
 
 Mission-count completion is **12/12 = 100%**, but editorial closure is not yet granted.
 
-## Normalization progress
+### LN structural normalization
+- LN-07 v1.1: 15/15 normalized.
+- LN-08 v1.1: 16/16 normalized.
+- current normalized total: **31/185 = 16.8%**; remaining **154**.
 
-Current control matrix: `docs/audits/LN_NORMALIZATION_MATRIX_v0.3.md`.
+Current matrix: `docs/audits/LN_NORMALIZATION_MATRIX_v0.3.md`.
 
-### LN-07 repaired to v1.1
-- 15/15 nodes have stable canonical IDs and schema-v1.2 structural records.
-- Structural required-route reachability passes.
-- No material TX1 grading point exists in LN-07.
+### LN retrieval closure
+Current register is now `docs/audits/LN_RETRIEVAL_REGISTER_v0.3.md`.
 
-### LN-08 repaired to v1.1
-Created: `docs/campaigns/LN/LN-08_TESTIMONY_AND_ACCUSATION_v1.1.md`.
+New exact stable links closed in the latest five-lane integration:
+- `LN04-N01 → LN09-N02` — prediction corpus to fulfilment corpus, with prediction recall still occurring first;
+- `LN04-N02 → LN09-N01` — common-core Peter/three-denials/rooster-marker delayed recall.
+
+Previously proven exact links remain, including `LN07-O02 → LN08-N10` and LN-07→LN-08 provenance/boundary retrieval.
+
+The Mark rooster `TX1` chain remains source-audited at mission level but not yet exact-ID closed end-to-end; this still blocks D-004 closure.
+
+### LN defects
+- D-001 HIGH — schema not uniformly explicit: OPEN, 31/185 normalized.
+- D-002 MEDIUM — stable IDs inconsistent: OPEN, 31/185 proven.
+- D-003 MEDIUM — confidence vocabulary ambiguity: FIXED_BY_SPEC_v1.2.
+- D-004 HIGH — retrieval closure incomplete: OPEN, but two LN04→LN09 exact anchors newly closed.
+- D-005 HIGH — variant relationships incomplete: OPEN.
+
+Current open summary: **0 critical, 3 high, 1 medium; 1 medium fixed by specification**.
+
+## PA «Дорога Павла» — authoring now active
+Created `docs/campaigns/PA/PA-01_PERSECUTOR_v1.0.md`.
+
+PA-01 status: **MISSION_COMPLETE / SOURCE_AUDITED**.
+
+Current PA authored total: **12 required + 2 optional = 14 canonical nodes**.
+
+PA-01 is schema-v1.2-native from birth:
+- stable IDs `PA01-N01…PA01-N12`, `PA01-O01/O02`;
+- explicit source provenance and uncertainty boundaries;
+- translation-neutral validation;
+- explicit branching, mastery, retrieval queues and NVDA/nonvisual equivalents;
+- no material TX1 grading point in v1.0.
+
+Primary source corpus: Acts 7:58–8:3; 9:1–2; 22:3–5; 26:9–11; Gal 1:13–14; Phil 3:5–6.
+
+Important safeguard: PA-01 does not claim as T1 that Saul personally threw stones at Stephen; it distinguishes presence/approval from unsupported direct-action inference.
+
+Next PA package: `PA-02 — Дорога до Дамаска`, comparing Acts 9, 22 and 26 without false harmonization.
+
+## Large-scale Scripture corpus
+Created `docs/corpus/SCRIPTURE_CORPUS_MAP_v0.1.md`.
+
+The corpus now has a versioned planning architecture across:
+- biblical books;
+- events;
+- people;
+- places;
+- speaker/recipient relations;
+- themes;
+- evidence operations;
+- depth tiers D1–D6;
+- OT↔NT relation classes;
+- player-state fit.
+
+Planned cases remain explicitly `PLANNED`; they are not counted as authored/source-audited content.
+
+Next package: `BOOK_COVERAGE_REGISTRY_v0.1` with per-book status/risk/first-case families.
+
+## Evidence and cross-reference corpus
+Created `docs/evidence/EVIDENCE_REGISTRY_SPEC_AND_PA_SEEDS_v0.1.md`.
 
 Result:
-- all **16 LN-08 nodes** now have stable canonical IDs;
-- required nodes: `LN08-N01`…`LN08-N14`;
-- optional nodes: `LN08-O01`, `LN08-O02`;
-- canonical identity, learning-purpose, ground-truth, feedback, branch, retrieval/mastery and accessibility fields are explicit;
-- structural required-route reachability passes;
-- `LN08-N08` explicitly enforces translation-neutral semantic validation;
-- no material TX1 grading point exists in LN-08;
-- `LN08-N10` consumes the Luke 22:66 daybreak anchor from LN-07 without exact-task repetition;
-- `LN08-N13` preserves the anti-false-harmonization boundary for Luke/John.
+- reusable evidence-record schema defined;
+- OT↔NT/cross-reference category vocabulary defined;
+- **7 PA seed evidence records** created and source-audited (`EV-PA-0001…EV-PA-0007`);
+- narrator vs Paul's later speech vs epistolary autobiography provenance is preserved;
+- chronology boundaries are explicit;
+- unsupported modern legal-office inference from Acts 26:10 is not encoded as T1.
 
-Current normalized total: **31/185 nodes = 16.8%**. Remaining: **154 nodes**.
+Next evidence package: PA-02 Damascus-road witness records from Acts 9/22/26.
 
-## Retrieval closure progress
+## Variants / mastery / accessibility / session scale
+Created `docs/systems/TASK_VARIANT_MASTERY_ACCESSIBILITY_MATRIX_v0.1.md`.
 
-Current register: `docs/audits/LN_RETRIEVAL_REGISTER_v0.2.md`.
+It now defines:
+- deterministic relation test for EXACT/VARIANT/PASSAGE_REVISIT/CROSS_CONTEXT/SYNTHESIS/NONE;
+- content fingerprint for duplicate detection;
+- mastery states from UNSEEN through MASTERED_FOR_NOW/LAPSED;
+- review-queue priorities and cooldown rules;
+- initial session-composition envelope;
+- five canonical player-history simulations;
+- NVDA/nonvisual acceptance matrix for source selection, witness comparison, ordering, evidence maps, classification, free response, hint ladders, TX1/confidence, mastery, geography and synthesis;
+- textual reason codes for why an item appears (`NEW`, `DUE`, `WEAK`, `CROSS_LINK`, etc.).
 
-Stable links currently proven include:
-- `LN07-O02 → LN08-N10` for Luke 22:66 daybreak retrieval;
-- LN-07 provenance/boundary retrieval → `LN08-O01` / `LN08-N13`.
+Next systems package: `MECHANIC_FAMILY_VARIANT_TEMPLATES_v0.1` and rerun of five histories against normalized LN + PA.
 
 ## Source/theological integrity status
+No critical theological/source-integrity defect has been found in the audited high-risk LN boundaries or PA-01 source audit.
 
-No critical theological/source-integrity defect has been found in audited high-risk boundaries.
-
-Passed at mission-design/normalized level:
-- LN-04 prediction → LN-09 fulfilment → LN-12 synthesis separation;
-- Mark rooster wording TX1 propagation;
-- LN-07/LN-08 questioning vs accusation boundary;
-- Luke 22:66 daybreak safeguard;
-- John 18:19–24 provenance separation from Matthew/Mark false-witness material;
-- LN-08 translation-neutral answer handling;
-- LN-10/LN-12 Pilate threshold;
-- final reconstruction preserves provenance, confidence and uncertainty.
-
-Canonical confidence vocabulary: `T1/T2/C1/I1/D1`; `TX1` is an adjunct textual-variant flag.
-
-## Current audit artifacts
-
-- `docs/audits/LN_PILOT_CROSS_MISSION_AUDIT_v0.2.md`;
-- `docs/audits/LN_PILOT_DEFECT_REGISTER_v0.5.md`;
-- `docs/audits/LN_RETRIEVAL_REGISTER_v0.2.md`;
-- `docs/audits/LN_VARIANT_RELATION_REGISTER_v0.1.md`;
-- `docs/audits/LN_NORMALIZATION_MATRIX_v0.3.md`;
-- `docs/audits/LN_PLAYER_MEMORY_SIMULATION_v0.1.md`.
-
-## Open LN defects
-
-### D-001 — HIGH — node schema not uniformly explicit
-`OPEN — 31/185 STRUCTURALLY NORMALIZED`.
-
-### D-002 — MEDIUM — stable node IDs inconsistent
-`OPEN — 31/185 STABLE IDS PROVEN`.
-
-### D-003 — MEDIUM — confidence vocabulary ambiguity
-`FIXED_BY_SPEC_v1.2`.
-
-### D-004 — HIGH — retrieval closure incomplete
-`OPEN — LN-07/LN-08 STABLE LINKS PARTIALLY CLOSED`.
-
-### D-005 — HIGH — variant relationships incomplete
-`OPEN — REGISTER STARTED`.
-
-Current LN open summary: **0 critical, 3 high, 1 medium; 1 medium fixed by specification**.
+Canonical confidence vocabulary remains `T1/T2/C1/I1/D1`; `TX1` is an adjunct textual-variant flag.
 
 ## Accessibility status
+Every LN mission has a nonvisual equivalent at design level; LN-07/LN-08 have explicit per-node normalized nonvisual controls. PA-01 is authored with explicit per-node accessibility from the start. The new cross-project systems matrix defines acceptance criteria for major mechanic families, but a dedicated campaign-wide NVDA regression is still required for LN closure.
 
-Every mission has nonvisual equivalents at design level. LN-07 and LN-08 v1.1 make nonvisual controls explicit per node. Dedicated task-family NVDA/nonvisual audit is still required before LN pilot editorial closure.
+## Latest five-lane integration delta
+Concrete completed artifacts in the latest integrated cycle:
+1. Lane 1: `LN_RETRIEVAL_REGISTER_v0.3.md` — 2 exact LN04→LN09 links newly closed.
+2. Lane 2: `PA-01_PERSECUTOR_v1.0.md` — 14 canonical nodes authored/source-audited.
+3. Lane 3: `SCRIPTURE_CORPUS_MAP_v0.1.md` — first large-scale canonical planning map.
+4. Lane 4: `EVIDENCE_REGISTRY_SPEC_AND_PA_SEEDS_v0.1.md` — evidence model + 7 source-audited PA seeds.
+5. Lane 5: `TASK_VARIANT_MASTERY_ACCESSIBILITY_MATRIX_v0.1.md` — adaptive repetition/mastery/NVDA production baseline.
 
-Player-memory/session controls must expose textually:
-- why an item appears (`new`, `due`, `weak`, `cross-link`, `synthesis`);
-- progress/mastery state;
-- review reason/mode;
-- no essential color-only/animation-only state.
+No shared-file conflict was detected during final HEAD refetch before this integration update.
 
-## Immediate five-lane production order
-
-### Lane 1 — LN
-Normalize LN-04/LN-09 prediction→fulfilment/TX1 chain; then LN-11/LN-12, LN-10 and remaining missions; close registers and run NVDA/branch/player-history regression.
-
-### Lane 2 — PA
-Begin `PA-01 — Переслідувач` immediately under schema v1.2, then advance through PA-08 with per-mission source audit. Historical 32 PA concepts remain planning input, not a canonical authored-node count.
-
-### Lane 3 — corpus map
-Create the first versioned large-scale Scripture corpus map and coverage taxonomy for books, events, themes, people, places and cross-testament study depth.
-
-### Lane 4 — evidence corpus
-Create reusable evidence/cross-reference registry specification and seed records with source provenance, confidence, chronology boundaries and textual-variant attachment points.
-
-### Lane 5 — systems
-Create task-variant/mastery/accessibility production matrix; extend player-memory/session simulations and deterministic duplicate/cooldown safeguards.
+## Next five-lane production package
+1. LN: normalize LN-04/LN-09 mission records to v1.2 and close the complete TX1 retrieval chain.
+2. PA: author/source-audit PA-02.
+3. Corpus: build per-book coverage registry.
+4. Evidence: build Damascus-road witness pack with Acts 9/22/26 comparison.
+5. Systems: create mechanic-family variant templates and rerun H-A…H-E against real LN+PA records.
 
 ## Current sequencing rule
-
-The former rule “do not begin PA migration or mass corpus expansion while LN pilot closure blockers remain” is **SUPERSEDED**.
-
-Current rule: **all five lanes advance concurrently. LN quality blockers remain blockers for LN editorial closure, but do not block independently safe PA, corpus, evidence or system work. No known unresolved LN defect may be blindly propagated into new canonical content.**
+All five lanes advance concurrently. LN quality blockers remain blockers for LN editorial closure, but do not block independently safe PA, corpus, evidence or system work. No known unresolved LN defect may be blindly propagated into new canonical content.

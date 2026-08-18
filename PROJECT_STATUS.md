@@ -33,11 +33,12 @@ As of 2026-08-18:
 - `LN-07_ANNAS_CAIAPHAS_NIGHT_QUESTIONING_v1.0.md` — `MISSION_COMPLETE / SOURCE_AUDITED`, 13 required + 2 optional; corpus Jn 18:12–24; Mt 26:57–58; Mk 14:53–54; Lk 22:54–65;
 - `LN-08_TESTIMONY_AND_ACCUSATION_v1.0.md` — `MISSION_COMPLETE / SOURCE_AUDITED`, 14 required + 2 optional; primary corpus Mt 26:59–68; Mk 14:55–65; Lk 22:66–71; Jn 18:19–24 contrast only;
 - `LN-09_THREE_DENIALS_v1.0.md` — `MISSION_COMPLETE / SOURCE_AUDITED`, 14 required + 2 optional; corpus Mt 26:69–75; Mk 14:66–72; Lk 22:54–62; Jn 18:15–18,25–27; retrieves LN-04 prediction before fulfilment, preserves witness-specific accusers and wording, and applies `TX1` to Mark’s first/second-crow variation;
-- `LN-10_MORNING_v1.0.md` — `MISSION_COMPLETE / SOURCE_AUDITED`, 13 required + 2 optional; corpus Mt 27:1–2; Mk 15:1; Lk 22:66–23:1; Jn 18:28–29; isolates the morning authority handoff and explicitly defers the substantive Roman trial.
+- `LN-10_MORNING_v1.0.md` — `MISSION_COMPLETE / SOURCE_AUDITED`, 13 required + 2 optional; corpus Mt 27:1–2; Mk 15:1; Lk 22:66–23:1; Jn 18:28–29; isolates the morning authority handoff and explicitly defers the substantive Roman trial;
+- `LN-11_EVIDENCE_MAP_v1.0.md` — `MISSION_COMPLETE / SOURCE_AUDITED`, 14 required + 3 optional; synthesis mission over LN-01–LN-10; establishes a provenance-aware evidence graph, preserves prediction→fulfilment links, `TX1`, local chronology, uncertainty boundaries and a complete linear/nonvisual evidence-map equivalent.
 
-Current canonical migrated total in campaign LN: **132 required task nodes + 19 optional/conditional nodes across 10 completed missions**.
+Current canonical migrated total in campaign LN: **146 required task nodes + 22 optional/conditional nodes across 11 completed missions**.
 
-Campaign mission completion: **10/12 = 83.3%**. This percentage is mission-count completion, not total editorial effort for the entire 500-mission game.
+Campaign mission completion: **11/12 = 91.7%**. This percentage is mission-count completion, not total editorial effort for the entire 500-mission game.
 
 Canonical distinctions:
 - baseline task-node concept — planning only;
@@ -77,23 +78,26 @@ Established in LN-09: the game counts three denial **episodes**, not three ident
 ### Authority-handoff boundary
 Established in LN-10: identify the last securely sourced action under the prior authority; preserve witness-specific custody/transport verbs; identify the receiving authority/location; mark the first action of the new authority as a threshold; keep later accusation/interrogation/verdict content out of the prior-stage mission; classify reconstructed legal procedure beyond the text as `C1/I1/D1`, not `T1`.
 
+### Provenance-aware evidence graph
+Established in LN-11: separate neutral `event nodes` from `witness claim nodes`; require `witness + passage + confidence` for each claim; require an explicit relation type for every edge; keep `local-order` scoped to its witness; preserve `TX1` and uncertainty metadata through synthesis; treat the linear/nonvisual evidence map as canonically equivalent to any future visual board; score synthesis by evidentiary correctness rather than by matching one editorial retelling.
+
 ## Theological integrity
 Claims use: `T1` direct scriptural statement; `T2` direct comparison; `C1` historical/contextual; `I1` interpretation; `D1` disputed/not responsibly reducible to one forced answer. `TX1` is an adjunct for material textual-transmission variation. The game never scores faith, spirituality, holiness or closeness to God; only defined knowledge/mastery domains.
 
 ## Accessibility baseline
-Keyboard-complete interaction, meaningful screen-reader labels, logical headings/focus, text alternatives for visual mechanics, no essential drag-only/color-only/spatial-only information, accessible feedback and textual-variant notes. LN-01 through LN-10 each specify nonvisual equivalents. Multi-witness comparison must have a linear text mode `witness → claim → verse → confidence`; visual evidence boards are never the only representation. Prediction/fulfilment matrices must also have a linear mode `prediction → fulfilment → witness → delta → certainty limit`. Authority transitions must have a plain-text mode `prior authority → custody/transport → receiving authority → threshold`.
+Keyboard-complete interaction, meaningful screen-reader labels, logical headings/focus, text alternatives for visual mechanics, no essential drag-only/color-only/spatial-only information, accessible feedback and textual-variant notes. LN-01 through LN-11 each specify nonvisual equivalents. Multi-witness comparison must have a linear text mode `witness → claim → verse → confidence`; visual evidence boards are never the only representation. Prediction/fulfilment matrices must also have a linear mode `prediction → fulfilment → witness → delta → certainty limit`. Authority transitions must have a plain-text mode `prior authority → custody/transport → receiving authority → threshold`. Evidence maps must expose every record as `ID → event/claim → witness → verse → confidence → relation → qualification` and allow nonvisual creation/removal of links.
 
 ## Platform neutrality
 No platform is canonical. Content and game rules remain separable from presentation. Do not start website or application implementation until explicitly authorized by the project owner.
 
 ## Current production objective
-Continue canonical migration of pilot campaign LN, then perform a cross-mission pilot audit, then PA, then expand the 500-mission spine campaign by campaign while auditing branching, mastery, theology, textual transmission and accessibility.
+Finish canonical migration of pilot campaign LN, then perform a cross-mission pilot audit, then PA, then expand the 500-mission spine campaign by campaign while auditing branching, mastery, theology, textual transmission and accessibility.
 
 Immediate priority:
-1. read the baseline and author/source-audit `LN-11 — Карта доказів` as a true synthesis mission using evidence already gathered in LN-01 through LN-10 rather than duplicating their questions;
-2. ensure LN-11 has a complete linear/nonvisual evidence-map equivalent and provenance-aware linking;
-3. author/source-audit `LN-12 — Фінальна реконструкція`;
-4. after LN-12, perform a pilot-campaign cross-mission audit for duplicate claims, contradictory grading, broken branches, mastery/retrieval coverage, source provenance, textual variants and accessibility;
-5. only after that migrate PA demonstration campaign.
+1. author/source-audit `LN-12 — Фінальна реконструкція` using the LN-11 evidence package rather than flattening it into an unsupported single harmonization;
+2. require LN-12 to produce at least one complete source-cited reconstruction plus explicit uncertainty/variant notes and a nonvisual equivalent;
+3. after LN-12, perform a pilot-campaign cross-mission audit for duplicate claims, contradictory grading, broken branches, mastery/retrieval coverage, source provenance, textual variants, scope leakage and accessibility;
+4. only after that migrate PA demonstration campaign;
+5. preserve all current mission history and do not replace prior versions silently.
 
 Before each new mission, read baseline index and current canonical status to preserve identity, sequence, retrieval dependencies and safeguards.

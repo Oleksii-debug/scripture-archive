@@ -21,7 +21,7 @@ The game evaluates defined knowledge/mastery, never faith, holiness, spiritualit
 
 ## Scale direction
 
-The historical v1.0 500-mission spine is preserved only as an early planning artifact. It is no longer the target or ceiling.
+Historical v1.0 `500-mission` spine is preserved only as an early planning artifact, not a target or ceiling.
 
 Current architecture envelope:
 - approximately **2,000–10,000+ missions/cases**;
@@ -32,19 +32,9 @@ Canonical macro-scale document: `docs/BASELINE_INDEX_v1.1.md`.
 
 ## Player memory and adaptive repetition
 
-Pure random is not the standard scheduler.
+Pure random is not the standard scheduler. Per-player state must persist campaign checkpoint, exact node history, passage exposure, concept mastery, mistakes/attempts/hints, due state, weak areas and recent content/task-family fatigue.
 
-The game must persist per player:
-- campaign checkpoint;
-- exact node history;
-- Bible-passage exposure;
-- concept mastery;
-- mistakes/attempts/hints;
-- review timing and due state;
-- weak areas;
-- recent task-family/passage/content fatigue.
-
-Canonical relation classes for repetition now are:
+Canonical repetition relations:
 - `EXACT`;
 - `VARIANT`;
 - `PASSAGE_REVISIT`;
@@ -52,7 +42,7 @@ Canonical relation classes for repetition now are:
 - `SYNTHESIS`;
 - `NONE` where no safe alternate exists.
 
-After successful completion an exact task may not randomly recur in the adjacent daily session. Wording-only paraphrases are still `EXACT`, not novelty. Weak/forgotten knowledge may return sooner, preferably through a registered source-audited alternative. If none exists, choose other content or end/shorten the narrow session rather than ask an LLM to invent novelty.
+After successful completion an exact task may not randomly recur in the adjacent daily session. Wording-only paraphrases are still EXACT. Weak knowledge may return sooner, preferably through a registered audited alternative. If none exists, choose other content rather than fabricate novelty with an LLM.
 
 Canonical documents:
 - `docs/spec/PLAYER_MEMORY_AND_SESSION_SCHEDULING_v1.0.md`;
@@ -60,11 +50,32 @@ Canonical documents:
 
 ## LN pilot authored content
 
-Campaign «Остання ніч» has 12 completed, source-audited mission files, LN-01 through LN-12.
+Campaign «Остання ніч» has 12 completed, source-audited missions, LN-01 through LN-12.
 
 Current authored total: **160 required + 25 optional/conditional = 185 authored nodes**.
 
-Mission-count completion is **12/12 = 100%**, but editorial closure is not yet granted. Existing v1.0 mission files are preserved as historical authored artifacts while schema-v1.2 normalization proceeds through versioned revisions where required.
+Mission-count completion is **12/12 = 100%**, but editorial closure is not yet granted.
+
+## Normalization progress
+
+Current control matrix: `docs/audits/LN_NORMALIZATION_MATRIX_v0.2.md`.
+
+### LN-07 repaired to v1.1
+
+Created:
+`docs/campaigns/LN/LN-07_ANNAS_CAIAPHAS_NIGHT_QUESTIONING_v1.1.md`.
+
+Result:
+- all **15 LN-07 nodes** now have stable canonical IDs;
+- required nodes: `LN07-N01`…`LN07-N13`;
+- historical optional N14/N15 map to `LN07-O01`/`LN07-O02` without deleting history;
+- mission-level v1.2 fields are explicit;
+- node identity, branching, retrieval/mastery and nonvisual control fields are explicit;
+- structural required-route reachability passes;
+- translation-neutral handling passes structurally; no material TX1 grading point exists in LN-07;
+- dedicated campaign-wide NVDA, retrieval/variant closure and end-to-end branch regression remain pending.
+
+This means **15 of 185 authored nodes now have a versioned structural normalization record under v1.2**. LN-08 is the next confirmed repair target.
 
 ## Source/theological integrity status
 
@@ -83,43 +94,43 @@ Canonical confidence vocabulary: `T1/T2/C1/I1/D1`; `TX1` is an adjunct textual-v
 
 ## Current audit artifacts
 
-- `docs/audits/LN_PILOT_CROSS_MISSION_AUDIT_v0.2.md` — current cross-mission audit baseline;
-- `docs/audits/LN_PILOT_DEFECT_REGISTER_v0.3.md` — current defect register;
-- `docs/audits/LN_RETRIEVAL_REGISTER_v0.1.md` — campaign-wide retrieval closure register, started but not complete;
-- `docs/audits/LN_VARIANT_RELATION_REGISTER_v0.1.md` — relation model for exact/variant/passage/cross-context/synthesis retrieval, started but not complete;
-- `docs/audits/LN_NORMALIZATION_MATRIX_v0.1.md` — mission-by-mission control matrix for all closure requirements;
-- `docs/audits/LN_PLAYER_MEMORY_SIMULATION_v0.1.md` — five simulated player histories; anti-repeat logic passes at design level.
+- `docs/audits/LN_PILOT_CROSS_MISSION_AUDIT_v0.2.md`;
+- `docs/audits/LN_PILOT_DEFECT_REGISTER_v0.4.md` — current defect register;
+- `docs/audits/LN_RETRIEVAL_REGISTER_v0.1.md`;
+- `docs/audits/LN_VARIANT_RELATION_REGISTER_v0.1.md`;
+- `docs/audits/LN_NORMALIZATION_MATRIX_v0.2.md` — current normalization control matrix;
+- `docs/audits/LN_PLAYER_MEMORY_SIMULATION_v0.1.md`.
 
 ## Open defects
 
 ### D-001 — HIGH — node schema not uniformly explicit
-`OPEN — CONTROL MATRIX CREATED`.
+`OPEN — 15/185 STRUCTURALLY NORMALIZED`.
 
-All 185 authored nodes still require node-by-node field-completeness normalization against `CONTENT_NODE_SCHEMA_v1.2`. LN-07 and LN-08 are the first confirmed candidates for versioned repair.
+LN-07 is repaired in v1.1. Remaining 170 authored nodes still require scan/repair as applicable. LN-08 is next.
 
 ### D-002 — MEDIUM — stable node IDs inconsistent
-`OPEN`.
+`OPEN — LN-07 FIXED LOCALLY`.
 
-Full stable IDs must be proven for all required and optional nodes; bare `Nxx` remains only a human-readable alias.
+LN-07 now has 15/15 stable IDs; campaign-wide proof remains incomplete.
 
 ### D-003 — MEDIUM — confidence vocabulary ambiguity
 `FIXED_BY_SPEC_v1.2`.
 
 ### D-004 — HIGH — retrieval closure incomplete
-`OPEN — REGISTER STARTED`.
+`OPEN — LN-07 CONCRETE HOOKS NORMALIZED`.
 
-Highest-risk chains and review queues are registered, but every non-none retrieval hook across all 185 nodes still has to be inventoried and resolved.
+LN-07 local hooks are now explicit. Exact cross-mission destination IDs still depend on normalization of LN-08/LN-11/LN-12 and register updates.
 
 ### D-005 — HIGH — variant relationships incomplete
 `OPEN — REGISTER STARTED`.
 
-Canonical relation semantics and high-confidence cross-mission examples are now registered. Full closure requires stable node IDs and concept identities across the 185-node corpus.
+No wording-only duplicate is accepted as novelty. Full corpus mapping waits on stable IDs/concept identities.
 
 Current open summary: **0 critical, 3 high, 1 medium; 1 medium fixed by specification**.
 
 ## Accessibility status
 
-Every mission defines nonvisual equivalents at design level, including linear witness/provenance forms and non-drag alternatives. A dedicated task-family NVDA/nonvisual audit is still required before pilot closure.
+Every mission has nonvisual equivalents at design level. LN-07 v1.1 now makes its nonvisual controls explicit per node. A dedicated task-family NVDA/nonvisual audit is still required before pilot closure.
 
 Player-memory/session controls must expose textually:
 - why an item appears (`new`, `due`, `weak`, `cross-link`, `synthesis`);
@@ -129,17 +140,18 @@ Player-memory/session controls must expose textually:
 
 ## Immediate production order
 
-1. begin node-by-node v1.2 normalization with LN-07 and LN-08, producing versioned revisions rather than overwriting v1.0;
-2. normalize globally stable node IDs;
-3. complete `LN_RETRIEVAL_REGISTER` from the full scan;
-4. complete `LN_VARIANT_RELATION_REGISTER` from normalized concept/node IDs;
-5. audit translation-neutral answers and every TX1-before-grading case;
-6. perform dedicated NVDA/nonvisual task-family audit;
-7. trace branch/reachability and final-synthesis accessibility regression;
-8. re-run five player histories against normalized retrieval + variant registers;
-9. mark `PILOT_AUDIT_COMPLETE` only after all HIGH defects are fixed and MEDIUM defects are fixed or explicitly accepted;
-10. only then migrate PA «Дорога Павла»;
-11. then build the versioned large-scale Bible corpus plan for thousands of missions and tens of thousands of audited nodes.
+1. create versioned LN-08 v1.1 structural normalization;
+2. update retrieval register with exact LN-07→LN-08 stable destinations;
+3. normalize LN-04/LN-09 high-risk prediction→fulfilment/TX1 chain;
+4. normalize LN-11/LN-12 synthesis layers;
+5. scan/repair remaining missions until all 185 nodes are covered;
+6. complete retrieval + variant registers;
+7. audit translation-neutral answers and every TX1-before-grading case;
+8. perform dedicated NVDA/nonvisual task-family audit;
+9. run end-to-end branch/reachability regression;
+10. re-run five player histories against normalized retrieval/variant data;
+11. mark `PILOT_AUDIT_COMPLETE` only after all HIGH defects are fixed and MEDIUM defects fixed/accepted;
+12. only then migrate PA «Дорога Павла» and later build the large-scale Bible corpus plan.
 
 ## Current stopping rule
 

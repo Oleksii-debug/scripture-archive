@@ -4,10 +4,10 @@
 **Project phase:** textual pre-production only  
 **Platform decision:** intentionally deferred  
 **Current baseline:** Game Design Bible v1.0 — 17 August 2026  
-**Canonical content schema:** v1.1 — 17 August 2026  
+**Canonical content schema:** v1.2 — 18 August 2026  
 **Textual-variant policy:** v1.0 — 17 August 2026  
 **Pilot campaign authoring status:** 12/12 missions authored and source-audited  
-**Pilot cross-mission audit:** IN_PROGRESS
+**Pilot cross-mission audit:** IN_PROGRESS — structural normalization defects identified
 
 ## Non-negotiable scope
 
@@ -29,8 +29,10 @@ Game Design Bible v1.0 establishes 20 task/mechanic families, 8 branching types,
 
 As of 2026-08-18:
 
-- `docs/spec/CONTENT_NODE_SCHEMA_v1.1.md` — canonical authoring schema;
+- `docs/spec/CONTENT_NODE_SCHEMA_v1.2.md` — current canonical authoring/normalization schema; v1.1 retained in history;
 - `docs/spec/TEXTUAL_VARIANT_POLICY_v1.0.md` — textual-variation policy;
+- `docs/audits/LN_PILOT_CROSS_MISSION_AUDIT_v0.2.md` — current pilot cross-mission audit;
+- `docs/audits/LN_PILOT_DEFECT_REGISTER_v0.1.md` — current defect register;
 - `LN-01_PREPARATION_v1.0.md` — `MISSION_COMPLETE / SOURCE_AUDITED`, 13 required + 1 optional;
 - `LN-02_AT_THE_TABLE_v1.0.md` — `MISSION_COMPLETE / SOURCE_AUDITED`, 12 required + 2 optional/conditional;
 - `LN-03_BETRAYER_AT_THE_TABLE_v1.0.md` — `MISSION_COMPLETE / SOURCE_AUDITED`, 13 required + 2 optional;
@@ -44,19 +46,42 @@ As of 2026-08-18:
 - `LN-11_EVIDENCE_MAP_v1.0.md` — `MISSION_COMPLETE / SOURCE_AUDITED`, 14 required + 3 optional; provenance-aware evidence graph and complete linear/nonvisual equivalent;
 - `LN-12_FINAL_RECONSTRUCTION_v1.0.md` — `MISSION_COMPLETE / SOURCE_AUDITED`, 14 required + 3 optional; final source-cited reconstruction, uncertainty statement and defence.
 
-Current canonical migrated total in campaign LN: **160 required task nodes + 25 optional/conditional nodes = 185 authored canonical nodes across 12 completed missions**.
+Current authored total in campaign LN: **160 required task nodes + 25 optional/conditional nodes = 185 authored nodes across 12 completed missions**.
 
 Campaign mission-count completion: **12/12 = 100%**.
 
-This does **not** mean the pilot is editorially closed. `docs/audits/LN_PILOT_CROSS_MISSION_AUDIT_v0.1.md` has started the mandatory cross-mission audit. Campaign status remains `PILOT_AUDIT_IN_PROGRESS` until duplicate claims, contradictory grading, branches, mastery/retrieval, provenance, TX1, mission boundaries and accessibility are checked across the whole campaign and defects are fixed.
+This does **not** mean the pilot is editorially closed. Cross-mission audit v0.2 found structural normalization defects that must be repaired before the 185 authored nodes can all be called fully normalized canonical records under schema v1.2. Campaign status remains `PILOT_AUDIT_IN_PROGRESS`.
 
-Canonical distinctions:
+## Current audit findings
+
+No critical theological/source-integrity defect has been identified in the high-risk cross-mission boundaries audited so far.
+
+Passed at mission-design level:
+- LN-04 prediction → LN-09 fulfilment → LN-12 final retrieval separation;
+- Mark cock-crow `TX1` propagation in that chain;
+- LN-07/LN-08 division of questioning vs accusation material;
+- Luke 22:66 daybreak safeguard;
+- provenance separation of John 18:19–24 from Matthew/Mark false-witness material;
+- LN-10/LN-12 Pilate threshold;
+- LN-12 final provenance and uncertainty grammar.
+
+Open structural defects:
+- `D-001 HIGH` — task-node records are not uniformly explicit against the canonical schema; at minimum LN-07/LN-08 require normalization review and the full 185-node corpus must be scanned;
+- `D-002 MEDIUM` — stable node identifier convention is inconsistent (`LNxx-Nyy` vs bare `Nyy` shorthand);
+- `D-004 HIGH` — future-retrieval hooks do not yet have one campaign-wide closure register proving each hook resolves to a concrete later node or explicit review queue.
+
+Fixed at specification level:
+- `D-003 MEDIUM` — confidence vocabulary ambiguity in schema v1.1; schema v1.2 now requires `confidence_code: T1/T2/C1/I1/D1`, with `TX1` as an adjunct textual-variant flag.
+
+## Canonical distinctions
 
 - baseline task-node concept — planning only;
+- authored node — gameplay node written in a mission file;
+- normalized canonical node — authored node conforming explicitly to current schema v1.2;
 - `AUTHOR_COMPLETE` — prompt, answers, evidence, feedback, hints, branches, mastery and accessibility authored;
 - `SOURCE_AUDITED` — answer-bearing claims checked;
-- `MISSION_COMPLETE` — all required nodes meet the standard and valid branches resolve;
-- `PILOT_AUDIT_COMPLETE` — cross-mission defects fixed/accepted and regression audit passed.
+- `MISSION_COMPLETE` — all required authored nodes meet the mission-level standard and valid branches resolve;
+- `PILOT_AUDIT_COMPLETE` — cross-mission defects fixed/accepted, canonical normalization complete and regression audit passed.
 
 ## Reusable design results established so far
 
@@ -108,13 +133,17 @@ Separate neutral event nodes from witness claim nodes; every claim stores witnes
 
 Established in LN-12: final synthesis is graded claim-by-claim as `claim → witness → passage → confidence → qualification`; multiple responsible reconstructions are allowed where D1 applies; final mastery includes explicit uncertainty statements and source-based defence, not merely a polished retelling.
 
+### Retrieval-closure contract
+
+Established in schema v1.2: every future repetition hook must resolve to `RESOLVED_NODE`, `REVIEW_QUEUE`, `DEFERRED_CAMPAIGN` or `RETIRED`. Anonymous “later” retrieval is not allowed at pilot closure.
+
 ## Theological integrity
 
 Claims use: `T1` direct scriptural statement; `T2` direct comparison; `C1` historical/contextual; `I1` interpretation; `D1` disputed/not responsibly reducible to one forced answer. `TX1` is an adjunct for material textual-transmission variation. The game never scores faith, spirituality, holiness or closeness to God; only defined knowledge/mastery domains.
 
 ## Accessibility baseline
 
-Keyboard-complete interaction, meaningful screen-reader labels, logical headings/focus, text alternatives for visual mechanics, no essential drag-only/color-only/spatial-only information, accessible feedback and textual-variant notes. LN-01 through LN-12 specify nonvisual equivalents. Core linear forms include:
+Keyboard-complete interaction, meaningful screen-reader labels, logical headings/focus, text alternatives for visual mechanics, no essential drag-only/color-only/spatial-only information, accessible feedback and textual-variant notes. LN-01 through LN-12 specify nonvisual equivalents at design level. Core linear forms include:
 
 - `witness → claim → verse → confidence`;
 - `prediction → fulfilment → witness → delta → certainty`;
@@ -122,7 +151,7 @@ Keyboard-complete interaction, meaningful screen-reader labels, logical headings
 - `ID → event/claim → witness → verse → confidence → relation → qualification`;
 - final reconstruction: `claim → witness → passage → confidence → qualification`.
 
-Visual evidence boards or timelines are never the only or canonical representation.
+Visual evidence boards or timelines are never the only or canonical representation. A dedicated task-family NVDA/nonvisual audit is still required before pilot closure.
 
 ## Platform neutrality
 
@@ -134,14 +163,15 @@ The first pilot campaign is fully authored but not yet editorially closed.
 
 Immediate priority:
 
-1. continue `LN_PILOT_CROSS_MISSION_AUDIT_v0.1` across all 12 missions;
-2. build duplicate-claim and grading-consistency matrices;
-3. trace every required branch and `later_retrieval_effect`;
-4. audit T1/T2/C1/I1/D1/TX1 propagation and translation-neutral validation;
-5. audit LN-07/LN-08/LN-09 overlap and LN-10/LN-12 scope boundaries;
-6. perform a dedicated NVDA/nonvisual task-family audit;
-7. fix high/critical defects and run regression audit;
-8. only after `PILOT_AUDIT_COMPLETE`, migrate PA demonstration campaign;
-9. then expand the 500-mission spine campaign by campaign.
+1. build `LN_RETRIEVAL_REGISTER_v0.1` and close every future-retrieval hook;
+2. run a field-completeness scan across all 185 authored nodes against schema v1.2;
+3. normalize stable full node IDs without deleting or silently replacing v1.0 mission history;
+4. create versioned mission revisions for high-severity schema omissions;
+5. audit translation-neutral answer validation and all TX1-before-grading cases;
+6. perform the dedicated NVDA/nonvisual task-family audit;
+7. trace required branches after normalization and run regression;
+8. mark `PILOT_AUDIT_COMPLETE` only after high defects are fixed and medium defects are fixed or explicitly accepted;
+9. only then migrate PA demonstration campaign;
+10. then expand the 500-mission spine campaign by campaign.
 
 Preserve all mission history; do not replace prior versions silently.

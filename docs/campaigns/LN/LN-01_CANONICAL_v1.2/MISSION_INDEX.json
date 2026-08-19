@@ -1,0 +1,92 @@
+{
+  "schema_version": "CONTENT_NODE_SCHEMA_v1.2",
+  "content_revision": "v1.2",
+  "canonical_status": "AUTHOR_COMPLETE / DEVELOPER_SOURCE_AUDITED / INDEPENDENT_AUDIT_PENDING",
+  "historical_source": {
+    "path": "docs/campaigns/LN/LN-01_PREPARATION_v1.0.md",
+    "sha": "e4ab3c241e5375fe5eb3839d56cc201770d02903",
+    "preserved": true
+  },
+  "mission": {
+    "mission_id": "LN-01",
+    "campaign_id": "LN",
+    "title": "Приготування",
+    "mission_role": "tutorial investigation / parallel-text comparison",
+    "estimated_time": "introductory",
+    "difficulty": "3/6",
+    "learning_objectives": [
+      "Identify the preparation witness set.",
+      "Preserve Luke naming versus Mark's unnamed two.",
+      "Use not-stated boundaries for unnamed persons.",
+      "Reconstruct Mark/Luke instruction order.",
+      "Produce source-cited synthesis."
+    ],
+    "mastery_tags": [
+      "GOSPEL_PARALLELS",
+      "TEXT_VS_INFERENCE",
+      "CITATION_EVIDENCE",
+      "CHRONOLOGY_BASIC",
+      "CHARACTER_IDENTIFICATION",
+      "SOURCE_SCOPE_DISCIPLINE"
+    ],
+    "retrieval_targets": "Historical source-audited mission relations plus explicit per-node stable destinations.",
+    "future_repetition_hooks": "Every canonical node terminates in RESOLVED_NODE / REVIEW_QUEUE / DEFERRED_CAMPAIGN / RETIRED.",
+    "primary_scripture": [
+      "Matthew 26:17–19",
+      "Mark 14:12–16",
+      "Luke 22:7–13"
+    ],
+    "secondary_scripture": [],
+    "historical_context_sources": "none for grading",
+    "interpretive_sources": "none for grading",
+    "source_classification_notes": "No new answer-bearing narrative claims are introduced by R03 normalization; source-audited v1.0 propositions are materialized under v1.2 with deterministic branches and nonvisual equivalents.",
+    "disputed_points": "Only source-bounded uncertainty and explicit-vs-inferred boundaries from the historical mission are retained.",
+    "textual_variant_points": [
+      "No material TX1 grading point in the historical LN-01 source; translation-safe wording is handled as semantic equivalence."
+    ],
+    "opening_brief": "Historical source-audited mission substance retained; canonical v1.2 node records are the machine-checkable product layer.",
+    "case_question": "Resolve the mission using direct text, witness provenance, comparison and explicit evidence boundaries.",
+    "known_facts_at_start": "Only the source corpus and previously earned campaign knowledge; no extra harmonized facts.",
+    "unknowns_to_resolve": "Witness-specific details, source limits, chronology/order where explicit, and any TX1-sensitive wording.",
+    "completion_synthesis": "Luke names Peter and John; Mark names two disciples; Mark/Luke share the water-carrier and upper-room details; unnamed persons remain unnamed.",
+    "entry_node": "LN01-N01",
+    "task_nodes": [
+      "LN01-N01",
+      "LN01-N02",
+      "LN01-N03",
+      "LN01-N04",
+      "LN01-N05",
+      "LN01-N06",
+      "LN01-N07",
+      "LN01-N08",
+      "LN01-N09",
+      "LN01-N10",
+      "LN01-N11",
+      "LN01-N12",
+      "LN01-N13"
+    ],
+    "optional_nodes": [
+      "LN01-O01"
+    ],
+    "failure_recovery_routes": "Every partial/incorrect route is targeted and returns to a valid current/remediation path; no dead ends.",
+    "completion_conditions": "All required nodes completed independently or guided with provenance/source/TX1 constraints intact.",
+    "perfect_investigation_conditions": "Independent high-value recall/application/synthesis plus optional evidence; knowledge-performance only, never spiritual status.",
+    "accessibility": {
+      "keyboard_complete_equivalent": true,
+      "screen_reader_announcement_requirements": "Announce node identity, source scope, result, evidence/confidence/TX1, mastery consequence and next action.",
+      "nonvisual_equivalent": "All comparisons, ordering, evidence relations and TX1 notes have labelled linear text/control equivalents.",
+      "focus_order": "Logical task/source/feedback order; focus returns to the task after source inspection.",
+      "prohibited_essential_modes": [
+        "color-only",
+        "drag-only",
+        "pointer-only",
+        "spatial-only",
+        "time-only"
+      ]
+    }
+  },
+  "node_files": [
+    "nodes.json"
+  ],
+  "node_count": 14
+}

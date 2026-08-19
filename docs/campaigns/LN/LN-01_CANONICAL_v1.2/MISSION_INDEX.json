@@ -86,7 +86,10 @@
     }
   },
   "node_files": [
-    "nodes.json"
+    "nodes_part_01.json",
+    "nodes_part_02.json",
+    "nodes_part_03.json",
+    "nodes_part_04.json"
   ],
   "node_count": 14
 }

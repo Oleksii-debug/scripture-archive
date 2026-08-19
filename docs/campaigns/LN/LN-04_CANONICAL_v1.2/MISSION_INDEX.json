@@ -1,0 +1,24 @@
+{
+  "schema_version": "CONTENT_NODE_SCHEMA_v1.2",
+  "content_revision": "v1.2",
+  "canonical_status": "AUTHOR_COMPLETE / DEVELOPER_SOURCE_AUDITED / INDEPENDENT_AUDIT_PENDING",
+  "historical_source": {"path": "docs/campaigns/LN/LN-04_PETER_WARNING_v1.0.md", "sha": "4c445f9fa9ef99916ce4242deedb534b3152ebf7", "preserved": true},
+  "mission": {
+    "mission_id": "LN-04", "campaign_id": "LN", "title": "Попередження Петрові", "mission_role": "parallel-witness investigation / prediction evidence / delayed retrieval", "estimated_time": "30–45 minutes", "difficulty": "3/6",
+    "learning_objectives": ["Compare Mt 26:30–35; Mk 14:26–31; Lk 22:31–34; Jn 13:36–38.","Extract the narrow shared prediction without false harmonization.","Preserve witness-specific Luke/John/Matthew-Mark details.","Expose Mark rooster-count TX1 before affected grading and preserve translation neutrality.","Create concrete prediction→fulfilment retrieval into LN-09."],
+    "mastery_tags": ["Peter","denial-prediction","Gospel-parallels","explicit-vs-inferred","textual-variants","prediction-to-fulfilment","source-citation","chronology-limits"],
+    "retrieval_targets": ["LN09-N01","LN09-N11","LN09-N13"],
+    "future_repetition_hooks": "All node hooks are materialized as RESOLVED_NODE / REVIEW_QUEUE / DEFERRED_CAMPAIGN / RETIRED in node records.",
+    "primary_scripture": ["Matthew 26:30–35","Mark 14:26–31","Luke 22:31–34","John 13:36–38"], "secondary_scripture": ["Zechariah 13:7 optional cross-reference"], "historical_context_sources": "none for grading", "interpretive_sources": "none for grading",
+    "source_classification_notes": "Local witness claims are T1; direct cross-witness comparison is T2; exact merged chronology is D1. TX1 is adjunct only.",
+    "disputed_points": ["Exact inter-Gospel micro-order is not forced.","Luke pronoun-number observation does not authorize a wider doctrinal conclusion."],
+    "textual_variant_points": ["Mark 14:30 rooster-count wording: TX1; responsible textual/translation forms are not penalized."],
+    "opening_brief": "Investigate Peter's prediction witness-by-witness before fulfilment is opened.", "case_question": "What did Jesus predict to Peter, what did Peter claim, and which details are shared versus witness-specific?",
+    "known_facts_at_start": ["Prediction occurs before fulfilment material used in LN-09.","Player already knows shared-core versus witness-specific discipline."], "unknowns_to_resolve": ["Shared core","Luke-specific details","John-specific dialogue","Matthew/Mark group warning","Mark TX1","limits of harmonized sequence"],
+    "completion_synthesis": "The prediction is reconstructed with witness provenance, explicit uncertainty and a concrete retrieval chain into LN-09.", "entry_node": "LN04-N01",
+    "task_nodes": ["LN04-N01","LN04-N02","LN04-N03","LN04-N04","LN04-N05","LN04-N06","LN04-N07","LN04-N08","LN04-N09","LN04-N10","LN04-N11","LN04-N12","LN04-N13"], "optional_nodes": ["LN04-O01","LN04-O02"],
+    "failure_recovery_routes": "Every partial/incorrect branch is explicit per node and returns to a valid remediation/current node or advances after guided resolution; no dead ends.", "completion_conditions": "Complete 13 required nodes through independent or guided routes; preserve source/provenance/confidence/TX1 boundaries; all remediation routes must remain reachable.", "perfect_investigation_conditions": "Independent completion of high-value recall/application/synthesis nodes plus optional evidence where offered; knowledge-performance only, never spiritual status.",
+    "accessibility": {"keyboard_complete_equivalent": true, "screen_reader_announcement_requirements": "Announce node identity, source scope, result, evidence/confidence/TX1 qualification, mastery consequence, and next action.", "nonvisual_equivalent": "Sequential witness blocks, labelled fields, keyboard ordering/matching alternatives and plain-text TX1 notes.", "focus_order": "Logical document/task order; after source inspection or feedback focus returns to the task heading/control.", "prohibited_essential_modes": ["color-only","drag-only","pointer-only","spatial-only","time-only"]}
+  },
+  "node_files": ["nodes_part_01.json","nodes_part_02.json","nodes_part_03.json","nodes_part_04.json"], "node_count": 15
+}

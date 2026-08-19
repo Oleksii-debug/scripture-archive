@@ -1,0 +1,102 @@
+{
+  "schema_version": "CONTENT_NODE_SCHEMA_v1.2",
+  "content_revision": "v1.2",
+  "canonical_status": "AUTHOR_COMPLETE / DEVELOPER_SOURCE_AUDITED / INDEPENDENT_AUDIT_PENDING",
+  "historical_source": {
+    "path": "docs/campaigns/LN/LN-05_GETHSEMANE_PRAYER_AND_SLEEP_v1.0.md",
+    "sha": "de5afe325ac84d2e4c7fc008c0a8aed49883e0ea",
+    "preserved": true
+  },
+  "mission": {
+    "mission_id": "LN-05",
+    "campaign_id": "LN",
+    "title": "Гефсиманія: молитва і сон",
+    "mission_role": "investigation / comparison / synthesis",
+    "estimated_time": "25–35 min",
+    "difficulty": "3/6",
+    "learning_objectives": [
+      "Compare the three Synoptic witnesses.",
+      "Preserve named/unnamed disciple boundaries.",
+      "Reconstruct local prayer/sleep cycles.",
+      "Distinguish stated reasons for sleep.",
+      "Apply TX1 to Luke 22:43–44.",
+      "Produce source-grounded synthesis."
+    ],
+    "mastery_tags": [
+      "parallel_witness_comparison",
+      "explicit_vs_inferred",
+      "local_chronology",
+      "prayer_scene",
+      "disciples_sleep",
+      "temptation_watchfulness",
+      "textual_variant_awareness",
+      "source_citation",
+      "synthesis"
+    ],
+    "retrieval_targets": "Historical source-audited mission relations plus explicit per-node stable destinations.",
+    "future_repetition_hooks": "Every canonical node terminates in RESOLVED_NODE / REVIEW_QUEUE / DEFERRED_CAMPAIGN / RETIRED.",
+    "primary_scripture": [
+      "Matthew 26:36–46",
+      "Mark 14:32–42",
+      "Luke 22:39–46"
+    ],
+    "secondary_scripture": [
+      "John 18:1 orientation only"
+    ],
+    "historical_context_sources": "none for grading",
+    "interpretive_sources": "none for grading",
+    "source_classification_notes": "No new answer-bearing narrative claims are introduced by R03 normalization; source-audited v1.0 propositions are materialized under v1.2 with deterministic branches and nonvisual equivalents.",
+    "disputed_points": "Only source-bounded uncertainty and explicit-vs-inferred boundaries from the historical mission are retained.",
+    "textual_variant_points": [
+      "Luke 22:43–44 angel/sweat material is TX1; note must be visible before affected grading; no originality verdict required."
+    ],
+    "opening_brief": "Historical source-audited mission substance retained; canonical v1.2 node records are the machine-checkable product layer.",
+    "case_question": "Resolve the mission using direct text, witness provenance, comparison and explicit evidence boundaries.",
+    "known_facts_at_start": "Only the source corpus and previously earned campaign knowledge; no extra harmonized facts.",
+    "unknowns_to_resolve": "Witness-specific details, source limits, chronology/order where explicit, and any TX1-sensitive wording.",
+    "completion_synthesis": "Shared prayer/sleep core is retained; Matthew/Mark repeated cycles and Mark-specific details remain attributed; Luke sleep-from-sorrow stays local; Luke 22:43–44 is TX1.",
+    "entry_node": "LN05-N01",
+    "task_nodes": [
+      "LN05-N01",
+      "LN05-N02",
+      "LN05-N03",
+      "LN05-N04",
+      "LN05-N05",
+      "LN05-N06",
+      "LN05-N07",
+      "LN05-N08",
+      "LN05-N09",
+      "LN05-N10",
+      "LN05-N11",
+      "LN05-N12",
+      "LN05-N13"
+    ],
+    "optional_nodes": [
+      "LN05-O01",
+      "LN05-O02"
+    ],
+    "failure_recovery_routes": "Every partial/incorrect route is targeted and returns to a valid current/remediation path; no dead ends.",
+    "completion_conditions": "All required nodes completed independently or guided with provenance/source/TX1 constraints intact.",
+    "perfect_investigation_conditions": "Independent high-value recall/application/synthesis plus optional evidence; knowledge-performance only, never spiritual status.",
+    "accessibility": {
+      "keyboard_complete_equivalent": true,
+      "screen_reader_announcement_requirements": "Announce node identity, source scope, result, evidence/confidence/TX1, mastery consequence and next action.",
+      "nonvisual_equivalent": "All comparisons, ordering, evidence relations and TX1 notes have labelled linear text/control equivalents.",
+      "focus_order": "Logical task/source/feedback order; focus returns to the task after source inspection.",
+      "prohibited_essential_modes": [
+        "color-only",
+        "drag-only",
+        "pointer-only",
+        "spatial-only",
+        "time-only"
+      ]
+    }
+  },
+  "node_files": [
+    "nodes_part_01.json",
+    "nodes_part_02.json",
+    "nodes_part_03.json",
+    "nodes_part_04.json"
+  ],
+  "node_count": 15
+}

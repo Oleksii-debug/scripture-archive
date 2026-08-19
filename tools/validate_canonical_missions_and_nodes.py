@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import json, sys
+import copy, json, sys
 from collections import Counter
 from pathlib import Path
 
@@ -10,12 +10,30 @@ TERMINALS=("RESOLVED_NODE","REVIEW_QUEUE","DEFERRED_CAMPAIGN","RETIRED")
 VALID_CONF={"T1","T2","C1","I1","D1"}; VALID_TX={"none","TX1"}
 BAD_HINT_PHRASES=("guided answer with mastery downgrade","placeholder","todo","tbd")
 GENERIC_FEEDBACK=("відповідь джерельно коректна.","виправте лише неточний елемент.","перечитайте вказаний уривок і повторіть.")
+OVERLAY_ALLOWED={"success_feedback","partial_feedback","failure_feedback","hints","on_hint_threshold","mastery_mode"}
 
 def empty(v): return v is None or v=="" or v==[] or v=={}
 def low(s): return str(s).strip().lower()
 
+def load_overlays(base:Path, errors:list[str]):
+    patches={}; index_paths=list(base.rglob("R05_PEDAGOGY_OVERLAY_INDEX.json"))
+    for ip in index_paths:
+        idx=json.loads(ip.read_text(encoding="utf-8")); folder=ip.parent
+        for name in idx.get("chunks",[]):
+            cp=folder/name
+            if not cp.is_file(): errors.append(f"{ip}: missing overlay chunk {name}"); continue
+            d=json.loads(cp.read_text(encoding="utf-8"))
+            if d.get("schema_version")!="CONTENT_NODE_PEDAGOGY_OVERLAY_v1.0": errors.append(f"{cp}: bad overlay schema")
+            for nid,patch in d.get("patches",{}).items():
+                if nid in patches: errors.append(f"duplicate overlay patch {nid}")
+                forbidden=set(patch)-OVERLAY_ALLOWED
+                if forbidden: errors.append(f"{cp}:{nid}: forbidden overlay keys {sorted(forbidden)}")
+                patches[nid]=(cp,patch)
+    return patches
+
 def main(root:str)->int:
-    base=Path(root); errors=[]; indexes=list(base.rglob("MISSION_INDEX.json")); node_count=0; ids=set(); feedback_triplets=[]
+    base=Path(root); errors=[]; overlays=load_overlays(base,errors)
+    indexes=list(base.rglob("MISSION_INDEX.json")); node_count=0; ids=set(); feedback_triplets=[]; seen_nodes=set()
     for p in indexes:
         d=json.loads(p.read_text(encoding="utf-8")); m=d.get("mission",{})
         for f in SOURCE_FIELDS:
@@ -26,10 +44,13 @@ def main(root:str)->int:
             np=p.parent/rel
             if not np.is_file(): errors.append(f"{p}: missing node file {rel}"); continue
             nd=json.loads(np.read_text(encoding="utf-8"))
-            for n in nd.get("nodes",[]):
-                node_count+=1; nid=n.get("node_id"); actual.add(nid)
+            for base_node in nd.get("nodes",[]):
+                n=copy.deepcopy(base_node); nid=n.get("node_id"); actual.add(nid); seen_nodes.add(nid); node_count+=1
                 if nid in ids: errors.append(f"duplicate node_id {nid}")
                 ids.add(nid)
+                if nid in overlays:
+                    _,patch=overlays[nid]
+                    for k,v in patch.items(): n[k]=copy.deepcopy(v)
                 for f in NODE_REQUIRED:
                     if f not in n or empty(n.get(f)): errors.append(f"{np}:{nid}: missing/empty {f}")
                 if n.get("confidence_code") not in VALID_CONF: errors.append(f"{np}:{nid}: invalid confidence_code")
@@ -39,7 +60,7 @@ def main(root:str)->int:
                     if k not in h or empty(h[k]): errors.append(f"{np}:{nid}: missing {k}")
                 h7=low(h.get("H7",""))
                 if any(x in h7 for x in BAD_HINT_PHRASES): errors.append(f"{np}:{nid}: placeholder H7")
-                if len(h7)<40 or ("guided" not in h7 and "mastery=guided" not in h7): errors.append(f"{np}:{nid}: H7 must reveal/explain answer and guided mastery")
+                if len(h7)<40 or "guided" not in h7: errors.append(f"{np}:{nid}: H7 must reveal/explain answer and guided mastery")
                 trip=(low(n.get("success_feedback")),low(n.get("partial_feedback")),low(n.get("failure_feedback")))
                 feedback_triplets.append((np,nid,trip))
                 if any(x in GENERIC_FEEDBACK for x in trip): errors.append(f"{np}:{nid}: known generic feedback placeholder")
@@ -49,11 +70,12 @@ def main(root:str)->int:
         declared=set(m.get("task_nodes",[])+m.get("optional_nodes",[]))
         if declared!=actual: errors.append(f"{p}: declared node set != actual node set")
         if d.get("node_count")!=len(actual): errors.append(f"{p}: node_count mismatch")
-    # Detect bulk-identical pedagogy inside a mission/package. Three or more identical feedback triplets is suspicious.
+    for nid,(cp,_) in overlays.items():
+        if nid not in seen_nodes: errors.append(f"{cp}:{nid}: overlay targets unknown canonical node")
     counts=Counter(t for _,_,t in feedback_triplets)
     for np,nid,t in feedback_triplets:
-        if counts[t]>=3: errors.append(f"{np}:{nid}: feedback triplet duplicated {counts[t]} times; semantic authoring review required")
-    print(f"MISSION_INDEXES={len(indexes)} NODES={node_count} ERRORS={len(errors)}")
+        if counts[t]>=3: errors.append(f"{np}:{nid}: effective feedback triplet duplicated {counts[t]} times; semantic authoring review required")
+    print(f"MISSION_INDEXES={len(indexes)} NODES={node_count} OVERLAYS={len(overlays)} ERRORS={len(errors)}")
     for e in errors: print("ERROR",e)
     print("NOTE static validation does not replace semantic source/pedagogy audit")
     return 1 if errors else 0

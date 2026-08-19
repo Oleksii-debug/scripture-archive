@@ -5,139 +5,111 @@
 **Project phase:** `TEXTUAL_PREPRODUCTION_ACTIVE`  
 **Production authorized:** `NO`  
 **Canonical content schema:** v1.2  
-**Developer round:** `DEV R02 COMPLETE / INDEPENDENT AUDIT PENDING`  
-**Latest independent verdict consumed:** `AUDIT R01 = MAJOR_FIXES`  
+**Developer round:** `DEV R03 COMPLETE / INDEPENDENT AUDIT PENDING`  
+**Latest independent verdict consumed:** `AUDIT R02 = PASS_AUDIT`  
 **Pilot editorial status:** `PILOT_AUDIT_IN_PROGRESS`
 
-## R02 purpose
-R02 repairs all five defects from AUDIT R01 without overwriting historical content or R01 packages.
+## R03 purpose
+R03 continues the post-PASS textual pre-production phase. It does not reopen accepted R02 repairs. The round advances remaining LN normalization/retrieval/variant/accessibility blockers and adds package↔GitHub fidelity validation requested by AUDIT R02 process findings.
 
 ## LN normalization
 Self-contained schema-v1.2 canonical records now exist for:
-- LN-04 — 15/15
-- LN-07 — 15/15 (prior normalized)
-- LN-08 — 16/16 (prior normalized)
-- LN-09 — 16/16
-- LN-12 — 17/17
+- LN-01 — 14/14 (new R03)
+- LN-04 — 15/15 (accepted through AUDIT R02)
+- LN-05 — 15/15 (new R03)
+- LN-07 — 15/15
+- LN-08 — 16/16
+- LN-09 — 16/16 (accepted through AUDIT R02)
+- LN-12 — 17/17 (accepted through AUDIT R02)
 
-Validated normalized total: **79/185 = 42.7%**. Remaining: **106**.
+Developer-validated normalized total: **108/185 = 58.4%**. Remaining: **77** across LN-02, LN-03, LN-06, LN-10 and LN-11.
 
-Current matrix: `docs/audits/LN_NORMALIZATION_MATRIX_v0.5.md`.
+Current matrix: `docs/audits/LN_NORMALIZATION_MATRIX_v0.6.md`.
 
-## R02 closure of AUD-R01 defects
-### AUD-R01-001 — LN04/LN09 explicitness
-Developer fix complete:
-- canonical JSON records directly expose all 34 mandatory task-node fields;
-- LN04 15/15 and LN09 16/16 pass the static validator;
-- historical v1.0 Markdown remains unchanged;
-- no `source_alias` is required to resolve a canonical node.
+## LN-01 — Preparation canonicalization
+Created `docs/campaigns/LN/LN-01_CANONICAL_v1.2/` with 13 required + 1 optional canonical nodes.
 
-Independent audit: pending.
+Preserved source safeguards:
+- Luke explicitly names Peter and John; Mark states two disciples without names; Matthew does not import either detail into its local wording;
+- man carrying water and householder remain unnamed in the defined corpus;
+- water-carrier=householder identity is not forced;
+- Mark/Luke shared room proposition stays translation-neutral;
+- local preparation order is keyboard/nonvisual equivalent;
+- wording-only jar/pitcher/householder noun changes do not count as task novelty.
 
-### AUD-R01-002 — PA-02 completeness
-Developer fix complete:
-- PA02 16/16 nodes directly expose all mandatory v1.2 fields;
-- every node has concrete H1–H7;
-- every node has concrete success/partial/failure feedback;
-- explicit branch/mastery/review/nonvisual fields are serialized per node;
-- R01 ground-truth boundaries are preserved.
+High-value preparation nodes now resolve deterministically into the accepted final reconstruction node `LN12-N03` or named review queues.
 
-Independent audit: pending.
+## LN-05 — Gethsemane canonicalization
+Created `docs/campaigns/LN/LN-05_CANONICAL_v1.2/` with 13 required + 2 optional canonical nodes.
 
-### AUD-R01-003 — LN-12 TX1 destination
-Developer fix complete:
-- all 17 LN-12 nodes are normalized, not only N08/N10;
-- `LN12-N08` = `confidence_code: T2`, `textual_variant_flag: TX1`;
-- `LN12-N10` = `confidence_code: T2`, `textual_variant_flag: TX1`;
-- end-to-end chain is materialized:
-  `LN04-N09 → LN09-N11 → LN12-N08`;
-- optional path:
-  `LN09-O01 → LN12-N10`;
-- both full and responsible shorter/footnoted Mark forms are accepted without textual-form penalty.
+Preserved source safeguards:
+- Matthew/Mark explicitly name Gethsemane while Luke uses Mount of Olives / “the place” language in the assigned passage;
+- Matthew/Mark inner-trio naming is not imported into Luke;
+- prayer wording is compared by proposition, not flattened into one quotation;
+- Matthew/Mark repeated cycles and Luke sleep-from-sorrow remain witness-specific;
+- no modern clinical diagnosis or spiritual grading is introduced.
 
-Independent audit: pending.
+### Luke 22:43–44 TX1 closure
+R03 materializes:
 
-### AUD-R01-004 — source traceability
-Developer fix complete in `docs/research/SOURCE_TRACEABILITY_R02_v0.1.md`:
-- named Acts 9:7 / 22:9 / 26:14 translation source set;
-- ESV Text Edition 2025 / Bible Gateway comparison;
-- ESV/NET Mark 14:68/72 textual notes;
-- source→supported-proposition mapping;
-- Acts 22:9 remains translation-neutral and not automatically TX1.
+`LN05-O02 [T1 + TX1] → LN12-N10 [T2 + TX1]`
 
-Independent audit: pending.
+The TX1 note must be visible before grading. Responsible editions/translations that bracket, footnote or omit the angel/sweat material are not penalized for textual form, and no originality judgment is required.
 
-### AUD-R01-005 — PA02-N04 wording
-Developer fix complete:
-`Acts 9:3: near/approaching Damascus; the verse does not state noon`.
-The comparison with Acts 22:6 and Acts 26:13 remains explicit.
+Current retrieval register: `docs/audits/LN_RETRIEVAL_REGISTER_v0.6.md`.
 
-Independent audit: pending.
+## Variant / player-memory state
+`docs/audits/LN_VARIANT_RELATION_REGISTER_v0.3.md` adds R03 relations while retaining the canonical classes `EXACT`, `VARIANT`, `PASSAGE_REVISIT`, `CROSS_CONTEXT`, `SYNTHESIS`, `NONE`.
 
-## TX1 retrieval state
-Current register: `docs/audits/LN_RETRIEVAL_REGISTER_v0.5.md`.
+R03 invariant: wording-only paraphrase remains `EXACT`; TX1 metadata does not manufacture novelty. If a material fingerprint does not change, the scheduler must choose other content or a due review rather than fabricate a variant with an LLM.
 
-Critical chain:
-`LN04-N09 [T2/TX1] → LN09-N11 [T1/TX1] → LN12-N08 [T2/TX1]`.
+`docs/systems/R03_PLAYER_HISTORY_REGRESSION_v0.1.md` reruns H-A…H-E against LN-01/LN-05 plus the R02-accepted memory rules. Developer regression: all five scenarios PASS.
 
-Optional deep dive:
-`LN09-O01 [T1/TX1] → LN12-N10 [T2/TX1]`.
+## Accessibility / branch state
+Created `docs/audits/LN_R03_ACCESSIBILITY_BRANCH_REGRESSION_v0.1.md`.
 
-`TX1` is a separate adjunct field at every R02 canonical hop.
+R03 developer checks:
+- 29/29 new canonical nodes have a non-empty `functional_nonvisual_equivalent`;
+- LN01-N09 ordering has numbered / move-up / move-down keyboard equivalence;
+- all comparison/evidence operations have labelled linear text forms;
+- LN05-O02 TX1 is ordinary labelled text before grading, not icon/color/tooltip only;
+- LN-01 and LN-05 required paths reach mission completion;
+- optional nodes return to required paths;
+- no R03 partial/incorrect path creates a dead end.
 
-## PA «Дорога Павла»
-PA-01 remains 14 canonical nodes.
-PA-02 remains 16 canonical nodes but is now fully materialized in `docs/campaigns/PA/PA-02_CANONICAL_v1.1/` (MISSION_INDEX + 4 canonical node shards).
+Final whole-pilot NVDA/focus/branch regression remains a release blocker and is not claimed complete before all 185 LN nodes are normalized.
 
-Current PA authored total: **30 canonical nodes**.
+## Package↔HEAD fidelity process
+AUDIT R02 noted a low-severity whitespace/newline mismatch risk between some package copies and GitHub blobs. R03 adds pre-production QA tool `tools/verify_package_git_blob_fidelity.py`.
 
-Source safeguards retained:
-- Acts 9 narrator ≠ Paul's later Acts 22/26 speeches;
-- Acts 22:9 accepts responsible `did not hear` / `did not understand` renderings;
-- Acts 26:14 states all fell and Paul heard a voice, but companion hearing is not separately stated;
-- Ananias omission in Acts 26:12–18 is not denial;
-- commission placement is witness-specific;
-- `not stated in cited text` is valid where appropriate.
+R03 handoff requires:
+1. a repository-path → Git blob SHA manifest for every `CHANGED_FILES` repository artifact;
+2. package copies checked with Git blob hashing;
+3. exact package↔GitHub blob SHA equality before Drive upload.
 
-## Player memory / variants / accessibility
-Created `docs/systems/R02_PLAYER_HISTORY_REGRESSION_v0.1.md`.
-H-A…H-E were rerun after repaired canonical records became the inputs.
+This is QA tooling only, not product/runtime code.
 
-Results:
-- adjacent-session EXACT suppression: PASS;
-- provenance-weak prioritization: PASS;
-- guided mastery without shame/punishment: PASS;
-- long-absence sampling rather than review wall: PASS;
-- small-pool no-fabricated-novelty fallback: PASS;
-- NVDA/nonvisual field presence on repaired records: 64/64.
+## Defect state
+- D-001 HIGH — schema normalization: **OPEN, 108/185 complete**.
+- D-002 MEDIUM — stable-ID proof: **OPEN, 108/185 proven**.
+- D-003 MEDIUM — confidence vocabulary: **FIXED_BY_SPEC_v1.2**.
+- D-004 HIGH — campaign-wide retrieval closure: **OPEN**, R03 preparation/Gethsemane relations advanced.
+- D-005 HIGH — whole-pilot relation/fingerprint closure: **OPEN**, relation register advanced to v0.3.
+- Campaign-wide final NVDA/branch/player-memory regression: **OPEN until normalization/relations finish**.
 
-Relation register advanced to `docs/audits/LN_VARIANT_RELATION_REGISTER_v0.2.md`; campaign-wide D-005 remains open.
+## R03 concrete delta
+1. `docs/campaigns/LN/LN-01_CANONICAL_v1.2/` — mission index + 4 node shards.
+2. `docs/campaigns/LN/LN-05_CANONICAL_v1.2/` — mission index + 4 node shards.
+3. `docs/audits/LN_NORMALIZATION_MATRIX_v0.6.md`.
+4. `docs/audits/LN_RETRIEVAL_REGISTER_v0.6.md`.
+5. `docs/audits/LN_VARIANT_RELATION_REGISTER_v0.3.md`.
+6. `docs/audits/LN_R03_ACCESSIBILITY_BRANCH_REGRESSION_v0.1.md`.
+7. `docs/systems/R03_PLAYER_HISTORY_REGRESSION_v0.1.md`.
+8. `tools/verify_package_git_blob_fidelity.py`.
+9. this `PROJECT_STATUS.md` integration update.
 
-## Validation
-`tools/validate_content_nodes_v1_2.py` is a pre-production QA validator, not product code.
-
-R02 static result:
-- LN04: 15/15 field presence
-- LN09: 16/16
-- LN12: 17/17
-- PA02: 16/16
-- total repaired dataset: **64/64**, 34 mandatory fields each
-- global ID uniqueness: PASS
-- TX1 destination separation: PASS
-- PA02 concrete H1–H7: 16/16
-- PA02 concrete feedback: 16/16
-- functional nonvisual equivalent: 64/64
-
-No production application/platform code was created.
-
-## Open campaign-wide blockers
-Independent AUDIT R02 is required before accepting R02.
-LN pilot closure remains blocked by:
-- D-001 schema normalization for remaining missions;
-- D-002 stable-ID proof for remaining missions;
-- D-004 full campaign retrieval closure;
-- D-005 full variant/fingerprint relation closure;
-- dedicated final campaign NVDA and branch regressions after normalization.
+## Validation state
+Developer static validation is required before handoff and does not substitute for independent audit. R03 does not create any production website/app/platform code and does not authorize production.
 
 ## Next role
-`AUDITOR` — independently verify DEV R02, specifically all AUD-R01 closure criteria and the corrected 79/185 normalization count.
+`AUDITOR` — independently verify DEV R03, especially the 29 new canonical nodes, corrected 108/185 count, Luke 22:43–44 TX1 chain, retrieval/variant classifications, accessibility/branch regression, and exact package↔HEAD fidelity evidence.

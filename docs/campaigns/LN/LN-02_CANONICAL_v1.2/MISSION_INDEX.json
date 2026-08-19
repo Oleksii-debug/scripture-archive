@@ -1,1 +1,43 @@
-{"schema_version":"CONTENT_NODE_SCHEMA_v1.2","content_revision":"v1.2","canonical_status":"AUTHOR_COMPLETE / DEVELOPER_SOURCE_AUDITED / INDEPENDENT_AUDIT_PENDING","historical_source":{"path":"docs/campaigns/LN/LN-02_AT_THE_TABLE_v1.0.md","sha":"38df5aad8e13739ba11eafddc258de9392b0a1d3","preserved":true},"mission":{"mission_id":"LN-02","campaign_id":"LN","title":"За столом","mission_role":"parallel-text investigation / evidence synthesis","estimated_time":"30–45 minutes","difficulty":"3/6","learning_objectives":["Define the Synoptic meal corpus.","Reconstruct shared bread/cup actions without flattening witnesses.","Preserve Luke- and Matthew-specific wording.","Handle textual variants transparently.","Produce source-cited synthesis."],"mastery_tags":["GOSPEL_PARALLELS","TEXT_VS_INFERENCE","SEQUENCE_RECONSTRUCTION","TEXTUAL_TRANSMISSION_AWARENESS","CITATION_EVIDENCE"],"retrieval_targets":"Historical source-audited mission relations plus explicit per-node stable destinations.","future_repetition_hooks":"Every canonical node uses an explicit terminal retrieval class; no anonymous later hook.","primary_scripture":["Matthew 26:20,26–29","Mark 14:17,22–25","Luke 22:14–20"],"secondary_scripture":["1 Corinthians 11:23–26 (optional cross-reference)"],"historical_context_sources":"none for grading","interpretive_sources":"none for grading","source_classification_notes":"Answer-bearing narrative claims are inherited from the source-audited historical mission; R04 materializes them under schema v1.2 without adding historical or doctrinal premises.","disputed_points":"Doctrinal interpretation of Eucharistic language is outside required grading; absence in one witness is not contradiction.","textual_variant_points":["Luke 22:19b–20 longer/shorter textual form is gameplay-relevant TX1.","Matthew 26:28 / Mark 14:24 covenant wording may vary by textual tradition/translation; exact-string grading is prohibited."],"opening_brief":"Historical source-audited mission substance retained; canonical records are the machine-checkable product layer.","case_question":"Resolve the mission from direct text, witness provenance, comparison, uncertainty and source boundaries.","known_facts_at_start":"Only previously audited campaign state and the assigned source corpus.","unknowns_to_resolve":"Witness-specific details, source limits, local order, comparison relations and any TX1-sensitive wording.","completion_synthesis":"Synoptic table/bread/cup core reconstructed with witness-specific wording and TX1 transparency.","entry_node":"LN02-N01","task_nodes":["LN02-N01","LN02-N02","LN02-N03","LN02-N04","LN02-N05","LN02-N06","LN02-N07","LN02-N08","LN02-N09","LN02-N10","LN02-N11","LN02-N12"],"optional_nodes":["LN02-O01","LN02-O02"],"failure_recovery_routes":"Every partial/incorrect route returns to the current node after targeted source remediation; no dead ends.","completion_conditions":"All required nodes completed independently or guided with provenance/source/TX1 constraints intact.","perfect_investigation_conditions":"Required nodes independent plus optional evidence where offered; knowledge performance only, never spiritual ranking.","accessibility":{"keyboard_complete_equivalent":true,"screen_reader_announcement_requirements":"Announce node identity, source scope, result, evidence/confidence/TX1, mastery consequence and next action.","nonvisual_equivalent":"All comparison, ordering, evidence and uncertainty mechanics have labelled linear text/control equivalents.","focus_order":"Prompt → source scope → controls → feedback → evidence → next action; focus returns predictably after source inspection.","prohibited_essential_modes":["color-only","drag-only","pointer-only","spatial-only","time-only"]}},"node_files":["nodes_part_01.json","nodes_part_02.json"],"node_count":14}
+{
+  "schema_version": "CONTENT_NODE_SCHEMA_v1.2",
+  "content_revision": "v1.2",
+  "canonical_status": "AUTHOR_COMPLETE / DEVELOPER_SOURCE_AUDITED / INDEPENDENT_AUDIT_PENDING",
+  "historical_source": {
+    "path": "docs/campaigns/LN/LN-02_AT_THE_TABLE_v1.0.md",
+    "sha": "38df5aad8e13739ba11eafddc258de9392b0a1d3",
+    "preserved": true
+  },
+  "mission": {
+    "mission_id": "LN-02",
+    "campaign_id": "LN",
+    "title": "За столом",
+    "mission_role": "parallel-text investigation / evidence synthesis",
+    "estimated_time": "30–45 minutes",
+    "difficulty": "3/6",
+    "learning_objectives": ["Define the Synoptic meal corpus.","Reconstruct shared bread/cup actions without flattening witnesses.","Preserve Luke- and Matthew-specific wording.","Handle textual variants transparently.","Produce source-cited synthesis."],
+    "mastery_tags": ["GOSPEL_PARALLELS","TEXT_VS_INFERENCE","SEQUENCE_RECONSTRUCTION","TEXTUAL_TRANSMISSION_AWARENESS","CITATION_EVIDENCE"],
+    "retrieval_targets": "Historical source-audited mission relations plus explicit per-node stable destinations.",
+    "future_repetition_hooks": "Every canonical node uses an explicit terminal retrieval class; no anonymous later hook.",
+    "primary_scripture": ["Matthew 26:20,26–29","Mark 14:17,22–25","Luke 22:14–20"],
+    "secondary_scripture": ["1 Corinthians 11:23–26 (optional cross-reference)"],
+    "historical_context_sources": "none for grading",
+    "interpretive_sources": "none for grading",
+    "source_classification_notes": "Answer-bearing narrative claims are inherited from the source-audited historical mission; R05 repairs semantic pedagogy and traceability without adding historical or doctrinal premises.",
+    "disputed_points": "Doctrinal interpretation of Eucharistic language is outside required grading; absence in one witness is not contradiction.",
+    "textual_variant_points": ["Luke 22:19b–20: NET Bible, textual-critical (tc) note at Luke 22:19–20 discusses the shorter/longer textual forms; gameplay marks this TX1 and does not force an originality verdict.","Matthew 26:28 and Mark 14:24: NET Bible textual-critical notes discuss variation involving kainēs (new) before covenant; exact-string grading is prohibited and the game preserves witness/text-form scope."],
+    "opening_brief": "Historical source-audited mission substance retained; canonical records are the machine-checkable product layer.",
+    "case_question": "Resolve the mission from direct text, witness provenance, comparison, uncertainty and source boundaries.",
+    "known_facts_at_start": "Only previously audited campaign state and the assigned source corpus.",
+    "unknowns_to_resolve": "Witness-specific details, source limits, local order, comparison relations and any TX1-sensitive wording.",
+    "completion_synthesis": "Synoptic table/bread/cup core reconstructed with witness-specific wording and TX1 transparency.",
+    "entry_node": "LN02-N01",
+    "task_nodes": ["LN02-N01","LN02-N02","LN02-N03","LN02-N04","LN02-N05","LN02-N06","LN02-N07","LN02-N08","LN02-N09","LN02-N10","LN02-N11","LN02-N12"],
+    "optional_nodes": ["LN02-O01","LN02-O02"],
+    "failure_recovery_routes": "Every partial/incorrect route returns to the current node after targeted source remediation; no dead ends.",
+    "completion_conditions": "All required nodes completed independently or guided with provenance/source/TX1 constraints intact.",
+    "perfect_investigation_conditions": "Required nodes independent plus optional evidence where offered; knowledge performance only, never spiritual ranking.",
+    "accessibility": {"keyboard_complete_equivalent":true,"screen_reader_announcement_requirements":"Announce node identity, source scope, result, evidence/confidence/TX1, mastery consequence and next action.","nonvisual_equivalent":"All comparison, ordering, evidence and uncertainty mechanics have labelled linear text/control equivalents.","focus_order":"Prompt → source scope → controls → feedback → evidence → next action; focus returns predictably after source inspection.","prohibited_essential_modes":["color-only","drag-only","pointer-only","spatial-only","time-only"]}
+  },
+  "node_files": ["nodes_part_01.json","nodes_part_02.json"],
+  "node_count": 14
+}

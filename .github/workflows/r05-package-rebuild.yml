@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - r05-package-rebuild
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read

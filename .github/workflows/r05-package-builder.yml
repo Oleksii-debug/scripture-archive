@@ -1,0 +1,284 @@
+name: R05 exact delivery package
+
+on:
+  push:
+    branches:
+      - r05-package-builder
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-r05-package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout builder branch with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build exact R05 package
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="42d5d38594350aca6d544f00b411fb8aef697a0e"
+          TARGET="bbc681db9701fa39dbe757dda8f2e341ea4e3c5b"
+          PKG="package"
+          SRC="source_exact"
+
+          rm -rf "$PKG" "$SRC" DEV_OUTPUT_SCRIPTURE_R05.zip
+          mkdir -p "$PKG/CHANGED_FILES" "$SRC"
+
+          git cat-file -e "$BASE^{commit}"
+          git cat-file -e "$TARGET^{commit}"
+          git archive "$TARGET" | tar -x -C "$SRC"
+          git diff --name-only --diff-filter=AM "$BASE" "$TARGET" > changed_files.txt
+          COUNT=$(wc -l < changed_files.txt | tr -d ' ')
+          test "$COUNT" = "55"
+
+          while IFS= read -r path; do
+            test -f "$SRC/$path"
+            mkdir -p "$PKG/CHANGED_FILES/$(dirname "$path")"
+            cp "$SRC/$path" "$PKG/CHANGED_FILES/$path"
+          done < changed_files.txt
+
+          python - <<'PY'
+          import hashlib, json, pathlib, subprocess
+          base='42d5d38594350aca6d544f00b411fb8aef697a0e'
+          target='bbc681db9701fa39dbe757dda8f2e341ea4e3c5b'
+          paths=[x for x in pathlib.Path('changed_files.txt').read_text(encoding='utf-8').splitlines() if x]
+          assert len(paths)==55, len(paths)
+          rows=[]
+          for p in paths:
+              data=(pathlib.Path('package/CHANGED_FILES')/p).read_bytes()
+              actual=hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest()
+              expected=subprocess.check_output(['git','rev-parse',f'{target}:{p}'], text=True).strip()
+              if actual != expected:
+                  raise SystemExit(f'BLOB_MISMATCH {p} expected={expected} actual={actual}')
+              rows.append({'path':p,'git_blob_expected':expected,'git_blob_actual':actual,'sha256':hashlib.sha256(data).hexdigest(),'bytes':len(data)})
+          manifest={'schema':'R05_PACKAGE_GIT_BLOB_MANIFEST_v1','base_commit':base,'target_commit':target,'changed_file_count':len(rows),'all_git_blobs_match':True,'files':rows}
+          pathlib.Path('package/PACKAGE_GIT_BLOB_MANIFEST.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          print(f'GIT_BLOB_FIDELITY_PASS={len(rows)}/55')
+          PY
+
+          set +e
+          (
+            cd "$SRC"
+            python tools/validate_canonical_missions_and_nodes.py
+          ) > validator.out 2>&1
+          VALIDATOR_RC=$?
+          (
+            cd "$SRC"
+            python tools/test_validate_canonical_missions_and_nodes.py
+          ) > validator_fixtures.out 2>&1
+          FIXTURE_RC=$?
+          (
+            cd "$SRC"
+            python tools/test_r05_effective_canonical_state.py
+          ) > effective_state.out 2>&1
+          EFFECTIVE_RC=$?
+          (
+            cd "$SRC"
+            python tools/validate_r05_precheck_corrections.py
+          ) > precheck.out 2>&1
+          PRECHECK_RC=$?
+          (
+            cd "$SRC"
+            python -m py_compile tools/validate_canonical_missions_and_nodes.py tools/test_validate_canonical_missions_and_nodes.py tools/test_r05_effective_canonical_state.py tools/validate_r05_precheck_corrections.py
+          ) > pycompile.out 2>&1
+          PYCOMPILE_RC=$?
+          set -e
+
+          test "$VALIDATOR_RC" = "0"
+          test "$FIXTURE_RC" = "0"
+          test "$EFFECTIVE_RC" = "0"
+          test "$PRECHECK_RC" = "0"
+          test "$PYCOMPILE_RC" = "0"
+
+          python - <<'PY'
+          import json, pathlib, re
+          root=pathlib.Path('source_exact')
+          # Machine-readable canonical LN node count from mission indexes.
+          total_nodes=0
+          mission_indexes=[]
+          for p in sorted((root/'docs/campaigns/LN').glob('LN-*_CANONICAL_v1.2/MISSION_INDEX.json')):
+              obj=json.loads(p.read_text(encoding='utf-8'))
+              c=int(obj.get('node_count',0))
+              total_nodes += c
+              mission_indexes.append((str(p.relative_to(root)),c))
+          if total_nodes != 154:
+              raise SystemExit(f'EXPECTED_154_JSON_NODES got={total_nodes} details={mission_indexes}')
+
+          overlay_dir=root/'docs/campaigns/LN/R05_PEDAGOGY_OVERLAYS'
+          overlay_count=0
+          for p in sorted(overlay_dir.glob('*_part_*.json')):
+              obj=json.loads(p.read_text(encoding='utf-8'))
+              items=obj.get('overlays',obj.get('nodes',obj.get('patches',[])))
+              if isinstance(items,list): overlay_count += len(items)
+          if overlay_count != 63:
+              raise SystemExit(f'EXPECTED_63_OVERLAYS got={overlay_count}')
+
+          evidence_count=0
+          for p in sorted((root/'docs/evidence').glob('R05_EVIDENCE_PROVENANCE_REGISTRY_v0.1_part_*.json')):
+              obj=json.loads(p.read_text(encoding='utf-8'))
+              items=obj.get('records',obj.get('evidence_records',obj.get('entries',[])))
+              if isinstance(items,list): evidence_count += len(items)
+          if evidence_count != 93:
+              raise SystemExit(f'EXPECTED_93_EVIDENCE_RECORDS got={evidence_count}')
+
+          # Secret scan only changed repository files; conservative high-confidence signatures.
+          patterns=[
+              re.compile(rb'sk-[A-Za-z0-9_-]{20,}'),
+              re.compile(rb'gh[pousr]_[A-Za-z0-9]{20,}'),
+              re.compile(rb'AIza[0-9A-Za-z_-]{25,}'),
+              re.compile(rb'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----'),
+          ]
+          hits=[]
+          for p in pathlib.Path('package/CHANGED_FILES').rglob('*'):
+              if p.is_file():
+                  data=p.read_bytes()
+                  if any(rx.search(data) for rx in patterns): hits.append(str(p))
+          if hits: raise SystemExit('SECRET_SIGNATURE_HITS '+repr(hits))
+          pathlib.Path('counts.out').write_text(f'JSON_CANONICAL_NODES={total_nodes}\nPEDAGOGY_OVERLAYS={overlay_count}\nEVIDENCE_RECORDS={evidence_count}\nSECRET_SCAN=PASS\n',encoding='utf-8')
+          PY
+
+          cat > "$PKG/DEV_REPORT.md" <<'EOF'
+          # DEV REPORT — Scripture Archive R05 delivery
+
+          R05 substantive work and PRE-R05-005 closure are delivered from exact GitHub target `bbc681db9701fa39dbe757dda8f2e341ea4e3c5b`, compared with frozen R04 base `42d5d38594350aca6d544f00b411fb8aef697a0e`.
+
+          This package contains every added or modified repository file in that boundary under `CHANGED_FILES/`. Independent audit is still required; this developer package does not declare audit PASS.
+          EOF
+
+          cat > "$PKG/CHANGELOG.md" <<'EOF'
+          # CHANGELOG — R05
+
+          - Repaired 29 LN-02/LN-03 pedagogy records with node-specific feedback and progressive H1-H7 guidance.
+          - Canonicalized remaining LN-06, LN-10 and LN-11 work; developer normalization reaches 185/185 with the documented split 154 JSON canonical nodes + 31 accepted normalized Markdown nodes.
+          - Added 63 pedagogy overlays and precedence rules.
+          - Added 93 provenance registry records (77 LN + 16 PA-02).
+          - Added TX1 source traceability and retrieval/variant/player-history regression documentation.
+          - Hardened canonical validation and negative fixtures.
+          - Closed PRE-R05-005 by making the effective canonical path consume semantic corrections and evidence corrections in the validated precedence chain.
+          EOF
+
+          cat > "$PKG/CURRENT_STATUS.md" <<'EOF'
+          # CURRENT STATUS
+
+          Phase: TEXTUAL_PREPRODUCTION_ACTIVE
+          Production authorized: NO
+          Developer round: R05 corrected delivery
+          Exact GitHub HEAD: bbc681db9701fa39dbe757dda8f2e341ea4e3c5b
+          Frozen R04 base: 42d5d38594350aca6d544f00b411fb8aef697a0e
+          Developer-normalized LN: 185/185 = 154 machine-readable JSON canonical nodes + 31 independently accepted normalized Markdown nodes.
+          Independent accepted baseline remains 108/185 until formal R05 audit.
+          PA canonical baseline: 30 nodes.
+          R05 evidence registry: 93 records.
+          R05 pedagogy overlays: 63 nodes.
+          R05 source-safe useful units: 170.
+          Next role after verified Drive delivery: AUDITOR.
+          EOF
+
+          cat > "$PKG/AUDITOR_SCOPE.md" <<'EOF'
+          # AUDITOR SCOPE — R05
+
+          Independently verify, without trusting developer claims:
+          1. exact 55-file R04→R05 package fidelity against GitHub target bbc681db9701fa39dbe757dda8f2e341ea4e3c5b;
+          2. all five R04 audit closures;
+          3. PRE-R05-005 effective canonical correction consumption;
+          4. 29 LN-02/LN-03 pedagogy repairs;
+          5. 48 newly canonicalized LN-06/LN-10/LN-11 nodes;
+          6. 63 pedagogy overlays and precedence restrictions;
+          7. 93 evidence provenance records and correction layer;
+          8. TX1 source traceability;
+          9. validator positive/negative fixtures and effective-state regression;
+          10. retrieval, variant, player-memory and accessibility regressions.
+
+          Do not raise the independent 108/185 baseline without actual audit evidence.
+          EOF
+
+          {
+            echo '# TEST AND VALIDATION REPORT'
+            echo
+            echo 'All commands below were executed against an archive materialized from exact target commit.'
+            echo
+            echo '## Canonical validator'
+            echo '```text'; cat validator.out; echo '```'
+            echo
+            echo '## Validator fixtures'
+            echo '```text'; cat validator_fixtures.out; echo '```'
+            echo
+            echo '## Effective canonical state regression'
+            echo '```text'; cat effective_state.out; echo '```'
+            echo
+            echo '## PRE-R05 correction validation'
+            echo '```text'; cat precheck.out; echo '```'
+            echo
+            echo '## Python compile'
+            echo '```text'; cat pycompile.out; echo 'exit=0'; echo '```'
+            echo
+            echo '## Count and secret assertions'
+            echo '```text'; cat counts.out; echo '```'
+            echo
+            echo '## Git blob fidelity'
+            echo '55/55 changed files matched exact target Git blob SHA before ZIP creation.'
+          } > "$PKG/TEST_AND_VALIDATION_REPORT.md"
+
+          cat > "$PKG/SOURCE_AUDIT_NOTES.md" <<'EOF'
+          # SOURCE AUDIT NOTES
+
+          R05 preserves the direct-text / comparative / interpretation / disputed-claim boundaries. TX1 remains a textual-variant adjunct rather than a confidence code. Named textual-critical traceability for the affected Last Supper passages is documented in `CHANGED_FILES/docs/audits/R05_TX1_SOURCE_TRACEABILITY_v0.1.md` and must be independently checked by the auditor.
+          EOF
+
+          cat > "$PKG/MIGRATION_NOTES.md" <<'EOF'
+          # MIGRATION NOTES
+
+          No production migration is authorized in R05. This is textual preproduction only. Effective canonical precedence for R05 must be interpreted using the repository specifications and correction/overlay layers included in `CHANGED_FILES/`. Production code or deployment must not be inferred from this package.
+          EOF
+
+          cat > "$PKG/PACKAGE_MANIFEST.md" <<'EOF'
+          # PACKAGE MANIFEST
+
+          Package: DEV_OUTPUT_SCRIPTURE_R05.zip
+          Base: 42d5d38594350aca6d544f00b411fb8aef697a0e
+          Target: bbc681db9701fa39dbe757dda8f2e341ea4e3c5b
+          Repository changed files: 55
+          Changed-file payload directory: CHANGED_FILES/
+          Byte-level Git blob manifest: PACKAGE_GIT_BLOB_MANIFEST.json
+          Root reports: DEV_REPORT.md, CHANGELOG.md, CURRENT_STATUS.md, AUDITOR_SCOPE.md, TEST_AND_VALIDATION_REPORT.md, SOURCE_AUDIT_NOTES.md, MIGRATION_NOTES.md, PACKAGE_MANIFEST.md.
+          Secrets scan: required PASS before archive creation.
+          Production authorization: NO.
+          EOF
+
+          (cd "$PKG" && zip -q -r ../DEV_OUTPUT_SCRIPTURE_R05.zip .)
+
+          python - <<'PY'
+          import hashlib, zipfile, pathlib
+          p=pathlib.Path('DEV_OUTPUT_SCRIPTURE_R05.zip')
+          with zipfile.ZipFile(p,'r') as z:
+              bad=z.testzip()
+              if bad is not None: raise SystemExit(f'ZIP_CRC_FAIL {bad}')
+              names=set(z.namelist())
+              required={'DEV_REPORT.md','CHANGELOG.md','CURRENT_STATUS.md','AUDITOR_SCOPE.md','TEST_AND_VALIDATION_REPORT.md','SOURCE_AUDIT_NOTES.md','MIGRATION_NOTES.md','PACKAGE_MANIFEST.md','PACKAGE_GIT_BLOB_MANIFEST.json'}
+              missing=required-names
+              if missing: raise SystemExit(f'ZIP_MISSING_ROOT_FILES {sorted(missing)}')
+              changed=[n for n in names if n.startswith('CHANGED_FILES/') and not n.endswith('/')]
+              if len(changed)!=55: raise SystemExit(f'ZIP_CHANGED_FILE_COUNT={len(changed)} expected=55')
+          data=p.read_bytes()
+          print('ZIP_CRC=PASS')
+          print('ZIP_CHANGED_FILES=55')
+          print('ZIP_BYTES='+str(len(data)))
+          print('ZIP_SHA256='+hashlib.sha256(data).hexdigest())
+          pathlib.Path('delivery_metadata.txt').write_text('ZIP_CRC=PASS\nZIP_CHANGED_FILES=55\nZIP_BYTES='+str(len(data))+'\nZIP_SHA256='+hashlib.sha256(data).hexdigest()+'\n',encoding='utf-8')
+          PY
+
+      - name: Upload exact R05 delivery artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEV_OUTPUT_SCRIPTURE_R05
+          path: |
+            DEV_OUTPUT_SCRIPTURE_R05.zip
+            delivery_metadata.txt
+          if-no-files-found: error
+          compression-level: 0

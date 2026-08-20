@@ -1,0 +1,130 @@
+name: R05 package rebuild
+
+on:
+  push:
+    branches:
+      - r05-package-rebuild
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact R05 product state
+        uses: actions/checkout@v4
+        with:
+          ref: c2d7272a2106879b19b76bedd621768635baf7be
+          fetch-depth: 0
+
+      - name: Build and validate DEV_OUTPUT_SCRIPTURE_R05
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess, json, hashlib, zipfile, re, shutil, os
+
+          BASE='42d5d38594350aca6d544f00b411fb8aef697a0e'
+          HEAD='c2d7272a2106879b19b76bedd621768635baf7be'
+          root=Path.cwd()
+          pkg=root/'_r05_package'
+          changed_root=pkg/'CHANGED_FILES'
+          if pkg.exists(): shutil.rmtree(pkg)
+          changed_root.mkdir(parents=True)
+
+          def run(cmd):
+              return subprocess.run(cmd, cwd=root, text=True, capture_output=True, check=False)
+
+          changed=run(['git','diff','--name-only',BASE,HEAD]).stdout.splitlines()
+          changed=[p.strip() for p in changed if p.strip()]
+          if len(changed)!=49:
+              raise SystemExit(f'Expected 49 changed repository files, got {len(changed)}')
+
+          blob_manifest=[]
+          for rel in changed:
+              src=root/rel
+              if not src.is_file():
+                  raise SystemExit(f'Missing current-head changed file: {rel}')
+              dst=changed_root/rel
+              dst.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copyfile(src,dst)
+              blob=run(['git','rev-parse',f'{HEAD}:{rel}']).stdout.strip()
+              local_blob=run(['git','hash-object',str(dst)]).stdout.strip()
+              if blob!=local_blob:
+                  raise SystemExit(f'Git blob mismatch for {rel}: {local_blob} != {blob}')
+              data=dst.read_bytes()
+              blob_manifest.append({'path':rel,'git_blob_sha':blob,'sha256':hashlib.sha256(data).hexdigest(),'bytes':len(data)})
+
+          validator=run(['python','tools/validate_canonical_missions_and_nodes.py','.'])
+          fixtures=run(['python','tools/test_validate_canonical_missions_and_nodes.py'])
+          if validator.returncode!=0:
+              print(validator.stdout); print(validator.stderr)
+              raise SystemExit('Validator failed')
+          if fixtures.returncode!=0:
+              print(fixtures.stdout); print(fixtures.stderr)
+              raise SystemExit('Validator fixture suite failed')
+
+          patterns={
+              'private_key': re.compile(rb'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----'),
+              'github_token': re.compile(rb'gh[pousr]_[A-Za-z0-9]{30,}'),
+              'openai_like_key': re.compile(rb'sk-[A-Za-z0-9_-]{20,}'),
+              'aws_access_key': re.compile(rb'AKIA[0-9A-Z]{16}'),
+          }
+          secret_hits=[]
+          for rel in changed:
+              data=(changed_root/rel).read_bytes()
+              for name,pat in patterns.items():
+                  if pat.search(data): secret_hits.append({'path':rel,'pattern':name})
+          if secret_hits:
+              raise SystemExit('Secret-pattern hits: '+json.dumps(secret_hits))
+
+          reports={
+          'DEV_REPORT.md': '''# DEV R05 — Developer Report\n\nState: COMPLETE / INDEPENDENT AUDIT R05 PENDING.\n\nR05 closes the developer side of AUD-R04-001..005. It repairs 29 LN-02/LN-03 nodes, canonicalizes all remaining 48 LN nodes (LN-06 16, LN-10 15, LN-11 17), adds 63 pedagogy overlays over preserved historical JSON, and adds 93 deterministic evidence-provenance records (77 LN + 16 accepted PA-02). Developer-normalized LN coverage is 185/185 with an explicit 154 JSON + 31 independently accepted normalized Markdown split.\n\nNo production website/app/platform code was created. Independent accepted baseline must not be raised by the developer.\n''',
+          'CHANGELOG.md': '''# DEV R05 — Changelog\n\n- Closed developer-side AUD-R04-001: individualized feedback and progressive H1-H7 with real guided answer/evidence for 29 LN-02/LN-03 nodes.\n- Closed developer-side AUD-R04-002: validator now rejects placeholder H7, generic/bulk-identical feedback, invalid overlay/source/retrieval/confidence/TX1 data; executable fixtures added.\n- Closed developer-side AUD-R04-003: TX1 traceability registry added for named textual-critical notes and existing TX1 chains retained.\n- Closed developer-side AUD-R04-004: ambiguous pseudo-campaign retrieval terminals replaced by explicit review queues.\n- Closed developer-side AUD-R04-005: source-safe R05 throughput reaches 170 useful units before 63 additional proactive legacy pedagogy overlays.\n- Canonicalized LN-06, LN-10, LN-11: 48 nodes.\n- Added whole-pilot normalization/retrieval/relation/accessibility/player-memory registers and 93 evidence provenance records.\n''',
+          'CURRENT_STATUS.md': '''# DEV R05 — Current Status\n\nPHASE: TEXTUAL_PREPRODUCTION_ACTIVE\nPRODUCTION_AUTHORIZED: NO\nDEV_ROUND: R05\nDEV_STATE: COMPLETE\nNEXT_ROLE: AUDITOR\n\nLN authored: 185/185.\nLN developer-normalized: 185/185 = 100%.\nFormat split: 154 machine-readable JSON canonical nodes + 31 independently accepted normalized Markdown nodes (LN-07/LN-08).\nIndependent accepted baseline before the actual AUDIT R05 remains 108/185.\nPA developer baseline remains PA-01 + PA-02 = 30 canonical nodes; PA-03 is not claimed.\n''',
+          'AUDITOR_SCOPE.md': '''# DEV R05 — Auditor Scope\n\nIndependently verify, without trusting developer self-checks:\n1. AUD-R04-001..005 closure.\n2. 29 repaired LN-02/LN-03 nodes: individualized success/partial/failure, progressive H1-H7, actual H7 answer/evidence, guided mastery.\n3. 48 new canonical LN nodes: LN-06 16, LN-10 15, LN-11 17.\n4. 63 pedagogy overlays: allowed pedagogy keys only; base answer/source claims preserved.\n5. LN 185/185 normalization claim with explicit 154 JSON + 31 normalized Markdown split.\n6. 93-record evidence provenance registry: 77 LN + 16 accepted PA-02.\n7. TX1 traceability and no originality-verdict requirement.\n8. Retrieval / variant-relation / player-memory / accessibility invariants.\n9. Validator and fixtures independently.\n10. PACKAGE_GIT_BLOB_MANIFEST.json against exact GitHub HEAD c2d7272a2106879b19b76bedd621768635baf7be.\n\nDo not convert developer validation into PASS without independent semantic/source verification.\n''',
+          'TEST_AND_VALIDATION_REPORT.md': f'''# DEV R05 — Test and Validation Report\n\nExact GitHub HEAD: `{HEAD}`\nBase R04 HEAD: `{BASE}`\nChanged repository files packaged: {len(changed)}\nPackage↔GitHub blob checks: {len(blob_manifest)}/{len(blob_manifest)} PASS.\n\nValidator return code: {validator.returncode}\n```text\n{validator.stdout.strip()}\n```\n\nFixture-suite return code: {fixtures.returncode}\n```text\n{fixtures.stdout.strip()}\n```\n\nSecret-pattern scan: 0 hits.\nProduction-code gate: no new production website/app/platform code claimed.\n\nLimit: static/developer validation is not an independent semantic audit.\n''',
+          'SOURCE_AUDIT_NOTES.md': '''# DEV R05 — Source Audit Notes\n\nR05 preserves witness-local provenance and uncertainty rather than forcing a single harmonized microchronology. LN-02/LN-03 repairs change pedagogy/traceability, not the previously audited biblical proposition boundaries. LN-06/LN-10/LN-11 are source-bounded canonicalizations of already authored/source-audited historical mission material.\n\nTX1 remains adjunct metadata separate from confidence_code. Responsible translation/textual forms preserving the proposition are not penalized. Named textual-note traceability is recorded in docs/audits/R05_TX1_SOURCE_TRACEABILITY_v0.1.md.\n\nThe 63 R05 pedagogy overlays are restricted to pedagogy/mastery presentation fields and are validated against forbidden source/answer overrides.\n''',
+          'PACKAGE_MANIFEST.md': f'''# DEV R05 — Package Manifest\n\nPackage type: self-contained developer handoff for the factual R05 GitHub delta.\nExact product HEAD: `{HEAD}`.\nBase R04 HEAD: `{BASE}`.\nRepository files in CHANGED_FILES: {len(changed)}.\nRequired root reports: DEV_REPORT.md, CHANGELOG.md, CURRENT_STATUS.md, AUDITOR_SCOPE.md, TEST_AND_VALIDATION_REPORT.md, SOURCE_AUDIT_NOTES.md, PACKAGE_MANIFEST.md, PACKAGE_GIT_BLOB_MANIFEST.json, QA_LOG.txt.\nNo secrets/private logs/credentials included.\n''',
+          'QA_LOG.txt': f'''DEV R05 PACKAGE REBUILD QA\nHEAD={HEAD}\nBASE={BASE}\nCHANGED_FILES={len(changed)}\nGIT_BLOB_FIDELITY={len(blob_manifest)}/{len(blob_manifest)} PASS\nVALIDATOR_RC={validator.returncode}\nFIXTURES_RC={fixtures.returncode}\nSECRET_PATTERN_HITS=0\nZIP_CREATED_BY_GITHUB_ACTION=YES\nNOTE=Independent audit still required.\n'''
+          }
+          for name,text in reports.items():
+              (pkg/name).write_text(text,encoding='utf-8')
+          (pkg/'PACKAGE_GIT_BLOB_MANIFEST.json').write_text(json.dumps({'repository':'Oleksii-debug/scripture-archive','base':BASE,'head':HEAD,'file_count':len(blob_manifest),'files':blob_manifest},ensure_ascii=False,indent=2),encoding='utf-8')
+
+          expected=set(changed)
+          actual=set(str(p.relative_to(changed_root)).replace(os.sep,'/') for p in changed_root.rglob('*') if p.is_file())
+          if expected!=actual:
+              raise SystemExit(f'CHANGED_FILES set mismatch missing={sorted(expected-actual)} extra={sorted(actual-expected)}')
+
+          zip_path=root/'DEV_OUTPUT_SCRIPTURE_R05.zip'
+          if zip_path.exists(): zip_path.unlink()
+          with zipfile.ZipFile(zip_path,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=9) as z:
+              for p in sorted(pkg.rglob('*')):
+                  if p.is_file(): z.write(p,p.relative_to(pkg).as_posix())
+          with zipfile.ZipFile(zip_path) as z:
+              bad=z.testzip()
+              if bad is not None: raise SystemExit(f'ZIP CRC failure: {bad}')
+              names=set(z.namelist())
+              required=set(reports)|{'PACKAGE_GIT_BLOB_MANIFEST.json'}
+              miss=required-names
+              if miss: raise SystemExit(f'Missing root reports in ZIP: {sorted(miss)}')
+          data=zip_path.read_bytes()
+          print('R05_ZIP_PATH='+str(zip_path))
+          print('R05_ZIP_BYTES='+str(len(data)))
+          print('R05_ZIP_SHA256='+hashlib.sha256(data).hexdigest())
+          print('R05_CHANGED_FILES='+str(len(changed)))
+          print('R05_GIT_BLOB_FIDELITY=49/49 PASS')
+          print('R05_ZIP_CRC=PASS')
+          PY
+
+      - name: Upload exact R05 developer package
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEV_OUTPUT_SCRIPTURE_R05_REBUILD
+          path: DEV_OUTPUT_SCRIPTURE_R05.zip
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0

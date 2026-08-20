@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - r05-package-builder
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -63,33 +66,17 @@ jobs:
           PY
 
           set +e
-          (
-            cd "$SRC"
-            python tools/validate_canonical_missions_and_nodes.py
-          ) > validator.out 2>&1
+          ( cd "$SRC" && python tools/validate_canonical_missions_and_nodes.py ) > validator.out 2>&1
           VALIDATOR_RC=$?
-          (
-            cd "$SRC"
-            python tools/test_validate_canonical_missions_and_nodes.py
-          ) > validator_fixtures.out 2>&1
+          ( cd "$SRC" && python tools/test_validate_canonical_missions_and_nodes.py ) > validator_fixtures.out 2>&1
           FIXTURE_RC=$?
-          (
-            cd "$SRC"
-            python tools/test_r05_effective_canonical_state.py
-          ) > effective_state.out 2>&1
+          ( cd "$SRC" && python tools/test_r05_effective_canonical_state.py ) > effective_state.out 2>&1
           EFFECTIVE_RC=$?
-          (
-            cd "$SRC"
-            python tools/validate_r05_precheck_corrections.py
-          ) > precheck.out 2>&1
+          ( cd "$SRC" && python tools/validate_r05_precheck_corrections.py ) > precheck.out 2>&1
           PRECHECK_RC=$?
-          (
-            cd "$SRC"
-            python -m py_compile tools/validate_canonical_missions_and_nodes.py tools/test_validate_canonical_missions_and_nodes.py tools/test_r05_effective_canonical_state.py tools/validate_r05_precheck_corrections.py
-          ) > pycompile.out 2>&1
+          ( cd "$SRC" && python -m py_compile tools/validate_canonical_missions_and_nodes.py tools/test_validate_canonical_missions_and_nodes.py tools/test_r05_effective_canonical_state.py tools/validate_r05_precheck_corrections.py ) > pycompile.out 2>&1
           PYCOMPILE_RC=$?
           set -e
-
           test "$VALIDATOR_RC" = "0"
           test "$FIXTURE_RC" = "0"
           test "$EFFECTIVE_RC" = "0"
@@ -99,7 +86,6 @@ jobs:
           python - <<'PY'
           import json, pathlib, re
           root=pathlib.Path('source_exact')
-          # Machine-readable canonical LN node count from mission indexes.
           total_nodes=0
           mission_indexes=[]
           for p in sorted((root/'docs/campaigns/LN').glob('LN-*_CANONICAL_v1.2/MISSION_INDEX.json')):
@@ -109,7 +95,6 @@ jobs:
               mission_indexes.append((str(p.relative_to(root)),c))
           if total_nodes != 154:
               raise SystemExit(f'EXPECTED_154_JSON_NODES got={total_nodes} details={mission_indexes}')
-
           overlay_dir=root/'docs/campaigns/LN/R05_PEDAGOGY_OVERLAYS'
           overlay_count=0
           for p in sorted(overlay_dir.glob('*_part_*.json')):
@@ -118,7 +103,6 @@ jobs:
               if isinstance(items,list): overlay_count += len(items)
           if overlay_count != 63:
               raise SystemExit(f'EXPECTED_63_OVERLAYS got={overlay_count}')
-
           evidence_count=0
           for p in sorted((root/'docs/evidence').glob('R05_EVIDENCE_PROVENANCE_REGISTRY_v0.1_part_*.json')):
               obj=json.loads(p.read_text(encoding='utf-8'))
@@ -126,14 +110,7 @@ jobs:
               if isinstance(items,list): evidence_count += len(items)
           if evidence_count != 93:
               raise SystemExit(f'EXPECTED_93_EVIDENCE_RECORDS got={evidence_count}')
-
-          # Secret scan only changed repository files; conservative high-confidence signatures.
-          patterns=[
-              re.compile(rb'sk-[A-Za-z0-9_-]{20,}'),
-              re.compile(rb'gh[pousr]_[A-Za-z0-9]{20,}'),
-              re.compile(rb'AIza[0-9A-Za-z_-]{25,}'),
-              re.compile(rb'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----'),
-          ]
+          patterns=[re.compile(rb'sk-[A-Za-z0-9_-]{20,}'),re.compile(rb'gh[pousr]_[A-Za-z0-9]{20,}'),re.compile(rb'AIza[0-9A-Za-z_-]{25,}'),re.compile(rb'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----')]
           hits=[]
           for p in pathlib.Path('package/CHANGED_FILES').rglob('*'):
               if p.is_file():

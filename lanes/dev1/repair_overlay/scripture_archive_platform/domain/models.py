@@ -1,16 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 TRANSPORT_API_VERSION = "scripture.transport.v1"
 CONTENT_SCHEMA_VERSION = "CONTENT_NODE_SCHEMA_v1.2"
+ANSWER_DTO_VERSION = "ANSWER_DTO_v1"
 
 BUILTIN_TASK_TYPES = (
-    "SINGLE_CHOICE", "MULTI_SELECT", "SHORT_TEXT", "LONG_TEXT",
+    "SINGLE_CHOICE", "MULTI_SELECT", "SHORT_TEXT", "LONG_TEXT", "ARGUMENT",
     "COMBOBOX_SELECT", "ORDERING", "MATCHING", "EVIDENCE_SELECT",
-    "CLAIM_EVIDENCE", "COMPOSITE_MULTI_STEP",
-    "SPEAKER_RECIPIENT", "PARALLEL_WITNESS_COMPARE", "OT_NT_LINK",
+    "CLAIM_EVIDENCE", "COMPOSITE_MULTI_STEP", "SPEAKER_RECIPIENT",
+    "PARALLEL_WITNESS_COMPARE", "OT_NT_LINK",
 )
 
 @dataclass(frozen=True)
@@ -42,9 +43,4 @@ class GradeResult:
     needs_human_or_dev5_grader: bool = False
 
     def as_dict(self) -> dict[str, Any]:
-        return {
-            "status": self.status, "score": self.score, "feedback": self.feedback,
-            "evidence": self.evidence, "confidence_code": self.confidence_code,
-            "textual_variant_flag": self.textual_variant_flag,
-            "needs_human_or_dev5_grader": self.needs_human_or_dev5_grader,
-        }
+        return {"status":self.status,"score":self.score,"feedback":self.feedback,"evidence":self.evidence,"confidence_code":self.confidence_code,"textual_variant_flag":self.textual_variant_flag,"needs_human_or_dev5_grader":self.needs_human_or_dev5_grader}

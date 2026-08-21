@@ -136,7 +136,30 @@ def derive_answer_dto(node: Mapping[str, Any]) -> dict[str, Any]:
         source = payload if payload else accepted if isinstance(accepted, Mapping) else {}
         dto = {name: str(source.get(name, "")) for name in ("ot_passage", "nt_passage", "relation_category", "confidence", "evidence_id")}
     elif ctype == "COMPOSITE_MULTI_STEP":
-        if isinstance(accepted, Mapping) and "confidence" in accepted and "conclusion" in accepted:
+        explicit_steps = grading.get("steps") if isinstance(grading.get("steps"), list) else []
+        if explicit_steps:
+            dto_steps: list[dict[str, Any]] = []
+            for step in explicit_steps:
+                if not isinstance(step, Mapping):
+                    raise ValidationError("COMPOSITE grading.steps entries must be objects")
+                step_id = str(step.get("id") or step.get("step_id") or "").strip()
+                if not step_id:
+                    raise ValidationError("COMPOSITE grading step requires id")
+                if isinstance(step.get("task"), Mapping):
+                    child = deepcopy(dict(node))
+                    child.update(dict(step["task"]))
+                    child["task_type"] = canonical_task_type(str(step["task"].get("task_type") or step["task"].get("response_mode") or "LONG_TEXT"))
+                    nested = derive_answer_dto(child)
+                    nested_answer = {k: v for k, v in nested.items() if k not in {"schema", "task_type"}}
+                elif step.get("accepted_choice") is not None:
+                    nested_answer = {"choice": str(step["accepted_choice"])}
+                elif step.get("accepted_text") is not None:
+                    nested_answer = {"text": str(step["accepted_text"])}
+                else:
+                    raise ValidationError(f"COMPOSITE step {step_id} lacks explicit task/accepted answer")
+                dto_steps.append({"step_id": step_id, "answer": nested_answer})
+            dto = {"steps": dto_steps}
+        elif isinstance(accepted, Mapping) and "confidence" in accepted and "conclusion" in accepted:
             dto = {"steps": [
                 {"step_id": "confidence", "answer": {"choice": str(accepted["confidence"])}},
                 {"step_id": "conclusion", "answer": {"text": str(accepted["conclusion"])}},

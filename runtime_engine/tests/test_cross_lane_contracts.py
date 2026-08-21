@@ -59,6 +59,20 @@ class CrossLaneContractTests(unittest.TestCase):
         a=adapt_node_for_runtime(n,lane="D3"); result=GraderRegistry().grade(TaskDefinition.from_canonical(a),derive_answer_dto(a))
         self.assertEqual(result.correctness, Correctness.CORRECT)
 
+    def test_d4_composite_uses_explicit_grading_steps(self):
+        n=node("OTAB01-N027","OT-AB-01","COMPOSITE",{
+            "evidence_1":"EV-1 (Genesis 12:4, narrator): proposition",
+            "boundary":"Do not infer an absolute chronology."
+        },["EV-1"],grading={"steps":[
+            {"id":"evidence_1","weight":1.0,"task":{"task_type":"SHORT_TEXT","response_mode":"SHORT_TEXT","accepted_answer":"EV-1 (Genesis 12:4, narrator): proposition","accepted_variants":[],"required_evidence":["EV-1"],"grading":{"accepted_propositions":[{"id":"evidence_id","required":True,"aliases":["EV-1"]},{"id":"passage","required":True,"aliases":["Genesis 12:4"]},{"id":"provenance","required":True,"aliases":["narrator"]}]}}},
+            {"id":"boundary","weight":1.0,"task":{"task_type":"SHORT_TEXT","response_mode":"SHORT_TEXT","accepted_answer":"Do not infer an absolute chronology.","accepted_variants":[],"required_evidence":[],"grading":{"accepted_propositions":[{"id":"boundary","required":True,"aliases":["Do not infer an absolute chronology."]}]}}}
+        ]})
+        a=adapt_node_for_runtime(n,lane="D4_REPAIR_01")
+        dto=derive_answer_dto(a)
+        self.assertEqual([s["step_id"] for s in dto["steps"]],["evidence_1","boundary"])
+        result=GraderRegistry().grade(TaskDefinition.from_canonical(a),dto)
+        self.assertEqual(result.correctness, Correctness.CORRECT)
+
     def test_application_exposes_answer_contract(self):
         n=node("GW01-N01","GW-01","SINGLE_CHOICE","Matthew",["GW-EV-1"],task_contract={"options":["Matthew","Mark"]})
         repo=ContentRepository([adapt_node_for_runtime(n,lane="D3")]); app=RuntimeApplication(repo)

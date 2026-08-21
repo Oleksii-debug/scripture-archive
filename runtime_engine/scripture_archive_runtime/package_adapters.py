@@ -216,12 +216,21 @@ def adapt_node_for_runtime(node: Mapping[str, Any], *, lane: str = "unknown") ->
     elif ctype == "OT_NT_LINK":
         grading.setdefault("ot_nt_link", {k: adapted["answer_dto"][k] for k in ("ot_passage", "nt_passage", "relation_category", "confidence", "evidence_id")})
     elif ctype == "COMPOSITE_MULTI_STEP":
-        if len(adapted["answer_dto"]["steps"]) == 2 and adapted["answer_dto"]["steps"][0]["step_id"] == "confidence":
-            grading.setdefault("steps", [
+        # Preserve authored explicit step graders exactly. Only synthesize a fallback
+        # when the content has no grading.steps contract. Do not evaluate a text
+        # fallback for evidence/select steps because that can corrupt or crash a
+        # valid authored composite contract.
+        if isinstance(grading.get("steps"), list) and grading["steps"]:
+            pass
+        elif len(adapted["answer_dto"]["steps"]) == 2 and adapted["answer_dto"]["steps"][0]["step_id"] == "confidence":
+            grading["steps"] = [
                 {"id": "confidence", "weight": 0.35, "task_type": "SINGLE_CHOICE", "accepted_choice": adapted["answer_dto"]["steps"][0]["answer"]["choice"]},
                 {"id": "conclusion", "weight": 0.65, "task_type": "LONG_TEXT", "accepted_text": adapted["answer_dto"]["steps"][1]["answer"]["text"]},
-            ])
+            ]
         else:
-            grading.setdefault("steps", [{"id": "summary", "weight": 1.0, "task_type": "LONG_TEXT", "accepted_text": adapted["answer_dto"]["steps"][0]["answer"]["text"]}])
+            first = adapted["answer_dto"]["steps"][0]["answer"]
+            if "text" not in first:
+                raise ValidationError("COMPOSITE fallback requires explicit grading.steps for non-text first step")
+            grading["steps"] = [{"id": "summary", "weight": 1.0, "task_type": "LONG_TEXT", "accepted_text": first["text"]}]
     adapted["grading"] = grading
     return adapted

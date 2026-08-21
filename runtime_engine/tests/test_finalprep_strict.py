@@ -59,9 +59,11 @@ class MaterializerTests(unittest.TestCase):
                 f.writestr('nodes.json', json.dumps({'nodes':[{'node_id':'N1','task_type':'SINGLE_CHOICE','grading':{'accepted_choice':'a'},'accepted_answer':'a','required_evidence':['E1']}]}))
                 f.writestr('evidence.json', json.dumps({'records':[{'evidence_id':'E1'}]}))
             with self.assertRaises(MaterializationError): materialize_packages([self._spec(z)],Path(d)/'out')
+
     def test_rejects_unresolved_evidence(self):
         with tempfile.TemporaryDirectory() as d:
             z=self._zip(d,evidence_id='E1')
+            # rewrite node required ref without evidence record
             with zipfile.ZipFile(z,'w') as f:
                 f.writestr('nodes.json', json.dumps({'nodes':[{'node_id':'N1','task_type':'SINGLE_CHOICE','grading':{'accepted_choice':'a'},'accepted_answer':'a','required_evidence':['MISSING']}]}))
                 f.writestr('evidence.json', json.dumps({'records':[{'evidence_id':'E1'}]}))

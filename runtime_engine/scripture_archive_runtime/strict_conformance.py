@@ -45,6 +45,8 @@ class StrictConformanceItem:
         }
 
 
+# These keys are the canonical authored grader truth for release. Adapters may
+# normalize shapes, but release truth must already exist here.
 _AUTHORED_KEYS: dict[str, tuple[str, ...]] = {
     "SINGLE_CHOICE": ("accepted_choice",),
     "COMBOBOX_SELECT": ("accepted_choice",),
@@ -80,6 +82,7 @@ def _authored_truth_status(node: Mapping[str, Any]) -> tuple[str, str]:
     if not required:
         return TruthClass.ERROR_UNSUPPORTED.value, "no canonical truth rule registered"
 
+    # Text graders may author either proposition aliases or one accepted text.
     if task_type in {"SHORT_TEXT", "LONG_TEXT", "ARGUMENT"}:
         if any(_nonempty(grading.get(k)) for k in required):
             return TruthClass.AUTHORED_GROUND_TRUTH_PASS.value, "grading.accepted_propositions/accepted_text"
@@ -93,9 +96,13 @@ def _authored_truth_status(node: Mapping[str, Any]) -> tuple[str, str]:
         if all(_nonempty(grading.get(k)) for k in required):
             return TruthClass.AUTHORED_GROUND_TRUTH_PASS.value, "grading." + "+".join(required)
 
+    # Explicit legacy contract: D4 repair 01 authored OT/NT truth under
+    # accepted_link. This is migration-compatible but is not release canonical.
     if task_type == "OT_NT_LINK" and _nonempty(grading.get("accepted_link")):
         return TruthClass.LEGACY_NORMALIZED_PASS.value, "grading.accepted_link legacy compatibility"
 
+    # If the public answer can still be built from accepted_answer/task_payload,
+    # the adapter would have to create the grader truth. That must fail release.
     try:
         derive_answer_dto(node)
     except Exception as exc:

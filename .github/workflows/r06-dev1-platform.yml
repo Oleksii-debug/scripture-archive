@@ -1,0 +1,77 @@
+name: R06 DEV1 Platform CI
+
+on:
+  push:
+    branches:
+      - r06-dev1-platform-windows-constructor
+  pull_request:
+    paths:
+      - 'lanes/dev1/**'
+      - '.github/workflows/r06-dev1-platform.yml'
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ['3.11', '3.13']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Reconstruct DEV1 source archive (POSIX)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          cat lanes/dev1/source_parts/part-*.b64 | base64 -d > DEV1_R06_PLATFORM_SOURCE.zip
+          echo "51a31a8840b57850c8d4d0fc714b124445f3b3155daea083817c3570e0b80e0e  DEV1_R06_PLATFORM_SOURCE.zip" | sha256sum -c -
+          python -m zipfile -e DEV1_R06_PLATFORM_SOURCE.zip .
+      - name: Reconstruct DEV1 source archive (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $parts = Get-ChildItem lanes/dev1/source_parts/part-*.b64 | Sort-Object Name
+          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          [IO.File]::WriteAllBytes('DEV1_R06_PLATFORM_SOURCE.zip', [Convert]::FromBase64String($b64))
+          $hash = (Get-FileHash DEV1_R06_PLATFORM_SOURCE.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -ne '51a31a8840b57850c8d4d0fc714b124445f3b3155daea083817c3570e0b80e0e') { throw "Source archive hash mismatch: $hash" }
+          Expand-Archive DEV1_R06_PLATFORM_SOURCE.zip -DestinationPath . -Force
+      - name: Compile Python
+        run: python -m compileall -q r06_platform/scripture_archive_platform r06_platform/tests
+      - name: Run compact test suite
+        working-directory: r06_platform
+        run: python -m unittest discover -s tests -v
+      - name: Smoke platform bootstrap
+        run: python r06_platform/tools_smoke.py
+
+  windows-build:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Reconstruct source archive
+        shell: pwsh
+        run: |
+          $parts = Get-ChildItem lanes/dev1/source_parts/part-*.b64 | Sort-Object Name
+          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          [IO.File]::WriteAllBytes('DEV1_R06_PLATFORM_SOURCE.zip', [Convert]::FromBase64String($b64))
+          $hash = (Get-FileHash DEV1_R06_PLATFORM_SOURCE.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -ne '51a31a8840b57850c8d4d0fc714b124445f3b3155daea083817c3570e0b80e0e') { throw "Source archive hash mismatch: $hash" }
+          Expand-Archive DEV1_R06_PLATFORM_SOURCE.zip -DestinationPath . -Force
+      - name: Build Windows developer artifact
+        shell: pwsh
+        run: ./r06_platform/packaging/build_windows.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ScriptureArchive-R06-DEV1-Windows
+          path: r06_platform/dist/**
+          if-no-files-found: error

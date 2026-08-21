@@ -1,11 +1,13 @@
-# R06 DEV1 — Platform / Windows / Constructor lane
+# R06 DEV1 — Platform / Windows / Constructor lane — FINALPREP02
 
-Base GitHub HEAD: `bbc681db9701fa39dbe757dda8f2e341ea4e3c5b`.
+Historical base: `bbc681db9701fa39dbe757dda8f2e341ea4e3c5b`. FINALPREP02 starts from live DEV1 tip `0d30126393894f6fb2a30cff15ca4ef17bf527e1` and remains isolated from `main` until the dedicated integration cycle.
 
-This lane is intentionally isolated from `main` and from DEV2–DEV5. The immutable first implementation slice is stored in `source_parts/` and reconstructs to SHA-256 `51a31a8840b57850c8d4d0fc714b124445f3b3155daea083817c3570e0b80e0e`. Pre-integration fixes are readable under `repair_overlay/` and are applied by `.github/workflows/r06-dev1-platform.yml` before tests/build.
+The historic immutable base is still retained under `source_parts/` for recovery, but FINALPREP02 changes are readable under `repair_overlay/`, and the canonical lane package contains the fully resolved readable `r06_platform` source plus per-file hashes. Integration must use the resolved FINALPREP02 package/source state, not cherry-pick historical opaque chunks.
 
-The repair overlay closes DEV1-side cross-lane mismatches found by PRE-INTEGRATION AUDIT 01: CLAIM_EVIDENCE uses `{claim,evidence[]}`, COMPOSITE_MULTI_STEP uses `{step_id:value}`, platform renderer/editor slots cover SPEAKER_RECIPIENT / PARALLEL_WITNESS_COMPARE / OT_NT_LINK, and `RuntimeEngineContractAdapter` explicitly maps the stable `scripture.transport.v1` frontend boundary to DEV5 `runtime.v1` player commands without duplicating DEV5 grading/mastery/scheduler logic.
+DEV1 consumes the exact shared `ANSWER_DTO_v1` descriptors used by DEV5 FINALPREP02. All 14 current task types have renderer/editor slots; deterministic grading/mastery/scheduling remain DEV5-owned. Public runtime submissions are validated fail-closed before crossing the DEV1→DEV5 adapter boundary.
 
-The Windows build script now emits `r06_platform/dist/ScriptureArchive-R06-DEV1.exe` plus SHA/size metadata. GitHub-hosted Actions runs on 2026-08-21 currently fail before any workflow step is allocated (`steps: []`), so no remote Windows EXE is claimed verified until an actual runner executes the job. Local Linux validation of the repaired materialized source is recorded in the canonical DEV1 lane package.
+Current D2/D3/D4 package-shape presentation check is 1196/1196 mapped without unsupported task-type/DTO errors. This is DEV1 presentation-contract evidence, not source audit or auditor acceptance.
 
-Do not merge this draft lane mechanically. Dedicated integration must reconcile the final DEV5 grading contracts and DEV2–DEV4 content packages first.
+Windows packaging remains reproducible through `packaging/build_windows.ps1`. GitHub-hosted Actions previously terminated before recording workflow steps, so a Windows artifact is only verified if a real Windows run/build and WebView2 launch evidence exists. Human NVDA acceptance must never be inferred from automated semantic tests.
+
+Do not merge this lane mechanically. Exact final branch HEAD, resolved-source hash, package hash and Windows-artifact status are recorded in `DEV_LANE_SCRIPTURE_R06_D1_FINALPREP_02.zip` and its Drive handoff/readback evidence.

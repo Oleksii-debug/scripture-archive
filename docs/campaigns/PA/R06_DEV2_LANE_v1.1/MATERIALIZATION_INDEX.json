@@ -1,0 +1,39 @@
+{
+  "round": "R06_DEV2_REPAIR_01",
+  "base_head": "bbc681db9701fa39dbe757dda8f2e341ea4e3c5b",
+  "pre_repair_tip": "027859b843834028d29a3832126e793dc83d1508",
+  "canonical_drive_package": "DEV_LANE_SCRIPTURE_R06_D2.zip",
+  "repaired_materialization_archive": {
+    "name": "D2_R06_REPAIRED_MATERIALIZATION.zip",
+    "sha256": "15625183caa5f145959aee9dbbdbc5ad869ba53227d6769823fdb440fc39a01b",
+    "zip_integrity": "PASS"
+  },
+  "content_hashes": {
+    "ANSWER_DTO_CONTRACT_v1.0.json": "cba284b0fcd679ac6a815b5cb713393e01821ada8ab4adb50840b29a5ac9d42c",
+    "PA03_CANONICAL_v1.1.json": "198ce1c728ba5babe7ea648de3906fba5e2ee864abc9c6d420744b484612f4c9",
+    "PA04_CANONICAL_v1.1.json": "a4b909e5b6c5d6d575dc980d78f40b8620d2da2ca810ff940fb4ad2250639df6",
+    "PA05_CANONICAL_v1.1.json": "83b41f35d34a0ccd30c973bd3f2281edc0cce37caacddfc1c295f8d6a5aa6f32",
+    "PA06_CANONICAL_v1.1.json": "eebb409d38e72891bccdc22ee511c4916f255dbdf8a6ca05738fc2b41a447eb5",
+    "PA07_CANONICAL_v1.1.json": "5ec2f1745acffe6eeef90cce130666e5dd777d42d7e0205f5f28b14d7b9e1819",
+    "PA08_CANONICAL_v1.1.json": "88ca30d519b8291229da90aa48a7b257a7a9cd8a22950d0cdfebb2e7a8201c38",
+    "PA_R06_D2_EVIDENCE_v1.1.json": "66c61a40f71892724e72e2123efcdc070df5c104ebf447baf2b76950d9ed21a9",
+    "PA_R06_D2_MANIFEST_v1.1.json": "16a5453ca55a408fcbec67fa6429c2d11198bd6ddf38c6a8f96bfb16c080b9fa",
+    "PA_R06_D2_QUARANTINE_v1.1.json": "196eefa6b885a7f00e13ab0b13f447cbd2c7269de53cd6e1ab0fbbb11f5ce125",
+    "PA_R06_D2_RUNTIME_NODES_v1.0.json": "24557160ddbd5c14235daf46ae011ec8f04bc1e113f4b9689301e4743ee9e210",
+    "SOURCE_BOUNDARY_REGRESSION_v1.0.json": "11e3ad71f3fb724537ae10b742fa503bd5bcaf6188b54ccd44948a1c259484bd",
+    "validate_dev2_lane_v1_1.py": "612cf317c9bdd701ba33051ff97b917f94124b3a1497ae3e529d807a210a844f",
+    "validate_dev2_runtime_contract_v1_1.py": "a35ee69b2cb4c684e271af842feb2af4b9946cc7fd532e0bf226e158aa3a0b13",
+    "validate_dev2_source_boundaries_v1_0.py": "d0648700a50de901f822a8e2a72f7deb17f8867056a16ed4d4efc719c725f264"
+  },
+  "validation": {
+    "canonical_nodes": 386,
+    "evidence_records": 184,
+    "schema_errors": 0,
+    "duplicate_fingerprints": 0,
+    "generic_accepted_variant_policy_strings": 0,
+    "grading_objects": 386,
+    "dev5_adapter_self_grade": "386/386 CORRECT",
+    "source_boundary_regression": "8/8 PASS",
+    "quarantine_concepts": 2
+  }
+}

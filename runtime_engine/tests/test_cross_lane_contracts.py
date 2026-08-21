@@ -73,6 +73,21 @@ class CrossLaneContractTests(unittest.TestCase):
         result=GraderRegistry().grade(TaskDefinition.from_canonical(a),dto)
         self.assertEqual(result.correctness, Correctness.CORRECT)
 
+    def test_composite_preserves_explicit_evidence_first_step(self):
+        n=node("PA05-N061","PA-05","COMPOSITE_MULTI_STEP",{
+            "source":["EV-1"],"boundary":"Do not add details.","synthesis":"Keep sources separate."
+        },["EV-1"],grading={"steps":[
+            {"id":"source","weight":0.25,"task":{"task_type":"EVIDENCE_SELECT","response_mode":"EVIDENCE_SELECT","accepted_answer":["EV-1"],"accepted_variants":[],"required_evidence":["EV-1"],"grading":{"required_evidence_ids":["EV-1"]}}},
+            {"id":"boundary","weight":0.25,"task":{"task_type":"SHORT_TEXT","response_mode":"SHORT_TEXT","accepted_answer":"Do not add details.","accepted_variants":[],"required_evidence":[],"grading":{"accepted_propositions":[{"id":"b","required":True,"aliases":["Do not add details."]}]}}},
+            {"id":"synthesis","weight":0.5,"task":{"task_type":"LONG_TEXT","response_mode":"LONG_TEXT","accepted_answer":"Keep sources separate.","accepted_variants":[],"required_evidence":[],"grading":{"accepted_propositions":[{"id":"s","required":True,"aliases":["Keep sources separate."]}]}}}
+        ]})
+        a=adapt_node_for_runtime(n,lane="D2")
+        self.assertEqual(a["grading"]["steps"][0]["id"],"source")
+        dto=derive_answer_dto(a)
+        self.assertEqual(dto["steps"][0]["answer"],{"evidence_ids":["EV-1"]})
+        result=GraderRegistry().grade(TaskDefinition.from_canonical(a),dto)
+        self.assertEqual(result.correctness, Correctness.CORRECT)
+
     def test_application_exposes_answer_contract(self):
         n=node("GW01-N01","GW-01","SINGLE_CHOICE","Matthew",["GW-EV-1"],task_contract={"options":["Matthew","Mark"]})
         repo=ContentRepository([adapt_node_for_runtime(n,lane="D3")]); app=RuntimeApplication(repo)

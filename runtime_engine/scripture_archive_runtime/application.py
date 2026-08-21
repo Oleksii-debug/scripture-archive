@@ -42,7 +42,7 @@ class RuntimeApplication:
         for concept_id in task.mastery_domains:
             mastery = self.memory.concept_mastery.setdefault(concept_id, MasteryState(concept_id=concept_id))
             consequences.append(self.mastery_engine.apply(mastery, correctness=result.correctness, independent=independent, used_hints=hint_count))
-        resolution = self.branches.resolve(task, result.corectness, hint_count=hint_count, hint_threshold=6); self.branches.enforce_cycle_guard(resolution.next_node_id, self._visit_counts)
+        resolution = self.branches.resolve(task, result.correctness, hint_count=hint_count, hint_threshold=6); self.branches.enforce_cycle_guard(resolution.next_node_id, self._visit_counts)
         for eid in resolution.evidence_unlocks:
             if eid in self.evidence.evidence:
                 self.evidence.unlock(eid); state.evidence_unlocked.add(eid); self.memory.evidence_exposure[eid] = self.memory.evidence_exposure.get(eid, 0) + 1

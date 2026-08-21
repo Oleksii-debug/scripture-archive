@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scripture-archive-runtime"
-version = "0.6.0.dev5"
+version = "0.6.1.dev5repair1"
 description = "UI-neutral game/domain runtime for Scripture Archive R06"
 requires-python = ">=3.11"
 dependencies = []

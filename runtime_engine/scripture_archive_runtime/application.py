@@ -4,6 +4,7 @@ import uuid
 from typing import Any, Mapping
 
 from .accessibility import branch_event, grade_event, hint_event
+from .answer_contracts import answer_contract_descriptor
 from .branching import BranchEngine
 from .content import ContentRepository
 from .evidence import EvidenceRuntime
@@ -29,7 +30,7 @@ class RuntimeApplication:
         task = self.content.get(node_id); self.current_node_id = node_id
         if node_id not in self.session.shown_node_ids: self.session.shown_node_ids.append(node_id)
         self.session.recent_task_families.append(task.task_type); self._visit_counts[node_id] = self._visit_counts.get(node_id, 0) + 1
-        return {"api_version": self.API_VERSION, "task": {"node_id": task.node_id, "mission_id": task.mission_id, "task_type": task.task_type, "prompt": task.prompt, "source_scope": task.source_scope, "hints_available": len(task.hints), "tx1": task.tx1, "confidence": task.confidence.value, "functional_nonvisual_equivalent": task.raw.get("functional_nonvisual_equivalent", "")}}
+        return {"api_version": self.API_VERSION, "task": {"node_id": task.node_id, "mission_id": task.mission_id, "task_type": task.task_type, "prompt": task.prompt, "source_scope": task.source_scope, "hints_available": len(task.hints), "tx1": task.tx1, "confidence": task.confidence.value, "answer_contract": answer_contract_descriptor(task.task_type), "functional_nonvisual_equivalent": task.raw.get("functional_nonvisual_equivalent", "")}}
 
     def submit_answer(self, node_id: str, answer: Any) -> dict[str, Any]:
         if node_id != self.current_node_id: raise ValidationError("submit_answer node_id is not the currently loaded task")

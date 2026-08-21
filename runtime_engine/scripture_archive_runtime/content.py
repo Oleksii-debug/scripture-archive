@@ -1,18 +1,18 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from .models import Confidence, TaskDefinition
+from .package_adapters import adapt_node_for_runtime, load_package_nodes
 from .security import ValidationError, validate_content_import
 
 
 class ContentRepository:
-    def __init__(self, nodes: Iterable[Mapping[str, Any]] = ()) -> None:
+    def __init__(self, nodes: Iterable[Mapping[str, Any]] = (), *, adapt_legacy: bool = False, lane: str = "unknown") -> None:
         self._nodes: dict[str, TaskDefinition] = {}
         for node in nodes:
-            self.add(node)
+            self.add(adapt_node_for_runtime(node, lane=lane) if adapt_legacy else node)
 
     def add(self, node: Mapping[str, Any]) -> TaskDefinition:
         validate_canonical_node(node)
@@ -29,17 +29,9 @@ class ContentRepository:
         return dict(self._nodes)
 
     @classmethod
-    def from_json_files(cls, paths: Iterable[str | Path]) -> "ContentRepository":
-        repo = cls()
-        for path in paths:
-            data = json.loads(Path(path).read_text(encoding="utf-8"))
-            validate_content_import(data)
-            nodes = data.get("nodes") if isinstance(data, dict) else None
-            if not isinstance(nodes, list):
-                raise ValidationError(f"Content file has no nodes array: {path}")
-            for node in nodes:
-                repo.add(node)
-        return repo
+    def from_json_files(cls, paths: Iterable[str | Path], *, adapt_legacy: bool = True, lane: str = "unknown") -> "ContentRepository":
+        nodes = load_package_nodes(paths)
+        return cls(nodes, adapt_legacy=adapt_legacy, lane=lane)
 
 
 REQUIRED_NODE_FIELDS = {

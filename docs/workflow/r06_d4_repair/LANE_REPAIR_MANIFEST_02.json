@@ -1,0 +1,40 @@
+{
+  "lane": "DEV4",
+  "round": "R06",
+  "repair_stage": "PRE_INTEGRATION_REPAIR_01",
+  "branch": "r06-d4-ot-corpus-repair-01",
+  "historical_main_base": "bbc681db9701fa39dbe757dda8f2e341ea4e3c5b",
+  "d4_candidate_base": "5ec6a5594a32757634d364df263749c470f042b8",
+  "audit_source": "AUDIT_R06_FIVE_LANES_PREINTEGRATION_01",
+  "defects_addressed": {
+    "R06-PRE-004": "content-side OT_NT_LINK/v1 DTO complete; DEV5 runtime implementation remains cross-lane gate",
+    "R06-PRE-005": "content accepted-answer DTO repair complete; 426/426 baseline-supported nodes grade CORRECT",
+    "R06-PRE-007": "pedagogy repair complete; success/partial/failure/H1/H2/H3/H5 each 431 unique across 450",
+    "R06-PRE-009": "generic accepted_variants removed; 450 grading objects with explicit proposition/structured contracts",
+    "R06-PRE-011": "exact repaired-file hashes recorded; full materialization supplied in non-overwriting Drive package for integration"
+  },
+  "counts": {"nodes":450,"evidence_records":90,"otnt_relations":24,"character_dossiers":15,"new_auditor_accepted":0},
+  "d5_baseline_conformance": {"correct":426,"unsupported_ot_nt_link":24,"incorrect":0,"partial":0},
+  "reference_ot_nt_link": "24/24",
+  "changed_files": {
+    "docs/campaigns/OT/R06_D4_OT_CANONICAL_v1.0/MISSION_INDEX.json":{"sha256":"cd19114e8dc4229fa71c7e4b4adbf3ee2be79fd30f0f48d326ed2706bbf8c772","size":59949},
+    "docs/campaigns/OT/R06_D4_OT_CANONICAL_v1.0/nodes_part_01.json":{"sha256":"7c43428241acf413a762adf2f071112fe5f7dee8525ca506c92db5728d70b94d","size":576710},
+    "docs/campaigns/OT/R06_D4_OT_CANONICAL_v1.0/nodes_part_02.json":{"sha256":"a2b041b7fc7aedd2e2bcfcca91fb3a3246a6283dc98bf706e301f260ee179618","size":577605},
+    "docs/campaigns/OT/R06_D4_OT_CANONICAL_v1.0/nodes_part_03.json":{"sha256":"e53af26c17d2fa8297cd56a5241ce8542e42e84c7857e335f7c5d2f8784052da","size":585906},
+    "docs/campaigns/OT/R06_D4_OT_CANONICAL_v1.0/nodes_part_04.json":{"sha256":"e1ddf06c12533b940637ce0e7684df4a5fe83b36ea6270379fef83e08fee6151","size":595753},
+    "docs/campaigns/OT/R06_D4_OT_CANONICAL_v1.0/nodes_part_05.json":{"sha256":"1f7040dea8d40668a30d91077daa1a4383e050b4a52eebe2dbef8de5ca39092f","size":601805},
+    "docs/corpus/OTNT_RELATION_REGISTRY_R06_D4_v1.0.json":{"sha256":"962587d587328079fabd8dcc3a1941d8b589ca35ea44f98c97346dc0df9861c7","size":30653},
+    "docs/corpus/OT_R06_D4_CHARACTER_DOSSIERS_v1.0.json":{"sha256":"52824bb7dea0397a8be6a5b6b85ca1018ec50a17201a5a5601947e8f24bcf785","size":12953},
+    "docs/corpus/OT_R06_D4_ENTITY_REGISTRIES_v1.0.json":{"sha256":"d280509810278bb4d606bfce0734c536a6b4d2fae886a0cc14116161f8b6690a","size":74452},
+    "docs/evidence/OT_R06_D4_EVIDENCE_REGISTRY_v1.0.json":{"sha256":"1f99831cc5a3fa4dbfc7519bc7ada8a0bb3542517f03ce2d4dffa72d864c834f","size":127655},
+    "docs/spec/R06_D4_SHARED_ANSWER_DTO_CONTRACT_v1.0.json":{"sha256":"54ee4185b8c6466ee658a5b7baa63b5fc7df4d7877c70edf8bc2e039fb6bec77","size":3414},
+    "docs/spec/R06_D4_SHARED_ANSWER_DTO_CONTRACT_v1.0.md":{"sha256":"b8f0ae464813bc93c0e60b2c609a38e9e733819e39a8c08bdafdf88a609a6b0e","size":2052},
+    "docs/workflow/r06_d4/LANE_OUTPUT_MANIFEST.json":{"sha256":"7444000b15b96d7909e5622252affc6eba533e9e2a0ee575136e238ff15f5964","size":2646},
+    "tools/test_ot_r06_d4_d5_contract.py":{"sha256":"cf5bfd8fd88736b5ec10ab6e35da1f2579482cb93fc27ca966cdca09931df2bf","size":3765},
+    "tools/validate_ot_r06_d4.py":{"sha256":"07b2e9d5e2bcdebce3b1e3fc15d6f64ad007c64178b305742fdeb3b1787de137","size":12299}
+  },
+  "integration_gate": "python tools/test_ot_r06_d4_d5_contract.py --runtime-root <runtime_engine> --require-otnt",
+  "previous_repair_manifest": "docs/workflow/r06_d4_repair/LANE_REPAIR_MANIFEST_01.json",
+  "manifest_status": "AUTHORITATIVE_REPAIR_MANIFEST_02",
+  "pedagogy_h7": "guided answer + source/provenance/boundary explanation + mastery=guided"
+}

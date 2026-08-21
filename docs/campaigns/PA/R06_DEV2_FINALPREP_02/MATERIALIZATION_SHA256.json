@@ -1,0 +1,33 @@
+{
+  "schema": "DEV2_FINALPREP_02_MATERIALIZATION_SHA256_v1",
+  "source_drive_package": {
+    "name": "DEV_LANE_SCRIPTURE_R06_D2.zip",
+    "drive_id": "1hRzCKbN3Dhbd3qlti-CGnlYMLi8XdJw1",
+    "sha256": "65677caba4d73a0a654dc70c63c183864910f5f9d9a44df5f99f12e689660890"
+  },
+  "starting_sha": "08f6f7f0d941397623fc7bd96abf73744c214871",
+  "counts": {"missions": 6, "canonical_nodes": 386, "evidence_records": 184},
+  "protected_semantic_fields_sha256_before_after": "0d6027105bec35a4854b20e4df1faa6f047746041d4d7cb5b9fc143421557665",
+  "files": [
+    {"path": "PA03_CANONICAL_v1.1.json", "bytes": 538125, "sha256": "6305fdbac025a1c9059c4cd3cefeaa8f2bb965e9ad1687c4be166f227d34b0f7"},
+    {"path": "PA04_CANONICAL_v1.1.json", "bytes": 656564, "sha256": "c5690f7016b886b9554fb924cdcba23aecb7809a8bc918df9c584790591ed562"},
+    {"path": "PA05_CANONICAL_v1.1.json", "bytes": 615573, "sha256": "5a1a69e55e0653a535a31c70ce4304c8bfc05393d64f14b1985e787cf962c560"},
+    {"path": "PA06_CANONICAL_v1.1.json", "bytes": 426691, "sha256": "d24b004bba9876f9cdc12fe3fb63fe0a4161fb22fdc703bd8e486ecbb510e615"},
+    {"path": "PA07_CANONICAL_v1.1.json", "bytes": 629250, "sha256": "64215aa784a2e38f66039a8d2b94f299c7f57d6db0474ad8924276bc5915c05e"},
+    {"path": "PA08_CANONICAL_v1.1.json", "bytes": 1084883, "sha256": "655cd7c613c9e5b4f9fc28e01e1a99521116a3d5834a682d74be8b3c16b37f05"},
+    {"path": "PA_R06_D2_EVIDENCE_v1.1.json", "bytes": 426818, "sha256": "66c61a40f71892724e72e2123efcdc070df5c104ebf447baf2b76950d9ed21a9"},
+    {"path": "PA_R06_D2_MANIFEST_v1.1.json", "bytes": 1713, "sha256": "16a5453ca55a408fcbec67fa6429c2d11198bd6ddf38c6a8f96bfb16c080b9fa"},
+    {"path": "SOURCE_BOUNDARY_REGRESSION_v1.0.json", "bytes": 2615, "sha256": "11e3ad71f3fb724537ae10b742fa503bd5bcaf6188b54ccd44948a1c259484bd"},
+    {"path": "PA_R06_D2_QUARANTINE_v1.1.json", "bytes": 1300, "sha256": "196eefa6b885a7f00e13ab0b13f447cbd2c7269de53cd6e1ab0fbbb11f5ce125"},
+    {"path": "ANSWER_DTO_CONTRACT_v1.0.json", "bytes": 2582, "sha256": "cba284b0fcd679ac6a815b5cb713393e01821ada8ab4adb50840b29a5ac9d42c"},
+    {"path": "PA_R06_D2_RUNTIME_NODES_v1.0.json", "bytes": 3890731, "sha256": "a0235cd9287731d84bb5d6b15aebc36fd4e2576364b0369d2adb10cff791dac5"}
+  ],
+  "qa": {
+    "structural_errors": 0,
+    "source_boundary": "8/8 PASS",
+    "d5_compatible_canonical_self_grade": "386/386 CORRECT",
+    "player_text_fields_scanned": 5018,
+    "player_text_errors": 0,
+    "protected_semantic_fields_changed": false
+  }
+}

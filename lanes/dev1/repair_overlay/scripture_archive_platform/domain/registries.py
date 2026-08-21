@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Any
 from .models import BUILTIN_TASK_TYPES, TaskTypeDefinition
-from scripture_archive_platform.transport.answer_contracts import FIELDS
+from scripture_archive_platform.transport.answer_contracts import answer_contract_descriptor
 
 class RegistryError(ValueError): pass
 class VersionedRegistry:
@@ -27,10 +27,10 @@ class TaskTemplateRegistry(VersionedRegistry): pass
 class ActionRegistry(VersionedRegistry): pass
 
 def _shape(task_type:str)->str:
-    return "ANSWER_DTO_v1 " + str(FIELDS[task_type])
+    return "ANSWER_DTO_v1 " + str(answer_contract_descriptor(task_type)["fields"])
 
 def build_task_registries():
-    task=TaskTypeRegistry('TaskTypeRegistry','1.1');render=RendererRegistry('RendererRegistry','1.1');grader=GraderRegistry('GraderRegistry','1.1');editor=EditorRegistry('EditorRegistry','1.1');templates=TaskTemplateRegistry('TaskTemplateRegistry','1.1')
+    task=TaskTypeRegistry('TaskTypeRegistry','1.2');render=RendererRegistry('RendererRegistry','1.2');grader=GraderRegistry('GraderRegistry','1.2');editor=EditorRegistry('EditorRegistry','1.2');templates=TaskTemplateRegistry('TaskTemplateRegistry','1.2')
     for t in BUILTIN_TASK_TYPES:
         d=TaskTypeDefinition(t,f'render.{t.lower()}',f'grade.{t.lower()}',f'edit.{t.lower()}',_shape(t),'Keyboard-linear semantic HTML control; JSON-safe ANSWER_DTO_v1; no drag/color/spatial-only dependency.')
         task.register(t,d);render.register(t,{"renderer_id":d.renderer_id,"frontend_registry":True});grader.register(t,{"grader_id":d.grader_id,"port":"GraderPort","ownership":"DEV5/runtime"});editor.register(t,{"editor_id":d.editor_id,"frontend_registry":True});templates.register(t,{"template_id":f'template.{t.lower()}',"task_type":t,"defaults":{"required":True,"difficulty":"2/6"}})

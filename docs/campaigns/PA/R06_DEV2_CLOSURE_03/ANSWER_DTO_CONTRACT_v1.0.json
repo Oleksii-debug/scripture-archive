@@ -1,0 +1,26 @@
+{
+  "contract_version": "ANSWER_DTO_v1.0_R06_PREINTEGRATION",
+  "owner": "DEV2 content lane; shared integration request for DEV5/DEV1",
+  "principles": [
+    "canonical task type retained",
+    "accepted_answer is machine-gradeable DTO",
+    "player-facing H7 remains human-readable",
+    "translation-neutral text tasks use concrete proposition aliases",
+    "evidence tasks use stable evidence IDs"
+  ],
+  "types": {
+    "SINGLE_CHOICE": {"answer":"string","grading":"exact normalized accepted_answer or concrete alias"},
+    "COMBOBOX_SELECT": {"answer":"string","grading":"exact normalized accepted_answer or concrete alias"},
+    "MULTI_SELECT": {"answer":"array[string]","grading":"set equality via grading.accepted_set"},
+    "SHORT_TEXT": {"answer":"string","grading":"grading.accepted_propositions[] concrete aliases"},
+    "LONG_TEXT": {"answer":"string","grading":"grading.accepted_propositions[] concrete aliases"},
+    "ARGUMENT": {"answer":"string","grading":"grading.accepted_propositions[] + content-side counterclaim boundary"},
+    "EVIDENCE_SELECT": {"answer":"array[evidence_id]","grading":"grading.required_evidence_ids"},
+    "CLAIM_EVIDENCE": {"answer":{"claim":"string","evidence":"array[evidence_id]"},"grading":"accepted_propositions + required_evidence_ids"},
+    "ORDERING": {"answer":"array[string]","grading":"grading.accepted_order; display items intentionally non-solution order"},
+    "MATCHING": {"answer":"object<string,string>","grading":"grading.accepted_pairs"},
+    "COMPOSITE_MULTI_STEP": {"answer":{"source":"array[evidence_id]","boundary":"string","synthesis":"string"},"grading":"weighted grading.steps[] with child task definitions"},
+    "SPEAKER_RECIPIENT": {"answer":{"speaker":"string","recipient":"string"},"grading":"grading.accepted_speakers + accepted_recipients; DEV5 implementation requested","current_d5_fallback":"SHORT_TEXT in runtime adapter only"},
+    "PARALLEL_WITNESS_COMPARE": {"answer":{"synthesis":"string","witnesses":"array[passage]"},"grading":"accepted_propositions + required_witnesses + provenance_required; DEV5 implementation requested","current_d5_fallback":"LONG_TEXT in runtime adapter only"}
+  }
+}

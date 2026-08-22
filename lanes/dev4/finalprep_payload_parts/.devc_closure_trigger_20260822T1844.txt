@@ -1,0 +1,4 @@
+DEV-C THREE_DEV_REBALANCE_CLOSURE_04 trigger.
+Purpose: re-run deterministic DEV4 materialization workflow from exact staged payload parts.
+Expected payload SHA256: e8b008c31462d7ed9388a7a84f73bb8666c8449181000751e9da45c2468779c9
+No canonical content authored or modified by this marker.

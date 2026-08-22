@@ -38,9 +38,14 @@ class CrossLaneContractTests(unittest.TestCase):
         n=node("GW01-N19","GW-01","PARALLEL_WITNESS_COMPARE","Luke",["GW-EV-19"],task_contract={"answer_shape":"witness_name","options":["Matthew","Mark","Luke","John"]})
         a=adapt_node_for_runtime(n,lane="D3"); self.assertEqual(GraderRegistry().grade(TaskDefinition.from_canonical(a),derive_answer_dto(a)).correctness, Correctness.CORRECT)
 
-    def test_ot_nt_link_real_shape(self):
-        payload={"ot_passage":"2 Samuel 7:14","nt_passage":"Hebrews 1:5","relation_category":"DIRECT_QUOTATION","confidence":"T2","evidence_id":"EV-OT-1"}
+    def test_ot_nt_link_requires_canonical_structured_truth(self):
+        payload={"ot_passage":"2 Samuel 7:14","nt_passage":"Hebrews 1:5","relation_category":"DIRECT_QUOTATION","confidence":"T2","evidence_id":"EV-OT-1","correct":"presentation-only"}
         n=node("OTNTROYAL01-N019","OTNT-ROYAL-01","OT_NT_LINK","2 Samuel 7:14 ↔ Hebrews 1:5 | DIRECT_QUOTATION | T2 | EV-OT-1.","EV-OT-1",task_payload=payload)
+        with self.assertRaises(ValidationError): adapt_node_for_runtime(n,lane="D4")
+
+    def test_ot_nt_link_canonical_structured_shape(self):
+        accepted={"ot_passage":"2 Samuel 7:14","nt_passage":"Hebrews 1:5","relation_category":"DIRECT_QUOTATION","confidence":"T2","evidence_id":"EV-OT-1"}
+        n=node("OTNTROYAL01-N019","OTNT-ROYAL-01","OT_NT_LINK",accepted,["EV-OT-1"],grading={"ot_nt_link":dict(accepted)})
         a=adapt_node_for_runtime(n,lane="D4"); result=GraderRegistry().grade(TaskDefinition.from_canonical(a),derive_answer_dto(a))
         self.assertEqual(result.correctness, Correctness.CORRECT); self.assertEqual(result.confidence.value,"T2")
 
@@ -53,9 +58,17 @@ class CrossLaneContractTests(unittest.TestCase):
         n=node("OTNTROYAL01-N015","OTNT-ROYAL-01","MATCHING","Allowed proposition","EV-OT-3",task_payload={"claims":[{"text":"x","supported":True}],"evidence":["EV-OT-3"]})
         with self.assertRaises(ValidationError): adapt_node_for_runtime(n,lane="D4")
 
-    def test_d3_composite_confidence_explanation(self):
+    def test_d3_composite_without_authored_step_structure_fails_closed(self):
         accepted={"confidence":"D1","conclusion":"Preserve each witness wording; detailed reconciliation is reconstruction."}
         n=node("GW01-N24","GW-01","COMPOSITE_MULTI_STEP",accepted,["GW-EV-24"])
+        with self.assertRaises(ValidationError): adapt_node_for_runtime(n,lane="D3")
+
+    def test_d3_composite_confidence_explanation_with_authored_steps(self):
+        accepted={"confidence":"D1","conclusion":"Preserve each witness wording; detailed reconciliation is reconstruction."}
+        n=node("GW01-N24","GW-01","COMPOSITE_MULTI_STEP",accepted,["GW-EV-24"],grading={"steps":[
+            {"id":"confidence","weight":0.35,"task":{"task_type":"SINGLE_CHOICE","accepted_answer":"D1","accepted_variants":[],"required_evidence":[]}},
+            {"id":"conclusion","weight":0.65,"task":{"task_type":"SHORT_TEXT","accepted_answer":accepted["conclusion"],"accepted_variants":[],"required_evidence":[],"grading":{"accepted_propositions":[{"id":"c","required":True,"aliases":[accepted["conclusion"]]}]}}}
+        ]})
         a=adapt_node_for_runtime(n,lane="D3"); result=GraderRegistry().grade(TaskDefinition.from_canonical(a),derive_answer_dto(a))
         self.assertEqual(result.correctness, Correctness.CORRECT)
 

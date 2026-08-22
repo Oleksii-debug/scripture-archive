@@ -1,0 +1,14 @@
+{
+  "registry_version": "R06_DEV2_v1.1",
+  "lane": "DEV2_PAUL_ACTS_CONTENT",
+  "canonical_status": "SOURCE_AUDITED / PREINTEGRATION_REPAIRED / INDEPENDENT_AUDIT_PENDING",
+  "evidence_model": "EVIDENCE_REGISTRY_SPEC_AND_PA_SEEDS_v0.1 + lane-compatible fields recipient/witness/uncertainty/relation",
+  "record_count": 184,
+  "first_evidence_id": "EVR-R06-D2-0001",
+  "last_evidence_id": "EVR-R06-D2-0184",
+  "source_file": "PA_R06_D2_EVIDENCE_v1.1.json",
+  "source_bytes": 426818,
+  "source_sha256": "66c61a40f71892724e72e2123efcdc070df5c104ebf447baf2b76950d9ed21a9",
+  "required_record_fields": ["evidence_id","entity_type","canonical_label","claim","source_passage","speaker_or_narrator","recipient","witness","confidence_code","textual_variant_flag","chronology_scope","uncertainty","relation","provenance_notes","accepted_semantic_forms","forbidden_overclaims","cross_links","usable_by_campaigns","source_audit_status","grading_aliases","grading_contract_version"],
+  "note": "Full 184 records remain hash-pinned in the canonical Drive package; CLOSURE_03 GitHub full readable record materialization is still an open gate."
+}

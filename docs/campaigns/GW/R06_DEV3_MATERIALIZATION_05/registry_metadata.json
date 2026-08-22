@@ -1,0 +1,53 @@
+{
+  "GW_EVIDENCE_BOARD_REGISTRY_v1.1.json": {
+    "schema": "DEV3_EVIDENCE_BOARD_SEED_v1.0",
+    "entity_counts": {
+      "Person": 96,
+      "Place": 100,
+      "Event": 15,
+      "Claim": 360,
+      "Evidence": 240,
+      "WitnessRelation": 240
+    },
+    "spatial_accessibility_rule": "Any visual board edge or layout must also render as a labelled linear relation list: source entity → relation → target entity → passage → confidence/TX1.",
+    "repair_metadata": {
+      "round": "R06_DEV3_REPAIR_01",
+      "source_truth_changed": false,
+      "note": "Only duplicate-book surface artifacts, if any, were normalized."
+    }
+  },
+  "GW_WITNESS_MATRIX_v1.1.json": {
+    "schema": "GW_WITNESS_MATRIX_v1.0",
+    "repair_metadata": {
+      "round": "R06_DEV3_REPAIR_01",
+      "source_truth_changed": false,
+      "note": "Only duplicate-book surface artifacts, if any, were normalized."
+    }
+  },
+  "GW_CHRONOLOGY_REGISTRY_v1.1.json": {
+    "schema": "GW_CHRONOLOGY_REGISTRY_v1.0",
+    "repair_metadata": {
+      "round": "R06_DEV3_REPAIR_01",
+      "source_truth_changed": false,
+      "note": "Only duplicate-book surface artifacts, if any, were normalized."
+    }
+  },
+  "GW_SOURCE_REGISTRY_v1.1.json": {
+    "schema": "DEV3_SOURCE_REGISTRY_v1.0",
+    "primary_source_policy": "Answer-bearing Gospel claims are source-bounded to cited canonical passages. WEBU/eBible is the named developer audit text basis. No external historical claim is graded in this lane.",
+    "independent_audit_status": "PENDING",
+    "repair_metadata": {
+      "round": "R06_DEV3_REPAIR_01",
+      "source_truth_changed": false,
+      "note": "Only duplicate-book surface artifacts, if any, were normalized."
+    }
+  },
+  "GW_TX1_REGISTRY_v1.1.json": {
+    "schema": "GW_TX1_REGISTRY_v1.0",
+    "repair_metadata": {
+      "round": "R06_DEV3_REPAIR_01",
+      "source_truth_changed": false,
+      "note": "Only duplicate-book surface artifacts, if any, were normalized."
+    }
+  }
+}

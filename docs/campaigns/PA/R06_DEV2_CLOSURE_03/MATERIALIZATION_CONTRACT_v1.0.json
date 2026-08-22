@@ -1,0 +1,39 @@
+{
+  "schema": "DEV2_CLOSURE_03_MATERIALIZATION_CONTRACT_v1",
+  "stage": "R06/PRE_INTEGRATION_CLOSURE_03",
+  "role": "DEV2 Paul/Acts canonical content",
+  "source_package": {
+    "name": "DEV_LANE_SCRIPTURE_R06_D2_FINALPREP_02.zip",
+    "drive_id": "1WxlVVZDqXcCMwkcgZIL3viZJrDAT3fFN",
+    "bytes": 564143,
+    "sha256": "1aa4ac4fb0476dd5b58a5bfe396af4890e9e9f5288b2cc904526162123c0cd6e"
+  },
+  "branch": "r06-dev2-finalprep-02",
+  "starting_head": "5f5a869d0a2313c10fa2d0740080b664de6d9caa",
+  "counts": {"missions": 6, "canonical_nodes": 386, "evidence_records": 184},
+  "semantic_change": "NONE",
+  "stable_ids_regenerated": false,
+  "source_claims_regenerated": false,
+  "protected_semantic_digest": "0d6027105bec35a4854b20e4df1faa6f047746041d4d7cb5b9fc143421557665",
+  "required_full_files": [
+    {"path":"ANSWER_DTO_CONTRACT_v1.0.json","bytes":2582,"sha256":"cba284b0fcd679ac6a815b5cb713393e01821ada8ab4adb50840b29a5ac9d42c","git_blob_sha1":"4839eb01cdeca999b47921d984927ae99648d779","canonical_role":"canonical_or_support"},
+    {"path":"PA03_CANONICAL_v1.1.json","bytes":538125,"sha256":"6305fdbac025a1c9059c4cd3cefeaa8f2bb965e9ad1687c4be166f227d34b0f7","git_blob_sha1":"9dbad92cb77b48f040cb5a608ee0c0edd2abf512","canonical_role":"canonical_or_support"},
+    {"path":"PA04_CANONICAL_v1.1.json","bytes":656564,"sha256":"c5690f7016b886b9554fb924cdcba23aecb7809a8bc918df9c584790591ed562","git_blob_sha1":"816c6aba283b8449b0e24a1f1c2b482d3e66d5fb","canonical_role":"canonical_or_support"},
+    {"path":"PA05_CANONICAL_v1.1.json","bytes":615573,"sha256":"5a1a69e55e0653a535a31c70ce4304c8bfc05393d64f14b1985e787cf962c560","git_blob_sha1":"61343196115a2bf2cc83eb492f67342fe4745098","canonical_role":"canonical_or_support"},
+    {"path":"PA06_CANONICAL_v1.1.json","bytes":426691,"sha256":"d24b004bba9876f9cdc12fe3fb63fe0a4161fb22fdc703bd8e486ecbb510e615","git_blob_sha1":"db3377cfe50481cf900a4da3aadc2cc383ce464d","canonical_role":"canonical_or_support"},
+    {"path":"PA07_CANONICAL_v1.1.json","bytes":629250,"sha256":"64215aa784a2e38f66039a8d2b94f299c7f57d6db0474ad8924276bc5915c05e","git_blob_sha1":"009738646f7670d1af9073a58300a81abc45c106","canonical_role":"canonical_or_support"},
+    {"path":"PA08_CANONICAL_v1.1.json","bytes":1084883,"sha256":"655cd7c613c9e5b4f9fc28e01e1a99521116a3d5834a682d74be8b3c16b37f05","git_blob_sha1":"3ac527718066949005bd3601744bae24f62e2ff0","canonical_role":"canonical_or_support"},
+    {"path":"PA_R06_D2_EVIDENCE_v1.1.json","bytes":426818,"sha256":"66c61a40f71892724e72e2123efcdc070df5c104ebf447baf2b76950d9ed21a9","git_blob_sha1":"99b68bddeff51adb3b93907c09f4d2c7693ce59e","canonical_role":"canonical_or_support"},
+    {"path":"PA_R06_D2_MANIFEST_v1.1.json","bytes":1713,"sha256":"16a5453ca55a408fcbec67fa6429c2d11198bd6ddf38c6a8f96bfb16c080b9fa","git_blob_sha1":"1db0231bf573ff0e80215ed46d793cd1bcb2eb9e","canonical_role":"canonical_or_support"},
+    {"path":"PA_R06_D2_QUARANTINE_v1.1.json","bytes":1300,"sha256":"196eefa6b885a7f00e13ab0b13f447cbd2c7269de53cd6e1ab0fbbb11f5ce125","git_blob_sha1":"133ca8628fb71703d9767204b90d0ae60c36dd82","canonical_role":"canonical_or_support"},
+    {"path":"PA_R06_D2_RUNTIME_NODES_v1.0.json","bytes":3890731,"sha256":"a0235cd9287731d84bb5d6b15aebc36fd4e2576364b0369d2adb10cff791dac5","git_blob_sha1":"44f657ec701406dba35b9cf96486630bfbad19e5","canonical_role":"derived_runtime_snapshot"},
+    {"path":"SOURCE_BOUNDARY_REGRESSION_v1.0.json","bytes":2615,"sha256":"11e3ad71f3fb724537ae10b742fa503bd5bcaf6188b54ccd44948a1c259484bd","git_blob_sha1":"7230ac09553b7990c2bf4a7bc8fc59b4d57f1863","canonical_role":"canonical_or_support"}
+  ],
+  "github_readable_contract": {
+    "final_required": "full mission nodes + 184 evidence records as readable JSON",
+    "current_connector_limitation": "no local-file-to-GitHub upload primitive; text-only GitHub contents/tree writes",
+    "runtime_snapshot_policy": "derived validation evidence; not a second canonical truth source"
+  },
+  "mission_index_files": ["PA03_MISSION_INDEX_v1.1.json","PA04_MISSION_INDEX_v1.1.json","PA05_MISSION_INDEX_v1.1.json","PA06_MISSION_INDEX_v1.1.json","PA07_MISSION_INDEX_v1.1.json","PA08_MISSION_INDEX_v1.1.json"],
+  "evidence_index_file": "PA_R06_D2_EVIDENCE_INDEX_v1.1.json"
+}

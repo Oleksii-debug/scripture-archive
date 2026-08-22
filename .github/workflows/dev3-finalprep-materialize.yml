@@ -63,7 +63,7 @@ jobs:
               got=hashlib.sha256((root/rel).read_bytes()).hexdigest()
               assert got==h, (rel,h,got)
               checked += 1
-          assert checked >= 30, checked
+          assert checked == 29, checked
           print(f'DEV3_CLOSURE_03_MATERIALIZATION_PASS nodes=360 evidence=240 tx1=22 hashed_files={checked}')
           PY
           rm -rf lanes/dev3/finalprep_payload

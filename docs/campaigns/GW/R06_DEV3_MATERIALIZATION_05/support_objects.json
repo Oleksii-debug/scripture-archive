@@ -1,0 +1,122 @@
+{
+  "GW_MANIFEST_v1.1.json": {
+    "schema": "GW_MANIFEST_v1.1",
+    "campaign_id": "GW",
+    "round": "R06_DEV3_REPAIR_01",
+    "mission_count": 15,
+    "node_count": 360,
+    "mission_files": [
+      "GW_MISSIONS_PART_01_v1.1.json",
+      "GW_MISSIONS_PART_02_v1.1.json",
+      "GW_MISSIONS_PART_03_v1.1.json"
+    ],
+    "runtime_nodes_file": "GW_NODES_RUNTIME_v1.1.json",
+    "answer_contract": "GW_RUNTIME_ANSWER_CONTRACT_v1.1.json",
+    "registries": [
+      "GW_EVIDENCE_BOARD_REGISTRY_v1.1.json",
+      "GW_WITNESS_MATRIX_v1.1.json",
+      "GW_CHRONOLOGY_REGISTRY_v1.1.json",
+      "GW_SOURCE_REGISTRY_v1.1.json",
+      "GW_TX1_REGISTRY_v1.1.json"
+    ],
+    "base_lane_head": "1a54ae3f4002cabced8c22d4830ce392c571c0a5",
+    "source_truth_changed": false,
+    "candidate_status": "DEVELOPER_REPAIRED / INDEPENDENT_AUDIT_PENDING"
+  },
+  "GW_RUNTIME_ANSWER_CONTRACT_v1.1.json": {
+    "contract_version": "GW_RUNTIME_ANSWER_CONTRACT_v1.1",
+    "based_on": "DEV5 runtime.v1 grading API observed in DEV_LANE_SCRIPTURE_R06_D5.zip",
+    "task_types": {
+      "EVIDENCE_SELECT": {
+        "submission": "array<string>",
+        "grading": "required_evidence_ids exact set"
+      },
+      "SHORT_TEXT": {
+        "submission": "string",
+        "grading": "accepted_propositions[].aliases bounded deterministic match"
+      },
+      "SPEAKER_RECIPIENT": {
+        "submission": "object{speaker:string,recipient:string}",
+        "grading": "field-pair equality; DEV5 permanent registry mapping still required",
+        "temporary_registry_compatibility": "grade_matching"
+      },
+      "CLAIM_EVIDENCE": {
+        "submission": "object{claim:string,evidence:array<string>}",
+        "grading": "accepted_propositions + required_evidence_ids"
+      },
+      "SINGLE_CHOICE": {
+        "submission": "string",
+        "grading": "accepted_answer/accepted alias"
+      },
+      "COMBOBOX_SELECT": {
+        "submission": "string",
+        "grading": "accepted_answer/accepted alias"
+      },
+      "PARALLEL_WITNESS_COMPARE": {
+        "submission": "string",
+        "grading": "same deterministic witness-label semantics as single choice; DEV5 permanent registry mapping still required"
+      },
+      "LONG_TEXT": {
+        "submission": "string or JSON-safe object whose values state required propositions",
+        "grading": "all required proposition groups"
+      },
+      "MULTI_SELECT": {
+        "submission": "array<string>",
+        "grading": "accepted_set exact set"
+      },
+      "ORDERING": {
+        "submission": "array<string>",
+        "grading": "accepted_order"
+      },
+      "MATCHING": {
+        "submission": "object<string,string>",
+        "grading": "accepted_pairs"
+      },
+      "COMPOSITE_MULTI_STEP": {
+        "submission": "object keyed by step id",
+        "grading": "weighted nested step graders"
+      }
+    }
+  },
+  "GW_REPAIR_STATS_v1.1.json": {
+    "nodes": 360,
+    "missions": 15,
+    "task_types": {
+      "EVIDENCE_SELECT": 60,
+      "SHORT_TEXT": 60,
+      "SPEAKER_RECIPIENT": 60,
+      "CLAIM_EVIDENCE": 60,
+      "SINGLE_CHOICE": 15,
+      "COMBOBOX_SELECT": 15,
+      "PARALLEL_WITNESS_COMPARE": 15,
+      "LONG_TEXT": 15,
+      "MULTI_SELECT": 15,
+      "ORDERING": 15,
+      "MATCHING": 15,
+      "COMPOSITE_MULTI_STEP": 15
+    },
+    "confidence": {
+      "T1": 242,
+      "T2": 108,
+      "D1": 10
+    },
+    "tx1": 22,
+    "unique_success_feedback": 360,
+    "unique_partial_feedback": 360,
+    "unique_failure_feedback": 360,
+    "hint_unique": {
+      "H1": 360,
+      "H2": 360,
+      "H3": 360,
+      "H4": 360,
+      "H5": 360,
+      "H6": 360,
+      "H7": 360
+    },
+    "generic_equivalence_variants": 0,
+    "duplicated_book_artifacts": 0,
+    "grading_objects": 360,
+    "duplicated_book_artifacts_whitespace": 0,
+    "duplicated_book_artifacts_label": 0
+  }
+}

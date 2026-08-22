@@ -10,6 +10,8 @@ from typing import Any, Iterable, Mapping
 
 from .package_adapters import iter_nodes_from_payload
 from .security import ValidationError
+from .content import validate_canonical_node
+from .provenance import classify_provenance, RELEASE_PASS_CLASSES, PROVENANCE_CONTRACT_VERSION
 
 
 @dataclass(frozen=True)
@@ -87,6 +89,8 @@ def materialize_packages(specs: Iterable[PackageSpec], output_dir: str | Path) -
     inputs: list[dict[str, Any]] = []
     unresolved: list[dict[str, str]] = []
     lane_counts: dict[str, dict[str, int]] = {}
+    provenance_counts: dict[str, dict[str, int]] = {}
+    ground_truth_indexes: dict[str, list[dict[str, str]]] = {}
 
     for spec in specs:
         path = Path(spec.zip_path)
@@ -112,14 +116,35 @@ def materialize_packages(specs: Iterable[PackageSpec], output_dir: str | Path) -
         if len(evidence) != spec.expected_evidence:
             raise MaterializationError(f"{spec.lane}: evidence count {len(evidence)} != {spec.expected_evidence}")
 
+        lane_provenance: dict[str, int] = {}
+        lane_gt_index: list[dict[str, str]] = []
         for node in nodes:
             node_id = _record_id(node, ("node_id",))
+            try:
+                validate_canonical_node(node)
+            except Exception as exc:
+                raise MaterializationError(f"{spec.lane}:{node_id}: canonical schema incompatibility: {type(exc).__name__}: {exc}") from exc
+            decision = classify_provenance(node)
+            lane_provenance[decision.provenance_class] = lane_provenance.get(decision.provenance_class, 0) + 1
+            if decision.provenance_class not in RELEASE_PASS_CLASSES or not decision.release_pass or decision.canonical_dto is None:
+                raise MaterializationError(f"{spec.lane}:{node_id}: canonical ground truth is not integration-safe: {decision.provenance_class}: {decision.reason}")
+            gt_record = {
+                "node_id": node_id,
+                "task_type": str(node.get("task_type") or node.get("response_mode") or node.get("task_family") or ""),
+                "accepted_answer": node.get("accepted_answer"),
+                "accepted_variants": node.get("accepted_variants"),
+                "required_evidence": node.get("required_evidence"),
+            }
+            gt_hash = hashlib.sha256(_canonical_json_bytes(gt_record)).hexdigest()
+            lane_gt_index.append({"node_id": node_id, "ground_truth_sha256": gt_hash, "provenance_class": decision.provenance_class})
             raw = _canonical_json_bytes(node)
             if node_id in global_nodes and global_nodes[node_id][0] != raw:
                 raise MaterializationError(f"conflicting duplicate node_id {node_id}")
             if node_id in global_nodes:
                 raise MaterializationError(f"duplicate node_id {node_id}")
             global_nodes[node_id] = (raw, spec.lane)
+        provenance_counts[spec.lane] = dict(sorted(lane_provenance.items()))
+        ground_truth_indexes[spec.lane] = sorted(lane_gt_index, key=lambda x: x["node_id"])
 
         for record in evidence:
             evidence_id = _record_id(record, ("evidence_id", "id"))
@@ -134,6 +159,7 @@ def materialize_packages(specs: Iterable[PackageSpec], output_dir: str | Path) -
         lane_dir.mkdir(parents=True, exist_ok=False)
         (lane_dir / "nodes.json").write_bytes(_canonical_json_bytes({"nodes": [dict(n) for n in nodes]}))
         (lane_dir / "evidence.json").write_bytes(_canonical_json_bytes({"records": [dict(r) for r in evidence]}))
+        (lane_dir / "ground_truth_index.json").write_bytes(_canonical_json_bytes({"schema": "CANONICAL_GROUND_TRUTH_INDEX_v1", "records": ground_truth_indexes[spec.lane]}))
         lane_counts[spec.lane] = {"nodes": len(nodes), "evidence": len(evidence)}
         inputs.append({**asdict(spec), "zip_path": path.name, "actual_sha256": actual_sha})
 
@@ -157,9 +183,12 @@ def materialize_packages(specs: Iterable[PackageSpec], output_dir: str | Path) -
         output_hashes[path.relative_to(out).as_posix()] = sha256_file(path)
 
     manifest = {
-        "schema": "R06_INTEGRATION_MATERIALIZER_MANIFEST_v1",
+        "schema": "R06_INTEGRATION_MATERIALIZER_MANIFEST_v2",
+        "content_schema": "CONTENT_NODE_SCHEMA_v1.2",
+        "provenance_contract": PROVENANCE_CONTRACT_VERSION,
         "inputs": inputs,
         "lane_counts": lane_counts,
+        "provenance_counts": provenance_counts,
         "total_nodes": len(global_nodes),
         "total_evidence": len(global_evidence),
         "duplicate_node_ids": 0,

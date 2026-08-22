@@ -1,0 +1,295 @@
+{
+  "ANSWER_DTO_CONTRACT_v1.0.json": {
+    "contract_version": "ANSWER_DTO_v1.0_R06_PREINTEGRATION",
+    "owner": "DEV2 content lane; shared integration request for DEV5/DEV1",
+    "principles": [
+      "canonical task type retained",
+      "accepted_answer is machine-gradeable DTO",
+      "player-facing H7 remains human-readable",
+      "translation-neutral text tasks use concrete proposition aliases",
+      "evidence tasks use stable evidence IDs"
+    ],
+    "types": {
+      "SINGLE_CHOICE": {
+        "answer": "string",
+        "grading": "exact normalized accepted_answer or concrete alias"
+      },
+      "COMBOBOX_SELECT": {
+        "answer": "string",
+        "grading": "exact normalized accepted_answer or concrete alias"
+      },
+      "MULTI_SELECT": {
+        "answer": "array[string]",
+        "grading": "set equality via grading.accepted_set"
+      },
+      "SHORT_TEXT": {
+        "answer": "string",
+        "grading": "grading.accepted_propositions[] concrete aliases"
+      },
+      "LONG_TEXT": {
+        "answer": "string",
+        "grading": "grading.accepted_propositions[] concrete aliases"
+      },
+      "ARGUMENT": {
+        "answer": "string",
+        "grading": "grading.accepted_propositions[] + content-side counterclaim boundary"
+      },
+      "EVIDENCE_SELECT": {
+        "answer": "array[evidence_id]",
+        "grading": "grading.required_evidence_ids"
+      },
+      "CLAIM_EVIDENCE": {
+        "answer": {
+          "claim": "string",
+          "evidence": "array[evidence_id]"
+        },
+        "grading": "accepted_propositions + required_evidence_ids"
+      },
+      "ORDERING": {
+        "answer": "array[string]",
+        "grading": "grading.accepted_order; display items intentionally non-solution order"
+      },
+      "MATCHING": {
+        "answer": "object<string,string>",
+        "grading": "grading.accepted_pairs"
+      },
+      "COMPOSITE_MULTI_STEP": {
+        "answer": {
+          "source": "array[evidence_id]",
+          "boundary": "string",
+          "synthesis": "string"
+        },
+        "grading": "weighted grading.steps[] with child task definitions"
+      },
+      "SPEAKER_RECIPIENT": {
+        "answer": {
+          "speaker": "string",
+          "recipient": "string"
+        },
+        "grading": "grading.accepted_speakers + accepted_recipients; DEV5 implementation requested",
+        "current_d5_fallback": "SHORT_TEXT in runtime adapter only"
+      },
+      "PARALLEL_WITNESS_COMPARE": {
+        "answer": {
+          "synthesis": "string",
+          "witnesses": "array[passage]"
+        },
+        "grading": "accepted_propositions + required_witnesses + provenance_required; DEV5 implementation requested",
+        "current_d5_fallback": "LONG_TEXT in runtime adapter only"
+      }
+    }
+  },
+  "PA_R06_D2_MANIFEST_v1.1.json": {
+    "lane": "DEV2_PAUL_ACTS_CONTENT",
+    "round": "R06_REPAIR_01",
+    "schema_version": "CONTENT_NODE_SCHEMA_v1.2",
+    "base_head": "bbc681db9701fa39dbe757dda8f2e341ea4e3c5b",
+    "pre_repair_branch_tip": "027859b843834028d29a3832126e793dc83d1508",
+    "missions": {
+      "PA-03": 53,
+      "PA-04": 63,
+      "PA-05": 61,
+      "PA-06": 43,
+      "PA-07": 61,
+      "PA-08": 105
+    },
+    "new_authored_nodes": 386,
+    "new_source_audited_nodes": 386,
+    "planned_nodes": 0,
+    "auditor_accepted_new_nodes": 0,
+    "quarantined_concepts": 2,
+    "duplicates_rejected": 1,
+    "new_evidence_records": 184,
+    "task_type_counts": {
+      "SINGLE_CHOICE": 60,
+      "EVIDENCE_SELECT": 56,
+      "COMBOBOX_SELECT": 59,
+      "SPEAKER_RECIPIENT": 73,
+      "SHORT_TEXT": 55,
+      "CLAIM_EVIDENCE": 55,
+      "PARALLEL_WITNESS_COMPARE": 11,
+      "MULTI_SELECT": 6,
+      "ORDERING": 4,
+      "MATCHING": 2,
+      "LONG_TEXT": 2,
+      "COMPOSITE_MULTI_STEP": 2,
+      "ARGUMENT": 1
+    },
+    "confidence_counts": {
+      "T1": 332,
+      "T2": 48,
+      "D1": 6
+    },
+    "repetition_relation_counts": {
+      "NONE": 180,
+      "PASSAGE_REVISIT": 180,
+      "CROSS_CONTEXT": 8,
+      "SYNTHESIS": 18
+    },
+    "feedback_uniqueness": {
+      "success_feedback": 386,
+      "partial_feedback": 386,
+      "failure_feedback": 386
+    },
+    "hint_uniqueness": {
+      "H1": 386,
+      "H2": 386,
+      "H3": 386,
+      "H4": 386,
+      "H5": 386,
+      "H6": 386,
+      "H7": 386
+    },
+    "generic_accepted_variant_policy_strings": 0,
+    "nodes_with_grading_object": 386,
+    "runtime_adapter_nodes": 386,
+    "runtime_adapter_self_grade_expected": "386/386 CORRECT against DEV5 pre-integration grader semantics",
+    "tx1_answer_bearing_nodes": 0,
+    "source_audit_status": "DEVELOPER_SOURCE_AUDITED / INDEPENDENT_AUDIT_PENDING"
+  },
+  "PA_R06_D2_QUARANTINE_v1.1.json": {
+    "status": "NOT_AUTHORED_NOT_SOURCE_AUDITED",
+    "concepts": [
+      {
+        "mission_id": "PA-05",
+        "passage": "Acts 11:20",
+        "claim": "Точну ідентичність адресатів у Діях 11:20 цей R06 lane не використовує як forced-answer claim без окремого текстологічного аудиту.",
+        "voice": "Acts narrator",
+        "recipient": "reader",
+        "witness": "Acts narrative",
+        "confidence": "D1",
+        "boundary": "Quarantined from forced grading pending textual-variant audit.",
+        "chronology": "local passage sequence",
+        "tags": [
+          "quarantine",
+          "not_stated"
+        ],
+        "status": "QUARANTINED_NOT_AUTHORED"
+      },
+      {
+        "mission_id": "PA-07",
+        "passage": "Acts 15:34",
+        "claim": "Цей R06 lane не використовує Дії 15:34 як answer-bearing fact до окремого текстологічного аудиту.",
+        "voice": "Acts narrator",
+        "recipient": "reader",
+        "witness": "Acts narrative",
+        "confidence": "D1",
+        "boundary": "Quarantined pending textual-variant audit.",
+        "chronology": "local passage sequence",
+        "tags": [
+          "quarantine"
+        ],
+        "status": "QUARANTINED_NOT_AUTHORED"
+      }
+    ]
+  },
+  "SOURCE_BOUNDARY_REGRESSION_v1.0.json": {
+    "contract": "R06_DEV2_SOURCE_BOUNDARY_REGRESSION_v1.0",
+    "checks": [
+      {
+        "id": "SB-PA03-ANANIAS-OMISSION",
+        "node_id": "PA03-N043",
+        "must_contain": [
+          "не згаданий",
+          "не сказано",
+          "не «Ананії не було»"
+        ],
+        "confidence": "T2",
+        "reason": "Acts 26 omission must not be converted into denial."
+      },
+      {
+        "id": "SB-PA03-COMMISSION-PROVENANCE",
+        "node_id": "PA03-N045",
+        "must_contain": [
+          "Дії 9",
+          "Дії 22",
+          "Дії 26",
+          "розміщено по-різному"
+        ],
+        "confidence": "T2",
+        "reason": "Commission placement remains witness-specific."
+      },
+      {
+        "id": "SB-PA04-ARABIA-SOURCE",
+        "node_id": "PA04-N033",
+        "must_contain": [
+          "Аравія",
+          "Гал 1",
+          "не локальною заявою наратора Дій 9"
+        ],
+        "confidence": "T2",
+        "reason": "Arabia is epistolary autobiography, not imported into Acts narrator."
+      },
+      {
+        "id": "SB-PA04-CHRONOLOGY-D1",
+        "node_id": "PA04-N059",
+        "must_contain": [
+          "Точний день-за-днем",
+          "не встановлюється",
+          "Дамаском",
+          "Аравією"
+        ],
+        "confidence": "D1",
+        "reason": "No forced harmonized day-by-day chronology Acts 9 + Galatians 1."
+      },
+      {
+        "id": "SB-PA06-NAME-PAUL",
+        "node_id": "PA06-N011",
+        "must_contain": [
+          "Савл, який також Павло",
+          "не описує окрему церемонію перейменування"
+        ],
+        "confidence": "T1",
+        "reason": "Acts 13:9 states Saul also Paul; no invented renaming ceremony."
+      },
+      {
+        "id": "SB-PA07-VISIT-IDENTITY-D1",
+        "node_id": "PA07-N055",
+        "must_contain": [
+          "не примушує",
+          "ототожнювати два відвідання"
+        ],
+        "confidence": "D1",
+        "reason": "Acts 15 and Galatians 2 visit identity is not forced."
+      },
+      {
+        "id": "SB-PA08-TROPHIMUS-ACCUSATION",
+        "node_id": "PA08-N069",
+        "must_contain": [
+          "звинувачують",
+          "Трохима",
+          "лише припустили"
+        ],
+        "confidence": "T1",
+        "reason": "Accusation is not rewritten as narrator-established temple entry."
+      },
+      {
+        "id": "SB-PA08-ACTS26-SPEECH",
+        "node_id": "PA08-N087",
+        "must_contain": [
+          "Перед Агриппою",
+          "переказує",
+          "пряму комісію на дорозі"
+        ],
+        "confidence": "T1",
+        "reason": "Acts 26 direct road commission remains inside Paul's Agrippa speech provenance."
+      }
+    ],
+    "quarantine_required": [
+      {
+        "contains": "Acts 11:20",
+        "reason": "recipient identity textual-variant audit required before answer-bearing use"
+      },
+      {
+        "contains": "Acts 15:34",
+        "reason": "textual-variant audit required before answer-bearing use"
+      }
+    ],
+    "global_rules": {
+      "tx1_answer_bearing_nodes": 0,
+      "omission_is_not_denial": true,
+      "epistle_autobiography_separate_from_acts_narrator": true,
+      "no_forced_damascus_harmonization": true
+    }
+  }
+}

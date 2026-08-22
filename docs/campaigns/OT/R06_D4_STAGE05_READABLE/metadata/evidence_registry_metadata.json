@@ -1,0 +1,6 @@
+{
+  "schema_version": "OT_EVIDENCE_REGISTRY_v1.0",
+  "lane": "DEV4",
+  "base_head": "bbc681db9701fa39dbe757dda8f2e341ea4e3c5b",
+  "source_policy": "WEB public-domain control; proposition-level translation-neutral grading; no external historical claims"
+}

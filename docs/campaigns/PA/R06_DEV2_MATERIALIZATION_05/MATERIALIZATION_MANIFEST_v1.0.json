@@ -1,0 +1,79 @@
+{
+  "materialization_schema": "SCRIPTURE_ARCHIVE_RECORD_SPLIT_MATERIALIZATION_v1",
+  "format": "UTF-8 JSON Lines; each line is one complete canonical JSON record using deterministic canonical serialization.",
+  "lane": "DEV-B/D2 Paul-Acts",
+  "stage": "THREE_DEV_MATERIALIZATION_AND_INTEGRATION_05",
+  "source_package": {
+    "name": "DEV_LANE_SCRIPTURE_R06_D2_FINALPREP_02.zip",
+    "drive_id": "1WxlVVZDqXcCMwkcgZIL3viZJrDAT3fFN",
+    "sha256": "1aa4ac4fb0476dd5b58a5bfe396af4890e9e9f5288b2cc904526162123c0cd6e"
+  },
+  "canonical_serialization": {
+    "encoding": "UTF-8",
+    "ensure_ascii": false,
+    "sort_keys": true,
+    "separators": [
+      ",",
+      ":"
+    ]
+  },
+  "aggregate_rule": "SHA256 of sorted '<id>\\t<record_sha256>\\n' UTF-8 lines.",
+  "collections": {
+    "nodes": {
+      "count": 386,
+      "parts": [
+        "nodes/part_001.jsonl",
+        "nodes/part_002.jsonl",
+        "nodes/part_003.jsonl",
+        "nodes/part_004.jsonl",
+        "nodes/part_005.jsonl",
+        "nodes/part_006.jsonl",
+        "nodes/part_007.jsonl",
+        "nodes/part_008.jsonl",
+        "nodes/part_009.jsonl",
+        "nodes/part_010.jsonl",
+        "nodes/part_011.jsonl",
+        "nodes/part_012.jsonl",
+        "nodes/part_013.jsonl",
+        "nodes/part_014.jsonl",
+        "nodes/part_015.jsonl",
+        "nodes/part_016.jsonl",
+        "nodes/part_017.jsonl",
+        "nodes/part_018.jsonl",
+        "nodes/part_019.jsonl",
+        "nodes/part_020.jsonl",
+        "nodes/part_021.jsonl",
+        "nodes/part_022.jsonl",
+        "nodes/part_023.jsonl",
+        "nodes/part_024.jsonl",
+        "nodes/part_025.jsonl",
+        "nodes/part_026.jsonl"
+      ],
+      "hash_index": "node_hash_index.json",
+      "aggregate_sha256": "fc7e8b7e01cba9614d66c4e756862cfd759f155deaf2ed83c798c6bc30127123"
+    },
+    "evidence": {
+      "count": 184,
+      "parts": [
+        "evidence/part_001.jsonl",
+        "evidence/part_002.jsonl",
+        "evidence/part_003.jsonl"
+      ],
+      "hash_index": "evidence_hash_index.json",
+      "aggregate_sha256": "88e197fd1c91b7787040e81bdd066d959d42b8ba64ac01acac667ffd8ad346ba"
+    }
+  },
+  "metadata": "mission_metadata.json",
+  "support_objects": "support_objects.json",
+  "derived_not_redeclared_as_authored_truth": [
+    "CANONICAL_MATERIALIZATION/PA_R06_D2_RUNTIME_NODES_v1.0.json"
+  ],
+  "reconstruction": "Group node records by mission_id and pair with mission_metadata.metadata; record values are unchanged from immutable source ZIP.",
+  "source_safety": [
+    "Acts 9 narrator distinct from Acts 22/26 later Pauline speech",
+    "epistolary/autobiographical boundaries preserved",
+    "omission != denial",
+    "TX1 separate from confidence",
+    "no transport-induced grading truth mutation"
+  ]
+}

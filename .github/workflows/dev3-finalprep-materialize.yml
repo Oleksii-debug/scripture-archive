@@ -5,7 +5,6 @@ on:
     branches:
       - r06-dev3-gospels-finalprep-02
     paths:
-      - lanes/dev3/finalprep_payload/payload.zip
       - lanes/dev3/finalprep_payload/READY
   pull_request:
     branches:
@@ -27,21 +26,23 @@ jobs:
         with:
           ref: r06-dev3-gospels-finalprep-02
           fetch-depth: 0
-      - name: Verify and materialize exact payload
+      - name: Verify and materialize exact chunks
         shell: bash
         run: |
           set -euo pipefail
-          PAYLOAD=lanes/dev3/finalprep_payload/payload.zip
-          test -f "$PAYLOAD"
-          echo 'b2da1210221b2f682a5e991df325e38403c170aafe51e2fbc9f152c3d35c47dd  lanes/dev3/finalprep_payload/payload.zip' | sha256sum -c -
+          test -f lanes/dev3/finalprep_payload/READY
+          COUNT=$(find lanes/dev3/finalprep_payload -maxdepth 1 -name 'chunk_*.b64' -type f | wc -l)
+          test "$COUNT" -eq 30
+          mkdir -p /tmp/dev3payload
+          cat lanes/dev3/finalprep_payload/chunk_*.b64 | base64 --decode > /tmp/dev3payload/payload.zip
+          echo 'b2da1210221b2f682a5e991df325e38403c170aafe51e2fbc9f152c3d35c47dd  /tmp/dev3payload/payload.zip' | sha256sum -c -
           ROOT=docs/campaigns/GW/R06_DEV3_CLOSURE_03
           rm -rf "$ROOT"
           mkdir -p "$ROOT"
-          unzip -q "$PAYLOAD" -d "$ROOT"
+          unzip -q /tmp/dev3payload/payload.zip -d "$ROOT"
           python - <<'PY'
           import hashlib, json, pathlib
           root=pathlib.Path('docs/campaigns/GW/R06_DEV3_CLOSURE_03')
-          manifest=json.loads((root/'GW_GITHUB_MATERIALIZATION_MANIFEST_v1.2.json').read_text(encoding='utf-8'))
           node_files=sorted((root/'nodes').glob('*.json'))
           nodes=[]
           for p in node_files:
@@ -53,20 +54,19 @@ jobs:
           ev=json.loads((root/'evidence'/'GW_EVIDENCE_BOARD_EVIDENCE_v1.2.json').read_text(encoding='utf-8'))
           records=ev.get('entities') or ev.get('evidence') or ev.get('records') or []
           assert len(records)==240, len(records)
-          sums={}
+          checked=0
           for line in (root/'SHA256SUMS.txt').read_text(encoding='utf-8').splitlines():
               if not line.strip():
                   continue
               h, rel=line.split(None,1)
               rel=rel.strip().lstrip('*')
-              b=(root/rel).read_bytes()
-              got=hashlib.sha256(b).hexdigest()
+              got=hashlib.sha256((root/rel).read_bytes()).hexdigest()
               assert got==h, (rel,h,got)
-              sums[rel]=got
-          assert sums
-          print('DEV3_CLOSURE_03_MATERIALIZATION_PASS nodes=360 evidence=240 tx1=22 hashed_files='+str(len(sums)))
+              checked += 1
+          assert checked >= 30, checked
+          print(f'DEV3_CLOSURE_03_MATERIALIZATION_PASS nodes=360 evidence=240 tx1=22 hashed_files={checked}')
           PY
-          rm -rf lanes/dev3/finalprep_payload/chunk_*.b64 lanes/dev3/finalprep_payload/TEST_TRIGGER lanes/dev3/finalprep_payload/READY
+          rm -rf lanes/dev3/finalprep_payload
       - name: Commit readable canonical corpus
         if: github.event_name == 'push'
         shell: bash

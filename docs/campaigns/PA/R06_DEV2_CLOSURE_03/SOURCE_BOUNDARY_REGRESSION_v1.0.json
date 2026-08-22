@@ -1,0 +1,23 @@
+{
+  "contract": "R06_DEV2_SOURCE_BOUNDARY_REGRESSION_v1.0",
+  "checks": [
+    {"id":"SB-PA03-ANANIAS-OMISSION","node_id":"PA03-N043","must_contain":["не згаданий","не сказано","не «Ананії не було»"],"confidence":"T2","reason":"Acts 26 omission must not be converted into denial."},
+    {"id":"SB-PA03-COMMISSION-PROVENANCE","node_id":"PA03-N045","must_contain":["Дії 9","Дії 22","Дії 26","розміщено по-різному"],"confidence":"T2","reason":"Commission placement remains witness-specific."},
+    {"id":"SB-PA04-ARABIA-SOURCE","node_id":"PA04-N033","must_contain":["Аравія","Гал 1","не локальною заявою наратора Дій 9"],"confidence":"T2","reason":"Arabia is epistolary autobiography, not imported into Acts narrator."},
+    {"id":"SB-PA04-CHRONOLOGY-D1","node_id":"PA04-N059","must_contain":["Точний день-за-днем","не встановлюється","Дамаском","Аравією"],"confidence":"D1","reason":"No forced harmonized day-by-day chronology Acts 9 + Galatians 1."},
+    {"id":"SB-PA06-NAME-PAUL","node_id":"PA06-N011","must_contain":["Савл, який також Павло","не описує окрему церемонію перейменування"],"confidence":"T1","reason":"Acts 13:9 states Saul also Paul; no invented renaming ceremony."},
+    {"id":"SB-PA07-VISIT-IDENTITY-D1","node_id":"PA07-N055","must_contain":["не примушує","ототожнювати два відвідання"],"confidence":"D1","reason":"Acts 15 and Galatians 2 visit identity is not forced."},
+    {"id":"SB-PA08-TROPHIMUS-ACCUSATION","node_id":"PA08-N069","must_contain":["звинувачують","Трохима","лише припустили"],"confidence":"T1","reason":"Accusation is not rewritten as narrator-established temple entry."},
+    {"id":"SB-PA08-ACTS26-SPEECH","node_id":"PA08-N087","must_contain":["Перед Агриппою","переказує","пряму комісію на дорозі"],"confidence":"T1","reason":"Acts 26 direct road commission remains inside Paul's Agrippa speech provenance."}
+  ],
+  "quarantine_required": [
+    {"contains":"Acts 11:20","reason":"recipient identity textual-variant audit required before answer-bearing use"},
+    {"contains":"Acts 15:34","reason":"textual-variant audit required before answer-bearing use"}
+  ],
+  "global_rules": {
+    "tx1_answer_bearing_nodes": 0,
+    "omission_is_not_denial": true,
+    "epistle_autobiography_separate_from_acts_narrator": true,
+    "no_forced_damascus_harmonization": true
+  }
+}

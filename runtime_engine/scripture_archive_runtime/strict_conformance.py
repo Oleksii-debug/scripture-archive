@@ -10,15 +10,24 @@ from .content import validate_canonical_node
 from .grading import GraderRegistry
 from .models import Correctness, TaskDefinition
 from .package_adapters import adapt_node_for_runtime, derive_answer_dto
+from .provenance import ProvenanceClass, RELEASE_PASS_CLASSES, classify_provenance
 
 
 class TruthClass(str, Enum):
-    AUTHORED_GROUND_TRUTH_PASS = "AUTHORED_GROUND_TRUTH_PASS"
-    LEGACY_NORMALIZED_PASS = "LEGACY_NORMALIZED_PASS"
-    ADAPTER_DERIVED_GROUND_TRUTH_FAIL_FOR_RELEASE = "ADAPTER_DERIVED_GROUND_TRUTH_FAIL_FOR_RELEASE"
+    """Public conformance labels. Old names remain only as import-compatible deprecated labels."""
+    AUTHORED_DIRECT_PASS = ProvenanceClass.AUTHORED_DIRECT_PASS.value
+    CANONICAL_LOSSLESS_NORMALIZATION_PASS = ProvenanceClass.CANONICAL_LOSSLESS_NORMALIZATION_PASS.value
+    LEGACY_EXPLICIT_NORMALIZATION_PASS = ProvenanceClass.LEGACY_EXPLICIT_NORMALIZATION_PASS.value
+    ADAPTER_INFERENCE_FAIL = ProvenanceClass.ADAPTER_INFERENCE_FAIL.value
+    MISMATCH_FAIL = ProvenanceClass.MISMATCH_FAIL.value
+    AMBIGUOUS_FAIL = ProvenanceClass.AMBIGUOUS_FAIL.value
     PARTIAL = "PARTIAL"
     INCORRECT = "INCORRECT"
     ERROR_UNSUPPORTED = "ERROR/UNSUPPORTED"
+    # Deprecated FINALPREP02 vocabulary. Never emitted by the new classifier.
+    AUTHORED_GROUND_TRUTH_PASS = "AUTHORED_GROUND_TRUTH_PASS"
+    LEGACY_NORMALIZED_PASS = "LEGACY_NORMALIZED_PASS"
+    ADAPTER_DERIVED_GROUND_TRUTH_FAIL_FOR_RELEASE = "ADAPTER_DERIVED_GROUND_TRUTH_FAIL_FOR_RELEASE"
 
 
 @dataclass(frozen=True)
@@ -30,6 +39,8 @@ class StrictConformanceItem:
     score: float
     release_pass: bool
     provenance: str
+    explicit_representation: str | None = None
+    warning: str | None = None
     error: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -41,73 +52,16 @@ class StrictConformanceItem:
             "score": self.score,
             "release_pass": self.release_pass,
             "provenance": self.provenance,
+            "explicit_representation": self.explicit_representation,
+            "warning": self.warning,
             "error": self.error,
         }
 
 
-# These keys are the canonical authored grader truth for release. Adapters may
-# normalize shapes, but release truth must already exist here.
-_AUTHORED_KEYS: dict[str, tuple[str, ...]] = {
-    "SINGLE_CHOICE": ("accepted_choice",),
-    "COMBOBOX_SELECT": ("accepted_choice",),
-    "PARALLEL_WITNESS_COMPARE": ("accepted_choice",),
-    "MULTI_SELECT": ("accepted_set",),
-    "SHORT_TEXT": ("accepted_propositions", "accepted_text"),
-    "LONG_TEXT": ("accepted_propositions", "accepted_text"),
-    "ARGUMENT": ("accepted_propositions", "accepted_text"),
-    "ORDERING": ("accepted_order",),
-    "MATCHING": ("accepted_pairs",),
-    "EVIDENCE_SELECT": ("required_evidence_ids",),
-    "CLAIM_EVIDENCE": ("accepted_text",),
-    "SPEAKER_RECIPIENT": ("speaker", "recipient"),
-    "OT_NT_LINK": ("ot_nt_link",),
-    "COMPOSITE_MULTI_STEP": ("steps",),
-}
-
-
-def _nonempty(value: Any) -> bool:
-    if value is None:
-        return False
-    if isinstance(value, str):
-        return bool(value.strip())
-    if isinstance(value, (list, tuple, set, dict)):
-        return bool(value)
-    return True
-
-
 def _authored_truth_status(node: Mapping[str, Any]) -> tuple[str, str]:
-    task_type = canonical_task_type(str(node.get("task_type") or node.get("response_mode") or node.get("task_family") or "SHORT_TEXT"))
-    grading = node.get("grading") if isinstance(node.get("grading"), Mapping) else {}
-    required = _AUTHORED_KEYS.get(task_type)
-    if not required:
-        return TruthClass.ERROR_UNSUPPORTED.value, "no canonical truth rule registered"
-
-    # Text graders may author either proposition aliases or one accepted text.
-    if task_type in {"SHORT_TEXT", "LONG_TEXT", "ARGUMENT"}:
-        if any(_nonempty(grading.get(k)) for k in required):
-            return TruthClass.AUTHORED_GROUND_TRUTH_PASS.value, "grading.accepted_propositions/accepted_text"
-    elif task_type == "CLAIM_EVIDENCE":
-        if _nonempty(grading.get("accepted_text")) and _nonempty(grading.get("required_evidence_ids")):
-            return TruthClass.AUTHORED_GROUND_TRUTH_PASS.value, "grading.accepted_text+required_evidence_ids"
-    elif task_type == "SPEAKER_RECIPIENT":
-        if all(_nonempty(grading.get(k)) for k in required):
-            return TruthClass.AUTHORED_GROUND_TRUTH_PASS.value, "grading.speaker+recipient"
-    else:
-        if all(_nonempty(grading.get(k)) for k in required):
-            return TruthClass.AUTHORED_GROUND_TRUTH_PASS.value, "grading." + "+".join(required)
-
-    # Explicit legacy contract: D4 repair 01 authored OT/NT truth under
-    # accepted_link. This is migration-compatible but is not release canonical.
-    if task_type == "OT_NT_LINK" and _nonempty(grading.get("accepted_link")):
-        return TruthClass.LEGACY_NORMALIZED_PASS.value, "grading.accepted_link legacy compatibility"
-
-    # If the public answer can still be built from accepted_answer/task_payload,
-    # the adapter would have to create the grader truth. That must fail release.
-    try:
-        derive_answer_dto(node)
-    except Exception as exc:
-        return TruthClass.ERROR_UNSUPPORTED.value, f"no authored truth and DTO derivation failed: {type(exc).__name__}: {exc}"
-    return TruthClass.ADAPTER_DERIVED_GROUND_TRUTH_FAIL_FOR_RELEASE.value, "truth only derivable from non-canonical accepted/payload fields"
+    """Compatibility wrapper retained for callers of FINALPREP02 internals."""
+    decision = classify_provenance(node)
+    return decision.provenance_class, decision.reason
 
 
 def check_nodes_strict(nodes: Iterable[Mapping[str, Any]], *, lane: str) -> dict[str, Any]:
@@ -119,23 +73,41 @@ def check_nodes_strict(nodes: Iterable[Mapping[str, Any]], *, lane: str) -> dict
         node_id = str(raw.get("node_id", "<missing>"))
         task_type = canonical_task_type(str(raw.get("task_type") or raw.get("response_mode") or raw.get("task_family") or "SHORT_TEXT"))
         task_counts[task_type] += 1
-        truth_class, provenance = _authored_truth_status(raw)
+        decision = classify_provenance(raw)
         try:
             adapted = adapt_node_for_runtime(raw, lane=lane)
             validate_canonical_node(adapted)
             task = TaskDefinition.from_canonical(adapted)
-            answer = derive_answer_dto(adapted)
+            answer = derive_answer_dto(raw)
             grade = graders.grade(task, answer)
-            if grade.correctness == Correctness.PARTIAL:
-                effective_class = TruthClass.PARTIAL.value
-            elif grade.correctness == Correctness.INCORRECT:
-                effective_class = TruthClass.INCORRECT.value
-            else:
-                effective_class = truth_class
-            release_pass = grade.correctness == Correctness.CORRECT and truth_class == TruthClass.AUTHORED_GROUND_TRUTH_PASS.value
-            results.append(StrictConformanceItem(node_id, task.task_type, effective_class, grade.correctness.value, grade.score, release_pass, provenance))
+            release_pass = (
+                grade.correctness == Correctness.CORRECT
+                and decision.provenance_class in RELEASE_PASS_CLASSES
+            )
+            results.append(StrictConformanceItem(
+                node_id=task.node_id,
+                task_type=task.task_type,
+                truth_class=decision.provenance_class,
+                correctness=grade.correctness.value,
+                score=grade.score,
+                release_pass=release_pass,
+                provenance=decision.reason,
+                explicit_representation=decision.explicit_representation,
+                warning=decision.warning,
+            ))
         except Exception as exc:
-            results.append(StrictConformanceItem(node_id, task_type, TruthClass.ERROR_UNSUPPORTED.value, "ERROR", 0.0, False, provenance, f"{type(exc).__name__}: {exc}"))
+            results.append(StrictConformanceItem(
+                node_id=node_id,
+                task_type=task_type,
+                truth_class=decision.provenance_class,
+                correctness="ERROR",
+                score=0.0,
+                release_pass=False,
+                provenance=decision.reason,
+                explicit_representation=decision.explicit_representation,
+                warning=decision.warning,
+                error=f"{type(exc).__name__}: {exc}",
+            ))
 
     truth_counts = Counter(item.truth_class for item in results)
     correctness_counts = Counter(item.correctness for item in results)
@@ -143,6 +115,7 @@ def check_nodes_strict(nodes: Iterable[Mapping[str, Any]], *, lane: str) -> dict
     return {
         "lane": lane,
         "answer_contract": "ANSWER_DTO_v1",
+        "provenance_contract": "GROUND_TRUTH_PROVENANCE_v1",
         "total": len(results),
         "strict_release_pass_count": strict_pass,
         "strict_release_blocker_count": len(results) - strict_pass,
@@ -151,4 +124,5 @@ def check_nodes_strict(nodes: Iterable[Mapping[str, Any]], *, lane: str) -> dict
         "correctness_counts": dict(sorted(correctness_counts.items())),
         "task_type_counts": dict(sorted(task_counts.items())),
         "blockers": [item.to_dict() for item in results if not item.release_pass],
+        "items": [item.to_dict() for item in results],
     }

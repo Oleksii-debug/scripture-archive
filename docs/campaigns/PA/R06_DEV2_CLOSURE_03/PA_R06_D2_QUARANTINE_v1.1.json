@@ -1,0 +1,36 @@
+{
+  "status": "NOT_AUTHORED_NOT_SOURCE_AUDITED",
+  "concepts": [
+    {
+      "mission_id": "PA-05",
+      "passage": "Acts 11:20",
+      "claim": "Точну ідентичність адресатів у Діях 11:20 цей R06 lane не використовує як forced-answer claim без окремого текстологічного аудиту.",
+      "voice": "Acts narrator",
+      "recipient": "reader",
+      "witness": "Acts narrative",
+      "confidence": "D1",
+      "boundary": "Quarantined from forced grading pending textual-variant audit.",
+      "chronology": "local passage sequence",
+      "tags": [
+        "quarantine",
+        "not_stated"
+      ],
+      "status": "QUARANTINED_NOT_AUTHORED"
+    },
+    {
+      "mission_id": "PA-07",
+      "passage": "Acts 15:34",
+      "claim": "Цей R06 lane не використовує Дії 15:34 як answer-bearing fact до окремого текстологічного аудиту.",
+      "voice": "Acts narrator",
+      "recipient": "reader",
+      "witness": "Acts narrative",
+      "confidence": "D1",
+      "boundary": "Quarantined pending textual-variant audit.",
+      "chronology": "local passage sequence",
+      "tags": [
+        "quarantine"
+      ],
+      "status": "QUARANTINED_NOT_AUTHORED"
+    }
+  ]
+}

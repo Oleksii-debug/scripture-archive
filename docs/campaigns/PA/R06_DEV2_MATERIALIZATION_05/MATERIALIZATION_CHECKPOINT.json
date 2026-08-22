@@ -1,6 +1,6 @@
 {
   "stage": "THREE_DEV_MATERIALIZATION_AND_INTEGRATION_05",
-  "status": "LOCAL_RECORD_SPLIT_PREPARED_GITHUB_PAYLOAD_PENDING",
+  "status": "GITHUB_PAYLOAD_PARTIAL",
   "source_package": {
     "name": "DEV_LANE_SCRIPTURE_R06_D2_FINALPREP_02.zip",
     "drive_id": "1WxlVVZDqXcCMwkcgZIL3viZJrDAT3fFN",
@@ -34,7 +34,11 @@
     "source_boundary": "8/8 PASS",
     "player_text": "5018 fields scanned; errors=0"
   },
+  "github_materialized_files": {
+    "MATERIALIZATION_MANIFEST_v1.0.json": "Git blob 0584c72fae47433d7231e99b759bd98d8cbadd90; exact expected blob SHA PASS",
+    "support_objects.json": "Git blob 24b0c6a82a6bd2180ac07f713539559a49f76e7d; exact expected blob SHA PASS"
+  },
+  "github_payload_readback": "PARTIAL_PASS: written files fetched/listed back with exact expected Git blob SHA; 26 node parts + 3 evidence parts + hash indexes/metadata still pending",
   "source_safety": "Acts 9 narrator vs Acts 22/26 later Pauline speech preserved; epistolary/autobiographical boundaries preserved; omission != denial; TX1/confidence separation preserved; no content regeneration.",
-  "github_payload_readback": "PENDING",
   "closure_package": "NOT_CREATED"
 }

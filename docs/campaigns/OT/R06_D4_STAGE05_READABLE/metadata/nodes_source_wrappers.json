@@ -1,0 +1,42 @@
+[
+  {
+    "schema_version": "CONTENT_NODE_SCHEMA_v1.2",
+    "campaign_id": "OT-R06-D4",
+    "canonical_status": "AUTHOR_COMPLETE / DEVELOPER_SOURCE_AUDITED / INDEPENDENT_AUDIT_PENDING",
+    "part": 1,
+    "repair_round": "R06_PREINTEGRATION_REPAIR_01",
+    "grading_contract_version": "R06_SHARED_ANSWER_DTO_v1"
+  },
+  {
+    "schema_version": "CONTENT_NODE_SCHEMA_v1.2",
+    "campaign_id": "OT-R06-D4",
+    "canonical_status": "AUTHOR_COMPLETE / DEVELOPER_SOURCE_AUDITED / INDEPENDENT_AUDIT_PENDING",
+    "part": 2,
+    "repair_round": "R06_PREINTEGRATION_REPAIR_01",
+    "grading_contract_version": "R06_SHARED_ANSWER_DTO_v1"
+  },
+  {
+    "schema_version": "CONTENT_NODE_SCHEMA_v1.2",
+    "campaign_id": "OT-R06-D4",
+    "canonical_status": "AUTHOR_COMPLETE / DEVELOPER_SOURCE_AUDITED / INDEPENDENT_AUDIT_PENDING",
+    "part": 3,
+    "repair_round": "R06_PREINTEGRATION_REPAIR_01",
+    "grading_contract_version": "R06_SHARED_ANSWER_DTO_v1"
+  },
+  {
+    "schema_version": "CONTENT_NODE_SCHEMA_v1.2",
+    "campaign_id": "OT-R06-D4",
+    "canonical_status": "AUTHOR_COMPLETE / DEVELOPER_SOURCE_AUDITED / INDEPENDENT_AUDIT_PENDING",
+    "part": 4,
+    "repair_round": "R06_PREINTEGRATION_REPAIR_01",
+    "grading_contract_version": "R06_SHARED_ANSWER_DTO_v1"
+  },
+  {
+    "schema_version": "CONTENT_NODE_SCHEMA_v1.2",
+    "campaign_id": "OT-R06-D4",
+    "canonical_status": "AUTHOR_COMPLETE / DEVELOPER_SOURCE_AUDITED / INDEPENDENT_AUDIT_PENDING",
+    "part": 5,
+    "repair_round": "R06_PREINTEGRATION_REPAIR_01",
+    "grading_contract_version": "R06_SHARED_ANSWER_DTO_v1"
+  }
+]

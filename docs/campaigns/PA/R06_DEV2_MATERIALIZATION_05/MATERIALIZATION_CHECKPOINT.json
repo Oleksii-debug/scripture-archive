@@ -1,0 +1,40 @@
+{
+  "stage": "THREE_DEV_MATERIALIZATION_AND_INTEGRATION_05",
+  "status": "LOCAL_RECORD_SPLIT_PREPARED_GITHUB_PAYLOAD_PENDING",
+  "source_package": {
+    "name": "DEV_LANE_SCRIPTURE_R06_D2_FINALPREP_02.zip",
+    "drive_id": "1WxlVVZDqXcCMwkcgZIL3viZJrDAT3fFN",
+    "sha256": "1aa4ac4fb0476dd5b58a5bfe396af4890e9e9f5288b2cc904526162123c0cd6e"
+  },
+  "prepared_staging_package": {
+    "name": "DEV_B_STAGE05_RECORD_SPLIT_STAGING.zip",
+    "drive_id": "1TgqHaCddxCGOmQjogcq40Jb4kOrf3NAW",
+    "sha256": "b681ea26d985eb754bde02a77254d40ab0920061edb9226fae7921a6740a06c0",
+    "raw_readback": "PASS",
+    "zip_crc": "PASS"
+  },
+  "record_split": {
+    "format": "UTF-8 JSON Lines; each line is one complete canonical JSON object",
+    "max_prepared_part_bytes": 143866,
+    "node_parts": 26,
+    "evidence_parts": 3,
+    "nodes": 386,
+    "evidence_records": 184,
+    "node_aggregate_sha256": "fc7e8b7e01cba9614d66c4e756862cfd759f155deaf2ed83c798c6bc30127123",
+    "evidence_aggregate_sha256": "88e197fd1c91b7787040e81bdd066d959d42b8ba64ac01acac667ffd8ad346ba"
+  },
+  "local_validation": {
+    "record_hash_fidelity": "386/386 nodes + 184/184 evidence PASS",
+    "unique_node_ids": "386/386 PASS",
+    "unique_evidence_ids": "184/184 PASS",
+    "missing_evidence_refs": 0,
+    "duplicate_semantic_fingerprints": 0,
+    "lane_validator": "PASS errors=0",
+    "runtime_self_grade": "386/386 CORRECT",
+    "source_boundary": "8/8 PASS",
+    "player_text": "5018 fields scanned; errors=0"
+  },
+  "source_safety": "Acts 9 narrator vs Acts 22/26 later Pauline speech preserved; epistolary/autobiographical boundaries preserved; omission != denial; TX1/confidence separation preserved; no content regeneration.",
+  "github_payload_readback": "PENDING",
+  "closure_package": "NOT_CREATED"
+}

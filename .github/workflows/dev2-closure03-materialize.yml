@@ -1,0 +1,119 @@
+name: DEV2 Closure03 canonical materialization
+
+on:
+  push:
+    branches:
+      - r06-dev2-finalprep-02
+    paths:
+      - .dev2_closure03_trigger
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reconstruct and verify exact canonical payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .dev2_closure03_staging/chunk_* | base64 --decode > /tmp/dev2_closure03_payload.zip
+          echo "05d9b36ec7079395154a9b4cf3d5cbc0cd3f5f2fe896430588d107e20025f5bf  /tmp/dev2_closure03_payload.zip" | sha256sum -c -
+          rm -rf docs/campaigns/PA/R06_DEV2_CLOSURE_03
+          mkdir -p docs/campaigns/PA/R06_DEV2_CLOSURE_03/canonical
+          python - <<'PY'
+          import hashlib, json, os, re, zipfile
+          from pathlib import Path
+
+          archive = Path('/tmp/dev2_closure03_payload.zip')
+          out = Path('docs/campaigns/PA/R06_DEV2_CLOSURE_03/canonical')
+          with zipfile.ZipFile(archive) as z:
+              z.testzip()
+              z.extractall(out)
+
+          manifest = json.loads((out / 'SOURCE_PACKAGE_FILE_SHA256.json').read_text(encoding='utf-8'))
+          errors = []
+          for rec in manifest['files']:
+              p = out / rec['file']
+              if not p.is_file():
+                  errors.append(f"missing:{rec['file']}")
+                  continue
+              raw = p.read_bytes()
+              if len(raw) != rec['bytes']:
+                  errors.append(f"size:{rec['file']}")
+              if hashlib.sha256(raw).hexdigest() != rec['sha256']:
+                  errors.append(f"sha256:{rec['file']}")
+
+          mission_files = [out / f'PA0{i}_CANONICAL_v1.1.json' for i in range(3, 9)]
+          nodes = []
+          ids = []
+          for p in mission_files:
+              obj = json.loads(p.read_text(encoding='utf-8'))
+              if obj.get('node_count') != len(obj.get('nodes', [])):
+                  errors.append(f"node_count:{p.name}")
+              nodes.extend(obj.get('nodes', []))
+              ids.extend(n.get('id') or n.get('node_id') for n in obj.get('nodes', []))
+          if len(nodes) != 386:
+              errors.append(f"nodes:{len(nodes)}")
+          if len(set(ids)) != 386:
+              errors.append('duplicate_or_missing_ids')
+
+          evidence = json.loads((out / 'PA_R06_D2_EVIDENCE_v1.1.json').read_text(encoding='utf-8')).get('records', [])
+          if len(evidence) != 184:
+              errors.append(f"evidence:{len(evidence)}")
+
+          bad_patterns = [r'конкретний твердження', r'Після після', r'([!?.,;:])\1+']
+          player_text_hits = []
+          def walk(v, path=''):
+              if isinstance(v, dict):
+                  for k, x in v.items():
+                      walk(x, f'{path}.{k}' if path else k)
+              elif isinstance(v, list):
+                  for i, x in enumerate(v):
+                      walk(x, f'{path}[{i}]')
+              elif isinstance(v, str):
+                  for pat in bad_patterns:
+                      if re.search(pat, v, flags=re.IGNORECASE):
+                          player_text_hits.append({'path': path, 'pattern': pat, 'sample': v[:180]})
+          for n in nodes:
+              walk(n)
+          if player_text_hits:
+              errors.append(f"player_text_hits:{len(player_text_hits)}")
+
+          report = {
+              'stage': 'R06_PRE_INTEGRATION_CLOSURE_03',
+              'source_package': manifest['source_package'],
+              'source_drive_id': manifest['source_drive_id'],
+              'source_package_sha256': manifest['source_package_sha256'],
+              'staging_archive_sha256': hashlib.sha256(archive.read_bytes()).hexdigest(),
+              'materialization_source_commit': os.environ.get('GITHUB_SHA'),
+              'mission_files': 6,
+              'nodes': len(nodes),
+              'unique_node_ids': len(set(ids)),
+              'evidence_records': len(evidence),
+              'player_text_known_defects': len(player_text_hits),
+              'hash_verified_files': len(manifest['files']),
+              'errors': errors,
+              'status': 'PASS' if not errors else 'FAIL'
+          }
+          (Path('docs/campaigns/PA/R06_DEV2_CLOSURE_03') / 'MATERIALIZATION_REPORT.json').write_text(
+              json.dumps(report, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          if errors:
+              raise SystemExit('\n'.join(errors))
+          PY
+
+      - name: Commit readable canonical materialization and remove staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "scripture-archive-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -- docs/campaigns/PA/R06_DEV2_CLOSURE_03
+          git rm -r --ignore-unmatch .dev2_closure03_staging .dev2_closure03_trigger .github/workflows/dev2-closure03-materialize.yml
+          git commit -m "R06 DEV2 closure03: materialize exact readable canonical corpus"
+          git push origin HEAD:r06-dev2-finalprep-02

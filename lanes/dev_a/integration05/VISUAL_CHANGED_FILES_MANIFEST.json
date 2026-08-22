@@ -1,0 +1,14 @@
+{
+  "schema": "DEV_A_STAGE05_VISUAL_CHANGED_FILES_v1",
+  "base_head": "524ecc3578964c7f1678b16256cdacdc942bab43",
+  "paths": [
+    "lanes/dev1/repair_overlay/frontend/styles.css",
+    "lanes/dev1/repair_overlay/frontend/renderers.js",
+    "lanes/dev1/repair_overlay/tests/test_visual_design.py",
+    "lanes/dev_a/integration05/VISUAL_DESIGN_SYSTEM_REPORT.md",
+    "lanes/dev_a/integration05/VISUAL_ACCESSIBILITY_PARITY_REPORT.md",
+    "lanes/dev_a/integration05/VISUAL_CHANGED_FILES_MANIFEST.json"
+  ],
+  "content_or_runtime_truth_changed": false,
+  "main_merge": false
+}

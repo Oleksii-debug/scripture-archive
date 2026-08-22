@@ -1,0 +1,27 @@
+{
+  "status": "PASS_LOCAL_RECORD_LEVEL_MATERIALIZATION",
+  "source_zip": {
+    "sha256": "1aa4ac4fb0476dd5b58a5bfe396af4890e9e9f5288b2cc904526162123c0cd6e",
+    "size": 564143
+  },
+  "record_counts": {
+    "missions": 6,
+    "nodes": 386,
+    "evidence": 184
+  },
+  "node_ids_unique": true,
+  "evidence_ids_unique": true,
+  "missing_evidence_refs": 0,
+  "duplicate_semantic_fingerprints": 0,
+  "source_package_validators": {
+    "lane": "PASS 386 nodes / 184 evidence / errors=0",
+    "runtime": "PASS self_grade CORRECT=386",
+    "source_boundary": "PASS checks=8 errors=0",
+    "player_text": "PASS scanned=5018 errors=0"
+  },
+  "record_hash_fidelity": {
+    "nodes": "386/386 exact canonical object hashes",
+    "evidence": "184/184 exact canonical object hashes"
+  },
+  "github_write_status": "PENDING"
+}

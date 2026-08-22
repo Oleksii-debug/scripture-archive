@@ -5,13 +5,7 @@ on:
     branches:
       - r06-dev3-gospels-finalprep-02
     paths:
-      - lanes/dev3/finalprep_payload/READY
-  pull_request:
-    branches:
-      - main
-    paths:
-      - .github/workflows/dev3-finalprep-materialize.yml
-      - lanes/dev3/finalprep_payload/**
+      - lanes/dev3/closure03_payload/READY
 
 permissions:
   contents: write
@@ -26,27 +20,29 @@ jobs:
         with:
           ref: r06-dev3-gospels-finalprep-02
           fetch-depth: 0
-      - name: Verify and materialize exact chunks
+      - name: Verify transport and materialize readable corpus
         shell: bash
         run: |
           set -euo pipefail
-          test -f lanes/dev3/finalprep_payload/READY
-          COUNT=$(find lanes/dev3/finalprep_payload -maxdepth 1 -name 'chunk_*.b64' -type f | wc -l)
-          test "$COUNT" -eq 30
-          mkdir -p /tmp/dev3payload
-          cat lanes/dev3/finalprep_payload/chunk_*.b64 | base64 --decode > /tmp/dev3payload/payload.zip
-          echo 'b2da1210221b2f682a5e991df325e38403c170aafe51e2fbc9f152c3d35c47dd  /tmp/dev3payload/payload.zip' | sha256sum -c -
+          STAGE=lanes/dev3/closure03_payload
           ROOT=docs/campaigns/GW/R06_DEV3_CLOSURE_03
+          test -f "$STAGE/READY"
+          COUNT=$(find "$STAGE" -maxdepth 1 -name 'part_*.b64' -type f | wc -l)
+          test "$COUNT" -eq 51
+          mkdir -p /tmp/dev3closure
+          cat "$STAGE"/part_*.b64 | base64 --decode > /tmp/dev3closure/payload.tar.xz
+          echo 'ea8e4d290101a6b1c95e3718844015b90abda0964705bf24b70309fa6062c35a  /tmp/dev3closure/payload.tar.xz' | sha256sum -c -
           rm -rf "$ROOT"
           mkdir -p "$ROOT"
-          unzip -q /tmp/dev3payload/payload.zip -d "$ROOT"
+          tar -xJf /tmp/dev3closure/payload.tar.xz -C "$ROOT"
           python - <<'PY'
           import hashlib, json, pathlib
           root=pathlib.Path('docs/campaigns/GW/R06_DEV3_CLOSURE_03')
           node_files=sorted((root/'nodes').glob('*.json'))
           nodes=[]
           for p in node_files:
-              nodes.extend(json.loads(p.read_text(encoding='utf-8'))['nodes'])
+              data=json.loads(p.read_text(encoding='utf-8'))
+              nodes.extend(data['nodes'])
           assert len(node_files)==15, len(node_files)
           assert len(nodes)==360, len(nodes)
           assert len({n['node_id'] for n in nodes})==360
@@ -66,18 +62,13 @@ jobs:
           assert checked == 29, checked
           print(f'DEV3_CLOSURE_03_MATERIALIZATION_PASS nodes=360 evidence=240 tx1=22 hashed_files={checked}')
           PY
-          rm -rf lanes/dev3/finalprep_payload
+          rm -rf "$STAGE" lanes/dev3/finalprep_payload
       - name: Commit readable canonical corpus
-        if: github.event_name == 'push'
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A -- lanes/dev3/finalprep_payload docs/campaigns/GW/R06_DEV3_CLOSURE_03
-          if git diff --cached --quiet; then
-            echo 'No materialization changes to commit.'
-            exit 0
-          fi
+          git add -A -- lanes/dev3/closure03_payload lanes/dev3/finalprep_payload docs/campaigns/GW/R06_DEV3_CLOSURE_03
           git commit -m 'R06 DEV3 closure03: materialize readable Gospel corpus [skip ci]'
           git push origin HEAD:r06-dev3-gospels-finalprep-02

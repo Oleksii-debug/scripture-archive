@@ -1,0 +1,5 @@
+{
+  "schema_version": "CHARACTER_DOSSIER_v1.0",
+  "lane": "DEV4",
+  "rule": "No biography beyond cited text; uncertainty and NT relation boundaries explicit."
+}

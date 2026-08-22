@@ -1,0 +1,24 @@
+{
+  "status": "PASS_LOCAL_RECORD_LEVEL_MATERIALIZATION",
+  "source_zip": {
+    "sha256": "9a302d32421ad2c9c704290eec3dbe5d84d28e5cc8c7d41daf0a430df5646913",
+    "size": 584527
+  },
+  "record_counts": {
+    "missions": 15,
+    "nodes": 360,
+    "Evidence": 240,
+    "witness_matrix": 240,
+    "TX1_nodes": 22
+  },
+  "confidence": {
+    "T1": 242,
+    "T2": 108,
+    "D1": 10
+  },
+  "node_ids_unique": true,
+  "source_package_validator": "PASS DEV3_REPAIR_STRUCTURAL",
+  "record_hash_fidelity": "all materialized collections aggregate and per-record hashes PASS",
+  "cross_d2_node_id_collision_count": 0,
+  "github_write_status": "PENDING"
+}

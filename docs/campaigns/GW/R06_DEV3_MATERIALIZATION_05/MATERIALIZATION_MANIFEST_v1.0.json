@@ -1,0 +1,153 @@
+{
+  "materialization_schema": "SCRIPTURE_ARCHIVE_RECORD_SPLIT_MATERIALIZATION_v1",
+  "format": "UTF-8 JSON Lines; each line is one complete canonical JSON record using deterministic canonical serialization.",
+  "lane": "DEV-B/D3 Gospels",
+  "stage": "THREE_DEV_MATERIALIZATION_AND_INTEGRATION_05",
+  "source_package": {
+    "name": "DEV_LANE_SCRIPTURE_R06_D3_REPAIR_01.zip",
+    "drive_id": "10soveW2htOitjEPXIUByjjQIvqykaGpt",
+    "sha256": "9a302d32421ad2c9c704290eec3dbe5d84d28e5cc8c7d41daf0a430df5646913"
+  },
+  "canonical_serialization": {
+    "encoding": "UTF-8",
+    "ensure_ascii": false,
+    "sort_keys": true,
+    "separators": [
+      ",",
+      ":"
+    ]
+  },
+  "aggregate_rule": "SHA256 of sorted '<id>\\t<record_sha256>\\n' UTF-8 lines.",
+  "collections": {
+    "nodes": {
+      "count": 360,
+      "parts": [
+        "nodes/part_001.jsonl",
+        "nodes/part_002.jsonl",
+        "nodes/part_003.jsonl",
+        "nodes/part_004.jsonl",
+        "nodes/part_005.jsonl",
+        "nodes/part_006.jsonl",
+        "nodes/part_007.jsonl",
+        "nodes/part_008.jsonl",
+        "nodes/part_009.jsonl",
+        "nodes/part_010.jsonl",
+        "nodes/part_011.jsonl",
+        "nodes/part_012.jsonl",
+        "nodes/part_013.jsonl",
+        "nodes/part_014.jsonl",
+        "nodes/part_015.jsonl",
+        "nodes/part_016.jsonl",
+        "nodes/part_017.jsonl"
+      ],
+      "aggregate_sha256": "6bc9ceadb9a02f7eef92cf70df004f3781a3e85732b1f5d17cd93c2e876896e6"
+    },
+    "evidence_board.Person": {
+      "count": 96,
+      "parts": [
+        "evidence_board/person/part_001.jsonl"
+      ],
+      "aggregate_sha256": "8246ef656e49fc4564ec47ee7c16016c33498df4c5d43bc4214f74d977407643"
+    },
+    "evidence_board.Place": {
+      "count": 100,
+      "parts": [
+        "evidence_board/place/part_001.jsonl"
+      ],
+      "aggregate_sha256": "fa725887a9a67047f34e5ae3e204ddba05cb876e01cb5ae45e1dfc248288c63e"
+    },
+    "evidence_board.Event": {
+      "count": 15,
+      "parts": [
+        "evidence_board/event/part_001.jsonl"
+      ],
+      "aggregate_sha256": "b0383e033bc05b5b71ff794648f6f1426033a21a58ef3fffd9af74283b35c5e3"
+    },
+    "evidence_board.Claim": {
+      "count": 360,
+      "parts": [
+        "evidence_board/claim/part_001.jsonl"
+      ],
+      "aggregate_sha256": "aa3a6a1e57fba32f344a48c74b3b5c771ea519188d2426f0e2dc29d0c0449151"
+    },
+    "evidence_board.Evidence": {
+      "count": 240,
+      "parts": [
+        "evidence_board/evidence/part_001.jsonl",
+        "evidence_board/evidence/part_002.jsonl"
+      ],
+      "aggregate_sha256": "e908835f05b572edea82cfe35460c6aaea8fa8d829e35e308a144b9f357a0335"
+    },
+    "evidence_board.WitnessRelation": {
+      "count": 240,
+      "parts": [
+        "evidence_board/witnessrelation/part_001.jsonl"
+      ],
+      "aggregate_sha256": "b749c84525f64acc0ee8f164bb3edd4a3d3061fc525ac7d2d35c1bb5dd9c9086"
+    },
+    "witness_matrix": {
+      "count": 240,
+      "parts": [
+        "registries/witness_matrix/part_001.jsonl",
+        "registries/witness_matrix/part_002.jsonl"
+      ],
+      "aggregate_sha256": "3bf9326213e97e22ccdf2429bf10722c7df4d521457ca1a72dbb96f5430f9261"
+    },
+    "chronology": {
+      "count": 15,
+      "parts": [
+        "registries/chronology/part_001.jsonl"
+      ],
+      "aggregate_sha256": "98c115fe5fd2b887a14207d3e16e67f5fca62f80ab684ba5b4d370443c2ceb79"
+    },
+    "sources": {
+      "count": 63,
+      "parts": [
+        "registries/sources/part_001.jsonl"
+      ],
+      "aggregate_sha256": "9a775d162a68a8858bcb410d1d4160f2363949dcab807b12d30a2bc1c2dc0466"
+    },
+    "tx1": {
+      "count": 3,
+      "parts": [
+        "registries/tx1/part_001.jsonl"
+      ],
+      "aggregate_sha256": "d872e71bdc2e6c96bcc5867c703e0726d00ac5272e8afefe0c2aced5c8ab0d92"
+    }
+  },
+  "hash_indexes": [
+    "record_hash_index_part_01.json",
+    "record_hash_index_part_02.json",
+    "record_hash_index_part_03.json",
+    "record_hash_index_part_04.json",
+    "record_hash_index_part_05.json"
+  ],
+  "mission_metadata": "mission_metadata.json",
+  "source_part_metadata": "source_part_metadata.json",
+  "registry_metadata": "registry_metadata.json",
+  "support_objects": "support_objects.json",
+  "derived_not_redeclared_as_authored_truth": [
+    "GW_NODES_RUNTIME_v1.1.json",
+    "GW_NODES_AUDIT_INDEX_v1.1.json",
+    "GW_NODES_AUDIT_INDEX_PART_01..04_v1.1.json"
+  ],
+  "expected": {
+    "missions": 15,
+    "nodes": 360,
+    "evidence": 240,
+    "witness_matrix": 240,
+    "tx1_nodes": 22,
+    "confidence": {
+      "T1": 242,
+      "T2": 108,
+      "D1": 10
+    }
+  },
+  "source_safety": [
+    "Matthew/Mark/Luke/John witness separation",
+    "no false harmonization",
+    "TX1 separate from confidence",
+    "chronology/source boundaries preserved",
+    "no transport-induced grading truth mutation"
+  ]
+}

@@ -4,6 +4,7 @@ from typing import Any
 
 from .answer_contracts import ANSWER_CONTRACT_VERSION, answer_contract_descriptor
 from .security import ALLOWED_COMMANDS
+from .provenance import provenance_contract_descriptor
 
 TRANSPORT_CONTRACT_VERSION = "D1_RUNTIME_TRANSPORT_v1"
 CANONICAL_TASK_TYPES = (
@@ -20,5 +21,6 @@ def transport_contract_descriptor() -> dict[str, Any]:
         "answer_contract": ANSWER_CONTRACT_VERSION,
         "commands": sorted(ALLOWED_COMMANDS),
         "task_types": {name: answer_contract_descriptor(name) for name in CANONICAL_TASK_TYPES},
+        "provenance": provenance_contract_descriptor(),
         "platform_rule": "domain/runtime contains no pywebview, win32 or desktop-only imports",
     }

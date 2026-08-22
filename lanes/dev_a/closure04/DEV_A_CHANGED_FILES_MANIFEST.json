@@ -1,0 +1,34 @@
+{
+  "schema": "DEV_A_CHANGED_FILES_MANIFEST_v1",
+  "stage": "R06_THREE_DEV_REBALANCE_CLOSURE_04",
+  "branch": "r06-3dev-a-platform-runtime-preintegration-04",
+  "integration_base_commit": "90d0c914f4b1a54ab845d7674486f0435395ee5b",
+  "inherited": {
+    "dev1_head": "072d294539ec16a3aedf519064fe31dd6b0b06f9",
+    "dev5_head": "84d40c64cacac391baf3e06102609a32fe68b2e0",
+    "main_untouched": "bbc681db9701fa39dbe757dda8f2e341ea4e3c5b"
+  },
+  "changed_or_added_paths": [
+    "lanes/dev1/repair_overlay/scripture_archive_platform/transport/answer_contracts.py",
+    "lanes/dev1/repair_overlay/scripture_archive_platform/transport/runtime_compat.py",
+    "lanes/dev1/repair_overlay/scripture_archive_platform/transport/contracts.py",
+    "lanes/dev1/repair_overlay/scripture_archive_platform/application/runtime_gateway.py",
+    "lanes/dev1/repair_overlay/scripture_archive_platform/application/service.py",
+    "lanes/dev1/repair_overlay/packaging/build_windows.ps1",
+    "lanes/dev1/repair_overlay/tests/test_dev_a_runtime_gateway.py",
+    "lanes/dev1/repair_overlay/tests/test_dev_a_runtime_application.py",
+    "lanes/dev_a/closure04/INTEGRATION_INPUT_CONTRACT.md",
+    "lanes/dev_a/closure04/DEV_A_CHANGED_FILES_MANIFEST.json"
+  ],
+  "contract_effect": {
+    "answer_dto_truth_owner": "runtime_engine/scripture_archive_runtime/answer_contracts.py",
+    "grading_branching_mastery_player_memory_truth_owner": "runtime_engine",
+    "platform_reference_grader": "REFERENCE_TEST_ONLY_WHEN_RUNTIME_ABSENT",
+    "public_transport": "scripture.transport.v1",
+    "runtime_transport": "runtime.v1",
+    "runtime_compat_contract": "D1_RUNTIME_TRANSPORT_v1",
+    "provenance_contract": "GROUND_TRUTH_PROVENANCE_v1"
+  },
+  "main_merge_performed": false,
+  "global_audit_ready_set": false
+}

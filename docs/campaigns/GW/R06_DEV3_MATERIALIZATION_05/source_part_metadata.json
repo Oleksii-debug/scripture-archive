@@ -1,0 +1,29 @@
+[
+  {
+    "source_file": "GW_MISSIONS_PART_01_v1.1.json",
+    "metadata": {
+      "schema": "CONTENT_NODE_SCHEMA_v1.2 + GW_REPAIR_CONTRACT_v1.1",
+      "campaign_id": "GW",
+      "part": 1,
+      "repair_round": "R06_DEV3_REPAIR_01"
+    }
+  },
+  {
+    "source_file": "GW_MISSIONS_PART_02_v1.1.json",
+    "metadata": {
+      "schema": "CONTENT_NODE_SCHEMA_v1.2 + GW_REPAIR_CONTRACT_v1.1",
+      "campaign_id": "GW",
+      "part": 2,
+      "repair_round": "R06_DEV3_REPAIR_01"
+    }
+  },
+  {
+    "source_file": "GW_MISSIONS_PART_03_v1.1.json",
+    "metadata": {
+      "schema": "CONTENT_NODE_SCHEMA_v1.2 + GW_REPAIR_CONTRACT_v1.1",
+      "campaign_id": "GW",
+      "part": 3,
+      "repair_round": "R06_DEV3_REPAIR_01"
+    }
+  }
+]

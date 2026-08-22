@@ -1,0 +1,74 @@
+name: DEV-C D4 Materialize via PR Event
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'lanes/dev4/finalprep_payload_parts/**'
+      - '.github/workflows/devc-d4-materialize-pr.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: r06-d4-ot-finalprep-02
+
+      - name: Reassemble and verify exact D4 payload
+        shell: python
+        run: |
+          import base64, glob, hashlib, pathlib, zipfile
+          parts = sorted(glob.glob('lanes/dev4/finalprep_payload_parts/part_*.b64'))
+          if not parts:
+              raise SystemExit('no payload parts')
+          encoded = ''.join(pathlib.Path(p).read_text(encoding='ascii').strip() for p in parts)
+          raw = base64.b64decode(encoded, validate=True)
+          expected = 'e8b008c31462d7ed9388a7a84f73bb8666c8449181000751e9da45c2468779c9'
+          got = hashlib.sha256(raw).hexdigest()
+          print('parts', len(parts), 'bytes', len(raw), 'sha256', got)
+          if got != expected:
+              raise SystemExit(f'payload SHA mismatch: {got}')
+          payload = pathlib.Path('/tmp/DEV4_FINALPREP_02_MATERIALIZATION_PAYLOAD.zip')
+          payload.write_bytes(raw)
+          with zipfile.ZipFile(payload) as z:
+              bad = z.testzip()
+              if bad:
+                  raise SystemExit(f'ZIP CRC failure: {bad}')
+              z.extractall('.')
+
+      - name: Validate exact D4 payload
+        run: |
+          python -m py_compile tools/validate_ot_r06_d4.py tools/test_ot_r06_d4_d5_contract.py
+          python tools/validate_ot_r06_d4.py
+          python tools/test_ot_r06_d4_d5_contract.py
+
+      - name: Commit readable canonical materialization
+        run: |
+          git config user.name 'scripture-archive-devc-bot'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/campaigns/OT/R06_D4_OT_CANONICAL_v1.0 \
+                  docs/corpus/OTNT_RELATION_REGISTRY_R06_D4_v1.0.json \
+                  docs/corpus/OT_R06_D4_CHARACTER_DOSSIERS_v1.0.json \
+                  docs/corpus/OT_R06_D4_ENTITY_REGISTRIES_v1.0.json \
+                  docs/evidence/OT_R06_D4_EVIDENCE_REGISTRY_v1.0.json \
+                  docs/spec/R06_D4_SHARED_ANSWER_DTO_CONTRACT_v1.0.json \
+                  docs/spec/R06_D4_SHARED_ANSWER_DTO_CONTRACT_v1.0.md \
+                  docs/workflow/r06_d4/LANE_OUTPUT_MANIFEST.json \
+                  docs/workflow/r06_d4_finalprep_02 \
+                  docs/workflow/r06_d4_repair/LANE_REPAIR_MANIFEST_02.json \
+                  tools/validate_ot_r06_d4.py \
+                  tools/test_ot_r06_d4_d5_contract.py
+          if git diff --cached --quiet; then
+            echo 'No materialization delta.'
+          else
+            git commit -m 'R06 DEV-C: materialize exact D4 OT corpus payload'
+            git push origin HEAD:r06-d4-ot-finalprep-02
+          fi
+          git rev-parse HEAD

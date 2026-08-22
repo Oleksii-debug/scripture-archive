@@ -1,0 +1,125 @@
+name: DEV-C Stage05 D4 Readable Materialization v2
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/devc-stage05-d4-materialize-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: r06-3dev-c-d4-materialization-05
+
+      - name: Reassemble exact pre-repair transport payload
+        shell: python
+        run: |
+          import base64, glob, hashlib, pathlib, zipfile
+          parts=sorted(glob.glob('lanes/dev4/finalprep_payload_parts/part_*.b64'))
+          if not parts: raise SystemExit('D4 transport parts missing')
+          raw=base64.b64decode(''.join(pathlib.Path(p).read_text(encoding='ascii').strip() for p in parts),validate=True)
+          got=hashlib.sha256(raw).hexdigest(); expected='e8b008c31462d7ed9388a7a84f73bb8666c8449181000751e9da45c2468779c9'
+          print('payload',len(raw),got)
+          if got!=expected: raise SystemExit(f'payload SHA mismatch {got}')
+          zpath=pathlib.Path('/tmp/d4_pre_repair.zip'); zpath.write_bytes(raw)
+          with zipfile.ZipFile(zpath) as z:
+              bad=z.testzip()
+              if bad: raise SystemExit(f'ZIP CRC failure {bad}')
+              z.extractall('/tmp/d4src')
+
+      - name: Apply exact 63-H1 repair and require 450 final node hashes
+        shell: python
+        run: |
+          import json,hashlib,pathlib,shutil
+          src=pathlib.Path('/tmp/d4src'); campaign=src/'docs/campaigns/OT/R06_D4_OT_CANONICAL_v1.0'
+          node_files=sorted(campaign.glob('nodes_part_*.json')); payloads=[json.loads(p.read_text(encoding='utf-8')) for p in node_files]
+          nodes=[n for obj in payloads for n in obj['nodes']]
+          if len(nodes)!=450: raise SystemExit(f'node count {len(nodes)}')
+          repairs=0
+          for n in nodes:
+              h1=n.get('hints',{}).get('H1')
+              if isinstance(h1,str) and 'доказовий запис запис' in h1:
+                  n['hints']['H1']=h1.replace('доказовий запис запис','доказовий запис'); repairs+=1
+          if repairs!=63: raise SystemExit(f'H1 repair count {repairs}')
+          def canon(o): return json.dumps(o,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode('utf-8')
+          expected={}
+          for p in sorted(pathlib.Path('docs/campaigns/OT/R06_D4_STAGE05_READABLE/record_hashes').glob('nodes_*.sha256.json')): expected.update(json.loads(p.read_text(encoding='utf-8')))
+          got={n['node_id']:hashlib.sha256(canon(n)).hexdigest() for n in nodes}
+          if set(got)!=set(expected): raise SystemExit(f'node ID set mismatch got={len(got)} expected={len(expected)}')
+          bad=[k for k in sorted(got) if got[k]!=expected[k]]
+          if bad: raise SystemExit(f'node hash mismatch {len(bad)} first={bad[:5]}')
+          agg=hashlib.sha256(''.join(got[k] for k in sorted(got)).encode()).hexdigest()
+          if agg!='ffb5fc49efaa42e4cd5b5a665f3b027a427a03498758b6622bb91649ea0dce5f': raise SystemExit(f'node aggregate {agg}')
+          # Rewrite repaired final nodes into the original 5x90 validator shape.
+          pos=0
+          for p,obj in zip(node_files,payloads):
+              count=len(obj['nodes']); obj['nodes']=nodes[pos:pos+count]; pos+=count
+              p.write_text(json.dumps(obj,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          out=pathlib.Path('docs/campaigns/OT/R06_D4_STAGE05_CANONICAL'); shutil.rmtree(out,ignore_errors=True); (out/'nodes').mkdir(parents=True)
+          for i in range(0,450,15):
+              chunk=nodes[i:i+15]; (out/'nodes'/f'nodes_{i+1:03}_{i+len(chunk):03}.jsonl').write_text(''.join(canon(n).decode('utf-8')+'\n' for n in chunk),encoding='utf-8')
+          print('D4_NODE_HASH_GATE_PASS 450/450 H1_REPAIR=63 aggregate='+agg)
+
+      - name: Require final support record aggregates and materialize registries
+        shell: python
+        run: |
+          import json,hashlib,pathlib,shutil
+          src=pathlib.Path('/tmp/d4src'); out=pathlib.Path('docs/campaigns/OT/R06_D4_STAGE05_CANONICAL')
+          def canon(o): return json.dumps(o,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode('utf-8')
+          def agg(recs,key):
+              h={r[key]:hashlib.sha256(canon(r)).hexdigest() for r in recs}; return hashlib.sha256(''.join(h[k] for k in sorted(h)).encode()).hexdigest(),h
+          E=json.loads((src/'docs/evidence/OT_R06_D4_EVIDENCE_REGISTRY_v1.0.json').read_text(encoding='utf-8'))
+          R=json.loads((src/'docs/corpus/OTNT_RELATION_REGISTRY_R06_D4_v1.0.json').read_text(encoding='utf-8'))
+          D=json.loads((src/'docs/corpus/OT_R06_D4_CHARACTER_DOSSIERS_v1.0.json').read_text(encoding='utf-8'))
+          M=json.loads((src/'docs/campaigns/OT/R06_D4_OT_CANONICAL_v1.0/MISSION_INDEX.json').read_text(encoding='utf-8'))
+          X=json.loads((src/'docs/corpus/OT_R06_D4_ENTITY_REGISTRIES_v1.0.json').read_text(encoding='utf-8'))
+          checks=[('evidence',E['records'],'evidence_id','4af76256bc75a030c6aff917dbfe80120ac6d3a98e327677ff613534006b279e'),('relations',R['records'],'relation_id','f1d9a8faece1e7533d4cb4f1fdc0fdabd7e275f80b9dcb5bd43bd3e447efd17f'),('dossiers',D['dossiers'],'dossier_id','24083043fcef08d8b670a9a3908658468b2c9dfed8792cfb58f54967c9da0b86'),('missions',M['missions'],'mission_id','352006fcc55f13f7927284c20c67ad608c7cc5450f94598eff722d3c7ee46f02')]
+          hashes={}
+          for name,recs,key,expected in checks:
+              a,h=agg(recs,key); hashes[name]=h
+              if a!=expected: raise SystemExit(f'{name} aggregate {a}')
+          if [len(E['records']),len(R['records']),len(D['dossiers']),len(M['missions'])]!=[90,24,15,15]: raise SystemExit('support count mismatch')
+          entity_specs={'Person':('person_id','3088dc8624b813e4482ad85c561509ae6eff38be426414e7060cd7d62169e944'),'Place':('place_id','d0a8dc05349629c4d1d5b2bc97bc536f975082aeba4094f2173113224fcab200'),'Event':('event_id','c19995bdc6f59c886ba29299fbe4bd90ef1f2560b7719cdd6de2adf00d4a3a24'),'Promise':('promise_id','8ff5358e1949f80fd4bd30c1dc2994bedfd5d0e51087e8adcf1060d273c64225'),'Covenant':('covenant_id','524cfce264b85794923aecf966228e0efb6781fa7d52e0f099d32b2c267d3e53'),'Passage':('passage_id','e1e1c736e25a8e6faf328640f88da8203302d89b7d898ab2a6d9b20988dcd0fb'),'Relation':('relation_id','db6bcdcf1855ee8b2b64009c29fb388f0bd207da2b58de605a71741cb51f4214'),'Evidence':('evidence_id','1f7f682bb3a9d0e48f3fafbf051ba5c41f24e136b902ccb95b73e36d34cbaba7')}
+          for name,(key,expected) in entity_specs.items():
+              a,h=agg(X[name],key)
+              if a!=expected: raise SystemExit(f'entity {name} aggregate {a}')
+              hashes['entity_'+name]=h
+          (out/'registries').mkdir(parents=True,exist_ok=True); (out/'contracts').mkdir(exist_ok=True); (out/'record_hashes').mkdir(exist_ok=True)
+          copies=[('docs/evidence/OT_R06_D4_EVIDENCE_REGISTRY_v1.0.json','registries/evidence_registry.json'),('docs/corpus/OTNT_RELATION_REGISTRY_R06_D4_v1.0.json','registries/otnt_relation_registry.json'),('docs/corpus/OT_R06_D4_CHARACTER_DOSSIERS_v1.0.json','registries/character_dossiers.json'),('docs/corpus/OT_R06_D4_ENTITY_REGISTRIES_v1.0.json','registries/entity_registries.json'),('docs/campaigns/OT/R06_D4_OT_CANONICAL_v1.0/MISSION_INDEX.json','registries/mission_index.json'),('docs/spec/R06_D4_SHARED_ANSWER_DTO_CONTRACT_v1.0.json','contracts/R06_D4_SHARED_ANSWER_DTO_CONTRACT_v1.0.json'),('docs/spec/R06_D4_SHARED_ANSWER_DTO_CONTRACT_v1.0.md','contracts/R06_D4_SHARED_ANSWER_DTO_CONTRACT_v1.0.md')]
+          for a,b in copies: shutil.copy2(src/a,out/b)
+          for name,h in hashes.items(): (out/'record_hashes'/f'{name}.sha256.json').write_text(json.dumps(h,ensure_ascii=False,sort_keys=True,separators=(',',':'))+'\n',encoding='utf-8')
+          print('D4_SUPPORT_HASH_GATE_PASS evidence=90 relations=24 dossiers=15 missions=15 entities=328')
+
+      - name: Run final repaired D4 validators
+        run: |
+          cd /tmp/d4src
+          python -m py_compile tools/validate_ot_r06_d4.py tools/test_ot_r06_d4_d5_contract.py
+          python tools/validate_ot_r06_d4.py
+          python tools/test_ot_r06_d4_d5_contract.py
+
+      - name: Build final materialization manifest
+        shell: python
+        run: |
+          import json,hashlib,pathlib
+          out=pathlib.Path('docs/campaigns/OT/R06_D4_STAGE05_CANONICAL'); files=[]
+          for p in sorted(x for x in out.rglob('*') if x.is_file()):
+              b=p.read_bytes(); files.append({'path':str(p).replace('\\','/'),'bytes':len(b),'sha256':hashlib.sha256(b).hexdigest()})
+          m={'schema':'D4_RECORD_HASH_MATERIALIZATION_MANIFEST_v1','source_package':'DEV_LANE_SCRIPTURE_R06_D4_CLOSURE_03.zip','source_drive_id':'1LSrCc1M8DcqRBwpO2NAVmcB9EzazgMDq','source_sha256':'c4e8dfe4ea62df2c3d52b810fb2413b31d6dcfd4cc711320beae3258ac6a981a','source_branch_head':'2417976b7b874db44f77a815d560ccafafbec061','canonical_serialization':'UTF-8 JSON ensure_ascii=false sort_keys=true separators=(comma,colon)','counts':{'nodes':450,'evidence':90,'relations':24,'dossiers':15,'missions':15,'entity_records':328},'node_record_aggregate_sha256':'ffb5fc49efaa42e4cd5b5a665f3b027a427a03498758b6622bb91649ea0dce5f','h1_repair_count':63,'files':files}
+          (out/'D4_RECORD_HASH_MATERIALIZATION_MANIFEST.json').write_text(json.dumps(m,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          print('D4_MANIFEST_PASS files',len(files)+1)
+
+      - name: Commit readable final D4 stage05 corpus
+        run: |
+          git config user.name 'scripture-archive-devc-bot'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/campaigns/OT/R06_D4_STAGE05_CANONICAL
+          if git diff --cached --quiet; then echo 'No materialization delta.'; else git commit -m 'R06 DEV-C stage05: materialize final readable D4 corpus'; git push origin HEAD:r06-3dev-c-d4-materialization-05; fi
+          git rev-parse HEAD

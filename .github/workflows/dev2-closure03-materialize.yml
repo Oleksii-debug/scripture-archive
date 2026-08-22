@@ -22,20 +22,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat .dev2_closure03_staging/chunk_* | base64 --decode > /tmp/dev2_closure03_payload.zip
-          echo "05d9b36ec7079395154a9b4cf3d5cbc0cd3f5f2fe896430588d107e20025f5bf  /tmp/dev2_closure03_payload.zip" | sha256sum -c -
+          cat .dev2_closure03_staging_xz/chunk_* | base64 --decode > /tmp/dev2_closure03_payload.tar.xz
+          echo "22b59de8bf39683dd5f2b6ade9eedcb5fecb0d91f07ba8cd42b94b72192b83c0  /tmp/dev2_closure03_payload.tar.xz" | sha256sum -c -
           rm -rf docs/campaigns/PA/R06_DEV2_CLOSURE_03
           mkdir -p docs/campaigns/PA/R06_DEV2_CLOSURE_03/canonical
+          tar -xJf /tmp/dev2_closure03_payload.tar.xz -C docs/campaigns/PA/R06_DEV2_CLOSURE_03/canonical
           python - <<'PY'
-          import hashlib, json, os, re, zipfile
+          import hashlib, json, os, re
           from pathlib import Path
 
-          archive = Path('/tmp/dev2_closure03_payload.zip')
+          archive = Path('/tmp/dev2_closure03_payload.tar.xz')
           out = Path('docs/campaigns/PA/R06_DEV2_CLOSURE_03/canonical')
-          with zipfile.ZipFile(archive) as z:
-              z.testzip()
-              z.extractall(out)
-
           manifest = json.loads((out / 'SOURCE_PACKAGE_FILE_SHA256.json').read_text(encoding='utf-8'))
           errors = []
           for rec in manifest['files']:
@@ -50,8 +47,7 @@ jobs:
                   errors.append(f"sha256:{rec['file']}")
 
           mission_files = [out / f'PA0{i}_CANONICAL_v1.1.json' for i in range(3, 9)]
-          nodes = []
-          ids = []
+          nodes, ids = [], []
           for p in mission_files:
               obj = json.loads(p.read_text(encoding='utf-8'))
               if obj.get('node_count') != len(obj.get('nodes', [])):
@@ -71,17 +67,14 @@ jobs:
           player_text_hits = []
           def walk(v, path=''):
               if isinstance(v, dict):
-                  for k, x in v.items():
-                      walk(x, f'{path}.{k}' if path else k)
+                  for k, x in v.items(): walk(x, f'{path}.{k}' if path else k)
               elif isinstance(v, list):
-                  for i, x in enumerate(v):
-                      walk(x, f'{path}[{i}]')
+                  for i, x in enumerate(v): walk(x, f'{path}[{i}]')
               elif isinstance(v, str):
                   for pat in bad_patterns:
                       if re.search(pat, v, flags=re.IGNORECASE):
                           player_text_hits.append({'path': path, 'pattern': pat, 'sample': v[:180]})
-          for n in nodes:
-              walk(n)
+          for n in nodes: walk(n)
           if player_text_hits:
               errors.append(f"player_text_hits:{len(player_text_hits)}")
 
@@ -101,10 +94,8 @@ jobs:
               'errors': errors,
               'status': 'PASS' if not errors else 'FAIL'
           }
-          (Path('docs/campaigns/PA/R06_DEV2_CLOSURE_03') / 'MATERIALIZATION_REPORT.json').write_text(
-              json.dumps(report, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
-          if errors:
-              raise SystemExit('\n'.join(errors))
+          (Path('docs/campaigns/PA/R06_DEV2_CLOSURE_03') / 'MATERIALIZATION_REPORT.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          if errors: raise SystemExit('\n'.join(errors))
           PY
 
       - name: Commit readable canonical materialization and remove staging
@@ -114,6 +105,6 @@ jobs:
           git config user.name "scripture-archive-bot"
           git config user.email "actions@users.noreply.github.com"
           git add -- docs/campaigns/PA/R06_DEV2_CLOSURE_03
-          git rm -r --ignore-unmatch .dev2_closure03_staging .dev2_closure03_trigger .github/workflows/dev2-closure03-materialize.yml
+          git rm -r --ignore-unmatch .dev2_closure03_staging .dev2_closure03_staging_xz .dev2_closure03_trigger .github/workflows/dev2-closure03-materialize.yml
           git commit -m "R06 DEV2 closure03: materialize exact readable canonical corpus"
           git push origin HEAD:r06-dev2-finalprep-02

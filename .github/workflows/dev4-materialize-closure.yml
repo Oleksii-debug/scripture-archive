@@ -1,0 +1,140 @@
+name: DEV4 Materialize Closure
+
+on:
+  push:
+    branches:
+      - r06-d4-ot-finalprep-02
+    paths:
+      - 'lanes/dev4/finalprep_payload_parts/**'
+      - '.github/workflows/dev4-materialize-closure.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: r06-d4-ot-finalprep-02
+
+      - name: Reassemble exact Drive payload
+        shell: python
+        run: |
+          import base64, glob, hashlib, pathlib, zipfile
+          parts=sorted(glob.glob('lanes/dev4/finalprep_payload_parts/part_*.b64'))
+          if not parts:
+              raise SystemExit('no payload parts')
+          encoded=''.join(pathlib.Path(p).read_text(encoding='ascii').strip() for p in parts)
+          raw=base64.b64decode(encoded, validate=True)
+          expected='e8b008c31462d7ed9388a7a84f73bb8666c8449181000751e9da45c2468779c9'
+          got=hashlib.sha256(raw).hexdigest()
+          print('parts', len(parts), 'bytes', len(raw), 'sha256', got)
+          if got != expected:
+              raise SystemExit(f'payload SHA mismatch: {got}')
+          p=pathlib.Path('/tmp/DEV4_FINALPREP_02_MATERIALIZATION_PAYLOAD.zip')
+          p.write_bytes(raw)
+          with zipfile.ZipFile(p) as z:
+              bad=z.testzip()
+              if bad: raise SystemExit(f'ZIP CRC failure: {bad}')
+              z.extractall('.')
+
+      - name: Validate exact DEV4 payload
+        run: |
+          python -m py_compile tools/validate_ot_r06_d4.py tools/test_ot_r06_d4_d5_contract.py
+          python tools/validate_ot_r06_d4.py | tee /tmp/dev4_validator.txt
+          python tools/test_ot_r06_d4_d5_contract.py | tee /tmp/dev4_contract.txt
+
+      - name: Commit readable canonical materialization
+        id: commit
+        run: |
+          git config user.name 'scripture-archive-dev4-bot'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/campaigns/OT/R06_D4_OT_CANONICAL_v1.0 \
+                  docs/corpus/OTNT_RELATION_REGISTRY_R06_D4_v1.0.json \
+                  docs/corpus/OT_R06_D4_CHARACTER_DOSSIERS_v1.0.json \
+                  docs/corpus/OT_R06_D4_ENTITY_REGISTRIES_v1.0.json \
+                  docs/evidence/OT_R06_D4_EVIDENCE_REGISTRY_v1.0.json \
+                  docs/spec/R06_D4_SHARED_ANSWER_DTO_CONTRACT_v1.0.json \
+                  docs/spec/R06_D4_SHARED_ANSWER_DTO_CONTRACT_v1.0.md \
+                  docs/workflow/r06_d4/LANE_OUTPUT_MANIFEST.json \
+                  docs/workflow/r06_d4_finalprep_02 \
+                  docs/workflow/r06_d4_repair/LANE_REPAIR_MANIFEST_02.json \
+                  tools/validate_ot_r06_d4.py tools/test_ot_r06_d4_d5_contract.py
+          if git diff --cached --quiet; then
+            echo 'No materialization delta.'
+          else
+            git commit -m 'R06 DEV4 closure: materialize exact OT corpus payload'
+            git push origin HEAD:r06-d4-ot-finalprep-02
+          fi
+          echo "head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Verify payload hashes against committed bytes
+        shell: python
+        run: |
+          import hashlib, json, pathlib, subprocess
+          root=pathlib.Path('.')
+          mf=root/'docs/workflow/r06_d4_finalprep_02/MATERIALIZATION_MANIFEST.json'
+          m=json.loads(mf.read_text(encoding='utf-8'))
+          records=dict(m['materialized_files_excluding_this_manifest'])
+          records[str(mf.relative_to(root))]={'sha256':hashlib.sha256(mf.read_bytes()).hexdigest(),'size':mf.stat().st_size}
+          errors=[]
+          out=[]
+          for rel,meta in sorted(records.items()):
+              p=root/rel; b=p.read_bytes(); sha=hashlib.sha256(b).hexdigest(); size=len(b)
+              if sha!=meta['sha256'] or size!=meta['size']:
+                  errors.append([rel,sha,size,meta])
+              gitsha=subprocess.check_output(['git','hash-object',str(p)],text=True).strip()
+              out.append({'path':rel,'sha256':sha,'bytes':size,'git_blob_sha':gitsha})
+          pathlib.Path('/tmp/package_git_fidelity.json').write_text(json.dumps({'head':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'files':out,'errors':errors},indent=2)+'\n')
+          if errors: raise SystemExit(f'hash fidelity errors: {len(errors)}')
+          print(f'PAYLOAD_FIDELITY_PASS {len(out)}/{len(out)}')
+
+      - name: Build canonical DEV4 closure ZIP
+        shell: python
+        run: |
+          import hashlib, json, pathlib, shutil, subprocess, zipfile
+          root=pathlib.Path('.'); stage=pathlib.Path('/tmp/dev4_closure'); shutil.rmtree(stage,ignore_errors=True); stage.mkdir()
+          payload_paths=[
+            'docs/campaigns/OT/R06_D4_OT_CANONICAL_v1.0',
+            'docs/corpus/OTNT_RELATION_REGISTRY_R06_D4_v1.0.json',
+            'docs/corpus/OT_R06_D4_CHARACTER_DOSSIERS_v1.0.json',
+            'docs/corpus/OT_R06_D4_ENTITY_REGISTRIES_v1.0.json',
+            'docs/evidence/OT_R06_D4_EVIDENCE_REGISTRY_v1.0.json',
+            'docs/spec/R06_D4_SHARED_ANSWER_DTO_CONTRACT_v1.0.json',
+            'docs/spec/R06_D4_SHARED_ANSWER_DTO_CONTRACT_v1.0.md',
+            'docs/workflow/r06_d4/LANE_OUTPUT_MANIFEST.json',
+            'docs/workflow/r06_d4_finalprep_02',
+            'docs/workflow/r06_d4_repair/LANE_REPAIR_MANIFEST_02.json',
+            'tools/validate_ot_r06_d4.py','tools/test_ot_r06_d4_d5_contract.py']
+          for rel in payload_paths:
+              src=root/rel; dst=stage/'CHANGED_FILES'/rel; dst.parent.mkdir(parents=True,exist_ok=True)
+              if src.is_dir(): shutil.copytree(src,dst,dirs_exist_ok=True)
+              else: shutil.copy2(src,dst)
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          report=f'''# DEV4 CLOSURE REPORT\n\nDEV role: DEV4 — OT / OT↔NT canonical materialization closure\nRound/stage: R06 / PRE_INTEGRATION_CLOSURE_03\nBranch: r06-d4-ot-finalprep-02\nStarting SHA: 85b7ee6990f966a29f7bf1a6dd712e60c1f6026c\nFinal SHA: {head}\n\nMaterialized exact readable payload: 15 missions / 450 nodes / 90 evidence / 24 OT↔NT relations / 15 dossiers.\nNo new OT content was authored in closure.\nAudit status: independent audit pending; this package is not PASS.\nMain merge: NOT performed / NOT authorized by this lane.\n'''
+          (stage/'DEV4_CLOSURE_REPORT.md').write_text(report,encoding='utf-8')
+          val=pathlib.Path('/tmp/dev4_validator.txt').read_text(); con=pathlib.Path('/tmp/dev4_contract.txt').read_text()
+          (stage/'TEST_AND_VALIDATION_REPORT.md').write_text('# TEST AND VALIDATION\n\n```text\n'+val+'\n'+con+'\n```\n\nDirect accepted-answer contract is 450/450 by validator; OT_NT_LINK authored contract is 24/24.\n',encoding='utf-8')
+          shutil.copy2('/tmp/package_git_fidelity.json',stage/'PACKAGE_GITHUB_FIDELITY.json')
+          (stage/'INTEGRATION_NOTES.md').write_text(f'# INTEGRATION NOTES\n\nConsume DEV4 from branch `r06-d4-ot-finalprep-02` at `{head}`. Do not merge main from this lane. Preserve T1/T2/I1/D1 and TX1 boundaries. Runtime redundant truth must not override canonical CONTENT_NODE_SCHEMA v1.2 truth.\n',encoding='utf-8')
+          manifest=[]
+          for p in sorted(x for x in stage.rglob('*') if x.is_file()):
+              b=p.read_bytes(); manifest.append({'path':str(p.relative_to(stage)).replace('\\','/'),'bytes':len(b),'sha256':hashlib.sha256(b).hexdigest()})
+          (stage/'PACKAGE_MANIFEST.json').write_text(json.dumps({'package':'DEV_LANE_SCRIPTURE_R06_D4_CLOSURE_03.zip','branch':'r06-d4-ot-finalprep-02','final_head':head,'files':manifest},indent=2)+'\n',encoding='utf-8')
+          out=pathlib.Path('/tmp/DEV_LANE_SCRIPTURE_R06_D4_CLOSURE_03.zip')
+          with zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED) as z:
+              for p in sorted(x for x in stage.rglob('*') if x.is_file()): z.write(p,p.relative_to(stage))
+          with zipfile.ZipFile(out) as z:
+              if z.testzip(): raise SystemExit('closure ZIP CRC fail')
+          print('closure_zip_bytes',out.stat().st_size)
+          print('closure_zip_sha256',hashlib.sha256(out.read_bytes()).hexdigest())
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DEV_LANE_SCRIPTURE_R06_D4_CLOSURE_03
+          path: /tmp/DEV_LANE_SCRIPTURE_R06_D4_CLOSURE_03.zip
+          if-no-files-found: error

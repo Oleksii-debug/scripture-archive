@@ -1,6 +1,6 @@
 {
   "stage": "THREE_DEV_MATERIALIZATION_AND_INTEGRATION_05",
-  "status": "LOCAL_RECORD_SPLIT_PREPARED_GITHUB_PAYLOAD_PENDING",
+  "status": "GITHUB_PAYLOAD_PARTIAL",
   "source_package": {
     "name": "DEV_LANE_SCRIPTURE_R06_D3_REPAIR_01.zip",
     "drive_id": "10soveW2htOitjEPXIUByjjQIvqykaGpt",
@@ -38,11 +38,18 @@
     "runtime_submission_examples": 360,
     "cross_d2_node_id_collisions": 0
   },
+  "github_materialized_files": {
+    "MATERIALIZATION_MANIFEST_v1.0.json": "Git blob 127a6e1925e31c8dc9eca3e304eaa44a37a7b430; exact expected blob SHA PASS",
+    "support_objects.json": "Git blob c15d3d34784244d0038b4f17aa3a6e58ae6fdb27; exact expected blob SHA PASS",
+    "registries/tx1/part_001.jsonl": "Git blob 098d83e7f88d358f7dffad7c3bb212b65ee48f8d; exact expected blob SHA PASS; 3 TX1 registry records",
+    "evidence_board/event/part_001.jsonl": "Git blob 476e8d0ba37fa24b7ae128b0a0f5e61b4e6e7639; exact expected blob SHA PASS; 15 Event records",
+    "evidence_board/person/part_001.jsonl": "Git blob fb864fd1af09718a371da296e497ddd8d4ccc7c8; exact expected blob SHA PASS; 96 Person records"
+  },
+  "github_payload_readback": "PARTIAL_PASS: written canonical/support files fetched/listed back with exact expected Git blob SHA; node/evidence/witness/source/chronology and remaining metadata/hash-index files still pending",
   "source_safety": "Matthew/Mark/Luke/John separation preserved; no false harmonization; chronology/source boundaries preserved; TX1 remains separate from confidence; no source truth mutation.",
   "auxiliary_runner_probe": {
     "pull_request": 9,
-    "result": "NO_WORKFLOW_RUN_OBSERVED; ABANDONED AS EVIDENCE/PATH"
+    "result": "CLOSED_UNMERGED; NO_WORKFLOW_RUN_OBSERVED; ABANDONED AS EVIDENCE/PATH"
   },
-  "github_payload_readback": "PENDING",
   "closure_package": "NOT_CREATED"
 }

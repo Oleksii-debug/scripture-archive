@@ -32,7 +32,9 @@ class PlatformApplication:
         if cmd=='player.submit_answer':return self._submit(p)
         if cmd=='player.request_hint':return self._hint(self._id(p,'node_id'))
         if cmd=='player.reveal_evidence':return self._evidence(self._id(p,'node_id'))
-        if cmd=='player.next':return self._next(p)
+        if cmd in {'player.next','player.navigate_branch'}:return self._next(p)
+        if cmd=='player.get_progress':return {'progress':self._progress(self._id(p,'node_id'))}
+        if cmd=='player.get_mastery':return self._mastery()
         if cmd=='player.save_checkpoint':return self._save_checkpoint(p)
         if cmd=='player.restore_checkpoint':return self._restore_checkpoint()
         if cmd=='authoring.list_drafts':return {'drafts':self.authoring.list_drafts()}
@@ -84,10 +86,13 @@ class PlatformApplication:
     def _next(self,p):
         nid=self._id(p,'node_id')
         if self.player_gateway:
-            target=p.get('target_node_id'); payload={'node_id':str(target)} if target else {}; rr=self.player_gateway.invoke('player.next',payload,request_id='next-'+nid); task=rr.get('task') or {}; next_id=task.get('node_id')
+            target=p.get('target_node_id'); payload={'target_node_id':str(target)} if target else {}; rr=self.player_gateway.invoke('player.navigate_branch' if target else 'player.next',payload,request_id='next-'+nid); task=rr.get('task') or {}; next_id=task.get('node_id')
             if not next_id:return {'complete_or_queued':True,'current_node_id':nid,'branch':rr.get('branch'),'accessibility':rr.get('accessibility'),'truth_owner':'D5/runtime'}
             node=self.loader.load_node(str(next_id)); mission=self.loader.mission_for_node(str(next_id)); renderable=self.mapper.to_renderable(node,mission); self._last_node[str(next_id)]=node; return {'mission':mission,'task':renderable,'progress':self._progress(str(next_id)),'hint_level':0,'truth_owner':'D5/runtime'}
         target=p.get('target_node_id') or self.loader.next_node_id(nid,'correct'); return {'complete_or_queued':True,'current_node_id':nid} if not target else self._load_node(str(target))
+    def _mastery(self):
+        if not self.player_gateway:return {'mastery':[],'truth_owner':'REFERENCE_TEST_ONLY'}
+        rr=self.player_gateway.invoke('player.get_mastery',{},request_id='mastery-player'); return {'mastery':rr.get('mastery') or [],'truth_owner':'D5/runtime'}
     def _save_checkpoint(self,p):
         checkpoint={'campaign_id':p.get('campaign_id'),'mission_id':p.get('mission_id'),'node_id':p.get('node_id'),'saved_at':int(time.time()),'checkpoint_schema':'scripture.player.checkpoint.v1'}
         if self.player_gateway:self.player_gateway.invoke('player.save_checkpoint',{},request_id='save-'+str(p.get('node_id') or 'current'))

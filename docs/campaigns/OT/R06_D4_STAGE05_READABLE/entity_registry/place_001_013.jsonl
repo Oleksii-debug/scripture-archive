@@ -1,0 +1,13 @@
+{"name":"Canaan","passages":["Genesis 12:5–7","Genesis 13:12"],"place_id":"PLC-OT-CANAAN","uncertainty":"No modern political boundary inferred."}
+{"name":"Haran","passages":["Genesis 12:4"],"place_id":"PLC-OT-HARAN","uncertainty":"No coordinate dataset included in this lane."}
+{"name":"Hebron","passages":["2 Samuel 5:1–5"],"place_id":"PLC-OT-HEBRON","uncertainty":"Textual place anchor only."}
+{"name":"Egypt","passages":["Genesis 37–45","Exodus 1–14"],"place_id":"PLC-OT-EGYPT","uncertainty":"No route/date reconstruction."}
+{"name":"Midian","passages":["Exodus 2:15"],"place_id":"PLC-OT-MIDIAN","uncertainty":"No external geographic precision added."}
+{"name":"Horeb","passages":["Exodus 3:1","1 Kings 19:8"],"place_id":"PLC-OT-HOREB","uncertainty":"This registry does not settle external Sinai/Horeb geography debates."}
+{"name":"Mount Sinai","passages":["Exodus 19–20","Exodus 24"],"place_id":"PLC-OT-SINAI","uncertainty":"No coordinates supplied."}
+{"aliases":["sea / Red Sea in many translations"],"name":"Sea crossing location","passages":["Exodus 14"],"place_id":"PLC-OT-SEA","uncertainty":"No exact modern crossing site claimed."}
+{"aliases":["stronghold of Zion in 2 Samuel 5 context"],"name":"Jerusalem","passages":["2 Samuel 5:6–12"],"place_id":"PLC-OT-JERUSALEM","uncertainty":"No later-city boundaries imported."}
+{"name":"Zion","passages":["2 Samuel 5:7"],"place_id":"PLC-OT-ZION","uncertainty":"Local textual anchor."}
+{"name":"Zarephath","passages":["1 Kings 17:8–24"],"place_id":"PLC-OT-ZAREPHATH","uncertainty":"No external archaeology claimed."}
+{"name":"Mount Carmel","passages":["1 Kings 18"],"place_id":"PLC-OT-CARMEL","uncertainty":"Textual place anchor only."}
+{"name":"Jordan","passages":["2 Kings 2:6–14"],"place_id":"PLC-OT-JORDAN","uncertainty":"No route coordinates supplied."}

@@ -1,0 +1,67 @@
+name: R06 W2-01 Windows Runner Forensics
+
+on:
+  workflow_dispatch:
+    inputs:
+      probe_label:
+        description: Optional diagnostic label
+        required: false
+        type: string
+  workflow_run:
+    workflows:
+      - R06 DEV1 Platform CI
+    types:
+      - completed
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  windows-runner-proof:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion != '' }}
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Emit runner identity
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Write-Host "runner_name=$env:RUNNER_NAME"
+          Write-Host "runner_os=$env:RUNNER_OS"
+          Write-Host "runner_arch=$env:RUNNER_ARCH"
+          Write-Host "github_sha=${{ github.sha }}"
+          Write-Host "event=${{ github.event_name }}"
+          if ('${{ github.event_name }}' -eq 'workflow_run') {
+            Write-Host "source_run_id=${{ github.event.workflow_run.id }}"
+            Write-Host "source_conclusion=${{ github.event.workflow_run.conclusion }}"
+          }
+
+      - name: Verify executable shell path
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Get-Location
+          Get-Command git | Format-List
+          Get-Command python | Format-List
+          python --version
+
+      - name: Create execution evidence artifact
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path diagnostic-output | Out-Null
+          @{
+            utc = (Get-Date).ToUniversalTime().ToString('o')
+            runner = $env:RUNNER_NAME
+            os = $env:RUNNER_OS
+            arch = $env:RUNNER_ARCH
+            sha = '${{ github.sha }}'
+            event = '${{ github.event_name }}'
+          } | ConvertTo-Json | Set-Content diagnostic-output/windows-runner-proof.json -Encoding UTF8
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: W2-01-windows-runner-proof
+          path: diagnostic-output/windows-runner-proof.json
+          if-no-files-found: error

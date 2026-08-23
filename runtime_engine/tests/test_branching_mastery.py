@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 from scripture_archive_runtime.branching import BranchEngine
 from scripture_archive_runtime.mastery import MasteryEngine
-from scripture_archive_runtime.models import Correctness, KnowledgeState, MasteryState, TaskDefinition
+from scripture_archive_runtime.models import BranchTerminal, Correctness, KnowledgeState, MasteryState, TaskDefinition
 from tests.fixtures import node_from
 
 
@@ -15,6 +15,14 @@ class BranchMasteryTests(unittest.TestCase):
         self.assertEqual(r.next_node_id, "LN01-N04")
         retrieval = engine.parse_target(task.later_retrieval_effect, task=task)
         self.assertEqual(retrieval.queue_id, "LN_REVIEW")
+
+    def test_mission_complete_terminal_is_supported(self):
+        engine = BranchEngine()
+        task = TaskDefinition.from_canonical(node_from(on_correct="MISSION_COMPLETE", later_retrieval_effect="REVIEW_QUEUE GOSPEL_REVIEW"))
+        result = engine.resolve(task, Correctness.CORRECT)
+        self.assertEqual(result.terminal, BranchTerminal.MISSION_COMPLETE)
+        self.assertIsNone(result.next_node_id)
+        self.assertEqual(result.raw_target, "MISSION_COMPLETE")
 
     def test_reachability_validation_catches_missing_target(self):
         engine = BranchEngine()

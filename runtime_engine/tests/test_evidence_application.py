@@ -20,7 +20,8 @@ class EvidenceApplicationTests(unittest.TestCase):
         with self.assertRaises(PermissionError): runtime.prove_claim("CL-MARK",["EV-MARK","EV-LUKE"])
     def test_application_runtime_api_with_real_ln_fixture(self):
         next_node=node_from(PA02_N04,node_id="LN01-N04",mission_id="LN-01",on_correct="REVIEW_QUEUE DONE",later_retrieval_effect="REVIEW_QUEUE DONE"); app=RuntimeApplication(ContentRepository([LN01_N03,next_node])); loaded=app.handle({"api_version":"runtime.v1","command":"load_task","request_id":"1","payload":{"node_id":"LN01-N03"}}); self.assertEqual(loaded["task"]["confidence"],"T2")
-        out=app.handle({"api_version":"runtime.v1","command":"submit_answer","request_id":"2","payload":{"node_id":"LN01-N03","answer":LN01_N03["accepted_answer"]}}); self.assertEqual(out["grade"]["correctness"],"CORRECT"); self.assertEqual(out["branch"]["next_node_id"],"LN01-N04"); self.assertEqual(out["accessibility"][0]["event_type"],"grade"); self.assertTrue(any("Confidence: T2" in x for x in out["accessibility"][0]["details"]))
+        answer={"schema":"ANSWER_DTO_v1","task_type":"SINGLE_CHOICE","choice":LN01_N03["accepted_answer"]}
+        out=app.handle({"api_version":"runtime.v1","command":"submit_answer","request_id":"2","payload":{"node_id":"LN01-N03","answer":answer}}); self.assertEqual(out["grade"]["correctness"],"CORRECT"); self.assertEqual(out["branch"]["next_node_id"],"LN01-N04"); self.assertEqual(out["accessibility"][0]["event_type"],"grade"); self.assertTrue(any("Confidence: T2" in x for x in out["accessibility"][0]["details"]))
     def test_hint_progression_and_guided_mastery(self):
         app=RuntimeApplication(ContentRepository([LN01_N03])); app.load_task("LN01-N03")
         for i in range(1,7): self.assertEqual(app.request_hint("LN01-N03")["hint"]["level"],i)

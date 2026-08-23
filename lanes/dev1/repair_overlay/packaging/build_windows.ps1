@@ -54,6 +54,11 @@ $sourceHash = $null
 if (Test-Path $sourceArchive) {
     $sourceHash = (Get-FileHash -Algorithm SHA256 $sourceArchive).Hash.ToLowerInvariant()
 }
+$actualGitSha = $null
+if (Get-Command git -ErrorAction SilentlyContinue) {
+    $actualGitSha = (git -C $Repo rev-parse HEAD 2>$null | Out-String).Trim()
+}
+if (-not $actualGitSha) { $actualGitSha = $env:GITHUB_SHA }
 
 $manifest = [ordered]@{
     schema_version = 1
@@ -62,7 +67,8 @@ $manifest = [ordered]@{
     size_bytes = $size
     sha256 = $hash
     built_utc = (Get-Date).ToUniversalTime().ToString("o")
-    git_sha = $env:GITHUB_SHA
+    git_sha = $actualGitSha
+    github_event_sha = $env:GITHUB_SHA
     git_ref_name = $env:GITHUB_REF_NAME
     python_version = (& $Python --version 2>&1 | Out-String).Trim()
     source_archive_sha256 = $sourceHash

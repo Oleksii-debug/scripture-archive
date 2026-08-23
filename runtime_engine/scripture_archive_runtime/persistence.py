@@ -193,9 +193,22 @@ class PersistenceStore:
         target.write_text(json.dumps(state, ensure_ascii=False, indent=2, sort_keys=True, default=_json_default) + "\n", encoding="utf-8")
         return target
 
-    def import_state(self, source: str | Path) -> dict[str, Any]:
+    def import_state(
+        self,
+        source: str | Path,
+        *,
+        validator: Callable[[Mapping[str, Any]], None] | None = None,
+    ) -> dict[str, Any]:
+        """Validate an import completely before replacing the current persisted state."""
         source_path = Path(source).expanduser().resolve()
         data = self._migrate_state(self._load_json(source_path))
+        if validator is not None:
+            try:
+                validator(data)
+            except ValidationError:
+                raise
+            except Exception as exc:
+                raise ValidationError("Imported state failed semantic validation") from exc
         if self.state_path.exists():
             self.create_recovery_point("pre_import")
         self.save(data)

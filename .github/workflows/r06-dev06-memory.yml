@@ -1,0 +1,36 @@
+name: R06 DEV06 memory persistence
+
+on:
+  push:
+    branches:
+      - r06-swarm-dev06-memory-persistence
+    paths:
+      - "runtime_engine/**"
+      - "lanes/dev06/memory/**"
+      - ".github/workflows/r06-dev06-memory.yml"
+  pull_request:
+    paths:
+      - "runtime_engine/**"
+      - "lanes/dev06/memory/**"
+      - ".github/workflows/r06-dev06-memory.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  memory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: runtime_engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compile runtime and tests
+        run: python -m compileall -q scripture_archive_runtime tests
+      - name: Full runtime regression suite
+        run: python -m unittest discover -s tests -v

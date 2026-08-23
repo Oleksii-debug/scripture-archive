@@ -174,6 +174,8 @@ class Session:
     recent_task_families: list[str] = field(default_factory=list)
     recent_passages: list[str] = field(default_factory=list)
     correct_node_ids: set[str] = field(default_factory=set)
+    successful_exact_ids: set[str] = field(default_factory=set)
+    ended_reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -240,6 +242,7 @@ class PlayerMemory:
     mistakes: dict[str, int] = field(default_factory=dict)
     sessions: list[Session] = field(default_factory=list)
     recent_fatigue: dict[str, int] = field(default_factory=dict)
+    session_rollup: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

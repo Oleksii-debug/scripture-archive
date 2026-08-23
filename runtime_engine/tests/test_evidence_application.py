@@ -26,6 +26,26 @@ class EvidenceApplicationTests(unittest.TestCase):
         app=RuntimeApplication(ContentRepository([LN01_N03])); app.load_task("LN01-N03")
         for i in range(1,7): self.assertEqual(app.request_hint("LN01-N03")["hint"]["level"],i)
         self.assertTrue(all(c["reason"]=="guided_correct" for c in app.submit_answer("LN01-N03",LN01_N03["accepted_answer"])["mastery_consequence"]))
+    def test_historical_hints_do_not_permanently_exhaust_or_downgrade_future_visit(self):
+        app=RuntimeApplication(ContentRepository([LN01_N03])); app.load_task("LN01-N03")
+        for i in range(1,7): app.request_hint("LN01-N03")
+        guided=app.submit_answer("LN01-N03",LN01_N03["accepted_answer"])
+        self.assertTrue(all(c["reason"]=="guided_correct" for c in guided["mastery_consequence"]))
+        self.assertFalse(app.memory.node_history["LN01-N03"].attempts[-1].independent)
+        app.load_task("LN01-N03")
+        self.assertEqual(app.request_hint("LN01-N03")["hint"]["level"],1)
+        self.assertEqual(len(app.memory.node_history["LN01-N03"].hint_uses),7)
+        app.load_task("LN01-N03")
+        independent=app.submit_answer("LN01-N03",LN01_N03["accepted_answer"])
+        self.assertTrue(app.memory.node_history["LN01-N03"].attempts[-1].independent)
+        self.assertEqual(app.memory.node_history["LN01-N03"].attempts[-1].used_hints,0)
+        self.assertTrue(all(c["reason"]=="independent_correct" for c in independent["mastery_consequence"]))
+    def test_restore_starts_fresh_active_hint_scope_but_preserves_history(self):
+        with tempfile.TemporaryDirectory() as td:
+            repo=ContentRepository([LN01_N03]); store=PersistenceStore(td); app=RuntimeApplication(repo,persistence=store); app.load_task("LN01-N03")
+            app.request_hint("LN01-N03"); app.request_hint("LN01-N03"); app.save()
+            app2=RuntimeApplication(repo,persistence=store); app2.restore(); self.assertEqual(len(app2.memory.node_history["LN01-N03"].hint_uses),2)
+            self.assertEqual(app2.request_hint("LN01-N03")["hint"]["level"],1); self.assertEqual(len(app2.memory.node_history["LN01-N03"].hint_uses),3)
     def test_save_restore_foundation(self):
         with tempfile.TemporaryDirectory() as td:
             repo=ContentRepository([LN01_N03]); store=PersistenceStore(td); app=RuntimeApplication(repo,persistence=store); app.load_task("LN01-N03"); app.save(); app2=RuntimeApplication(repo,persistence=store); self.assertEqual(app2.restore()["current_node_id"],"LN01-N03")

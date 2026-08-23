@@ -6,13 +6,14 @@ from unittest.mock import patch
 
 from scripture_archive_runtime.preintegration_gate import (
     PreintegrationGateError,
+    _cross_record_integrity,
     summarize_validated_inputs,
 )
 
 
 class FakeSnapshot:
-    def __init__(self, node_count: int):
-        self._nodes = tuple({"node_id": f"n{i}"} for i in range(node_count))
+    def __init__(self, node_count: int, nodes=None):
+        self._nodes = tuple(nodes) if nodes is not None else tuple({"node_id": f"n{i}"} for i in range(node_count))
 
     def collection(self, name: str):
         if name != "nodes":
@@ -20,10 +21,10 @@ class FakeSnapshot:
         return SimpleNamespace(records=self._nodes)
 
 
-def fake_input(lane: str, node_count: int, evidence_count: int, relation_count: int = 0):
+def fake_input(lane: str, node_count: int, evidence_count: int, relation_count: int = 0, nodes=None):
     return SimpleNamespace(
         expectation=SimpleNamespace(lane=lane, expected_nodes=node_count),
-        snapshot=FakeSnapshot(node_count),
+        snapshot=FakeSnapshot(node_count, nodes=nodes),
         node_ids=frozenset(f"{lane}-n-{i}" for i in range(node_count)),
         evidence_ids=frozenset(f"{lane}-e-{i}" for i in range(evidence_count)),
         relation_ids=frozenset(f"{lane}-r-{i}" for i in range(relation_count)),
@@ -67,6 +68,9 @@ class Stage05PreintegrationGateTests(unittest.TestCase):
         self.assertEqual(result["node_collisions"], 0)
         self.assertEqual(result["evidence_collisions"], 0)
         self.assertEqual(result["relation_collisions"], 0)
+        self.assertEqual(result["semantic_duplicate_blocker_count"], 0)
+        self.assertEqual(result["semantic_conflict_blocker_count"], 0)
+        self.assertEqual(result["branch_reachability_blocker_count"], 0)
 
     def test_missing_lane_fails_closed(self):
         with self.assertRaisesRegex(PreintegrationGateError, "final lane set mismatch"):
@@ -117,6 +121,46 @@ class Stage05PreintegrationGateTests(unittest.TestCase):
                 "preintegration total node count",
             ):
                 summarize_validated_inputs(broken)
+
+    @staticmethod
+    def semantic_node(node_id, accepted, *, prompt="same question", scope="Acts 9"):
+        return {
+            "node_id": node_id,
+            "player_prompt": prompt,
+            "source_scope_visible_to_player": scope,
+            "task_type": "SINGLE_CHOICE",
+            "accepted_answer": accepted,
+        }
+
+    def test_semantic_duplicate_fails_closed(self):
+        rows = [
+            fake_input("D2", 1, 0, nodes=[self.semantic_node("D2-N1", "A")]),
+            fake_input("D3", 1, 0, nodes=[self.semantic_node("D3-N1", "A")]),
+        ]
+        decision = SimpleNamespace(canonical_dto={"schema": "ANSWER_DTO_v1", "task_type": "SINGLE_CHOICE", "choice": "A"})
+        with patch("scripture_archive_runtime.preintegration_gate.classify_provenance", return_value=decision):
+            with self.assertRaisesRegex(PreintegrationGateError, "semantic duplicate blockers"):
+                _cross_record_integrity(rows)
+
+    def test_semantic_truth_conflict_fails_closed(self):
+        rows = [
+            fake_input("D2", 1, 0, nodes=[self.semantic_node("D2-N1", "A")]),
+            fake_input("D3", 1, 0, nodes=[self.semantic_node("D3-N1", "B")]),
+        ]
+        def classify(row):
+            return SimpleNamespace(canonical_dto={"choice": row["accepted_answer"]})
+        with patch("scripture_archive_runtime.preintegration_gate.classify_provenance", side_effect=classify):
+            with self.assertRaisesRegex(PreintegrationGateError, "semantic truth conflicts"):
+                _cross_record_integrity(rows)
+
+    def test_missing_optional_evidence_fails_closed(self):
+        row = self.semantic_node("D2-N1", "A", prompt="unique")
+        row["optional_evidence_unlock"] = "E-MISSING"
+        rows = [fake_input("D2", 1, 0, nodes=[row])]
+        decision = SimpleNamespace(canonical_dto={"choice": "A"})
+        with patch("scripture_archive_runtime.preintegration_gate.classify_provenance", return_value=decision):
+            with self.assertRaisesRegex(PreintegrationGateError, "unresolved optional_evidence_unlock"):
+                _cross_record_integrity(rows)
 
 
 if __name__ == "__main__":

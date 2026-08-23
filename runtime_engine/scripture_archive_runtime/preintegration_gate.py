@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
+from .branching import BranchEngine, BranchTerminal
+from .content import ContentRepository
 from .integration_intake import (
     FinalInputExpectation,
     FinalInputError,
@@ -11,7 +13,8 @@ from .integration_intake import (
     validate_cross_lane_inputs,
     validate_final_input,
 )
-from .provenance import PROVENANCE_CONTRACT_VERSION, ProvenanceClass
+from .materialization_manifest import canonical_record_sha256
+from .provenance import PROVENANCE_CONTRACT_VERSION, ProvenanceClass, classify_provenance
 from .strict_conformance import check_nodes_strict
 
 
@@ -86,6 +89,140 @@ def _strict_lane_summary(item: ValidatedFinalInput) -> dict[str, Any]:
     }
 
 
+def _optional_evidence_ids(value: Any) -> tuple[str, ...]:
+    if value in (None, "", "none", "NONE"):
+        return ()
+    if isinstance(value, str):
+        normalized = value.replace(",", ";")
+        return tuple(
+            part.strip()
+            for part in normalized.split(";")
+            if part.strip() and part.strip().casefold() != "none"
+        )
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        return tuple(
+            str(part).strip()
+            for part in value
+            if str(part).strip() and str(part).strip().casefold() != "none"
+        )
+    return (str(value).strip(),)
+
+
+def _semantic_key(node: Mapping[str, Any]) -> tuple[str, str, str] | None:
+    prompt = str(node.get("player_prompt") or "").strip()
+    scope = str(node.get("source_scope_visible_to_player") or "").strip()
+    task_type = str(
+        node.get("task_type")
+        or node.get("response_mode")
+        or node.get("task_family")
+        or ""
+    ).strip()
+    if not prompt or not scope or not task_type:
+        return None
+    return (task_type.casefold(), " ".join(prompt.split()).casefold(), " ".join(scope.split()).casefold())
+
+
+def _cross_record_integrity(inputs: Sequence[ValidatedFinalInput]) -> dict[str, int]:
+    """Validate corpus-level invariants not expressible in a per-lane manifest."""
+    global_node_ids = {node_id for item in inputs for node_id in item.node_ids}
+    global_evidence_ids = {evidence_id for item in inputs for evidence_id in item.evidence_ids}
+
+    semantic_seen: dict[tuple[str, str, str], tuple[str, str, str]] = {}
+    duplicates: list[str] = []
+    conflicts: list[str] = []
+    missing_optional_evidence: list[str] = []
+    branch_errors: list[str] = []
+    branch_engine = BranchEngine()
+
+    for item in sorted(inputs, key=lambda row: row.expectation.lane):
+        lane = item.expectation.lane
+        for raw in item.snapshot.collection("nodes").records:
+            node_id = str(raw.get("node_id") or "<missing>")
+
+            for evidence_id in _optional_evidence_ids(raw.get("optional_evidence_unlock")):
+                if evidence_id not in global_evidence_ids:
+                    missing_optional_evidence.append(f"{lane}:{node_id}->{evidence_id}")
+
+            key = _semantic_key(raw)
+            if key is not None and "accepted_answer" in raw:
+                decision = classify_provenance(raw)
+                truth = decision.canonical_dto
+                if truth is not None:
+                    truth_hash = canonical_record_sha256(truth)
+                    prior = semantic_seen.get(key)
+                    if prior is None:
+                        semantic_seen[key] = (lane, node_id, truth_hash)
+                    elif prior[2] == truth_hash:
+                        duplicates.append(f"{prior[0]}:{prior[1]} == {lane}:{node_id}")
+                    else:
+                        conflicts.append(f"{prior[0]}:{prior[1]} != {lane}:{node_id}")
+
+            # Synthetic unit fixtures intentionally omit canonical branch fields.
+            # Real validated final inputs always contain them via CONTENT_NODE_SCHEMA_v1.2.
+            if "mission_id" not in raw:
+                continue
+            try:
+                task = ContentRepository((raw,)).get(node_id)
+            except Exception as exc:
+                branch_errors.append(f"{lane}:{node_id}:task:{type(exc).__name__}:{exc}")
+                continue
+            for branch_name in ("on_correct", "on_partial", "on_incorrect", "on_hint_threshold"):
+                branch_raw = task.branches.get(branch_name, "none")
+                try:
+                    resolution = branch_engine.parse_target(branch_raw, task=task)
+                except Exception as exc:
+                    branch_errors.append(f"{lane}:{node_id}.{branch_name}:{type(exc).__name__}:{exc}")
+                    continue
+                if (
+                    resolution.next_node_id
+                    and resolution.next_node_id not in global_node_ids
+                    and resolution.terminal in {BranchTerminal.NODE, BranchTerminal.RESOLVED_NODE}
+                ):
+                    branch_errors.append(
+                        f"{lane}:{node_id}.{branch_name}:missing target {resolution.next_node_id}"
+                    )
+            try:
+                retrieval = branch_engine.parse_target(task.later_retrieval_effect, task=task)
+                if (
+                    retrieval.next_node_id
+                    and retrieval.next_node_id not in global_node_ids
+                    and retrieval.terminal in {BranchTerminal.NODE, BranchTerminal.RESOLVED_NODE}
+                ):
+                    branch_errors.append(
+                        f"{lane}:{node_id}.later_retrieval_effect:missing target {retrieval.next_node_id}"
+                    )
+            except Exception as exc:
+                branch_errors.append(
+                    f"{lane}:{node_id}.later_retrieval_effect:{type(exc).__name__}:{exc}"
+                )
+
+    if missing_optional_evidence:
+        raise PreintegrationGateError(
+            "unresolved optional_evidence_unlock refs: "
+            f"{len(missing_optional_evidence)} ({', '.join(missing_optional_evidence[:5])})"
+        )
+    if duplicates:
+        raise PreintegrationGateError(
+            f"semantic duplicate blockers: {len(duplicates)} ({', '.join(duplicates[:5])})"
+        )
+    if conflicts:
+        raise PreintegrationGateError(
+            f"semantic truth conflicts: {len(conflicts)} ({', '.join(conflicts[:5])})"
+        )
+    if branch_errors:
+        raise PreintegrationGateError(
+            f"branch/retrieval reachability blockers: {len(branch_errors)} "
+            f"({', '.join(branch_errors[:5])})"
+        )
+
+    return {
+        "semantic_duplicate_blocker_count": 0,
+        "semantic_conflict_blocker_count": 0,
+        "unresolved_optional_evidence": 0,
+        "branch_reachability_blocker_count": 0,
+    }
+
+
 def summarize_validated_inputs(
     inputs: Sequence[ValidatedFinalInput],
     *,
@@ -117,6 +254,7 @@ def summarize_validated_inputs(
     _require_equal(cross_lane.get("node_collisions"), 0, "node collision count")
     _require_equal(cross_lane.get("evidence_collisions"), 0, "evidence collision count")
 
+    integrity = _cross_record_integrity(inputs)
     lane_summaries = [
         _strict_lane_summary(item)
         for item in sorted(inputs, key=lambda x: x.expectation.lane)
@@ -145,6 +283,7 @@ def summarize_validated_inputs(
         "evidence_collisions": 0,
         "relation_collisions": 0,
         "unresolved_required_evidence": 0,
+        **integrity,
         "lanes": lane_summaries,
         "player_flow_gate": "SEPARATE_REQUIRED",
     }

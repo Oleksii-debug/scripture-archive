@@ -26,6 +26,10 @@ class RuntimeApplication:
         self.graders, self.branches, self.mastery_engine = GraderRegistry(), BranchEngine(), MasteryEngine()
         self.memory = PlayerMemory(profile_id="default"); self.current_node_id: str | None = None
         self.session = Session(session_id=str(uuid.uuid4())); self._visit_counts: dict[str, int] = {}
+        # Persisted TaskState.hint_uses is the historical audit trail. This separate
+        # per-visit counter prevents a hint used months ago from permanently downgrading
+        # every future attempt or exhausting the H1..H7 ladder forever.
+        self._active_hint_counts: dict[str, int] = {}
 
     @staticmethod
     def _require_release_ground_truth(task: TaskDefinition) -> ProvenanceDecision:
@@ -47,6 +51,7 @@ class RuntimeApplication:
         task = self.content.get(node_id)
         provenance = self._require_release_ground_truth(task)
         self.current_node_id = node_id
+        self._active_hint_counts[node_id] = 0
         if node_id not in self.session.shown_node_ids: self.session.shown_node_ids.append(node_id)
         self.session.recent_task_families.append(task.task_type); self._visit_counts[node_id] = self._visit_counts.get(node_id, 0) + 1
         return {"api_version": self.API_VERSION, "task": {"node_id": task.node_id, "mission_id": task.mission_id, "task_type": task.task_type, "prompt": task.prompt, "source_scope": task.source_scope, "hints_available": len(task.hints), "tx1": task.tx1, "confidence": task.confidence.value, "answer_contract": answer_contract_descriptor(task.task_type), "ground_truth_provenance": {"schema": PROVENANCE_CONTRACT_VERSION, "class": provenance.provenance_class, "release_pass": provenance.release_pass, "explicit_representation": provenance.explicit_representation, "warning": provenance.warning}, "functional_nonvisual_equivalent": task.raw.get("functional_nonvisual_equivalent", "")}}
@@ -55,7 +60,7 @@ class RuntimeApplication:
         if node_id != self.current_node_id: raise ValidationError("submit_answer node_id is not the currently loaded task")
         task = self.content.get(node_id)
         self._require_release_ground_truth(task)
-        state = self.memory.node_history.setdefault(node_id, TaskState(node_id=node_id)); hint_count = len(state.hint_uses)
+        state = self.memory.node_history.setdefault(node_id, TaskState(node_id=node_id)); hint_count = self._active_hint_counts.get(node_id, 0)
         result = self.graders.grade(task, answer); independent = hint_count < 6
         state.attempts.append(Attempt(node_id, result.correctness, result.score, hint_count, independent, answer_snapshot=answer)); state.last_result = result.correctness
         if result.correctness is Correctness.CORRECT: state.completed = True; self.session.correct_node_ids.add(node_id)
@@ -76,16 +81,17 @@ class RuntimeApplication:
 
     def request_hint(self, node_id: str) -> dict[str, Any]:
         if node_id != self.current_node_id: raise ValidationError("request_hint node_id is not the currently loaded task")
-        task = self.content.get(node_id); state = self.memory.node_history.setdefault(node_id, TaskState(node_id=node_id)); level = len(state.hint_uses) + 1; key = f"H{level}"
+        task = self.content.get(node_id); state = self.memory.node_history.setdefault(node_id, TaskState(node_id=node_id)); level = self._active_hint_counts.get(node_id, 0) + 1; key = f"H{level}"
         if key not in task.hints: raise ValidationError("No additional hint available")
-        use = HintUse(node_id, level, task.hints[key]); state.hint_uses.append(use)
+        use = HintUse(node_id, level, task.hints[key]); state.hint_uses.append(use); self._active_hint_counts[node_id] = level
         return {"api_version": self.API_VERSION, "hint": {"level": level, "text": use.text}, "accessibility": hint_event(level, use.text).to_dict()}
 
     def next(self, *, explicit_node_id: str | None = None) -> dict[str, Any]:
         if explicit_node_id: return self.load_task(explicit_node_id)
         if not self.current_node_id: raise ValidationError("No current task")
         task = self.content.get(self.current_node_id); state = self.memory.node_history.get(self.current_node_id); correctness = state.last_result if state and state.last_result else Correctness.INCORRECT
-        resolution = self.branches.resolve(task, correctness, hint_count=len(state.hint_uses) if state else 0, hint_threshold=6)
+        hint_count = self._active_hint_counts.get(self.current_node_id, 0)
+        resolution = self.branches.resolve(task, correctness, hint_count=hint_count, hint_threshold=6)
         if resolution.next_node_id:
             self.branches.enforce_cycle_guard(resolution.next_node_id, self._visit_counts); return self.load_task(resolution.next_node_id)
         return {"api_version": self.API_VERSION, "branch": resolution.to_dict(), "accessibility": branch_event(resolution).to_dict()}
@@ -104,6 +110,9 @@ class RuntimeApplication:
         if not self.persistence: raise ValidationError("Persistence is not configured")
         state = self.persistence.load(); self.current_node_id = state.get("current_node_id"); restored_session = restore_memory(self.memory, state)
         if restored_session: self.session = restored_session
+        # A process/session restore begins a new active attempt scope; historical hint uses
+        # remain persisted in TaskState for analytics but do not consume today's ladder.
+        self._active_hint_counts = {}
         return {"api_version": self.API_VERSION, "restored": True, "current_node_id": self.current_node_id, "schema_version": state["schema_version"]}
 
     def _submit_command(self, payload: Mapping[str, Any]) -> dict[str, Any]:

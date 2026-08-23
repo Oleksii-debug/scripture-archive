@@ -4,7 +4,7 @@
   "branch": "r06-swarm-dev07-paul-acts",
   "legacy_parent": "r06-dev2-materialization-05",
   "recovery_start_sha": "a96f0645fde2c94c99c11700008189e57ef61a4b",
-  "payload_checkpoint_sha": "8c2e2cd9fdc8c4ebee301087fbbef1c7f24d870f",
+  "payload_checkpoint_sha": "334bf872879af546ed3bd6a16bbfc48a14f63b24",
   "source_package": {
     "name": "DEV_LANE_SCRIPTURE_R06_D2_FINALPREP_02.zip",
     "drive_id": "1WxlVVZDqXcCMwkcgZIL3viZJrDAT3fFN",
@@ -24,9 +24,9 @@
     "evidence_records": 184
   },
   "github_readable_progress": {
-    "logical_node_parts_completed": [1, 2, 3, 4],
-    "node_records_readable": 61,
-    "node_records_remaining": 325,
+    "logical_node_parts_completed": [1, 2, 3, 4, 5],
+    "node_records_readable": 76,
+    "node_records_remaining": 310,
     "evidence_records_readable": 0,
     "evidence_records_remaining": 184,
     "node_hash_index_materialized": false,
@@ -51,17 +51,27 @@
       "physical_files": 14,
       "record_sha256_vs_staging_index": "PASS_14_OF_14",
       "git_blob_sha1_and_size_readback": "PASS_14_OF_14"
+    },
+    {
+      "logical_part": 5,
+      "node_id_first": "PA04-N009",
+      "node_id_last": "PA04-N023",
+      "records": 15,
+      "physical_files": 15,
+      "record_sha256_vs_staging_index": "PASS_15_OF_15",
+      "git_blob_sha1_and_size_readback": "PASS_15_OF_15"
     }
   ],
   "this_run_increment": {
-    "logical_parts_added": [3, 4],
-    "node_records_added": 29,
-    "physical_files_added": 29,
-    "record_sha256_vs_staging_index": "PASS_29_OF_29",
-    "git_blob_sha1_and_size_readback": "PASS_29_OF_29"
+    "logical_parts_added": [5],
+    "node_records_added": 15,
+    "physical_files_added": 15,
+    "record_sha256_vs_staging_index": "PASS_15_OF_15",
+    "git_blob_sha1_and_size_readback": "PASS_15_OF_15"
   },
   "source_boundary_guardrails_preserved": [
     "Acts 9 narrator remains distinct from later Pauline speech in Acts 22/26",
+    "Acts 9 narrator remains distinct from Pauline epistolary autobiography in 2 Corinthians 11 and Galatians 1",
     "omission is not treated as denial",
     "no witness detail was imported into another witness",
     "T1/T2 confidence values and TX1 fields were transported unchanged"
@@ -69,5 +79,5 @@
   "status": "GITHUB_PAYLOAD_PARTIAL",
   "closure_package": "NOT_CREATED",
   "independent_audit": "NOT_RUN_FOR_THIS_SWARM_CHECKPOINT",
-  "next_action": "Continue immutable GitHub materialization with logical node part_005, then remaining node parts, evidence parts, hash indexes and mission metadata; perform full 386+184 GitHub readback before any closure claim."
+  "next_action": "Continue immutable GitHub materialization with logical node part_006 (PA04-N024..PA04-N039), then remaining node parts, evidence parts, hash indexes and mission metadata; perform full 386+184 GitHub readback before any closure claim."
 }

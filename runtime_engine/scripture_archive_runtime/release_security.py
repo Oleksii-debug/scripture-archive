@@ -11,6 +11,7 @@ FORBIDDEN_BASENAMES = {".env", "token.json", "credentials.json", "cookies.txt", 
 TEXT_SUFFIXES = {
     "", ".cfg", ".css", ".csv", ".html", ".ini", ".js", ".json", ".md", ".ps1", ".py", ".toml", ".tsv", ".txt", ".xml", ".yaml", ".yml",
 }
+PLACEHOLDER_MARKERS = ("EXAMPLE", "PLACEHOLDER", "REDACTED", "CHANGEME", "YOUR_KEY", "YOUR-KEY")
 
 _SECRET_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("PRIVATE_KEY", re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----")),
@@ -33,12 +34,18 @@ class SecretFinding:
         return {"path": self.path, "rule": self.rule, "line": self.line}
 
 
+def _looks_like_placeholder(value: str) -> bool:
+    upper = value.upper()
+    return any(marker in upper for marker in PLACEHOLDER_MARKERS)
+
+
 def scan_text(text: str, path: str = "<memory>") -> list[SecretFinding]:
     findings: list[SecretFinding] = []
     lines = text.splitlines()
     for line_no, line in enumerate(lines, start=1):
         for rule, pattern in _SECRET_PATTERNS:
-            if pattern.search(line):
+            match = pattern.search(line)
+            if match and not _looks_like_placeholder(match.group(0)):
                 findings.append(SecretFinding(path=path, rule=rule, line=line_no))
     return findings
 

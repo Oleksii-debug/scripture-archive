@@ -39,8 +39,15 @@ class PlatformApplication:
         if cmd=='player.restore_checkpoint':return self._restore_checkpoint()
         if cmd=='authoring.list_drafts':return {'drafts':self.authoring.list_drafts()}
         if cmd=='authoring.new_draft':return {'draft':self.authoring.new_draft(str(p.get('title') or 'Нова чернетка'),str(p.get('kind') or 'node'))}
+        if cmd=='authoring.new_node_from_task_type':return {'draft':self.authoring.new_node_from_task_type(str(p.get('title') or 'Нова чернетка'),self._id(p,'task_type'))}
         if cmd=='authoring.load_draft':return {'draft':self.authoring.load_draft(self._id(p,'draft_id'))}
         if cmd=='authoring.save_draft':return {'draft':self.authoring.save_draft(p.get('draft'))}
+        if cmd=='authoring.delete_draft':return self.authoring.delete_draft(self._id(p,'draft_id'))
+        if cmd=='authoring.fork_record':return {'draft':self.authoring.fork_record(self._id(p,'kind'),p.get('record'),str(p.get('title') or '') or None)}
+        if cmd=='authoring.fork_canonical_node':
+            nid=self._id(p,'node_id'); node=self.loader.load_node(nid); return {'draft':self.authoring.fork_record('node',node,str(p.get('title') or f'Edit {nid}'))}
+        if cmd=='authoring.move_collection_item':
+            return {'draft':self.authoring.move_collection_item(p.get('draft'),self._id(p,'path'),p.get('index'),self._id(p,'direction'))}
         if cmd=='authoring.validate_draft':return self.authoring.validate_draft(p.get('draft'))
         if cmd=='authoring.preview_draft':return self.authoring.preview(p.get('draft'))
         if cmd=='authoring.prepare_publish_candidate':return {'candidate':self.authoring.prepare_publish_candidate(p.get('draft'))}

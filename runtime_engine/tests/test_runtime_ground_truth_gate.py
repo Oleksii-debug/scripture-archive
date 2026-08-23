@@ -62,11 +62,27 @@ class RuntimeGroundTruthGateTests(unittest.TestCase):
     def test_runtime_command_requires_answer_dto_object(self):
         app = RuntimeApplication(ContentRepository([LN01_N03]))
         app.handle(self._command("load_task", {"node_id": "LN01-N03"}, "load"))
-        with self.assertRaisesRegex(ValidationError, "ANSWER_DTO_v1 object form"):
+        with self.assertRaisesRegex(ValidationError, "explicit ANSWER_DTO_v1 schema"):
             app.handle(self._command("submit_answer", {
                 "node_id": "LN01-N03",
                 "answer": LN01_N03["accepted_answer"],
             }, "submit-raw"))
+
+    def test_runtime_command_requires_explicit_answer_schema(self):
+        app = RuntimeApplication(ContentRepository([LN01_N03]))
+        app.handle(self._command("load_task", {"node_id": "LN01-N03"}, "load"))
+        answer = self._valid_choice_answer()
+        del answer["schema"]
+        with self.assertRaisesRegex(ValidationError, "explicit ANSWER_DTO_v1 schema"):
+            app.handle(self._command("submit_answer", {"node_id": "LN01-N03", "answer": answer}, "submit-noschema"))
+
+    def test_runtime_command_requires_explicit_answer_task_type(self):
+        app = RuntimeApplication(ContentRepository([LN01_N03]))
+        app.handle(self._command("load_task", {"node_id": "LN01-N03"}, "load"))
+        answer = self._valid_choice_answer()
+        del answer["task_type"]
+        with self.assertRaisesRegex(ValidationError, "explicit answer task_type"):
+            app.handle(self._command("submit_answer", {"node_id": "LN01-N03", "answer": answer}, "submit-notype"))
 
     def test_runtime_command_rejects_unknown_answer_fields(self):
         app = RuntimeApplication(ContentRepository([LN01_N03]))

@@ -6,6 +6,7 @@ from typing import Any, Mapping
 
 from .models import Attempt, Correctness, HintUse, KnowledgeState, MasteryState, PlayerMemory, ReviewQueueItem, RetrievalRelation, Session, TaskState
 from .persistence import CURRENT_SCHEMA_VERSION
+from .security import ValidationError
 
 
 def parse_dt(value: Any) -> datetime | None:
@@ -20,6 +21,14 @@ def parse_dt(value: Any) -> datetime | None:
 def _attempt_independent(independent: Any, used_hints: int) -> bool:
     """Persisted independence can never contradict guided mastery semantics."""
     return bool(independent) and int(used_hints) == 0
+
+
+def _reject_duplicate_ids(values: list[str], label: str) -> None:
+    seen: set[str] = set()
+    for value in values:
+        if value in seen:
+            raise ValidationError(f"Duplicate {label}: {value}")
+        seen.add(value)
 
 
 def serialize_task_state(state: TaskState) -> dict[str, Any]:
@@ -154,35 +163,42 @@ def deserialize_review_item(raw: Mapping[str, Any]) -> ReviewQueueItem:
 def _decode_mastery_collection(raw: Any) -> dict[str, MasteryState]:
     if not raw:
         return {}
+    decoded: dict[str, MasteryState] = {}
     if isinstance(raw, Mapping):
-        decoded: dict[str, MasteryState] = {}
         for concept_id, item in raw.items():
             if not isinstance(item, Mapping):
-                raise ValueError("mastery mapping values must be objects")
+                raise ValidationError("mastery mapping values must be objects")
+            expected_id = str(concept_id)
             normalized = dict(item)
-            normalized.setdefault("concept_id", str(concept_id))
+            stored_id = normalized.get("concept_id")
+            if stored_id is not None and str(stored_id) != expected_id:
+                raise ValidationError(f"Mastery key/concept_id mismatch: {expected_id} != {stored_id}")
+            normalized.setdefault("concept_id", expected_id)
             mastery = deserialize_mastery(normalized)
+            if mastery.concept_id in decoded:
+                raise ValidationError(f"Duplicate mastery concept_id: {mastery.concept_id}")
             decoded[mastery.concept_id] = mastery
         return decoded
     if isinstance(raw, list):
-        decoded = {}
         for item in raw:
             if not isinstance(item, Mapping):
-                raise ValueError("mastery list items must be objects")
+                raise ValidationError("mastery list items must be objects")
             mastery = deserialize_mastery(item)
+            if mastery.concept_id in decoded:
+                raise ValidationError(f"Duplicate mastery concept_id: {mastery.concept_id}")
             decoded[mastery.concept_id] = mastery
         return decoded
-    raise ValueError("mastery must be an object or list")
+    raise ValidationError("mastery must be an object or list")
 
 
 def _decode_memory(state: Mapping[str, Any], fallback_profile_id: str) -> PlayerMemory:
     profile = state.get("profile") or {}
     if not isinstance(profile, Mapping):
-        raise ValueError("profile must be an object")
+        raise ValidationError("profile must be an object")
 
     history = state.get("history") or {}
     if not isinstance(history, Mapping):
-        raise ValueError("history must be an object")
+        raise ValidationError("history must be an object")
 
     campaign_checkpoints = state.get("campaign_checkpoints") or {}
     passage_exposure = state.get("passage_exposure") or {}
@@ -199,14 +215,14 @@ def _decode_memory(state: Mapping[str, Any], fallback_profile_id: str) -> Player
         "session_rollup": session_rollup,
     }.items():
         if not isinstance(value, Mapping):
-            raise ValueError(f"{name} must be an object")
+            raise ValidationError(f"{name} must be an object")
 
     review_raw = state.get("review_queue") or []
     sessions_raw = state.get("sessions") or []
     if not isinstance(review_raw, list):
-        raise ValueError("review_queue must be a list")
+        raise ValidationError("review_queue must be a list")
     if not isinstance(sessions_raw, list):
-        raise ValueError("sessions must be a list")
+        raise ValidationError("sessions must be a list")
 
     decoded = PlayerMemory(profile_id=str(profile.get("profile_id", fallback_profile_id)))
     decoded.campaign_checkpoints = {str(k): str(v) for k, v in campaign_checkpoints.items()}
@@ -215,10 +231,34 @@ def _decode_memory(state: Mapping[str, Any], fallback_profile_id: str) -> Player
     decoded.mistakes = {str(k): int(v) for k, v in mistakes.items()}
     decoded.recent_fatigue = {str(k): int(v) for k, v in recent_fatigue.items()}
     decoded.session_rollup = {str(k): int(v) for k, v in session_rollup.items()}
-    decoded.node_history = {str(k): deserialize_task_state(v) for k, v in history.items()}
+
+    decoded.node_history = {}
+    for key, value in history.items():
+        node_id = str(key)
+        if not isinstance(value, Mapping):
+            raise ValidationError(f"history[{node_id}] must be an object")
+        normalized = dict(value)
+        normalized.setdefault("node_id", node_id)
+        task_state = deserialize_task_state(normalized)
+        if task_state.node_id != node_id:
+            raise ValidationError(f"History key/node_id mismatch: {node_id} != {task_state.node_id}")
+        decoded.node_history[node_id] = task_state
+
     decoded.concept_mastery = _decode_mastery_collection(state.get("mastery"))
-    decoded.review_queue = [deserialize_review_item(x) for x in review_raw]
-    decoded.sessions = [deserialize_session(x) for x in sessions_raw]
+
+    decoded.review_queue = []
+    for value in review_raw:
+        if not isinstance(value, Mapping):
+            raise ValidationError("review queue items must be objects")
+        decoded.review_queue.append(deserialize_review_item(value))
+    _reject_duplicate_ids([item.queue_id for item in decoded.review_queue], "review queue_id")
+
+    decoded.sessions = []
+    for value in sessions_raw:
+        if not isinstance(value, Mapping):
+            raise ValidationError("session items must be objects")
+        decoded.sessions.append(deserialize_session(value))
+    _reject_duplicate_ids([item.session_id for item in decoded.sessions], "session_id")
     return decoded
 
 

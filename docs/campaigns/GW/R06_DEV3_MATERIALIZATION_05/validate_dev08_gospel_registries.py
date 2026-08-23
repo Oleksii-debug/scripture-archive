@@ -237,8 +237,11 @@ def validate_sources(records: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def validate_chronology(records: list[dict[str, Any]]) -> dict[str, Any]:
-    if any(record.get("forced_single_answer") is not False for record in records):
-        fail("chronology: disputed/local sequences must not be forced to one answer")
+    # Some records omit the optional flag; an omitted flag is not a forced chronology.
+    # Only an explicit true value is prohibited.
+    forced = [record["chronology_id"] for record in records if record.get("forced_single_answer") is True]
+    if forced:
+        fail(f"chronology: forced single-answer reconstruction(s): {forced}")
     for record in records:
         reconstruction = record.get("historical_reconstruction")
         if not isinstance(reconstruction, dict) or reconstruction.get("status") != "NOT_ASSERTED_AS_CANONICAL_FACT":

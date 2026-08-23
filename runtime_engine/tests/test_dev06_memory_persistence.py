@@ -152,3 +152,35 @@ class MasteryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class PlayerStateRepositoryTests(unittest.TestCase):
+    def test_restore_starts_new_session_and_save_preserves_passthrough(self):
+        from scripture_archive_runtime.player_state import PlayerStateRepository
+        with tempfile.TemporaryDirectory() as td:
+            store = PersistenceStore(td)
+            prior_memory = PlayerMemory("p")
+            prior = Session("prior", started_at=datetime(2026, 8, 22, tzinfo=UTC), successful_exact_ids={"LN01-N01"}, correct_node_ids={"LN01-N01"})
+            prior_memory.sessions = [prior]
+            payload = serialize_memory(prior_memory, prior, "LN01-N01", base_state={"settings": {"theme": "dark"}, "keymap": {"next": "Alt+N"}})
+            store.save(payload)
+
+            memory = PlayerMemory("new")
+            repo = PlayerStateRepository(store)
+            restored = repo.restore(memory, session_id="current", now=datetime(2026, 8, 23, tzinfo=UTC))
+            self.assertEqual(restored.session.session_id, "current")
+            self.assertEqual(memory.sessions[-2].ended_reason, "restart_recovery")
+            self.assertEqual(repo.memory_service.adjacent_successful_exact_ids(memory, restored.session), {"LN01-N01"})
+
+            repo.save(memory, restored.session, "LN01-N01")
+            saved = store.load()
+            self.assertEqual(saved["settings"]["theme"], "dark")
+            self.assertEqual(saved["keymap"]["next"], "Alt+N")
+            self.assertEqual(len(saved["sessions"]), 2)
+
+    def test_ten_thousand_history_records_roundtrip_under_state_boundary(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = PersistenceStore(td)
+            state = store.default_state()
+            state["history"] = {f"LN-STRESS-{i:05d}": {"node_id": f"LN-STRESS-{i:05d}"} for i in range(10000)}
+            store.save(state)
+            self.assertEqual(len(store.load()["history"]), 10000)

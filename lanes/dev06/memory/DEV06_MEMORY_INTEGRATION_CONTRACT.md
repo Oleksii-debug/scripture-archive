@@ -31,3 +31,7 @@ Persisted `Attempt.independent` must use the same semantics as mastery evidence.
 ## Non-goals
 
 This lane does not decide biblical correctness, source provenance, grading propositions, task variants, Windows/NVDA acceptance, or final integration PASS.
+
+## High-level adapter
+
+`PlayerStateRepository` packages the required restore/start-session/save lifecycle and preserves non-memory state. Integrators should prefer this boundary over directly reusing a deserialized `Session` after process restart.

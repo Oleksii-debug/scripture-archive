@@ -1,0 +1,34 @@
+name: R06 DEV05 runtime grading
+
+on:
+  push:
+    branches:
+      - r06-swarm-dev05-runtime-grading
+    paths:
+      - "runtime_engine/**"
+      - ".github/workflows/r06-dev05-runtime.yml"
+  pull_request:
+    paths:
+      - "runtime_engine/**"
+      - ".github/workflows/r06-dev05-runtime.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: runtime_engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compile runtime and tests
+        run: python -m compileall -q scripture_archive_runtime tests
+      - name: Runtime regression suite
+        run: python -m unittest discover -s tests -v

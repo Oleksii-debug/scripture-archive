@@ -16,7 +16,9 @@ Status: integration-ready DEV06 contract. This file does not change grading trut
 
 DEV05 owns `RuntimeApplication`, grading/provenance and per-visit hint counters. DEV06 therefore does not overwrite DEV05's live `application.py` changes. Integration should wire the hook points above into the newer DEV05 application rather than replace it with an older base copy.
 
-Persisted `Attempt.independent` must use the same semantics as mastery evidence. Current `MasteryEngine` treats any `used_hints > 0` as guided; integrator/DEV05 should not persist `independent=true` for such an attempt unless the field is deliberately redefined and versioned.
+Persisted `Attempt.independent` now has an enforced DEV06 invariant: it can only remain `true` when `used_hints == 0`. Any H1–H7 use serializes/restores as guided (`independent=false`). A zero-hint attempt explicitly marked non-independent remains non-independent, so the persistence layer does not invent independence. This aligns stored attempt evidence with the current `MasteryEngine` rule without taking ownership of DEV05 grading truth.
+
+DEV05 has separately hardened player branch navigation after QA defect #65. DEV06 must not reintroduce caller-selected target-node routing while integrating the state repository.
 
 ## Persistence safety
 
@@ -26,7 +28,10 @@ Persisted `Attempt.independent` must use the same semantics as mastery evidence.
 - atomic replace + fsync remains in use;
 - a corrupt primary cannot overwrite a known-good backup during a later save;
 - explicit recovery points are retained with a bounded count;
-- delete-progress preserves profile/settings/keymap/accessibility by default and leaves a recovery point.
+- delete-progress preserves profile/settings/keymap/accessibility by default and leaves a recovery point;
+- player-memory restore is transactional at the in-memory boundary: nested state is decoded into a temporary `PlayerMemory` first, and the caller's live memory object is replaced only after the entire nested structure decodes successfully;
+- malformed/newer-schema import is validated before the current state is replaced, so a rejected import leaves the existing persisted state intact;
+- legacy non-empty mastery mappings are accepted and normalized into the current concept-keyed in-memory representation.
 
 ## Non-goals
 

@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "observed_at": "2026-08-23T15:29:18+03:00",
+  "repository": "Oleksii-debug/scripture-archive",
+  "control_issue": 11,
+  "coordinator_issue": 22,
+  "qa_issue": 23,
+  "integration_branch": "r06-swarm-coord-integration",
+  "handoff": {
+    "state": "AUTONOMOUS_SWARM_ACTIVE",
+    "phase": "PARALLEL_CONTENT_AND_PRODUCTION_ACTIVE",
+    "production_authorized": true,
+    "primary_runtime": "WINDOWS_11_X64",
+    "web_portability_required": true
+  },
+  "main": {
+    "head": "bbc681db9701fa39dbe757dda8f2e341ea4e3c5b",
+    "historical_r05_checkpoint": "bbc681db9701fa39dbe757dda8f2e341ea4e3c5b",
+    "merge_authorization": false
+  },
+  "lanes": {
+    "DEV01": {"branch":"r06-swarm-dev01-windows-release","head":"6ce359a99cea6f6b1101bcb88a655f7842d643a1","legacy_parent":"r06-3dev-a-materialization-integration-05","legacy_head":"9bf256d2817fde97fb2fb1cb5b279de33749748e","legacy_reconciled":true,"legacy_relation":"AHEAD_1_BEHIND_0","status":"CHECKPOINT_CI_INFRA_BLOCKED","terminal":false,"pr":62},
+    "DEV02": {"branch":"r06-swarm-dev02-semantic-a11y","head":"9bf256d2817fde97fb2fb1cb5b279de33749748e","legacy_parent":"r06-3dev-a-materialization-integration-05","legacy_head":"9bf256d2817fde97fb2fb1cb5b279de33749748e","legacy_reconciled":true,"legacy_relation":"EQUAL_AT_OBSERVATION","status":"UNREPORTED","terminal":false,"pr":null},
+    "DEV03": {"branch":"r06-swarm-dev03-visual-ui","head":"940451d639c580d8d974496b7fdb1c9525b0f7d3","legacy_parent":"r06-3dev-a-materialization-integration-05","legacy_head":"9bf256d2817fde97fb2fb1cb5b279de33749748e","legacy_reconciled":true,"legacy_relation":"AHEAD_1_BEHIND_0","status":"CHECKPOINT_CI_INFRA_BLOCKED","terminal":false,"pr":63},
+    "DEV04": {"branch":"r06-swarm-dev04-constructor","head":"8c771775ac669e15c38a92d8363f188b9c505f60","legacy_parent":"r06-3dev-a-materialization-integration-05","legacy_head":"9bf256d2817fde97fb2fb1cb5b279de33749748e","legacy_reconciled":true,"legacy_relation":"AHEAD_4_BEHIND_0","status":"RUNNING_CI_INFRA_BLOCKED","terminal":false,"pr":64},
+    "DEV05": {"branch":"r06-swarm-dev05-runtime-grading","head":"a7c127d038aaa6ec605b5a78c66d1378d16290a9","legacy_parent":"r06-3dev-a-materialization-integration-05","legacy_head":"9bf256d2817fde97fb2fb1cb5b279de33749748e","legacy_reconciled":true,"legacy_relation":"AHEAD_6_BEHIND_0","status":"RUNNING_CI_INFRA_BLOCKED","terminal":false,"pr":61},
+    "DEV06": {"branch":"r06-swarm-dev06-memory-persistence","head":"9bf256d2817fde97fb2fb1cb5b279de33749748e","legacy_parent":"r06-3dev-a-materialization-integration-05","legacy_head":"9bf256d2817fde97fb2fb1cb5b279de33749748e","legacy_reconciled":true,"legacy_relation":"EQUAL_AT_OBSERVATION","status":"RUNNING","terminal":false,"pr":null},
+    "DEV07": {"branch":"r06-swarm-dev07-paul-acts","head":"38887319310e498f7c74392c411518784e5e68dc","legacy_parent":"r06-dev2-materialization-05","legacy_head":"a96f0645fde2c94c99c11700008189e57ef61a4b","legacy_reconciled":true,"legacy_relation":"AHEAD_11_BEHIND_0","status":"RUNNING","terminal":false,"pr":null},
+    "DEV08": {"branch":"r06-swarm-dev08-gospels","head":"344305a49c46f7cb0f1235702096f4dc292d3dae","legacy_parent":"r06-dev3-gospels-materialization-05","legacy_head":"35175b4841fc74a044271b78b7e49544588b7d73","legacy_reconciled":true,"legacy_relation":"AHEAD_4_BEHIND_0","status":"RUNNING","terminal":false,"pr":null},
+    "DEV09": {"branch":"r06-swarm-dev09-ot-otnt","head":"c884d2bee606c3bd012e9570e11f933ab28bb7b3","legacy_parent":"r06-3dev-c-d4-materialization-05","legacy_head":"998087dfa52408d2c1a9ab067373a75e8d493764","legacy_reconciled":true,"legacy_relation":"AHEAD_1_BEHIND_0","status":"RUNNING","terminal":false,"pr":66},
+    "DEV10": {"branch":"r06-swarm-dev10-integration-tests","head":"37c6608b51bf21cc5609c9151363197600139149","legacy_parent":"r06-3dev-a-materialization-integration-05","legacy_head":"9bf256d2817fde97fb2fb1cb5b279de33749748e","legacy_reconciled":true,"legacy_relation":"AHEAD_8_BEHIND_0","status":"RUNNING","terminal":false,"pr":null}
+  },
+  "progress_since_bootstrap": {
+    "advanced_lanes": ["DEV01","DEV03","DEV04","DEV05","DEV07","DEV08","DEV09","DEV10"],
+    "unchanged_lanes": ["DEV02","DEV06"],
+    "terminal_lanes": []
+  },
+  "content_materialization": {
+    "D2_PAUL_ACTS": {"expected_nodes":386,"expected_evidence":184,"complete":false,"observed_progress":"DEV07 added node materialization parts 003a-003k; closure/readback/hash indexes still not terminal"},
+    "D3_GOSPELS": {"expected_nodes":360,"expected_evidence":240,"complete":false,"observed_progress":"DEV08 extended readable witness matrix through GW-WM-0187; full readable corpus/closure still non-terminal"},
+    "D4_OT_OTNT": {"expected_nodes":450,"expected_evidence":90,"complete":false,"observed_progress":"DEV09 added exact readable-materialization workflow; readable nodes remain incomplete pending workflow/output verification"}
+  },
+  "ci": {
+    "systemic_hosted_runner_blocker": true,
+    "evidence": [
+      "DEV01 exact head run #72 failed before workflow steps/logs; issue #12 records BlobNotFound/no steps.",
+      "DEV03 exact head run #73 failed before workflow steps/logs and reproduced on rerun; issue #14 records the same pre-step pattern.",
+      "DEV04 exact head run #74 / 32639327970: Linux and Windows jobs failed with steps=null and no logs.",
+      "DEV05 exact head run #6 / 32639368446: runtime job failed with steps=null and no logs."
+    ],
+    "no_pr_workflow_run_observed_for_exact_head": ["DEV07","DEV08","DEV09","DEV10"]
+  },
+  "conflict_map": {
+    "observed_direct_path_collisions_between_new_swarm_slices": [],
+    "shared_zones_requiring_integration_tests": [
+      "DEV03 and DEV04 both extend lanes/dev1/repair_overlay, but current changed-file sets are disjoint (frontend visual CSS/tests vs authoring service/tests).",
+      "DEV05 and DEV10 both extend runtime_engine, but current changed-file sets are disjoint; runtime grading/provenance must be exercised through DEV10 exact-input/E2E tooling.",
+      "DEV01 packaging must ultimately be tested against the integrated platform rather than its isolated parent only.",
+      "D2/D3/D4 manifests and ANSWER_DTO/provenance contracts must be checked together before any 1196 candidate claim."
+    ],
+    "stale_gate_rule": "Any integration/QA gate is invalid for final readiness if any pinned input branch advances afterward."
+  },
+  "dependency_map": {
+    "DEV01": ["integrated platform candidate", "real Windows/WebView2 evidence"],
+    "DEV02": ["semantic/accessibility ownership checkpoint"],
+    "DEV03": ["DEV02 semantic contract compatibility"],
+    "DEV04": ["TaskTypeRegistry/renderer/editor contracts", "semantic constructor UX integration"],
+    "DEV05": ["canonical ANSWER_DTO/provenance contracts"],
+    "DEV06": ["DEV05 runtime state semantics", "DEV10 persistence integration"],
+    "DEV07": ["D2 immutable/source-audited truth", "materialization readback"],
+    "DEV08": ["D3 immutable/source-audited truth", "materialization readback"],
+    "DEV09": ["D4 immutable closure truth", "materialization readback"],
+    "DEV10": ["terminal/pinned DEV01-DEV09 inputs for final exact candidate"]
+  },
+  "qa": {
+    "issue_23_checkpoint_present": false,
+    "new_evidence_backed_defect_issues_observed": false,
+    "release_blocking_defects_clear": false,
+    "exact_integrated_candidate_accepted": false
+  },
+  "legacy_drive_audit_baseline": {
+    "name":"AUDIT_R06_STAGE05_LIVE_RECHECK_06",
+    "verdict":"CONTINUE_CURRENT_STAGE / NOT AUDIT_READY",
+    "candidate_nodes":1196,
+    "candidate_evidence":514,
+    "final_dev_output_r06_present":false,
+    "real_windows_webview2_acceptance":false,
+    "human_nvda_acceptance":false
+  },
+  "integration_state": {
+    "exact_swarm_candidate_ready": false,
+    "merge_authorized": false,
+    "main_merge_authorized": false,
+    "safe_now": [
+      "continue conflict/dependency mapping while lanes run",
+      "accept only explicitly pinned terminal outputs into an isolated candidate",
+      "exercise DEV05 runtime changes through DEV10 integration tooling when both checkpoints are stable",
+      "do not classify hosted pre-step CI failure as product test failure without job-step/log evidence"
+    ],
+    "next_high_value": "Wait for no one globally: continue coordinator tooling and consume the first terminal/pinned lane output; re-pin all exact inputs before every integration gate."
+  }
+}

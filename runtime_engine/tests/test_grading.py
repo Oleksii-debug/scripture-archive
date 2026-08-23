@@ -25,6 +25,16 @@ class GradingTests(unittest.TestCase):
     def test_claim_evidence_and_tx1_payload(self):
         task=self.task(task_type="CLAIM_EVIDENCE",response_mode="claim/evidence",textual_variant_flag="TX1",accepted_answer="Mark rooster wording is qualified",required_evidence=["EV-MARK"],grading={"accepted_propositions":[{"id":"qualified","required":True,"aliases":["qualified","кваліфіковане"]}],"required_evidence_ids":["EV-MARK"]})
         result=self.registry.grade(task,{"claim":"це кваліфіковане твердження","evidence":["EV-MARK"]}); self.assertEqual(result.correctness,Correctness.CORRECT); self.assertTrue(result.tx1); self.assertIsNotNone(result.uncertainty)
+    def test_evidence_select_uses_canonical_accepted_answer_without_adapter_grading(self):
+        task=self.task(task_type="EVIDENCE_SELECT",response_mode="evidence select",accepted_answer=["EV-MARK","EV-LUKE"],accepted_variants=[],required_evidence=[],grading={})
+        result=self.registry.grade(task,{"evidence_ids":["EV-LUKE","EV-MARK"]}); self.assertEqual(result.correctness,Correctness.CORRECT); self.assertEqual(result.score,1.0)
+    def test_claim_evidence_uses_canonical_structured_answer_without_adapter_grading(self):
+        task=self.task(task_type="CLAIM_EVIDENCE",response_mode="claim/evidence",accepted_answer={"claim":"Mark states two disciples","evidence_ids":["EV-MARK"]},accepted_variants=[],required_evidence=[],grading={})
+        result=self.registry.grade(task,{"claim":"Mark states two disciples","evidence_ids":["EV-MARK"]}); self.assertEqual(result.correctness,Correctness.CORRECT); self.assertEqual(result.score,1.0)
+    def test_ot_nt_link_uses_canonical_structured_answer_without_adapter_grading(self):
+        accepted={"ot_passage":"Isaiah 40:3","nt_passage":"Mark 1:2-3","relation_category":"citation/application","confidence":"T2","evidence_id":"EV-OTNT-1"}
+        task=self.task(task_type="OT_NT_LINK",response_mode="ot nt link",accepted_answer=accepted,accepted_variants=[],required_evidence=[],grading={})
+        result=self.registry.grade(task,dict(accepted)); self.assertEqual(result.correctness,Correctness.CORRECT); self.assertEqual(result.score,1.0); self.assertEqual(result.evidence,("EV-OTNT-1",))
     def test_composite_aggregates_steps(self):
         task=self.task(task_type="COMPOSITE_MULTI_STEP",response_mode="composite",grading={"steps":[{"id":"a","weight":1,"task":{"task_type":"SINGLE_CHOICE","response_mode":"single choice","accepted_answer":"Luke","accepted_variants":[]}},{"id":"b","weight":1,"task":{"task_type":"ORDERING","response_mode":"ordering","accepted_answer":["light","fall"],"accepted_variants":[],"grading":{"accepted_order":["light","fall"]}}}]})
         result=self.registry.grade(task,{"a":"Luke","b":["light","fall"]}); self.assertEqual(result.correctness,Correctness.CORRECT); self.assertEqual(result.score,1.0)

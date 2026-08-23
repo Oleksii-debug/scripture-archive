@@ -12,6 +12,7 @@ $Name = "ScriptureArchive-R06-DEV01"
 $Exe = Join-Path $Dist "$Name.exe"
 $BuildManifest = Join-Path $Dist "build_manifest.json"
 $Diagnostics = Join-Path $Dist "windows_release_diagnostics.json"
+$WebView2Probe = Join-Path $Dist "webview2_host_probe.json"
 $StartupProbe = Join-Path $Dist "packaged_startup_probe.json"
 if (-not $OutputJson) { $OutputJson = Join-Path $Dist "release_gate.json" }
 
@@ -29,8 +30,9 @@ $result = [ordered]@{
     tools_smoke = $false
     build = $false
     artifact_readback = $false
-    process_liveness = $false
     webview2_detected = $false
+    webview2_host_probe = $false
+    process_liveness = $false
     per_user_state_writable = $false
     running_without_admin = $false
     artifact_sha256 = $null
@@ -39,6 +41,7 @@ $result = [ordered]@{
     not_proven = @(
         "human NVDA acceptance",
         "complete functional WebView UI acceptance",
+        "packaged application's own WebView2 content-ready signal",
         "visual quality acceptance",
         "source/theological audit"
     )
@@ -104,6 +107,21 @@ try {
     $result.webview2_detected = @($diag.webview2_candidates).Count -gt 0
     $result.per_user_state_writable = [bool]$diag.state_write_probe.writable
     $result.running_without_admin = ($diag.is_admin -eq $false)
+    if (-not $result.running_without_admin) {
+        $result.not_proven += "no-admin startup acceptance"
+    }
+
+    $BuildPython = Join-Path $Repo ".venv-r06-dev01-build\Scripts\python.exe"
+    if (-not (Test-Path $BuildPython)) { throw "Build Python environment missing: $BuildPython" }
+    & $BuildPython (Join-Path $PSScriptRoot "probe_webview2_host.py") `
+        --output $WebView2Probe `
+        --timeout-seconds 20
+    if ($LASTEXITCODE -ne 0) { throw "Real EdgeChromium/WebView2 host probe failed with code $LASTEXITCODE" }
+    $hostProbe = Get-Content -Raw -Encoding utf8 $WebView2Probe | ConvertFrom-Json
+    if (-not $hostProbe.ok -or $hostProbe.renderer_actual -ne "edgechromium" -or -not $hostProbe.main_found) {
+        throw "Real EdgeChromium/WebView2 host probe did not verify renderer + semantic DOM"
+    }
+    $result.webview2_host_probe = $true
 
     & (Join-Path $PSScriptRoot "probe_packaged_startup.ps1") `
         -Executable $Exe `

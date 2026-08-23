@@ -87,7 +87,15 @@ class RuntimeApplication:
         return {"api_version": self.API_VERSION, "hint": {"level": level, "text": use.text}, "accessibility": hint_event(level, use.text).to_dict()}
 
     def next(self, *, explicit_node_id: str | None = None) -> dict[str, Any]:
-        if explicit_node_id: return self.load_task(explicit_node_id)
+        """Advance only through runtime-owned canonical branch resolution.
+
+        `explicit_node_id` is retained solely as a fail-closed compatibility parameter so
+        stale callers receive a deterministic error instead of silently bypassing branch
+        eligibility. Unrestricted authoring/preview jumps must use a separate non-player
+        capability and are intentionally not exposed by runtime.v1.
+        """
+        if explicit_node_id is not None:
+            raise ValidationError("runtime.v1 player next forbids caller-selected node targets")
         if not self.current_node_id: raise ValidationError("No current task")
         task = self.content.get(self.current_node_id); state = self.memory.node_history.get(self.current_node_id); correctness = state.last_result if state and state.last_result else Correctness.INCORRECT
         hint_count = self._active_hint_counts.get(self.current_node_id, 0)
@@ -132,8 +140,13 @@ class RuntimeApplication:
         answer = validate_answer_dto(task.task_type, raw_answer)
         return self.submit_answer(node_id, answer)
 
+    def _next_command(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+        if payload:
+            raise ValidationError("runtime.v1 next accepts no caller-selected target payload")
+        return self.next()
+
     def handle(self, command: Mapping[str, Any] | CommandEnvelope) -> dict[str, Any]:
         envelope = command if isinstance(command, CommandEnvelope) else CommandEnvelope.from_mapping(command); p = envelope.payload
-        routes = {"load_task": lambda: self.load_task(str(p["node_id"])), "submit_answer": lambda: self._submit_command(p), "request_hint": lambda: self.request_hint(str(p["node_id"])), "next": lambda: self.next(explicit_node_id=str(p["node_id"]) if p.get("node_id") else None), "save": self.save, "restore": self.restore, "get_mastery": self.get_mastery, "get_evidence": self.get_evidence}
+        routes = {"load_task": lambda: self.load_task(str(p["node_id"])), "submit_answer": lambda: self._submit_command(p), "request_hint": lambda: self.request_hint(str(p["node_id"])), "next": lambda: self._next_command(p), "save": self.save, "restore": self.restore, "get_mastery": self.get_mastery, "get_evidence": self.get_evidence}
         if envelope.command not in routes: raise ValidationError("Unsupported command")
         return {"request_id": envelope.request_id, **routes[envelope.command]()}

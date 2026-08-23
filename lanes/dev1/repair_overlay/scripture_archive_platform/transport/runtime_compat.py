@@ -23,10 +23,9 @@ class RuntimeEngineContractAdapter:
     """
     def __init__(self, runtime_invoke: Callable[[Mapping[str, Any]], Mapping[str, Any]]): self._runtime_invoke=runtime_invoke
     def to_runtime_request(self, request: Mapping[str, Any]) -> dict[str, Any]:
-        rid,command,payload=validate_request_shape(dict(request))
-        if command=='player.navigate_branch':
+        if isinstance(request,Mapping) and request.get('command')=='player.navigate_branch':
             raise RuntimeContractError('player.navigate_branch is disabled: player targets are runtime-owned; use player.next')
-        runtime_command=PLAYER_COMMAND_MAP.get(command)
+        rid,command,payload=validate_request_shape(dict(request));runtime_command=PLAYER_COMMAND_MAP.get(command)
         if not runtime_command:raise RuntimeContractError(f"No runtime mapping for platform command: {command}")
         runtime_payload=dict(payload)
         if runtime_command=='submit_answer':

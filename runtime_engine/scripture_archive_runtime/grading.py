@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from .answer_contracts import ANSWER_CONTRACT_VERSION, canonical_task_type, validate_answer_dto
@@ -184,11 +184,19 @@ def grade_matching(task: TaskDefinition, answer: Any) -> GradeResult:
     return _result(task, correctness, score, accepted=ne, details={"matched_pairs": hits, "pair_count": len(ne)})
 
 
+def _canonical_evidence_values(task: TaskDefinition) -> Any:
+    accepted = task.accepted_answer
+    if isinstance(accepted, Mapping):
+        return accepted.get("evidence_ids", accepted.get("evidence"))
+    return accepted
+
+
 def grade_evidence_select(task: TaskDefinition, answer: Any) -> GradeResult:
     raw = answer.get("evidence_ids") if isinstance(answer, Mapping) and "evidence_ids" in answer else answer
     submitted = {normalize_text(v) for v in _listify(raw)}
     configured = task.grading.get("required_evidence_ids")
-    expected_raw = configured if configured is not None else task.required_evidence
+    canonical = _canonical_evidence_values(task)
+    expected_raw = configured if configured is not None else (canonical if _listify(canonical) else task.required_evidence)
     expected = {normalize_text(v) for v in _listify(expected_raw)}
     if not expected:
         return _result(task, Correctness.INCORRECT, 0.0, details={"validation": "missing required evidence"})
@@ -203,7 +211,12 @@ def grade_claim_evidence(task: TaskDefinition, answer: Any) -> GradeResult:
         return _result(task, Correctness.INCORRECT, 0.0, details={"validation": "claim/evidence answer must be object"})
     claim = answer.get("claim", "")
     evidence = answer.get("evidence_ids", answer.get("evidence", []))
-    cc, cs, cd = _proposition_score(task, {"text": claim})
+    claim_task = task
+    if isinstance(task.accepted_answer, Mapping):
+        canonical_claim = task.accepted_answer.get("claim", task.accepted_answer.get("text"))
+        if canonical_claim is not None:
+            claim_task = replace(task, accepted_answer=canonical_claim)
+    cc, cs, cd = _proposition_score(claim_task, {"text": claim})
     ev = grade_evidence_select(task, {"evidence_ids": evidence})
     score = round(cs * 0.6 + ev.score * 0.4, 6)
     correctness = Correctness.CORRECT if cc is Correctness.CORRECT and ev.correctness is Correctness.CORRECT else Correctness.PARTIAL if cc is not Correctness.INCORRECT or ev.correctness is not Correctness.INCORRECT else Correctness.INCORRECT
@@ -225,6 +238,8 @@ def grade_ot_nt_link(task: TaskDefinition, answer: Any) -> GradeResult:
     if not isinstance(answer, Mapping):
         return _result(task, Correctness.INCORRECT, 0.0, details={"validation": "OT_NT_LINK answer must be object"})
     expected = task.grading.get("ot_nt_link")
+    if not isinstance(expected, Mapping):
+        expected = task.accepted_answer if isinstance(task.accepted_answer, Mapping) else None
     if not isinstance(expected, Mapping):
         return _result(task, Correctness.INCORRECT, 0.0, details={"validation": "missing ot_nt_link ground truth"})
     fields = ("ot_passage", "nt_passage", "relation_category", "confidence", "evidence_id")

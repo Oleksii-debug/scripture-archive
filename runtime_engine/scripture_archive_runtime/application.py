@@ -4,7 +4,7 @@ import uuid
 from typing import Any, Mapping
 
 from .accessibility import branch_event, grade_event, hint_event
-from .answer_contracts import answer_contract_descriptor, validate_answer_dto
+from .answer_contracts import ANSWER_CONTRACT_VERSION, answer_contract_descriptor, validate_answer_dto
 from .branching import BranchEngine
 from .content import ContentRepository
 from .evidence import EvidenceRuntime
@@ -124,7 +124,12 @@ class RuntimeApplication:
         """
         node_id = str(payload["node_id"])
         task = self.content.get(node_id)
-        answer = validate_answer_dto(task.task_type, payload.get("answer"))
+        raw_answer = payload.get("answer")
+        if not isinstance(raw_answer, Mapping) or raw_answer.get("schema") != ANSWER_CONTRACT_VERSION:
+            raise ValidationError("runtime.v1 submit_answer requires explicit ANSWER_DTO_v1 schema")
+        if "task_type" not in raw_answer:
+            raise ValidationError("runtime.v1 submit_answer requires explicit answer task_type")
+        answer = validate_answer_dto(task.task_type, raw_answer)
         return self.submit_answer(node_id, answer)
 
     def handle(self, command: Mapping[str, Any] | CommandEnvelope) -> dict[str, Any]:

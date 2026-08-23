@@ -1,13 +1,23 @@
 name: R06 DEV1 Platform CI
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - r06-dev1-platform-windows-constructor
+      - r06-swarm-dev01-windows-release
+    paths:
+      - 'lanes/dev1/**'
+      - 'runtime_engine/**'
+      - '.github/workflows/r06-dev1-platform.yml'
   pull_request:
     paths:
       - 'lanes/dev1/**'
+      - 'runtime_engine/**'
       - '.github/workflows/r06-dev1-platform.yml'
+
+env:
+  DEV01_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   linux-contract-test:
@@ -15,12 +25,19 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEV01_SOURCE_SHA }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Confirm exact source checkout
+        shell: bash
+        run: |
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$DEV01_SOURCE_SHA" || { echo "Expected $DEV01_SOURCE_SHA, got $actual"; exit 1; }
       - name: Reconstruct immutable DEV1 base source
         shell: bash
         run: |
@@ -33,30 +50,42 @@ jobs:
       - name: Compile and test repaired source
         shell: bash
         run: |
-          python -m compileall -q r06_platform/scripture_archive_platform r06_platform/tests
+          python -m compileall -q r06_platform/scripture_archive_platform r06_platform/tests r06_platform/packaging
           (cd r06_platform && python -m unittest discover -s tests -v)
           node --check r06_platform/frontend/renderers.js
           python r06_platform/tools_smoke.py
+          python r06_platform/packaging/windows_release.py diagnose \
+            --platform-root r06_platform \
+            --output r06_platform/diagnostics-linux.json
       - name: Archive repaired readable source
         shell: bash
         run: python -c "import shutil; shutil.make_archive('DEV1_R06_PLATFORM_SOURCE_REPAIRED','zip','.', 'r06_platform')"
       - uses: actions/upload-artifact@v4
         with:
           name: DEV1-R06-Repaired-Readable-Source
-          path: DEV1_R06_PLATFORM_SOURCE_REPAIRED.zip
+          path: |
+            DEV1_R06_PLATFORM_SOURCE_REPAIRED.zip
+            r06_platform/diagnostics-linux.json
           if-no-files-found: error
 
   windows-build-test:
     runs-on: windows-latest
-    timeout-minutes: 40
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEV01_SOURCE_SHA }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Confirm exact source checkout
+        shell: pwsh
+        run: |
+          $actual = (git rev-parse HEAD).Trim()
+          if ($actual -ne $env:DEV01_SOURCE_SHA) { throw "Expected $env:DEV01_SOURCE_SHA, got $actual" }
       - name: Reconstruct immutable DEV1 base source
         shell: pwsh
         run: |
@@ -69,20 +98,25 @@ jobs:
       - name: Apply readable pre-integration repair overlay
         shell: pwsh
         run: Copy-Item -Path lanes\dev1\repair_overlay\* -Destination r06_platform -Recurse -Force
-      - name: Compile and test repaired source on Windows
+      - name: Unicode and spaced-path diagnostic smoke
         shell: pwsh
         run: |
-          python -m compileall -q r06_platform\scripture_archive_platform r06_platform\tests
-          Push-Location r06_platform
-          python -m unittest discover -s tests -v
-          Pop-Location
-          node --check r06_platform\frontend\renderers.js
-          python r06_platform\tools_smoke.py
-      - name: Build Windows developer artifact
+          $smokeRoot = Join-Path $env:RUNNER_TEMP 'Архів Писання DEV01'
+          $smokePlatform = Join-Path $smokeRoot 'r06_platform'
+          New-Item -ItemType Directory -Force -Path $smokeRoot | Out-Null
+          Copy-Item -Path r06_platform -Destination $smokePlatform -Recurse -Force
+          New-Item -ItemType Directory -Force -Path (Join-Path $smokeRoot 'docs') | Out-Null
+          Copy-Item -Path docs\campaigns -Destination (Join-Path $smokeRoot 'docs\campaigns') -Recurse -Force
+          python "$smokePlatform\packaging\windows_release.py" diagnose --platform-root $smokePlatform --output "$smokeRoot\unicode_path_diagnostics.json"
+      - name: Run exact Windows engineering release gate
         shell: pwsh
-        run: ./r06_platform/packaging/build_windows.ps1
+        run: |
+          ./r06_platform/packaging/run_windows_release_gate.ps1 `
+            -ExpectedGitSha $env:DEV01_SOURCE_SHA `
+            -ProbeSeconds 8 `
+            -OutputJson ./r06_platform/dist/release_gate.json
       - uses: actions/upload-artifact@v4
         with:
-          name: ScriptureArchive-R06-DEV1-Windows
+          name: ScriptureArchive-R06-DEV01-Windows
           path: r06_platform/dist/**
           if-no-files-found: error

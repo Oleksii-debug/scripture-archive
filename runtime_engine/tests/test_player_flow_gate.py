@@ -42,6 +42,10 @@ class FakeApplication:
     accessibility_complete = True
     complete_state = True
     mutate_source = False
+    provenance_present = True
+    provenance_release_pass = True
+    provenance_schema = "GROUND_TRUTH_PROVENANCE_v1"
+    provenance_class = "CANONICAL_LOSSLESS_NORMALIZATION_PASS"
 
     def __init__(self, records):
         self.records = {r["node_id"]: r for r in records}
@@ -53,16 +57,20 @@ class FakeApplication:
         self.current = node_id
         self.session.shown_node_ids.append(node_id)
         row = self.records[node_id]
-        return {
-            "api_version": "runtime.v1",
-            "task": {
-                "node_id": node_id,
-                "task_type": row["task_type"],
-                "answer_contract": {"schema": "ANSWER_DTO_v1"},
-                "functional_nonvisual_equivalent": row["functional_nonvisual_equivalent"],
-                "hints_available": 1 if row.get("hint") else 0,
-            },
+        task = {
+            "node_id": node_id,
+            "task_type": row["task_type"],
+            "answer_contract": {"schema": "ANSWER_DTO_v1"},
+            "functional_nonvisual_equivalent": row["functional_nonvisual_equivalent"],
+            "hints_available": 1 if row.get("hint") else 0,
         }
+        if self.provenance_present:
+            task["ground_truth_provenance"] = {
+                "schema": self.provenance_schema,
+                "class": self.provenance_class,
+                "release_pass": self.provenance_release_pass,
+            }
+        return {"api_version": "runtime.v1", "task": task}
 
     def request_hint(self, node_id):
         return {
@@ -85,7 +93,6 @@ class FakeApplication:
 
 
 def adapt(raw, *, lane): return raw
-
 def answer(raw): return {"value": raw["answer"]}
 
 
@@ -95,6 +102,10 @@ class PlayerFlowGateTests(unittest.TestCase):
         FakeApplication.accessibility_complete = True
         FakeApplication.complete_state = True
         FakeApplication.mutate_source = False
+        FakeApplication.provenance_present = True
+        FakeApplication.provenance_release_pass = True
+        FakeApplication.provenance_schema = "GROUND_TRUTH_PROVENANCE_v1"
+        FakeApplication.provenance_class = "CANONICAL_LOSSLESS_NORMALIZATION_PASS"
         self.inputs = [input_row("D2", [node("D2-N1")]), input_row("D3", [node("D3-N1", hint=False)])]
         self.policy = PlayerFlowPolicy(required_lanes=("D2", "D3"), expected_nodes=2)
 
@@ -117,6 +128,7 @@ class PlayerFlowGateTests(unittest.TestCase):
         self.assertEqual(result["accessibility_grade_branch_pass_count"], 2)
         self.assertEqual(result["runtime_state_completion_pass_count"], 2)
         self.assertEqual(result["session_unique_shown_count"], 2)
+        self.assertEqual(result["ground_truth_provenance_class_counts"], {"CANONICAL_LOSSLESS_NORMALIZATION_PASS": 2})
 
     def test_wrong_lane_set_fails_closed(self):
         with self.assertRaisesRegex(PlayerFlowGateError, "lane set mismatch"):
@@ -148,6 +160,22 @@ class PlayerFlowGateTests(unittest.TestCase):
     def test_canonical_input_mutation_fails(self):
         FakeApplication.mutate_source = True
         with self.assertRaisesRegex(PlayerFlowGateError, "canonical input record mutated"):
+            self.run_gate()
+
+    def test_missing_ground_truth_provenance_fails(self):
+        FakeApplication.provenance_present = False
+        with self.assertRaisesRegex(PlayerFlowGateError, "ground_truth_provenance missing"):
+            self.run_gate()
+
+    def test_non_release_ground_truth_provenance_fails(self):
+        FakeApplication.provenance_release_pass = False
+        FakeApplication.provenance_class = "MISMATCH_FAIL"
+        with self.assertRaisesRegex(PlayerFlowGateError, "ground_truth_provenance is not release-pass"):
+            self.run_gate()
+
+    def test_wrong_ground_truth_provenance_schema_fails(self):
+        FakeApplication.provenance_schema = "GROUND_TRUTH_PROVENANCE_v0"
+        with self.assertRaisesRegex(PlayerFlowGateError, "ground_truth_provenance schema mismatch"):
             self.run_gate()
 
 

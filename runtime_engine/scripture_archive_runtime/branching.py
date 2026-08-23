@@ -49,6 +49,8 @@ class BranchEngine:
         if raw.startswith("DEFERRED_CAMPAIGN"):
             campaign = raw[len("DEFERRED_CAMPAIGN"):].strip() or None
             return BranchResolution(BranchTerminal.DEFERRED_CAMPAIGN, raw, campaign_id=campaign, evidence_unlocks=evidence, retrieval_effect=retrieval)
+        if raw == "MISSION_COMPLETE":
+            return BranchResolution(BranchTerminal.MISSION_COMPLETE, raw, evidence_unlocks=evidence, retrieval_effect=retrieval)
         if raw.startswith("RETIRED"):
             return BranchResolution(BranchTerminal.RETIRED, raw, evidence_unlocks=evidence, retrieval_effect=retrieval)
         if raw.startswith("RESOLVED_NODE"):

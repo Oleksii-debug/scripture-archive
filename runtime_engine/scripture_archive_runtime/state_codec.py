@@ -5,12 +5,16 @@ from datetime import datetime, timezone
 from typing import Any, Mapping
 
 from .models import Attempt, Correctness, HintUse, KnowledgeState, MasteryState, PlayerMemory, ReviewQueueItem, RetrievalRelation, Session, TaskState
+from .persistence import CURRENT_SCHEMA_VERSION
 
 
 def parse_dt(value: Any) -> datetime | None:
     if not value:
         return None
-    return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def serialize_task_state(state: TaskState) -> dict[str, Any]:
@@ -37,11 +41,35 @@ def deserialize_task_state(raw: Mapping[str, Any]) -> TaskState:
 
 
 def serialize_session(session: Session) -> dict[str, Any]:
-    return {"session_id": session.session_id, "started_at": session.started_at.isoformat(), "ended_at": session.ended_at.isoformat() if session.ended_at else None, "shown_node_ids": list(session.shown_node_ids), "recent_task_families": list(session.recent_task_families), "recent_passages": list(session.recent_passages), "correct_node_ids": sorted(session.correct_node_ids)}
+    return {
+        "session_id": session.session_id,
+        "started_at": session.started_at.isoformat(),
+        "ended_at": session.ended_at.isoformat() if session.ended_at else None,
+        "ended_reason": session.ended_reason,
+        "shown_node_ids": list(session.shown_node_ids),
+        "recent_task_families": list(session.recent_task_families),
+        "recent_passages": list(session.recent_passages),
+        "correct_node_ids": sorted(session.correct_node_ids),
+        "successful_exact_ids": sorted(session.successful_exact_ids),
+    }
 
 
 def deserialize_session(raw: Mapping[str, Any]) -> Session:
-    return Session(str(raw.get("session_id", uuid.uuid4())), parse_dt(raw.get("started_at")) or datetime.now(timezone.utc), parse_dt(raw.get("ended_at")), [str(x) for x in raw.get("shown_node_ids") or []], [str(x) for x in raw.get("recent_task_families") or []], [str(x) for x in raw.get("recent_passages") or []], set(str(x) for x in raw.get("correct_node_ids") or []))
+    correct = set(str(x) for x in raw.get("correct_node_ids") or [])
+    exact = set(str(x) for x in raw.get("successful_exact_ids") or [])
+    if not exact:
+        exact = set(correct)
+    return Session(
+        session_id=str(raw.get("session_id", uuid.uuid4())),
+        started_at=parse_dt(raw.get("started_at")) or datetime.now(timezone.utc),
+        ended_at=parse_dt(raw.get("ended_at")),
+        shown_node_ids=[str(x) for x in raw.get("shown_node_ids") or []],
+        recent_task_families=[str(x) for x in raw.get("recent_task_families") or []],
+        recent_passages=[str(x) for x in raw.get("recent_passages") or []],
+        correct_node_ids=correct,
+        successful_exact_ids=exact,
+        ended_reason=str(raw["ended_reason"]) if raw.get("ended_reason") else None,
+    )
 
 
 def serialize_mastery(state: MasteryState) -> dict[str, Any]:
@@ -60,22 +88,51 @@ def deserialize_review_item(raw: Mapping[str, Any]) -> ReviewQueueItem:
     return ReviewQueueItem(str(raw["queue_id"]), str(raw["concept_id"]), str(raw["node_id"]) if raw.get("node_id") else None, parse_dt(raw["due_at"]) or datetime.now(timezone.utc), int(raw.get("priority", 0)), RetrievalRelation(str(raw.get("relation", "EXACT"))), str(raw.get("reason", "")))
 
 
-def serialize_memory(memory: PlayerMemory, session: Session, current_node_id: str | None) -> dict[str, Any]:
+def serialize_memory(memory: PlayerMemory, session: Session, current_node_id: str | None, *, base_state: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    sessions = list(memory.sessions)
+    index = next((i for i, existing in enumerate(sessions) if existing.session_id == session.session_id), None)
+    if index is None:
+        sessions.append(session)
+    else:
+        sessions[index] = session
+    base = dict(base_state or {})
+    profile = dict(base.get("profile") or {})
+    profile["profile_id"] = memory.profile_id
+    accessibility_state = dict(base.get("accessibility_state") or {})
+    accessibility_state["last_focus_target"] = "task-feedback"
     return {
-        "schema_version": 2, "profile": {"profile_id": memory.profile_id}, "settings": {}, "sessions": [serialize_session(session)],
-        "history": {nid: serialize_task_state(s) for nid, s in memory.node_history.items()}, "mastery": [serialize_mastery(s) for _, s in sorted(memory.concept_mastery.items())],
-        "review_queue": [serialize_review_item(x) for x in memory.review_queue], "campaign_checkpoints": dict(memory.campaign_checkpoints), "passage_exposure": dict(memory.passage_exposure),
-        "mistakes": dict(memory.mistakes), "recent_fatigue": dict(memory.recent_fatigue), "constructor_drafts": {}, "keymap": {}, "evidence_exposure": dict(memory.evidence_exposure),
-        "accessibility_state": {"last_focus_target": "task-feedback"}, "current_node_id": current_node_id,
+        "schema_version": CURRENT_SCHEMA_VERSION,
+        "profile": profile,
+        "settings": dict(base.get("settings") or {}),
+        "sessions": [serialize_session(item) for item in sessions],
+        "history": {nid: serialize_task_state(s) for nid, s in memory.node_history.items()},
+        "mastery": [serialize_mastery(s) for _, s in sorted(memory.concept_mastery.items())],
+        "review_queue": [serialize_review_item(x) for x in memory.review_queue],
+        "campaign_checkpoints": dict(memory.campaign_checkpoints),
+        "passage_exposure": dict(memory.passage_exposure),
+        "mistakes": dict(memory.mistakes),
+        "recent_fatigue": dict(memory.recent_fatigue),
+        "session_rollup": dict(memory.session_rollup),
+        "constructor_drafts": dict(base.get("constructor_drafts") or {}),
+        "keymap": dict(base.get("keymap") or {}),
+        "evidence_exposure": dict(memory.evidence_exposure),
+        "accessibility_state": accessibility_state,
+        "current_node_id": current_node_id,
     }
 
 
 def restore_memory(memory: PlayerMemory, state: Mapping[str, Any]) -> Session | None:
-    profile = state.get("profile") or {}; memory.profile_id = str(profile.get("profile_id", memory.profile_id))
+    profile = state.get("profile") or {}
+    memory.profile_id = str(profile.get("profile_id", memory.profile_id))
     memory.campaign_checkpoints = {str(k): str(v) for k, v in (state.get("campaign_checkpoints") or {}).items()}
-    memory.passage_exposure = {str(k): int(v) for k, v in (state.get("passage_exposure") or {}).items()}; memory.evidence_exposure = {str(k): int(v) for k, v in (state.get("evidence_exposure") or {}).items()}
-    memory.mistakes = {str(k): int(v) for k, v in (state.get("mistakes") or {}).items()}; memory.recent_fatigue = {str(k): int(v) for k, v in (state.get("recent_fatigue") or {}).items()}
-    memory.node_history = {str(k): deserialize_task_state(v) for k, v in (state.get("history") or {}).items()}; memory.concept_mastery = {m.concept_id: m for m in (deserialize_mastery(x) for x in state.get("mastery") or [])}
+    memory.passage_exposure = {str(k): int(v) for k, v in (state.get("passage_exposure") or {}).items()}
+    memory.evidence_exposure = {str(k): int(v) for k, v in (state.get("evidence_exposure") or {}).items()}
+    memory.mistakes = {str(k): int(v) for k, v in (state.get("mistakes") or {}).items()}
+    memory.recent_fatigue = {str(k): int(v) for k, v in (state.get("recent_fatigue") or {}).items()}
+    memory.session_rollup = {str(k): int(v) for k, v in (state.get("session_rollup") or {}).items()}
+    memory.node_history = {str(k): deserialize_task_state(v) for k, v in (state.get("history") or {}).items()}
+    memory.concept_mastery = {m.concept_id: m for m in (deserialize_mastery(x) for x in state.get("mastery") or [])}
     memory.review_queue = [deserialize_review_item(x) for x in state.get("review_queue") or []]
-    sessions = [deserialize_session(x) for x in state.get("sessions") or []]; memory.sessions = sessions
+    sessions = [deserialize_session(x) for x in state.get("sessions") or []]
+    memory.sessions = sessions
     return sessions[-1] if sessions else None

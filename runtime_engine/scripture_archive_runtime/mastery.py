@@ -29,7 +29,10 @@ class MasteryEngine:
         elif correctness is Correctness.CORRECT:
             state.guided_successes += 1
             state.consecutive_independent_successes = 0
-            state.state = KnowledgeState.LEARNING if before in {KnowledgeState.UNSEEN, KnowledgeState.INTRODUCED, KnowledgeState.LAPSED} else min_state(before, KnowledgeState.STABLE)
+            if before in {KnowledgeState.STABLE, KnowledgeState.MASTERED_FOR_NOW, KnowledgeState.REVIEW_DUE}:
+                state.state = KnowledgeState.STABLE
+            else:
+                state.state = KnowledgeState.LEARNING
             state.stability_days = max(0.5, state.stability_days * 0.7 if state.stability_days else 1.0)
             reason = "guided_correct"
         elif correctness is Correctness.PARTIAL:

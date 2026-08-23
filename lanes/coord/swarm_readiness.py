@@ -3,7 +3,8 @@
 
 This coordinator helper evaluates an already-refetched integration snapshot.
 It never declares source truth, QA acceptance, Windows acceptance, or human NVDA
-acceptance on its own. A new run must first regenerate/refetch the snapshot.
+acceptance on its own. A new run must first regenerate/refetch the snapshot and
+set legacy_reconciled only after an explicit ancestry/compare check.
 """
 
 from __future__ import annotations
@@ -50,19 +51,22 @@ def evaluate(data: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(content, dict) or not content:
         raise ValueError("content_materialization must be a non-empty object")
 
-    stale_lanes: list[str] = []
+    unreconciled_lanes: list[str] = []
     nonterminal_lanes: list[str] = []
     for lane_name, lane in sorted(lanes.items()):
         if not isinstance(lane, dict):
             raise ValueError(f"lane {lane_name} must be an object")
-        if lane.get("head") != lane.get("legacy_head"):
-            stale_lanes.append(lane_name)
+        if not lane.get("legacy_reconciled", False):
+            unreconciled_lanes.append(lane_name)
         if not lane.get("terminal", False):
             nonterminal_lanes.append(lane_name)
 
-    incomplete_content = sorted(
-        name for name, item in content.items() if not item.get("complete", False)
-    )
+    incomplete_content: list[str] = []
+    for name, item in sorted(content.items()):
+        if not isinstance(item, dict):
+            raise ValueError(f"content item {name} must be an object")
+        if not item.get("complete", False):
+            incomplete_content.append(name)
 
     historical = main.get("historical_r05_checkpoint")
     main_moved = bool(historical) and main.get("head") != historical
@@ -71,18 +75,13 @@ def evaluate(data: dict[str, Any]) -> dict[str, Any]:
     qa_blockers_uncleared = not qa.get("release_blocking_defects_clear", False)
     qa_candidate_unaccepted = not qa.get("exact_integrated_candidate_accepted", False)
 
-    final_dev_output_missing = not data.get("legacy_drive_audit_baseline", {}).get(
-        "final_dev_output_r06_present", False
-    )
-    windows_unverified = not data.get("legacy_drive_audit_baseline", {}).get(
-        "real_windows_webview2_acceptance", False
-    )
-    nvda_unverified = not data.get("legacy_drive_audit_baseline", {}).get(
-        "human_nvda_acceptance", False
-    )
+    drive_baseline = data.get("legacy_drive_audit_baseline", {})
+    final_dev_output_missing = not drive_baseline.get("final_dev_output_r06_present", False)
+    windows_unverified = not drive_baseline.get("real_windows_webview2_acceptance", False)
+    nvda_unverified = not drive_baseline.get("human_nvda_acceptance", False)
 
     exact_candidate_ready = not (
-        stale_lanes or nonterminal_lanes or incomplete_content or main_moved
+        unreconciled_lanes or nonterminal_lanes or incomplete_content or main_moved
     )
 
     merge_authorized = bool(
@@ -98,8 +97,8 @@ def evaluate(data: dict[str, Any]) -> dict[str, Any]:
     )
 
     blockers: list[str] = []
-    if stale_lanes:
-        blockers.append("stale_or_diverged_lanes=" + ",".join(stale_lanes))
+    if unreconciled_lanes:
+        blockers.append("unreconciled_lanes=" + ",".join(unreconciled_lanes))
     if nonterminal_lanes:
         blockers.append("nonterminal_lanes=" + ",".join(nonterminal_lanes))
     if incomplete_content:
@@ -127,7 +126,7 @@ def evaluate(data: dict[str, Any]) -> dict[str, Any]:
         "observed_at": data.get("observed_at"),
         "exact_candidate_ready": exact_candidate_ready,
         "merge_authorized": merge_authorized,
-        "stale_lanes": stale_lanes,
+        "unreconciled_lanes": unreconciled_lanes,
         "nonterminal_lanes": nonterminal_lanes,
         "incomplete_content": incomplete_content,
         "blockers": blockers,

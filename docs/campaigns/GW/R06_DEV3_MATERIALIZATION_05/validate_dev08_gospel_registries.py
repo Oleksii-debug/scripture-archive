@@ -170,9 +170,6 @@ def validate_witness_matrix(records: list[dict[str, Any]]) -> dict[str, Any]:
     if tx1_count != 10:
         fail(f"witness_matrix: expected 10 TX1 records, got {tx1_count}")
 
-    # High-value regression sentinels: preserve omission boundaries and known
-    # anti-harmonization/TX1 cases. These are assertions about existing source-audited
-    # records; the validator never authors new theological conclusions.
     sentinels = {
         "GW-WM-0090": lambda r: r.get("witness") == "Luke"
         and r.get("witness_relation") == "NO_DIRECT_PARALLEL_IN_ASSIGNED_SCOPE"
@@ -209,15 +206,34 @@ def validate_witness_matrix(records: list[dict[str, Any]]) -> dict[str, Any]:
 
 def validate_sources(records: list[dict[str, Any]]) -> dict[str, Any]:
     source_ids = {record["source_id"] for record in records}
+    scripture = 0
+    tx_reference = 0
     for record in records:
-        if record.get("source_class") not in {"PRIMARY_SCRIPTURE", "TEXTUAL_VARIANT_NOTE"}:
-            fail(f"{record['source_id']}: unexpected source_class {record.get('source_class')!r}")
-        if record.get("status") != "DEVELOPER_SOURCE_AUDITED":
-            fail(f"{record['source_id']}: source is not DEVELOPER_SOURCE_AUDITED")
+        source_class = record.get("source_class")
+        status = record.get("status")
         witness = record.get("witness")
-        if witness not in ALLOWED_WITNESSES | {"Textual variant"}:
+        if witness not in ALLOWED_WITNESSES:
             fail(f"{record['source_id']}: unexpected witness {witness!r}")
-    return {"unique_source_ids": len(source_ids), "status": "PASS"}
+        if source_class == "PRIMARY_SCRIPTURE":
+            scripture += 1
+            if status != "DEVELOPER_SOURCE_AUDITED":
+                fail(f"{record['source_id']}: primary source is not DEVELOPER_SOURCE_AUDITED")
+        elif source_class == "TEXTUAL_VARIANT_REFERENCE":
+            tx_reference += 1
+            if status not in {"DEVELOPER_TX_SOURCE_CHECKED", "DEVELOPER_TX_BOUNDARY_RECORDED"}:
+                fail(f"{record['source_id']}: invalid textual-variant source status {status!r}")
+            if not record.get("grading_boundary"):
+                fail(f"{record['source_id']}: textual-variant grading_boundary missing")
+        else:
+            fail(f"{record['source_id']}: unexpected source_class {source_class!r}")
+    if scripture != 60 or tx_reference != 3:
+        fail(f"sources: expected 60 primary + 3 TX references, got {scripture} + {tx_reference}")
+    return {
+        "unique_source_ids": len(source_ids),
+        "primary_scripture": scripture,
+        "textual_variant_reference": tx_reference,
+        "status": "PASS",
+    }
 
 
 def validate_chronology(records: list[dict[str, Any]]) -> dict[str, Any]:

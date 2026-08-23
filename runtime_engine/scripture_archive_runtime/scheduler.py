@@ -33,8 +33,10 @@ class Scheduler:
             return False, "already_shown_this_session"
         if candidate.queue in {QueueKind.DUE, QueueKind.REVIEW} and candidate.due_at and candidate.due_at > now and not candidate.user_requested:
             return False, "not_due_yet"
-        exact_id = candidate.paired_exact_node_id or candidate.node_id
-        if candidate.relation is RetrievalRelation.EXACT and exact_id in adjacent_successful_exact_ids:
+        exact_identity_ids = {candidate.node_id}
+        if candidate.paired_exact_node_id:
+            exact_identity_ids.add(candidate.paired_exact_node_id)
+        if candidate.relation is RetrievalRelation.EXACT and exact_identity_ids.intersection(adjacent_successful_exact_ids):
             return False, "adjacent_session_exact_cooldown"
         task_state = memory.node_history.get(candidate.node_id)
         if task_state and task_state.completed and candidate.relation is RetrievalRelation.EXACT:

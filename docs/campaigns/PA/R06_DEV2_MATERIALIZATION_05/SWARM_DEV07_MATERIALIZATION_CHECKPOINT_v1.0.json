@@ -1,0 +1,55 @@
+{
+  "schema": "SWARM_DEV07_MATERIALIZATION_CHECKPOINT_v1.0",
+  "role": "SWARM DEV07 Paul/Acts",
+  "branch": "r06-swarm-dev07-paul-acts",
+  "legacy_parent": "r06-dev2-materialization-05",
+  "recovery_start_sha": "a96f0645fde2c94c99c11700008189e57ef61a4b",
+  "payload_checkpoint_sha": "79417d4893d2960f6b46a12cf94aa8d5c90fd156",
+  "source_package": {
+    "name": "DEV_LANE_SCRIPTURE_R06_D2_FINALPREP_02.zip",
+    "drive_id": "1WxlVVZDqXcCMwkcgZIL3viZJrDAT3fFN",
+    "sha256": "1aa4ac4fb0476dd5b58a5bfe396af4890e9e9f5288b2cc904526162123c0cd6e"
+  },
+  "staging_package": {
+    "name": "DEV_B_STAGE05_RECORD_SPLIT_STAGING.zip",
+    "drive_id": "1TgqHaCddxCGOmQjogcq40Jb4kOrf3NAW",
+    "sha256": "b681ea26d985eb754bde02a77254d40ab0920061edb9226fae7921a6740a06c0"
+  },
+  "semantic_change": "NONE",
+  "stable_ids_regenerated": false,
+  "source_claims_regenerated": false,
+  "protected_semantic_digest": "0d6027105bec35a4854b20e4df1faa6f047746041d4d7cb5b9fc143421557665",
+  "canonical_counts": {
+    "nodes": 386,
+    "evidence_records": 184
+  },
+  "github_readable_progress": {
+    "logical_node_parts_completed": [1, 2, 3],
+    "node_records_readable": 47,
+    "node_records_remaining": 339,
+    "evidence_records_readable": 0,
+    "evidence_records_remaining": 184,
+    "node_hash_index_materialized": false,
+    "evidence_hash_index_materialized": false,
+    "mission_metadata_materialized": false
+  },
+  "new_slice": {
+    "logical_part": 3,
+    "node_id_first": "PA03-N033",
+    "node_id_last": "PA03-N047",
+    "records": 15,
+    "physical_files": 15,
+    "record_sha256_vs_staging_index": "PASS_15_OF_15",
+    "git_blob_sha1_and_size_readback": "PASS_15_OF_15"
+  },
+  "source_boundary_guardrails_preserved": [
+    "Acts 9 narrator remains distinct from later Pauline speech in Acts 22/26",
+    "omission is not treated as denial",
+    "no witness detail was imported into another witness",
+    "T1/T2 confidence values and TX1 fields were transported unchanged"
+  ],
+  "status": "GITHUB_PAYLOAD_PARTIAL",
+  "closure_package": "NOT_CREATED",
+  "independent_audit": "NOT_RUN_FOR_THIS_SWARM_CHECKPOINT",
+  "next_action": "Continue immutable GitHub materialization with logical node part_004, then remaining node parts, evidence parts, hash indexes and mission metadata; perform full 386+184 GitHub readback before any closure claim."
+}

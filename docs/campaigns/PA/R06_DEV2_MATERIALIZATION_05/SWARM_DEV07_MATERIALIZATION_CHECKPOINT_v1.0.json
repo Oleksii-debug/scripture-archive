@@ -4,7 +4,7 @@
   "branch": "r06-swarm-dev07-paul-acts",
   "legacy_parent": "r06-dev2-materialization-05",
   "recovery_start_sha": "a96f0645fde2c94c99c11700008189e57ef61a4b",
-  "payload_checkpoint_sha": "79417d4893d2960f6b46a12cf94aa8d5c90fd156",
+  "payload_checkpoint_sha": "8c2e2cd9fdc8c4ebee301087fbbef1c7f24d870f",
   "source_package": {
     "name": "DEV_LANE_SCRIPTURE_R06_D2_FINALPREP_02.zip",
     "drive_id": "1WxlVVZDqXcCMwkcgZIL3viZJrDAT3fFN",
@@ -24,23 +24,41 @@
     "evidence_records": 184
   },
   "github_readable_progress": {
-    "logical_node_parts_completed": [1, 2, 3],
-    "node_records_readable": 47,
-    "node_records_remaining": 339,
+    "logical_node_parts_completed": [1, 2, 3, 4],
+    "node_records_readable": 61,
+    "node_records_remaining": 325,
     "evidence_records_readable": 0,
     "evidence_records_remaining": 184,
     "node_hash_index_materialized": false,
     "evidence_hash_index_materialized": false,
     "mission_metadata_materialized": false
   },
-  "new_slice": {
-    "logical_part": 3,
-    "node_id_first": "PA03-N033",
-    "node_id_last": "PA03-N047",
-    "records": 15,
-    "physical_files": 15,
-    "record_sha256_vs_staging_index": "PASS_15_OF_15",
-    "git_blob_sha1_and_size_readback": "PASS_15_OF_15"
+  "completed_slices": [
+    {
+      "logical_part": 3,
+      "node_id_first": "PA03-N033",
+      "node_id_last": "PA03-N047",
+      "records": 15,
+      "physical_files": 15,
+      "record_sha256_vs_staging_index": "PASS_15_OF_15",
+      "git_blob_sha1_and_size_readback": "PASS_15_OF_15"
+    },
+    {
+      "logical_part": 4,
+      "node_id_first": "PA03-N048",
+      "node_id_last": "PA04-N008",
+      "records": 14,
+      "physical_files": 14,
+      "record_sha256_vs_staging_index": "PASS_14_OF_14",
+      "git_blob_sha1_and_size_readback": "PASS_14_OF_14"
+    }
+  ],
+  "this_run_increment": {
+    "logical_parts_added": [3, 4],
+    "node_records_added": 29,
+    "physical_files_added": 29,
+    "record_sha256_vs_staging_index": "PASS_29_OF_29",
+    "git_blob_sha1_and_size_readback": "PASS_29_OF_29"
   },
   "source_boundary_guardrails_preserved": [
     "Acts 9 narrator remains distinct from later Pauline speech in Acts 22/26",
@@ -51,5 +69,5 @@
   "status": "GITHUB_PAYLOAD_PARTIAL",
   "closure_package": "NOT_CREATED",
   "independent_audit": "NOT_RUN_FOR_THIS_SWARM_CHECKPOINT",
-  "next_action": "Continue immutable GitHub materialization with logical node part_004, then remaining node parts, evidence parts, hash indexes and mission metadata; perform full 386+184 GitHub readback before any closure claim."
+  "next_action": "Continue immutable GitHub materialization with logical node part_005, then remaining node parts, evidence parts, hash indexes and mission metadata; perform full 386+184 GitHub readback before any closure claim."
 }

@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "observed_at": "2026-08-23T15:18:00+03:00",
+  "repository": "Oleksii-debug/scripture-archive",
+  "control_issue": 11,
+  "coordinator_issue": 22,
+  "qa_issue": 23,
+  "integration_branch": "r06-swarm-coord-integration",
+  "handoff": {
+    "state": "AUTONOMOUS_SWARM_ACTIVE",
+    "phase": "PARALLEL_CONTENT_AND_PRODUCTION_ACTIVE",
+    "production_authorized": true,
+    "primary_runtime": "WINDOWS_11_X64",
+    "web_portability_required": true
+  },
+  "main": {
+    "head": "bbc681db9701fa39dbe757dda8f2e341ea4e3c5b",
+    "historical_r05_checkpoint": "bbc681db9701fa39dbe757dda8f2e341ea4e3c5b",
+    "merge_authorization": false
+  },
+  "legacy_drive_audit_baseline": {
+    "name": "AUDIT_R06_STAGE05_LIVE_RECHECK_06",
+    "verdict": "CONTINUE_CURRENT_STAGE / NOT AUDIT_READY",
+    "candidate_nodes": 1196,
+    "candidate_evidence": 514,
+    "final_dev_output_r06_present": false,
+    "real_windows_webview2_acceptance": false,
+    "human_nvda_acceptance": false
+  },
+  "lanes": {
+    "DEV01": {"branch": "r06-swarm-dev01-windows-release", "head": "9bf256d2817fde97fb2fb1cb5b279de33749748e", "legacy_parent": "r06-3dev-a-materialization-integration-05", "legacy_head": "9bf256d2817fde97fb2fb1cb5b279de33749748e", "status": "RUNNING", "terminal": false},
+    "DEV02": {"branch": "r06-swarm-dev02-semantic-a11y", "head": "9bf256d2817fde97fb2fb1cb5b279de33749748e", "legacy_parent": "r06-3dev-a-materialization-integration-05", "legacy_head": "9bf256d2817fde97fb2fb1cb5b279de33749748e", "status": "UNREPORTED", "terminal": false},
+    "DEV03": {"branch": "r06-swarm-dev03-visual-ui", "head": "9bf256d2817fde97fb2fb1cb5b279de33749748e", "legacy_parent": "r06-3dev-a-materialization-integration-05", "legacy_head": "9bf256d2817fde97fb2fb1cb5b279de33749748e", "status": "RUNNING", "terminal": false},
+    "DEV04": {"branch": "r06-swarm-dev04-constructor", "head": "9bf256d2817fde97fb2fb1cb5b279de33749748e", "legacy_parent": "r06-3dev-a-materialization-integration-05", "legacy_head": "9bf256d2817fde97fb2fb1cb5b279de33749748e", "status": "UNREPORTED", "terminal": false},
+    "DEV05": {"branch": "r06-swarm-dev05-runtime-grading", "head": "9bf256d2817fde97fb2fb1cb5b279de33749748e", "legacy_parent": "r06-3dev-a-materialization-integration-05", "legacy_head": "9bf256d2817fde97fb2fb1cb5b279de33749748e", "status": "UNREPORTED", "terminal": false},
+    "DEV06": {"branch": "r06-swarm-dev06-memory-persistence", "head": "9bf256d2817fde97fb2fb1cb5b279de33749748e", "legacy_parent": "r06-3dev-a-materialization-integration-05", "legacy_head": "9bf256d2817fde97fb2fb1cb5b279de33749748e", "status": "RUNNING", "terminal": false},
+    "DEV07": {"branch": "r06-swarm-dev07-paul-acts", "head": "a96f0645fde2c94c99c11700008189e57ef61a4b", "legacy_parent": "r06-dev2-materialization-05", "legacy_head": "a96f0645fde2c94c99c11700008189e57ef61a4b", "status": "RUNNING", "terminal": false},
+    "DEV08": {"branch": "r06-swarm-dev08-gospels", "head": "35175b4841fc74a044271b78b7e49544588b7d73", "legacy_parent": "r06-dev3-gospels-materialization-05", "legacy_head": "35175b4841fc74a044271b78b7e49544588b7d73", "status": "UNREPORTED", "terminal": false},
+    "DEV09": {"branch": "r06-swarm-dev09-ot-otnt", "head": "998087dfa52408d2c1a9ab067373a75e8d493764", "legacy_parent": "r06-3dev-c-d4-materialization-05", "legacy_head": "998087dfa52408d2c1a9ab067373a75e8d493764", "status": "UNREPORTED", "terminal": false},
+    "DEV10": {"branch": "r06-swarm-dev10-integration-tests", "head": "9bf256d2817fde97fb2fb1cb5b279de33749748e", "legacy_parent": "r06-3dev-a-materialization-integration-05", "legacy_head": "9bf256d2817fde97fb2fb1cb5b279de33749748e", "status": "UNREPORTED", "terminal": false}
+  },
+  "content_materialization": {
+    "D2_PAUL_ACTS": {"expected_nodes": 386, "expected_evidence": 184, "complete": false, "reason": "readable GitHub materialization/readback and closure artifacts still incomplete"},
+    "D3_GOSPELS": {"expected_nodes": 360, "expected_evidence": 240, "complete": false, "reason": "readable GitHub materialization/readback and closure artifacts still incomplete"},
+    "D4_OT_OTNT": {"expected_nodes": 450, "expected_evidence": 90, "complete": false, "reason": "readable node materialization/readback is still partial despite prior immutable closure evidence"}
+  },
+  "conflict_map": {
+    "observed_direct_path_collisions": [],
+    "semantic_contract_risks": [
+      "ANSWER_DTO/provenance contracts exist independently in platform runtime, D2 closure data, and D4 shared contract; compatibility must be tested before exact integration.",
+      "Split materialization loaders/manifests must preserve canonical per-record hashes, IDs, evidence references, witness boundaries, confidence and TX1 semantics.",
+      "Any gate becomes stale if an input branch advances after the pinned SHA."
+    ]
+  },
+  "qa": {
+    "swarm_checkpoint_present": false,
+    "release_blocking_defects_clear": false,
+    "exact_integrated_candidate_accepted": false
+  },
+  "integration_state": {
+    "legacy_platform_intake_available": true,
+    "exact_swarm_candidate_ready": false,
+    "merge_authorized": false,
+    "safe_next_action": "Continue coordinator conflict/dependency tracking and gate tooling; consume only pinned terminal lane outputs as they appear; do not merge main."
+  }
+}

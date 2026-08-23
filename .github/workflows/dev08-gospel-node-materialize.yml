@@ -1,0 +1,192 @@
+name: DEV08 Gospel Node Materialization
+
+on:
+  push:
+    branches:
+      - r06-swarm-dev08-gospels
+    paths:
+      - lanes/dev3/closure03_payload/DEV08_NODE_TRIGGER
+
+permissions:
+  contents: write
+
+jobs:
+  materialize-nodes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout DEV08 branch
+        uses: actions/checkout@v4
+        with:
+          ref: r06-swarm-dev08-gospels
+          fetch-depth: 0
+
+      - name: Reconstruct immutable DEV3 closure payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          STAGE=lanes/dev3/closure03_payload
+          test -f "$STAGE/DEV08_NODE_TRIGGER"
+          COUNT=$(find "$STAGE" -maxdepth 1 -name 'part_*.b64' -type f | wc -l)
+          test "$COUNT" -eq 51
+          rm -rf /tmp/dev08-gospel-closure
+          mkdir -p /tmp/dev08-gospel-closure
+          cat "$STAGE"/part_*.b64 | base64 --decode > /tmp/dev08-gospel-closure/payload.tar.xz
+          echo 'ea8e4d290101a6b1c95e3718844015b90abda0964705bf24b70309fa6062c35a  /tmp/dev08-gospel-closure/payload.tar.xz' | sha256sum -c -
+          mkdir -p /tmp/dev08-gospel-closure/source
+          tar -xJf /tmp/dev08-gospel-closure/payload.tar.xz -C /tmp/dev08-gospel-closure/source
+
+      - name: Verify closure payload and materialize exact canonical node records
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import collections
+          import hashlib
+          import json
+          import pathlib
+          import shutil
+
+          source = pathlib.Path('/tmp/dev08-gospel-closure/source')
+          target = pathlib.Path('docs/campaigns/GW/R06_DEV3_MATERIALIZATION_05/nodes')
+          proof_path = pathlib.Path('docs/campaigns/GW/R06_DEV3_MATERIALIZATION_05/DEV08_NODE_MATERIALIZATION_PROOF.json')
+          hash_path = pathlib.Path('docs/campaigns/GW/R06_DEV3_MATERIALIZATION_05/DEV08_NODE_RECORD_HASH_INDEX.json')
+
+          # Verify every file hash shipped in the immutable closure payload.
+          sums = source / 'SHA256SUMS.txt'
+          assert sums.is_file(), sums
+          checked = 0
+          for line in sums.read_text(encoding='utf-8').splitlines():
+              if not line.strip():
+                  continue
+              expected, rel = line.split(None, 1)
+              rel = rel.strip().lstrip('*')
+              path = source / rel
+              assert path.is_file(), path
+              got = hashlib.sha256(path.read_bytes()).hexdigest()
+              assert got == expected, (rel, expected, got)
+              checked += 1
+          assert checked == 29, checked
+
+          # Read already-authored node objects. No field is generated or normalized.
+          source_files = sorted((source / 'nodes').glob('*.json'))
+          assert len(source_files) == 15, len(source_files)
+          nodes = []
+          for path in source_files:
+              data = json.loads(path.read_text(encoding='utf-8'))
+              assert isinstance(data, dict) and isinstance(data.get('nodes'), list), path
+              nodes.extend(data['nodes'])
+
+          assert len(nodes) == 360, len(nodes)
+          node_ids = [node.get('node_id') for node in nodes]
+          assert all(isinstance(x, str) and x for x in node_ids)
+          assert len(set(node_ids)) == 360
+          assert sum(node.get('textual_variant_flag') == 'TX1' for node in nodes) == 22
+          confidence = collections.Counter(node.get('confidence_code') for node in nodes)
+          assert confidence == collections.Counter({'T1': 242, 'T2': 108, 'D1': 10}), confidence
+
+          def canonical_bytes(record):
+              return json.dumps(
+                  record,
+                  ensure_ascii=False,
+                  sort_keys=True,
+                  separators=(',', ':'),
+              ).encode('utf-8')
+
+          record_hashes = {
+              node['node_id']: hashlib.sha256(canonical_bytes(node)).hexdigest()
+              for node in nodes
+          }
+          aggregate_payload = ''.join(
+              f'{node_id}\t{digest}\n'
+              for node_id, digest in sorted(record_hashes.items())
+          ).encode('utf-8')
+          aggregate = hashlib.sha256(aggregate_payload).hexdigest()
+          expected_aggregate = '6bc9ceadb9a02f7eef92cf70df004f3781a3e85732b1f5d17cd93c2e876896e6'
+          assert aggregate == expected_aggregate, (expected_aggregate, aggregate)
+
+          # Only after all source and aggregate checks pass, replace the DEV08 readable
+          # node materialization. Serialization is canonical transport, not new authorship.
+          if target.exists():
+              shutil.rmtree(target)
+          target.mkdir(parents=True)
+          sizes = [22, 22, 22] + [21] * 14
+          assert sum(sizes) == 360
+          offset = 0
+          files = []
+          for number, size in enumerate(sizes, 1):
+              shard = nodes[offset:offset + size]
+              offset += size
+              path = target / f'part_{number:03d}.jsonl'
+              payload = b''.join(canonical_bytes(record) + b'\n' for record in shard)
+              path.write_bytes(payload)
+              files.append({
+                  'path': path.as_posix(),
+                  'records': len(shard),
+                  'first_node_id': shard[0]['node_id'],
+                  'last_node_id': shard[-1]['node_id'],
+                  'file_sha256': hashlib.sha256(payload).hexdigest(),
+              })
+          assert offset == 360
+
+          hash_payload = {
+              'schema': 'DEV08_NODE_RECORD_HASH_INDEX_v1',
+              'canonical_serialization': {
+                  'encoding': 'UTF-8',
+                  'ensure_ascii': False,
+                  'sort_keys': True,
+                  'separators': [',', ':'],
+              },
+              'record_count': 360,
+              'node_aggregate_sha256': aggregate,
+              'records': [
+                  {'node_id': node_id, 'record_sha256': digest}
+                  for node_id, digest in sorted(record_hashes.items())
+              ],
+          }
+          hash_path.write_text(
+              json.dumps(hash_payload, ensure_ascii=False, sort_keys=True, indent=2) + '\n',
+              encoding='utf-8',
+          )
+
+          proof = {
+              'schema': 'DEV08_NODE_MATERIALIZATION_PROOF_v1',
+              'status': 'PASS',
+              'source_transport': 'lanes/dev3/closure03_payload/part_*.b64',
+              'source_archive_sha256': 'ea8e4d290101a6b1c95e3718844015b90abda0964705bf24b70309fa6062c35a',
+              'source_file_hashes_checked': checked,
+              'source_node_files': len(source_files),
+              'node_count': len(nodes),
+              'unique_node_ids': len(set(node_ids)),
+              'tx1_node_count': 22,
+              'confidence_counts': dict(sorted(confidence.items())),
+              'node_aggregate_sha256': aggregate,
+              'expected_node_aggregate_sha256': expected_aggregate,
+              'source_truth_changed': False,
+              'shards': files,
+          }
+          proof_path.write_text(
+              json.dumps(proof, ensure_ascii=False, sort_keys=True, indent=2) + '\n',
+              encoding='utf-8',
+          )
+          print(
+              'DEV08_GOSPEL_NODE_MATERIALIZATION_PASS '
+              f'nodes={len(nodes)} tx1=22 hashes={len(record_hashes)} aggregate={aggregate}'
+          )
+          PY
+
+      - name: Commit readable DEV08 nodes and proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- \
+            docs/campaigns/GW/R06_DEV3_MATERIALIZATION_05/nodes \
+            docs/campaigns/GW/R06_DEV3_MATERIALIZATION_05/DEV08_NODE_MATERIALIZATION_PROOF.json \
+            docs/campaigns/GW/R06_DEV3_MATERIALIZATION_05/DEV08_NODE_RECORD_HASH_INDEX.json
+          if git diff --cached --quiet; then
+            echo 'DEV08 node materialization already exact; nothing to commit.'
+            exit 0
+          fi
+          git commit -m 'R06 DEV08: materialize 360 readable Gospel nodes [skip ci]'
+          git push origin HEAD:r06-swarm-dev08-gospels

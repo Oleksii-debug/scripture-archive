@@ -1,0 +1,60 @@
+name: R06 DEV10 Integration CI
+
+on:
+  push:
+    branches:
+      - r06-swarm-dev10-integration-tests
+  pull_request:
+    paths:
+      - 'runtime_engine/**'
+      - 'lanes/dev10/**'
+      - '.github/workflows/r06-dev10-integration.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: r06-dev10-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  runtime-integration:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Compile runtime, tests and integration tools
+        working-directory: runtime_engine
+        run: python -m compileall -q scripture_archive_runtime tests tools
+      - name: Run complete runtime regression suite
+        working-directory: runtime_engine
+        run: python -m unittest discover -s tests -v
+
+  release-secret-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Compile secret scanner
+        working-directory: runtime_engine
+        run: python -m compileall -q scripture_archive_runtime/release_security.py tools/run_release_secret_scan.py
+      - name: Scan checked-out repository for high-confidence secrets
+        working-directory: runtime_engine
+        run: python tools/run_release_secret_scan.py .. --output ../dev10-secret-scan.json
+      - name: Upload sanitized scan result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEV10-secret-scan-result
+          path: dev10-secret-scan.json
+          if-no-files-found: error

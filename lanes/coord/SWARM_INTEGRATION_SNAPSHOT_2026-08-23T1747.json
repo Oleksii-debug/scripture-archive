@@ -1,6 +1,7 @@
 {
   "schema": "R06_SWARM_COORD_SNAPSHOT_v1",
   "observed_at": "2026-08-23T17:47:00+03:00",
+  "readback_reconciled_at": "2026-08-23T17:50:00+03:00",
   "authority": {
     "handoff_state": "AUTONOMOUS_SWARM_ACTIVE",
     "phase": "PARALLEL_CONTENT_AND_PRODUCTION_ACTIVE",
@@ -18,7 +19,18 @@
   },
   "coordinator": {
     "branch": "r06-swarm-coord-integration",
-    "parent_head_before_this_snapshot": "f29520d0f91889405a688d5ff7227ab65f8887f2"
+    "last_pre_observation_checkpoint": "f29520d0f91889405a688d5ff7227ab65f8887f2",
+    "actual_parent_before_snapshot_write": "21140219ad01ba2dd4849485588b6dd05c9e8bb5",
+    "concurrent_change_detected_during_readback": true,
+    "concurrent_change_summary": "Terminal DEV06 memory/persistence slice was integrated into the isolated coordinator branch before this snapshot commit; compare f29520d..21140219 shows only DEV06-owned memory/persistence/workflow files.",
+    "integrated_inputs": {
+      "DEV06": {
+        "source_head": "7fc4549ab18abd21f3b949da9e95c4ac34770f07",
+        "integration_commit": "21140219ad01ba2dd4849485588b6dd05c9e8bb5",
+        "scope": "terminal memory/persistence slice only",
+        "final_acceptance": false
+      }
+    }
   },
   "lanes": {
     "DEV01": {
@@ -54,8 +66,8 @@
     "DEV06": {
       "branch": "r06-swarm-dev06-memory-persistence",
       "head": "7fc4549ab18abd21f3b949da9e95c4ac34770f07",
-      "checkpoint": "NEW_CONTINUATION_STARTED_FROM_TERMINAL_HEAD",
-      "notes": "PlayerMemoryService/PlayerStateRepository/persistence v3 and stress coverage present. Current continuation started after fresh DEV05/DEV10 reconciliation; integration seam remains."
+      "checkpoint": "TERMINAL_SLICE_INTEGRATED_AND_NEW_CONTINUATION_STARTED",
+      "notes": "Terminal memory/persistence slice is already present in coordinator candidate via 21140219. A new DEV06 continuation started from the same source head after fresh DEV05/DEV10 reconciliation; no newer DEV06 commit was observed at this snapshot."
     },
     "DEV07": {
       "branch": "r06-swarm-dev07-paul-acts",
@@ -114,7 +126,7 @@
     }
   },
   "cross_lane_seams": [
-    "DEV05 RuntimeApplication must integrate DEV06 PlayerStateRepository/PlayerMemoryService without overwriting runtime grading changes.",
+    "Coordinator now contains DEV06 memory/persistence slice, but DEV05 RuntimeApplication still must be integrated against PlayerStateRepository/PlayerMemoryService without overwriting runtime grading changes.",
     "Reconcile Attempt.independent semantics for H1-H5 with mastery guided semantics before integrated persistence/runtime acceptance.",
     "DEV02 semantic frontend and DEV03 visual CSS must be reconciled without replacing semantic DOM or accessibility behavior.",
     "DEV04 authoring hooks must integrate with DEV02 semantics and DEV03 visuals after #67 systemic validation is fixed.",
@@ -128,6 +140,10 @@
     "Human NVDA browse/focus/keyboard acceptance is not run/accepted."
   ],
   "integration": {
+    "isolated_candidate_active": true,
+    "isolated_candidate_contains": [
+      "DEV06 terminal memory/persistence slice @ 7fc4549ab18abd21f3b949da9e95c4ac34770f07"
+    ],
     "terminal_inputs_ready_for_final_candidate": false,
     "exact_integrated_candidate_ready": false,
     "audit_ready": false,
@@ -137,8 +153,9 @@
       "DEV10 fix QA #68 fail-closed secret scanning and unverified accounting.",
       "DEV04 complete registry-derived per-task publishability contracts and parameterized regressions for QA #67.",
       "QA independently execute/recheck DEV05 fixing head 4332fd... for #65 before closure.",
+      "Integrate DEV05 and already-intaken DEV06 only after #65 recheck and the Attempt.independent/guided semantic seam is explicitly reconciled.",
       "Continue D2/D3/D4 immutable readable materialization and exact readback without semantic regeneration.",
-      "Coordinator must re-pin all heads after any lane advance before assembling an isolated integration candidate."
+      "Coordinator must re-pin all heads after any lane advance before adding another terminal slice."
     ]
   }
 }

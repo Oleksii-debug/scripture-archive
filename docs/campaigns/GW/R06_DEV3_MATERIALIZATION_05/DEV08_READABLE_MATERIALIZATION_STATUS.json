@@ -53,28 +53,46 @@
       "witness_relation": {"records": 240, "aggregate_sha256": "b749c84525f64acc0ee8f164bb3edd4a3d3061fc525ac7d2d35c1bb5dd9c9086"}
     },
     "nodes": {
-      "status": "PENDING_ACTIONS_MATERIALIZATION",
+      "status": "PARTIAL_READABLE_DIRECT_CONNECTOR",
+      "readable_records": 24,
       "expected_records": 360,
+      "completed_missions": ["GW-01"],
+      "completed_node_range": "GW01-N01..GW01-N24",
+      "readable_slice_aggregate_sha256": "b79dd877addad367c2bd195f7deae0efd34277e312e10247d2771b8de1c82d31",
+      "readable_slice_confidence_counts": {"D1": 1, "T1": 15, "T2": 8},
+      "readable_slice_tx1_nodes": 3,
       "expected_aggregate_sha256": "6bc9ceadb9a02f7eef92cf70df004f3781a3e85732b1f5d17cd93c2e876896e6",
       "expected_confidence_counts": {"D1": 10, "T1": 242, "T2": 108},
       "expected_tx1_nodes": 22,
-      "last_direct_fetch": "nodes directory absent before DEV08 materializer trigger",
-      "materializer_workflow": ".github/workflows/dev08-gospel-node-materialize.yml",
-      "trigger": "lanes/dev3/closure03_payload/DEV08_NODE_TRIGGER",
-      "completion_rule": "Do not mark complete until bot commit/proof is fetched back and aggregate equals expected."
+      "source_spans": ["staging nodes/part_001.jsonl records 1..22", "staging nodes/part_002.jsonl records 1..2"],
+      "shard_git_blob_fidelity": "9/9 exact expected Git blob SHA PASS",
+      "shards": {
+        "part_001a.jsonl": "6835dca7b92b6e692670c578706a111b245c9ebd",
+        "part_001b.jsonl": "a7eae0c44dbda13fa8737c2db44ee00910d39c2c",
+        "part_001c.jsonl": "ca961e3764cdb2960806d67c6d3e124d0952669e",
+        "part_001d.jsonl": "50c829819b56e4b287c3cf1e5d8651f09c680146",
+        "part_001e.jsonl": "f7f8f409da614a6520f4f5c4574ad2ede0291391",
+        "part_001f.jsonl": "aebcf17b88b7c95bc2eb8b44b90bc57541c356f5",
+        "part_001g.jsonl": "2f007c3d2fb05b9243c720befc0b13c2f7f91657",
+        "part_001h.jsonl": "d531d13f52bcd0a460df324225a22255c6c2c820",
+        "part_002a.jsonl": "cc8640992f892b4be35ad7485d0cef8ed7576770"
+      },
+      "transport_note": "GitHub Actions materializer left no completion proof. Direct connector materialization is active. Shards are limited to <=3 records because larger readback payloads are truncated by the connector.",
+      "completion_rule": "Do not mark complete until all 360 records are readable and the full aggregate equals expected."
     },
     "record_hash_indexes": {
       "status": "PARTIAL",
       "staging_authority": "PRESENT_IN_IMMUTABLE_STAGING_PACKAGE",
       "readable_github_index": "NOT_YET_MATERIALIZED_FOR_ALL_COLLECTIONS",
-      "node_workflow_will_emit": "DEV08_NODE_RECORD_HASH_INDEX.json"
+      "node_index_required_after_full_node_materialization": true
     }
   },
   "validators": {
     "registry_validator": "validate_dev08_gospel_registries.py",
     "evidence_board_validator": "validate_dev08_evidence_board.py",
     "immutable_staging_dry_run": "PASS_AFTER_VALIDATOR_CONTRACT_FIXES",
-    "content_truth_changed_during_validator_fixes": false
+    "node_slice_validation": "GW-01 24/24 unique; exact shard Git blob fidelity 9/9; subset aggregate recomputed PASS",
+    "content_truth_changed_during_validator_or_materialization_fixes": false
   },
   "source_safety_sentinels": [
     "GW-WM-0090",
@@ -90,6 +108,6 @@
     "drive_package_created": false,
     "reason": "not closure/release checkpoint",
     "main_merge": false,
-    "next_required_action": "Fetch Actions/node proof; then run node/player-text and complete-materialization validators before closure packaging."
+    "next_required_action": "Continue exact direct node materialization from staging at GW02-N01; fetch-back each safe shard group; after 360/360 run full node/player-text/aggregate and record-hash-index validation before closure packaging."
   }
 }

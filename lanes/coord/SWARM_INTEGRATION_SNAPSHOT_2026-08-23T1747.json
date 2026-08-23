@@ -1,0 +1,144 @@
+{
+  "schema": "R06_SWARM_COORD_SNAPSHOT_v1",
+  "observed_at": "2026-08-23T17:47:00+03:00",
+  "authority": {
+    "handoff_state": "AUTONOMOUS_SWARM_ACTIVE",
+    "phase": "PARALLEL_CONTENT_AND_PRODUCTION_ACTIVE",
+    "production_authorized": true,
+    "primary_runtime": "WINDOWS_11_X64",
+    "web_portability_required": true,
+    "control_issue": 11,
+    "coordinator_issue": 22,
+    "qa_issue": 23
+  },
+  "main": {
+    "head": "bbc681db9701fa39dbe757dda8f2e341ea4e3c5b",
+    "role": "historical_R05_checkpoint",
+    "merge_authorized": false
+  },
+  "coordinator": {
+    "branch": "r06-swarm-coord-integration",
+    "parent_head_before_this_snapshot": "f29520d0f91889405a688d5ff7227ab65f8887f2"
+  },
+  "lanes": {
+    "DEV01": {
+      "branch": "r06-swarm-dev01-windows-release",
+      "head": "ba4d1a4ff517f1ad67997f35ea0ee366973fc716",
+      "checkpoint": "TERMINAL_FOR_CURRENT_RUN",
+      "notes": "Windows release hardening and real EdgeChromium/WebView2 host probe committed; hosted Actions still fail before steps; no EXE/WebView2/NVDA PASS."
+    },
+    "DEV02": {
+      "branch": "r06-swarm-dev02-semantic-a11y",
+      "head": "0e4ccc7966baff8e060ac8558d5398c8a7337bd9",
+      "checkpoint": "ADVANCED_POST_BOOTSTRAP",
+      "notes": "Semantic/accessibility lane is no longer inactive; latest commit covers scoped keyboard capture regression. Human NVDA acceptance remains unproven."
+    },
+    "DEV03": {
+      "branch": "r06-swarm-dev03-visual-ui",
+      "head": "940451d639c580d8d974496b7fdb1c9525b0f7d3",
+      "checkpoint": "CHECKPOINT",
+      "notes": "Visual contrast/focus/high-contrast/reduced-motion slice; semantic/source/grading truth unchanged; hosted CI pre-step failure."
+    },
+    "DEV04": {
+      "branch": "r06-swarm-dev04-constructor",
+      "head": "23a566bd7a522243f1bff8031d780e9266a7ba71",
+      "checkpoint": "CHECKPOINT",
+      "notes": "Constructor/authoring substantially hardened. QA #67 immediate empty MATCHING/COMPOSITE hole is partially mitigated but systemic per-task publishability contract remains OPEN."
+    },
+    "DEV05": {
+      "branch": "r06-swarm-dev05-runtime-grading",
+      "head": "4332fd690cb55cb850dfaca82417d0037285ffaf",
+      "checkpoint": "FIXING_HEAD_AVAILABLE",
+      "notes": "QA #65 arbitrary player branch target bypass appears materially remediated in current bytes; independent negative regression recheck still required."
+    },
+    "DEV06": {
+      "branch": "r06-swarm-dev06-memory-persistence",
+      "head": "7fc4549ab18abd21f3b949da9e95c4ac34770f07",
+      "checkpoint": "NEW_CONTINUATION_STARTED_FROM_TERMINAL_HEAD",
+      "notes": "PlayerMemoryService/PlayerStateRepository/persistence v3 and stress coverage present. Current continuation started after fresh DEV05/DEV10 reconciliation; integration seam remains."
+    },
+    "DEV07": {
+      "branch": "r06-swarm-dev07-paul-acts",
+      "head": "4be0434acbd46f24660c552353462cc0e30dc645",
+      "checkpoint": "RUNNING_MATERIALIZATION",
+      "notes": "D2 readable node progress 61/386 at durable checkpoint; 325 nodes remain; evidence 0/184 in readable directory; immutable transport only, no semantic regeneration."
+    },
+    "DEV08": {
+      "branch": "r06-swarm-dev08-gospels",
+      "head": "a97b8640f15c81ada83735f6ae03eb83f2bee7bc",
+      "checkpoint": "RUNNING_MATERIALIZATION",
+      "notes": "Witness matrix 240/240, source registry 63/63, chronology 15/15, TX1 3/3, evidence 240/240 and board registries validated/readable; canonical 360-node readable materialization still not accepted complete."
+    },
+    "DEV09": {
+      "branch": "r06-swarm-dev09-ot-otnt",
+      "head": "84dc9c37c3c1201c4074cc665a11d52d891defa4",
+      "checkpoint": "RUNNING_BLOCKED_BY_SOURCE_DEFECT",
+      "notes": "Current diff from D4 legacy source contains tooling/checkpoint only, not semantic repair. QA #60 remains OPEN; immutable D4 closure package itself carries the source-scope defect. Readable N010-N450 materialization also remains incomplete."
+    },
+    "DEV10": {
+      "branch": "r06-swarm-dev10-integration-tests",
+      "head": "a0018efe04e61fc69532572df322e9e795be0793",
+      "checkpoint": "RUNNING_BLOCKED_BY_SECURITY_DEFECT",
+      "notes": "Exact-input and quality-gate tooling present. QA #68 remains reproducible at current head: oversize/unreadable/NUL eligible files can be silently unverified by secret scan."
+    }
+  },
+  "qa_defects": {
+    "60": {
+      "severity": "HIGH",
+      "owner": "DEV09",
+      "state": "OPEN",
+      "integration_blocker": true,
+      "summary": "D4 named-speaker T1 provenance exceeds cited source scope; defect confirmed in immutable closure package."
+    },
+    "65": {
+      "severity": "HIGH",
+      "owner": "DEV05",
+      "state": "REMEDIATION_OBSERVED_RECHECK_PENDING",
+      "integration_blocker": true,
+      "fixing_head": "4332fd690cb55cb850dfaca82417d0037285ffaf",
+      "summary": "Public arbitrary branch-target path appears removed; required negative/state-invariance/adapter-parity regressions still need independent execution/recheck."
+    },
+    "67": {
+      "severity": "MEDIUM",
+      "owner": "DEV04",
+      "state": "PARTIALLY_REMEDIATED_OPEN",
+      "integration_blocker": true,
+      "summary": "Zero MATCHING/COMPOSITE payloads are blocked, but registry-derived minimum contracts and malformed/parameterized regressions for all built-ins remain incomplete."
+    },
+    "68": {
+      "severity": "HIGH",
+      "owner": "DEV10",
+      "state": "OPEN_CURRENT_HEAD",
+      "integration_blocker": true,
+      "summary": "Fail-closed secret scan still silently skips oversize/stat-read/decode/NUL candidates and lacks unverified accounting."
+    }
+  },
+  "cross_lane_seams": [
+    "DEV05 RuntimeApplication must integrate DEV06 PlayerStateRepository/PlayerMemoryService without overwriting runtime grading changes.",
+    "Reconcile Attempt.independent semantics for H1-H5 with mastery guided semantics before integrated persistence/runtime acceptance.",
+    "DEV02 semantic frontend and DEV03 visual CSS must be reconciled without replacing semantic DOM or accessibility behavior.",
+    "DEV04 authoring hooks must integrate with DEV02 semantics and DEV03 visuals after #67 systemic validation is fixed.",
+    "DEV07/DEV08/DEV09 exact readable materialization and package-to-head fidelity must be pinned before DEV10 final preintegration gate."
+  ],
+  "external_release_blockers": [
+    "GitHub-hosted Actions repeatedly terminate before workflow steps/logs on multiple lanes; this is not evidence of product test failure and provides no PASS.",
+    "Real Windows 11 x64 packaged application execution is not independently accepted.",
+    "Actual Edge/WebView2 application startup/rendering on target runtime is not independently accepted.",
+    "No-admin launch from Cyrillic/space paths is not independently accepted.",
+    "Human NVDA browse/focus/keyboard acceptance is not run/accepted."
+  ],
+  "integration": {
+    "terminal_inputs_ready_for_final_candidate": false,
+    "exact_integrated_candidate_ready": false,
+    "audit_ready": false,
+    "main_merge_authorized": false,
+    "safe_next_actions": [
+      "DEV09 fix QA #60 in source-truth lineage and add deterministic speaker-scope regressions before further D4 acceptance claims.",
+      "DEV10 fix QA #68 fail-closed secret scanning and unverified accounting.",
+      "DEV04 complete registry-derived per-task publishability contracts and parameterized regressions for QA #67.",
+      "QA independently execute/recheck DEV05 fixing head 4332fd... for #65 before closure.",
+      "Continue D2/D3/D4 immutable readable materialization and exact readback without semantic regeneration.",
+      "Coordinator must re-pin all heads after any lane advance before assembling an isolated integration candidate."
+    ]
+  }
+}

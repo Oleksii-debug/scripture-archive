@@ -1,0 +1,53 @@
+{
+  "schema": "DEV08_GOSPEL_NODE_SLICE_QA_v1",
+  "slice": "GW-01",
+  "node_range": "GW01-N01..GW01-N24",
+  "records": 24,
+  "unique_node_ids": 24,
+  "source_spans": [
+    "immutable staging D3_MATERIALIZATION/nodes/part_001.jsonl records 1..22",
+    "immutable staging D3_MATERIALIZATION/nodes/part_002.jsonl records 1..2"
+  ],
+  "source_truth_changed": false,
+  "readable_shards": 9,
+  "git_blob_fidelity": "9/9 PASS",
+  "subset_aggregate_sha256": "b79dd877addad367c2bd195f7deae0efd34277e312e10247d2771b8de1c82d31",
+  "confidence_counts": {"T1": 15, "T2": 8, "D1": 1},
+  "tx1_nodes": 3,
+  "task_type_counts": {
+    "EVIDENCE_SELECT": 4,
+    "SHORT_TEXT": 4,
+    "SPEAKER_RECIPIENT": 4,
+    "CLAIM_EVIDENCE": 4,
+    "SINGLE_CHOICE": 1,
+    "COMBOBOX_SELECT": 1,
+    "PARALLEL_WITNESS_COMPARE": 1,
+    "LONG_TEXT": 1,
+    "MULTI_SELECT": 1,
+    "ORDERING": 1,
+    "MATCHING": 1,
+    "COMPOSITE_MULTI_STEP": 1
+  },
+  "checks": {
+    "player_prompt_nonempty": "24/24 PASS",
+    "success_feedback_nonempty": "24/24 PASS",
+    "failure_feedback_nonempty": "24/24 PASS",
+    "functional_nonvisual_equivalent_nonempty": "24/24 PASS",
+    "H1_through_H7_complete": "24/24 PASS",
+    "runtime_grader_key_present": "24/24 PASS",
+    "keyboard_linear_contract": "24/24 PASS",
+    "translation_neutral_contract": "24/24 PASS",
+    "not_stated_valid_when_scope_supports": "24/24 PASS",
+    "TX1_pregrading_note_present_when_flagged": "3/3 PASS",
+    "on_correct_chain": "GW01-N01..N24 -> MISSION_COMPLETE PASS"
+  },
+  "source_safety": {
+    "false_harmonization_added": false,
+    "witness_detail_transfer_added": false,
+    "omission_treated_as_denial_added": false,
+    "TX1_used_as_confidence": false,
+    "forced_merged_chronology": false
+  },
+  "status": "SLICE_PASS_NOT_GLOBAL_CLOSURE",
+  "next": "Continue exact connector-safe materialization at GW02-N01; full 360-node aggregate and closure remain pending."
+}

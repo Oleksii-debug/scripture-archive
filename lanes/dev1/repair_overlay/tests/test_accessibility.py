@@ -49,6 +49,8 @@ class AccessibilityTests(unittest.TestCase):
         keymap = (self.front / 'keymap-ui.js').read_text(encoding='utf-8')
         self.assertIn("if(e.key==='Escape'){this.clearCapture();return}", hotkeys)
         self.assertIn("if(e.key==='Tab')return", hotkeys)
+        self.assertIn('captureScope', hotkeys)
+        self.assertIn("setCapture(binding=>{inp.value=binding;byId('shortcut-error').textContent=''},inp)", keymap)
         self.assertIn("closest?.('textarea", hotkeys)
         self.assertIn("addEventListener('close'", keymap)
         self.assertIn('focusSoon(this.shortcutReturn)', keymap)

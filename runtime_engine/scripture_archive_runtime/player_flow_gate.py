@@ -54,6 +54,19 @@ def _require_accessibility_event(event: Any, *, node_id: str, expected_type: str
             raise PlayerFlowGateError(f"{node_id}: accessibility {expected_type}.{field} is empty")
 
 
+def _require_ground_truth_provenance(value: Any, *, lane: str, node_id: str) -> str:
+    if not isinstance(value, Mapping):
+        raise PlayerFlowGateError(f"{lane}:{node_id}: ground_truth_provenance missing from player payload")
+    if value.get("schema") != "GROUND_TRUTH_PROVENANCE_v1":
+        raise PlayerFlowGateError(f"{lane}:{node_id}: ground_truth_provenance schema mismatch")
+    if value.get("release_pass") is not True:
+        raise PlayerFlowGateError(f"{lane}:{node_id}: ground_truth_provenance is not release-pass")
+    provenance_class = str(value.get("class") or "").strip()
+    if not provenance_class:
+        raise PlayerFlowGateError(f"{lane}:{node_id}: ground_truth_provenance class missing")
+    return provenance_class
+
+
 def run_player_flow_gate(
     inputs: Sequence[Any],
     *,
@@ -87,6 +100,7 @@ def run_player_flow_gate(
     prepared: list[tuple[str, Mapping[str, Any], Mapping[str, Any], Any]] = []
     seen_ids: set[str] = set()
     task_type_counts: dict[str, int] = {}
+    provenance_class_counts: dict[str, int] = {}
     for item in sorted(inputs, key=lambda row: str(row.expectation.lane)):
         lane = str(item.expectation.lane)
         for raw in _node_records(item):
@@ -133,6 +147,10 @@ def run_player_flow_gate(
             nonvisual = task_payload.get("functional_nonvisual_equivalent")
             if not isinstance(nonvisual, str) or not nonvisual.strip():
                 raise PlayerFlowGateError(f"{lane}:{node_id}: nonvisual equivalent missing from player payload")
+            provenance_class = _require_ground_truth_provenance(
+                task_payload.get("ground_truth_provenance"), lane=lane, node_id=node_id
+            )
+            provenance_class_counts[provenance_class] = provenance_class_counts.get(provenance_class, 0) + 1
             load_pass += 1
             task_type = str(task_payload.get("task_type") or "<missing>")
             task_type_counts[task_type] = task_type_counts.get(task_type, 0) + 1
@@ -203,6 +221,11 @@ def run_player_flow_gate(
             f"player session shown-node count mismatch: {len(set(shown))} != {policy.expected_nodes}"
         )
 
+    if sum(provenance_class_counts.values()) != policy.expected_nodes:
+        raise PlayerFlowGateError(
+            "ground-truth provenance count does not cover every player-flow node"
+        )
+
     return {
         "schema": "R06_STAGE05_PLAYER_FLOW_GATE_RESULT_v1",
         "status": "PASS",
@@ -218,6 +241,7 @@ def run_player_flow_gate(
         "mistake_count": 0,
         "session_unique_shown_count": len(set(shown)),
         "task_type_counts": dict(sorted(task_type_counts.items())),
+        "ground_truth_provenance_class_counts": dict(sorted(provenance_class_counts.items())),
         "persistence_gate": "SEPARATE_REQUIRED",
         "security_gate": "SEPARATE_REQUIRED",
         "real_ui_nvda_gate": "SEPARATE_REQUIRED",

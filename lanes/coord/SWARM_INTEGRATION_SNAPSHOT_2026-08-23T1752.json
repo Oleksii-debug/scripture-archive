@@ -1,0 +1,84 @@
+{
+  "schema": "R06_SWARM_COORD_SNAPSHOT_v1",
+  "observed_at": "2026-08-23T17:52:00+03:00",
+  "authority": {
+    "handoff_state": "AUTONOMOUS_SWARM_ACTIVE",
+    "phase": "PARALLEL_CONTENT_AND_PRODUCTION_ACTIVE",
+    "production_authorized": true,
+    "primary_runtime": "WINDOWS_11_X64",
+    "web_portability_required": true,
+    "control_issue": 11,
+    "coordinator_issue": 22,
+    "qa_issue": 23
+  },
+  "main": {
+    "head": "bbc681db9701fa39dbe757dda8f2e341ea4e3c5b",
+    "role": "historical_R05_checkpoint",
+    "merge_authorized": false
+  },
+  "coordinator": {
+    "branch": "r06-swarm-coord-integration",
+    "pre_snapshot_head": "1dd6427da657f23d45c044451042ce91f5ac2883",
+    "integrated_inputs": {
+      "DEV06": {
+        "source_head": "7fc4549ab18abd21f3b949da9e95c4ac34770f07",
+        "scope": "terminal memory/persistence slice",
+        "final_acceptance": false
+      },
+      "DEV01": {
+        "source_head": "ba4d1a4ff517f1ad67997f35ea0ee366973fc716",
+        "integration_commit": "1dd6427da657f23d45c044451042ce91f5ac2883",
+        "scope": "terminal Windows release-hardening slice",
+        "final_acceptance": false,
+        "release_note": "No Windows/WebView2/EXE/NVDA PASS; hosted Actions ended before steps."
+      }
+    }
+  },
+  "lane_heads": {
+    "DEV01": "ba4d1a4ff517f1ad67997f35ea0ee366973fc716",
+    "DEV02": "0e4ccc7966baff8e060ac8558d5398c8a7337bd9",
+    "DEV03": "940451d639c580d8d974496b7fdb1c9525b0f7d3",
+    "DEV04": "23a566bd7a522243f1bff8031d780e9266a7ba71",
+    "DEV05": "4332fd690cb55cb850dfaca82417d0037285ffaf",
+    "DEV06": "7fc4549ab18abd21f3b949da9e95c4ac34770f07",
+    "DEV07": "4be0434acbd46f24660c552353462cc0e30dc645",
+    "DEV08": "a97b8640f15c81ada83735f6ae03eb83f2bee7bc",
+    "DEV09": "84dc9c37c3c1201c4074cc665a11d52d891defa4",
+    "DEV10": "a0018efe04e61fc69532572df322e9e795be0793"
+  },
+  "qa_defects": {
+    "60": {"severity": "HIGH", "owner": "DEV09", "state": "OPEN", "blocks_integration": true},
+    "65": {"severity": "HIGH", "owner": "DEV05", "state": "FIXING_HEAD_AVAILABLE_QA_RECHECK_PENDING", "fixing_head": "4332fd690cb55cb850dfaca82417d0037285ffaf", "blocks_integration": true},
+    "67": {"severity": "MEDIUM", "owner": "DEV04", "state": "PARTIAL_REMEDIATION_QA_RECHECK_PENDING", "head": "23a566bd7a522243f1bff8031d780e9266a7ba71", "blocks_integration": true},
+    "68": {"severity": "HIGH", "owner": "DEV10", "state": "OPEN_CURRENT_HEAD", "head": "a0018efe04e61fc69532572df322e9e795be0793", "blocks_integration": true}
+  },
+  "materialization": {
+    "DEV07_D2": "61/386 readable nodes; 0/184 readable evidence; nonterminal",
+    "DEV08_D3": "witness/evidence/registries readable, canonical 360-node materialization not accepted complete",
+    "DEV09_D4": "readable N001-N009 only; N010-N450 incomplete; QA #60 semantic source defect remains"
+  },
+  "cross_lane_seams": [
+    "DEV05 RuntimeApplication must integrate with already-intaken DEV06 PlayerStateRepository/PlayerMemoryService without overwriting grading changes.",
+    "Attempt.independent semantics for H1-H5 still disagree with guided mastery semantics and require explicit reconciliation.",
+    "DEV04 constructor task minimums remain incomplete systemically despite blocking zero MATCHING/COMPOSITE publish candidates.",
+    "DEV10 release secret scan remains fail-open for unverified eligible bytes until QA #68 is fixed."
+  ],
+  "integration": {
+    "isolated_candidate_active": true,
+    "isolated_candidate_contains": [
+      "DEV06 terminal memory/persistence @ 7fc4549ab18abd21f3b949da9e95c4ac34770f07",
+      "DEV01 terminal Windows release-hardening @ ba4d1a4ff517f1ad67997f35ea0ee366973fc716"
+    ],
+    "exact_integrated_candidate_ready": false,
+    "audit_ready": false,
+    "main_merge_authorized": false,
+    "next": [
+      "QA recheck DEV05 4332fd for #65.",
+      "DEV09 fix #60 source-truth scope before D4 acceptance.",
+      "DEV10 fix #68 fail-closed scan accounting.",
+      "DEV04 finish registry-derived task-specific publishability minimums for #67.",
+      "Continue DEV07/DEV08/DEV09 immutable materialization and exact readback.",
+      "Do not integrate DEV05 with DEV06 until #65 and Attempt.independent/guided seam are resolved."
+    ]
+  }
+}

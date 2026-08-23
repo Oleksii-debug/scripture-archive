@@ -1,12 +1,19 @@
 name: R06 DEV1 Platform CI
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - r06-dev1-platform-windows-constructor
+      - r06-swarm-dev01-windows-release
+    paths:
+      - 'lanes/dev1/**'
+      - 'runtime_engine/**'
+      - '.github/workflows/r06-dev1-platform.yml'
   pull_request:
     paths:
       - 'lanes/dev1/**'
+      - 'runtime_engine/**'
       - '.github/workflows/r06-dev1-platform.yml'
 
 jobs:
@@ -33,17 +40,22 @@ jobs:
       - name: Compile and test repaired source
         shell: bash
         run: |
-          python -m compileall -q r06_platform/scripture_archive_platform r06_platform/tests
+          python -m compileall -q r06_platform/scripture_archive_platform r06_platform/tests r06_platform/packaging
           (cd r06_platform && python -m unittest discover -s tests -v)
           node --check r06_platform/frontend/renderers.js
           python r06_platform/tools_smoke.py
+          python r06_platform/packaging/windows_release.py diagnose \
+            --platform-root r06_platform \
+            --output r06_platform/diagnostics-linux.json
       - name: Archive repaired readable source
         shell: bash
         run: python -c "import shutil; shutil.make_archive('DEV1_R06_PLATFORM_SOURCE_REPAIRED','zip','.', 'r06_platform')"
       - uses: actions/upload-artifact@v4
         with:
           name: DEV1-R06-Repaired-Readable-Source
-          path: DEV1_R06_PLATFORM_SOURCE_REPAIRED.zip
+          path: |
+            DEV1_R06_PLATFORM_SOURCE_REPAIRED.zip
+            r06_platform/diagnostics-linux.json
           if-no-files-found: error
 
   windows-build-test:
@@ -72,7 +84,7 @@ jobs:
       - name: Compile and test repaired source on Windows
         shell: pwsh
         run: |
-          python -m compileall -q r06_platform\scripture_archive_platform r06_platform\tests
+          python -m compileall -q r06_platform\scripture_archive_platform r06_platform\tests r06_platform\packaging
           Push-Location r06_platform
           python -m unittest discover -s tests -v
           Pop-Location
@@ -81,8 +93,15 @@ jobs:
       - name: Build Windows developer artifact
         shell: pwsh
         run: ./r06_platform/packaging/build_windows.ps1
+      - name: Probe packaged process liveness
+        shell: pwsh
+        run: |
+          ./r06_platform/packaging/probe_packaged_startup.ps1 `
+            -Executable ./r06_platform/dist/ScriptureArchive-R06-DEV01.exe `
+            -ProbeSeconds 8 `
+            -OutputJson ./r06_platform/dist/packaged_startup_probe.json
       - uses: actions/upload-artifact@v4
         with:
-          name: ScriptureArchive-R06-DEV1-Windows
+          name: ScriptureArchive-R06-DEV01-Windows
           path: r06_platform/dist/**
           if-no-files-found: error

@@ -1,0 +1,95 @@
+{
+  "schema": "DEV08_READABLE_MATERIALIZATION_STATUS_v1",
+  "role": "SWARM_DEV08_GOSPELS",
+  "branch": "r06-swarm-dev08-gospels",
+  "legacy_parent": "r06-dev3-gospels-materialization-05",
+  "legacy_parent_bootstrap_head": "35175b4841fc74a044271b78b7e49544588b7d73",
+  "source_truth": {
+    "repair_package": "DEV_LANE_SCRIPTURE_R06_D3_REPAIR_01.zip",
+    "repair_package_sha256": "9a302d32421ad2c9c704290eec3dbe5d84d28e5cc8c7d41daf0a430df5646913",
+    "staging_package": "DEV_B_STAGE05_RECORD_SPLIT_STAGING.zip",
+    "staging_package_drive_id": "1TgqHaCddxCGOmQjogcq40Jb4kOrf3NAW",
+    "staging_package_sha256": "b681ea26d985eb754bde02a77254d40ab0920061edb9226fae7921a6740a06c0",
+    "staging_zip_crc": "PASS",
+    "source_truth_changed_by_dev08": false
+  },
+  "readable_materialization": {
+    "witness_matrix": {
+      "status": "COMPLETE",
+      "records": 240,
+      "aggregate_sha256": "3bf9326213e97e22ccdf2429bf10722c7df4d521457ca1a72dbb96f5430f9261",
+      "witness_counts": {"John": 60, "Luke": 60, "Mark": 60, "Matthew": 60},
+      "confidence_counts": {"T1": 227, "T2": 13},
+      "tx1_records": 10,
+      "dev08_added_range": "GW-WM-0080..GW-WM-0216",
+      "dev08_added_records": 137
+    },
+    "sources": {
+      "status": "COMPLETE",
+      "records": 63,
+      "primary_scripture": 60,
+      "textual_variant_reference": 3,
+      "aggregate_sha256": "9a775d162a68a8858bcb410d1d4160f2363949dcab807b12d30a2bc1c2dc0466"
+    },
+    "chronology": {
+      "status": "COMPLETE",
+      "records": 15,
+      "aggregate_sha256": "98c115fe5fd2b887a14207d3e16e67f5fca62f80ab684ba5b4d370443c2ceb79",
+      "explicit_forced_single_answer_true": 0
+    },
+    "tx1_registry": {
+      "status": "COMPLETE",
+      "records": 3,
+      "aggregate_sha256": "d872e71bdc2e6c96bcc5867c703e0726d00ac5272e8afefe0c2aced5c8ab0d92",
+      "confidence_separation": "PRESERVED"
+    },
+    "evidence_board": {
+      "status": "COMPLETE_READABLE",
+      "person": {"records": 96, "aggregate_sha256": "8246ef656e49fc4564ec47ee7c16016c33498df4c5d43bc4214f74d977407643"},
+      "place": {"records": 100, "aggregate_sha256": "fa725887a9a67047f34e5ae3e204ddba05cb876e01cb5ae45e1dfc248288c63e"},
+      "event": {"records": 15, "aggregate_sha256": "b0383e033bc05b5b71ff794648f6f1426033a21a58ef3fffd9af74283b35c5e3"},
+      "claim": {"records": 360, "aggregate_sha256": "aa3a6a1e57fba32f344a48c74b3b5c771ea519188d2426f0e2dc29d0c0449151"},
+      "evidence": {"records": 240, "aggregate_sha256": "e908835f05b572edea82cfe35460c6aaea8fa8d829e35e308a144b9f357a0335"},
+      "witness_relation": {"records": 240, "aggregate_sha256": "b749c84525f64acc0ee8f164bb3edd4a3d3061fc525ac7d2d35c1bb5dd9c9086"}
+    },
+    "nodes": {
+      "status": "PENDING_ACTIONS_MATERIALIZATION",
+      "expected_records": 360,
+      "expected_aggregate_sha256": "6bc9ceadb9a02f7eef92cf70df004f3781a3e85732b1f5d17cd93c2e876896e6",
+      "expected_confidence_counts": {"D1": 10, "T1": 242, "T2": 108},
+      "expected_tx1_nodes": 22,
+      "last_direct_fetch": "nodes directory absent before DEV08 materializer trigger",
+      "materializer_workflow": ".github/workflows/dev08-gospel-node-materialize.yml",
+      "trigger": "lanes/dev3/closure03_payload/DEV08_NODE_TRIGGER",
+      "completion_rule": "Do not mark complete until bot commit/proof is fetched back and aggregate equals expected."
+    },
+    "record_hash_indexes": {
+      "status": "PARTIAL",
+      "staging_authority": "PRESENT_IN_IMMUTABLE_STAGING_PACKAGE",
+      "readable_github_index": "NOT_YET_MATERIALIZED_FOR_ALL_COLLECTIONS",
+      "node_workflow_will_emit": "DEV08_NODE_RECORD_HASH_INDEX.json"
+    }
+  },
+  "validators": {
+    "registry_validator": "validate_dev08_gospel_registries.py",
+    "evidence_board_validator": "validate_dev08_evidence_board.py",
+    "immutable_staging_dry_run": "PASS_AFTER_VALIDATOR_CONTRACT_FIXES",
+    "content_truth_changed_during_validator_fixes": false
+  },
+  "source_safety_sentinels": [
+    "GW-WM-0090",
+    "GW-WM-0091",
+    "GW-WM-0092",
+    "GW-WM-0107",
+    "GW-WM-0141",
+    "GW-WM-0167",
+    "GW-WM-0171",
+    "GW-WM-0213"
+  ],
+  "governance": {
+    "drive_package_created": false,
+    "reason": "not closure/release checkpoint",
+    "main_merge": false,
+    "next_required_action": "Fetch Actions/node proof; then run node/player-text and complete-materialization validators before closure packaging."
+  }
+}

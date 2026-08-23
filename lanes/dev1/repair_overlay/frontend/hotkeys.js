@@ -1,12 +1,15 @@
 function eventBinding(e){const parts=[];if(e.ctrlKey)parts.push('Ctrl');if(e.altKey)parts.push('Alt');if(e.shiftKey)parts.push('Shift');if(e.metaKey)parts.push('Meta');let key=e.key;if(['Control','Alt','Shift','Meta'].includes(key))return null;const map={' ':'Space','ArrowRight':'ArrowRight','ArrowLeft':'ArrowLeft','ArrowUp':'ArrowUp','ArrowDown':'ArrowDown','Escape':'Escape','Enter':'Enter','Home':'Home','Tab':'Tab'};key=map[key]||((key.length===1)?key.toUpperCase():key);parts.push(key);return parts.join('+')}
 function editableTarget(target){const el=target?.nodeType===3?target.parentElement:target;return !!el?.closest?.('textarea,input:not([type=button]):not([type=checkbox]):not([type=radio]),select,[contenteditable="true"],[contenteditable=""]')}
 export class HotkeyDispatcher{
- constructor(execute){this.execute=execute;this.actions=[];this.capture=null;document.addEventListener('keydown',e=>this.onKey(e),true)}
+ constructor(execute){this.execute=execute;this.actions=[];this.capture=null;this.captureScope=null;document.addEventListener('keydown',e=>this.onKey(e),true)}
  setActions(a){this.actions=a||[]}
- setCapture(fn){this.capture=fn}
- clearCapture(){this.capture=null}
+ setCapture(fn,scope=null){this.capture=fn;this.captureScope=scope}
+ clearCapture(){this.capture=null;this.captureScope=null}
  onKey(e){
    if(this.capture){
+     // Capture only while focus is in the explicitly scoped capture control.
+     // Once Tab moves to Save/Cancel, native button/dialog keyboard behavior wins.
+     if(this.captureScope&&e.target!==this.captureScope&&!this.captureScope.contains?.(e.target))return
      // Escape must remain the native modal-cancel key and Tab/Shift+Tab must
      // continue to move focus. They are never swallowed by shortcut capture.
      if(e.key==='Escape'){this.clearCapture();return}

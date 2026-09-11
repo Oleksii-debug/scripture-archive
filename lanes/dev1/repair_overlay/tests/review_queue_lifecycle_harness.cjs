@@ -246,8 +246,9 @@ async function waitForQueueCalls(queueDeferreds, expected) {
   assert.strictEqual(heading.focusCount, focusAfterNew, 'late pre-leave completion stole focus');
   assert.strictEqual(status.textContent, statusAfterNew, 'late pre-leave completion rewrote status');
 
-  // Two refreshes overlap. The second generation resolves first and must remain visible.
+  // Two refreshes overlap. Ensure refresh A reaches the runtime queue await before B supersedes it.
   refresh.click();
+  await waitForQueueCalls(queueDeferreds, 3);
   refresh.click();
   await waitForQueueCalls(queueDeferreds, 4);
   queueDeferreds[3].resolve(queuePayload('QUEUE-REFRESH-NEW'));

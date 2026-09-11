@@ -151,6 +151,10 @@ class DossierCoreTests(unittest.TestCase):
             DossierSubject("", DossierKind.PERSON, "Paul")
         with self.assertRaises(ValueError):
             DossierSubject("PERSON-PAUL", DossierKind.PERSON, " ")
+        with self.assertRaises(ValueError):
+            DossierSubject("PERSON-PAUL", "PERSON", "Paul")
+        with self.assertRaises(ValueError):
+            DossierSubject(123, DossierKind.PERSON, "Paul")
 
 
 if __name__ == "__main__":

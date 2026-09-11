@@ -127,7 +127,8 @@ def project_cross_testament(
 
     No link is created from topical similarity, shared entities, claims, or
     proximity. A Relation must explicitly name both passage IDs. By default,
-    both passages must be represented by unlocked evidence.
+    every passage named by a relation must be represented by unlocked evidence
+    before any part of that relation is exposed.
     """
     if not isinstance(runtime, EvidenceRuntime):
         raise TypeError("runtime must be an EvidenceRuntime")
@@ -167,9 +168,14 @@ def project_cross_testament(
                     f"Relation {relation.relation_id} references unknown passage_id {passage_id}"
                 )
 
+        # A multi-passage relation is one explicit assertion. Showing a visible
+        # subset would leak that hidden support exists and could change the
+        # assertion's meaning, so suppress the whole relation until every
+        # declared passage endpoint is visible.
+        if any(passage_id not in visible_provenance for passage_id in ordered_ids):
+            continue
+
         for left_id, right_id in combinations(ordered_ids, 2):
-            if left_id not in visible_provenance or right_id not in visible_provenance:
-                continue
             left = all_passages[left_id]
             right = all_passages[right_id]
             _validate_relation_witness(

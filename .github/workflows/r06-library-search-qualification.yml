@@ -1,0 +1,42 @@
+name: R06 Library Search Qualification
+
+on:
+  push:
+    branches:
+      - r06-cc-library-search-9f2a
+  pull_request:
+    paths:
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/content/library.py'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/application/service.py'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/transport/contracts.py'
+      - 'lanes/dev1/repair_overlay/tests/test_library_search.py'
+      - 'tools/verify_library_search_overlay.py'
+      - '.github/workflows/r06-library-search-qualification.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: r06-library-search-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-overlay-qualification:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Confirm exact source checkout
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}" || exit 1
+          git status --porcelain
+      - name: Execute Library/Search qualification
+        run: python tools/verify_library_search_overlay.py

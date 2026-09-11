@@ -115,24 +115,44 @@ class ApplicationUpdateTests(unittest.TestCase):
                 verify_local_update(manifest, renamed, current_version="1.1.0")
 
     def test_direct_manifest_construction_cannot_bypass_validation(self):
-        unsafe = ApplicationUpdateManifest(
-            product_id="scripture-archive",
-            target_platform="windows-x64",
-            target_version="1.2.0",
-            source_head="not-a-git-head",
-            artifact_name="../update.zip",
-            artifact_size=len(ARTIFACT),
-            artifact_sha256=hashlib.sha256(ARTIFACT).hexdigest(),
+        valid = manifest_dict()
+        unsafe_cases = (
+            {"source_head": "not-a-git-head"},
+            {"artifact_name": "../update.zip"},
+            {"artifact_name": "CON.zip"},
+            {"artifact_sha256": "0" * 63},
+            {"artifact_size": 0},
+            {"artifact_size": True},
+            {"schema": "scripture.application-update.v0"},
         )
-        with self.assertRaises(ApplicationUpdateError):
-            verify_artifact_bytes(unsafe, ARTIFACT, current_version="1.1.0")
+        for overrides in unsafe_cases:
+            with self.subTest(overrides=overrides):
+                values = dict(valid)
+                values.update(overrides)
+                unsafe = ApplicationUpdateManifest(
+                    product_id=values["product_id"],
+                    target_platform=values["target_platform"],
+                    target_version=values["target_version"],
+                    source_head=values["source_head"],
+                    artifact_name=values["artifact_name"],
+                    artifact_size=values["artifact_size"],
+                    artifact_sha256=values["artifact_sha256"],
+                    schema=values["schema"],
+                )
+                with self.assertRaises(ApplicationUpdateError):
+                    verify_artifact_bytes(unsafe, ARTIFACT, current_version="1.1.0")
 
     def test_downgrade_opt_in_requires_real_boolean(self):
         manifest = ApplicationUpdateManifest.from_mapping(manifest_dict(target_version="1.0.0"))
-        with self.assertRaisesRegex(ApplicationUpdateError, "must be a boolean"):
-            verify_artifact_bytes(
-                manifest, ARTIFACT, current_version="1.1.0", allow_downgrade="yes"
-            )
+        for unsafe_opt_in in ("false", "yes", 1, 0, None):
+            with self.subTest(unsafe_opt_in=unsafe_opt_in):
+                with self.assertRaisesRegex(ApplicationUpdateError, "must be a boolean"):
+                    verify_artifact_bytes(
+                        manifest,
+                        ARTIFACT,
+                        current_version="1.1.0",
+                        allow_downgrade=unsafe_opt_in,
+                    )
 
     def test_source_head_hash_and_size_bounds_are_strict(self):
         bad_cases = (

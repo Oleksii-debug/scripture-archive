@@ -47,14 +47,26 @@ class RuntimeApplication:
             )
         return decision
 
+    @staticmethod
+    def _task_response(task: TaskDefinition, provenance: ProvenanceDecision) -> dict[str, Any]:
+        """Render a task DTO without mutating player progression state."""
+        return {"api_version": RuntimeApplication.API_VERSION, "task": {"node_id": task.node_id, "mission_id": task.mission_id, "task_type": task.task_type, "prompt": task.prompt, "source_scope": task.source_scope, "hints_available": len(task.hints), "tx1": task.tx1, "confidence": task.confidence.value, "answer_contract": answer_contract_descriptor(task.task_type), "ground_truth_provenance": {"schema": PROVENANCE_CONTRACT_VERSION, "class": provenance.provenance_class, "release_pass": provenance.release_pass, "explicit_representation": provenance.explicit_representation, "warning": provenance.warning}, "functional_nonvisual_equivalent": task.raw.get("functional_nonvisual_equivalent", "")}}
+
     def load_task(self, node_id: str) -> dict[str, Any]:
+        """Load a runtime-authorized task and make it current.
+
+        This method is the internal state transition used by canonical runtime progression.
+        Player-facing `runtime.v1 load_task` requests are constrained separately by
+        `_load_task_command` so a caller cannot turn this internal transition into an
+        arbitrary node-jump capability.
+        """
         task = self.content.get(node_id)
         provenance = self._require_release_ground_truth(task)
         self.current_node_id = node_id
         self._active_hint_counts[node_id] = 0
         if node_id not in self.session.shown_node_ids: self.session.shown_node_ids.append(node_id)
         self.session.recent_task_families.append(task.task_type); self._visit_counts[node_id] = self._visit_counts.get(node_id, 0) + 1
-        return {"api_version": self.API_VERSION, "task": {"node_id": task.node_id, "mission_id": task.mission_id, "task_type": task.task_type, "prompt": task.prompt, "source_scope": task.source_scope, "hints_available": len(task.hints), "tx1": task.tx1, "confidence": task.confidence.value, "answer_contract": answer_contract_descriptor(task.task_type), "ground_truth_provenance": {"schema": PROVENANCE_CONTRACT_VERSION, "class": provenance.provenance_class, "release_pass": provenance.release_pass, "explicit_representation": provenance.explicit_representation, "warning": provenance.warning}, "functional_nonvisual_equivalent": task.raw.get("functional_nonvisual_equivalent", "")}}
+        return self._task_response(task, provenance)
 
     def submit_answer(self, node_id: str, answer: Any) -> dict[str, Any]:
         if node_id != self.current_node_id: raise ValidationError("submit_answer node_id is not the currently loaded task")
@@ -123,6 +135,24 @@ class RuntimeApplication:
         self._active_hint_counts = {}
         return {"api_version": self.API_VERSION, "restored": True, "current_node_id": self.current_node_id, "schema_version": state["schema_version"]}
 
+    def _load_task_command(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+        """Player-facing entry policy for runtime.v1 `load_task`.
+
+        A player may choose an initial entry only while no runtime node is current. Once
+        progression has established a current node, a direct load may only re-render that
+        same node and must not reset hints, visits, history, mastery, evidence, or session
+        state. Moving to any other node is runtime-owned and must happen through `next`
+        (or a future explicitly authorized mission-entry capability).
+        """
+        node_id = str(payload["node_id"])
+        if self.current_node_id is None:
+            return self.load_task(node_id)
+        if node_id != self.current_node_id:
+            raise ValidationError("runtime.v1 player load_task cannot change current node; use next")
+        task = self.content.get(node_id)
+        provenance = self._require_release_ground_truth(task)
+        return self._task_response(task, provenance)
+
     def _submit_command(self, payload: Mapping[str, Any]) -> dict[str, Any]:
         """Strict public runtime.v1 submission boundary.
 
@@ -147,6 +177,6 @@ class RuntimeApplication:
 
     def handle(self, command: Mapping[str, Any] | CommandEnvelope) -> dict[str, Any]:
         envelope = command if isinstance(command, CommandEnvelope) else CommandEnvelope.from_mapping(command); p = envelope.payload
-        routes = {"load_task": lambda: self.load_task(str(p["node_id"])), "submit_answer": lambda: self._submit_command(p), "request_hint": lambda: self.request_hint(str(p["node_id"])), "next": lambda: self._next_command(p), "save": self.save, "restore": self.restore, "get_mastery": self.get_mastery, "get_evidence": self.get_evidence}
+        routes = {"load_task": lambda: self._load_task_command(p), "submit_answer": lambda: self._submit_command(p), "request_hint": lambda: self.request_hint(str(p["node_id"])), "next": lambda: self._next_command(p), "save": self.save, "restore": self.restore, "get_mastery": self.get_mastery, "get_evidence": self.get_evidence}
         if envelope.command not in routes: raise ValidationError("Unsupported command")
         return {"request_id": envelope.request_id, **routes[envelope.command]()}

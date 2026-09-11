@@ -1,0 +1,119 @@
+name: R06 W2-26 D3 Closure Diagnostic
+
+on:
+  push:
+    branches:
+      - r06-wave2-w26-d3-nodes-005-008
+    paths:
+      - '.github/workflows/r06-w2-26-d3-closure-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  capture-divergence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: r06-wave2-w26-d3-nodes-005-008
+          fetch-depth: 1
+
+      - name: Reconstruct verified closure payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          STAGE=lanes/dev3/closure03_payload
+          test "$(find "$STAGE" -maxdepth 1 -name 'part_*.b64' -type f | wc -l)" -eq 51
+          rm -rf /tmp/w2-26-closure /tmp/w2-26-diagnostic
+          mkdir -p /tmp/w2-26-closure/source /tmp/w2-26-diagnostic
+          cat "$STAGE"/part_*.b64 | base64 --decode > /tmp/w2-26-closure/payload.tar.xz
+          echo 'ea8e4d290101a6b1c95e3718844015b90abda0964705bf24b70309fa6062c35a  /tmp/w2-26-closure/payload.tar.xz' | sha256sum -c -
+          tar -xJf /tmp/w2-26-closure/payload.tar.xz -C /tmp/w2-26-closure/source
+
+      - name: Emit exact record hashes and selected source records
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import pathlib
+          import shutil
+
+          source = pathlib.Path('/tmp/w2-26-closure/source')
+          out = pathlib.Path('/tmp/w2-26-diagnostic')
+          sums = source / 'SHA256SUMS.txt'
+          checked = []
+          for line in sums.read_text(encoding='utf-8').splitlines():
+              if not line.strip():
+                  continue
+              expected, rel = line.split(None, 1)
+              rel = rel.strip().lstrip('*')
+              p = source / rel
+              got = hashlib.sha256(p.read_bytes()).hexdigest()
+              assert got == expected, (rel, expected, got)
+              checked.append({'path': rel, 'sha256': got})
+          assert len(checked) == 29, len(checked)
+
+          files = sorted((source / 'nodes').glob('*.json'))
+          assert len(files) == 15, len(files)
+          all_nodes = []
+          file_index = []
+          selected_nodes = []
+          for idx, p in enumerate(files, 1):
+              data = json.loads(p.read_text(encoding='utf-8'))
+              nodes = data['nodes']
+              ids = [n['node_id'] for n in nodes]
+              file_index.append({'index': idx, 'name': p.name, 'records': len(nodes), 'first_node_id': ids[0], 'last_node_id': ids[-1]})
+              all_nodes.extend(nodes)
+              if 5 <= idx <= 8:
+                  selected_nodes.extend(nodes)
+
+          def canon(r):
+              return json.dumps(r, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')
+
+          hashes = {n['node_id']: hashlib.sha256(canon(n)).hexdigest() for n in all_nodes}
+          aggregate = hashlib.sha256(''.join(f'{k}\t{v}\n' for k,v in sorted(hashes.items())).encode('utf-8')).hexdigest()
+          expected = '6bc9ceadb9a02f7eef92cf70df004f3781a3e85732b1f5d17cd93c2e876896e6'
+          diag = {
+              'source_archive_sha256': 'ea8e4d290101a6b1c95e3718844015b90abda0964705bf24b70309fa6062c35a',
+              'shipped_file_hashes_checked': checked,
+              'source_node_files': file_index,
+              'node_count': len(all_nodes),
+              'unique_node_ids': len(set(hashes)),
+              'computed_node_aggregate_sha256': aggregate,
+              'expected_node_aggregate_sha256': expected,
+              'aggregate_matches': aggregate == expected,
+              'record_hashes': hashes,
+          }
+          (out / 'closure_diagnostic.json').write_text(json.dumps(diag, ensure_ascii=False, sort_keys=True, indent=2) + '\n', encoding='utf-8')
+          with (out / 'closure_nodes_canonical.jsonl').open('wb') as f:
+              for n in all_nodes:
+                  f.write(canon(n) + b'\n')
+          with (out / 'source_005_008_canonical.jsonl').open('wb') as f:
+              for n in selected_nodes:
+                  f.write(canon(n) + b'\n')
+          shutil.copy2('/tmp/w2-26-closure/payload.tar.xz', out / 'payload.tar.xz')
+          print(f'W2_26_CLOSURE_DIAGNOSTIC aggregate={aggregate} expected={expected} selected={len(selected_nodes)}')
+          PY
+
+      - name: Upload exact divergence evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: w2-26-d3-closure-diagnostic
+          path: /tmp/w2-26-diagnostic/*
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Fail closed on corpus identity mismatch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/w2-26-diagnostic/closure_diagnostic.json',encoding='utf-8'))
+          assert p['aggregate_matches'], (p['expected_node_aggregate_sha256'], p['computed_node_aggregate_sha256'])
+          PY

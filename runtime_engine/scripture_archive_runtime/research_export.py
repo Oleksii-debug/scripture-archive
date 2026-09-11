@@ -97,9 +97,8 @@ class ResearchExport:
                 f"- Relation IDs: {_md_join(record['relation_ids'])}",
                 "- Passages:",
             ])
-            passages = record["passage_refs"]
-            if passages:
-                for passage in passages:
+            if record["passage_refs"]:
+                for passage in record["passage_refs"]:
                     verse = str(passage["verse_start"])
                     if passage["verse_end"] is not None:
                         verse += f"-{passage['verse_end']}"
@@ -253,6 +252,17 @@ def build_research_export(
     if unknown_unlocked:
         raise ValueError(f"Unlocked evidence missing from runtime: {sorted(unknown_unlocked)}")
 
+    visible_claims = []
+    for claim in runtime.claims.values():
+        required = set(claim.required_evidence_ids)
+        unknown = required - set(runtime.evidence)
+        if unknown:
+            raise ValueError(
+                f"Claim {claim.claim_id} references unknown evidence: {sorted(unknown)}"
+            )
+        if required.issubset(visible_evidence_ids):
+            visible_claims.append(claim)
+
     for note in notes:
         _validate_workspace_evidence_refs(note.evidence_ids, runtime, visible_evidence_ids)
     for row in chronology:
@@ -267,7 +277,7 @@ def build_research_export(
         "workspace_id": workspace_id,
         "title": title,
         "evidence_scope": "all_runtime_evidence" if include_locked_evidence else "unlocked_only",
-        "claims": [_claim_payload(runtime.claims[key]) for key in sorted(runtime.claims)],
+        "claims": [_claim_payload(claim) for claim in sorted(visible_claims, key=lambda item: item.claim_id)],
         "evidence": [_evidence_payload(runtime.evidence[key]) for key in sorted(visible_evidence_ids)],
         "relations": [_relation_payload(row) for row in sorted(visible_relations, key=lambda item: item.relation_id)],
         "workspace_notes": [
@@ -449,15 +459,18 @@ def _md(value: object) -> str:
         text = text.replace(ch, "\\" + ch)
 
     safe_lines: list[str] = []
-    ordered = re.compile(r"^(\s*\d+)\.(\s+)")
+    ordered = re.compile(r"^(\s*\d+)([.)])(\s+)")
     for line in text.split("\n"):
         match = ordered.match(line)
         if match:
-            line = f"{match.group(1)}\\.{match.group(2)}{line[match.end():]}"
+            line = (
+                f"{match.group(1)}\\{match.group(2)}{match.group(3)}"
+                f"{line[match.end():]}"
+            )
         else:
             stripped = line.lstrip()
             indent = line[: len(line) - len(stripped)]
-            if stripped.startswith("#") or stripped.startswith("+ ") or stripped.startswith("- "):
+            if stripped.startswith(("#", "+", "-", "=", "~", ":")):
                 line = indent + "\\" + stripped
         safe_lines.append(line)
     return "  \n".join(safe_lines)

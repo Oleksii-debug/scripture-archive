@@ -3,7 +3,12 @@ from datetime import datetime, timedelta, timezone
 import json
 import unittest
 
-from scripture_archive_runtime.daily_case import DAILY_CASE_SCHEMA, DailyCaseComposer
+from scripture_archive_runtime.daily_case import (
+    DAILY_CASE_SCHEMA,
+    DailyCaseComposer,
+    DailyCaseItem,
+    DailyCasePlan,
+)
 from scripture_archive_runtime.models import (
     PlayerMemory,
     QueueKind,
@@ -183,6 +188,16 @@ class DailyCaseComposerTests(unittest.TestCase):
                 now=NOW,
             )
 
+        with self.assertRaises(ValueError):
+            self.composer.compose(
+                [candidate(" PADDED ")],
+                self.memory,
+                self.session,
+                case_id="case",
+                title="Case",
+                now=NOW,
+            )
+
         naive_due = candidate("NAIVE", queue=QueueKind.DUE, due_at=datetime(2026, 9, 10, 18, 0))
         with self.assertRaises(ValueError):
             self.composer.compose(
@@ -194,9 +209,36 @@ class DailyCaseComposerTests(unittest.TestCase):
                 now=NOW,
             )
 
+    def test_direct_output_construction_cannot_bypass_invariants(self):
+        item = DailyCaseItem(
+            position=1,
+            node_id="NODE-1",
+            task_family="short_text",
+            queue=QueueKind.NEW.value,
+            relation=RetrievalRelation.NONE.value,
+            concept_ids=("concept-a",),
+            passage_keys=("John 1:1",),
+            book_key="John",
+        )
+        plan = DailyCasePlan("case-direct", "Direct Case", (item,))
+        self.assertEqual(plan.to_dict()["schema"], DAILY_CASE_SCHEMA)
+
+        with self.assertRaises(ValueError):
+            DailyCaseItem(0, "NODE-1", "short_text", QueueKind.NEW.value, RetrievalRelation.NONE.value, (), (), None)
+        with self.assertRaises(ValueError):
+            DailyCaseItem(1, " NODE-1", "short_text", QueueKind.NEW.value, RetrievalRelation.NONE.value, (), (), None)
+        with self.assertRaises(ValueError):
+            DailyCaseItem(1, "NODE-1", "short_text", "NOT_A_QUEUE", RetrievalRelation.NONE.value, (), (), None)
+        with self.assertRaises(ValueError):
+            DailyCasePlan("case-direct", "Direct Case", (DailyCaseItem(
+                2, "NODE-2", "short_text", QueueKind.NEW.value, RetrievalRelation.NONE.value, (), (), None
+            ),))
+
     def test_plan_metadata_limit_and_clock_are_bounded(self):
         with self.assertRaises(ValueError):
             self.composer.compose([], self.memory, self.session, case_id=" ", title="Case", now=NOW)
+        with self.assertRaises(ValueError):
+            self.composer.compose([], self.memory, self.session, case_id=" padded ", title="Case", now=NOW)
         with self.assertRaises(ValueError):
             self.composer.compose([], self.memory, self.session, case_id="case", title=" ", now=NOW)
         with self.assertRaises(ValueError):

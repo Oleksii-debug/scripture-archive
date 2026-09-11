@@ -126,6 +126,7 @@ def build_witness_matrix(
     normalized_witnesses = _validate_witnesses(witnesses)
     selected_ids = _select_evidence_ids(
         runtime,
+        witnesses=set(normalized_witnesses),
         evidence_ids=evidence_ids,
         include_locked_evidence=include_locked_evidence,
     )
@@ -216,22 +217,29 @@ def _validate_witnesses(witnesses: Sequence[str]) -> tuple[str, ...]:
 def _select_evidence_ids(
     runtime: EvidenceRuntime,
     *,
+    witnesses: set[str],
     evidence_ids: Iterable[str] | None,
     include_locked_evidence: bool,
 ) -> set[str]:
-    if evidence_ids is None:
-        selected = set(runtime.evidence) if include_locked_evidence else set(runtime.unlocked)
-    else:
-        selected = set()
-        for evidence_id in evidence_ids:
-            if evidence_id not in runtime.evidence:
-                raise KeyError(evidence_id)
-            if not include_locked_evidence and evidence_id not in runtime.unlocked:
-                raise PermissionError(f"Evidence not unlocked: {evidence_id}")
-            selected.add(evidence_id)
-    unknown_unlocked = selected - set(runtime.evidence)
+    allowed = set(runtime.evidence) if include_locked_evidence else set(runtime.unlocked)
+    unknown_unlocked = allowed - set(runtime.evidence)
     if unknown_unlocked:
         raise ValueError(f"Unlocked evidence missing from runtime: {sorted(unknown_unlocked)}")
+
+    if evidence_ids is None:
+        return {
+            evidence_id
+            for evidence_id in allowed
+            if _record_witness_signals(runtime.evidence[evidence_id]) & witnesses
+        }
+
+    selected: set[str] = set()
+    for evidence_id in evidence_ids:
+        if evidence_id not in runtime.evidence:
+            raise KeyError(evidence_id)
+        if not include_locked_evidence and evidence_id not in runtime.unlocked:
+            raise PermissionError(f"Evidence not unlocked: {evidence_id}")
+        selected.add(evidence_id)
     return selected
 
 
@@ -269,6 +277,18 @@ def _parallel_components(
             key=lambda items: items,
         )
     )
+
+
+def _record_witness_signals(record: EvidenceRecord) -> set[str]:
+    signals: set[str] = set()
+    if record.witness and record.witness.strip():
+        signals.add(record.witness.strip())
+    signals.update(
+        passage.witness.strip()
+        for passage in record.passage_refs
+        if passage.witness and passage.witness.strip()
+    )
+    return signals
 
 
 def _record_witness(record: EvidenceRecord) -> str | None:

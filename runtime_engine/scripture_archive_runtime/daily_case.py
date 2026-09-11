@@ -79,9 +79,9 @@ class DailyCasePlan:
 class DailyCaseComposer:
     """Build a deterministic player-visible case plan from SchedulerCandidate metadata only.
 
-    The composer delegates all eligibility and ranking decisions to the canonical Scheduler.
-    It intentionally has no access to TaskDefinition answers, grading truth, hints, or evidence
-    payloads, so it cannot become a second task/source truth store.
+    Eligibility and ranking stay owned by the canonical Scheduler. This layer intentionally
+    has no access to TaskDefinition answers, grading truth, hints, or evidence payloads, so it
+    cannot become a second task/source truth store.
     """
 
     def __init__(self, *, scheduler: Scheduler | None = None) -> None:
@@ -107,8 +107,11 @@ class DailyCaseComposer:
             raise TypeError("session must be Session")
         if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= _MAX_ITEMS:
             raise ValueError(f"limit must be an integer from 1 to {_MAX_ITEMS}")
-        if now is not None and not isinstance(now, datetime):
-            raise TypeError("now must be datetime or None")
+        if now is not None:
+            if not isinstance(now, datetime):
+                raise TypeError("now must be datetime or None")
+            if now.tzinfo is None or now.utcoffset() is None:
+                raise ValueError("now must be timezone-aware")
         if adjacent_successful_exact_ids is not None:
             if not isinstance(adjacent_successful_exact_ids, set):
                 raise TypeError("adjacent_successful_exact_ids must be a set[str] or None")
@@ -154,13 +157,14 @@ def _bounded_text(value: object, name: str, maximum: int) -> str:
         raise ValueError(f"{name} must be non-empty")
     if len(normalized) > maximum:
         raise ValueError(f"{name} exceeds {maximum} characters")
+    if any(ch in normalized for ch in ("\r", "\n", "\t", "\u2028", "\u2029", "\x00")):
+        raise ValueError(f"{name} must not contain line/control separators")
     return normalized
 
 
 def _validate_string_sequence(values: Sequence[object], name: str) -> None:
-    for value in values:
-        if not isinstance(value, str) or not value.strip():
-            raise ValueError(f"{name} must contain only non-empty strings")
+    for index, value in enumerate(values):
+        _bounded_text(value, f"{name}[{index}]", 256)
 
 
 def _validate_finite_number(value: object, name: str) -> None:

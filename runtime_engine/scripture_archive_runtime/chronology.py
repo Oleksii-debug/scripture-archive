@@ -67,8 +67,11 @@ class ChronologyAssertion:
 
     @property
     def display_temporal(self) -> str:
+        # UNKNOWN is a hard no-chronology boundary. Never echo a caller-supplied
+        # label here: validation rejects such labels, and this property remains
+        # fail-closed even if inspected before an assertion is added to a lab.
         if self.kind is TemporalKind.UNKNOWN:
-            return self.temporal_label.strip() or NOT_STATED
+            return NOT_STATED
         return self.temporal_label.strip()
 
     @property
@@ -102,21 +105,59 @@ class ChronologyFinding:
         }
 
 
+def _require_text(value: object, label: str, *, allow_empty: bool = False) -> str:
+    if not isinstance(value, str):
+        raise ValueError(f"{label} must be a string")
+    if not allow_empty and not value.strip():
+        raise ValueError(f"{label} is required")
+    return value
+
+
+def _require_id(value: object, label: str) -> str:
+    text = _require_text(value, label)
+    if text != text.strip():
+        raise ValueError(f"{label} must not contain surrounding whitespace")
+    if any(ord(char) < 0x20 or ord(char) == 0x7F for char in text):
+        raise ValueError(f"{label} must not contain control characters")
+    return text
+
+
 def _validate_ids(values: Iterable[str], label: str) -> tuple[str, ...]:
-    result = tuple(str(value).strip() for value in values)
-    if any(not value for value in result):
-        raise ValueError(f"{label} must contain non-empty IDs")
+    if isinstance(values, (str, bytes)):
+        raise ValueError(f"{label} must contain string IDs, not a string value")
+    try:
+        result = tuple(values)
+    except TypeError as exc:
+        raise ValueError(f"{label} must be an iterable of string IDs") from exc
+    for index, value in enumerate(result):
+        _require_id(value, f"{label}[{index}]")
     if len(result) != len(set(result)):
         raise ValueError(f"{label} must not contain duplicate IDs")
     return result
 
 
+def _validate_ordinal(value: object, label: str) -> None:
+    if value is not None and type(value) is not int:
+        raise ValueError(f"{label} must be an integer")
+
+
 def _validate_assertion(assertion: ChronologyAssertion) -> None:
     if not isinstance(assertion, ChronologyAssertion):
         raise TypeError("ChronologyLab accepts ChronologyAssertion values only")
-    for field_name in ("assertion_id", "event_id", "event_label", "source_scope"):
-        if not str(getattr(assertion, field_name)).strip():
-            raise ValueError(f"{field_name} is required")
+
+    _require_id(assertion.assertion_id, "assertion_id")
+    _require_id(assertion.event_id, "event_id")
+    _require_text(assertion.event_label, "event_label")
+    _require_text(assertion.source_scope, "source_scope")
+    _require_text(assertion.temporal_label, "temporal_label", allow_empty=True)
+
+    if assertion.witness is not None:
+        _require_text(assertion.witness, "witness")
+    if assertion.uncertainty is not None:
+        _require_text(assertion.uncertainty, "uncertainty")
+    if assertion.relative_to_event_id is not None:
+        _require_id(assertion.relative_to_event_id, "relative_to_event_id")
+
     if not isinstance(assertion.kind, TemporalKind):
         raise ValueError("kind must be a TemporalKind")
     if not isinstance(assertion.confidence, Confidence):
@@ -128,6 +169,9 @@ def _validate_assertion(assertion: ChronologyAssertion) -> None:
     evidence_ids = _validate_ids(assertion.evidence_ids, "evidence_ids")
     if not passage_ids and not evidence_ids:
         raise ValueError("chronology assertions require passage or evidence provenance")
+
+    _validate_ordinal(assertion.order_start, "order_start")
+    _validate_ordinal(assertion.order_end, "order_end")
 
     if assertion.kind is TemporalKind.EXACT:
         if not assertion.temporal_label.strip():
@@ -156,7 +200,7 @@ def _validate_assertion(assertion: ChronologyAssertion) -> None:
     if assertion.kind is TemporalKind.RELATIVE:
         if assertion.order_start is not None or assertion.order_end is not None:
             raise ValueError("RELATIVE chronology cannot carry inferred order keys")
-        if not str(assertion.relative_to_event_id or "").strip():
+        if assertion.relative_to_event_id is None:
             raise ValueError("RELATIVE chronology requires relative_to_event_id")
         if assertion.relative_to_event_id == assertion.event_id:
             raise ValueError("RELATIVE chronology cannot target the same event_id")
@@ -172,6 +216,11 @@ def _validate_assertion(assertion: ChronologyAssertion) -> None:
         return
 
     if assertion.kind is TemporalKind.UNKNOWN:
+        if assertion.temporal_label.strip():
+            raise ValueError(
+                "UNKNOWN chronology cannot carry temporal_label; "
+                "use uncertainty for non-temporal source wording"
+            )
         if assertion.order_start is not None or assertion.order_end is not None:
             raise ValueError("UNKNOWN chronology cannot carry order keys")
         if assertion.relative_to_event_id or assertion.relative_relation:
@@ -269,7 +318,8 @@ class ChronologyLab:
         """
 
         candidates = [
-            item for item in self.assertions_for_event(event_id)
+            item
+            for item in self.assertions_for_event(event_id)
             if item.explicit_interval is not None
         ]
         findings: list[ChronologyFinding] = []

@@ -43,10 +43,16 @@ class ResearchWorkbenchUiTests(unittest.TestCase):
         self.assertIn("tab.tabIndex=active?0:-1",self.ui)
         self.assertIn('returnFromResearch',self.app)
 
+    def test_linear_evidence_reuses_structured_provenance_summary(self):
+        self.assertIn("byId('research-evidence-status').textContent=evidenceSummary(this.evidence)",self.ui)
+        self.assertIn("provenance.textContent=evidenceSummary(this.evidence)",self.ui)
+        self.assertIn('confidence_code',self.ui)
+        self.assertIn('textual_variant_flag',self.ui)
+
     def test_modules_parse(self):
         node=shutil.which('node')
         if not node:self.skipTest('node unavailable')
-        for name in ['app.js','research-workbench.js']:
+        for name in ['app.js','research-workbench.js','player-next.js']:
             r=subprocess.run([node,'--check',str(self.front/name)],capture_output=True,text=True)
             self.assertEqual(0,r.returncode,r.stderr)
 

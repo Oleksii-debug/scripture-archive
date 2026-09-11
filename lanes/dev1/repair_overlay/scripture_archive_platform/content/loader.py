@@ -10,7 +10,7 @@ class ContentLoadError(RuntimeError): pass
 
 class CanonicalContentLoader:
     """Read-only loader over canonical mission indexes and JSON shards. No question text is hard-coded here."""
-    def __init__(self, repo_root: Path):
+    def __init__(self,repo_root: Path):
         self.repo_root=Path(repo_root).resolve(); self._missions=None; self._nodes=None; self._mission_for_node={}
     @property
     def campaigns_root(self)->Path:return self.repo_root/'docs'/'campaigns'
@@ -166,37 +166,31 @@ class TaskPresentationMapper:
         options=self._option_objects(ui.get('options') or payload.get('options') or [])
         evidence_options=self._option_objects(ui.get('evidence_options') or payload.get('evidence_options') or [])
         if not evidence_options and task_type in {'EVIDENCE_SELECT','CLAIM_EVIDENCE'}:
-            evidence_options=self._option_objects(payload.get('options') or payload.get('evidence') or node.get('required_evidence') or [])
-        if not options and task_type in {'SINGLE_CHOICE','COMBOBOX_SELECT','PARALLEL_WITNESS_COMPARE'}:
-            accepted=str(node.get('accepted_answer','')).strip(); rejected=str(node.get('rejected_answers','')).strip()
-            if accepted: options.append({'id':accepted,'label':accepted})
-            for part in [x.strip() for x in re.split(r';|\n',rejected) if x.strip()]: options.append({'id':part,'label':part})
+            evidence_options=self._option_objects(payload.get('options') or payload.get('evidence') or [])
         raw_items=ui.get('items') or payload.get('items') or payload.get('ordered_items') or (payload.get('options') if task_type=='ORDERING' else [])
         items=[]
         for item in raw_items or []:
             if isinstance(item,dict): items.append({'id':str(item.get('id',item.get('value',item.get('label','')))),'label':str(item.get('label',item.get('value',item.get('id',''))))})
             else: items.append({'id':str(item),'label':str(item)})
         raw_pairs=ui.get('pairs') or payload.get('pairs') or []
-        if task_type=='MATCHING' and not raw_pairs:
-            accepted_pairs=(node.get('grading') or {}).get('accepted_pairs')
-            if isinstance(accepted_pairs,dict): raw_pairs=[{'left':k,'right':v} for k,v in accepted_pairs.items()]
         pairs=self._matching_objects(raw_pairs) if task_type=='MATCHING' else []
         ui_steps=ui.get('steps')
         payload_steps=payload.get('steps')
-        grading_steps=(node.get('grading') or {}).get('steps')
         if ui_steps:
             steps=list(ui_steps); preserve_step_contract=True
         elif payload_steps:
             steps=list(payload_steps); preserve_step_contract=True
         else:
-            steps=list(grading_steps or []); preserve_step_contract=False
+            steps=[]; preserve_step_contract=False
         normalized_steps=self._normalize_composite_steps(steps,preserve_step_contract)
         relation_types=list(ui.get('relation_types') or payload.get('relation_types') or [])
         if task_type=='OT_NT_LINK' and not relation_types and payload.get('relation_category'):
             relation_types=[{'id':str(payload['relation_category']),'label':str(payload['relation_category'])}]
         legacy_answer_contract=dict(node.get('answer_contract') or {})
         if not legacy_answer_contract:
-            if task_type in {'SINGLE_CHOICE','COMBOBOX_SELECT','PARALLEL_WITNESS_COMPARE'} and options: legacy_answer_contract={'accepted_choice_ids':[str(node.get('accepted_answer','accepted'))]}
+            if task_type in {'SINGLE_CHOICE','COMBOBOX_SELECT','PARALLEL_WITNESS_COMPARE'}:
+                accepted=str(node.get('accepted_answer','')).strip()
+                if accepted: legacy_answer_contract={'accepted_choice_ids':[accepted]}
             elif task_type=='MULTI_SELECT': legacy_answer_contract={'accepted_choice_ids':ui.get('accepted_choice_ids',payload.get('accepted_options',[]))}
         answer_contract=answer_contract_descriptor(task_type)
         surface={
@@ -218,9 +212,9 @@ class TaskPresentationMapper:
     @staticmethod
     def _source_refs(node,mission):
         vals=[]
-        for value in [node.get('required_evidence'), node.get('source_scope_visible_to_player')]:
-            if isinstance(value,str) and value.strip(): vals.append(value.strip())
-            elif isinstance(value,list): vals.extend(map(str,value))
+        value=node.get('source_scope_visible_to_player')
+        if isinstance(value,str) and value.strip(): vals.append(value.strip())
+        elif isinstance(value,list): vals.extend(map(str,value))
         if mission:
             primary=mission.get('primary_scripture',[])
             if isinstance(primary,str): vals.append(primary)

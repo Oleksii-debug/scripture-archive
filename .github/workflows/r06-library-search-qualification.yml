@@ -40,3 +40,7 @@ jobs:
           git status --porcelain
       - name: Execute Library/Search qualification
         run: python tools/verify_library_search_overlay.py
+      - name: Execute Library/Search regression tests
+        env:
+          PYTHONPATH: lanes/dev1/repair_overlay
+        run: python -m unittest discover -s lanes/dev1/repair_overlay/tests -p "test_library_search.py" -v

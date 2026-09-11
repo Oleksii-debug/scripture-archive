@@ -1,0 +1,25 @@
+name: R06 QA67 exact candidate overlay artifact
+
+on:
+  push:
+    branches:
+      - r06-qa67-c931-exact
+
+jobs:
+  export-overlay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Prove PR80 overlay bytes are unchanged
+        shell: bash
+        run: |
+          git merge-base --is-ancestor c93145e816e1c1d1bc24e6db96da7a940e357fbb HEAD
+          git diff --quiet c93145e816e1c1d1bc24e6db96da7a940e357fbb HEAD -- lanes/dev1/repair_overlay
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qa67-exact-pr80-overlay
+          path: lanes/dev1/repair_overlay/**
+          if-no-files-found: error

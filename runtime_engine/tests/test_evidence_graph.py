@@ -50,7 +50,6 @@ class EvidenceGraphTests(unittest.TestCase):
                 source_scope="Mark 14:13; Luke 22:8",
                 uncertainty="Omission in the cited Mark verse is not denial.",
                 required_evidence_ids=("EV-MARK", "EV-LUKE"),
-                witness="Mark/Luke comparison",
             )
         )
         runtime.add_relation(
@@ -342,7 +341,7 @@ class EvidenceGraphTests(unittest.TestCase):
         self.assertIn("Passage MK14:13: Mark 14:13; witness=Mark", linear)
         self.assertIn("Canonical entity reference PERSON-PETER", linear)
         self.assertIn("Claim CL-COMPARE", linear)
-        self.assertIn("T2 TX1; witness=Mark/Luke comparison", linear)
+        self.assertIn("T2 TX1; witness=not specified", linear)
         self.assertIn("Required evidence: EV-MARK, EV-LUKE", linear)
         self.assertIn("Source scope: Mark 14:13; Luke 22:8", linear)
         self.assertIn("Uncertainty: Omission in the cited Mark verse is not denial.", linear)

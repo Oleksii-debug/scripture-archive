@@ -11,7 +11,9 @@ class PackagedPlayerRuntimeNextContractTests(unittest.TestCase):
         cls.source = APP.read_text(encoding="utf-8")
 
     def test_next_uses_runtime_owned_transition(self):
-        self.assertIn("api('player.next',{node_id:currentTask.node_id})", self.source)
+        self.assertIn("createPlayerNextController", self.source)
+        self.assertIn("currentNodeId:()=>currentTask?.node_id", self.source)
+        self.assertIn("api('player.next',{node_id:nodeId})", self.source)
         self.assertNotIn("loadNode(nextNodeId)", self.source)
 
     def test_frontend_does_not_expose_caller_selected_branch_navigation(self):

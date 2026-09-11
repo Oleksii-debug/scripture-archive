@@ -114,7 +114,10 @@ class EvidenceGraphTests(unittest.TestCase):
 
         self.assertIn("supports:EV-MARK:CL-COMPARE", edges)
         self.assertIn("supports:EV-LUKE:CL-COMPARE", edges)
-        self.assertEqual(edges["relation:REL-PARALLEL"]["edge_type"], "parallel_witness")
+        self.assertEqual(
+            edges["relation:REL-PARALLEL"]["edge_type"],
+            "canonical:parallel_witness",
+        )
         self.assertEqual(
             edges["relation:REL-PARALLEL"]["payload"]["passage_ids"],
             ["MK14:13", "LK22:8"],
@@ -209,6 +212,39 @@ class EvidenceGraphTests(unittest.TestCase):
         serialized = json.dumps(build_evidence_graph(runtime).to_dict(), sort_keys=True)
         self.assertNotIn("REL-HIDDEN-PROV", serialized)
         self.assertNotIn("P-HIDDEN", serialized)
+
+    def test_canonical_relation_type_cannot_collide_with_structural_edge_types(self):
+        runtime = EvidenceRuntime()
+        runtime.add_evidence(
+            EvidenceRecord(
+                "EV-A",
+                (PassageRef("P-A", "Mark", 1, 1, witness="Mark"),),
+                "Visible proposition.",
+                Confidence.T1,
+                witness="Mark",
+                entity_ids=("ENTITY-A",),
+            )
+        )
+        runtime.add_relation(
+            Relation(
+                "REL-NAMESPACE",
+                "EV-A",
+                "supports_claim",
+                "ENTITY-A",
+                witness="Mark",
+                passage_ids=("P-A",),
+            )
+        )
+        runtime.unlock("EV-A")
+
+        graph = build_evidence_graph(runtime)
+        edge = next(item for item in graph.to_dict()["edges"] if item["edge_id"] == "relation:REL-NAMESPACE")
+        self.assertEqual(edge["edge_type"], "canonical:supports_claim")
+        linear = "\n".join(graph.linearize())
+        self.assertIn("Canonical relation REL-NAMESPACE", linear)
+        self.assertIn("-[supports_claim]->", linear)
+        self.assertIn("witness=Mark", linear)
+        self.assertIn("passages=P-A", linear)
 
     def test_ambiguous_relation_endpoint_is_rejected_instead_of_guessed(self):
         runtime = EvidenceRuntime()

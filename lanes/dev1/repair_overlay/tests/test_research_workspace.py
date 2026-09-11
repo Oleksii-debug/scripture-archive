@@ -10,12 +10,21 @@ from scripture_archive_platform.application.research_workspace import (
 class FakeStore:
     def __init__(self):
         self.data = {}
+        self.unreadable = set()
 
     def get_json(self, namespace, key, default=None):
+        if (namespace, key) in self.unreadable:
+            return default
         return self.data.get((namespace, key), default)
 
     def put_json(self, namespace, key, value):
+        self.unreadable.discard((namespace, key))
         self.data[(namespace, key)] = value
+
+    def list_keys(self, namespace):
+        keys = {key for ns, key in self.data if ns == namespace}
+        keys.update(key for ns, key in self.unreadable if ns == namespace)
+        return sorted(keys)
 
 
 class ResearchWorkspaceTests(unittest.TestCase):
@@ -126,6 +135,14 @@ class ResearchWorkspaceTests(unittest.TestCase):
                     with self.assertRaises(ValueError):
                         ResearchWorkspaceService(self.store)._load(key)
             self.store.data.pop(("research_workspace", key), None)
+
+    def test_store_default_on_existing_unreadable_key_fails_closed(self):
+        for key in ("bookmarks", "notes"):
+            with self.subTest(key=key):
+                self.store.unreadable.add(("research_workspace", key))
+                with self.assertRaisesRegex(ValueError, "unreadable"):
+                    ResearchWorkspaceService(self.store)._load(key)
+                self.store.unreadable.clear()
 
     def test_tampered_persistence_is_revalidated_and_rejected(self):
         self.store.data[("research_workspace", "notes")] = {

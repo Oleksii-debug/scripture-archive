@@ -79,33 +79,40 @@ class WitnessMatrix:
             for cell in row.cells:
                 lines.append(f"{cell.witness}: {cell.status}")
                 for record in cell.evidence:
-                    tx1 = " TX1" if record["tx1"] else ""
-                    lines.append(
-                        f"  Evidence {record['evidence_id']}: {record['proposition']} "
-                        f"[{record['confidence']}{tx1}]"
-                    )
-                    for passage in record["passage_refs"]:
-                        verse = str(passage["verse_start"])
-                        if passage["verse_end"] is not None:
-                            verse += f"-{passage['verse_end']}"
-                        lines.append(
-                            f"    Passage {passage['passage_id']}: "
-                            f"{passage['book']} {passage['chapter']}:{verse}"
-                        )
+                    lines.extend(_linear_evidence(record, indent="  "))
+            for relation in row.relations:
+                relation_line = (
+                    f"Relation {relation['relation_id']}: {relation['source_id']} --"
+                    f"{relation['relation_type']}--> {relation['target_id']}"
+                )
+                if relation["witness"]:
+                    relation_line += f"; witness={relation['witness']}"
+                lines.append(relation_line)
+                if relation["passage_ids"]:
+                    lines.append(f"  Passage IDs: {', '.join(relation['passage_ids'])}")
             for claim in row.claims:
                 tx1 = " TX1" if claim["tx1"] else ""
                 lines.append(
                     f"Claim {claim['claim_id']}: {claim['proposition']} "
                     f"[{claim['confidence']}{tx1}]"
                 )
+                if claim["witness"]:
+                    lines.append(f"  Witness: {claim['witness']}")
+                lines.append(
+                    "  Required evidence IDs: "
+                    + (", ".join(claim["required_evidence_ids"]) or "none")
+                )
                 if claim["source_scope"]:
                     lines.append(f"  Source scope: {claim['source_scope']}")
                 if claim["uncertainty"]:
                     lines.append(f"  Uncertainty: {claim['uncertainty']}")
             for record in row.unassigned_evidence:
+                tx1 = " TX1" if record["tx1"] else ""
                 lines.append(
-                    f"Unassigned witness evidence {record['evidence_id']}: {record['proposition']}"
+                    f"Unassigned witness evidence {record['evidence_id']}: "
+                    f"{record['proposition']} [{record['confidence']}{tx1}]"
                 )
+                lines.extend(_linear_evidence_metadata(record, indent="  "))
         return lines
 
 
@@ -129,6 +136,7 @@ def build_witness_matrix(
         and relation.source_id in selected_ids
         and relation.target_id in selected_ids
     )
+    visible_relation_ids = {relation.relation_id for relation in visible_relations}
     components = _parallel_components(selected_ids, visible_relations)
 
     rows: list[WitnessMatrixRow] = []
@@ -145,7 +153,7 @@ def build_witness_matrix(
         unassigned: list[Mapping[str, Any]] = []
         for evidence_id in component:
             record = runtime.evidence[evidence_id]
-            payload = _evidence_payload(record)
+            payload = _evidence_payload(record, visible_relation_ids=visible_relation_ids)
             resolved_witness = _record_witness(record)
             if resolved_witness in assigned:
                 assigned[resolved_witness].append(payload)
@@ -279,7 +287,11 @@ def _record_witness(record: EvidenceRecord) -> str | None:
     return None
 
 
-def _evidence_payload(record: EvidenceRecord) -> dict[str, Any]:
+def _evidence_payload(
+    record: EvidenceRecord,
+    *,
+    visible_relation_ids: set[str],
+) -> dict[str, Any]:
     return {
         "evidence_id": record.evidence_id,
         "proposition": record.proposition,
@@ -287,7 +299,10 @@ def _evidence_payload(record: EvidenceRecord) -> dict[str, Any]:
         "tx1": record.tx1,
         "witness": record.witness,
         "entity_ids": list(record.entity_ids),
-        "relation_ids": list(record.relation_ids),
+        "relation_ids": [
+            relation_id for relation_id in record.relation_ids
+            if relation_id in visible_relation_ids
+        ],
         "passage_refs": [
             {
                 "passage_id": passage.passage_id,
@@ -324,3 +339,33 @@ def _claim_payload(claim) -> dict[str, Any]:
         "required_evidence_ids": list(claim.required_evidence_ids),
         "witness": claim.witness,
     }
+
+
+def _linear_evidence(record: Mapping[str, Any], *, indent: str) -> list[str]:
+    tx1 = " TX1" if record["tx1"] else ""
+    lines = [
+        f"{indent}Evidence {record['evidence_id']}: {record['proposition']} "
+        f"[{record['confidence']}{tx1}]"
+    ]
+    lines.extend(_linear_evidence_metadata(record, indent=indent + "  "))
+    return lines
+
+
+def _linear_evidence_metadata(record: Mapping[str, Any], *, indent: str) -> list[str]:
+    lines: list[str] = []
+    if record["witness"]:
+        lines.append(f"{indent}Record witness: {record['witness']}")
+    if record["entity_ids"]:
+        lines.append(f"{indent}Entity IDs: {', '.join(record['entity_ids'])}")
+    if record["relation_ids"]:
+        lines.append(f"{indent}Visible relation IDs: {', '.join(record['relation_ids'])}")
+    for passage in record["passage_refs"]:
+        verse = str(passage["verse_start"])
+        if passage["verse_end"] is not None:
+            verse += f"-{passage['verse_end']}"
+        witness = f"; witness={passage['witness']}" if passage["witness"] else ""
+        lines.append(
+            f"{indent}Passage {passage['passage_id']}: "
+            f"{passage['book']} {passage['chapter']}:{verse}{witness}"
+        )
+    return lines

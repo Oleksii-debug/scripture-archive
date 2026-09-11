@@ -67,12 +67,7 @@ class EvidenceGraph:
         }
 
     def linearize(self) -> list[str]:
-        """Complete deterministic nonvisual representation of graph truth.
-
-        The linear form intentionally repeats provenance represented structurally in
-        ``to_dict`` so a future spatial graph never becomes the only source of
-        player-visible information.
-        """
+        """Complete deterministic nonvisual representation of graph truth."""
 
         lines = ["Evidence Graph", f"Evidence scope: {self.evidence_scope}"]
         for node in self.nodes:
@@ -109,7 +104,7 @@ class EvidenceGraph:
                 )
             elif node.node_type == ENTITY_NODE:
                 lines.append(f"Canonical entity reference {node.raw_id}")
-            else:  # pragma: no cover - construction is closed over known node types.
+            else:  # pragma: no cover
                 raise ValueError(f"Unsupported graph node type: {node.node_type}")
 
         for edge in self.edges:
@@ -135,7 +130,7 @@ class EvidenceGraph:
                     f"{edge.source_id} -[{payload['relation_type']}]-> {edge.target_id}; "
                     f"witness={witness}; passages={passage_text}"
                 )
-            else:  # pragma: no cover - construction is closed over known edge types.
+            else:  # pragma: no cover
                 raise ValueError(f"Unsupported graph edge type: {edge.edge_type}")
         return lines
 
@@ -148,11 +143,10 @@ def build_evidence_graph(
 ) -> EvidenceGraph:
     """Build a source-safe derived graph over the existing evidence runtime.
 
-    By default only already-unlocked evidence participates. Claims are visible only
-    when they have a non-empty required-evidence contract and every required record
-    is visible. Relations are visible only when both endpoints resolve uniquely to
-    visible graph nodes and every relation passage reference is visible. Explicit
-    witness provenance is validated but never inferred or harmonized.
+    Default scope is unlocked evidence only. Claims surface only when all required
+    evidence is visible and the existing EvidenceRuntime witness gate is satisfied.
+    Relations surface only for visible unique endpoints and visible provenance.
+    Explicit witness provenance is validated but never inferred or harmonized.
     """
 
     selected_ids = _select_evidence_ids(
@@ -262,7 +256,6 @@ def build_evidence_graph(
 
     for claim in visible_claims:
         _reject_hidden_alias(claim.claim_id, hidden_raw_ids, "claim_id")
-        _validated_witness(claim.witness, f"claim {claim.claim_id} witness")
         claim_graph_id = _graph_id(CLAIM_NODE, claim.claim_id)
         add_node(
             EvidenceGraphNode(
@@ -307,7 +300,6 @@ def build_evidence_graph(
         if source is None or target is None:
             continue
         if relation.passage_ids and not set(relation.passage_ids).issubset(visible_passage_ids):
-            # Do not leak relation provenance that is outside the visible evidence scope.
             continue
         _validate_relation_witness_provenance(
             relation,
@@ -377,8 +369,25 @@ def _select_visible_claims(
             raise ValueError(
                 f"Claim {claim.claim_id} references unknown evidence: {sorted(unknown)}"
             )
-        if set(required).issubset(selected_evidence):
-            visible.append(claim)
+        if not set(required).issubset(selected_evidence):
+            continue
+
+        claim_witness = _validated_witness(
+            claim.witness,
+            f"claim {claim.claim_id} witness",
+        )
+        if claim_witness is not None:
+            incompatible = []
+            for evidence_id in sorted(set(required)):
+                evidence_witness = _validated_witness(
+                    runtime.evidence[evidence_id].witness,
+                    f"evidence {evidence_id} witness",
+                )
+                if evidence_witness not in {None, claim_witness}:
+                    incompatible.append(evidence_id)
+            if incompatible:
+                continue
+        visible.append(claim)
     return tuple(visible)
 
 
@@ -390,8 +399,6 @@ def _resolve_endpoint(
     included_claim_ids: set[str],
     raw_to_graph_ids: Mapping[str, set[str]],
 ) -> str | None:
-    # A hidden evidence/claim ID shadows any coincident visible entity/passage ID so
-    # an ambiguous raw identifier can never be reinterpreted to bypass visibility.
     if raw_id in runtime.evidence and raw_id not in selected_evidence:
         return None
     if raw_id in runtime.claims and raw_id not in included_claim_ids:

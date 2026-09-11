@@ -113,6 +113,15 @@ def _require_text(value: object, label: str, *, allow_empty: bool = False) -> st
         raise ValueError(f"{label} must be a string")
     if not allow_empty and not value.strip():
         raise ValueError(f"{label} is required")
+    if any(
+        ord(char) < 0x20
+        or ord(char) == 0x7F
+        or char in {"\u2028", "\u2029"}
+        for char in value
+    ):
+        raise ValueError(
+            f"{label} must not contain control or line-separator characters"
+        )
     return value
 
 

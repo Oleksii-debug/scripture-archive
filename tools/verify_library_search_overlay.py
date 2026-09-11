@@ -21,24 +21,50 @@ def parse_all() -> None:
         ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
 
 
+def _package(name: str):
+    module = sys.modules.get(name)
+    if module is None:
+        module = types.ModuleType(name)
+        module.__path__ = []
+        sys.modules[name] = module
+    return module
+
+
 def load_library_module():
-    package = types.ModuleType("scripture_archive_platform")
-    package.__path__ = []
-    content_package = types.ModuleType("scripture_archive_platform.content")
-    content_package.__path__ = []
+    _package("scripture_archive_platform")
+    _package("scripture_archive_platform.content")
     loader_module = types.ModuleType("scripture_archive_platform.content.loader")
 
     class CanonicalContentLoader:
         pass
 
     loader_module.CanonicalContentLoader = CanonicalContentLoader
-    sys.modules[package.__name__] = package
-    sys.modules[content_package.__name__] = content_package
     sys.modules[loader_module.__name__] = loader_module
 
     spec = importlib.util.spec_from_file_location("scripture_archive_platform.content.library", LIBRARY)
     if spec is None or spec.loader is None:
         raise AssertionError("cannot load library module")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_contracts_module():
+    _package("scripture_archive_platform")
+    _package("scripture_archive_platform.transport")
+    _package("scripture_archive_platform.domain")
+    models = types.ModuleType("scripture_archive_platform.domain.models")
+    models.TRANSPORT_API_VERSION = "scripture.transport.v1"
+
+    class GradeResult:
+        pass
+
+    models.GradeResult = GradeResult
+    sys.modules[models.__name__] = models
+    spec = importlib.util.spec_from_file_location("scripture_archive_platform.transport.contracts", CONTRACTS)
+    if spec is None or spec.loader is None:
+        raise AssertionError("cannot load transport contracts")
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
@@ -133,6 +159,55 @@ def verify_behavior() -> None:
             raise AssertionError(f"limit should fail closed: {limit!r}")
 
 
+def verify_security_contract() -> None:
+    contracts = load_contracts_module()
+    assert "library.catalog" in contracts.ALLOWLISTED_COMMANDS
+    assert "library.search" in contracts.ALLOWLISTED_COMMANDS
+    assert "player.navigate_branch" not in contracts.ALLOWLISTED_COMMANDS
+
+    rid, cmd, payload = contracts.validate_request_shape(
+        {
+            "api_version": "scripture.transport.v1",
+            "request_id": "library-qualification",
+            "command": "library.catalog",
+            "payload": {},
+        }
+    )
+    assert rid == "library-qualification" and cmd == "library.catalog" and payload == {}
+
+    rid, cmd, payload = contracts.validate_request_shape(
+        {
+            "api_version": "scripture.transport.v1",
+            "request_id": "next-context",
+            "command": "player.next",
+            "payload": {"node_id": "DM01-N01"},
+        }
+    )
+    assert rid == "next-context" and cmd == "player.next" and payload == {"node_id": "DM01-N01"}
+
+    blocked = (
+        {
+            "api_version": "scripture.transport.v1",
+            "request_id": "blocked-nav",
+            "command": "player.navigate_branch",
+            "payload": {"target_node_id": "DM01-N02"},
+        },
+        {
+            "api_version": "scripture.transport.v1",
+            "request_id": "blocked-target",
+            "command": "player.next",
+            "payload": {"target_node_id": "DM01-N02"},
+        },
+    )
+    for request in blocked:
+        try:
+            contracts.validate_request_shape(request)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"branch target request must fail closed: {request}")
+
+
 def verify_wiring() -> None:
     service = SERVICE.read_text(encoding="utf-8")
     contracts = CONTRACTS.read_text(encoding="utf-8")
@@ -149,5 +224,6 @@ def verify_wiring() -> None:
 if __name__ == "__main__":
     parse_all()
     verify_behavior()
+    verify_security_contract()
     verify_wiring()
     print("LIBRARY_SEARCH_QUALIFICATION_PASS")

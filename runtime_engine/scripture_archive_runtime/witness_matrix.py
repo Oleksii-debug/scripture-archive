@@ -133,6 +133,11 @@ def build_witness_matrix(
         evidence_ids=evidence_ids,
         include_locked_evidence=include_locked_evidence,
     )
+    visible_passage_ids = {
+        passage.passage_id
+        for evidence_id in selected_ids
+        for passage in runtime.evidence[evidence_id].passage_refs
+    }
     visible_relations = tuple(
         relation
         for relation in sorted(runtime.relations.values(), key=lambda item: item.relation_id)
@@ -152,7 +157,7 @@ def build_witness_matrix(
     for component in components:
         component_set = set(component)
         relations = tuple(
-            _relation_payload(relation)
+            _relation_payload(relation, visible_passage_ids=visible_passage_ids)
             for relation in visible_relations
             if relation.source_id in component_set and relation.target_id in component_set
         )
@@ -349,14 +354,21 @@ def _evidence_payload(
     }
 
 
-def _relation_payload(relation: Relation) -> dict[str, Any]:
+def _relation_payload(
+    relation: Relation,
+    *,
+    visible_passage_ids: set[str],
+) -> dict[str, Any]:
     return {
         "relation_id": relation.relation_id,
         "source_id": relation.source_id,
         "relation_type": relation.relation_type,
         "target_id": relation.target_id,
         "witness": relation.witness,
-        "passage_ids": list(relation.passage_ids),
+        "passage_ids": [
+            passage_id for passage_id in relation.passage_ids
+            if passage_id in visible_passage_ids
+        ],
     }
 
 

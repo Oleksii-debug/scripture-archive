@@ -73,7 +73,7 @@ class RuntimeApplication:
         task = self.content.get(node_id)
         self._require_release_ground_truth(task)
         state = self.memory.node_history.setdefault(node_id, TaskState(node_id=node_id)); hint_count = self._active_hint_counts.get(node_id, 0)
-        result = self.graders.grade(task, answer); independent = hint_count < 6
+        result = self.graders.grade(task, answer); independent = hint_count == 0
         state.attempts.append(Attempt(node_id, result.correctness, result.score, hint_count, independent, answer_snapshot=answer)); state.last_result = result.correctness
         if result.correctness is Correctness.CORRECT: state.completed = True; self.session.correct_node_ids.add(node_id)
         elif result.correctness is Correctness.INCORRECT: self.memory.mistakes[node_id] = self.memory.mistakes.get(node_id, 0) + 1

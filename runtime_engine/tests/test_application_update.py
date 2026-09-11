@@ -114,6 +114,26 @@ class ApplicationUpdateTests(unittest.TestCase):
             with self.assertRaisesRegex(ApplicationUpdateError, "name"):
                 verify_local_update(manifest, renamed, current_version="1.1.0")
 
+    def test_direct_manifest_construction_cannot_bypass_validation(self):
+        unsafe = ApplicationUpdateManifest(
+            product_id="scripture-archive",
+            target_platform="windows-x64",
+            target_version="1.2.0",
+            source_head="not-a-git-head",
+            artifact_name="../update.zip",
+            artifact_size=len(ARTIFACT),
+            artifact_sha256=hashlib.sha256(ARTIFACT).hexdigest(),
+        )
+        with self.assertRaises(ApplicationUpdateError):
+            verify_artifact_bytes(unsafe, ARTIFACT, current_version="1.1.0")
+
+    def test_downgrade_opt_in_requires_real_boolean(self):
+        manifest = ApplicationUpdateManifest.from_mapping(manifest_dict(target_version="1.0.0"))
+        with self.assertRaisesRegex(ApplicationUpdateError, "must be a boolean"):
+            verify_artifact_bytes(
+                manifest, ARTIFACT, current_version="1.1.0", allow_downgrade="yes"
+            )
+
     def test_source_head_hash_and_size_bounds_are_strict(self):
         bad_cases = (
             {"source_head": "A" * 40},

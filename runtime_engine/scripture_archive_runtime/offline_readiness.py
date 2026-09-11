@@ -369,7 +369,12 @@ def _validate_relative_path(value: Any) -> str:
         raise OfflineReadinessError("manifest_path_type", "dependency path must be a string")
     if not value or len(value) > MAX_RELATIVE_PATH or value != value.strip():
         raise OfflineReadinessError("manifest_path", "dependency path is empty, padded, or too long")
-    if "\\" in value or ":" in value or value.startswith("/"):
+    if (
+        "\\" in value
+        or ":" in value
+        or any(char in value for char in '<>"|?*')
+        or value.startswith("/")
+    ):
         raise OfflineReadinessError("manifest_path", "dependency path must be a safe relative POSIX-style path")
     if any(ord(char) < 32 or ord(char) == 127 for char in value):
         raise OfflineReadinessError("manifest_path", "dependency path contains control characters")

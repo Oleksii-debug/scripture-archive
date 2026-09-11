@@ -32,9 +32,11 @@ class TemporalRelation(str, Enum):
 class ChronologyAssertion:
     """One explicit, provenance-bearing chronology assertion.
 
-    ``order_start``/``order_end`` are optional source-provided ordinal keys. They
-    are intentionally *not* parsed or inferred from ``temporal_label``. Calendar
-    text remains display/source data so the runtime cannot manufacture a date.
+    ``order_start``/``order_end`` are optional source-provided ordinal keys.
+    They are intentionally *not* parsed or inferred from ``temporal_label`` and
+    are comparable only when both assertions declare the same
+    ``order_scale_id``. Calendar text remains display/source data so the runtime
+    cannot manufacture a date or silently combine unrelated local orderings.
     """
 
     assertion_id: str
@@ -50,6 +52,7 @@ class ChronologyAssertion:
     evidence_ids: tuple[str, ...] = ()
     order_start: int | None = None
     order_end: int | None = None
+    order_scale_id: str | None = None
     relative_to_event_id: str | None = None
     relative_relation: TemporalRelation | None = None
     uncertainty: str | None = None
@@ -155,6 +158,8 @@ def _validate_assertion(assertion: ChronologyAssertion) -> None:
         _require_text(assertion.witness, "witness")
     if assertion.uncertainty is not None:
         _require_text(assertion.uncertainty, "uncertainty")
+    if assertion.order_scale_id is not None:
+        _require_id(assertion.order_scale_id, "order_scale_id")
     if assertion.relative_to_event_id is not None:
         _require_id(assertion.relative_to_event_id, "relative_to_event_id")
 
@@ -178,6 +183,10 @@ def _validate_assertion(assertion: ChronologyAssertion) -> None:
             raise ValueError("EXACT chronology requires source-provided temporal_label")
         if assertion.order_end is not None:
             raise ValueError("EXACT chronology uses at most order_start")
+        if assertion.order_start is not None and assertion.order_scale_id is None:
+            raise ValueError("EXACT order_start requires explicit order_scale_id")
+        if assertion.order_start is None and assertion.order_scale_id is not None:
+            raise ValueError("order_scale_id requires source-provided order keys")
         if assertion.relative_to_event_id or assertion.relative_relation:
             raise ValueError("EXACT chronology cannot also declare a relative relation")
         return
@@ -187,6 +196,10 @@ def _validate_assertion(assertion: ChronologyAssertion) -> None:
             raise ValueError("RANGE chronology requires source-provided temporal_label")
         if (assertion.order_start is None) != (assertion.order_end is None):
             raise ValueError("RANGE order_start/order_end must be supplied together")
+        if assertion.order_start is not None and assertion.order_scale_id is None:
+            raise ValueError("RANGE order keys require explicit order_scale_id")
+        if assertion.order_start is None and assertion.order_scale_id is not None:
+            raise ValueError("order_scale_id requires source-provided order keys")
         if (
             assertion.order_start is not None
             and assertion.order_end is not None
@@ -200,6 +213,8 @@ def _validate_assertion(assertion: ChronologyAssertion) -> None:
     if assertion.kind is TemporalKind.RELATIVE:
         if assertion.order_start is not None or assertion.order_end is not None:
             raise ValueError("RELATIVE chronology cannot carry inferred order keys")
+        if assertion.order_scale_id is not None:
+            raise ValueError("RELATIVE chronology cannot declare order_scale_id")
         if assertion.relative_to_event_id is None:
             raise ValueError("RELATIVE chronology requires relative_to_event_id")
         if assertion.relative_to_event_id == assertion.event_id:
@@ -223,6 +238,8 @@ def _validate_assertion(assertion: ChronologyAssertion) -> None:
             )
         if assertion.order_start is not None or assertion.order_end is not None:
             raise ValueError("UNKNOWN chronology cannot carry order keys")
+        if assertion.order_scale_id is not None:
+            raise ValueError("UNKNOWN chronology cannot declare order_scale_id")
         if assertion.relative_to_event_id or assertion.relative_relation:
             raise ValueError("UNKNOWN chronology cannot declare a relative relation")
         return
@@ -234,8 +251,9 @@ class ChronologyLab:
     """Deterministic chronology queries over explicit source-safe assertions.
 
     This object never derives chronology from narrative order, witness omission,
-    passage numbering, or prose. It only compares explicit source-provided
-    ordinal keys/relations and returns INDETERMINATE otherwise.
+    passage numbering, or prose. It compares source-provided ordinal keys only
+    within one explicitly declared order scale, compares explicit relative
+    relations when present, and returns INDETERMINATE otherwise.
     """
 
     def __init__(self, assertions: Iterable[ChronologyAssertion] = ()) -> None:
@@ -266,12 +284,23 @@ class ChronologyLab:
     def _sort_key(assertion: ChronologyAssertion) -> tuple:
         interval = assertion.explicit_interval
         if interval is not None:
-            return (0, interval[0], interval[1], assertion.event_id, assertion.assertion_id)
+            # order_scale_id is validation-required for every interval. The
+            # scale token provides a deterministic non-chronological grouping
+            # across unrelated scales; numeric interval ordering is applied
+            # only *within* the same explicitly comparable scale.
+            return (
+                0,
+                assertion.order_scale_id,
+                interval[0],
+                interval[1],
+                assertion.event_id,
+                assertion.assertion_id,
+            )
         if assertion.kind is TemporalKind.RELATIVE:
-            return (1, 0, 0, assertion.event_id, assertion.assertion_id)
+            return (1, "", 0, 0, assertion.event_id, assertion.assertion_id)
         if assertion.kind is TemporalKind.UNKNOWN:
-            return (3, 0, 0, assertion.event_id, assertion.assertion_id)
-        return (2, 0, 0, assertion.event_id, assertion.assertion_id)
+            return (3, "", 0, 0, assertion.event_id, assertion.assertion_id)
+        return (2, "", 0, 0, assertion.event_id, assertion.assertion_id)
 
     def ordered_assertions(self) -> tuple[ChronologyAssertion, ...]:
         return tuple(sorted(self._assertions.values(), key=self._sort_key))
@@ -281,7 +310,12 @@ class ChronologyLab:
         right = self.get(right_id)
         left_interval = left.explicit_interval
         right_interval = right.explicit_interval
-        if left_interval is not None and right_interval is not None:
+        if (
+            left_interval is not None
+            and right_interval is not None
+            and left.order_scale_id is not None
+            and left.order_scale_id == right.order_scale_id
+        ):
             if left_interval[1] < right_interval[0]:
                 return TemporalRelation.BEFORE
             if left_interval[0] > right_interval[1]:
@@ -311,10 +345,11 @@ class ChronologyLab:
         return TemporalRelation.INDETERMINATE
 
     def non_overlapping_assertions(self, event_id: str) -> tuple[ChronologyFinding, ...]:
-        """Report source assertions for one event whose explicit intervals disagree.
+        """Report source assertions for one event whose comparable intervals disagree.
 
         A finding is diagnostic, never an automatic truth-resolution decision.
         Different witnesses stay different; neither is copied into the other.
+        Unrelated ordinal scales are never treated as comparable chronology.
         """
 
         candidates = [
@@ -334,8 +369,9 @@ class ChronologyLab:
                     event_id=event_id,
                     witness_values=(left.witness, right.witness),
                     message=(
-                        "Source assertions do not overlap; preserve both with their "
-                        "witness/provenance and do not harmonize automatically."
+                        "Source assertions on the same explicit order scale do not "
+                        "overlap; preserve both with their witness/provenance and do "
+                        "not harmonize automatically."
                     ),
                 )
             )
@@ -353,6 +389,7 @@ class ChronologyLab:
                     "event": assertion.event_label,
                     "temporal_kind": assertion.kind.value,
                     "temporal": assertion.display_temporal,
+                    "order_scale_id": assertion.order_scale_id,
                     "relative_to_event_id": assertion.relative_to_event_id,
                     "relative_relation": (
                         assertion.relative_relation.value
@@ -375,7 +412,16 @@ class ChronologyLab:
         for row in self.semantic_rows():
             confidence = row["confidence"] + (" TX1" if row["tx1"] else "")
             witness = row["witness"] or "not specified"
-            uncertainty = f"; uncertainty={row['uncertainty']}" if row["uncertainty"] else ""
+            passages = ", ".join(row["passage_ids"]) or "none"
+            evidence = ", ".join(row["evidence_ids"]) or "none"
+            scale = (
+                f"; order-scale={row['order_scale_id']}"
+                if row["order_scale_id"]
+                else ""
+            )
+            uncertainty = (
+                f"; uncertainty={row['uncertainty']}" if row["uncertainty"] else ""
+            )
             relation = ""
             if row["relative_relation"]:
                 relation = (
@@ -385,6 +431,7 @@ class ChronologyLab:
             lines.append(
                 f"{row['event']} ({row['event_id']}): {row['temporal']} "
                 f"[{confidence}; witness={witness}; source={row['source_scope']}"
-                f"{relation}{uncertainty}]"
+                f"; passages={passages}; evidence={evidence}"
+                f"{scale}{relation}{uncertainty}]"
             )
         return lines

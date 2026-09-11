@@ -50,14 +50,26 @@ class ChronologyLabTests(unittest.TestCase):
     def test_explicit_source_order_is_deterministic_and_unknown_sorts_last(self):
         lab = ChronologyLab(
             [
-                self.assertion("A-LATE", "E2", order_start=20, temporal_label="later"),
+                self.assertion(
+                    "A-LATE",
+                    "E2",
+                    order_start=20,
+                    order_scale_id="SOURCE-SCALE-1",
+                    temporal_label="later",
+                ),
                 self.assertion(
                     "A-UNKNOWN",
                     "E3",
                     kind=TemporalKind.UNKNOWN,
                     temporal_label="",
                 ),
-                self.assertion("A-EARLY", "E1", order_start=10, temporal_label="earlier"),
+                self.assertion(
+                    "A-EARLY",
+                    "E1",
+                    order_start=10,
+                    order_scale_id="SOURCE-SCALE-1",
+                    temporal_label="earlier",
+                ),
             ]
         )
         self.assertEqual(
@@ -73,6 +85,37 @@ class ChronologyLabTests(unittest.TestCase):
             lab.relation("A-LATE", "A-EARLY"),
         )
 
+    def test_different_order_scales_never_create_chronology_relation(self):
+        scale_a_late_number = self.assertion(
+            "A-SCALE-A",
+            "E1",
+            temporal_label="local source A order",
+            order_start=100,
+            order_scale_id="SCALE-A",
+            witness="Witness-A",
+        )
+        scale_b_early_number = self.assertion(
+            "A-SCALE-B",
+            "E1",
+            temporal_label="local source B order",
+            order_start=1,
+            order_scale_id="SCALE-B",
+            witness="Witness-B",
+        )
+        lab = ChronologyLab([scale_b_early_number, scale_a_late_number])
+
+        self.assertEqual(
+            TemporalRelation.INDETERMINATE,
+            lab.relation("A-SCALE-A", "A-SCALE-B"),
+        )
+        self.assertEqual((), lab.non_overlapping_assertions("E1"))
+        # Deterministic cross-scale fallback groups by declared scale token rather
+        # than pretending raw 1/100 values share chronology.
+        self.assertEqual(
+            ["A-SCALE-A", "A-SCALE-B"],
+            [item.assertion_id for item in lab.ordered_assertions()],
+        )
+
     def test_range_overlap_is_reported_without_resolving_truth(self):
         lab = ChronologyLab(
             [
@@ -83,6 +126,7 @@ class ChronologyLabTests(unittest.TestCase):
                     temporal_label="source range one",
                     order_start=10,
                     order_end=20,
+                    order_scale_id="SHARED-SOURCE-SCALE",
                     witness="Witness-A",
                 ),
                 self.assertion(
@@ -92,6 +136,7 @@ class ChronologyLabTests(unittest.TestCase):
                     temporal_label="source range two",
                     order_start=15,
                     order_end=25,
+                    order_scale_id="SHARED-SOURCE-SCALE",
                     witness="Witness-B",
                 ),
             ]
@@ -109,6 +154,7 @@ class ChronologyLabTests(unittest.TestCase):
                     "E1",
                     temporal_label="Witness A chronology",
                     order_start=10,
+                    order_scale_id="SHARED-SOURCE-SCALE",
                     witness="Witness-A",
                 ),
                 self.assertion(
@@ -116,6 +162,7 @@ class ChronologyLabTests(unittest.TestCase):
                     "E1",
                     temporal_label="Witness B chronology",
                     order_start=30,
+                    order_scale_id="SHARED-SOURCE-SCALE",
                     witness="Witness-B",
                     confidence=Confidence.T2,
                 ),
@@ -133,7 +180,12 @@ class ChronologyLabTests(unittest.TestCase):
         self.assertEqual(2, len(lab.assertions_for_event("E1")))
 
     def test_relative_relation_is_used_only_when_explicitly_authored(self):
-        target = self.assertion("A-TARGET", "E-TARGET", order_start=50)
+        target = self.assertion(
+            "A-TARGET",
+            "E-TARGET",
+            order_start=50,
+            order_scale_id="TARGET-SCALE",
+        )
         relative = self.assertion(
             "A-REL",
             "E-REL",
@@ -223,6 +275,30 @@ class ChronologyLabTests(unittest.TestCase):
                 ]
             )
 
+    def test_order_keys_require_explicit_comparability_scale(self):
+        with self.assertRaisesRegex(ValueError, "requires explicit order_scale_id"):
+            ChronologyLab(
+                [
+                    self.assertion(
+                        "A-UNSCALED",
+                        "E1",
+                        order_start=10,
+                    )
+                ]
+            )
+        with self.assertRaisesRegex(
+            ValueError, "order_scale_id requires source-provided order keys"
+        ):
+            ChronologyLab(
+                [
+                    self.assertion(
+                        "A-SCALE-ONLY",
+                        "E1",
+                        order_scale_id="SCALE-A",
+                    )
+                ]
+            )
+
     def test_semantic_rows_and_linearize_have_feature_parity(self):
         lab = ChronologyLab(
             [
@@ -232,6 +308,7 @@ class ChronologyLabTests(unittest.TestCase):
                     event_label="Event One",
                     temporal_label="source supplied point",
                     order_start=1,
+                    order_scale_id="SOURCE-SCALE-1",
                     witness="Witness-A",
                     confidence=Confidence.C1,
                     tx1=True,
@@ -244,12 +321,16 @@ class ChronologyLabTests(unittest.TestCase):
         row = lab.semantic_rows()[0]
         line = lab.linearize()[0]
         self.assertEqual("Event One", row["event"])
+        self.assertEqual("SOURCE-SCALE-1", row["order_scale_id"])
         self.assertEqual(["P1", "P2"], row["passage_ids"])
         self.assertEqual(["EV1"], row["evidence_ids"])
         self.assertIn("Event One", line)
         self.assertIn("source supplied point", line)
         self.assertIn("C1 TX1", line)
         self.assertIn("Witness-A", line)
+        self.assertIn("passages=P1, P2", line)
+        self.assertIn("evidence=EV1", line)
+        self.assertIn("order-scale=SOURCE-SCALE-1", line)
         self.assertIn("bounded uncertainty", line)
 
     def test_duplicate_ids_rejected(self):
@@ -279,6 +360,7 @@ class ChronologyLabTests(unittest.TestCase):
             {"source_scope": 99},
             {"passage_ids": (123,)},
             {"evidence_ids": (None,)},
+            {"order_start": 1, "order_scale_id": 9},
         )
         for overrides in cases:
             with self.subTest(overrides=overrides):
@@ -301,7 +383,16 @@ class ChronologyLabTests(unittest.TestCase):
                 with self.assertRaisesRegex(
                     ValueError, "order_start must be an integer"
                 ):
-                    ChronologyLab([self.assertion("A1", "E1", order_start=bad)])
+                    ChronologyLab(
+                        [
+                            self.assertion(
+                                "A1",
+                                "E1",
+                                order_start=bad,
+                                order_scale_id="SOURCE-SCALE-1",
+                            )
+                        ]
+                    )
 
         with self.assertRaisesRegex(ValueError, "order_end must be an integer"):
             ChronologyLab(
@@ -313,6 +404,7 @@ class ChronologyLabTests(unittest.TestCase):
                         temporal_label="range",
                         order_start=1,
                         order_end=2.0,
+                        order_scale_id="SOURCE-SCALE-1",
                     )
                 ]
             )

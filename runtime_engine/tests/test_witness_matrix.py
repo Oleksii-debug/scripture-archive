@@ -101,6 +101,43 @@ class WitnessMatrixTests(unittest.TestCase):
         self.assertEqual(row["relations"], [])
         self.assertEqual(row["claims"], [])
 
+    def test_claim_spanning_unrelated_components_is_not_duplicated_into_rows(self):
+        runtime = EvidenceRuntime()
+        runtime.add_evidence(
+            EvidenceRecord(
+                "EV-MARK",
+                (PassageRef("MK1:1", "Mark", 1, 1, witness="Mark"),),
+                "Mark record.",
+                Confidence.T1,
+                witness="Mark",
+            )
+        )
+        runtime.add_evidence(
+            EvidenceRecord(
+                "EV-LUKE",
+                (PassageRef("LK1:1", "Luke", 1, 1, witness="Luke"),),
+                "Luke record.",
+                Confidence.T1,
+                witness="Luke",
+            )
+        )
+        runtime.add_claim(
+            Claim(
+                "CL-CROSS",
+                "Cross-record synthesis.",
+                Confidence.T2,
+                required_evidence_ids=("EV-MARK", "EV-LUKE"),
+                source_scope="Mark 1:1; Luke 1:1",
+            )
+        )
+        runtime.unlock("EV-MARK")
+        runtime.unlock("EV-LUKE")
+
+        payload = build_witness_matrix(runtime, witnesses=("Mark", "Luke")).to_dict()
+        self.assertEqual(len(payload["rows"]), 2)
+        self.assertTrue(all(row["claims"] == [] for row in payload["rows"]))
+        self.assertNotIn("CL-CROSS", json.dumps(payload, sort_keys=True))
+
     def test_absence_is_not_upgraded_to_denial_or_contradiction(self):
         runtime = self.runtime()
         runtime.unlock("EV-MARK")

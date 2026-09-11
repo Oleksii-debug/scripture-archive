@@ -8,10 +8,16 @@ from .content_packs import MAX_ARCHIVE_BYTES, ContentPackInspection, ContentPack
 from .security import ValidationError
 
 
-def _semver_key(value: str) -> tuple[int, int, int, int, str]:
+def _semver_key(value: str) -> tuple[int, int, int, int, tuple[tuple[int, int | str], ...]]:
     main, separator, prerelease = value.partition("-")
     major, minor, patch = (int(part) for part in main.split("."))
-    return major, minor, patch, 0 if separator else 1, prerelease
+    if not separator:
+        return major, minor, patch, 1, ()
+    identifiers = tuple(
+        (0, int(identifier)) if identifier.isdigit() else (1, identifier)
+        for identifier in prerelease.split(".")
+    )
+    return major, minor, patch, 0, identifiers
 
 
 class ContentPackStore(_CoreContentPackStore):

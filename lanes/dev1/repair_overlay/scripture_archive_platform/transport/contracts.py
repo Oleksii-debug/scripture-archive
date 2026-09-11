@@ -15,7 +15,7 @@ ALLOWLISTED_COMMANDS = frozenset({
   "authoring.validate_draft","authoring.preview_draft","authoring.prepare_publish_candidate",
   "authoring.export_draft","authoring.import_draft",
   "keymap.list","keymap.rebind","keymap.clear","keymap.reset_context","keymap.reset_all",
-  "keymap.export","keymap.import","settings.get","settings.set"
+  "keymap.export","keymap.import","settings.get","settings.set","research.export"
 })
 
 class ContentLoaderPort(Protocol):
@@ -40,6 +40,7 @@ def validate_request_shape(request:Any)->tuple[str,str,dict[str,Any]]:
     if not isinstance(rid,str) or not rid or len(rid)>128: raise ValueError('invalid request_id')
     if cmd not in ALLOWLISTED_COMMANDS: raise ValueError('command not allowlisted')
     if not isinstance(payload,dict): raise ValueError('payload must be an object')
+    if cmd=='research.export' and payload: raise ValueError('research.export accepts no caller payload')
     if cmd=='player.next':
         unknown=set(payload)-{'node_id'}
         if unknown: raise ValueError('player.next accepts only current node_id context; target selection is forbidden')

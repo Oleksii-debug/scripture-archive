@@ -26,6 +26,25 @@ class AccessibilityTests(unittest.TestCase):
         self.assertTrue(any('unnamed dialog: keymap-dialog' in e for e in errors), errors)
         self.assertTrue(any('missing id: missing-progress-label' in e for e in errors), errors)
 
+    def test_audit_accepts_implicit_wrapping_label_without_control_id(self):
+        valid = (
+            '<a class="skip-link" href="#main-content">Skip</a>'
+            '<header>Header</header>'
+            '<main id="main-content">'
+            '<h1>Title</h1><h2>Section</h2><h3>Subsection</h3>'
+            '<form><fieldset><legend>Example</legend>'
+            '<label>Wrapped input <input name="wrapped"></label>'
+            '<label for="choice">Choice</label>'
+            '<select id="choice"><option>One</option></select>'
+            '<label for="notes">Notes</label><textarea id="notes"></textarea>'
+            '<button type="button">Action</button>'
+            '</fieldset></form>'
+            '<dialog aria-label="Example dialog"></dialog>'
+            '<div role="status" aria-live="polite" aria-atomic="true"></div>'
+            '</main>'
+        )
+        self.assertEqual([], audit_static_html(valid))
+
     def test_audit_detects_duplicate_id_and_positive_tabindex(self):
         broken = self.html.replace('<h2 id="home-heading">', '<h2 id="app-title" tabindex="2">', 1)
         errors = audit_static_html(broken)

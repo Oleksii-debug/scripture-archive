@@ -172,6 +172,11 @@ def project_cross_testament(
                 continue
             left = all_passages[left_id]
             right = all_passages[right_id]
+            _validate_relation_witness(
+                relation,
+                (left, right),
+                visible_provenance[left_id] + visible_provenance[right_id],
+            )
             left_testament = _testament_for(left.book, book_testaments)
             right_testament = _testament_for(right.book, book_testaments)
             if left_testament == right_testament:
@@ -225,6 +230,7 @@ def _index_passages(
         _validate_evidence(record, expected_id=evidence_id)
         for passage in record.passage_refs:
             _validate_passage(passage)
+            _validate_record_passage_witness(record, passage)
             previous = passages.get(passage.passage_id)
             if previous is not None and previous != passage:
                 raise ValueError(
@@ -276,6 +282,21 @@ def _validate_passage(passage: PassageRef) -> None:
     _optional_text(passage.witness, "passage witness", _MAX_WITNESS)
 
 
+def _validate_record_passage_witness(
+    record: EvidenceRecord,
+    passage: PassageRef,
+) -> None:
+    if (
+        record.witness is not None
+        and passage.witness is not None
+        and record.witness != passage.witness
+    ):
+        raise ValueError(
+            f"Evidence {record.evidence_id} witness conflicts with passage "
+            f"{passage.passage_id} witness"
+        )
+
+
 def _validate_relation(relation: Relation, *, expected_id: str) -> None:
     if not isinstance(relation, Relation):
         raise TypeError(f"Relation {expected_id!r} must be Relation")
@@ -292,6 +313,27 @@ def _validate_relation(relation: Relation, *, expected_id: str) -> None:
         raise ValueError(f"Relation {relation.relation_id} passage_ids must be tuple")
     for passage_id in relation.passage_ids:
         _require_text(passage_id, "relation passage_id", _MAX_ID)
+
+
+def _validate_relation_witness(
+    relation: Relation,
+    passages: tuple[PassageRef, PassageRef],
+    provenance: tuple[EvidenceProvenance, ...],
+) -> None:
+    if relation.witness is None:
+        return
+    explicit_witnesses = {
+        witness
+        for witness in (
+            *(passage.witness for passage in passages),
+            *(item.witness for item in provenance),
+        )
+        if witness is not None
+    }
+    if explicit_witnesses and explicit_witnesses != {relation.witness}:
+        raise ValueError(
+            f"Relation {relation.relation_id} witness conflicts with supporting provenance"
+        )
 
 
 def _testament_for(book: str, book_testaments: Mapping[str, str]) -> str:

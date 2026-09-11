@@ -196,6 +196,7 @@ def verify_artifact_bytes(
     expected_platform: str = DEFAULT_PLATFORM,
     allow_downgrade: bool = False,
 ) -> VerifiedApplicationUpdate:
+    manifest = _validated_manifest(manifest)
     _validate_target(manifest, current_version, expected_product_id, expected_platform, allow_downgrade)
     try:
         view = memoryview(artifact)
@@ -226,6 +227,7 @@ def verify_local_update(
     step to this exact digest/size rather than trusting a mutable path.
     """
 
+    manifest = _validated_manifest(manifest)
     _validate_target(manifest, current_version, expected_product_id, expected_platform, allow_downgrade)
     path = Path(artifact_path)
     if path.name != manifest.artifact_name:
@@ -266,6 +268,23 @@ def verify_local_update(
     return _verified(manifest, current_version)
 
 
+def _validated_manifest(manifest: ApplicationUpdateManifest) -> ApplicationUpdateManifest:
+    if not isinstance(manifest, ApplicationUpdateManifest):
+        raise ApplicationUpdateError("manifest must be ApplicationUpdateManifest")
+    return ApplicationUpdateManifest.from_mapping(
+        {
+            "schema": manifest.schema,
+            "product_id": manifest.product_id,
+            "target_platform": manifest.target_platform,
+            "target_version": manifest.target_version,
+            "source_head": manifest.source_head,
+            "artifact_name": manifest.artifact_name,
+            "artifact_size": manifest.artifact_size,
+            "artifact_sha256": manifest.artifact_sha256,
+        }
+    )
+
+
 def _validate_target(
     manifest: ApplicationUpdateManifest,
     current_version: str,
@@ -273,6 +292,8 @@ def _validate_target(
     expected_platform: str,
     allow_downgrade: bool,
 ) -> None:
+    if not isinstance(allow_downgrade, bool):
+        raise ApplicationUpdateError("allow_downgrade must be a boolean")
     expected_product_id = _bounded_token(expected_product_id, "expected_product_id", 64)
     expected_platform = _bounded_token(expected_platform, "expected_platform", 32)
     if manifest.product_id != expected_product_id:

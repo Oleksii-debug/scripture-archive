@@ -112,6 +112,7 @@ class DossierCoreTests(unittest.TestCase):
         self.assertEqual(claim.source_scope, "Acts 9:1")
         self.assertEqual(claim.uncertainty, "Witness-local scope only")
         self.assertEqual(claim.passage_ids, ("ACTS-9-1",))
+        self.assertEqual(claim.passage_witnesses, (("ACTS-9-1", "Luke"),))
         self.assertEqual(claim.evidence_ids, ("EV-VISIBLE",))
         linear = "\n".join(view.linearize())
         for token in (
@@ -121,6 +122,7 @@ class DossierCoreTests(unittest.TestCase):
             "source_scope=Acts 9:1",
             "uncertainty=Witness-local scope only",
             "passages=ACTS-9-1",
+            "passage_witnesses=ACTS-9-1@Luke",
             "evidence=EV-VISIBLE",
         ):
             self.assertIn(token, linear)
@@ -145,6 +147,77 @@ class DossierCoreTests(unittest.TestCase):
         self.assertIn("EV-LOCKED", ids)
         self.assertIn("CLAIM-LOCKED", ids)
         self.assertIn("REL-UNSUPPORTED", ids)
+
+    def test_conflicting_record_and_passage_witness_fail_closed(self):
+        runtime = EvidenceRuntime()
+        runtime.add_evidence(
+            EvidenceRecord(
+                "EV-CONFLICT",
+                (PassageRef("MK-1-1", "Mark", 1, 1, witness="Luke"),),
+                "Conflicting witness metadata must not be attributed.",
+                Confidence.T1,
+                witness="Mark",
+                entity_ids=("PERSON-X",),
+            )
+        )
+        runtime.unlock("EV-CONFLICT")
+        view = DossierAssembler(runtime).build(
+            DossierSubject("PERSON-X", DossierKind.PERSON, "X")
+        )
+        semantic = repr(view.to_dict())
+        linear = "\n".join(view.linearize())
+        self.assertFalse(view.stated)
+        self.assertEqual(view.to_dict()["status_text"], NOT_STATED)
+        self.assertNotIn("EV-CONFLICT", semantic)
+        self.assertNotIn("EV-CONFLICT", linear)
+        self.assertNotIn("MK-1-1", semantic)
+        self.assertNotIn("MK-1-1", linear)
+
+    def test_conflicting_relation_and_claim_witness_fail_closed(self):
+        runtime = EvidenceRuntime()
+        runtime.add_evidence(
+            EvidenceRecord(
+                "EV-LUKE",
+                (PassageRef("LK-1-1", "Luke", 1, 1, witness="Luke"),),
+                "Luke-local evidence.",
+                Confidence.T1,
+                witness="Luke",
+                entity_ids=("PERSON-X",),
+                relation_ids=("REL-CONFLICT",),
+            )
+        )
+        runtime.add_claim(
+            Claim(
+                "CLAIM-CONFLICT",
+                "A claim declared as a different witness must not be emitted.",
+                Confidence.T2,
+                required_evidence_ids=("EV-LUKE",),
+                witness="Mark",
+            )
+        )
+        runtime.add_relation(
+            Relation(
+                "REL-CONFLICT",
+                "PERSON-X",
+                "appears_in",
+                "EVENT-X",
+                witness="Mark",
+                passage_ids=("LK-1-1",),
+            )
+        )
+        runtime.unlock("EV-LUKE")
+        view = DossierAssembler(runtime).build(
+            DossierSubject("PERSON-X", DossierKind.PERSON, "X")
+        )
+        semantic = repr(view.to_dict())
+        linear = "\n".join(view.linearize())
+        self.assertIn("EV-LUKE", semantic)
+        self.assertIn("passage_witnesses", semantic)
+        self.assertIn("LK-1-1@Luke", linear)
+        self.assertNotIn("REL-CONFLICT", semantic)
+        self.assertNotIn("REL-CONFLICT", linear)
+        self.assertNotIn("CLAIM-CONFLICT", semantic)
+        self.assertNotIn("CLAIM-CONFLICT", linear)
 
     def test_invalid_subject_fails_closed(self):
         with self.assertRaises(ValueError):

@@ -80,6 +80,17 @@ class ApplicationUpdateTests(unittest.TestCase):
             ApplicationUpdateManifest.from_mapping(extra)
         payload = json.dumps(manifest_dict()).encode("utf-8")
         self.assertEqual(ApplicationUpdateManifest.from_json(payload).target_version, "1.2.0")
+        duplicate = payload.decode("utf-8").replace(
+            '"schema": "scripture.application-update.v1"',
+            '"schema": "scripture.application-update.v1", "schema": "scripture.application-update.v1"',
+            1,
+        )
+        with self.assertRaisesRegex(ApplicationUpdateError, "duplicate key"):
+            ApplicationUpdateManifest.from_json(duplicate)
+        non_string_key = manifest_dict()
+        non_string_key[1] = "unexpected"
+        with self.assertRaisesRegex(ApplicationUpdateError, "keys must be strings"):
+            ApplicationUpdateManifest.from_mapping(non_string_key)
 
     def test_path_like_or_windows_ambiguous_artifact_names_are_rejected(self):
         invalid = (

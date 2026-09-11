@@ -1,8 +1,10 @@
 import {chooseTransport, unwrap} from './transport.js';
+import {MasteryRequestGuard, validateMasteryPayload} from './mastery-state.mjs';
 
 const $ = id => document.getElementById(id);
 const BASE_VIEWS = ['home', 'mission', 'player', 'authoring'];
 let transport = null;
+const masteryGuard = new MasteryRequestGuard();
 
 async function api(command, payload = {}) {
   if (!transport) transport = await chooseTransport();
@@ -16,8 +18,13 @@ function announce(text) {
   requestAnimationFrame(() => { status.textContent = text; });
 }
 
-function hideMastery() {
+function hideMasterySurface() {
   $('mastery-view')?.classList.add('hidden');
+}
+
+function leaveMastery() {
+  masteryGuard.invalidate();
+  hideMasterySurface();
 }
 
 function showMastery() {
@@ -52,15 +59,29 @@ function renderMastery(rows) {
   }
 }
 
+function renderMasteryError() {
+  const host = $('mastery-rows');
+  host.replaceChildren();
+  $('mastery-empty').classList.add('hidden');
+  $('mastery-count').textContent = 'Дані майстерності runtime недоступні через помилку.';
+}
+
 async function loadMastery() {
+  const token = masteryGuard.begin();
   try {
     const data = await api('player.get_mastery');
-    const rows = Array.isArray(data.mastery) ? data.mastery : [];
+    if (!masteryGuard.owns(token)) return;
+    const rows = validateMasteryPayload(data);
+    if (!masteryGuard.owns(token)) return;
     renderMastery(rows);
     showMastery();
+    if (!masteryGuard.owns(token)) return;
     announce(rows.length ? `Показано стан майстерності для ${rows.length} концептів` : 'Даних майстерності ще немає');
   } catch (error) {
-    announce(`Помилка: ${error.message}`);
+    if (!masteryGuard.owns(token)) return;
+    renderMasteryError();
+    showMastery();
+    announce(`Помилка даних майстерності: ${error.message}`);
   }
 }
 
@@ -69,12 +90,17 @@ function bindMastery() {
   if (!button) return;
   button.addEventListener('click', loadMastery);
   for (const id of ['nav-home', 'nav-authoring', 'mission-back']) {
-    $(id)?.addEventListener('click', hideMastery, {capture: true});
+    $(id)?.addEventListener('click', leaveMastery, {capture: true});
   }
   const masteryView = $('mastery-view');
   const observer = new MutationObserver(() => {
-    if (masteryView.classList.contains('hidden')) return;
-    if (BASE_VIEWS.some(name => !$(`${name}-view`)?.classList.contains('hidden'))) hideMastery();
+    const baseViewVisible = BASE_VIEWS.some(name => {
+      const view = $(`${name}-view`);
+      return view && !view.classList.contains('hidden');
+    });
+    if (baseViewVisible && (masteryGuard.isActive() || !masteryView.classList.contains('hidden'))) {
+      leaveMastery();
+    }
   });
   for (const name of BASE_VIEWS) {
     const view = $(`${name}-view`);

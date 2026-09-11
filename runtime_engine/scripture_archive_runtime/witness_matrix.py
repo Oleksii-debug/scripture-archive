@@ -264,13 +264,16 @@ def _parallel_components(
 
 
 def _record_witness(record: EvidenceRecord) -> str | None:
-    if record.witness and record.witness.strip():
-        return record.witness.strip()
+    record_witness = record.witness.strip() if record.witness and record.witness.strip() else None
     passage_witnesses = {
         passage.witness.strip()
         for passage in record.passage_refs
         if passage.witness and passage.witness.strip()
     }
+    if record_witness is not None:
+        if passage_witnesses and passage_witnesses != {record_witness}:
+            return None
+        return record_witness
     if len(passage_witnesses) == 1:
         return next(iter(passage_witnesses))
     return None

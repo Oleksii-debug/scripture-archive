@@ -194,17 +194,21 @@ class DailyCaseComposerTests(unittest.TestCase):
                 now=NOW,
             )
 
-    def test_plan_metadata_and_limit_are_bounded(self):
+    def test_plan_metadata_limit_and_clock_are_bounded(self):
         with self.assertRaises(ValueError):
             self.composer.compose([], self.memory, self.session, case_id=" ", title="Case", now=NOW)
         with self.assertRaises(ValueError):
             self.composer.compose([], self.memory, self.session, case_id="case", title=" ", now=NOW)
+        with self.assertRaises(ValueError):
+            self.composer.compose([], self.memory, self.session, case_id="case", title="Case\nInjected", now=NOW)
         with self.assertRaises(ValueError):
             self.composer.compose([], self.memory, self.session, case_id="case", title="Case", limit=0, now=NOW)
         with self.assertRaises(ValueError):
             self.composer.compose([], self.memory, self.session, case_id="case", title="Case", limit=51, now=NOW)
         with self.assertRaises(ValueError):
             self.composer.compose([], self.memory, self.session, case_id="case", title="Case", limit=True, now=NOW)
+        with self.assertRaises(ValueError):
+            self.composer.compose([], self.memory, self.session, case_id="case", title="Case", now=datetime(2026, 9, 11, 18, 0))
 
 
 if __name__ == "__main__":

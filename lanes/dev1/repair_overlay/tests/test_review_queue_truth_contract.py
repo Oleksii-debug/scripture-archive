@@ -52,6 +52,8 @@ class ReviewQueueTruthContractTests(unittest.TestCase):
             "not-a-list",
             ["not-an-object"],
             [{key: value for key, value in VALID_ITEMS[0].items() if key != "due_at"}],
+            [{**VALID_ITEMS[0], "due_at": "not-a-date"}],
+            [{**VALID_ITEMS[0], "due_at": "2026-09-12T00:00:00"}],
             [{**VALID_ITEMS[0], "priority": True}],
             [{**VALID_ITEMS[0], "relation": "UNKNOWN"}],
             [{**VALID_ITEMS[0], "queue_id": " padded "}],

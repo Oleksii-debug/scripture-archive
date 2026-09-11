@@ -20,6 +20,7 @@ class ResearchExportTests(unittest.TestCase):
         export = build_research_export(self.runtime(), workspace_id="case-1", title="Case 1")
         self.assertEqual(export.payload["evidence_scope"], "unlocked_only")
         self.assertEqual([row["evidence_id"] for row in export.payload["evidence"]], ["EV-A"])
+        self.assertEqual(export.payload["claims"], [])
         self.assertEqual(export.payload["relations"], [])
 
     def test_workspace_rows_cannot_reference_locked_or_unknown_evidence(self):
@@ -60,6 +61,7 @@ class ResearchExportTests(unittest.TestCase):
             runtime,
             workspace_id="case-<1>",
             title="Case <unsafe>",
+            include_locked_evidence=True,
             notes=(WorkspaceNote("N1", "<script>alert('x')</script> & note", evidence_ids=("EV-A",)),),
             chronology=(ChronologyRow("T1", "<event>", "first", uncertainty="not <certain>", evidence_ids=("EV-A",)),),
         )
@@ -76,7 +78,13 @@ class ResearchExportTests(unittest.TestCase):
 
     def test_markdown_is_linear_text_and_escapes_embedded_html(self):
         runtime = self.runtime()
-        export = build_research_export(runtime, workspace_id="case-1", title="Research <case>", notes=(WorkspaceNote("N1", "<script>bad</script>", evidence_ids=("EV-A",)),))
+        export = build_research_export(
+            runtime,
+            workspace_id="case-1",
+            title="Research <case>",
+            include_locked_evidence=True,
+            notes=(WorkspaceNote("N1", "<script>bad</script>", evidence_ids=("EV-A",)),),
+        )
         markdown = export.to_markdown()
         self.assertIn("## Claims", markdown)
         self.assertIn("## Evidence", markdown)

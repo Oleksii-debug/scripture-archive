@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 import math
 from numbers import Real
@@ -27,6 +27,24 @@ class DailyCaseItem:
     passage_keys: tuple[str, ...]
     book_key: str | None
 
+    def __post_init__(self) -> None:
+        if isinstance(self.position, bool) or not isinstance(self.position, int) or self.position < 1:
+            raise ValueError("DailyCaseItem.position must be a positive integer")
+        _canonical_text(self.node_id, "DailyCaseItem.node_id", 256)
+        _canonical_text(self.task_family, "DailyCaseItem.task_family", 128)
+        if not isinstance(self.queue, str) or self.queue not in {item.value for item in QueueKind}:
+            raise ValueError("DailyCaseItem.queue must be a QueueKind value")
+        if not isinstance(self.relation, str) or self.relation not in {item.value for item in RetrievalRelation}:
+            raise ValueError("DailyCaseItem.relation must be a RetrievalRelation value")
+        if not isinstance(self.concept_ids, tuple):
+            raise TypeError("DailyCaseItem.concept_ids must be tuple[str, ...]")
+        if not isinstance(self.passage_keys, tuple):
+            raise TypeError("DailyCaseItem.passage_keys must be tuple[str, ...]")
+        _validate_string_sequence(self.concept_ids, "DailyCaseItem.concept_ids")
+        _validate_string_sequence(self.passage_keys, "DailyCaseItem.passage_keys")
+        if self.book_key is not None:
+            _canonical_text(self.book_key, "DailyCaseItem.book_key", 128)
+
     def to_dict(self) -> dict[str, object]:
         return {
             "position": self.position,
@@ -45,7 +63,20 @@ class DailyCasePlan:
     case_id: str
     title: str
     items: tuple[DailyCaseItem, ...]
-    schema: str = DAILY_CASE_SCHEMA
+    schema: str = field(default=DAILY_CASE_SCHEMA, init=False)
+
+    def __post_init__(self) -> None:
+        _canonical_text(self.case_id, "DailyCasePlan.case_id", _MAX_CASE_ID)
+        _canonical_text(self.title, "DailyCasePlan.title", _MAX_TITLE)
+        if not isinstance(self.items, tuple):
+            raise TypeError("DailyCasePlan.items must be tuple[DailyCaseItem, ...]")
+        for expected_position, item in enumerate(self.items, start=1):
+            if not isinstance(item, DailyCaseItem):
+                raise TypeError("DailyCasePlan.items must contain DailyCaseItem values")
+            if item.position != expected_position:
+                raise ValueError("DailyCasePlan item positions must be contiguous from 1")
+        if len(self.items) > _MAX_ITEMS:
+            raise ValueError(f"DailyCasePlan cannot exceed {_MAX_ITEMS} items")
 
     def semantic_rows(self) -> list[dict[str, object]]:
         return [item.to_dict() for item in self.items]
@@ -99,7 +130,7 @@ class DailyCaseComposer:
         adjacent_successful_exact_ids: set[str] | None = None,
         now: datetime | None = None,
     ) -> DailyCasePlan:
-        normalized_case_id = _bounded_text(case_id, "case_id", _MAX_CASE_ID)
+        normalized_case_id = _canonical_text(case_id, "case_id", _MAX_CASE_ID)
         normalized_title = _bounded_text(title, "title", _MAX_TITLE)
         if not isinstance(memory, PlayerMemory):
             raise TypeError("memory must be PlayerMemory")
@@ -162,9 +193,16 @@ def _bounded_text(value: object, name: str, maximum: int) -> str:
     return normalized
 
 
+def _canonical_text(value: object, name: str, maximum: int) -> str:
+    normalized = _bounded_text(value, name, maximum)
+    if value != normalized:
+        raise ValueError(f"{name} must not contain leading or trailing whitespace")
+    return normalized
+
+
 def _validate_string_sequence(values: Sequence[object], name: str) -> None:
     for index, value in enumerate(values):
-        _bounded_text(value, f"{name}[{index}]", 256)
+        _canonical_text(value, f"{name}[{index}]", 256)
 
 
 def _validate_finite_number(value: object, name: str) -> None:
@@ -175,8 +213,8 @@ def _validate_finite_number(value: object, name: str) -> None:
 def _validate_candidate(candidate: object) -> None:
     if not isinstance(candidate, SchedulerCandidate):
         raise TypeError("candidates must contain SchedulerCandidate values")
-    _bounded_text(candidate.node_id, "candidate.node_id", 256)
-    _bounded_text(candidate.task_family, "candidate.task_family", 128)
+    _canonical_text(candidate.node_id, "candidate.node_id", 256)
+    _canonical_text(candidate.task_family, "candidate.task_family", 128)
     if not isinstance(candidate.queue, QueueKind):
         raise TypeError("candidate.queue must be QueueKind")
     if not isinstance(candidate.relation, RetrievalRelation):
@@ -194,9 +232,9 @@ def _validate_candidate(candidate: object) -> None:
     _validate_string_sequence(candidate.concept_ids, "candidate.concept_ids")
     _validate_string_sequence(candidate.passage_keys, "candidate.passage_keys")
     if candidate.book_key is not None:
-        _bounded_text(candidate.book_key, "candidate.book_key", 128)
+        _canonical_text(candidate.book_key, "candidate.book_key", 128)
     if candidate.paired_exact_node_id is not None:
-        _bounded_text(candidate.paired_exact_node_id, "candidate.paired_exact_node_id", 256)
+        _canonical_text(candidate.paired_exact_node_id, "candidate.paired_exact_node_id", 256)
     if candidate.due_at is not None:
         if not isinstance(candidate.due_at, datetime):
             raise TypeError("candidate.due_at must be datetime or None")

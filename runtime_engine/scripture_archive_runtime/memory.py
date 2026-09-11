@@ -31,11 +31,14 @@ class PlayerMemoryService:
         now: datetime | None = None,
     ) -> Session:
         now = now or datetime.now(timezone.utc)
+        new_session_id = session_id or str(uuid.uuid4())
+        if any(existing.session_id == new_session_id for existing in memory.sessions):
+            raise ValueError(f"Duplicate session_id: {new_session_id}")
         if memory.sessions and memory.sessions[-1].ended_at is None:
             previous = memory.sessions[-1]
             previous.ended_at = now
             previous.ended_reason = previous.ended_reason or "restart_recovery"
-        session = Session(session_id=session_id or str(uuid.uuid4()), started_at=now)
+        session = Session(session_id=new_session_id, started_at=now)
         memory.sessions.append(session)
         self.trim_sessions(memory)
         return session

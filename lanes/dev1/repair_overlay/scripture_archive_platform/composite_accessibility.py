@@ -38,10 +38,11 @@ def _child_contract_missing(path: str) -> AccessibilityFinding:
 def inspect_packaged_task(task: Mapping[str, Any]) -> AccessibilityReport:
     """Inspect a packaged task and recursively qualify composite child surfaces.
 
-    The base inspector deliberately remains host-neutral. This packaged wrapper adds
-    recursion only where TaskPresentationMapper has preserved player-visible child
-    contracts; absence of that contract is an error rather than a false accessibility
-    PASS. No grading/answer truth is consulted or inherited.
+    TaskPresentationMapper passes only player-visible child metadata into this layer.
+    Missing child semantics are therefore a qualification failure, not permission to
+    infer them from grading truth. Even incomplete children are still inspected so
+    explicit nested pointer/visual/media hazards cannot disappear behind the missing
+    contract finding.
     """
     base = inspect_renderable_task(task)
     if not isinstance(task, Mapping):
@@ -59,26 +60,25 @@ def inspect_packaged_task(task: Mapping[str, Any]) -> AccessibilityReport:
     for index, step in enumerate(steps):
         path = f"task.steps[{index}]"
         if not isinstance(step, Mapping):
-            continue  # Base inspector already emits the invalid-step finding.
+            continue  # Base inspector already reports the invalid step.
 
         child_type = _text(step.get("task_type"))
         if not child_type:
             findings.append(_child_contract_missing(path))
-            continue
 
         step_id = _text(step.get("step_id")) or str(index + 1)
         label = _text(step.get("label")) or _text(step.get("prompt")) or f"Step {index + 1}"
         prompt = _text(step.get("prompt")) or label
 
-        # Copy only the already-sanitized packaged child surface. Parent context supplies
-        # identity/source scope; accessibility is intentionally NOT inherited, because a
-        # missing child nonvisual contract must fail closed.
+        # Copy only the sanitized packaged child surface. Parent context supplies the
+        # source scope when the child did not provide one. Accessibility is NOT
+        # inherited: a missing child nonvisual contract must remain visible as a fail.
         child: dict[str, Any] = dict(step)
         child["node_id"] = f"{base.node_id}#{step_id}"
-        child["task_type"] = canonical_task_type(child_type)
+        child["task_type"] = canonical_task_type(child_type) if child_type else "<MISSING>"
         child["heading"] = label
         child["prompt"] = prompt
-        child["source_scope"] = task.get("source_scope")
+        child.setdefault("source_scope", task.get("source_scope"))
         child.setdefault("visual", {})
 
         child_report = inspect_packaged_task(child)

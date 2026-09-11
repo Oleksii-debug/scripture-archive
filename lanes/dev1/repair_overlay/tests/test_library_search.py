@@ -144,6 +144,16 @@ class LibrarySearchTests(unittest.TestCase):
         self.assertTrue(leaked["ok"])
         self.assertEqual(0, leaked["data"]["total"])
 
+    def test_convergence_preserves_dev05_fail_closed_branch_target_security(self):
+        self.assertNotIn("player.navigate_branch", ALLOWLISTED_COMMANDS)
+        app = PlatformApplication(self.repo, store=self.store)
+        navigate = self.call(app, "player.navigate_branch", {"target_node_id": "DM01-N01"})
+        self.assertFalse(navigate["ok"])
+        self.assertEqual("VALIDATION_ERROR", navigate["error"]["code"])
+        targeted_next = self.call(app, "player.next", {"target_node_id": "DM01-N01"})
+        self.assertFalse(targeted_next["ok"])
+        self.assertEqual("VALIDATION_ERROR", targeted_next["error"]["code"])
+
 
 if __name__ == "__main__":
     unittest.main()

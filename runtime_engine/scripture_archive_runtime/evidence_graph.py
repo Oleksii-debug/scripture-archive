@@ -151,8 +151,8 @@ def build_evidence_graph(
     By default only already-unlocked evidence participates. Claims are visible only
     when they have a non-empty required-evidence contract and every required record
     is visible. Relations are visible only when both endpoints resolve uniquely to
-    visible graph nodes and every relation passage reference is visible. No missing
-    node, endpoint, entity type, chronology, or source fact is inferred.
+    visible graph nodes and every relation passage reference is visible. Explicit
+    witness provenance is validated but never inferred or harmonized.
     """
 
     selected_ids = _select_evidence_ids(
@@ -192,6 +192,7 @@ def build_evidence_graph(
         record = runtime.evidence[evidence_id]
         _require_stable_id(record.evidence_id, "evidence_id")
         _reject_hidden_alias(record.evidence_id, hidden_raw_ids, "evidence_id")
+        _validate_record_witness_provenance(record)
         add_node(
             EvidenceGraphNode(
                 graph_id=_graph_id(EVIDENCE_NODE, record.evidence_id),
@@ -261,6 +262,7 @@ def build_evidence_graph(
 
     for claim in visible_claims:
         _reject_hidden_alias(claim.claim_id, hidden_raw_ids, "claim_id")
+        _validated_witness(claim.witness, f"claim {claim.claim_id} witness")
         claim_graph_id = _graph_id(CLAIM_NODE, claim.claim_id)
         add_node(
             EvidenceGraphNode(
@@ -307,6 +309,13 @@ def build_evidence_graph(
         if relation.passage_ids and not set(relation.passage_ids).issubset(visible_passage_ids):
             # Do not leak relation provenance that is outside the visible evidence scope.
             continue
+        _validate_relation_witness_provenance(
+            relation,
+            source_id=source,
+            target_id=target,
+            nodes=nodes,
+            passage_payloads=passage_payloads,
+        )
         add_edge(
             EvidenceGraphEdge(
                 edge_id=f"relation:{relation.relation_id}",
@@ -393,6 +402,84 @@ def _resolve_endpoint(
     if len(candidates) != 1:
         raise ValueError(f"Ambiguous relation endpoint {raw_id}: {sorted(candidates)}")
     return next(iter(candidates))
+
+
+def _validated_witness(value: str | None, label: str) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError(f"{label} must be a string or None")
+    stripped = value.strip()
+    if not stripped or stripped != value:
+        raise ValueError(f"{label} must be a non-empty trimmed string when provided")
+    return stripped
+
+
+def _validate_record_witness_provenance(record: EvidenceRecord) -> None:
+    record_witness = _validated_witness(record.witness, f"evidence {record.evidence_id} witness")
+    passage_witnesses = {
+        witness
+        for passage in record.passage_refs
+        if (witness := _validated_witness(
+            passage.witness,
+            f"passage {passage.passage_id} witness",
+        )) is not None
+    }
+    if record_witness is not None and any(
+        witness != record_witness for witness in passage_witnesses
+    ):
+        raise ValueError(
+            f"Conflicting witness provenance for evidence {record.evidence_id}: "
+            f"record={record_witness}; passages={sorted(passage_witnesses)}"
+        )
+
+
+def _validate_relation_witness_provenance(
+    relation: Relation,
+    *,
+    source_id: str,
+    target_id: str,
+    nodes: Mapping[str, EvidenceGraphNode],
+    passage_payloads: Mapping[str, Mapping[str, Any]],
+) -> None:
+    relation_witness = _validated_witness(
+        relation.witness,
+        f"relation {relation.relation_id} witness",
+    )
+    if relation_witness is None:
+        return
+
+    supporting_witnesses: set[str] = set()
+    for passage_id in relation.passage_ids:
+        passage = passage_payloads.get(passage_id)
+        if passage is None:
+            continue
+        witness = _validated_witness(
+            passage.get("witness"),
+            f"relation {relation.relation_id} passage {passage_id} witness",
+        )
+        if witness is not None:
+            supporting_witnesses.add(witness)
+
+    for endpoint_id in (source_id, target_id):
+        node = nodes[endpoint_id]
+        if node.node_type not in {EVIDENCE_NODE, PASSAGE_NODE}:
+            continue
+        witness = _validated_witness(
+            node.payload.get("witness"),
+            f"relation {relation.relation_id} endpoint {endpoint_id} witness",
+        )
+        if witness is not None:
+            supporting_witnesses.add(witness)
+
+    conflicting = sorted(
+        witness for witness in supporting_witnesses if witness != relation_witness
+    )
+    if conflicting:
+        raise ValueError(
+            f"Conflicting witness provenance for relation {relation.relation_id}: "
+            f"relation={relation_witness}; supporting={sorted(supporting_witnesses)}"
+        )
 
 
 def _graph_id(node_type: str, raw_id: str) -> str:

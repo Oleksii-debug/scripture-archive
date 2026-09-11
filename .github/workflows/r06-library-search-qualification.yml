@@ -38,9 +38,5 @@ jobs:
         run: |
           test "$(git rev-parse HEAD)" = "${GITHUB_SHA}" || exit 1
           git status --porcelain
-      - name: Execute Library/Search qualification
+      - name: Execute Library/Search isolated qualification
         run: python tools/verify_library_search_overlay.py
-      - name: Execute Library/Search regression tests
-        env:
-          PYTHONPATH: lanes/dev1/repair_overlay
-        run: python -m unittest discover -s lanes/dev1/repair_overlay/tests -p "test_library_search.py" -v

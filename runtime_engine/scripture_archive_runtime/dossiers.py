@@ -25,10 +25,12 @@ class DossierSubject:
     display_name: str
 
     def __post_init__(self) -> None:
-        if not self.subject_id.strip():
-            raise ValueError("subject_id must be non-empty")
-        if not self.display_name.strip():
-            raise ValueError("display_name must be non-empty")
+        if not isinstance(self.subject_id, str) or not self.subject_id.strip():
+            raise ValueError("subject_id must be a non-empty string")
+        if not isinstance(self.kind, DossierKind):
+            raise ValueError("kind must be a DossierKind")
+        if not isinstance(self.display_name, str) or not self.display_name.strip():
+            raise ValueError("display_name must be a non-empty string")
 
 
 @dataclass(frozen=True)

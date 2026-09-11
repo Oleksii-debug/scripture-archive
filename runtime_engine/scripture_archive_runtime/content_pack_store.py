@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import os
+import uuid
 from pathlib import Path
 
-from .content_packs import ContentPackStore as _CoreContentPackStore
+from .content_packs import MAX_ARCHIVE_BYTES, ContentPackInspection, ContentPackStore as _CoreContentPackStore
 from .security import ValidationError
 
 
@@ -13,13 +15,37 @@ def _semver_key(value: str) -> tuple[int, int, int, int, str]:
 
 
 class ContentPackStore(_CoreContentPackStore):
-    """Public store boundary with immutable-store export protection.
+    """Public store boundary with stable-input and immutable-store protection.
 
-    The core class owns archive validation, install, activation and rollback.
-    This public facade additionally prevents callers from exporting generated
-    archives back inside the immutable pack store and returns semver-ordered
-    installed versions.
+    Caller-owned archives are copied into the private staging root before the
+    core validator/extractor sees them. This closes the inspect-versus-extract
+    TOCTOU window for a source file that changes during installation.
     """
+
+    def install(self, archive: str | Path) -> ContentPackInspection:
+        source = Path(archive).expanduser().resolve()
+        snapshot = self.staging_root / f".incoming-{uuid.uuid4().hex}.zip"
+        total = 0
+        try:
+            try:
+                with source.open("rb") as src, snapshot.open("xb") as dst:
+                    while True:
+                        chunk = src.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        total += len(chunk)
+                        if total > MAX_ARCHIVE_BYTES:
+                            raise ValidationError("Content pack archive exceeds compressed size limit")
+                        dst.write(chunk)
+                    dst.flush()
+                    os.fsync(dst.fileno())
+            except ValidationError:
+                raise
+            except OSError as exc:
+                raise ValidationError("Content pack archive is not readable") from exc
+            return super().install(snapshot)
+        finally:
+            snapshot.unlink(missing_ok=True)
 
     def installed_versions(self, pack_id: str) -> tuple[str, ...]:
         return tuple(sorted(super().installed_versions(pack_id), key=_semver_key))

@@ -1,0 +1,26 @@
+{
+  "schema": "DEV09_D4_PROVENANCE_SCOPE_REPAIR_v1",
+  "issue": 60,
+  "input_transport": {
+    "filename": "DEV4_FINALPREP_02_MATERIALIZATION_PAYLOAD.zip",
+    "drive_id": "188Pswz0qdGZJ5h4gyM8KPpQUfTGGr0y6",
+    "sha256": "e8b008c31462d7ed9388a7a84f73bb8666c8449181000751e9da45c2468779c9"
+  },
+  "audited_closure": {
+    "filename": "DEV_LANE_SCRIPTURE_R06_D4_CLOSURE_03.zip",
+    "drive_id": "1LSrCc1M8DcqRBwpO2NAVmcB9EzazgMDq",
+    "sha256": "c4e8dfe4ea62df2c3d52b810fb2413b31d6dcfd4cc711320beae3258ac6a981a"
+  },
+  "policy": "Broaden only the declared/displayed source scope needed to include the explicit speaker anchor. Stable semantic IDs and claim propositions remain unchanged.",
+  "evidence_repairs": [
+    {"evidence_id":"EV-OT-D4-0002","speaker_or_narrator":"Yahweh speaking to Abram","old_source_passage":"Genesis 12:2–3","new_source_passage":"Genesis 12:1–3","speaker_anchor":"Genesis 12:1","basis":"Genesis 12:1 names Yahweh speaking to Abram; 12:2–3 continues that speech.","affected_node_ids":["OTAB01-N002","OTAB01-N008","OTAB01-N014","OTAB01-N020","OTAB01-N025","OTAB01-N026"]},
+    {"evidence_id":"EV-OT-D4-0007","speaker_or_narrator":"Yahweh speaking to Abram","old_source_passage":"Genesis 15:13–16","new_source_passage":"Genesis 15:7–16","speaker_anchor":"Genesis 15:7","basis":"Genesis 15:7 explicitly identifies Yahweh in the dialogue whose pronoun-led speech continues at 15:13–16.","affected_node_ids":["OTAB02-N001","OTAB02-N007","OTAB02-N013","OTAB02-N019","OTAB02-N025","OTAB02-N030"]},
+    {"evidence_id":"EV-OT-D4-0008","speaker_or_narrator":"God speaking to Abraham","old_source_passage":"Genesis 17:4–5","new_source_passage":"Genesis 17:3–5","speaker_anchor":"Genesis 17:3","basis":"Genesis 17:3 explicitly says God talked with Abram before the continued quotation in 17:4–5.","affected_node_ids":["OTAB02-N002","OTAB02-N008","OTAB02-N014","OTAB02-N020","OTAB02-N025","OTAB02-N026"]},
+    {"evidence_id":"EV-OT-D4-0032","speaker_or_narrator":"Yahweh speaking","old_source_passage":"Exodus 12:14–20","new_source_passage":"Exodus 12:12–20","speaker_anchor":"Exodus 12:12","basis":"Exodus 12:12 explicitly identifies the first-person speaker as Yahweh; 12:14–20 continues that speech.","affected_node_ids":["OTEX02-N002","OTEX02-N008","OTEX02-N014","OTEX02-N020","OTEX02-N025","OTEX02-N026"]},
+    {"evidence_id":"EV-OT-D4-0041","speaker_or_narrator":"God speaking to Israel","old_source_passage":"Exodus 20:12–17","new_source_passage":"Exodus 20:1–17","speaker_anchor":"Exodus 20:1","basis":"Exodus 20:1 explicitly identifies God as the speaker of the commandments continued through 20:12–17.","affected_node_ids":["OTSI01-N005","OTSI01-N011","OTSI01-N017","OTSI01-N023","OTSI01-N028","OTSI01-N029"]}
+  ],
+  "changed_node_count": 29,
+  "changed_node_ids": ["OTAB01-N002","OTAB01-N008","OTAB01-N014","OTAB01-N020","OTAB01-N025","OTAB01-N026","OTAB02-N001","OTAB02-N002","OTAB02-N007","OTAB02-N008","OTAB02-N013","OTAB02-N014","OTAB02-N019","OTAB02-N020","OTAB02-N025","OTAB02-N026","OTAB02-N030","OTEX02-N002","OTEX02-N008","OTEX02-N014","OTEX02-N020","OTEX02-N025","OTEX02-N026","OTSI01-N005","OTSI01-N011","OTSI01-N017","OTSI01-N023","OTSI01-N028","OTSI01-N029"],
+  "node_record_aggregate_sha256": "9fd8f668868e267e97b718a1de3025ad47577748e1054e146b6279da585e2ef7",
+  "independent_audit_status": "PENDING"
+}

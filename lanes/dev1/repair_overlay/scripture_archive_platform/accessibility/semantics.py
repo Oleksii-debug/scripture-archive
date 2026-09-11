@@ -38,8 +38,7 @@ class _SemanticAuditParser(HTMLParser):
         self.duplicate_ids: set[str] = set()
         self.idrefs: list[tuple[str, str, str]] = []
         self.label_for: set[str] = set()
-        self.nested_label_controls: set[str] = set()
-        self.control_records: list[tuple[str, str | None, dict[str, str]]] = []
+        self.control_records: list[tuple[str, str | None, dict[str, str], bool]] = []
         self.dialogs: list[dict[str, str]] = []
         self.main_count = 0
         self.h1_count = 0
@@ -84,9 +83,7 @@ class _SemanticAuditParser(HTMLParser):
         if tag in {'input', 'select', 'textarea'}:
             input_type = a.get('type', '').lower() if tag == 'input' else ''
             if input_type not in {'hidden', 'button', 'submit', 'reset', 'image'}:
-                self.control_records.append((tag, element_id, a))
-                if self._label_depth and element_id:
-                    self.nested_label_controls.add(element_id)
+                self.control_records.append((tag, element_id, a, self._label_depth > 0))
 
         if tag == 'fieldset':
             self._fieldset_stack.append(False)
@@ -147,10 +144,10 @@ def audit_static_html(html: str) -> list[str]:
         if ref not in parser.ids:
             errors.append(f'{tag} {attr} references missing id: {ref}')
 
-    for tag, element_id, attrs in parser.control_records:
-        labelled = bool(attrs.get('aria-label') or attrs.get('aria-labelledby'))
+    for tag, element_id, attrs, nested_in_label in parser.control_records:
+        labelled = bool(attrs.get('aria-label') or attrs.get('aria-labelledby') or nested_in_label)
         if element_id:
-            labelled = labelled or element_id in parser.label_for or element_id in parser.nested_label_controls
+            labelled = labelled or element_id in parser.label_for
         if not labelled:
             errors.append(f'unlabeled {tag}: {element_id or "<no id>"}')
 

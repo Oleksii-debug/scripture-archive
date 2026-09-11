@@ -110,7 +110,7 @@ class WitnessMatrixTests(unittest.TestCase):
         self.assertEqual(luke["status"], "not_stated_in_visible_scope")
         self.assertEqual(payload["contradiction_semantics"], "not_inferred")
         self.assertIn("not denial", payload["absence_semantics"])
-        self.assertIn("not proof", payload["absence_semantics"])
+        self.assertIn("or proof", payload["absence_semantics"])
 
     def test_explicit_full_scope_may_include_locked_parallel_record_and_claim(self):
         runtime = self.runtime()

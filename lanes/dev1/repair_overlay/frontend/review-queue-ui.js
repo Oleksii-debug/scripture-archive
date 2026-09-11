@@ -1,4 +1,5 @@
 import {chooseTransport, unwrap} from './transport.js';
+import {createRequestGenerationGate} from './review-queue-request-gate.js';
 
 const MAX_VISIBLE_ITEMS = 500;
 const MAX_QUEUE_ITEMS = 5000;
@@ -9,8 +10,13 @@ const CONTROL_OR_LINE_SEPARATOR = /[\u0000-\u001F\u007F\u2028\u2029]/u;
 const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/u;
 let transportPromise = null;
 let loadedOnce = false;
+let reviewViewActive = false;
 
 const byId = id => document.getElementById(id);
+const requestGate = createRequestGenerationGate(() => {
+  const review = byId('review-queue-view');
+  return reviewViewActive && Boolean(review) && !review.classList.contains('hidden');
+});
 
 function element(tag, text = '', attrs = {}) {
   const node = document.createElement(tag);
@@ -48,10 +54,21 @@ function hideOtherViews() {
   }
 }
 
+function deactivateReviewQueue() {
+  if (!reviewViewActive) return;
+  reviewViewActive = false;
+  requestGate.invalidate();
+}
+
 function keepViewExclusive() {
   const review = byId('review-queue-view');
-  if (!review || review.classList.contains('hidden')) return;
+  if (!review) return;
+  if (review.classList.contains('hidden')) {
+    deactivateReviewQueue();
+    return;
+  }
   if (mainSections().some(view => view.id !== 'review-queue-view' && !view.classList.contains('hidden'))) {
+    deactivateReviewQueue();
     review.classList.add('hidden');
   }
 }
@@ -126,17 +143,22 @@ function renderQueue(rawQueue) {
 }
 
 async function loadReviewQueue() {
+  const generation = requestGate.begin();
+  if (!requestGate.isCurrent(generation)) return;
   setStatus('Перевірка canonical review capability…');
   try {
     const bootstrap = await api('system.bootstrap');
+    if (!requestGate.isCurrent(generation)) return;
     if (bootstrap?.capabilities?.review_queue !== true) {
       throw new Error('Canonical runtime review queue недоступна в цьому запуску');
     }
     const data = await api('player.get_review_queue');
+    if (!requestGate.isCurrent(generation)) return;
     if (data?.truth_owner !== 'D5/runtime') {
       throw new Error('Review queue response не підтверджує D5/runtime truth ownership');
     }
     const rendered = renderQueue(data.review_queue);
+    if (!requestGate.isCurrent(generation)) return;
     loadedOnce = true;
     if (rendered.total > rendered.shown) {
       setStatus(`Canonical queue містить ${rendered.total} записів; показано перші ${rendered.shown} у runtime order без локального re-ranking.`);
@@ -145,6 +167,7 @@ async function loadReviewQueue() {
     }
     byId('review-queue-heading')?.focus();
   } catch (error) {
+    if (!requestGate.isCurrent(generation)) return;
     loadedOnce = false;
     byId('review-queue-results')?.replaceChildren();
     setStatus(`Review queue недоступна: ${error.message}`);
@@ -172,14 +195,18 @@ function buildSurface() {
   section.append(heading, note, status, actions, results);
   main.append(section);
 
-  navButton.addEventListener('click', async () => {
+  navButton.addEventListener('click', () => {
     hideOtherViews();
     section.classList.remove('hidden');
+    reviewViewActive = true;
     heading.focus();
-    if (!loadedOnce) await loadReviewQueue();
+    if (!loadedOnce) void loadReviewQueue();
   });
-  refresh.addEventListener('click', loadReviewQueue);
-  back.addEventListener('click', () => byId('nav-home')?.click());
+  refresh.addEventListener('click', () => { void loadReviewQueue(); });
+  back.addEventListener('click', () => {
+    deactivateReviewQueue();
+    byId('nav-home')?.click();
+  });
 
   const observer = new MutationObserver(keepViewExclusive);
   observer.observe(main, {subtree: true, childList: true, attributes: true, attributeFilter: ['class']});

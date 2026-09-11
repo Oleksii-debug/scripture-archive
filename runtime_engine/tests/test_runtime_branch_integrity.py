@@ -7,9 +7,11 @@ from scripture_archive_runtime.content import ContentRepository
 from scripture_archive_runtime.security import ValidationError
 from tests.fixtures import LN01_N03, PA02_N04, node_from
 
-PLATFORM_OVERLAY = Path(__file__).resolve().parents[2] / "lanes" / "dev1" / "repair_overlay"
-if str(PLATFORM_OVERLAY) not in sys.path:
-    sys.path.insert(0, str(PLATFORM_OVERLAY))
+REPO_ROOT = Path(__file__).resolve().parents[2]
+PLATFORM_OVERLAY = REPO_ROOT / "lanes" / "dev1" / "repair_overlay"
+for import_root in (REPO_ROOT, PLATFORM_OVERLAY):
+    if str(import_root) not in sys.path:
+        sys.path.insert(0, str(import_root))
 from scripture_archive_platform.transport.runtime_compat import RuntimeEngineContractAdapter
 
 

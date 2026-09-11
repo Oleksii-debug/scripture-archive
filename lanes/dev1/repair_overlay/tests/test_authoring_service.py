@@ -3,7 +3,16 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+import sys
 
+for _parent in Path(__file__).resolve().parents:
+    _runtime_root = _parent / "runtime_engine"
+    if (_runtime_root / "scripture_archive_runtime").is_dir():
+        sys.path.insert(0, str(_runtime_root))
+        break
+
+from scripture_archive_runtime.grading import GraderRegistry as RuntimeGraderRegistry
+from scripture_archive_runtime.models import Correctness, TaskDefinition
 from scripture_archive_platform.authoring.service import AuthoringService
 from scripture_archive_platform.content.loader import TaskPresentationMapper
 from scripture_archive_platform.domain.models import BUILTIN_TASK_TYPES
@@ -20,6 +29,7 @@ class ConstructorHardeningTests(unittest.TestCase):
             JsonFileStore(Path(self.tmp.name)), self.registry, TaskPresentationMapper(),
             clock=lambda: 1000, id_factory=lambda: f"{next(self.ids):012d}",
         )
+        self.runtime_graders = RuntimeGraderRegistry()
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -47,34 +57,44 @@ class ConstructorHardeningTests(unittest.TestCase):
     def populate_task_payload(draft, task_type):
         node = draft["node"]
         ui = node["ui_metadata"]
+        node["grading"] = {}
         if task_type in {"SINGLE_CHOICE", "COMBOBOX_SELECT", "PARALLEL_WITNESS_COMPARE"}:
             ui["options"] = [{"id": "a", "label": "A"}, {"id": "b", "label": "B"}]
             node["answer_contract"] = {"accepted_choice_ids": ["a"]}
+            node["grading"] = {"accepted_choice": "a"}
         elif task_type == "MULTI_SELECT":
             ui["options"] = [{"id": "a", "label": "A"}, {"id": "b", "label": "B"}]
             node["answer_contract"] = {"accepted_choice_ids": ["a", "b"]}
+            node["grading"] = {"accepted_set": ["a", "b"]}
         elif task_type == "ORDERING":
             ui["items"] = [{"id": "a", "label": "A"}, {"id": "b", "label": "B"}]
             node["answer_contract"] = {"accepted_order": ["b", "a"]}
+            node["grading"] = {"accepted_order": ["b", "a"]}
         elif task_type == "MATCHING":
             ui["pairs"] = [
                 {"left": "L1", "right": "R1"},
                 {"left": "L2", "right": "R2"},
             ]
             node["answer_contract"] = {"accepted_pairs": {"L1": "R1", "L2": "R2"}}
+            node["grading"] = {"accepted_pairs": {"L1": "R1", "L2": "R2"}}
         elif task_type == "EVIDENCE_SELECT":
             ui["evidence_options"] = [
                 {"id": "e1", "label": "Evidence 1"},
                 {"id": "e2", "label": "Evidence 2"},
             ]
             node["answer_contract"] = {"accepted_choice_ids": ["e1"]}
+            node["grading"] = {"required_evidence_ids": ["e1"]}
         elif task_type == "CLAIM_EVIDENCE":
             ui["evidence_options"] = [
                 {"id": "e1", "label": "Evidence 1"},
                 {"id": "e2", "label": "Evidence 2"},
             ]
             node["answer_contract"] = {
-                "accepted_value": {"claim": "bounded claim", "evidence_ids": ["e1"]}
+                "accepted_value": {"claim": "bounded answer", "evidence_ids": ["e1"]}
+            }
+            node["grading"] = {
+                "accepted_text": "bounded answer",
+                "required_evidence_ids": ["e1"],
             }
         elif task_type == "COMPOSITE_MULTI_STEP":
             ui["steps"] = [{
@@ -89,11 +109,70 @@ class ConstructorHardeningTests(unittest.TestCase):
                     "steps": [{"step_id": "s1", "answer": {"text": "bounded answer"}}],
                 }
             }
+            node["grading"] = {
+                "steps": [{
+                    "id": "s1",
+                    "task_type": "SHORT_TEXT",
+                    "accepted_text": "bounded answer",
+                }]
+            }
+        elif task_type == "SPEAKER_RECIPIENT":
+            node["grading"] = {"speaker": "Paul", "recipient": "church"}
         elif task_type == "OT_NT_LINK":
             ui["relation_types"] = [
                 {"id": "DIRECT_QUOTATION", "label": "Direct quotation"},
             ]
+            node["grading"] = {
+                "ot_nt_link": {
+                    "ot_passage": "Isaiah 1:1",
+                    "nt_passage": "Matthew 1:1",
+                    "relation_category": "DIRECT_QUOTATION",
+                    "confidence": "T1",
+                    "evidence_id": "Fixture 1:1",
+                }
+            }
         return draft
+
+    @staticmethod
+    def correct_answer(task_type):
+        base = {"schema": "ANSWER_DTO_v1", "task_type": task_type}
+        if task_type in {"SINGLE_CHOICE", "COMBOBOX_SELECT", "PARALLEL_WITNESS_COMPARE"}:
+            return {**base, "choice": "a"}
+        if task_type == "MULTI_SELECT":
+            return {**base, "choices": ["a", "b"]}
+        if task_type in {"SHORT_TEXT", "LONG_TEXT", "ARGUMENT"}:
+            return {**base, "text": "bounded answer"}
+        if task_type == "ORDERING":
+            return {**base, "items": ["b", "a"]}
+        if task_type == "MATCHING":
+            return {
+                **base,
+                "pairs": [
+                    {"left": "L1", "right": "R1"},
+                    {"left": "L2", "right": "R2"},
+                ],
+            }
+        if task_type == "EVIDENCE_SELECT":
+            return {**base, "evidence_ids": ["e1"]}
+        if task_type == "CLAIM_EVIDENCE":
+            return {**base, "claim": "bounded answer", "evidence_ids": ["e1"]}
+        if task_type == "COMPOSITE_MULTI_STEP":
+            return {
+                **base,
+                "steps": [{"step_id": "s1", "answer": {"text": "bounded answer"}}],
+            }
+        if task_type == "SPEAKER_RECIPIENT":
+            return {**base, "speaker": "Paul", "recipient": "church"}
+        if task_type == "OT_NT_LINK":
+            return {
+                **base,
+                "ot_passage": "Isaiah 1:1",
+                "nt_passage": "Matthew 1:1",
+                "relation_category": "DIRECT_QUOTATION",
+                "confidence": "T1",
+                "evidence_id": "Fixture 1:1",
+            }
+        raise AssertionError(f"missing answer fixture for {task_type}")
 
     def test_backward_shape_and_revision_stale_write_protection(self):
         d = self.service.new_draft("Node", "node")
@@ -113,7 +192,7 @@ class ConstructorHardeningTests(unittest.TestCase):
         self.assertEqual("SHORT_TEXT", preview["renderable"]["task_type"])
         self.assertEqual("authoring-preview-heading", preview["focus_target"])
 
-    def test_every_builtin_has_registry_contract_and_valid_minimal_publish_fixture(self):
+    def test_every_builtin_has_registry_contract_and_runtime_gradeable_publish_fixture(self):
         listed = {item["id"]: item for item in self.registry.list()}
         self.assertEqual(set(BUILTIN_TASK_TYPES), set(listed))
         for task_type in BUILTIN_TASK_TYPES:
@@ -124,14 +203,22 @@ class ConstructorHardeningTests(unittest.TestCase):
                 self.assertTrue(contract)
                 self.assertIsInstance(contract.get("answer_fields"), dict)
                 self.assertTrue(contract["answer_fields"])
+                self.assertTrue(contract.get("grader_truth"))
 
                 d = self.populate_task_payload(self.populated_node(task_type), task_type)
                 result = self.service.validate_draft(d)
                 self.assertTrue(result["valid"], result)
                 self.assertTrue(result["valid_for_publish"], result)
                 self.assertEqual([], result["publish_blockers"])
+                preview = self.service.preview(d)
+                self.assertEqual(task_type, preview["renderable"]["task_type"])
                 candidate = self.service.prepare_publish_candidate(d)
                 self.assertFalse(candidate["canonical_mutation_performed"])
+
+                runtime_task = TaskDefinition.from_canonical(candidate["node"])
+                grade = self.runtime_graders.grade(runtime_task, self.correct_answer(task_type))
+                self.assertEqual(Correctness.CORRECT, grade.correctness, grade.to_dict())
+                self.assertEqual(1.0, grade.score, grade.to_dict())
 
     def test_every_builtin_rejects_malformed_or_empty_task_payload(self):
         for task_type in BUILTIN_TASK_TYPES:
@@ -148,6 +235,26 @@ class ConstructorHardeningTests(unittest.TestCase):
                 self.assertTrue(result["errors"] or result["publish_blockers"], result)
                 with self.assertRaises(ValueError):
                     self.service.prepare_publish_candidate(d)
+
+    def test_answer_contract_only_truth_cannot_publish_ungradeable_structured_tasks(self):
+        matching = self.populate_task_payload(self.populated_node("MATCHING"), "MATCHING")
+        matching["node"].pop("grading", None)
+        matching["node"]["accepted_answer"] = "bounded answer"
+        result = self.service.validate_draft(matching)
+        self.assertFalse(result["valid_for_publish"], result)
+        self.assertTrue(any("runtime grading.accepted_pairs" in msg for msg in result["errors"]))
+        with self.assertRaises(ValueError):
+            self.service.prepare_publish_candidate(matching)
+
+        composite = self.populate_task_payload(
+            self.populated_node("COMPOSITE_MULTI_STEP"), "COMPOSITE_MULTI_STEP"
+        )
+        composite["node"].pop("grading", None)
+        result = self.service.validate_draft(composite)
+        self.assertFalse(result["valid_for_publish"], result)
+        self.assertTrue(any("runtime grading.steps" in msg for msg in result["errors"]))
+        with self.assertRaises(ValueError):
+            self.service.prepare_publish_candidate(composite)
 
     def test_choice_publish_requires_two_well_formed_unique_options(self):
         d = self.populated_node("SINGLE_CHOICE")

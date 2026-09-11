@@ -62,6 +62,70 @@ class AccessibilitySettingsCompositionTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("PASS", result.stdout)
 
+    def test_reload_rejects_noncanonical_persisted_truth_before_mutation(self):
+        module = (FRONTEND / "settings-ui.js").resolve()
+        script = f"""
+          import {{AccessibilitySettingsUI}} from {json.dumps(module.as_uri())};
+
+          const invalidResponses = [
+            {{}},
+            {{settings: {{theme:'dark'}}}},
+            {{settings: {{
+              theme:'dark', font_scale:1.25, high_contrast_mode:false, reduced_motion:'false'
+            }}}},
+          ];
+
+          for (const response of invalidResponses) {{
+            const root = {{dataset: {{theme:'dark',fontScale:'150',highContrast:'true'}}}};
+            const ui = new AccessibilitySettingsUI({{
+              api: async command => {{
+                if (command !== 'settings.get') throw new Error('unexpected command');
+                return response;
+              }},
+              announce: () => {{}},
+              documentObject: {{documentElement: root}},
+            }});
+            const before = JSON.stringify(root.dataset);
+            let rejected = false;
+            try {{
+              await ui.reload();
+            }} catch (error) {{
+              rejected = true;
+            }}
+            if (!rejected) throw new Error('noncanonical settings.get response was accepted');
+            if (JSON.stringify(root.dataset) !== before) throw new Error('presentation mutated on rejected settings.get');
+          }}
+
+          const root = {{dataset: {{theme:'dark',fontScale:'150',highContrast:'true'}}}};
+          const canonical = {{
+            theme:'light',font_scale:1.25,high_contrast_mode:false,reduced_motion:true
+          }};
+          const ui = new AccessibilitySettingsUI({{
+            api: async command => {{
+              if (command !== 'settings.get') throw new Error('unexpected command');
+              return {{settings: canonical}};
+            }},
+            announce: () => {{}},
+            documentObject: {{documentElement: root}},
+          }});
+          const loaded = await ui.reload();
+          if (JSON.stringify(loaded) !== JSON.stringify(canonical)) throw new Error('canonical load changed');
+          if (root.dataset.theme !== 'light' || root.dataset.fontScale !== '125') throw new Error('canonical presentation not applied');
+          if ('highContrast' in root.dataset) throw new Error('canonical contrast clear');
+          if (root.dataset.reducedMotion !== 'true') throw new Error('canonical motion not applied');
+          console.log('PASS reload truth');
+        """
+        result = subprocess.run(
+            ["node", "--input-type=module", "--eval", script],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("PASS reload truth", result.stdout)
+
     def test_styles_use_fixed_attribute_tokens(self):
         text = (FRONTEND / "settings.css").read_text(encoding="utf-8")
         for token in ('data-font-scale="150"', 'data-high-contrast="true"', 'data-reduced-motion="true"'):

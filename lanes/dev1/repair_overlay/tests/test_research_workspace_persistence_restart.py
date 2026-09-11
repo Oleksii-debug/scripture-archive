@@ -7,7 +7,9 @@ from scripture_archive_platform.application.research_workspace import (
     CANONICAL_TARGET_TRUTH_OWNER,
     ResearchWorkspaceService,
 )
+from scripture_archive_platform.application.service import PlatformApplication
 from scripture_archive_platform.content.loader import CanonicalContentLoader, TaskPresentationMapper
+from scripture_archive_platform.domain.models import TRANSPORT_API_VERSION
 from scripture_archive_platform.persistence.store import JsonFileStore
 
 
@@ -50,27 +52,29 @@ def build_canonical_fixture(root: Path):
     return CanonicalContentLoader(repo_root), TaskPresentationMapper()
 
 
+def canonical_target():
+    return {
+        "kind": "canonical_node",
+        "id": "DM01-N01",
+        "campaign_id": "DM",
+        "mission_id": "DM-01",
+        "node_id": "DM01-N01",
+    }
+
+
 class ResearchWorkspaceRestartPersistenceTests(unittest.TestCase):
     def test_bookmark_and_note_survive_fresh_store_and_canonical_loader_instances(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             store_root = root / "state"
             loader, mapper = build_canonical_fixture(root)
-            target = {
-                "kind": "canonical_node",
-                "id": "DM01-N01",
-                "campaign_id": "DM",
-                "mission_id": "DM-01",
-                "node_id": "DM01-N01",
-                # Deliberately omitted: source_references are canonical-derived.
-            }
 
             first = ResearchWorkspaceService(JsonFileStore(store_root), loader, mapper)
             bookmark = first.upsert_bookmark(
                 {
                     "bookmark_id": "bm-restart",
                     "title": "Passover preparation",
-                    "target": target,
+                    "target": canonical_target(),
                     "tags": ["restart", "Luke"],
                 }
             )
@@ -79,7 +83,7 @@ class ResearchWorkspaceRestartPersistenceTests(unittest.TestCase):
                     "note_id": "note-restart",
                     "title": "Witness observation",
                     "body": "The cited passage states the preparation instruction.",
-                    "target": target,
+                    "target": canonical_target(),
                     "tags": ["restart", "witness"],
                 }
             )
@@ -101,6 +105,53 @@ class ResearchWorkspaceRestartPersistenceTests(unittest.TestCase):
             self.assertEqual([], third.list_bookmarks())
             self.assertEqual([note], third.list_notes())
 
+    def test_allowlisted_application_boundary_rejects_fabricated_canonical_link(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            loader, _ = build_canonical_fixture(root)
+            app = PlatformApplication(
+                root / "repo", store=JsonFileStore(root / "state"), loader=loader
+            )
+            fabricated = canonical_target()
+            fabricated["source_references"] = ["Fabricated 99:99"]
+            response = app.handle(
+                {
+                    "api_version": TRANSPORT_API_VERSION,
+                    "request_id": "research-invalid-source",
+                    "command": "research.upsert_bookmark",
+                    "payload": {
+                        "bookmark": {
+                            "bookmark_id": "bm-invalid",
+                            "title": "Must fail",
+                            "target": fabricated,
+                            "tags": [],
+                        }
+                    },
+                }
+            )
+            self.assertFalse(response["ok"])
+            self.assertEqual("VALIDATION_ERROR", response["error"]["code"])
+
+            valid = app.handle(
+                {
+                    "api_version": TRANSPORT_API_VERSION,
+                    "request_id": "research-valid-source",
+                    "command": "research.upsert_bookmark",
+                    "payload": {
+                        "bookmark": {
+                            "bookmark_id": "bm-valid",
+                            "title": "Canonical link",
+                            "target": canonical_target(),
+                            "tags": [],
+                        }
+                    },
+                }
+            )
+            self.assertTrue(valid["ok"])
+            target = valid["data"]["bookmark"]["target"]
+            self.assertEqual(["Luke 22:8-13"], target["source_references"])
+            self.assertEqual(CANONICAL_TARGET_TRUTH_OWNER, target["truth_owner"])
+
     def test_restart_fails_closed_if_canonical_target_becomes_stale(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -111,13 +162,7 @@ class ResearchWorkspaceRestartPersistenceTests(unittest.TestCase):
                 {
                     "bookmark_id": "bm-stale",
                     "title": "Canonical link",
-                    "target": {
-                        "kind": "canonical_node",
-                        "id": "DM01-N01",
-                        "campaign_id": "DM",
-                        "mission_id": "DM-01",
-                        "node_id": "DM01-N01",
-                    },
+                    "target": canonical_target(),
                     "tags": [],
                 }
             )

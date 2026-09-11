@@ -74,12 +74,20 @@ class WitnessMatrixTests(unittest.TestCase):
         self.assertEqual(cells["Luke"]["status"], STATED)
         self.assertEqual(cells["Mark"]["evidence"][0]["proposition"], "Mark says two disciples.")
         self.assertEqual(cells["Luke"]["evidence"][0]["proposition"], "Luke names Peter and John.")
+        self.assertEqual(cells["Mark"]["evidence"][0]["relation_ids"], ["REL-PARALLEL"])
         self.assertEqual(row["relations"][0]["relation_id"], "REL-PARALLEL")
         self.assertEqual(row["claims"][0]["confidence"], "T2")
         self.assertEqual(row["claims"][0]["source_scope"], "Mark 14:13; Luke 22:8")
         self.assertEqual(row["claims"][0]["uncertainty"], "Omission in the cited Mark verse is not denial.")
 
-    def test_locked_evidence_and_claim_truth_do_not_leak_from_default_matrix(self):
+        linear = "\n".join(matrix.linearize())
+        self.assertIn("Relation REL-PARALLEL: EV-MARK --parallel_witness--> EV-LUKE", linear)
+        self.assertIn("Passage IDs: MK14:13, LK22:8", linear)
+        self.assertIn("Witness: Mark/Luke comparison", linear)
+        self.assertIn("Required evidence IDs: EV-MARK, EV-LUKE", linear)
+        self.assertIn("Passage MK14:13: Mark 14:13; witness=Mark", linear)
+
+    def test_locked_evidence_claim_and_relation_identity_do_not_leak_from_default_matrix(self):
         runtime = self.runtime()
         runtime.unlock("EV-MARK")
 
@@ -89,14 +97,17 @@ class WitnessMatrixTests(unittest.TestCase):
 
         self.assertIn("EV-MARK", serialized)
         self.assertNotIn("EV-LUKE", serialized)
+        self.assertNotIn("REL-PARALLEL", serialized)
         self.assertNotIn("Luke names Peter and John.", serialized)
         self.assertNotIn("CL-COMPARE", serialized)
         self.assertNotIn("EV-LUKE", linear)
+        self.assertNotIn("REL-PARALLEL", linear)
         self.assertNotIn("Luke names Peter and John.", linear)
 
         row = matrix.to_dict()["rows"][0]
         cells = {cell["witness"]: cell for cell in row["cells"]}
         self.assertEqual(cells["Mark"]["status"], STATED)
+        self.assertEqual(cells["Mark"]["evidence"][0]["relation_ids"], [])
         self.assertEqual(cells["Luke"]["status"], NOT_STATED)
         self.assertEqual(row["relations"], [])
         self.assertEqual(row["claims"], [])
@@ -149,21 +160,26 @@ class WitnessMatrixTests(unittest.TestCase):
         self.assertIn("not denial", payload["absence_semantics"])
         self.assertIn("or proof", payload["absence_semantics"])
 
-    def test_explicit_full_scope_may_include_locked_parallel_record_and_claim(self):
+    def test_explicit_full_scope_may_include_locked_parallel_record_claim_and_relation(self):
         runtime = self.runtime()
         runtime.unlock("EV-MARK")
 
-        payload = build_witness_matrix(
+        matrix = build_witness_matrix(
             runtime,
             witnesses=("Mark", "Luke"),
             include_locked_evidence=True,
-        ).to_dict()
+        )
+        payload = matrix.to_dict()
 
         self.assertEqual(payload["evidence_scope"], "all_runtime_evidence")
         self.assertEqual(len(payload["rows"]), 1)
         row = payload["rows"][0]
         self.assertEqual(row["evidence_ids"], ["EV-LUKE", "EV-MARK"])
         self.assertEqual([claim["claim_id"] for claim in row["claims"]], ["CL-COMPARE"])
+        self.assertEqual([relation["relation_id"] for relation in row["relations"]], ["REL-PARALLEL"])
+        cells = {cell["witness"]: cell for cell in row["cells"]}
+        self.assertEqual(cells["Mark"]["evidence"][0]["relation_ids"], ["REL-PARALLEL"])
+        self.assertIn("REL-PARALLEL", "\n".join(matrix.linearize()))
 
     def test_explicit_selection_fails_closed_for_locked_or_unknown_evidence(self):
         runtime = self.runtime()
@@ -215,10 +231,15 @@ class WitnessMatrixTests(unittest.TestCase):
         )
         runtime.unlock("EV-MIXED")
 
-        row = build_witness_matrix(runtime, witnesses=("Mark", "Luke")).to_dict()["rows"][0]
+        matrix = build_witness_matrix(runtime, witnesses=("Mark", "Luke"))
+        row = matrix.to_dict()["rows"][0]
         self.assertTrue(all(cell["status"] == NOT_STATED for cell in row["cells"]))
         self.assertEqual(row["unassigned_evidence"][0]["evidence_id"], "EV-MIXED")
         self.assertIsNone(row["unassigned_evidence"][0]["resolved_witness"])
+        linear = "\n".join(matrix.linearize())
+        self.assertIn("Unassigned witness evidence EV-MIXED", linear)
+        self.assertIn("Passage MK1:1: Mark 1:1; witness=Mark", linear)
+        self.assertIn("Passage LK1:1: Luke 1:1; witness=Luke", linear)
 
     def test_record_witness_conflicting_with_passage_witness_fails_closed(self):
         runtime = EvidenceRuntime()
@@ -242,6 +263,9 @@ class WitnessMatrixTests(unittest.TestCase):
         linear = "\n".join(matrix.linearize())
         self.assertNotIn("Mark: stated", linear)
         self.assertNotIn("Luke: stated", linear)
+        self.assertIn("Unassigned witness evidence EV-CONFLICT", linear)
+        self.assertIn("Record witness: Mark", linear)
+        self.assertIn("Passage LK1:1: Luke 1:1; witness=Luke", linear)
 
     def test_output_is_deterministic_across_runtime_insertion_order(self):
         first = self.runtime()

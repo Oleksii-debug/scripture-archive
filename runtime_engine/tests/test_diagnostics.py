@@ -117,6 +117,19 @@ class DiagnosticsTests(unittest.TestCase):
             self.assertEqual(report.backup_status, "INVALID")
             self.assertIn("BACKUP_JSON_INVALID", {item.code for item in report.findings})
 
+    def test_backup_location_failure_is_warning_and_does_not_leak_path(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            store = FakeStore(root)
+            write_state(store.state_path)
+            store.backup_path = root.parent / "outside-backup.json"
+            report = inspect_persistence(store, identity())
+            self.assertEqual(report.status, "WARN")
+            self.assertEqual(report.backup_status, "INVALID")
+            payload = json.dumps(report.as_dict())
+            self.assertIn("BACKUP_LOCATION_INVALID", payload)
+            self.assertNotIn(str(store.backup_path), payload)
+
     def test_invalid_recovery_point_is_warn_and_not_counted_valid(self):
         with tempfile.TemporaryDirectory() as td:
             store = FakeStore(Path(td))

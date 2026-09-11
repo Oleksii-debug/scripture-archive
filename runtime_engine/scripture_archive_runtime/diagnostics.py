@@ -227,11 +227,10 @@ def _inspect_state_file(
     expected_name: str,
     absent_status: str,
 ) -> tuple[str, list[DiagnosticFinding]]:
-    if path.name != expected_name or not _path_is_direct_child(root, path):
-        prefix = "STATE" if expected_name == "state.json" else "BACKUP"
-        return "INVALID", [DiagnosticFinding(f"{prefix}_LOCATION_INVALID", "FAIL")]
     prefix = "STATE" if expected_name == "state.json" else "BACKUP"
     severity = "FAIL" if prefix == "STATE" else "WARN"
+    if path.name != expected_name or not _path_is_direct_child(root, path):
+        return "INVALID", [DiagnosticFinding(f"{prefix}_LOCATION_INVALID", severity)]
     return _inspect_json_state_file(path, absent_status=absent_status, prefix=prefix, severity=severity)
 
 

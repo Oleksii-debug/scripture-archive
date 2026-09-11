@@ -31,6 +31,13 @@ VALID_ITEMS = [
     },
 ]
 
+NONCANONICAL_DUE_AT = (
+    "2026-09-12 00:00:00+00:00",
+    "20260912T000000+00:00",
+    "2026-09-12T00:00:00Z",
+    "2026-09-12T00:00:00+0000",
+)
+
 
 class StaticGateway:
     def __init__(self, response):
@@ -54,6 +61,7 @@ class ReviewQueueTruthContractTests(unittest.TestCase):
             [{key: value for key, value in VALID_ITEMS[0].items() if key != "due_at"}],
             [{**VALID_ITEMS[0], "due_at": "not-a-date"}],
             [{**VALID_ITEMS[0], "due_at": "2026-09-12T00:00:00"}],
+            *[[{**VALID_ITEMS[0], "due_at": due_at}] for due_at in NONCANONICAL_DUE_AT],
             [{**VALID_ITEMS[0], "priority": True}],
             [{**VALID_ITEMS[0], "relation": "UNKNOWN"}],
             [{**VALID_ITEMS[0], "queue_id": " padded "}],
@@ -64,7 +72,7 @@ class ReviewQueueTruthContractTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     validate_review_queue_projection(value)
 
-    def test_runtime_adapter_rejects_missing_wrong_and_malformed_review_queue(self):
+    def test_runtime_adapter_rejects_missing_wrong_and_noncanonical_review_queue(self):
         def invoke_with(response):
             return RuntimeEngineContractAdapter(
                 lambda request: {"api_version": "runtime.v1", "request_id": request["request_id"], **response}
@@ -81,6 +89,7 @@ class ReviewQueueTruthContractTests(unittest.TestCase):
             {"review_queue": None},
             {"review_queue": {}},
             {"review_queue": [{**VALID_ITEMS[0], "concept_id": 7}]},
+            {"review_queue": [{**VALID_ITEMS[0], "due_at": NONCANONICAL_DUE_AT[2]}]},
         )
         for response in bad_responses:
             with self.subTest(response=response):
@@ -90,7 +99,7 @@ class ReviewQueueTruthContractTests(unittest.TestCase):
         accepted = invoke_with({"review_queue": copy.deepcopy(VALID_ITEMS)}).invoke_runtime(request)
         self.assertEqual(VALID_ITEMS, accepted["review_queue"])
 
-    def test_platform_never_attests_malformed_gateway_queue_as_d5_truth(self):
+    def test_platform_never_attests_malformed_or_noncanonical_gateway_queue_as_d5_truth(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             repo = make_repo(root / "repo")
@@ -102,6 +111,16 @@ class ReviewQueueTruthContractTests(unittest.TestCase):
                     "api_version": "runtime.v1",
                     "request_id": "review-queue-player",
                     "review_queue": [{**VALID_ITEMS[0], "priority": "55"}],
+                },
+                {
+                    "api_version": "runtime.v1",
+                    "request_id": "review-queue-player",
+                    "review_queue": [{**VALID_ITEMS[0], "due_at": NONCANONICAL_DUE_AT[0]}],
+                },
+                {
+                    "api_version": "runtime.v1",
+                    "request_id": "review-queue-player",
+                    "review_queue": [{**VALID_ITEMS[0], "due_at": NONCANONICAL_DUE_AT[2]}],
                 },
             )
             for response in bad_responses:

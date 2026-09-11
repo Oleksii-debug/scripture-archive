@@ -18,6 +18,7 @@ on:
 
 env:
   DEV01_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  DEV01_BASE_SOURCE_SHA256: 3edef808a6358c3d098bd973c70fefdbb5de93e14103b080a85a6ade04fad0e2
 
 jobs:
   linux-contract-test:
@@ -38,12 +39,13 @@ jobs:
         run: |
           actual="$(git rev-parse HEAD)"
           test "$actual" = "$DEV01_SOURCE_SHA" || { echo "Expected $DEV01_SOURCE_SHA, got $actual"; exit 1; }
-      - name: Reconstruct immutable DEV1 base source
+      - name: Reconstruct and verify immutable DEV1 base source
         shell: bash
         run: |
           cat lanes/dev1/source_parts/part-*.b64 | base64 -d > DEV1_R06_PLATFORM_SOURCE.zip
-          echo "51a31a8840b57850c8d4d0fc714b124445f3b3155daea083817c3570e0b80e0e  DEV1_R06_PLATFORM_SOURCE.zip" | sha256sum -c -
+          python lanes/dev1/verify_source_archive.py DEV1_R06_PLATFORM_SOURCE.zip "$DEV01_BASE_SOURCE_SHA256"
           python -m zipfile -e DEV1_R06_PLATFORM_SOURCE.zip .
+          test -d r06_platform || { echo "Verified archive did not extract required r06_platform directory"; exit 1; }
       - name: Apply readable pre-integration repair overlay
         shell: bash
         run: cp -R lanes/dev1/repair_overlay/. r06_platform/
@@ -86,15 +88,16 @@ jobs:
         run: |
           $actual = (git rev-parse HEAD).Trim()
           if ($actual -ne $env:DEV01_SOURCE_SHA) { throw "Expected $env:DEV01_SOURCE_SHA, got $actual" }
-      - name: Reconstruct immutable DEV1 base source
+      - name: Reconstruct and verify immutable DEV1 base source
         shell: pwsh
         run: |
           $parts = Get-ChildItem lanes/dev1/source_parts/part-*.b64 | Sort-Object Name
           $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
           [IO.File]::WriteAllBytes('DEV1_R06_PLATFORM_SOURCE.zip', [Convert]::FromBase64String($b64))
-          $hash = (Get-FileHash DEV1_R06_PLATFORM_SOURCE.zip -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($hash -ne '51a31a8840b57850c8d4d0fc714b124445f3b3155daea083817c3570e0b80e0e') { throw "Base source archive hash mismatch: $hash" }
+          python lanes\dev1\verify_source_archive.py DEV1_R06_PLATFORM_SOURCE.zip $env:DEV01_BASE_SOURCE_SHA256
+          if ($LASTEXITCODE -ne 0) { throw "DEV1 source archive verification failed with exit code $LASTEXITCODE" }
           Expand-Archive DEV1_R06_PLATFORM_SOURCE.zip -DestinationPath . -Force
+          if (-not (Test-Path r06_platform -PathType Container)) { throw 'Verified archive did not extract required r06_platform directory' }
       - name: Apply readable pre-integration repair overlay
         shell: pwsh
         run: Copy-Item -Path lanes\dev1\repair_overlay\* -Destination r06_platform -Recurse -Force

@@ -12,11 +12,22 @@ permissions:
 jobs:
   materialize-and-readback:
     runs-on: ubuntu-latest
+    env:
+      TRIGGER_HEAD: ${{ github.event.pull_request.head.sha }}
+      MATERIALIZE_BRANCH: r06-dev09-materialize-5639332373
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: r06-dev09-materialize-5639332373
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Assert immutable triggering head
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual=$(git rev-parse HEAD)
+          test "$actual" = "$TRIGGER_HEAD"
+          echo "D4_TRIGGER_HEAD_PIN_PASS $actual"
 
       - name: Download and verify exact Drive FINALPREP authority
         shell: bash
@@ -46,19 +57,24 @@ jobs:
         run: |
           set -euo pipefail
           python -m py_compile tools/dev09_materialize_d4_readable.py tools/test_dev09_d4_provenance_scope.py
-          python tools/dev09_d4_provenance_scope.py 2>/dev/null && exit 97 || true
           python tools/dev09_materialize_d4_readable.py --transport-zip /tmp/DEV4_FINALPREP_02_MATERIALIZATION_PAYLOAD.zip --chunk-size 30
           python tools/test_dev09_d4_provenance_scope.py
           python tools/dev09_materialize_d4_readable.py --verify-only --require-manifest
 
-      - name: Commit only canonical readable outputs and self-remove temporary gate
+      - name: Compare-and-swap remote parent, commit canonical outputs, self-remove temporary machinery
         shell: bash
         run: |
           set -euo pipefail
+          git fetch origin "+refs/heads/$MATERIALIZE_BRANCH:refs/remotes/origin/$MATERIALIZE_BRANCH"
+          remote_before=$(git rev-parse "refs/remotes/origin/$MATERIALIZE_BRANCH")
+          test "$remote_before" = "$TRIGGER_HEAD"
+          echo "D4_REMOTE_PARENT_PIN_PASS $remote_before"
+
           git config user.name 'scripture-archive-dev09-bot'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add docs/campaigns/OT/R06_D4_STAGE05_READABLE docs/workflow/r06_dev09/D4_READABLE_MATERIALIZATION_MANIFEST.json
           git rm .github/workflows/dev09-d4-materialize-5639332373.yml
+          git rm sitecustomize.py
           git rm -f lanes/dev09/materialize_5639332373/transport_part_00.b64 || true
           python - <<'PY'
           import subprocess
@@ -66,6 +82,7 @@ jobs:
             'docs/campaigns/OT/R06_D4_STAGE05_READABLE/',
             'docs/workflow/r06_dev09/D4_READABLE_MATERIALIZATION_MANIFEST.json',
             '.github/workflows/dev09-d4-materialize-5639332373.yml',
+            'sitecustomize.py',
             'lanes/dev09/materialize_5639332373/transport_part_00.b64',
           )
           changed=subprocess.check_output(['git','diff','--cached','--name-only'],text=True).splitlines()
@@ -75,15 +92,16 @@ jobs:
           PY
           git diff --cached --check
           git commit -m 'R06 DEV09: complete exact readable D4 materialization'
-          git push origin HEAD:r06-dev09-materialize-5639332373
-          echo "materialized_sha=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          materialized_sha=$(git rev-parse HEAD)
+          git push origin "HEAD:refs/heads/$MATERIALIZE_BRANCH"
+          echo "materialized_sha=$materialized_sha" >> "$GITHUB_ENV"
 
       - name: Fetch back exact remote commit and verify again
         shell: bash
         run: |
           set -euo pipefail
-          git fetch origin refs/heads/r06-dev09-materialize-5639332373:refs/remotes/origin/r06-dev09-materialize-5639332373
-          remote_sha=$(git rev-parse refs/remotes/origin/r06-dev09-materialize-5639332373)
+          git fetch origin "+refs/heads/$MATERIALIZE_BRANCH:refs/remotes/origin/$MATERIALIZE_BRANCH"
+          remote_sha=$(git rev-parse "refs/remotes/origin/$MATERIALIZE_BRANCH")
           test "$remote_sha" = "$materialized_sha"
           rm -rf /tmp/dev09-readback
           git worktree add --detach /tmp/dev09-readback "$remote_sha"

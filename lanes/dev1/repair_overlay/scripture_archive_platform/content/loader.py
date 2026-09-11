@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 from scripture_archive_platform.domain.models import CONTENT_SCHEMA_VERSION
 from scripture_archive_platform.transport.answer_contracts import canonical_task_type, answer_contract_descriptor
+from scripture_archive_platform.accessibility_inspector import inspect_renderable_task
 
 class ContentLoadError(RuntimeError): pass
 
@@ -133,7 +134,7 @@ class TaskPresentationMapper:
             if task_type in {'SINGLE_CHOICE','COMBOBOX_SELECT','PARALLEL_WITNESS_COMPARE'} and options: legacy_answer_contract={'accepted_choice_ids':[str(node.get('accepted_answer','accepted'))]}
             elif task_type=='MULTI_SELECT': legacy_answer_contract={'accepted_choice_ids':ui.get('accepted_choice_ids',payload.get('accepted_options',[]))}
         answer_contract=answer_contract_descriptor(task_type)
-        return {
+        surface={
           'node_id':node['node_id'],'mission_id':node['mission_id'],'task_type':task_type,
           'task_family':node.get('task_family'),'difficulty':node.get('difficulty'),'required':bool(node.get('required')),
           'heading':ui.get('heading') or f"Завдання {node['node_id']}",
@@ -145,6 +146,10 @@ class TaskPresentationMapper:
           'accessibility':{'nonvisual_equivalent':node.get('functional_nonvisual_equivalent',''),'announcements':'Result, evidence, confidence/TX1 and next action are textual.'},
           'visual':dict(node.get('visual_metadata') or {'state_badge':node.get('confidence_code'),'media_slot':None}),
         }
+        inspection=inspect_renderable_task(surface)
+        surface['accessibility']['inspection']=inspection.to_dict()
+        surface['accessibility']['inspection_linear']=list(inspection.linear())
+        return surface
     @staticmethod
     def _source_refs(node,mission):
         vals=[]

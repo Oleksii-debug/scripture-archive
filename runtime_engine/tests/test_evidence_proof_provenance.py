@@ -71,6 +71,18 @@ class EvidenceProofProvenanceTests(unittest.TestCase):
         self.assertEqual(result.accepted_evidence_ids, ())
         self.assertEqual(result.missing_evidence_ids, ("EV-CONFLICT",))
 
+    def test_prove_claim_rejects_padded_declared_witness_without_normalizing(self):
+        runtime = self._runtime_with_claim(
+            self._record("EV-MARK", "Mark", "Mark"),
+            claim_witness=" Mark ",
+        )
+
+        result = runtime.prove_claim("CL-1", ("EV-MARK",))
+
+        self.assertFalse(result.proven)
+        self.assertEqual(result.accepted_evidence_ids, ())
+        self.assertEqual(result.missing_evidence_ids, ("EV-MARK",))
+
     def test_witnessless_cross_witness_claim_remains_permitted_without_fabricated_attribution(self):
         runtime = EvidenceRuntime()
         mark = self._record("EV-MARK", "Mark", "Mark")

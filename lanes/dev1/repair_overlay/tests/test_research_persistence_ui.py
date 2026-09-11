@@ -34,6 +34,8 @@ class ResearchPersistenceUiTests(unittest.TestCase):
         self.assertIn('source_references:[...task.source_references]',self.ui)
         self.assertNotIn('truth_owner:OWNER',self.ui)
         self.assertIn("target=buildResearchTarget(this.task,this.mission)",self.ui)
+        self.assertIn('this._setEditorsEnabled(false)',self.ui)
+        self.assertIn('this._clearForms()',self.ui)
 
     def test_response_truth_and_shape_fail_closed(self):
         self.assertIn("t.truth_owner===OWNER",self.ui)

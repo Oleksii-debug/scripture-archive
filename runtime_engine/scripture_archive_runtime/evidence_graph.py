@@ -14,6 +14,7 @@ ENTITY_NODE = "entity_ref"
 SUPPORTS_EDGE = "supports_claim"
 CITES_EDGE = "cites_passage"
 MENTIONS_EDGE = "mentions_entity"
+CANONICAL_EDGE_PREFIX = "canonical:"
 
 
 @dataclass(frozen=True)
@@ -125,15 +126,17 @@ class EvidenceGraph:
                 lines.append(
                     f"Entity edge {edge.edge_id}: {edge.source_id} -> {edge.target_id}"
                 )
-            else:
+            elif edge.edge_type.startswith(CANONICAL_EDGE_PREFIX):
                 witness = payload.get("witness") or "not specified"
                 passage_ids = payload.get("passage_ids", [])
                 passage_text = ", ".join(passage_ids) if passage_ids else "none stated"
                 lines.append(
                     f"Canonical relation {payload['relation_id']}: "
-                    f"{edge.source_id} -[{edge.edge_type}]-> {edge.target_id}; "
+                    f"{edge.source_id} -[{payload['relation_type']}]-> {edge.target_id}; "
                     f"witness={witness}; passages={passage_text}"
                 )
+            else:  # pragma: no cover - construction is closed over known edge types.
+                raise ValueError(f"Unsupported graph edge type: {edge.edge_type}")
         return lines
 
 
@@ -284,6 +287,7 @@ def build_evidence_graph(
     visible_passage_ids = set(passage_payloads)
     for relation in sorted(runtime.relations.values(), key=lambda item: item.relation_id):
         _require_stable_id(relation.relation_id, "relation_id")
+        _require_stable_id(relation.relation_type, "relation_type")
         _require_stable_id(relation.source_id, "relation source_id")
         _require_stable_id(relation.target_id, "relation target_id")
 
@@ -309,11 +313,12 @@ def build_evidence_graph(
         add_edge(
             EvidenceGraphEdge(
                 edge_id=f"relation:{relation.relation_id}",
-                edge_type=relation.relation_type,
+                edge_type=f"{CANONICAL_EDGE_PREFIX}{relation.relation_type}",
                 source_id=source,
                 target_id=target,
                 payload={
                     "relation_id": relation.relation_id,
+                    "relation_type": relation.relation_type,
                     "witness": relation.witness,
                     "passage_ids": list(relation.passage_ids),
                 },

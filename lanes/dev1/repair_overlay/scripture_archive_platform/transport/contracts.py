@@ -5,6 +5,7 @@ from scripture_archive_platform.domain.models import TRANSPORT_API_VERSION, Grad
 
 MAX_REQUEST_BYTES = 262_144
 MAX_IMPORT_BYTES = 2_000_000
+DOSSIER_KINDS = frozenset({"PERSON", "EVENT", "PLACE", "THEME"})
 
 ALLOWLISTED_COMMANDS = frozenset({
   "system.bootstrap",
@@ -15,7 +16,7 @@ ALLOWLISTED_COMMANDS = frozenset({
   "authoring.validate_draft","authoring.preview_draft","authoring.prepare_publish_candidate",
   "authoring.export_draft","authoring.import_draft",
   "keymap.list","keymap.rebind","keymap.clear","keymap.reset_context","keymap.reset_all",
-  "keymap.export","keymap.import","settings.get","settings.set"
+  "keymap.export","keymap.import","settings.get","settings.set","dossier.get"
 })
 
 class ContentLoaderPort(Protocol):
@@ -33,6 +34,13 @@ class PersistencePort(Protocol):
 class TransportAdapterPort(Protocol):
     def invoke(self,request:dict[str,Any])->dict[str,Any]: ...
 
+def _require_clean_text(value:Any,key:str,max_length:int)->str:
+    if not isinstance(value,str) or not value or len(value)>max_length or value!=value.strip():
+        raise ValueError(f'invalid {key}')
+    if any(ord(ch)<32 or ord(ch)==127 for ch in value):
+        raise ValueError(f'invalid {key}')
+    return value
+
 def validate_request_shape(request:Any)->tuple[str,str,dict[str,Any]]:
     if not isinstance(request,dict): raise ValueError('request must be an object')
     if request.get('api_version')!=TRANSPORT_API_VERSION: raise ValueError('unsupported api_version')
@@ -40,6 +48,13 @@ def validate_request_shape(request:Any)->tuple[str,str,dict[str,Any]]:
     if not isinstance(rid,str) or not rid or len(rid)>128: raise ValueError('invalid request_id')
     if cmd not in ALLOWLISTED_COMMANDS: raise ValueError('command not allowlisted')
     if not isinstance(payload,dict): raise ValueError('payload must be an object')
+    if cmd=='dossier.get':
+        if set(payload)!={'subject_id','display_name','kind'}:
+            raise ValueError('dossier.get requires exactly subject_id, display_name and kind')
+        _require_clean_text(payload.get('subject_id'),'subject_id',100)
+        _require_clean_text(payload.get('display_name'),'display_name',160)
+        if payload.get('kind') not in DOSSIER_KINDS:
+            raise ValueError('invalid dossier kind')
     if cmd=='player.next':
         unknown=set(payload)-{'node_id'}
         if unknown: raise ValueError('player.next accepts only current node_id context; target selection is forbidden')

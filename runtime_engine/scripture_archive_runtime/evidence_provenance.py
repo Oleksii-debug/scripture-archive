@@ -30,6 +30,48 @@ def _evidence_id_tuple(values: Iterable[str]) -> tuple[str, ...] | None:
     return requested
 
 
+def _clean_relation_token(value: object) -> str | None:
+    """Validate an exact relation identifier before any hashing/membership use."""
+
+    if not isinstance(value, str) or not value or value != value.strip():
+        return None
+    if any(
+        ord(character) < 0x20
+        or 0x7F <= ord(character) <= 0x9F
+        or character in {"\u2028", "\u2029"}
+        for character in value
+    ):
+        return None
+    return value
+
+
+def _relation_passage_id_tuple(values: object) -> tuple[str, ...] | None:
+    if isinstance(values, (str, bytes)):
+        return None
+    try:
+        passage_ids = tuple(values)  # type: ignore[arg-type]
+    except TypeError:
+        return None
+    if any(_clean_relation_token(passage_id) is None for passage_id in passage_ids):
+        return None
+    return passage_ids
+
+
+def _validated_relation_tokens(
+    relation: Relation,
+) -> tuple[str, str, tuple[str, ...]] | None:
+    """Validate relation identity/endpoints/passage IDs before set/dict membership."""
+
+    if _clean_relation_token(relation.relation_id) is None:
+        return None
+    source_id = _clean_relation_token(relation.source_id)
+    target_id = _clean_relation_token(relation.target_id)
+    passage_ids = _relation_passage_id_tuple(relation.passage_ids)
+    if source_id is None or target_id is None or passage_ids is None:
+        return None
+    return source_id, target_id, passage_ids
+
+
 def resolve_evidence_witness(record: EvidenceRecord) -> str | None:
     """Resolve source-local witness attribution without harmonizing conflicts."""
 
@@ -137,6 +179,11 @@ def _complete_relation_support(
 ) -> tuple[str, ...] | None:
     """Validate caller support and require every evidence-backed relation endpoint."""
 
+    relation_tokens = _validated_relation_tokens(relation)
+    if relation_tokens is None:
+        return None
+    source_id, target_id, _ = relation_tokens
+
     requested = _evidence_id_tuple(support_evidence_ids)
     if requested is None:
         return None
@@ -145,7 +192,7 @@ def _complete_relation_support(
     requested_set = set(requested)
     mandatory_endpoint_ids = {
         endpoint_id
-        for endpoint_id in (relation.source_id, relation.target_id)
+        for endpoint_id in (source_id, target_id)
         if endpoint_id in runtime.evidence
     }
     if not mandatory_endpoint_ids.issubset(requested_set):
@@ -204,6 +251,11 @@ def visible_relation_passage_ids(
     provenance. Output preserves declaration order and de-duplicates IDs.
     """
 
+    relation_tokens = _validated_relation_tokens(relation)
+    if relation_tokens is None:
+        return ()
+    _, _, relation_passage_ids = relation_tokens
+
     requested = _complete_relation_support(
         runtime,
         relation,
@@ -220,7 +272,7 @@ def visible_relation_passage_ids(
 
     result: list[str] = []
     seen: set[str] = set()
-    for passage_id in relation.passage_ids:
+    for passage_id in relation_passage_ids:
         if passage_id in backed_passage_ids and passage_id not in seen:
             result.append(passage_id)
             seen.add(passage_id)

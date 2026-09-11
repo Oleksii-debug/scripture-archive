@@ -144,9 +144,10 @@ def build_evidence_graph(
     """Build a source-safe derived graph over the existing evidence runtime.
 
     Default scope is unlocked evidence only. Claims surface only when all required
-    evidence is visible and the existing EvidenceRuntime witness gate is satisfied.
-    Relations surface only for visible unique endpoints and visible provenance.
-    Explicit witness provenance is validated but never inferred or harmonized.
+    evidence is visible and every explicit witness signal in that support is
+    compatible with the claim's declared witness. Relations surface only for
+    visible unique endpoints and visible provenance. Explicit witness provenance is
+    validated but never inferred or harmonized.
     """
 
     selected_ids = _select_evidence_ids(
@@ -377,14 +378,26 @@ def _select_visible_claims(
             f"claim {claim.claim_id} witness",
         )
         if claim_witness is not None:
-            incompatible = []
+            incompatible = False
             for evidence_id in sorted(set(required)):
-                evidence_witness = _validated_witness(
-                    runtime.evidence[evidence_id].witness,
+                record = runtime.evidence[evidence_id]
+                support_witnesses: set[str] = set()
+                record_witness = _validated_witness(
+                    record.witness,
                     f"evidence {evidence_id} witness",
                 )
-                if evidence_witness not in {None, claim_witness}:
-                    incompatible.append(evidence_id)
+                if record_witness is not None:
+                    support_witnesses.add(record_witness)
+                for passage in record.passage_refs:
+                    passage_witness = _validated_witness(
+                        passage.witness,
+                        f"passage {passage.passage_id} witness",
+                    )
+                    if passage_witness is not None:
+                        support_witnesses.add(passage_witness)
+                if any(witness != claim_witness for witness in support_witnesses):
+                    incompatible = True
+                    break
             if incompatible:
                 continue
         visible.append(claim)

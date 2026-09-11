@@ -206,8 +206,8 @@ export class AccessibilitySettingsUI {
 
   async reload() {
     const response = await this.api('settings.get');
-    const settings = normalizeSettings(response?.settings);
-    this.current = applySettings(settings, this.document.documentElement);
+    if (!hasCanonicalSettingsShape(response?.settings)) throw new Error('settings response failed validation');
+    this.current = applySettings(response.settings, this.document.documentElement);
     this.#fill(this.current);
     this.#setStatus('Завантажено збережені параметри.');
     return this.current;

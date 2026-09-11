@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import fnmatch
 import json
+import os
 import re
 import stat
 from dataclasses import dataclass
@@ -12,9 +14,14 @@ from .persistence import CURRENT_SCHEMA_VERSION, MAX_RECOVERY_POINTS, MAX_STATE_
 DIAGNOSTICS_SCHEMA = "scripture.diagnostics.v1"
 SUPPORT_SNAPSHOT_SCHEMA = "scripture.support-snapshot.v1"
 MAX_SUPPORT_SNAPSHOT_BYTES = 16 * 1024
+# Diagnostics must not trust an arbitrarily large recovery directory. Normal
+# persistence retains at most MAX_RECOVERY_POINTS; four times that budget gives
+# room for stale/unrelated entries while keeping discovery work strictly bounded.
+MAX_RECOVERY_DISCOVERY_ENTRIES = max(MAX_RECOVERY_POINTS * 4, MAX_RECOVERY_POINTS + 1)
 
 _SAFE_TOKEN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$")
 _BUILD_SHA = re.compile(r"^[0-9a-f]{40}$")
+_RECOVERY_GLOB = "state.*.*.json"
 
 
 class PersistenceView(Protocol):
@@ -22,8 +29,6 @@ class PersistenceView(Protocol):
     state_path: Path
     backup_path: Path
     backups: Path
-
-    def list_recovery_points(self) -> list[Path]: ...
 
 
 @dataclass(frozen=True)
@@ -71,6 +76,7 @@ class DiagnosticsReport:
     state_status: str
     backup_status: str
     recovery_point_count: int
+    recovery_point_count_capped: bool
     inspected_recovery_point_count: int
     valid_recovery_point_count: int
     findings: tuple[DiagnosticFinding, ...]
@@ -96,9 +102,11 @@ class DiagnosticsReport:
                 "state_status": self.state_status,
                 "backup_status": self.backup_status,
                 "recovery_point_count": self.recovery_point_count,
+                "recovery_point_count_capped": self.recovery_point_count_capped,
                 "inspected_recovery_point_count": self.inspected_recovery_point_count,
                 "valid_recovery_point_count": self.valid_recovery_point_count,
                 "recovery_point_limit": MAX_RECOVERY_POINTS,
+                "recovery_discovery_entry_limit": MAX_RECOVERY_DISCOVERY_ENTRIES,
             },
             "findings": [finding.as_dict() for finding in self.findings],
         }
@@ -109,7 +117,9 @@ def inspect_persistence(store: PersistenceView, identity: DiagnosticsIdentity) -
 
     The returned report is intentionally content-free: it contains no paths, profile
     data, Scripture text, notes, answers, logs, environment variables, or exception
-    strings.
+    strings. Recovery discovery is performed directly by diagnostics with a hard
+    directory-entry budget so a hostile recovery directory cannot force unbounded
+    list/glob/sort materialization.
     """
 
     root = Path(store.root)
@@ -131,9 +141,12 @@ def inspect_persistence(store: PersistenceView, identity: DiagnosticsIdentity) -
         findings.append(recovery_root_finding)
 
     points: list[Path] = []
+    recovery_point_count_capped = False
     point_list_finding: DiagnosticFinding | None = None
     if recovery_root_ok:
-        points, point_list_finding = _safe_recovery_points(store)
+        points, recovery_point_count_capped, point_list_finding = _safe_recovery_points(
+            backups_root
+        )
         if point_list_finding is not None:
             findings.append(point_list_finding)
 
@@ -141,6 +154,10 @@ def inspect_persistence(store: PersistenceView, identity: DiagnosticsIdentity) -
     inspected_points = points[:MAX_RECOVERY_POINTS]
     if len(points) > MAX_RECOVERY_POINTS:
         findings.append(DiagnosticFinding("RECOVERY_POINT_LIMIT_EXCEEDED", "WARN"))
+    if recovery_point_count_capped:
+        findings.append(
+            DiagnosticFinding("RECOVERY_POINT_DISCOVERY_LIMIT_EXCEEDED", "WARN")
+        )
 
     for point in inspected_points:
         status, point_findings = _inspect_recovery_file(backups_root, point)
@@ -159,6 +176,7 @@ def inspect_persistence(store: PersistenceView, identity: DiagnosticsIdentity) -
         state_status=state_status,
         backup_status=backup_status,
         recovery_point_count=len(points),
+        recovery_point_count_capped=recovery_point_count_capped,
         inspected_recovery_point_count=len(inspected_points),
         valid_recovery_point_count=valid_points,
         findings=tuple(findings),
@@ -202,16 +220,37 @@ def _inspect_recovery_root(
 
 
 def _safe_recovery_points(
-    store: PersistenceView,
-) -> tuple[list[Path], DiagnosticFinding | None]:
+    backups_root: Path,
+) -> tuple[list[Path], bool, DiagnosticFinding | None]:
+    """Discover recovery candidates with bounded directory enumeration.
+
+    At most MAX_RECOVERY_DISCOVERY_ENTRIES candidate entries are retained and only
+    one extra directory entry is consumed to detect overflow. When overflow occurs,
+    ``recovery_point_count`` is explicitly marked capped by the caller rather than
+    pretending to be an exact total. Provider-level list/glob APIs are deliberately
+    avoided because they can materialize an unbounded directory before returning.
+    """
+
+    raw: list[Path] = []
+    count_capped = False
     try:
-        raw = store.list_recovery_points()
-    except Exception:
-        return [], DiagnosticFinding("RECOVERY_POINT_ENUMERATION_UNVERIFIED", "WARN")
-    if not isinstance(raw, list) or any(not isinstance(path, Path) for path in raw):
-        return [], DiagnosticFinding("RECOVERY_POINT_ENUMERATION_INVALID", "WARN")
-    # Do not trust provider ordering; diagnostics output must be deterministic.
-    return sorted(raw, key=lambda path: path.name, reverse=True), None
+        with os.scandir(backups_root) as entries:
+            for index, entry in enumerate(entries):
+                if index >= MAX_RECOVERY_DISCOVERY_ENTRIES:
+                    count_capped = True
+                    break
+                name = entry.name
+                if fnmatch.fnmatchcase(name, _RECOVERY_GLOB):
+                    raw.append(backups_root / name)
+    except (OSError, TypeError, ValueError):
+        return [], False, DiagnosticFinding(
+            "RECOVERY_POINT_ENUMERATION_UNVERIFIED", "WARN"
+        )
+
+    # Do not trust directory iteration order; diagnostics output is deterministic
+    # for the bounded discovered set. Each path is still lstat/path-confined before
+    # any file content is read.
+    return sorted(raw, key=lambda path: path.name, reverse=True), count_capped, None
 
 
 def _inspect_recovery_file(root: Path, path: Path) -> tuple[str, list[DiagnosticFinding]]:

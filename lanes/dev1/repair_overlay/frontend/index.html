@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Архів Писання — R06 DEV1</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="research-workbench.css">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Перейти до основного вмісту</a>
+  <header class="app-header" role="banner">
+    <div>
+      <p class="eyebrow">Scripture Archive · R06 DEV1</p>
+      <h1 id="app-title">Архів Писання</h1>
+      <p id="app-context">Дослідження тексту, доказів і свідків</p>
+    </div>
+    <nav aria-label="Головна навігація" class="top-nav">
+      <button type="button" data-action-id="app.home" id="nav-home">Головна</button>
+      <button type="button" id="nav-research">Дослідження</button>
+      <button type="button" id="nav-authoring">Конструктор</button>
+      <button type="button" data-action-id="settings.keymap" id="nav-keymap">Клавіші</button>
+    </nav>
+  </header>
+
+  <div id="global-status" class="sr-status" role="status" aria-live="polite" aria-atomic="true"></div>
+
+  <main id="main-content" tabindex="-1">
+    <section id="home-view" aria-labelledby="home-heading">
+      <h2 id="home-heading">Кампанії</h2>
+      <p>Оберіть кампанію. Список завантажується з канонічних даних репозиторію, а не з жорстко зашитих питань.</p>
+      <section id="resume-panel" class="surface subtle hidden" aria-labelledby="resume-heading"><h3 id="resume-heading">Продовжити</h3><p id="resume-text"></p><button type="button" id="resume-button">Відновити збережене завдання</button></section>
+      <div id="campaign-list" class="card-grid" role="list"></div>
+    </section>
+
+    <section id="mission-view" class="hidden" aria-labelledby="mission-heading">
+      <button type="button" class="back-link" id="mission-back">← До кампаній</button>
+      <h2 id="mission-heading">Місії</h2>
+      <p id="mission-context"></p>
+      <div id="mission-list" class="card-grid" role="list"></div>
+    </section>
+
+    <section id="player-view" class="hidden" aria-labelledby="task-heading">
+      <div class="player-grid">
+        <article class="surface task-surface" aria-labelledby="task-heading">
+          <p id="task-breadcrumb" class="eyebrow"></p>
+          <h2 id="task-heading" tabindex="-1">Завдання</h2>
+          <div id="task-meta" class="meta-row" aria-label="Метадані завдання"></div>
+
+          <section aria-labelledby="source-heading" class="source-panel">
+            <h3 id="source-heading">Уривок і джерела</h3>
+            <p id="source-scope"></p>
+            <ul id="source-list"></ul>
+          </section>
+
+          <section aria-labelledby="question-heading">
+            <h3 id="question-heading">Питання</h3>
+            <p id="player-prompt" class="prompt"></p>
+            <form id="answer-form" novalidate>
+              <div id="answer-control"></div>
+              <div class="action-row">
+                <button type="submit" data-action-id="player.submit" class="primary">Надіслати відповідь</button>
+                <button type="button" id="hint-button" data-action-id="player.hint">Підказка</button>
+                <button type="button" id="evidence-button" data-action-id="player.evidence">Докази</button>
+                <button type="button" id="research-current">Досліджувати</button>
+              </div>
+            </form>
+          </section>
+
+          <section id="hint-panel" class="notice info hidden" aria-labelledby="hint-heading">
+            <h3 id="hint-heading" tabindex="-1">Підказка</h3>
+            <p id="hint-text"></p>
+          </section>
+
+          <section id="feedback-panel" class="notice hidden" aria-labelledby="feedback-heading">
+            <h3 id="feedback-heading" tabindex="-1">Результат</h3>
+            <p id="feedback-status" class="status-text"></p>
+            <p id="feedback-text"></p>
+            <dl id="feedback-details" class="details-list"></dl>
+          </section>
+
+          <section id="evidence-panel" class="surface subtle hidden" aria-labelledby="evidence-heading">
+            <h3 id="evidence-heading" tabindex="-1">Доказова панель</h3>
+            <p id="evidence-notice"></p>
+            <ul id="evidence-list"></ul>
+          </section>
+
+          <section aria-labelledby="progress-heading">
+            <h3 id="progress-heading">Прогрес</h3>
+            <progress id="progress-bar" max="1" value="0">0%</progress>
+            <p id="progress-text"></p>
+          </section>
+
+          <div class="action-row">
+            <button type="button" id="save-progress">Зберегти</button>
+            <button type="button" id="next-button" data-action-id="player.next" class="primary" disabled>Наступне</button>
+          </div>
+        </article>
+
+        <aside class="surface" aria-labelledby="linear-equivalent-heading">
+          <h2 id="linear-equivalent-heading">Текстовий еквівалент</h2>
+          <p id="nonvisual-equivalent">Кожна складна механіка має лінійне клавіатурне представлення.</p>
+          <h3>Поточний стан</h3>
+          <p id="current-state-text">Ще не завантажено.</p>
+          <h3>Візуальний слот</h3>
+          <div class="media-slot" role="img" aria-label="Резервне місце для ілюстрації; зміст і правильна відповідь не залежать від цього зображення.">
+            <span aria-hidden="true">▦</span>
+            <p>Ілюстрація/карта може з’явитися тут. Увесь зміст дублюється текстом.</p>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+
+
+    <section id="research-view" class="hidden" aria-labelledby="research-heading">
+      <div class="research-heading-row">
+        <div>
+          <p class="eyebrow">Passage Research Workbench</p>
+          <h2 id="research-heading" tabindex="-1">Дослідження уривка</h2>
+          <p id="research-context-summary">Відкрийте завдання, щоб передати видимий контекст у дослідницький простір.</p>
+        </div>
+        <button type="button" id="research-return">Повернутися до попереднього екрана</button>
+      </div>
+
+      <div class="research-layout">
+        <section class="surface research-primary" aria-labelledby="research-tabs-heading">
+          <h3 id="research-tabs-heading">Робочий простір</h3>
+          <div class="research-tabs" role="tablist" aria-label="Панелі дослідження">
+            <button type="button" role="tab" id="research-tab-context" aria-controls="research-panel-context" aria-selected="true" tabindex="0">Контекст</button>
+            <button type="button" role="tab" id="research-tab-sources" aria-controls="research-panel-sources" aria-selected="false" tabindex="-1">Джерела</button>
+            <button type="button" role="tab" id="research-tab-compare" aria-controls="research-panel-compare" aria-selected="false" tabindex="-1">Порівняння</button>
+          </div>
+
+          <section id="research-panel-context" role="tabpanel" aria-labelledby="research-tab-context" tabindex="0">
+            <h3>Поточний контекст</h3>
+            <dl id="research-context-details" class="details-list"></dl>
+            <h4>Питання / дослідницький фокус</h4>
+            <p id="research-prompt">Немає відкритого завдання.</p>
+            <h4>Видимий source scope</h4>
+            <p id="research-source-scope">Не вказано.</p>
+          </section>
+
+          <section id="research-panel-sources" role="tabpanel" aria-labelledby="research-tab-sources" tabindex="0" class="hidden">
+            <h3>Видимі джерела</h3>
+            <p>Закріплення нижче діє лише в поточній сесії цього екрана. Воно не створює bookmark і не замінює канонічне сховище дослідницьких нотаток.</p>
+            <ul id="research-source-list" class="research-source-list"></ul>
+            <section id="research-evidence-section" class="notice info" aria-labelledby="research-evidence-heading">
+              <h4 id="research-evidence-heading">Відкриті докази</h4>
+              <p id="research-evidence-status">Докази ще не були відкриті в player.</p>
+              <ul id="research-evidence-list"></ul>
+            </section>
+          </section>
+
+          <section id="research-panel-compare" role="tabpanel" aria-labelledby="research-tab-compare" tabindex="0" class="hidden">
+            <h3>Порівняння закріплених джерел</h3>
+            <p id="research-compare-help">Закріпіть щонайменше два видимі джерела. Порівняння не робить висновку про consensus і не переносить твердження між свідками.</p>
+            <div class="table-scroll" tabindex="0" aria-label="Таблиця порівняння джерел">
+              <table>
+                <caption>Порівняння видимих source references поточного завдання</caption>
+                <thead><tr><th scope="col">Джерело</th><th scope="col">Видимий scope</th><th scope="col">Статус доказів</th></tr></thead>
+                <tbody id="research-compare-body"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <aside class="surface research-linear" aria-labelledby="research-linear-heading">
+          <h3 id="research-linear-heading">Лінійний еквівалент</h3>
+          <p>Уся інформація Workbench доступна послідовно без графічної взаємодії.</p>
+          <div id="research-linear-output" aria-live="polite"></div>
+        </aside>
+      </div>
+    </section>
+
+    <section id="authoring-view" class="hidden" aria-labelledby="authoring-heading">
+      <h2 id="authoring-heading" tabindex="-1">Конструктор контенту</h2>
+      <p class="notice warning"><strong>Чернетка ≠ канон.</strong> Цей режим не змінює опублікований source-audited контент. Публікація готує лише candidate для окремого source/integration review.</p>
+      <div class="authoring-grid">
+        <section class="surface" aria-labelledby="drafts-heading">
+          <h3 id="drafts-heading">Чернетки</h3>
+          <div class="action-row"><button type="button" id="new-draft">Створити чернетку</button><button type="button" id="import-draft">Імпорт JSON</button></div>
+          <label for="draft-search">Пошук чернеток</label>
+          <input id="draft-search" type="search" autocomplete="off">
+          <ul id="draft-list" class="select-list"></ul>
+        </section>
+
+        <form id="authoring-form" class="surface" aria-labelledby="editor-heading" novalidate>
+          <h3 id="editor-heading">Редактор вузла</h3>
+          <input id="draft-id" type="hidden">
+          <fieldset><legend>Campaign і mission</legend>
+            <label for="campaign-id">Campaign ID</label><input id="campaign-id" type="text" placeholder="XX">
+            <label for="campaign-title">Назва кампанії</label><input id="campaign-title" type="text">
+            <label for="mission-title">Назва місії</label><input id="mission-title" type="text">
+            <label for="primary-scripture">Primary scripture (один уривок на рядок)</label><textarea id="primary-scripture" rows="3"></textarea>
+            <label for="secondary-scripture">Secondary scripture або none</label><textarea id="secondary-scripture" rows="2"></textarea>
+          </fieldset>
+          <fieldset><legend>Identity і навчальна мета</legend>
+            <label for="draft-title">Назва чернетки</label><input id="draft-title" type="text">
+            <label for="node-id">Stable node ID</label><input id="node-id" type="text" placeholder="XX01-N01">
+            <label for="mission-id">Mission ID</label><input id="mission-id" type="text" placeholder="XX-01">
+            <label for="task-type">Тип завдання</label><select id="task-type"></select>
+            <label for="task-family">Task family</label><input id="task-family" type="text">
+            <label for="difficulty">Складність</label><select id="difficulty"><option>1/6</option><option selected>2/6</option><option>3/6</option><option>4/6</option><option>5/6</option><option>6/6</option></select>
+            <label class="check-row"><input id="required" type="checkbox" checked> Обов’язкове завдання</label>
+            <label for="skill-target">Skill target</label><input id="skill-target" type="text">
+            <label for="knowledge-target">Knowledge target</label><input id="knowledge-target" type="text">
+            <label for="why-node">Навіщо існує цей вузол</label><textarea id="why-node" rows="2"></textarea>
+          </fieldset>
+          <fieldset><legend>Prompt, response і ground truth</legend>
+            <label for="prompt-editor">Prompt</label><textarea id="prompt-editor" rows="4"></textarea>
+            <label for="source-scope-editor">Видимий scope джерела</label><textarea id="source-scope-editor" rows="2"></textarea>
+            <label for="accepted-answer">Accepted answer</label><textarea id="accepted-answer" rows="3"></textarea>
+            <label for="accepted-variants">Accepted variants (один на рядок)</label><textarea id="accepted-variants" rows="3"></textarea>
+            <label for="rejected-answers">Rejected answers (один на рядок)</label><textarea id="rejected-answers" rows="3"></textarea>
+            <label for="rejection-reason">Причина відхилення</label><textarea id="rejection-reason" rows="2"></textarea>
+            <label for="evidence-editor">Evidence/source IDs або citations (один на рядок)</label><textarea id="evidence-editor" rows="3"></textarea>
+            <label for="confidence">Confidence</label><select id="confidence"><option>T1</option><option>T2</option><option>C1</option><option>I1</option><option>D1</option></select>
+            <label for="tx1">Textual variant</label><select id="tx1"><option value="none">none</option><option value="TX1">TX1</option></select>
+          </fieldset>
+          <fieldset><legend>Options / ordering / evidence data</legend>
+            <p id="structured-help">Для choice/select використовуйте options. Для ordering — items. Зміна порядку доступна кнопками, не drag-only.</p>
+            <div id="structured-items"></div>
+            <button type="button" id="add-structured-item">Додати елемент</button>
+          </fieldset>
+          <fieldset><legend>Feedback</legend>
+            <label for="success-feedback">Success</label><textarea id="success-feedback" rows="2"></textarea>
+            <label for="partial-feedback">Partial</label><textarea id="partial-feedback" rows="2"></textarea>
+            <label for="failure-feedback">Failure</label><textarea id="failure-feedback" rows="2"></textarea>
+          </fieldset>
+          <fieldset><legend>Hints H1–H7</legend><div id="hints-editor"></div></fieldset>
+          <fieldset><legend>Branching і mastery</legend>
+            <label for="on-correct">on_correct</label><input id="on-correct" type="text">
+            <label for="on-partial">on_partial</label><input id="on-partial" type="text">
+            <label for="on-incorrect">on_incorrect</label><input id="on-incorrect" type="text">
+            <label for="hint-threshold">on_hint_threshold</label><input id="hint-threshold" type="text">
+            <label for="optional-evidence">optional_evidence_unlock</label><input id="optional-evidence" type="text">
+            <label for="later-retrieval">later_retrieval_effect</label><input id="later-retrieval" type="text">
+            <label for="mastery-domains">Mastery domains (один на рядок)</label><textarea id="mastery-domains" rows="2"></textarea>
+            <label for="review-queue">Review queue rule</label><input id="review-queue" type="text">
+          </fieldset>
+          <fieldset><legend>Visual + accessibility metadata</legend>
+            <label for="theme-token">Theme token</label><input id="theme-token" type="text">
+            <label for="icon-editor">Icon/emoji (не єдиний носій сенсу)</label><input id="icon-editor" type="text">
+            <label for="media-slot-editor">Media slot ID</label><input id="media-slot-editor" type="text">
+            <label for="visual-equivalent">Текстовий еквівалент visual</label><textarea id="visual-equivalent" rows="2"></textarea>
+            <label for="nonvisual-editor">Functional nonvisual equivalent</label><textarea id="nonvisual-editor" rows="3"></textarea>
+          </fieldset>
+          <div class="action-row sticky-actions">
+            <button type="button" id="validate-draft" data-action-id="authoring.validate">Validate</button>
+            <button type="button" id="preview-draft" data-action-id="authoring.preview">Preview</button>
+            <button type="submit" class="primary" data-action-id="authoring.save">Save draft</button>
+            <button type="button" id="prepare-publish">Prepare publish candidate</button>
+            <button type="button" id="export-draft">Export</button>
+          </div>
+          <section id="validation-panel" class="notice hidden" aria-labelledby="validation-heading"><h3 id="validation-heading" tabindex="-1">Валідація</h3><div id="validation-output"></div></section>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="keymap-dialog" aria-labelledby="keymap-heading">
+    <form method="dialog" class="dialog-shell"><div class="dialog-header"><h2 id="keymap-heading">Клавіатурні команди</h2><button value="close" aria-label="Закрити">×</button></div></form>
+    <div class="dialog-body">
+      <label for="keymap-search">Пошук</label><input id="keymap-search" type="search">
+      <label for="keymap-context">Контекст</label><select id="keymap-context"><option value="">Усі</option><option value="global">Global</option><option value="player">Player</option><option value="authoring">Authoring</option></select>
+      <div id="keymap-list"></div>
+      <div class="action-row"><button type="button" id="reset-keymap-section">Reset current section</button><button type="button" id="reset-keymap-all">Reset all</button><button type="button" id="export-keymap">Export</button><button type="button" id="import-keymap">Import</button></div>
+    </div>
+  </dialog>
+
+  <dialog id="shortcut-dialog" aria-labelledby="shortcut-heading">
+    <form method="dialog" class="dialog-shell">
+      <h2 id="shortcut-heading">Змінити комбінацію</h2>
+      <p id="shortcut-action-name"></p>
+      <label for="shortcut-capture">Нова комбінація</label>
+      <input id="shortcut-capture" type="text" readonly aria-describedby="shortcut-help shortcut-error">
+      <p id="shortcut-help">Натисніть бажану комбінацію. Escape закриває вікно.</p>
+      <p id="shortcut-error" class="error-text" role="alert"></p>
+      <div class="action-row"><button value="cancel">Скасувати</button><button type="button" id="shortcut-save" class="primary">Зберегти</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="json-dialog" aria-labelledby="json-heading">
+    <form method="dialog" class="dialog-shell">
+      <h2 id="json-heading">JSON import/export</h2>
+      <label for="json-text">JSON</label><textarea id="json-text" rows="18"></textarea>
+      <p id="json-error" class="error-text" role="alert"></p>
+      <div class="action-row"><button value="close">Закрити</button><button type="button" id="json-commit" class="primary">Імпортувати</button></div>
+    </form>
+  </dialog>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

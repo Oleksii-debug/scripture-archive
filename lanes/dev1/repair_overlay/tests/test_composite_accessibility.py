@@ -104,6 +104,63 @@ class CompositeAccessibilityTests(unittest.TestCase):
         self.assertEqual("SHORT_TEXT", child["task_type"])
         self.assertEqual("ANSWER_DTO_v1", child["answer_contract"]["schema"])
 
+    def test_nested_single_choice_fails_packaged_renderer_answer_parity(self) -> None:
+        task = self._render(
+            [
+                {
+                    "step_id": "s1",
+                    "task_type": "SINGLE_CHOICE",
+                    "label": "Choose",
+                    "prompt": "Choose the supported answer.",
+                    "options": [
+                        {"id": "a", "label": "Alpha"},
+                        {"id": "b", "label": "Beta"},
+                    ],
+                    "accessibility": self._child_accessibility(),
+                }
+            ]
+        )
+
+        inspection = task["accessibility"]["inspection"]
+        self.assertFalse(inspection["passed"])
+        self.assertIn(
+            (
+                "A11Y_COMPOSITE_CHILD_RENDERER_PARITY_MISMATCH",
+                "task.steps[0].task_type",
+            ),
+            {(item["code"], item["path"]) for item in inspection["findings"]},
+        )
+        linear = "\n".join(task["accessibility"]["inspection_linear"])
+        self.assertIn("A11Y_COMPOSITE_CHILD_RENDERER_PARITY_MISMATCH", linear)
+        self.assertIn("task.steps[0].task_type", linear)
+
+    def test_nested_ordering_fails_packaged_renderer_answer_parity(self) -> None:
+        task = self._render(
+            [
+                {
+                    "step_id": "s1",
+                    "task_type": "ORDERING",
+                    "label": "Order",
+                    "prompt": "Put the items in order.",
+                    "items": [
+                        {"id": "first", "label": "First"},
+                        {"id": "second", "label": "Second"},
+                    ],
+                    "accessibility": self._child_accessibility(),
+                }
+            ]
+        )
+
+        inspection = task["accessibility"]["inspection"]
+        self.assertFalse(inspection["passed"])
+        self.assertIn(
+            (
+                "A11Y_COMPOSITE_CHILD_RENDERER_PARITY_MISMATCH",
+                "task.steps[0].task_type",
+            ),
+            {(item["code"], item["path"]) for item in inspection["findings"]},
+        )
+
     def test_grading_only_step_cannot_be_promoted_to_accessibility_contract(self) -> None:
         node = dict(self.base_node)
         node["grading"] = {

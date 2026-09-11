@@ -79,7 +79,6 @@ class RuntimeApplication:
         state = self.memory.node_history.setdefault(node_id, TaskState(node_id=node_id)); hint_count = self._active_hint_counts.get(node_id, 0)
         result = self.graders.grade(task, answer); independent = hint_count == 0
         state.attempts.append(Attempt(node_id, result.correctness, result.score, hint_count, independent, answer_snapshot=answer)); state.last_result = result.correctness
-        self._current_visit_result = result.correctness
         if result.correctness is Correctness.CORRECT: state.completed = True; self.session.correct_node_ids.add(node_id)
         elif result.correctness is Correctness.INCORRECT: self.memory.mistakes[node_id] = self.memory.mistakes.get(node_id, 0) + 1
         consequences = []
@@ -90,6 +89,9 @@ class RuntimeApplication:
         for eid in resolution.evidence_unlocks:
             if eid in self.evidence.evidence:
                 self.evidence.unlock(eid); state.evidence_unlocked.add(eid); self.memory.evidence_exposure[eid] = self.memory.evidence_exposure.get(eid, 0) + 1
+        # Authorize progression only after the whole submission path has completed.
+        # A partial/failed submit must not leave player.next enabled by an intermediate grade.
+        self._current_visit_result = result.correctness
         return {"api_version": self.API_VERSION, "grade": result.to_dict(), "mastery_consequence": [self._consequence(c) for c in consequences], "branch": resolution.to_dict(), "accessibility": [grade_event(result, consequences).to_dict(), branch_event(resolution).to_dict()]}
 
     @staticmethod

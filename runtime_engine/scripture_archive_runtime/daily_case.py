@@ -5,6 +5,7 @@ from datetime import datetime
 import math
 from numbers import Real
 from typing import Iterable, Sequence
+import unicodedata
 
 from .models import PlayerMemory, QueueKind, RetrievalRelation, SchedulerCandidate, Session
 from .scheduler import Scheduler
@@ -14,6 +15,7 @@ DAILY_CASE_SCHEMA = "daily-case.v1"
 _MAX_CASE_ID = 128
 _MAX_TITLE = 200
 _MAX_ITEMS = 50
+_MAX_ITEM_METADATA_VALUES = 64
 
 
 @dataclass(frozen=True)
@@ -40,8 +42,16 @@ class DailyCaseItem:
             raise TypeError("DailyCaseItem.concept_ids must be tuple[str, ...]")
         if not isinstance(self.passage_keys, tuple):
             raise TypeError("DailyCaseItem.passage_keys must be tuple[str, ...]")
-        _validate_string_sequence(self.concept_ids, "DailyCaseItem.concept_ids")
-        _validate_string_sequence(self.passage_keys, "DailyCaseItem.passage_keys")
+        _validate_string_sequence(
+            self.concept_ids,
+            "DailyCaseItem.concept_ids",
+            maximum_items=_MAX_ITEM_METADATA_VALUES,
+        )
+        _validate_string_sequence(
+            self.passage_keys,
+            "DailyCaseItem.passage_keys",
+            maximum_items=_MAX_ITEM_METADATA_VALUES,
+        )
         if self.book_key is not None:
             _canonical_text(self.book_key, "DailyCaseItem.book_key", 128)
 
@@ -116,7 +126,12 @@ class DailyCaseComposer:
     """
 
     def __init__(self, *, scheduler: Scheduler | None = None) -> None:
-        self.scheduler = scheduler or Scheduler()
+        if scheduler is None:
+            self.scheduler = Scheduler()
+        elif type(scheduler) is Scheduler:
+            self.scheduler = scheduler
+        else:
+            raise TypeError("scheduler must be the canonical Scheduler implementation or None")
 
     def compose(
         self,
@@ -188,8 +203,8 @@ def _bounded_text(value: object, name: str, maximum: int) -> str:
         raise ValueError(f"{name} must be non-empty")
     if len(normalized) > maximum:
         raise ValueError(f"{name} exceeds {maximum} characters")
-    if any(ch in normalized for ch in ("\r", "\n", "\t", "\u2028", "\u2029", "\x00")):
-        raise ValueError(f"{name} must not contain line/control separators")
+    if any(unicodedata.category(ch) == "Cc" or ch in {"\u2028", "\u2029"} for ch in normalized):
+        raise ValueError(f"{name} must not contain control or line/paragraph separator characters")
     return normalized
 
 
@@ -200,7 +215,14 @@ def _canonical_text(value: object, name: str, maximum: int) -> str:
     return normalized
 
 
-def _validate_string_sequence(values: Sequence[object], name: str) -> None:
+def _validate_string_sequence(
+    values: Sequence[object],
+    name: str,
+    *,
+    maximum_items: int | None = None,
+) -> None:
+    if maximum_items is not None and len(values) > maximum_items:
+        raise ValueError(f"{name} cannot exceed {maximum_items} items")
     for index, value in enumerate(values):
         _canonical_text(value, f"{name}[{index}]", 256)
 
@@ -229,8 +251,16 @@ def _validate_candidate(candidate: object) -> None:
         raise TypeError("candidate.concept_ids must be tuple[str, ...]")
     if not isinstance(candidate.passage_keys, tuple):
         raise TypeError("candidate.passage_keys must be tuple[str, ...]")
-    _validate_string_sequence(candidate.concept_ids, "candidate.concept_ids")
-    _validate_string_sequence(candidate.passage_keys, "candidate.passage_keys")
+    _validate_string_sequence(
+        candidate.concept_ids,
+        "candidate.concept_ids",
+        maximum_items=_MAX_ITEM_METADATA_VALUES,
+    )
+    _validate_string_sequence(
+        candidate.passage_keys,
+        "candidate.passage_keys",
+        maximum_items=_MAX_ITEM_METADATA_VALUES,
+    )
     if candidate.book_key is not None:
         _canonical_text(candidate.book_key, "candidate.book_key", 128)
     if candidate.paired_exact_node_id is not None:

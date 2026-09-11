@@ -66,6 +66,7 @@ class WitnessMatrixTests(unittest.TestCase):
 
         self.assertEqual(payload["schema"], "witness-matrix.v1")
         self.assertEqual(payload["evidence_scope"], "unlocked_only")
+        self.assertEqual(payload["selection_scope"], "requested_witnesses")
         self.assertEqual(len(payload["rows"]), 1)
         row = payload["rows"][0]
         self.assertEqual(row["evidence_ids"], ["EV-LUKE", "EV-MARK"])
@@ -81,6 +82,7 @@ class WitnessMatrixTests(unittest.TestCase):
         self.assertEqual(row["claims"][0]["uncertainty"], "Omission in the cited Mark verse is not denial.")
 
         linear = "\n".join(matrix.linearize())
+        self.assertIn("Selection scope: requested_witnesses", linear)
         self.assertIn("Relation REL-PARALLEL: EV-MARK --parallel_witness--> EV-LUKE", linear)
         self.assertIn("Passage IDs: MK14:13, LK22:8", linear)
         self.assertIn("Witness: Mark/Luke comparison", linear)
@@ -138,11 +140,58 @@ class WitnessMatrixTests(unittest.TestCase):
             witnesses=("Mark", "Luke"),
             evidence_ids=("EV-JOHN",),
         ).to_dict()
+        self.assertEqual(explicit["selection_scope"], "explicit_evidence_ids")
         self.assertEqual(explicit["rows"][0]["evidence_ids"], ["EV-JOHN"])
         self.assertEqual(explicit["rows"][0]["unassigned_evidence"][0]["evidence_id"], "EV-JOHN")
         self.assertTrue(
             all(cell["status"] == NOT_STATED for cell in explicit["rows"][0]["cells"])
         )
+
+    def test_evidence_relation_ids_are_bound_to_actual_visible_endpoints(self):
+        runtime = EvidenceRuntime()
+        runtime.add_evidence(
+            EvidenceRecord(
+                "EV-MARK-1",
+                (PassageRef("MK1:1", "Mark", 1, 1, witness="Mark"),),
+                "First Mark record.",
+                Confidence.T1,
+                witness="Mark",
+                relation_ids=("REL-OTHER",),
+            )
+        )
+        runtime.add_evidence(
+            EvidenceRecord(
+                "EV-MARK-2",
+                (PassageRef("MK1:2", "Mark", 1, 2, witness="Mark"),),
+                "Second Mark record.",
+                Confidence.T1,
+                witness="Mark",
+                relation_ids=("REL-OTHER",),
+            )
+        )
+        runtime.add_evidence(
+            EvidenceRecord(
+                "EV-LUKE",
+                (PassageRef("LK1:1", "Luke", 1, 1, witness="Luke"),),
+                "Luke record.",
+                Confidence.T1,
+                witness="Luke",
+                relation_ids=("REL-OTHER",),
+            )
+        )
+        runtime.add_relation(
+            Relation("REL-OTHER", "EV-MARK-2", "parallel_witness", "EV-LUKE")
+        )
+        for evidence_id in ("EV-MARK-1", "EV-MARK-2", "EV-LUKE"):
+            runtime.unlock(evidence_id)
+
+        payload = build_witness_matrix(runtime, witnesses=("Mark", "Luke")).to_dict()
+        singleton = next(row for row in payload["rows"] if row["evidence_ids"] == ["EV-MARK-1"])
+        mark_cell = next(cell for cell in singleton["cells"] if cell["witness"] == "Mark")
+        self.assertEqual(mark_cell["evidence"][0]["relation_ids"], [])
+        related = next(row for row in payload["rows"] if "EV-MARK-2" in row["evidence_ids"])
+        related_mark = next(cell for cell in related["cells"] if cell["witness"] == "Mark")
+        self.assertEqual(related_mark["evidence"][0]["relation_ids"], ["REL-OTHER"])
 
     def test_claim_spanning_unrelated_components_is_not_duplicated_into_rows(self):
         runtime = EvidenceRuntime()
@@ -204,6 +253,7 @@ class WitnessMatrixTests(unittest.TestCase):
         payload = matrix.to_dict()
 
         self.assertEqual(payload["evidence_scope"], "all_runtime_evidence")
+        self.assertEqual(payload["selection_scope"], "requested_witnesses")
         self.assertEqual(len(payload["rows"]), 1)
         row = payload["rows"][0]
         self.assertEqual(row["evidence_ids"], ["EV-LUKE", "EV-MARK"])

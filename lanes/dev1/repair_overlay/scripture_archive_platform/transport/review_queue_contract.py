@@ -30,9 +30,10 @@ def validate_review_queue_projection(value: Any) -> list[dict[str, Any]]:
     """Validate the exact persisted runtime review-queue projection.
 
     This boundary validates canonical shape, identity/type constraints, and the
-    serialized due timestamp syntax only. Scheduling order, priority, due-date
-    policy, and relation policy remain owned by D5/runtime; callers may neither
-    repair nor normalize malformed runtime truth.
+    exact D5/runtime ``datetime.isoformat()`` due timestamp serialization only.
+    Scheduling order, priority, due-date policy, and relation policy remain
+    owned by D5/runtime; callers may neither repair nor normalize malformed or
+    noncanonical runtime truth.
     """
 
     if not isinstance(value, list):
@@ -66,11 +67,13 @@ def validate_review_queue_projection(value: Any) -> list[dict[str, Any]]:
         if not _exact_nonempty_text(due_at):
             raise ValueError(f"runtime review_queue[{index}].due_at is invalid")
         try:
-            parsed_due_at = datetime.fromisoformat(due_at.replace("Z", "+00:00"))
+            parsed_due_at = datetime.fromisoformat(due_at)
         except ValueError as exc:
             raise ValueError(f"runtime review_queue[{index}].due_at is invalid") from exc
         if parsed_due_at.tzinfo is None:
             raise ValueError(f"runtime review_queue[{index}].due_at must include timezone")
+        if parsed_due_at.isoformat() != due_at:
+            raise ValueError(f"runtime review_queue[{index}].due_at is noncanonical")
         if not isinstance(priority, int) or isinstance(priority, bool):
             raise ValueError(f"runtime review_queue[{index}].priority is invalid")
         if relation not in REVIEW_RELATIONS:

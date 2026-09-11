@@ -138,9 +138,17 @@ class ResearchWorkspaceService:
         }
 
     def _load(self, key: str) -> dict[str, dict[str, Any]]:
+        namespace = "research_workspace"
+        present_before = key in set(self.store.list_keys(namespace))
         missing = object()
-        raw = self.store.get_json("research_workspace", key, missing)
+        raw = self.store.get_json(namespace, key, missing)
         if raw is missing:
+            # JsonFileStore deliberately returns the provided default after quarantining
+            # unreadable/corrupt JSON. Distinguish that from a genuinely absent key so
+            # research data never silently resets to an empty workspace.
+            present_after = key in set(self.store.list_keys(namespace))
+            if present_before or present_after:
+                raise ValueError("workspace persistence is unreadable")
             return {}
         if not isinstance(raw, dict):
             raise ValueError("workspace persistence is malformed")

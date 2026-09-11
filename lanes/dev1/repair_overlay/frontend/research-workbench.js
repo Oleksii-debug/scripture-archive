@@ -1,3 +1,5 @@
+import {ResearchPersistenceUI} from './research-persistence.js';
+
 const byId=id=>document.getElementById(id);
 
 function cleanList(values){
@@ -14,12 +16,14 @@ export function evidenceSummary(evidence){
 }
 
 export class ResearchWorkbenchUI{
-  constructor({announce,onReturn}={}){
+  constructor({announce,onReturn,invoke,capabilities}={}){
     this.announce=announce||(()=>{});
     this.onReturn=onReturn||(()=>{});
     this.task=null;this.mission=null;this.evidence=null;this.pinned=new Set();
     this.tabs=['context','sources','compare'];
-    this._bind();this.render();
+    this._bind();
+    this.persistence=new ResearchPersistenceUI({host:byId('research-panel-context'),invoke,capabilities,announce:this.announce});
+    this.render();
   }
   _bind(){
     byId('research-return').onclick=()=>this.onReturn();
@@ -42,8 +46,10 @@ export class ResearchWorkbenchUI{
     const priorId=this.task?.node_id;
     this.task=task;this.mission=mission;
     if(priorId!==task?.node_id){this.evidence=null;this.pinned.clear();}
+    this.persistence?.setContext({task,mission});
     this.render();
   }
+  async refreshPersistence(){await this.persistence?.refresh();}
   setEvidence(data){this.evidence=data||null;this.render();}
   focusHeading(){byId('research-heading')?.focus();}
   activateTab(name,focus=false){

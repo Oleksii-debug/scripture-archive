@@ -8,12 +8,13 @@ ROOT = Path(__file__).resolve().parents[1] / "frontend"
 class PackagedLibraryUiTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.index = (ROOT / "index.html").read_text(encoding="utf-8")
+        cls.transport = (ROOT / "transport.js").read_text(encoding="utf-8")
         cls.js = (ROOT / "library-ui.js").read_text(encoding="utf-8")
 
-    def test_packaged_entrypoint_loads_library_module(self):
-        self.assertEqual(self.index.count('src="library-ui.js"'), 1)
-        self.assertLess(self.index.index('src="library-ui.js"'), self.index.index('src="app.js"'))
+    def test_packaged_transport_entrypoint_loads_library_module(self):
+        self.assertEqual(self.transport.count("import('./library-ui.js')"), 1)
+        self.assertIn("export async function chooseTransport", self.transport)
+        self.assertIn("export async function unwrap", self.transport)
 
     def test_ui_calls_only_read_only_library_contracts(self):
         commands = set(re.findall(r"api\('([^']+)'", self.js))

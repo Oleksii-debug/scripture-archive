@@ -1,0 +1,34 @@
+name: QA67 Constructor Runtime Gradeability
+
+on:
+  push:
+    branches:
+      - r06-repair-67-runtime-gradeability
+  pull_request:
+    paths:
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/authoring/**'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/domain/registries.py'
+      - 'lanes/dev1/repair_overlay/tests/test_authoring_service.py'
+      - '.github/workflows/qa67-runtime-gradeability.yml'
+
+jobs:
+  constructor-runtime-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Compile exact repair surface
+        env:
+          PYTHONPATH: lanes/dev1/repair_overlay:runtime_engine
+        run: |
+          python -m py_compile \
+            lanes/dev1/repair_overlay/scripture_archive_platform/domain/registries.py \
+            lanes/dev1/repair_overlay/scripture_archive_platform/authoring/validation.py \
+            lanes/dev1/repair_overlay/tests/test_authoring_service.py
+      - name: Run constructor to runtime grader contract regressions
+        env:
+          PYTHONPATH: lanes/dev1/repair_overlay:runtime_engine
+        run: python -m unittest discover -s lanes/dev1/repair_overlay/tests -p 'test_authoring_service.py' -v

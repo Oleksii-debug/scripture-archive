@@ -5,6 +5,7 @@ from typing import Any
 from scripture_archive_platform.domain.models import TRANSPORT_API_VERSION
 from scripture_archive_platform.domain.registries import build_task_registries
 from scripture_archive_platform.transport.contracts import validate_request_shape,ok_response,error_response
+from scripture_archive_platform.transport.review_queue_contract import validate_review_queue_projection
 from scripture_archive_platform.content.loader import CanonicalContentLoader,TaskPresentationMapper,ContentLoadError
 from scripture_archive_platform.grading.reference import ReferenceGrader
 from scripture_archive_platform.persistence.store import JsonFileStore
@@ -96,7 +97,7 @@ class PlatformApplication:
         rr=self.player_gateway.invoke('player.get_mastery',{},request_id='mastery-player'); return {'mastery':rr.get('mastery') or [],'truth_owner':'D5/runtime'}
     def _review_queue(self):
         if not self.player_gateway:return {'review_queue':[],'truth_owner':'REFERENCE_TEST_ONLY'}
-        rr=self.player_gateway.invoke('player.get_review_queue',{},request_id='review-queue-player'); return {'review_queue':rr.get('review_queue') or [],'truth_owner':'D5/runtime'}
+        rr=self.player_gateway.invoke('player.get_review_queue',{},request_id='review-queue-player'); return {'review_queue':validate_review_queue_projection(rr.get('review_queue')),'truth_owner':'D5/runtime'}
     def _save_checkpoint(self,p):
         checkpoint={'campaign_id':p.get('campaign_id'),'mission_id':p.get('mission_id'),'node_id':p.get('node_id'),'saved_at':int(time.time()),'checkpoint_schema':'scripture.player.checkpoint.v1'}
         if self.player_gateway:self.player_gateway.invoke('player.save_checkpoint',{},request_id='save-'+str(p.get('node_id') or 'current'))

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from typing import Any
 
 from .model import (
@@ -84,6 +85,23 @@ def _required(obj: Any, fields: tuple[str, ...], label: str, errors: list[str]) 
 def _stable_id(value: Any, label: str, errors: list[str]) -> None:
     if value not in (None, "") and not re.fullmatch(r"[A-Z][A-Z0-9-]{2,63}", str(value)):
         errors.append(f"{label} must be a stable uppercase ID")
+
+
+def _runtime_identifier_key(value: Any) -> str:
+    """Mirror runtime grading.normalize_text for answer-bearing identity checks.
+
+    Runtime choice/order/matching/evidence graders compare normalized identifiers,
+    so authoring must reject two visible identities that collapse to one runtime key.
+    Keeping the normalization here explicit avoids a platform->runtime import cycle.
+    """
+    text = unicodedata.normalize("NFKC", str(value or "")).casefold()
+    text = re.sub(r"[^\w\s]+", " ", text, flags=re.UNICODE)
+    return " ".join(text.split())
+
+
+def _runtime_unique(values: list[str]) -> bool:
+    keys = [_runtime_identifier_key(value) for value in values]
+    return bool(keys) and all(keys) and len(keys) == len(set(keys))
 
 
 def _validate_node(node: dict[str, Any], task_registry: Any,
@@ -198,6 +216,10 @@ def _validate_options(task_type: str, collection: str, values: list[Any], errors
         ids.append(item_id)
     if any(not value for value in ids) or len(ids) != len(set(ids)):
         errors.append(f"{task_type} {collection} IDs must be non-empty and unique")
+    elif not _runtime_unique(ids):
+        errors.append(
+            f"{task_type} {collection} IDs must remain unique after runtime grader normalization"
+        )
 
 
 def _validate_matching_pairs(values: list[Any], errors: list[str]) -> None:
@@ -218,8 +240,12 @@ def _validate_matching_pairs(values: list[Any], errors: list[str]) -> None:
         right_ids.append(right)
     if any(not value for value in left_ids) or len(left_ids) != len(set(left_ids)):
         errors.append("MATCHING left-side IDs must be non-empty and unique")
+    elif not _runtime_unique(left_ids):
+        errors.append("MATCHING left-side IDs must remain unique after runtime grader normalization")
     if any(not value for value in right_ids) or len(right_ids) != len(set(right_ids)):
         errors.append("MATCHING right-side choices must be non-empty and unique")
+    elif not _runtime_unique(right_ids):
+        errors.append("MATCHING right-side choices must remain unique after runtime grader normalization")
 
 
 def _validate_composite_steps(values: list[Any], authoring: dict[str, Any],
@@ -473,7 +499,12 @@ def _validate_runtime_grader_truth(
             ui_type = str(ui_contract.get("task_type", "")).upper()
             nested = grade_step.get("task")
             if isinstance(nested, dict):
-                runtime_type = str(nested.get("task_type", ui_type)).upper()
+                nested_type = nested.get("task_type")
+                runtime_type = str(nested_type).upper() if isinstance(nested_type, str) and nested_type.strip() else ""
+                if not runtime_type:
+                    errors.append(
+                        f"COMPOSITE_MULTI_STEP nested runtime task {sid} requires explicit task_type"
+                    )
                 nested_grading = nested.get("grading") if isinstance(nested.get("grading"), dict) else {}
                 runtime_truth = nested_grading.get("accepted_text", nested.get("accepted_answer"))
             else:

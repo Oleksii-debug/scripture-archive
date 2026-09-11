@@ -1,6 +1,11 @@
 name: R06 W2-01 Windows Runner Forensics
 
 on:
+  push:
+    branches:
+      - r06-wave2-w01-windows-actions-forensics
+    paths:
+      - '.github/workflows/r06-w2-01-runner-forensics.yml'
   workflow_dispatch:
     inputs:
       probe_label:
@@ -19,7 +24,7 @@ permissions:
 
 jobs:
   windows-runner-proof:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion != '' }}
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion != '' }}
     runs-on: windows-latest
     timeout-minutes: 15
     steps:

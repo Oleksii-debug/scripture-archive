@@ -37,6 +37,7 @@ class PlatformApplication:
         if cmd=='player.get_mastery':return self._mastery()
         if cmd=='player.save_checkpoint':return self._save_checkpoint(p)
         if cmd=='player.restore_checkpoint':return self._restore_checkpoint()
+        if cmd=='research.export':return self._research_export()
         if cmd=='authoring.list_drafts':return {'drafts':self.authoring.list_drafts()}
         if cmd=='authoring.new_draft':return {'draft':self.authoring.new_draft(str(p.get('title') or 'Нова чернетка'),str(p.get('kind') or 'node'))}
         if cmd=='authoring.load_draft':return {'draft':self.authoring.load_draft(self._id(p,'draft_id'))}
@@ -61,7 +62,7 @@ class PlatformApplication:
         raise ValueError('command not implemented')
     def _bootstrap(self):
         campaigns=self.loader.list_campaigns()
-        return {'app':{'name':'Архів Писання','version':'R06-3DEV-A','runtime':'Windows 11 x64 / WebView2 semantic UI','transport_api_version':TRANSPORT_API_VERSION},'registries':{'task_types':self.task_types.list(),'renderers':self.renderers.list(),'graders':self.graders.list(),'editors':self.editors.list(),'templates':self.templates.list()},'campaigns':campaigns,'keymap':self.keymap.list(),'capabilities':{'constructor':True,'draft_vs_canonical':True,'web_portable_transport':True,'allowlisted_bridge':True,'arbitrary_filesystem':False,'shell':False,'python_eval':False,'runtime_truth':bool(self.player_gateway),'grading_truth':'D5/runtime' if self.player_gateway else 'REFERENCE_TEST_ONLY'}}
+        return {'app':{'name':'Архів Писання','version':'R06-3DEV-A','runtime':'Windows 11 x64 / WebView2 semantic UI','transport_api_version':TRANSPORT_API_VERSION},'registries':{'task_types':self.task_types.list(),'renderers':self.renderers.list(),'graders':self.graders.list(),'editors':self.editors.list(),'templates':self.templates.list()},'campaigns':campaigns,'keymap':self.keymap.list(),'capabilities':{'constructor':True,'draft_vs_canonical':True,'web_portable_transport':True,'allowlisted_bridge':True,'arbitrary_filesystem':False,'shell':False,'python_eval':False,'research_export':bool(self.player_gateway and hasattr(self.player_gateway,'export_research')),'runtime_truth':bool(self.player_gateway),'grading_truth':'D5/runtime' if self.player_gateway else 'REFERENCE_TEST_ONLY'}}
     def _load_node(self,nid):
         if self.player_gateway:self.player_gateway.invoke('player.load_node',{'node_id':nid},request_id='load-'+nid)
         node=self.loader.load_node(nid); mission=self.loader.mission_for_node(nid); renderable=self.mapper.to_renderable(node,mission); self._last_node[nid]=node
@@ -93,6 +94,20 @@ class PlatformApplication:
     def _mastery(self):
         if not self.player_gateway:return {'mastery':[],'truth_owner':'REFERENCE_TEST_ONLY'}
         rr=self.player_gateway.invoke('player.get_mastery',{},request_id='mastery-player'); return {'mastery':rr.get('mastery') or [],'truth_owner':'D5/runtime'}
+    def _research_export(self):
+        if not self.player_gateway or not hasattr(self.player_gateway,'export_research'):
+            raise ValueError('research export requires canonical runtime')
+        data=self.player_gateway.export_research()
+        export=data.get('export') if isinstance(data,dict) else None
+        if not isinstance(export,dict):raise ValueError('runtime research export must be object')
+        if export.get('schema')!='research-export.v1':raise ValueError('unexpected research export schema')
+        if export.get('evidence_scope')!='unlocked_only':raise ValueError('packaged research export must remain unlocked_only')
+        for key in ('json','markdown','html'):
+            if not isinstance(export.get(key),str):raise ValueError(f'missing research export {key}')
+        counts=export.get('counts')
+        if not isinstance(counts,dict) or any(type(counts.get(key)) is not int or counts[key]<0 for key in ('claims','evidence','relations')):
+            raise ValueError('invalid research export counts')
+        return {'export':export,'truth_owner':'D5/runtime'}
     def _save_checkpoint(self,p):
         checkpoint={'campaign_id':p.get('campaign_id'),'mission_id':p.get('mission_id'),'node_id':p.get('node_id'),'saved_at':int(time.time()),'checkpoint_schema':'scripture.player.checkpoint.v1'}
         if self.player_gateway:self.player_gateway.invoke('player.save_checkpoint',{},request_id='save-'+str(p.get('node_id') or 'current'))

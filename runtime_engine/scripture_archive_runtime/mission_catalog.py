@@ -4,6 +4,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 import json
 from typing import Any
+import unicodedata
 
 from .content import ContentRepository
 from .security import ValidationError, validate_content_import
@@ -14,6 +15,13 @@ _CANONICAL_MISSION_SCHEMA = "CONTENT_NODE_SCHEMA_v1.2"
 _MAX_TEXT = 4096
 _MAX_ID = 128
 _MAX_ITEMS = 512
+_MAX_MISSIONS = 512
+_WINDOWS_INVALID_FILENAME_CHARS = frozenset('<>:"/\\|?*')
+_WINDOWS_RESERVED_BASENAMES = frozenset(
+    {"CON", "PRN", "AUX", "NUL"}
+    | {f"COM{i}" for i in range(1, 10)}
+    | {f"LPT{i}" for i in range(1, 10)}
+)
 
 
 @dataclass(frozen=True)
@@ -96,7 +104,11 @@ class MissionCatalog:
         entries: list[MissionCatalogEntry] = []
         seen_missions: set[str] = set()
 
-        for raw_index in indexes:
+        for index_number, raw_index in enumerate(indexes):
+            if index_number >= _MAX_MISSIONS:
+                raise ValidationError(
+                    f"Mission catalog exceeds maximum mission count {_MAX_MISSIONS}"
+                )
             if not isinstance(raw_index, Mapping):
                 raise ValidationError("Mission index must be an object")
             validate_content_import(raw_index)
@@ -130,23 +142,39 @@ class MissionCatalog:
         )
 
     def linearize(self) -> list[str]:
+        lines: list[str] = [f"Catalog schema: {SCHEMA_VERSION}"]
         if not self.entries:
-            return ["No canonical missions are available."]
-        lines: list[str] = []
+            lines.append("No canonical missions are available.")
+            return lines
         for entry in self.entries:
-            lines.append(
-                f"Mission {entry.mission_id} — {entry.title}; campaign={entry.campaign_id}; "
-                f"difficulty={entry.difficulty}; status={entry.canonical_status}; "
-                f"tasks={entry.task_count}; optional={entry.optional_count}; "
-                f"entry={entry.entry_node}"
-            )
-            lines.append(
-                "Primary Scripture: " + ", ".join(entry.primary_scripture)
-            )
-            lines.append(
-                "Accessibility: keyboard complete; "
-                f"nonvisual={entry.accessibility.nonvisual_equivalent}; "
-                f"focus={entry.accessibility.focus_order}"
+            lines.extend(
+                [
+                    (
+                        f"Mission {entry.mission_id} — {entry.title}; "
+                        f"campaign={entry.campaign_id}; role={entry.mission_role}; "
+                        f"estimated_time={entry.estimated_time}; difficulty={entry.difficulty}; "
+                        f"status={entry.canonical_status}; revision={entry.content_revision}; "
+                        f"tasks={entry.task_count}; optional={entry.optional_count}; "
+                        f"entry={entry.entry_node}"
+                    ),
+                    "Mastery tags: " + _linear_items(entry.mastery_tags),
+                    "Primary Scripture: " + _linear_items(entry.primary_scripture),
+                    "Secondary Scripture: " + _linear_source_value(entry.secondary_scripture),
+                    "Historical context sources: "
+                    + _linear_source_value(entry.historical_context_sources),
+                    "Interpretive sources: " + _linear_source_value(entry.interpretive_sources),
+                    f"Textual variant point count: {entry.textual_variant_point_count}",
+                    (
+                        "Accessibility: "
+                        f"keyboard_complete_equivalent={'true' if entry.accessibility.keyboard_complete_equivalent else 'false'}; "
+                        "screen_reader_announcement_requirements="
+                        f"{entry.accessibility.screen_reader_announcement_requirements}; "
+                        f"nonvisual_equivalent={entry.accessibility.nonvisual_equivalent}; "
+                        f"focus_order={entry.accessibility.focus_order}; "
+                        "prohibited_essential_modes="
+                        f"{_linear_items(entry.accessibility.prohibited_essential_modes)}"
+                    ),
+                ]
             )
         return lines
 
@@ -177,7 +205,9 @@ def _entry_from_index(
     difficulty = _required_text(mission.get("difficulty"), "mission.difficulty", _MAX_ID)
     entry_node = _required_text(mission.get("entry_node"), "mission.entry_node", _MAX_ID)
     task_nodes = _id_list(mission.get("task_nodes"), "mission.task_nodes")
-    optional_nodes = _id_list(mission.get("optional_nodes", []), "mission.optional_nodes", allow_empty=True)
+    optional_nodes = _id_list(
+        mission.get("optional_nodes", []), "mission.optional_nodes", allow_empty=True
+    )
     if set(task_nodes) & set(optional_nodes):
         raise ValidationError("task_nodes and optional_nodes must not overlap")
     declared_nodes = set(task_nodes) | set(optional_nodes)
@@ -287,9 +317,18 @@ def _accessibility(value: object) -> MissionAccessibility:
 
 def _validate_node_files(value: object) -> None:
     files = _text_list(value, "node_files")
+    if len(files) != len(set(files)):
+        raise ValidationError("node_files contains duplicates")
     for name in files:
-        if "/" in name or "\\" in name or name in {".", ".."} or not name.endswith(".json"):
+        if not name.endswith(".json"):
             raise ValidationError("node_files must contain simple JSON basenames only")
+        if any(ch in _WINDOWS_INVALID_FILENAME_CHARS for ch in name):
+            raise ValidationError("node_files contain a Windows-invalid filename")
+        if name[-1] in {".", " "}:
+            raise ValidationError("node_files contain a Windows-ambiguous filename")
+        reserved_base = name.rstrip(" .").split(".", 1)[0].upper()
+        if reserved_base in _WINDOWS_RESERVED_BASENAMES:
+            raise ValidationError("node_files contain a Windows-reserved filename")
 
 
 def _id_list(value: object, field: str, *, allow_empty: bool = False) -> tuple[str, ...]:
@@ -325,6 +364,14 @@ def _json_source_value(value: str | tuple[str, ...]) -> object:
     return list(value) if isinstance(value, tuple) else value
 
 
+def _linear_source_value(value: str | tuple[str, ...]) -> str:
+    return _linear_items(value) if isinstance(value, tuple) else value
+
+
+def _linear_items(value: Sequence[str]) -> str:
+    return ", ".join(value) if value else "none"
+
+
 def _required_text(value: object, field: str, max_length: int) -> str:
     if not isinstance(value, str):
         raise ValidationError(f"{field} must be a string")
@@ -335,4 +382,9 @@ def _required_text(value: object, field: str, max_length: int) -> str:
         raise ValidationError(f"{field} must not contain leading/trailing whitespace")
     if len(text) > max_length:
         raise ValidationError(f"{field} exceeds maximum length {max_length}")
+    if any(
+        unicodedata.category(char) in {"Cc", "Cs", "Zl", "Zp"}
+        for char in text
+    ):
+        raise ValidationError(f"{field} must not contain control or line-separator characters")
     return text

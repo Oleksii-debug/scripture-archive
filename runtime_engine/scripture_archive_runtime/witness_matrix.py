@@ -49,6 +49,7 @@ class WitnessMatrixRow:
 class WitnessMatrix:
     witnesses: tuple[str, ...]
     evidence_scope: str
+    selection_scope: str
     rows: tuple[WitnessMatrixRow, ...]
     schema: str = WITNESS_MATRIX_SCHEMA
 
@@ -56,6 +57,7 @@ class WitnessMatrix:
         return {
             "schema": self.schema,
             "evidence_scope": self.evidence_scope,
+            "selection_scope": self.selection_scope,
             "witnesses": list(self.witnesses),
             "absence_semantics": (
                 f"{NOT_STATED} means this derived row has no visible witness-local record; "
@@ -69,6 +71,7 @@ class WitnessMatrix:
         lines = [
             "Witness Matrix",
             f"Evidence scope: {self.evidence_scope}",
+            f"Selection scope: {self.selection_scope}",
             (
                 "Absence rule: a not-stated cell means no visible witness-local record in this "
                 "derived row; it is not denial or a contradiction finding."
@@ -137,7 +140,12 @@ def build_witness_matrix(
         and relation.source_id in selected_ids
         and relation.target_id in selected_ids
     )
-    visible_relation_ids = {relation.relation_id for relation in visible_relations}
+    visible_relation_ids_by_evidence: dict[str, set[str]] = {
+        evidence_id: set() for evidence_id in selected_ids
+    }
+    for relation in visible_relations:
+        visible_relation_ids_by_evidence[relation.source_id].add(relation.relation_id)
+        visible_relation_ids_by_evidence[relation.target_id].add(relation.relation_id)
     components = _parallel_components(selected_ids, visible_relations)
 
     rows: list[WitnessMatrixRow] = []
@@ -154,7 +162,10 @@ def build_witness_matrix(
         unassigned: list[Mapping[str, Any]] = []
         for evidence_id in component:
             record = runtime.evidence[evidence_id]
-            payload = _evidence_payload(record, visible_relation_ids=visible_relation_ids)
+            payload = _evidence_payload(
+                record,
+                visible_relation_ids=visible_relation_ids_by_evidence[evidence_id],
+            )
             resolved_witness = _record_witness(record)
             if resolved_witness in assigned:
                 assigned[resolved_witness].append(payload)
@@ -194,6 +205,7 @@ def build_witness_matrix(
     return WitnessMatrix(
         witnesses=normalized_witnesses,
         evidence_scope="all_runtime_evidence" if include_locked_evidence else "unlocked_only",
+        selection_scope="requested_witnesses" if evidence_ids is None else "explicit_evidence_ids",
         rows=tuple(rows),
     )
 

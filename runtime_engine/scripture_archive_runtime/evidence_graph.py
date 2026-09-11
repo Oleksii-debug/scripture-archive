@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Iterable, Mapping
 
 from .evidence import Claim, EvidenceRecord, EvidenceRuntime, PassageRef, Relation
+from .evidence_provenance import validated_relation_witness, visible_relation_passage_ids
 
 
 EVIDENCE_GRAPH_SCHEMA = "evidence-graph.v1"
@@ -277,7 +278,6 @@ def build_evidence_graph(
                 )
             )
 
-    visible_passage_ids = set(passage_payloads)
     for relation in sorted(runtime.relations.values(), key=lambda item: item.relation_id):
         _require_stable_id(relation.relation_id, "relation_id")
         _require_stable_id(relation.relation_type, "relation_type")
@@ -300,15 +300,37 @@ def build_evidence_graph(
         )
         if source is None or target is None:
             continue
-        if relation.passage_ids and not set(relation.passage_ids).issubset(visible_passage_ids):
-            continue
-        _validate_relation_witness_provenance(
+
+        support_evidence_ids = _relation_support_evidence_ids(
+            runtime,
             relation,
-            source_id=source,
-            target_id=target,
-            nodes=nodes,
-            passage_payloads=passage_payloads,
+            selected_evidence=selected_set,
+            included_claim_ids=included_claim_ids,
         )
+        projected_passage_ids = visible_relation_passage_ids(
+            runtime,
+            relation,
+            support_evidence_ids,
+            visible_evidence_ids=selected_set,
+        )
+        declared_passage_ids = tuple(dict.fromkeys(relation.passage_ids))
+        if declared_passage_ids and projected_passage_ids != declared_passage_ids:
+            continue
+
+        relation_witness: str | None = None
+        if relation.witness is not None:
+            relation_witness = validated_relation_witness(
+                runtime,
+                relation,
+                support_evidence_ids,
+                visible_evidence_ids=selected_set,
+            )
+            if relation_witness is None:
+                raise ValueError(
+                    f"Conflicting or unsupported witness provenance for relation "
+                    f"{relation.relation_id}"
+                )
+
         add_edge(
             EvidenceGraphEdge(
                 edge_id=f"relation:{relation.relation_id}",
@@ -318,8 +340,8 @@ def build_evidence_graph(
                 payload={
                     "relation_id": relation.relation_id,
                     "relation_type": relation.relation_type,
-                    "witness": relation.witness,
-                    "passage_ids": list(relation.passage_ids),
+                    "witness": relation_witness,
+                    "passage_ids": list(projected_passage_ids),
                 },
             )
         )
@@ -424,6 +446,48 @@ def _resolve_endpoint(
     return next(iter(candidates))
 
 
+def _relation_support_evidence_ids(
+    runtime: EvidenceRuntime,
+    relation: Relation,
+    *,
+    selected_evidence: set[str],
+    included_claim_ids: set[str],
+) -> tuple[str, ...]:
+    """Collect explicit visible endpoint support for this relation.
+
+    Evidence endpoints are direct support. Visible claim endpoints contribute their
+    complete required-evidence set. Passage endpoints contribute only visible
+    records that explicitly cite those exact passage IDs. Entity endpoints never
+    create witness support by themselves, and relation metadata alone never makes
+    an unrelated passage a support record.
+    """
+
+    support: set[str] = set()
+    endpoint_passage_ids: set[str] = set()
+
+    for endpoint_id in (relation.source_id, relation.target_id):
+        if endpoint_id in selected_evidence:
+            support.add(endpoint_id)
+        if endpoint_id in included_claim_ids:
+            claim = runtime.claims.get(endpoint_id)
+            if claim is None:
+                return ()
+            required = set(claim.required_evidence_ids)
+            if not required or not required.issubset(selected_evidence):
+                return ()
+            support.update(required)
+        endpoint_passage_ids.add(endpoint_id)
+
+    if endpoint_passage_ids:
+        for evidence_id in selected_evidence:
+            record = runtime.evidence[evidence_id]
+            record_passage_ids = {passage.passage_id for passage in record.passage_refs}
+            if record_passage_ids & endpoint_passage_ids:
+                support.add(evidence_id)
+
+    return tuple(sorted(support))
+
+
 def _validated_witness(value: str | None, label: str) -> str | None:
     if value is None:
         return None
@@ -451,54 +515,6 @@ def _validate_record_witness_provenance(record: EvidenceRecord) -> None:
         raise ValueError(
             f"Conflicting witness provenance for evidence {record.evidence_id}: "
             f"record={record_witness}; passages={sorted(passage_witnesses)}"
-        )
-
-
-def _validate_relation_witness_provenance(
-    relation: Relation,
-    *,
-    source_id: str,
-    target_id: str,
-    nodes: Mapping[str, EvidenceGraphNode],
-    passage_payloads: Mapping[str, Mapping[str, Any]],
-) -> None:
-    relation_witness = _validated_witness(
-        relation.witness,
-        f"relation {relation.relation_id} witness",
-    )
-    if relation_witness is None:
-        return
-
-    supporting_witnesses: set[str] = set()
-    for passage_id in relation.passage_ids:
-        passage = passage_payloads.get(passage_id)
-        if passage is None:
-            continue
-        witness = _validated_witness(
-            passage.get("witness"),
-            f"relation {relation.relation_id} passage {passage_id} witness",
-        )
-        if witness is not None:
-            supporting_witnesses.add(witness)
-
-    for endpoint_id in (source_id, target_id):
-        node = nodes[endpoint_id]
-        if node.node_type not in {EVIDENCE_NODE, PASSAGE_NODE}:
-            continue
-        witness = _validated_witness(
-            node.payload.get("witness"),
-            f"relation {relation.relation_id} endpoint {endpoint_id} witness",
-        )
-        if witness is not None:
-            supporting_witnesses.add(witness)
-
-    conflicting = sorted(
-        witness for witness in supporting_witnesses if witness != relation_witness
-    )
-    if conflicting:
-        raise ValueError(
-            f"Conflicting witness provenance for relation {relation.relation_id}: "
-            f"relation={relation_witness}; supporting={sorted(supporting_witnesses)}"
         )
 
 

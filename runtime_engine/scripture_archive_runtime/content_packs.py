@@ -28,13 +28,18 @@ MAX_UNCOMPRESSED_BYTES = 128 * 1024 * 1024
 MAX_COMPRESSION_RATIO = 500
 
 _PACK_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
-_VERSION_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z][0-9A-Za-z.-]{0,63})?$")
+_VERSION_RE = re.compile(
+    r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
+    r"(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$"
+)
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _DRIVE_RE = re.compile(r"^[A-Za-z]:")
+_WINDOWS_INVALID_CHARS = frozenset('<>:"/\\|?*')
 _RESERVED_WINDOWS_NAMES = {
-    "con", "prn", "aux", "nul",
+    "con", "prn", "aux", "nul", "conin$", "conout$",
     *(f"com{i}" for i in range(1, 10)),
     *(f"lpt{i}" for i in range(1, 10)),
+    "com¹", "com²", "com³", "lpt¹", "lpt²", "lpt³",
 }
 _ALLOWED_DATA_EXTENSIONS = {
     ".json", ".md", ".txt", ".csv", ".tsv",
@@ -49,16 +54,33 @@ _EXECUTABLE_EXTENSIONS = {
 }
 
 
+def _validate_windows_component(value: str, *, label: str) -> str:
+    if not value or value.endswith((" ", ".")):
+        raise ValidationError(f"{label} is unsafe on Windows")
+    if any(ord(char) < 32 or char in _WINDOWS_INVALID_CHARS for char in value):
+        raise ValidationError(f"{label} is unsafe on Windows")
+    stem = value.split(".", 1)[0].casefold()
+    if stem in _RESERVED_WINDOWS_NAMES:
+        raise ValidationError(f"{label} uses reserved Windows name")
+    return value
+
+
 def _validate_pack_id(value: str) -> str:
     if not _PACK_ID_RE.fullmatch(value):
         raise ValidationError("Invalid content pack id")
-    return value
+    return _validate_windows_component(value, label="Content pack id")
 
 
 def _validate_version(value: str) -> str:
-    if not _VERSION_RE.fullmatch(value):
+    match = _VERSION_RE.fullmatch(value)
+    if not match:
         raise ValidationError("Content pack version must be semantic version x.y.z")
-    return value
+    prerelease = match.group(4)
+    if prerelease:
+        for identifier in prerelease.split("."):
+            if identifier.isdigit() and len(identifier) > 1 and identifier.startswith("0"):
+                raise ValidationError("Content pack version has a leading-zero numeric prerelease identifier")
+    return _validate_windows_component(value, label="Content pack version")
 
 
 def _safe_member_name(name: str, *, allow_directory: bool = False) -> str:
@@ -76,11 +98,7 @@ def _safe_member_name(name: str, *, allow_directory: bool = False) -> str:
     if any(part in {"", ".", ".."} for part in parts):
         raise ValidationError(f"Archive member contains unsafe path segment: {name}")
     for part in parts:
-        if ":" in part or part.endswith((" ", ".")):
-            raise ValidationError(f"Archive member is unsafe on Windows: {name}")
-        stem = part.split(".", 1)[0].casefold()
-        if stem in _RESERVED_WINDOWS_NAMES:
-            raise ValidationError(f"Archive member uses reserved Windows name: {name}")
+        _validate_windows_component(part, label=f"Archive member segment in {name}")
 
     normalized = PurePosixPath(raw).as_posix()
     if normalized != raw:
@@ -330,7 +348,16 @@ class ContentPackStore:
         self.staging_root.mkdir(exist_ok=True)
 
     def _pack_dir(self, pack_id: str, version: str) -> Path:
-        return self.packs_root / _validate_pack_id(pack_id) / _validate_version(version)
+        safe_pack_id = _validate_pack_id(pack_id)
+        safe_version = _validate_version(version)
+        pack_root = self.packs_root / safe_pack_id
+        if pack_root.exists():
+            for child in pack_root.iterdir():
+                if child.is_dir() and child.name.casefold() == safe_version.casefold() and child.name != safe_version:
+                    raise ValidationError(
+                        f"Content pack version collides case-insensitively on Windows: {safe_version}"
+                    )
+        return pack_root / safe_version
 
     def _load_state(self) -> dict[str, Any]:
         if not self.state_path.exists():

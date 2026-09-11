@@ -9,6 +9,10 @@ function cleanList(values){
   return out.slice(0,24);
 }
 
+export function evidenceSummary(evidence){
+  return evidence?`Показано лише докази, які користувач уже відкрив у player. Confidence: ${evidence.confidence_code||'—'}; TX1: ${evidence.textual_variant_flag||'none'}.`:'Докази ще не були відкриті в player.';
+}
+
 export class ResearchWorkbenchUI{
   constructor({announce,onReturn}={}){
     this.announce=announce||(()=>{});
@@ -79,7 +83,7 @@ export class ResearchWorkbenchUI{
   renderEvidence(){
     const list=byId('research-evidence-list');list.replaceChildren();
     const values=cleanList(this.evidence?.evidence);
-    byId('research-evidence-status').textContent=this.evidence?`Показано лише докази, які користувач уже відкрив у player. Confidence: ${this.evidence.confidence_code||'—'}; TX1: ${this.evidence.textual_variant_flag||'none'}.`:'Докази ще не були відкриті в player.';
+    byId('research-evidence-status').textContent=evidenceSummary(this.evidence);
     values.forEach(value=>{const li=document.createElement('li');li.textContent=value;list.append(li)});
   }
   renderCompare(){
@@ -97,6 +101,7 @@ export class ResearchWorkbenchUI{
     const h4=document.createElement('h4');h4.textContent='Видимі джерела';host.append(h4);
     const ul=document.createElement('ul');(refs.length?refs:['Немає']).forEach(ref=>{const li=document.createElement('li');li.textContent=`${ref}${this.pinned.has(ref)?' — закріплено':''}`;ul.append(li)});host.append(ul);
     const eh=document.createElement('h4');eh.textContent='Відкриті докази';host.append(eh);
+    const provenance=document.createElement('p');provenance.textContent=evidenceSummary(this.evidence);host.append(provenance);
     const ep=document.createElement('p');ep.textContent=evidence.length?evidence.join('; '):'Докази не відкриті або відсутні.';host.append(ep);
     const caution=document.createElement('p');caution.textContent='Workbench не робить consensus/harmonization висновків і не переносить твердження між свідками.';host.append(caution);
   }

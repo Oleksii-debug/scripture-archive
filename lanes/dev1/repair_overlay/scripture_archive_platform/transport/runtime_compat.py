@@ -8,7 +8,7 @@ from scripture_archive_platform.transport.answer_contracts import validate_answe
 RUNTIME_API_VERSION = "runtime.v1"
 PLAYER_COMMAND_MAP = {
     "player.load_node": "load_task", "player.submit_answer": "submit_answer", "player.request_hint": "request_hint",
-    "player.next": "next", "player.get_mastery": "get_mastery",
+    "player.next": "next", "player.get_mastery": "get_mastery", "player.get_review_queue": "get_review_queue",
     "player.save_checkpoint": "save", "player.restore_checkpoint": "restore", "player.reveal_evidence": "get_evidence",
 }
 class RuntimeContractError(ValueError): pass
@@ -37,7 +37,7 @@ class RuntimeEngineContractAdapter:
             if runtime_payload:
                 raise RuntimeContractError('player.next accepts no caller-selected target payload')
             runtime_payload={}
-        if runtime_command in {'save','restore','get_evidence','get_mastery'}:runtime_payload={}
+        if runtime_command in {'save','restore','get_evidence','get_mastery','get_review_queue'}:runtime_payload={}
         return {'api_version':RUNTIME_API_VERSION,'command':runtime_command,'request_id':rid,'payload':runtime_payload}
     def invoke_runtime(self,request:Mapping[str,Any])->dict[str,Any]:
         runtime_request=self.to_runtime_request(request);response=self._runtime_invoke(runtime_request)

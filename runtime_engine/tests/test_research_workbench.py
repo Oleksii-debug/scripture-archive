@@ -46,6 +46,38 @@ class ResearchWorkbenchTests(unittest.TestCase):
         )
         return runtime
 
+    def collision_runtime(self, *, claim_collision: bool = False) -> EvidenceRuntime:
+        runtime = EvidenceRuntime()
+        runtime.add_evidence(
+            EvidenceRecord(
+                "EV-VISIBLE",
+                (PassageRef("P-VISIBLE", "Mark", 1, 1, witness="Mark"),),
+                "Visible proposition",
+                Confidence.T1,
+                witness="Mark",
+            )
+        )
+        runtime.add_evidence(
+            EvidenceRecord(
+                "EV-SECRET",
+                (PassageRef("P-SECRET", "Luke", 1, 1, witness="Luke"),),
+                "Locked proposition",
+                Confidence.T1,
+                witness="Luke",
+            )
+        )
+        if claim_collision:
+            runtime.add_claim(
+                Claim(
+                    "EV-SECRET",
+                    "Visible support must not leak a hidden evidence identifier through claim identity",
+                    Confidence.T1,
+                    required_evidence_ids=("EV-VISIBLE",),
+                )
+            )
+        runtime.unlock("EV-VISIBLE")
+        return runtime
+
     def test_default_projection_is_unlocked_only_and_claims_fail_closed(self):
         runtime = self.runtime()
         runtime.unlock("EV-MARK")
@@ -59,6 +91,7 @@ class ResearchWorkbenchTests(unittest.TestCase):
         self.assertNotIn("EV-LUKE", rendered)
         self.assertNotIn("CL-COMPARE", rendered)
         self.assertNotIn("CL-LOCKED", rendered)
+        self.assertNotIn("EV-LUKE", repr(view["semantic_rows"]))
 
     def test_explicit_locked_selection_is_rejected_by_default(self):
         runtime = self.runtime()
@@ -152,6 +185,79 @@ class ResearchWorkbenchTests(unittest.TestCase):
         runtime.unlock("EV-BAD")
         with self.assertRaisesRegex(ValueError, "chapter must be a positive integer"):
             build_research_workbench(runtime)
+
+    def test_hidden_evidence_id_shadows_visible_passage_id(self):
+        runtime = self.collision_runtime()
+        runtime.evidence["EV-VISIBLE"] = EvidenceRecord(
+            "EV-VISIBLE",
+            (PassageRef("EV-SECRET", "Mark", 1, 1, witness="Mark"),),
+            "Visible proposition",
+            Confidence.T1,
+            witness="Mark",
+        )
+
+        with self.assertRaisesRegex(ValueError, "passage EV-SECRET collides with non-visible evidence id"):
+            build_research_workbench(runtime)
+
+        full = build_research_workbench(runtime, unlocked_only=False).to_dict()
+        self.assertIn("EV-SECRET", [item["passage_id"] for item in full["passages"]])
+        self.assertIn("EV-SECRET", [item["evidence_id"] for item in full["evidence"]])
+
+    def test_hidden_evidence_id_shadows_visible_claim_id(self):
+        runtime = self.collision_runtime(claim_collision=True)
+
+        with self.assertRaisesRegex(ValueError, "claim EV-SECRET collides with non-visible evidence id"):
+            build_research_workbench(runtime)
+
+        full = build_research_workbench(runtime, unlocked_only=False).to_dict()
+        self.assertIn("EV-SECRET", [item["claim_id"] for item in full["claims"]])
+        self.assertIn("EV-SECRET", [item["evidence_id"] for item in full["evidence"]])
+
+    def test_non_boolean_tx1_is_rejected_instead_of_coerced(self):
+        runtime = EvidenceRuntime()
+        runtime.add_evidence(
+            EvidenceRecord(
+                "EV-BAD-TX1",
+                (PassageRef("P1", "Mark", 1, 1, witness="Mark"),),
+                "Bad TX1 type",
+                Confidence.T1,
+                tx1=1,
+                witness="Mark",
+            )
+        )
+        runtime.unlock("EV-BAD-TX1")
+        with self.assertRaisesRegex(ValueError, "evidence tx1 must be boolean"):
+            build_research_workbench(runtime)
+
+    def test_non_boolean_claim_tx1_is_rejected_instead_of_coerced(self):
+        runtime = EvidenceRuntime()
+        runtime.add_evidence(
+            EvidenceRecord(
+                "EV-1",
+                (PassageRef("P1", "Mark", 1, 1, witness="Mark"),),
+                "Visible support",
+                Confidence.T1,
+                witness="Mark",
+            )
+        )
+        runtime.add_claim(
+            Claim(
+                "CL-BAD-TX1",
+                "Bad claim TX1 type",
+                Confidence.T1,
+                tx1=1,
+                required_evidence_ids=("EV-1",),
+            )
+        )
+        runtime.unlock("EV-1")
+        with self.assertRaisesRegex(ValueError, "claim tx1 must be boolean"):
+            build_research_workbench(runtime)
+
+    def test_unlocked_only_flag_must_be_boolean(self):
+        runtime = self.runtime()
+        runtime.unlock("EV-MARK")
+        with self.assertRaisesRegex(ValueError, "unlocked_only must be boolean"):
+            build_research_workbench(runtime, unlocked_only=1)
 
     def test_projection_does_not_mutate_runtime_unlock_state(self):
         runtime = self.runtime()

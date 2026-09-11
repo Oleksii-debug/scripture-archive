@@ -186,6 +186,62 @@ class EvidenceGraphTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Conflicting passage metadata"):
             build_evidence_graph(runtime)
 
+    def test_visible_structured_ids_cannot_alias_hidden_evidence_or_claim_ids(self):
+        evidence_alias = EvidenceRuntime()
+        evidence_alias.add_evidence(
+            EvidenceRecord(
+                "EV-VISIBLE",
+                (PassageRef("EV-LOCKED", "Mark", 1, 1, witness="Mark"),),
+                "Visible proposition.",
+                Confidence.T1,
+                witness="Mark",
+            )
+        )
+        evidence_alias.add_evidence(
+            EvidenceRecord(
+                "EV-LOCKED",
+                (PassageRef("P-LOCKED", "Luke", 1, 1, witness="Luke"),),
+                "Locked proposition.",
+                Confidence.T1,
+                witness="Luke",
+            )
+        )
+        evidence_alias.unlock("EV-VISIBLE")
+        with self.assertRaisesRegex(ValueError, "aliases a hidden evidence/claim identifier"):
+            build_evidence_graph(evidence_alias)
+
+        claim_alias = EvidenceRuntime()
+        claim_alias.add_evidence(
+            EvidenceRecord(
+                "EV-VISIBLE",
+                (PassageRef("P-VISIBLE", "Mark", 1, 1, witness="Mark"),),
+                "Visible proposition.",
+                Confidence.T1,
+                witness="Mark",
+                entity_ids=("CL-HIDDEN",),
+            )
+        )
+        claim_alias.add_evidence(
+            EvidenceRecord(
+                "EV-LOCKED",
+                (PassageRef("P-LOCKED", "Luke", 1, 1, witness="Luke"),),
+                "Locked proposition.",
+                Confidence.T1,
+                witness="Luke",
+            )
+        )
+        claim_alias.add_claim(
+            Claim(
+                "CL-HIDDEN",
+                "Hidden claim.",
+                Confidence.T2,
+                required_evidence_ids=("EV-LOCKED",),
+            )
+        )
+        claim_alias.unlock("EV-VISIBLE")
+        with self.assertRaisesRegex(ValueError, "aliases a hidden evidence/claim identifier"):
+            build_evidence_graph(claim_alias)
+
     def test_relation_with_nonvisible_passage_provenance_is_omitted(self):
         runtime = EvidenceRuntime()
         for evidence_id, passage_id in (("EV-A", "P-A"), ("EV-B", "P-B")):

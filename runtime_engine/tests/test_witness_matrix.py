@@ -220,6 +220,29 @@ class WitnessMatrixTests(unittest.TestCase):
         self.assertEqual(row["unassigned_evidence"][0]["evidence_id"], "EV-MIXED")
         self.assertIsNone(row["unassigned_evidence"][0]["resolved_witness"])
 
+    def test_record_witness_conflicting_with_passage_witness_fails_closed(self):
+        runtime = EvidenceRuntime()
+        runtime.add_evidence(
+            EvidenceRecord(
+                "EV-CONFLICT",
+                (PassageRef("LK1:1", "Luke", 1, 1, witness="Luke"),),
+                "This proposition must not be attributed to Mark or Luke locally.",
+                Confidence.T1,
+                witness="Mark",
+            )
+        )
+        runtime.unlock("EV-CONFLICT")
+
+        matrix = build_witness_matrix(runtime, witnesses=("Mark", "Luke"))
+        row = matrix.to_dict()["rows"][0]
+        self.assertTrue(all(cell["status"] == NOT_STATED for cell in row["cells"]))
+        self.assertTrue(all(cell["evidence"] == [] for cell in row["cells"]))
+        self.assertEqual(row["unassigned_evidence"][0]["evidence_id"], "EV-CONFLICT")
+        self.assertIsNone(row["unassigned_evidence"][0]["resolved_witness"])
+        linear = "\n".join(matrix.linearize())
+        self.assertNotIn("Mark: stated", linear)
+        self.assertNotIn("Luke: stated", linear)
+
     def test_output_is_deterministic_across_runtime_insertion_order(self):
         first = self.runtime()
         first.unlock("EV-LUKE")

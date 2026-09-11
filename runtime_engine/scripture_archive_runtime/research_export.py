@@ -262,6 +262,7 @@ def build_research_export(
             )
         if required.issubset(visible_evidence_ids):
             visible_claims.append(claim)
+    visible_claim_ids = {claim.claim_id for claim in visible_claims}
 
     for note in notes:
         _validate_workspace_evidence_refs(note.evidence_ids, runtime, visible_evidence_ids)
@@ -270,7 +271,7 @@ def build_research_export(
 
     visible_relations = [
         relation for relation in runtime.relations.values()
-        if _relation_is_visible(relation, runtime, visible_evidence_ids)
+        if _relation_is_visible(relation, runtime, visible_evidence_ids, visible_claim_ids)
     ]
     payload: dict[str, object] = {
         "schema": EXPORT_SCHEMA,
@@ -320,11 +321,20 @@ def _validate_workspace_evidence_refs(
             raise PermissionError(f"Evidence not unlocked for export: {evidence_id}")
 
 
-def _relation_is_visible(relation: Any, runtime: EvidenceRuntime, visible_evidence_ids: set[str]) -> bool:
-    return all(
-        endpoint not in runtime.evidence or endpoint in visible_evidence_ids
-        for endpoint in (relation.source_id, relation.target_id)
-    )
+def _relation_is_visible(
+    relation: Any,
+    runtime: EvidenceRuntime,
+    visible_evidence_ids: set[str],
+    visible_claim_ids: set[str],
+) -> bool:
+    def endpoint_is_visible(endpoint: str) -> bool:
+        if endpoint in runtime.evidence:
+            return endpoint in visible_evidence_ids
+        if endpoint in runtime.claims:
+            return endpoint in visible_claim_ids
+        return True
+
+    return all(endpoint_is_visible(endpoint) for endpoint in (relation.source_id, relation.target_id))
 
 
 def _claim_payload(claim: Any) -> dict[str, object]:

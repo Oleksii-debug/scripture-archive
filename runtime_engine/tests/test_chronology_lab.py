@@ -258,6 +258,82 @@ class ChronologyLabTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Duplicate assertion_id"):
             lab.add(first)
 
+    def test_unknown_nonempty_temporal_label_fails_closed(self):
+        item = self.assertion(
+            "A-UNKNOWN-DATE",
+            "E-DATE",
+            kind=TemporalKind.UNKNOWN,
+            event_label="Event labelled 70 CE",
+            temporal_label="70 CE",
+        )
+        self.assertEqual(NOT_STATED, item.display_temporal)
+        with self.assertRaisesRegex(
+            ValueError, "UNKNOWN chronology cannot carry temporal_label"
+        ):
+            ChronologyLab([item])
+
+    def test_non_string_identity_source_and_provenance_ids_fail_closed(self):
+        cases = (
+            {"assertion_id": 7},
+            {"event_id": None},
+            {"source_scope": 99},
+            {"passage_ids": (123,)},
+            {"evidence_ids": (None,)},
+        )
+        for overrides in cases:
+            with self.subTest(overrides=overrides):
+                payload = {"assertion_id": "A1", "event_id": "E1"}
+                payload.update(overrides)
+                with self.assertRaises(ValueError):
+                    ChronologyLab([self.assertion(**payload)])
+
+    def test_provenance_ids_are_not_trimmed_or_control_normalized(self):
+        for passage_id in (" P1", "P1 ", "P\n1"):
+            with self.subTest(passage_id=passage_id):
+                with self.assertRaises(ValueError):
+                    ChronologyLab(
+                        [self.assertion("A1", "E1", passage_ids=(passage_id,))]
+                    )
+
+    def test_ordinal_keys_require_real_ints_and_reject_bool(self):
+        for bad in ("10", 10.0, True, False):
+            with self.subTest(bad=bad):
+                with self.assertRaisesRegex(
+                    ValueError, "order_start must be an integer"
+                ):
+                    ChronologyLab([self.assertion("A1", "E1", order_start=bad)])
+
+        with self.assertRaisesRegex(ValueError, "order_end must be an integer"):
+            ChronologyLab(
+                [
+                    self.assertion(
+                        "R",
+                        "E",
+                        kind=TemporalKind.RANGE,
+                        temporal_label="range",
+                        order_start=1,
+                        order_end=2.0,
+                    )
+                ]
+            )
+
+    def test_relative_target_must_be_a_string_id(self):
+        with self.assertRaisesRegex(
+            ValueError, "relative_to_event_id must be a string"
+        ):
+            ChronologyLab(
+                [
+                    self.assertion(
+                        "A",
+                        "E",
+                        kind=TemporalKind.RELATIVE,
+                        temporal_label="before target",
+                        relative_to_event_id=42,
+                        relative_relation=TemporalRelation.BEFORE,
+                    )
+                ]
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -153,8 +153,15 @@ export class CommandPaletteUI{
   runSelected(){
     const action=this.results[this.selected];
     if(!action)return;
+    const result=this.registry.execute(action.id);
+    if(result===false){
+      this.selected=0;
+      this.render();
+      this.announce('Команда більше недоступна в поточному контексті');
+      return false;
+    }
     this.close({restore:false});
     this.announce(`Команда: ${action.label}`);
-    return this.registry.execute(action.id);
+    return result;
   }
 }

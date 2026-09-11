@@ -1,0 +1,44 @@
+name: R06 W2-13 Constructor QA67
+
+on:
+  push:
+    branches:
+      - r06-wave2-w13-constructor-qa67
+    paths:
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/authoring/**'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/domain/**'
+      - 'lanes/dev1/repair_overlay/tests/test_authoring_service.py'
+      - '.github/workflows/r06-w2-13-constructor-qa67.yml'
+  workflow_dispatch:
+
+jobs:
+  constructor-publishability-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Confirm exact qualification source
+        shell: bash
+        run: |
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$GITHUB_SHA" || { echo "Expected $GITHUB_SHA, got $actual"; exit 1; }
+          git show --no-patch --format='%H %P %s' HEAD
+      - name: Compile constructor overlay
+        shell: bash
+        run: |
+          python -m compileall -q \
+            lanes/dev1/repair_overlay/scripture_archive_platform/authoring \
+            lanes/dev1/repair_overlay/scripture_archive_platform/domain \
+            lanes/dev1/repair_overlay/tests/test_authoring_service.py
+      - name: Execute canonical constructor hardening regressions
+        shell: bash
+        env:
+          PYTHONPATH: lanes/dev1/repair_overlay
+        run: |
+          python -m unittest discover \
+            -s lanes/dev1/repair_overlay/tests \
+            -p 'test_authoring_service.py' \
+            -v

@@ -133,11 +133,32 @@ class EvidenceRuntime:
                 raise PermissionError(f"Evidence not unlocked: {eid}")
         required = set(claim.required_evidence_ids)
         missing = required - submitted
-        if claim.witness:
-            relevant = {eid for eid in submitted if self.evidence[eid].witness in {None, claim.witness}}
-            if required and not required.issubset(relevant):
-                missing |= required - relevant
-        return ProofResult(not missing, claim_id, tuple(sorted(submitted & required)), tuple(sorted(missing)), claim.confidence, claim.tx1, claim.source_scope, claim.uncertainty)
+        if claim.witness is not None and required:
+            # Import locally to keep the provenance helper layer reusable without
+            # creating a module-import cycle at EvidenceRuntime definition time.
+            from .evidence_provenance import resolve_evidence_witness
+
+            declared_witness = (
+                claim.witness
+                if isinstance(claim.witness, str)
+                and claim.witness
+                and claim.witness == claim.witness.strip()
+                else None
+            )
+            for eid in required & submitted:
+                if declared_witness is None or resolve_evidence_witness(self.evidence[eid]) != declared_witness:
+                    missing.add(eid)
+        accepted = (submitted & required) - missing
+        return ProofResult(
+            not missing,
+            claim_id,
+            tuple(sorted(accepted)),
+            tuple(sorted(missing)),
+            claim.confidence,
+            claim.tx1,
+            claim.source_scope,
+            claim.uncertainty,
+        )
 
     def cross_references(self, entity_id: str) -> tuple[Relation, ...]:
         return tuple(r for r in self.relations.values() if r.source_id == entity_id or r.target_id == entity_id)

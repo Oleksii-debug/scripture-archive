@@ -1,9 +1,16 @@
+import sys
 import unittest
+from pathlib import Path
 
 from scripture_archive_runtime.application import RuntimeApplication
 from scripture_archive_runtime.content import ContentRepository
 from scripture_archive_runtime.security import ValidationError
 from tests.fixtures import LN01_N03, PA02_N04, node_from
+
+PLATFORM_OVERLAY = Path(__file__).resolve().parents[2] / "lanes" / "dev1" / "repair_overlay"
+if str(PLATFORM_OVERLAY) not in sys.path:
+    sys.path.insert(0, str(PLATFORM_OVERLAY))
+from scripture_archive_platform.transport.runtime_compat import RuntimeEngineContractAdapter
 
 
 class RuntimeBranchIntegrityTests(unittest.TestCase):
@@ -52,6 +59,24 @@ class RuntimeBranchIntegrityTests(unittest.TestCase):
         }
 
     @staticmethod
+    def _load_command(node_id):
+        return {
+            "api_version": "runtime.v1",
+            "command": "load_task",
+            "request_id": "load-test",
+            "payload": {"node_id": node_id},
+        }
+
+    @staticmethod
+    def _platform_load_request(node_id):
+        return {
+            "api_version": "scripture.transport.v1",
+            "command": "player.load_node",
+            "request_id": "platform-load-test",
+            "payload": {"node_id": node_id},
+        }
+
+    @staticmethod
     def _state_snapshot(app):
         return {
             "current_node_id": app.current_node_id,
@@ -65,12 +90,55 @@ class RuntimeBranchIntegrityTests(unittest.TestCase):
             "attempt_counts": {nid: len(state.attempts) for nid, state in app.memory.node_history.items()},
         }
 
+    def _new_app(self):
+        a, b, c, cross = self._nodes()
+        return RuntimeApplication(ContentRepository([a, b, c, cross]))
+
     def _ready_app(self):
         a, b, c, cross = self._nodes()
         app = RuntimeApplication(ContentRepository([a, b, c, cross]))
         app.load_task("TST01-N01")
         app.submit_answer("TST01-N01", a["accepted_answer"])
         return app
+
+    def test_initial_player_load_is_allowed(self):
+        app = self._new_app()
+        out = app.handle(self._load_command("TST01-N01"))
+        self.assertEqual(out["task"]["node_id"], "TST01-N01")
+        self.assertEqual(app.current_node_id, "TST01-N01")
+
+    def test_reload_of_current_node_is_read_only(self):
+        app = self._new_app()
+        app.handle(self._load_command("TST01-N01"))
+        before = self._state_snapshot(app)
+        out = app.handle(self._load_command("TST01-N01"))
+        self.assertEqual(out["task"]["node_id"], "TST01-N01")
+        self.assertEqual(self._state_snapshot(app), before)
+
+    def test_player_load_arbitrary_existing_same_mission_target_is_rejected_without_state_mutation(self):
+        app = self._ready_app(); before = self._state_snapshot(app)
+        with self.assertRaisesRegex(ValidationError, "cannot change current node"):
+            app.handle(self._load_command("TST01-N03"))
+        self.assertEqual(self._state_snapshot(app), before)
+
+    def test_player_load_cross_mission_target_is_rejected_without_state_mutation(self):
+        app = self._ready_app(); before = self._state_snapshot(app)
+        with self.assertRaisesRegex(ValidationError, "cannot change current node"):
+            app.handle(self._load_command("OTH01-N01"))
+        self.assertEqual(self._state_snapshot(app), before)
+
+    def test_player_load_unknown_target_is_rejected_without_lookup_or_state_mutation(self):
+        app = self._ready_app(); before = self._state_snapshot(app)
+        with self.assertRaisesRegex(ValidationError, "cannot change current node"):
+            app.handle(self._load_command("ZZZ99-N99"))
+        self.assertEqual(self._state_snapshot(app), before)
+
+    def test_scripture_transport_player_load_cannot_bypass_runtime_entry_policy(self):
+        app = self._ready_app(); before = self._state_snapshot(app)
+        adapter = RuntimeEngineContractAdapter(app.handle)
+        with self.assertRaisesRegex(ValidationError, "cannot change current node"):
+            adapter.invoke_runtime(self._platform_load_request("TST01-N03"))
+        self.assertEqual(self._state_snapshot(app), before)
 
     def test_canonical_target_is_accepted_only_by_runtime_resolution(self):
         app = self._ready_app()

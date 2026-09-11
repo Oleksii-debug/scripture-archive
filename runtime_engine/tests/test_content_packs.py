@@ -22,12 +22,19 @@ def _json_bytes(value):
     return (json.dumps(value, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8")
 
 
-def _write_pack(path: Path, *, version: str = "1.0.0", node=None, digest_override: str | None = None) -> None:
+def _write_pack(
+    path: Path,
+    *,
+    version: str = "1.0.0",
+    pack_id: str = "study-core",
+    node=None,
+    digest_override: str | None = None,
+) -> None:
     payload = _json_bytes({"nodes": [deepcopy(node or LN01_N03)]})
     digest = digest_override or hashlib.sha256(payload).hexdigest()
     manifest = {
         "schema": CONTENT_PACK_SCHEMA,
-        "pack_id": "study-core",
+        "pack_id": pack_id,
         "version": version,
         "content_schema_version": CONTENT_SCHEMA_VERSION,
         "entry_points": ["content/nodes.json"],
@@ -112,10 +119,57 @@ class ContentPackTests(unittest.TestCase):
             inspect_content_pack(pack)
 
     def test_parent_traversal_absolute_and_windows_ambiguous_paths_are_rejected(self):
-        for index, unsafe in enumerate(("../escape.json", "/absolute.json", "C:/drive.json", "dir\\evil.json", "safe/file.json:ads")):
+        unsafe_paths = (
+            "../escape.json",
+            "/absolute.json",
+            "C:/drive.json",
+            "dir\\evil.json",
+            "safe/file.json:ads",
+        )
+        for index, unsafe in enumerate(unsafe_paths):
             archive = self.root / f"unsafe-{index}.zip"
             _write_raw_zip(archive, [(MANIFEST_NAME, b"{}"), (unsafe, b"{}")])
             with self.subTest(path=unsafe):
+                with self.assertRaises(ValidationError):
+                    inspect_content_pack(archive)
+
+    def test_windows_invalid_and_control_characters_in_member_segments_are_rejected(self):
+        unsafe_paths = (
+            "content/bad?.json",
+            "content/bad*.json",
+            "content/bad|name.json",
+            "content/bad<name.json",
+            "content/bad>name.json",
+            'content/bad"name.json',
+            "content/bad\x1bname.json",
+        )
+        for index, unsafe in enumerate(unsafe_paths):
+            archive = self.root / f"windows-invalid-{index}.zip"
+            _write_raw_zip(archive, [(MANIFEST_NAME, b"{}"), (unsafe, b"{}")])
+            with self.subTest(path=repr(unsafe)):
+                with self.assertRaisesRegex(ValidationError, "unsafe on Windows"):
+                    inspect_content_pack(archive)
+
+    def test_pack_identity_and_versions_are_windows_safe_and_strict_semver(self):
+        for index, pack_id in enumerate(("con", "nul.txt", "com1.cfg", "lpt9.data", "study.")):
+            archive = self.root / f"unsafe-id-{index}.zip"
+            _write_pack(archive, pack_id=pack_id)
+            with self.subTest(pack_id=pack_id):
+                with self.assertRaises(ValidationError):
+                    inspect_content_pack(archive)
+
+        invalid_versions = (
+            "01.0.0",
+            "1.01.0",
+            "1.0.01",
+            "1.0.0-alpha.01",
+            "1.0.0-01",
+            "1.0.0-a.",
+        )
+        for index, version in enumerate(invalid_versions):
+            archive = self.root / f"unsafe-version-{index}.zip"
+            _write_pack(archive, version=version)
+            with self.subTest(version=version):
                 with self.assertRaises(ValidationError):
                     inspect_content_pack(archive)
 

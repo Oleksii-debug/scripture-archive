@@ -161,6 +161,12 @@ def build_evidence_graph(
         include_locked_evidence=include_locked_evidence,
     )
     selected_set = set(selected_ids)
+    visible_claims = _select_visible_claims(runtime, selected_set)
+    included_claim_ids = {claim.claim_id for claim in visible_claims}
+    hidden_raw_ids = (
+        (set(runtime.evidence) - selected_set)
+        | (set(runtime.claims) - included_claim_ids)
+    )
 
     nodes: dict[str, EvidenceGraphNode] = {}
     edges: dict[str, EvidenceGraphEdge] = {}
@@ -185,6 +191,7 @@ def build_evidence_graph(
     for evidence_id in selected_ids:
         record = runtime.evidence[evidence_id]
         _require_stable_id(record.evidence_id, "evidence_id")
+        _reject_hidden_alias(record.evidence_id, hidden_raw_ids, "evidence_id")
         add_node(
             EvidenceGraphNode(
                 graph_id=_graph_id(EVIDENCE_NODE, record.evidence_id),
@@ -197,6 +204,7 @@ def build_evidence_graph(
         seen_passages: set[str] = set()
         for passage in record.passage_refs:
             _require_stable_id(passage.passage_id, "passage_id")
+            _reject_hidden_alias(passage.passage_id, hidden_raw_ids, "passage_id")
             payload = _passage_payload(passage)
             existing = passage_payloads.get(passage.passage_id)
             if existing is not None and existing != payload:
@@ -229,6 +237,7 @@ def build_evidence_graph(
         seen_entities: set[str] = set()
         for entity_id in record.entity_ids:
             _require_stable_id(entity_id, "entity_id")
+            _reject_hidden_alias(entity_id, hidden_raw_ids, "entity_id")
             entity_graph_id = _graph_id(ENTITY_NODE, entity_id)
             add_node(
                 EvidenceGraphNode(
@@ -250,19 +259,8 @@ def build_evidence_graph(
                 )
                 seen_entities.add(entity_id)
 
-    included_claim_ids: set[str] = set()
-    for claim in sorted(runtime.claims.values(), key=lambda item: item.claim_id):
-        _require_stable_id(claim.claim_id, "claim_id")
-        required = tuple(claim.required_evidence_ids)
-        if not required:
-            continue
-        unknown = set(required) - set(runtime.evidence)
-        if unknown and bool(set(required) & selected_set):
-            raise ValueError(
-                f"Claim {claim.claim_id} references unknown evidence: {sorted(unknown)}"
-            )
-        if not set(required).issubset(selected_set):
-            continue
+    for claim in visible_claims:
+        _reject_hidden_alias(claim.claim_id, hidden_raw_ids, "claim_id")
         claim_graph_id = _graph_id(CLAIM_NODE, claim.claim_id)
         add_node(
             EvidenceGraphNode(
@@ -272,8 +270,7 @@ def build_evidence_graph(
                 payload=_claim_payload(claim),
             )
         )
-        included_claim_ids.add(claim.claim_id)
-        for evidence_id in sorted(set(required)):
+        for evidence_id in sorted(set(claim.required_evidence_ids)):
             add_edge(
                 EvidenceGraphEdge(
                     edge_id=f"supports:{evidence_id}:{claim.claim_id}",
@@ -356,6 +353,26 @@ def _select_evidence_ids(
     return tuple(sorted(selected))
 
 
+def _select_visible_claims(
+    runtime: EvidenceRuntime,
+    selected_evidence: set[str],
+) -> tuple[Claim, ...]:
+    visible: list[Claim] = []
+    for claim in sorted(runtime.claims.values(), key=lambda item: item.claim_id):
+        _require_stable_id(claim.claim_id, "claim_id")
+        required = tuple(claim.required_evidence_ids)
+        if not required:
+            continue
+        unknown = set(required) - set(runtime.evidence)
+        if unknown and bool(set(required) & selected_evidence):
+            raise ValueError(
+                f"Claim {claim.claim_id} references unknown evidence: {sorted(unknown)}"
+            )
+        if set(required).issubset(selected_evidence):
+            visible.append(claim)
+    return tuple(visible)
+
+
 def _resolve_endpoint(
     raw_id: str,
     *,
@@ -386,6 +403,14 @@ def _require_stable_id(value: Any, label: str) -> str:
     if not isinstance(value, str) or not value or value != value.strip():
         raise ValueError(f"{label} must be a non-empty stable string without outer whitespace")
     return value
+
+
+def _reject_hidden_alias(value: str, hidden_raw_ids: set[str], label: str) -> None:
+    if value in hidden_raw_ids:
+        raise ValueError(
+            f"{label} {value} aliases a hidden evidence/claim identifier; "
+            "derived graph refuses cross-namespace disclosure"
+        )
 
 
 def _evidence_payload(record: EvidenceRecord) -> dict[str, Any]:

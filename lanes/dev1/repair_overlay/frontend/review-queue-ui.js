@@ -1,6 +1,12 @@
 import {chooseTransport, unwrap} from './transport.js';
 
 const MAX_VISIBLE_ITEMS = 500;
+const MAX_QUEUE_ITEMS = 5000;
+const MAX_ID_LENGTH = 200;
+const MAX_REASON_LENGTH = 1000;
+const REVIEW_RELATIONS = new Set(['EXACT', 'VARIANT', 'PASSAGE_REVISIT', 'CROSS_CONTEXT', 'SYNTHESIS', 'NONE']);
+const CONTROL_OR_LINE_SEPARATOR = /[\u0000-\u001F\u007F\u2028\u2029]/u;
+const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/u;
 let transportPromise = null;
 let loadedOnce = false;
 
@@ -50,28 +56,46 @@ function keepViewExclusive() {
   }
 }
 
+function requireSafeText(raw, name, index, {allowEmpty = false, maxLength = MAX_ID_LENGTH} = {}) {
+  if (!Object.prototype.hasOwnProperty.call(raw, name)) {
+    throw new Error(`Відсутнє поле ${name} у review item #${index + 1}`);
+  }
+  const value = raw[name];
+  if (typeof value !== 'string' || (!allowEmpty && !value) || value.length > maxLength || CONTROL_OR_LINE_SEPARATOR.test(value)) {
+    throw new Error(`Некоректне поле ${name} у review item #${index + 1}`);
+  }
+  return value;
+}
+
 function validateQueueItem(raw, index) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error(`Некоректний review item #${index + 1}`);
-  const requireString = (name, allowEmpty = false) => {
-    const value = raw[name];
-    if (typeof value !== 'string' || (!allowEmpty && !value)) throw new Error(`Некоректне поле ${name} у review item #${index + 1}`);
-    return value;
-  };
-  const queueId = requireString('queue_id');
-  const conceptId = requireString('concept_id');
-  const dueAt = requireString('due_at');
-  const relation = requireString('relation');
-  const reason = requireString('reason', true);
+  const queueId = requireSafeText(raw, 'queue_id', index);
+  const conceptId = requireSafeText(raw, 'concept_id', index);
+  const dueAt = requireSafeText(raw, 'due_at', index, {maxLength: 64});
+  const relation = requireSafeText(raw, 'relation', index, {maxLength: 32});
+  const reason = requireSafeText(raw, 'reason', index, {allowEmpty: true, maxLength: MAX_REASON_LENGTH});
+
+  if (!Object.prototype.hasOwnProperty.call(raw, 'node_id')) {
+    throw new Error(`Відсутнє поле node_id у review item #${index + 1}`);
+  }
   const nodeId = raw.node_id;
-  if (nodeId !== null && nodeId !== undefined && (typeof nodeId !== 'string' || !nodeId)) {
+  if (nodeId !== null && (typeof nodeId !== 'string' || !nodeId || nodeId.length > MAX_ID_LENGTH || CONTROL_OR_LINE_SEPARATOR.test(nodeId))) {
     throw new Error(`Некоректне поле node_id у review item #${index + 1}`);
   }
-  if (!Number.isInteger(raw.priority)) throw new Error(`Некоректне поле priority у review item #${index + 1}`);
-  return {queueId, conceptId, nodeId: nodeId || null, dueAt, priority: raw.priority, relation, reason};
+  if (!Object.prototype.hasOwnProperty.call(raw, 'priority') || !Number.isInteger(raw.priority)) {
+    throw new Error(`Некоректне поле priority у review item #${index + 1}`);
+  }
+  if (!REVIEW_RELATIONS.has(relation)) {
+    throw new Error(`Невідоме поле relation у review item #${index + 1}`);
+  }
+  if (!ISO_TIMESTAMP.test(dueAt) || Number.isNaN(Date.parse(dueAt))) {
+    throw new Error(`Некоректне поле due_at у review item #${index + 1}`);
+  }
+  return {queueId, conceptId, nodeId, dueAt, priority: raw.priority, relation, reason};
 }
 
 function renderQueue(rawQueue) {
-  if (!Array.isArray(rawQueue)) throw new Error('Некоректний review_queue contract');
+  if (!Array.isArray(rawQueue) || rawQueue.length > MAX_QUEUE_ITEMS) throw new Error('Некоректний review_queue contract');
   const validated = rawQueue.map(validateQueueItem);
   const host = byId('review-queue-results');
   host.replaceChildren();

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from itertools import combinations
 import json
 
 from .evidence import EvidenceRecord, EvidenceRuntime, PassageRef, Relation
@@ -126,9 +125,11 @@ def project_cross_testament(
     """Project only explicit, source-backed OT↔NT links from EvidenceRuntime.
 
     No link is created from topical similarity, shared entities, claims, or
-    proximity. A Relation must explicitly name both passage IDs. By default,
-    every passage named by a relation must be represented by unlocked evidence
-    before any part of that relation is exposed.
+    proximity. A projected Relation must explicitly name exactly two passage
+    IDs; N-ary relations are not pairwise-expanded because that would invent
+    semantics not stated by the source relation. By default, every named
+    passage and every relation endpoint that resolves to evidence must be
+    visible before any part of the relation is exposed.
     """
     if not isinstance(runtime, EvidenceRuntime):
         raise TypeError("runtime must be an EvidenceRuntime")
@@ -158,62 +159,68 @@ def project_cross_testament(
     for relation_id in sorted(runtime.relations):
         relation = runtime.relations[relation_id]
         _validate_relation(relation, expected_id=relation_id)
-        if len(relation.passage_ids) < 2:
+        ordered_ids = _dedupe_preserving_order(relation.passage_ids)
+        if len(ordered_ids) != 2:
             continue
 
-        ordered_ids = _dedupe_preserving_order(relation.passage_ids)
         for passage_id in ordered_ids:
             if passage_id not in all_passages:
                 raise ValueError(
                     f"Relation {relation.relation_id} references unknown passage_id {passage_id}"
                 )
 
-        # A multi-passage relation is one explicit assertion. Showing a visible
-        # subset would leak that hidden support exists and could change the
-        # assertion's meaning, so suppress the whole relation until every
-        # declared passage endpoint is visible.
+        # Relation endpoint identity is part of the assertion. If an endpoint
+        # names an evidence record, a locked endpoint suppresses the relation
+        # even when the same passage is independently visible via other evidence.
+        if unlocked_only and _relation_has_hidden_evidence_endpoint(
+            relation,
+            runtime.evidence,
+            visible_evidence_ids,
+        ):
+            continue
+
         if any(passage_id not in visible_provenance for passage_id in ordered_ids):
             continue
 
-        for left_id, right_id in combinations(ordered_ids, 2):
-            left = all_passages[left_id]
-            right = all_passages[right_id]
-            _validate_relation_witness(
-                relation,
-                (left, right),
-                visible_provenance[left_id] + visible_provenance[right_id],
-            )
-            left_testament = _testament_for(left.book, book_testaments)
-            right_testament = _testament_for(right.book, book_testaments)
-            if left_testament == right_testament:
-                continue
+        left_id, right_id = ordered_ids
+        left = all_passages[left_id]
+        right = all_passages[right_id]
+        _validate_relation_witness(
+            relation,
+            (left, right),
+            visible_provenance[left_id] + visible_provenance[right_id],
+        )
+        left_testament = _testament_for(left.book, book_testaments)
+        right_testament = _testament_for(right.book, book_testaments)
+        if left_testament == right_testament:
+            continue
 
-            ot_ref, nt_ref = (
-                (left, right)
-                if left_testament == "OT"
-                else (right, left)
+        ot_ref, nt_ref = (
+            (left, right)
+            if left_testament == "OT"
+            else (right, left)
+        )
+        key = (relation.relation_id, ot_ref.passage_id, nt_ref.passage_id)
+        if key in seen:
+            continue
+        seen.add(key)
+        links.append(
+            CrossTestamentLink(
+                relation_id=relation.relation_id,
+                relation_type=relation.relation_type,
+                relation_witness=relation.witness,
+                ot=_endpoint(
+                    ot_ref,
+                    "OT",
+                    visible_provenance[ot_ref.passage_id],
+                ),
+                nt=_endpoint(
+                    nt_ref,
+                    "NT",
+                    visible_provenance[nt_ref.passage_id],
+                ),
             )
-            key = (relation.relation_id, ot_ref.passage_id, nt_ref.passage_id)
-            if key in seen:
-                continue
-            seen.add(key)
-            links.append(
-                CrossTestamentLink(
-                    relation_id=relation.relation_id,
-                    relation_type=relation.relation_type,
-                    relation_witness=relation.witness,
-                    ot=_endpoint(
-                        ot_ref,
-                        "OT",
-                        visible_provenance[ot_ref.passage_id],
-                    ),
-                    nt=_endpoint(
-                        nt_ref,
-                        "NT",
-                        visible_provenance[nt_ref.passage_id],
-                    ),
-                )
-            )
+        )
 
     links.sort(key=lambda item: (item.relation_id, item.ot.passage_id, item.nt.passage_id))
     return CrossTestamentProjection(tuple(links))
@@ -319,6 +326,17 @@ def _validate_relation(relation: Relation, *, expected_id: str) -> None:
         raise ValueError(f"Relation {relation.relation_id} passage_ids must be tuple")
     for passage_id in relation.passage_ids:
         _require_text(passage_id, "relation passage_id", _MAX_ID)
+
+
+def _relation_has_hidden_evidence_endpoint(
+    relation: Relation,
+    evidence: Mapping[str, EvidenceRecord],
+    visible_evidence_ids: set[str],
+) -> bool:
+    return any(
+        endpoint_id in evidence and endpoint_id not in visible_evidence_ids
+        for endpoint_id in (relation.source_id, relation.target_id)
+    )
 
 
 def _validate_relation_witness(

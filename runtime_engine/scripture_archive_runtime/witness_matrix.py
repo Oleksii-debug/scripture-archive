@@ -161,8 +161,7 @@ def build_witness_matrix(
             _claim_payload(claim)
             for claim in sorted(runtime.claims.values(), key=lambda item: item.claim_id)
             if claim.required_evidence_ids
-            and set(claim.required_evidence_ids).issubset(selected_ids)
-            and bool(set(claim.required_evidence_ids) & component_set)
+            and set(claim.required_evidence_ids).issubset(component_set)
         )
         cells = tuple(
             WitnessCell(

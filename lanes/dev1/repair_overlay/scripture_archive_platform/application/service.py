@@ -37,6 +37,7 @@ class PlatformApplication:
         if cmd=='player.get_mastery':return self._mastery()
         if cmd=='player.save_checkpoint':return self._save_checkpoint(p)
         if cmd=='player.restore_checkpoint':return self._restore_checkpoint()
+        if cmd=='dossier.get':return self._dossier(p)
         if cmd=='authoring.list_drafts':return {'drafts':self.authoring.list_drafts()}
         if cmd=='authoring.new_draft':return {'draft':self.authoring.new_draft(str(p.get('title') or 'Нова чернетка'),str(p.get('kind') or 'node'))}
         if cmd=='authoring.load_draft':return {'draft':self.authoring.load_draft(self._id(p,'draft_id'))}
@@ -61,7 +62,7 @@ class PlatformApplication:
         raise ValueError('command not implemented')
     def _bootstrap(self):
         campaigns=self.loader.list_campaigns()
-        return {'app':{'name':'Архів Писання','version':'R06-3DEV-A','runtime':'Windows 11 x64 / WebView2 semantic UI','transport_api_version':TRANSPORT_API_VERSION},'registries':{'task_types':self.task_types.list(),'renderers':self.renderers.list(),'graders':self.graders.list(),'editors':self.editors.list(),'templates':self.templates.list()},'campaigns':campaigns,'keymap':self.keymap.list(),'capabilities':{'constructor':True,'draft_vs_canonical':True,'web_portable_transport':True,'allowlisted_bridge':True,'arbitrary_filesystem':False,'shell':False,'python_eval':False,'runtime_truth':bool(self.player_gateway),'grading_truth':'D5/runtime' if self.player_gateway else 'REFERENCE_TEST_ONLY'}}
+        return {'app':{'name':'Архів Писання','version':'R06-3DEV-A','runtime':'Windows 11 x64 / WebView2 semantic UI','transport_api_version':TRANSPORT_API_VERSION},'registries':{'task_types':self.task_types.list(),'renderers':self.renderers.list(),'graders':self.graders.list(),'editors':self.editors.list(),'templates':self.templates.list()},'campaigns':campaigns,'keymap':self.keymap.list(),'capabilities':{'constructor':True,'draft_vs_canonical':True,'web_portable_transport':True,'allowlisted_bridge':True,'arbitrary_filesystem':False,'shell':False,'python_eval':False,'dossiers':bool(self.player_gateway and hasattr(self.player_gateway,'get_dossier')),'runtime_truth':bool(self.player_gateway),'grading_truth':'D5/runtime' if self.player_gateway else 'REFERENCE_TEST_ONLY'}}
     def _load_node(self,nid):
         if self.player_gateway:self.player_gateway.invoke('player.load_node',{'node_id':nid},request_id='load-'+nid)
         node=self.loader.load_node(nid); mission=self.loader.mission_for_node(nid); renderable=self.mapper.to_renderable(node,mission); self._last_node[nid]=node
@@ -93,6 +94,34 @@ class PlatformApplication:
     def _mastery(self):
         if not self.player_gateway:return {'mastery':[],'truth_owner':'REFERENCE_TEST_ONLY'}
         rr=self.player_gateway.invoke('player.get_mastery',{},request_id='mastery-player'); return {'mastery':rr.get('mastery') or [],'truth_owner':'D5/runtime'}
+    def _dossier(self,p):
+        if not self.player_gateway or not hasattr(self.player_gateway,'get_dossier'):
+            raise ValueError('dossier requires canonical runtime')
+        subject_id=p['subject_id']; display_name=p['display_name']; kind=p['kind']
+        data=self.player_gateway.get_dossier(subject_id,display_name,kind)
+        dossier=data.get('dossier') if isinstance(data,dict) else None
+        if not isinstance(dossier,dict):raise ValueError('runtime dossier must be object')
+        if dossier.get('schema')!='scripture.dossier-view.v1':raise ValueError('unexpected dossier schema')
+        if dossier.get('evidence_scope')!='unlocked_only':raise ValueError('packaged dossier must remain unlocked_only')
+        subject=dossier.get('subject')
+        if not isinstance(subject,dict) or subject!={'subject_id':subject_id,'kind':kind,'display_name':display_name}:
+            raise ValueError('runtime dossier subject mismatch')
+        if type(dossier.get('stated')) is not bool:raise ValueError('runtime dossier stated must be boolean')
+        if not isinstance(dossier.get('status_text'),str) or len(dossier['status_text'])>500:raise ValueError('invalid dossier status_text')
+        rows=dossier.get('rows'); linear=dossier.get('linear')
+        if not isinstance(rows,list) or len(rows)>1000:raise ValueError('invalid dossier rows')
+        if not isinstance(linear,list) or len(linear)>2000 or any(not isinstance(line,str) or len(line)>4000 for line in linear):raise ValueError('invalid dossier linear representation')
+        for row in rows:
+            if not isinstance(row,dict):raise ValueError('invalid dossier row')
+            if row.get('row_type') not in {'EVIDENCE','CLAIM','RELATION'}:raise ValueError('invalid dossier row type')
+            if not isinstance(row.get('row_id'),str) or not row['row_id'] or len(row['row_id'])>160:raise ValueError('invalid dossier row id')
+            if not isinstance(row.get('proposition'),str) or len(row['proposition'])>4000:raise ValueError('invalid dossier proposition')
+            if row.get('confidence') not in {None,'T1','T2','C1','I1','D1'}:raise ValueError('invalid dossier confidence')
+            if type(row.get('tx1')) is not bool:raise ValueError('invalid dossier TX1 flag')
+            for key in ('passage_ids','evidence_ids'):
+                values=row.get(key)
+                if not isinstance(values,list) or len(values)>500 or any(not isinstance(value,str) or not value or len(value)>200 for value in values):raise ValueError(f'invalid dossier {key}')
+        return {'dossier':dossier,'truth_owner':'D5/runtime'}
     def _save_checkpoint(self,p):
         checkpoint={'campaign_id':p.get('campaign_id'),'mission_id':p.get('mission_id'),'node_id':p.get('node_id'),'saved_at':int(time.time()),'checkpoint_schema':'scripture.player.checkpoint.v1'}
         if self.player_gateway:self.player_gateway.invoke('player.save_checkpoint',{},request_id='save-'+str(p.get('node_id') or 'current'))

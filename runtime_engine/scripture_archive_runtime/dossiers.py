@@ -44,6 +44,7 @@ class DossierRow:
     source_scope: str = ""
     uncertainty: str | None = None
     passage_ids: tuple[str, ...] = ()
+    passage_witnesses: tuple[tuple[str, str | None], ...] = ()
     evidence_ids: tuple[str, ...] = ()
     relation_type: str | None = None
     related_id: str | None = None
@@ -59,6 +60,10 @@ class DossierRow:
             "source_scope": self.source_scope,
             "uncertainty": self.uncertainty,
             "passage_ids": list(self.passage_ids),
+            "passage_witnesses": [
+                {"passage_id": passage_id, "witness": witness}
+                for passage_id, witness in self.passage_witnesses
+            ],
             "evidence_ids": list(self.evidence_ids),
             "relation_type": self.relation_type,
             "related_id": self.related_id,
@@ -114,6 +119,14 @@ class DossierView:
                 fields.append(f"related_id={row.related_id}")
             if row.passage_ids:
                 fields.append("passages=" + ",".join(row.passage_ids))
+            if row.passage_witnesses:
+                fields.append(
+                    "passage_witnesses="
+                    + ",".join(
+                        f"{passage_id}@{witness or 'not_stated'}"
+                        for passage_id, witness in row.passage_witnesses
+                    )
+                )
             if row.evidence_ids:
                 fields.append("evidence=" + ",".join(row.evidence_ids))
             lines.append(" | ".join(fields))
@@ -123,12 +136,29 @@ class DossierView:
 class DossierAssembler:
     """Build read-only dossier views from explicit EvidenceRuntime truth.
 
-    The assembler never creates canonical facts. In the default player-safe mode,
-    locked evidence and any claims/relations that depend on it are omitted.
+    The assembler never creates canonical facts. Locked evidence and dependent
+    claims/relations are omitted from the default player-safe view. Explicit
+    witness contradictions fail closed rather than being harmonized.
     """
 
     def __init__(self, runtime: EvidenceRuntime):
         self.runtime = runtime
+
+    @staticmethod
+    def _record_witness(record: EvidenceRecord) -> tuple[bool, str | None]:
+        passage_witnesses = {
+            passage.witness.strip()
+            for passage in record.passage_refs
+            if isinstance(passage.witness, str) and passage.witness.strip()
+        }
+        record_witness = record.witness.strip() if isinstance(record.witness, str) and record.witness.strip() else None
+        if record_witness is not None and any(witness != record_witness for witness in passage_witnesses):
+            return False, None
+        if record_witness is not None:
+            return True, record_witness
+        if len(passage_witnesses) == 1:
+            return True, next(iter(passage_witnesses))
+        return True, None
 
     @staticmethod
     def _passage_ids(records: tuple[EvidenceRecord, ...]) -> tuple[str, ...]:
@@ -142,6 +172,39 @@ class DossierAssembler:
             )
         )
 
+    @staticmethod
+    def _passage_witnesses(records: tuple[EvidenceRecord, ...]) -> tuple[tuple[str, str | None], ...]:
+        refs = {
+            (
+                passage.passage_id,
+                passage.witness.strip()
+                if isinstance(passage.witness, str) and passage.witness.strip()
+                else None,
+            )
+            for record in records
+            for passage in record.passage_refs
+        }
+        return tuple(sorted(refs, key=lambda item: (item[0], item[1] or "")))
+
+    @staticmethod
+    def _declared_witness_matches_support(
+        declared_witness: str | None,
+        records: tuple[EvidenceRecord, ...],
+    ) -> bool:
+        if not isinstance(declared_witness, str) or not declared_witness.strip():
+            return True
+        declared = declared_witness.strip()
+        for record in records:
+            safe, effective = DossierAssembler._record_witness(record)
+            if not safe:
+                return False
+            if effective is not None and effective != declared:
+                return False
+            for passage in record.passage_refs:
+                if isinstance(passage.witness, str) and passage.witness.strip() and passage.witness.strip() != declared:
+                    return False
+        return True
+
     def build(
         self,
         subject: DossierSubject,
@@ -149,12 +212,15 @@ class DossierAssembler:
         unlocked_only: bool = True,
     ) -> DossierView:
         all_evidence = tuple(sorted(self.runtime.evidence.values(), key=lambda item: item.evidence_id))
-        if unlocked_only:
-            visible_evidence = tuple(
-                record for record in all_evidence if record.evidence_id in self.runtime.unlocked
-            )
-        else:
-            visible_evidence = all_evidence
+        candidate_evidence = tuple(
+            record
+            for record in all_evidence
+            if not unlocked_only or record.evidence_id in self.runtime.unlocked
+        )
+        visible_evidence = tuple(
+            record for record in candidate_evidence if self._record_witness(record)[0]
+        )
+        visible_evidence_ids = {record.evidence_id for record in visible_evidence}
 
         subject_evidence = tuple(
             record for record in visible_evidence if subject.subject_id in record.entity_ids
@@ -163,6 +229,7 @@ class DossierAssembler:
 
         rows: list[DossierRow] = []
         for record in subject_evidence:
+            _safe, effective_witness = self._record_witness(record)
             rows.append(
                 DossierRow(
                     row_type="EVIDENCE",
@@ -170,8 +237,9 @@ class DossierAssembler:
                     proposition=record.proposition,
                     confidence=record.confidence,
                     tx1=record.tx1,
-                    witness=record.witness,
+                    witness=effective_witness,
                     passage_ids=self._passage_ids((record,)),
+                    passage_witnesses=self._passage_witnesses((record,)),
                     evidence_ids=(record.evidence_id,),
                 )
             )
@@ -182,9 +250,11 @@ class DossierAssembler:
                 continue
             if any(evidence_id not in self.runtime.evidence for evidence_id in required):
                 continue
-            if unlocked_only and any(evidence_id not in self.runtime.unlocked for evidence_id in required):
+            if any(evidence_id not in visible_evidence_ids for evidence_id in required):
                 continue
             required_records = tuple(self.runtime.evidence[evidence_id] for evidence_id in required)
+            if not self._declared_witness_matches_support(claim.witness, required_records):
+                continue
             rows.append(
                 DossierRow(
                     row_type="CLAIM",
@@ -196,6 +266,7 @@ class DossierAssembler:
                     source_scope=claim.source_scope,
                     uncertainty=claim.uncertainty,
                     passage_ids=self._passage_ids(required_records),
+                    passage_witnesses=self._passage_witnesses(required_records),
                     evidence_ids=required,
                 )
             )
@@ -210,13 +281,15 @@ class DossierAssembler:
             )
             if unlocked_only and not support:
                 continue
+            if support and not self._declared_witness_matches_support(relation.witness, support):
+                continue
             related_id = relation.target_id if relation.source_id == subject.subject_id else relation.source_id
-            if unlocked_only and related_id in self.runtime.evidence and related_id not in self.runtime.unlocked:
+            if unlocked_only and related_id in self.runtime.evidence and related_id not in visible_evidence_ids:
                 continue
             if unlocked_only and related_id in self.runtime.claims:
                 related_claim = self.runtime.claims[related_id]
                 related_required = set(related_claim.required_evidence_ids)
-                if related_required and not related_required.issubset(self.runtime.unlocked):
+                if related_required and not related_required.issubset(visible_evidence_ids):
                     continue
             support_passages = self._passage_ids(support)
             relation_passages = () if unlocked_only else tuple(sorted(set(relation.passage_ids)))
@@ -227,6 +300,7 @@ class DossierAssembler:
                     proposition=f"{subject.subject_id} {relation.relation_type} {related_id}",
                     witness=relation.witness,
                     passage_ids=tuple(sorted(set(relation_passages).union(support_passages))),
+                    passage_witnesses=self._passage_witnesses(support),
                     evidence_ids=tuple(sorted(record.evidence_id for record in support)),
                     relation_type=relation.relation_type,
                     related_id=related_id,

@@ -98,6 +98,34 @@ class EvidenceGraphWitnessSafetyTests(unittest.TestCase):
         self.assertNotIn("claim:CL-MARK", graph_ids)
         self.assertNotIn("CL-MARK", "\n".join(graph.linearize()))
 
+    def test_single_witness_claim_checks_passage_when_record_is_unassigned(self):
+        runtime = EvidenceRuntime()
+        runtime.add_evidence(
+            EvidenceRecord(
+                "EV-UNASSIGNED",
+                (PassageRef("LK1:2", "Luke", 1, 2, witness="Luke"),),
+                "A proposition whose record is witness-unassigned.",
+                Confidence.T1,
+                witness=None,
+            )
+        )
+        runtime.add_claim(
+            Claim(
+                "CL-MARK-PASSAGE-CONFLICT",
+                "A claim explicitly scoped to Mark.",
+                Confidence.T2,
+                required_evidence_ids=("EV-UNASSIGNED",),
+                witness="Mark",
+            )
+        )
+        runtime.unlock("EV-UNASSIGNED")
+
+        graph = build_evidence_graph(runtime)
+        graph_ids = {node["graph_id"] for node in graph.to_dict()["nodes"]}
+        self.assertIn("evidence:EV-UNASSIGNED", graph_ids)
+        self.assertNotIn("claim:CL-MARK-PASSAGE-CONFLICT", graph_ids)
+        self.assertNotIn("CL-MARK-PASSAGE-CONFLICT", "\n".join(graph.linearize()))
+
     def test_unassigned_cross_witness_record_is_not_harmonized(self):
         runtime = EvidenceRuntime()
         runtime.add_evidence(

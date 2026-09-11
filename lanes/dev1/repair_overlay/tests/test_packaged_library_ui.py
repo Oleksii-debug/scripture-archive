@@ -1,7 +1,9 @@
 from pathlib import Path
 import json
 import re
+import shutil
 import subprocess
+import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1] / "frontend"
@@ -60,8 +62,13 @@ class PackagedLibraryUiTest(unittest.TestCase):
         self.assertIn("slice(0, MAX_RESULT_REFS)", self.js)
 
     def test_executable_search_leave_reopen_late_resolution_regression(self):
-        module_url = (ROOT / "library-ui.js").resolve().as_uri()
-        script = f"""
+        with tempfile.TemporaryDirectory() as tmp:
+            scope = Path(tmp)
+            shutil.copy2(ROOT / "library-ui.js", scope / "library-ui.js")
+            shutil.copy2(ROOT / "transport.js", scope / "transport.js")
+            (scope / "package.json").write_text('{"type":"module"}\n', encoding="utf-8")
+            module_url = (scope / "library-ui.js").resolve().as_uri()
+            script = f"""
 import {{createSearchLifecycle}} from {json.dumps(module_url)};
 const assert = (value, message) => {{ if (!value) throw new Error(message); }};
 const deferred = () => {{ let resolve, reject; const promise = new Promise((r,j) => {{resolve=r; reject=j;}}); return {{promise,resolve,reject}}; }};
@@ -103,14 +110,14 @@ assert(attrs['aria-busy'] === 'false', 'newer search completion must clear busy 
 assert(rendered.length === 1 && rendered[0] === 'new', 'only newer result may render');
 assert(focused === 1, 'only newer result may move result focus');
 """
-        completed = subprocess.run(
-            ["node", "--input-type=module", "-e", script],
-            cwd=ROOT,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+            completed = subprocess.run(
+                ["node", "--input-type=module", "-e", script],
+                cwd=scope,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
 
 
 if __name__ == "__main__":

@@ -17,7 +17,7 @@ class PlatformApplication:
         self.repo_root=Path(repo_root).resolve(); self.store=store or JsonFileStore(JsonFileStore.default_root())
         self.loader=loader or CanonicalContentLoader(self.repo_root); self.mapper=TaskPresentationMapper(); self.grader=grader or ReferenceGrader(); self.player_gateway=player_gateway
         self.task_types,self.renderers,self.graders,self.editors,self.templates=build_task_registries()
-        self.keymap=KeybindingService(self.store); self.research=ResearchWorkspaceService(self.store); self.authoring=AuthoringService(self.store,self.task_types,self.mapper)
+        self.keymap=KeybindingService(self.store); self.research=ResearchWorkspaceService(self.store,self.loader,self.mapper); self.authoring=AuthoringService(self.store,self.task_types,self.mapper)
         self._hint_level:dict[str,int]={}; self._last_node:dict[str,dict[str,Any]]={}
     def handle(self,request:dict[str,Any])->dict[str,Any]:
         rid=str(request.get('request_id','invalid')) if isinstance(request,dict) else 'invalid'

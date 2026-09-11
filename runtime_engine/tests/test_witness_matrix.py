@@ -112,6 +112,38 @@ class WitnessMatrixTests(unittest.TestCase):
         self.assertEqual(row["relations"], [])
         self.assertEqual(row["claims"], [])
 
+    def test_default_matrix_excludes_unrelated_unlocked_witness_records(self):
+        runtime = self.runtime()
+        runtime.add_evidence(
+            EvidenceRecord(
+                "EV-JOHN",
+                (PassageRef("JN20:30", "John", 20, 30, witness="John"),),
+                "John states that Jesus did many other signs.",
+                Confidence.T1,
+                witness="John",
+            )
+        )
+        runtime.unlock("EV-MARK")
+        runtime.unlock("EV-LUKE")
+        runtime.unlock("EV-JOHN")
+
+        matrix = build_witness_matrix(runtime, witnesses=("Mark", "Luke"))
+        serialized = json.dumps(matrix.to_dict(), ensure_ascii=False, sort_keys=True)
+        self.assertNotIn("EV-JOHN", serialized)
+        self.assertNotIn("John states that Jesus did many other signs.", serialized)
+        self.assertEqual(len(matrix.rows), 1)
+
+        explicit = build_witness_matrix(
+            runtime,
+            witnesses=("Mark", "Luke"),
+            evidence_ids=("EV-JOHN",),
+        ).to_dict()
+        self.assertEqual(explicit["rows"][0]["evidence_ids"], ["EV-JOHN"])
+        self.assertEqual(explicit["rows"][0]["unassigned_evidence"][0]["evidence_id"], "EV-JOHN")
+        self.assertTrue(
+            all(cell["status"] == NOT_STATED for cell in explicit["rows"][0]["cells"])
+        )
+
     def test_claim_spanning_unrelated_components_is_not_duplicated_into_rows(self):
         runtime = EvidenceRuntime()
         runtime.add_evidence(

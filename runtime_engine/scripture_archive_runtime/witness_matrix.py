@@ -4,7 +4,11 @@ from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Sequence
 
 from .evidence import EvidenceRecord, EvidenceRuntime, Relation
-from .evidence_provenance import validated_claim_witness, validated_relation_witness
+from .evidence_provenance import (
+    validated_claim_witness,
+    validated_relation_witness,
+    visible_relation_passage_ids,
+)
 
 WITNESS_MATRIX_SCHEMA = "witness-matrix.v1"
 PARALLEL_WITNESS_RELATION = "parallel_witness"
@@ -134,11 +138,6 @@ def build_witness_matrix(
         evidence_ids=evidence_ids,
         include_locked_evidence=include_locked_evidence,
     )
-    visible_passage_ids = {
-        passage.passage_id
-        for evidence_id in selected_ids
-        for passage in runtime.evidence[evidence_id].passage_refs
-    }
     visible_relations = tuple(
         relation
         for relation in sorted(runtime.relations.values(), key=lambda item: item.relation_id)
@@ -160,7 +159,12 @@ def build_witness_matrix(
         relations = tuple(
             _relation_payload(
                 relation,
-                visible_passage_ids=visible_passage_ids,
+                passage_ids=visible_relation_passage_ids(
+                    runtime,
+                    relation,
+                    (relation.source_id, relation.target_id),
+                    visible_evidence_ids=component_set,
+                ),
                 witness=validated_relation_witness(
                     runtime,
                     relation,
@@ -374,7 +378,7 @@ def _evidence_payload(
 def _relation_payload(
     relation: Relation,
     *,
-    visible_passage_ids: set[str],
+    passage_ids: Sequence[str],
     witness: str | None,
 ) -> dict[str, Any]:
     return {
@@ -383,10 +387,7 @@ def _relation_payload(
         "relation_type": relation.relation_type,
         "target_id": relation.target_id,
         "witness": witness,
-        "passage_ids": [
-            passage_id for passage_id in relation.passage_ids
-            if passage_id in visible_passage_ids
-        ],
+        "passage_ids": list(passage_ids),
     }
 
 

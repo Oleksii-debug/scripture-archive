@@ -15,6 +15,7 @@ class FakeGateway:
         if command=='player.reveal_evidence': return {'api_version':'runtime.v1','request_id':request_id,'unlocked':['EV-1'],'linear':['EV-1 — Luke 22:8']}
         if command in {'player.next','player.navigate_branch'}: return {'api_version':'runtime.v1','request_id':request_id,'task':{'node_id':'LN01-N02'}}
         if command=='player.get_mastery': return {'api_version':'runtime.v1','request_id':request_id,'mastery':[{'concept_id':'GOSPEL_PARALLELS','state':'STABLE'}]}
+        if command=='player.get_review_queue': return {'api_version':'runtime.v1','request_id':request_id,'review_queue':[{'queue_id':'review:GOSPEL_PARALLELS:LN01-N01','concept_id':'GOSPEL_PARALLELS','node_id':'LN01-N01','due_at':'2026-09-12T00:00:00+00:00','priority':55,'relation':'EXACT','reason':'independent_correct'}]}
         if command=='player.save_checkpoint': return {'api_version':'runtime.v1','request_id':request_id,'saved':True}
         if command=='player.restore_checkpoint': return {'api_version':'runtime.v1','request_id':request_id,'restored':True,'current_node_id':'LN01-N01','schema_version':2}
         raise AssertionError(command)
@@ -27,8 +28,9 @@ class DevARuntimeApplicationTests(unittest.TestCase):
     def test_player_flow_uses_runtime_truth_and_platform_presentation(self):
         loaded=self.call('player.load_node',{'node_id':'LN01-N01'})['data']; answer={'schema':'ANSWER_DTO_v1','task_type':loaded['task']['task_type'],'text':'Luke names Peter and John'}
         submitted=self.call('player.submit_answer',{'node_id':'LN01-N01','answer':answer})['data']; self.assertEqual('D5/runtime',submitted['truth_owner']); self.assertEqual('CORRECT',submitted['status']); self.assertEqual('LN01-N02',submitted['next_node_id']); self.assertEqual('runtime feedback',submitted['feedback'])
-    def test_hint_evidence_branch_progress_mastery_save_restore_delegate_runtime(self):
+    def test_hint_evidence_branch_progress_mastery_review_save_restore_delegate_runtime(self):
         self.call('player.load_node',{'node_id':'LN01-N01'}); self.assertEqual('runtime hint',self.call('player.request_hint',{'node_id':'LN01-N01'})['data']['hint']); self.assertEqual(['EV-1 — Luke 22:8'],self.call('player.reveal_evidence',{'node_id':'LN01-N01'})['data']['evidence'])
         self.assertEqual('LN-01',self.call('player.get_progress',{'node_id':'LN01-N01'})['data']['progress']['mission_id']); self.assertEqual('STABLE',self.call('player.get_mastery')['data']['mastery'][0]['state'])
+        review=self.call('player.get_review_queue')['data']; self.assertEqual('GOSPEL_PARALLELS',review['review_queue'][0]['concept_id']); self.assertEqual('D5/runtime',review['truth_owner'])
         nxt=self.call('player.navigate_branch',{'node_id':'LN01-N01','target_node_id':'LN01-N02'})['data']; self.assertEqual('LN01-N02',nxt['task']['node_id']); self.assertEqual('D5/runtime',nxt['truth_owner'])
         self.assertEqual('D5/runtime',self.call('player.save_checkpoint',{'campaign_id':'LN','mission_id':'LN-01','node_id':'LN01-N01'})['data']['truth_owner']); restored=self.call('player.restore_checkpoint')['data']; self.assertEqual('LN01-N01',restored['checkpoint']['node_id']); self.assertEqual(2,restored['runtime_schema_version'])

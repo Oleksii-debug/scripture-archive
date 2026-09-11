@@ -37,13 +37,14 @@ class ResearchPersistenceUiTests(unittest.TestCase):
 
     def test_response_truth_and_shape_fail_closed(self):
         self.assertIn("t.truth_owner===OWNER",self.ui)
+        self.assertIn("kind==='bookmark'?validTarget(row?.target)",self.ui)
         self.assertIn("schema=kind==='bookmark'?'scripture.research.bookmark.v1':'scripture.research.note.v1'",self.ui)
         self.assertIn("data[key].length>500",self.ui)
         self.assertIn("typeof res.deleted!=='boolean'",self.ui)
         self.assertIn('validateResearchList(kind',self.ui)
 
-    def test_records_are_upsertable_searchable_and_deletable(self):
-        self.assertIn("`${kind}:${target.node_id}`",self.ui)
+    def test_records_are_stable_upserts_searchable_and_deletable(self):
+        self.assertIn("record[isB?'bookmark_id':'note_id']=target.node_id",self.ui)
         self.assertIn('Зберегти / оновити',self.ui)
         self.assertIn("q.type='search'",self.ui)
         self.assertIn("deleteBookmark:'research.delete_bookmark'",self.ui)

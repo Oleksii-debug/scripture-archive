@@ -10,9 +10,9 @@ from .content_packs import (
     CONTENT_SCHEMA_VERSION,
     ContentPackInspection,
     ContentPackManifest,
-    ContentPackStore,
     inspect_content_pack,
 )
+from .content_pack_store import ContentPackStore
 from .evidence import Claim, EvidenceRecord, EvidenceRuntime, Event, PassageRef, Person, Place, Relation
 from .grading import GraderRegistry
 from .mastery import MasteryEngine

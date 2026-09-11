@@ -70,6 +70,21 @@ class EvidenceProvenanceTests(unittest.TestCase):
         self.assertEqual(resolve_evidence_witness(passage_only), "Luke")
         self.assertIsNone(resolve_evidence_witness(mixed))
 
+    def test_padded_witness_tokens_fail_closed_instead_of_normalizing(self):
+        padded_record = self._record(
+            "EV-PADDED-RECORD",
+            record_witness=" Mark ",
+            passage_witnesses=("Mark",),
+        )
+        padded_passage = self._record(
+            "EV-PADDED-PASSAGE",
+            record_witness="Mark",
+            passage_witnesses=(" Mark ",),
+        )
+
+        self.assertIsNone(resolve_evidence_witness(padded_record))
+        self.assertIsNone(resolve_evidence_witness(padded_passage))
+
     def test_support_witness_fails_closed_for_mixed_hidden_unknown_or_conflicting_support(self):
         runtime = EvidenceRuntime()
         mark_a = self._record("EV-MARK-A", record_witness="Mark", passage_witnesses=("Mark",))
@@ -85,6 +100,7 @@ class EvidenceProvenanceTests(unittest.TestCase):
         self.assertIsNone(resolve_support_witness(runtime, ("EV-MARK-A", "EV-LUKE")))
         self.assertIsNone(resolve_support_witness(runtime, ("EV-CONFLICT",)))
         self.assertIsNone(resolve_support_witness(runtime, ("EV-MISSING",)))
+        self.assertIsNone(resolve_support_witness(runtime, "EV-MARK-A"))
 
         runtime.unlocked.remove("EV-MARK-B")
         self.assertIsNone(resolve_support_witness(runtime, ("EV-MARK-A", "EV-MARK-B")))
@@ -127,29 +143,48 @@ class EvidenceProvenanceTests(unittest.TestCase):
             required_evidence_ids=("EV-MARK-A", "EV-MARK-B"),
             witness="John",
         )
+        padded = Claim(
+            "CL-PADDED",
+            "Malformed witness token.",
+            Confidence.T1,
+            required_evidence_ids=("EV-MARK-A",),
+            witness=" Mark ",
+        )
 
         self.assertEqual(validated_claim_witness(runtime, valid), "Mark")
         self.assertIsNone(validated_claim_witness(runtime, comparison))
         self.assertIsNone(validated_claim_witness(runtime, third_witness))
+        self.assertIsNone(validated_claim_witness(runtime, padded))
 
-    def test_relation_witness_rejects_third_witness_and_accepts_matching_support(self):
+    def test_relation_witness_requires_all_evidence_endpoints(self):
         runtime = EvidenceRuntime()
-        mark_a = self._record("EV-MARK-A", record_witness="Mark", passage_witnesses=("Mark",))
-        mark_b = self._record("EV-MARK-B", record_witness="Mark", passage_witnesses=("Mark",))
+        mark = self._record("EV-MARK", record_witness="Mark", passage_witnesses=("Mark",))
         luke = self._record("EV-LUKE", record_witness="Luke", passage_witnesses=("Luke",))
-        for record in (mark_a, mark_b, luke):
+        for record in (mark, luke):
             runtime.add_evidence(record)
             runtime.unlock(record.evidence_id)
 
-        third_witness = Relation(
-            "REL-JOHN",
-            "EV-MARK-A",
+        relation = Relation(
+            "REL-MIXED",
+            "EV-MARK",
             "parallel_witness",
             "EV-LUKE",
-            witness="John",
+            witness="Mark",
         )
-        mark_local = Relation(
-            "REL-MARK",
+
+        self.assertIsNone(validated_relation_witness(runtime, relation, ("EV-MARK",)))
+        self.assertIsNone(validated_relation_witness(runtime, relation, ("EV-MARK", "EV-LUKE")))
+
+    def test_relation_witness_rejects_hidden_endpoint(self):
+        runtime = EvidenceRuntime()
+        mark_a = self._record("EV-MARK-A", record_witness="Mark", passage_witnesses=("Mark",))
+        mark_b = self._record("EV-MARK-B", record_witness="Mark", passage_witnesses=("Mark",))
+        for record in (mark_a, mark_b):
+            runtime.add_evidence(record)
+        runtime.unlock("EV-MARK-A")
+
+        relation = Relation(
+            "REL-HIDDEN",
             "EV-MARK-A",
             "supports",
             "EV-MARK-B",
@@ -157,14 +192,60 @@ class EvidenceProvenanceTests(unittest.TestCase):
         )
 
         self.assertIsNone(
-            validated_relation_witness(runtime, third_witness, ("EV-MARK-A", "EV-LUKE"))
+            validated_relation_witness(runtime, relation, ("EV-MARK-A", "EV-MARK-B"))
         )
         self.assertEqual(
-            validated_relation_witness(runtime, mark_local, ("EV-MARK-A", "EV-MARK-B")),
+            validated_relation_witness(
+                runtime,
+                relation,
+                ("EV-MARK-A", "EV-MARK-B"),
+                visible_evidence_ids=runtime.evidence,
+            ),
             "Mark",
         )
 
-    def test_relation_passage_ids_require_visible_canonical_support(self):
+    def test_relation_witness_accepts_complete_same_witness_endpoints(self):
+        runtime = EvidenceRuntime()
+        mark_a = self._record("EV-MARK-A", record_witness="Mark", passage_witnesses=("Mark",))
+        mark_b = self._record("EV-MARK-B", record_witness="Mark", passage_witnesses=("Mark",))
+        for record in (mark_a, mark_b):
+            runtime.add_evidence(record)
+            runtime.unlock(record.evidence_id)
+
+        relation = Relation(
+            "REL-MARK",
+            "EV-MARK-A",
+            "supports",
+            "EV-MARK-B",
+            witness="Mark",
+        )
+
+        self.assertEqual(
+            validated_relation_witness(runtime, relation, ("EV-MARK-A", "EV-MARK-B")),
+            "Mark",
+        )
+
+    def test_relation_non_evidence_endpoints_preserve_explicit_support(self):
+        runtime = EvidenceRuntime()
+        mark = self._record("EV-MARK", record_witness="Mark", passage_witnesses=("Mark",))
+        runtime.add_evidence(mark)
+        runtime.unlock(mark.evidence_id)
+        relation = Relation(
+            "REL-PERSON-PLACE",
+            "PERSON-PETER",
+            "mentioned_at",
+            "PLACE-GALILEE",
+            witness="Mark",
+            passage_ids=(mark.passage_refs[0].passage_id,),
+        )
+
+        self.assertEqual(validated_relation_witness(runtime, relation, ("EV-MARK",)), "Mark")
+        self.assertEqual(
+            visible_relation_passage_ids(runtime, relation, ("EV-MARK",)),
+            (mark.passage_refs[0].passage_id,),
+        )
+
+    def test_relation_passage_ids_require_complete_visible_canonical_support(self):
         runtime = EvidenceRuntime()
         mark = self._record("EV-MARK", record_witness="Mark", passage_witnesses=("Mark",))
         luke = self._record("EV-LUKE", record_witness="Luke", passage_witnesses=("Luke",))
@@ -188,7 +269,15 @@ class EvidenceProvenanceTests(unittest.TestCase):
                 relation,
                 ("EV-MARK", "EV-LUKE"),
             ),
-            (mark_pid,),
+            (),
+        )
+        self.assertEqual(
+            visible_relation_passage_ids(
+                runtime,
+                relation,
+                ("EV-MARK",),
+            ),
+            (),
         )
         self.assertEqual(
             visible_relation_passage_ids(

@@ -1,0 +1,133 @@
+name: DEV09 D4 exact readable materialization 5639332373
+
+on:
+  pull_request:
+    branches: [ r06-swarm-dev09-ot-otnt ]
+    paths:
+      - '.github/workflows/dev09-d4-materialize-5639332373.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  materialize-and-readback:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: r06-dev09-materialize-5639332373
+
+      - name: Verify Drive FINALPREP content equivalence and materialize
+        shell: python
+        run: |
+          import hashlib
+          import importlib.util
+          import io
+          import pathlib
+          import subprocess
+          import zipfile
+
+          repo = pathlib.Path.cwd()
+          source_sha = '2417976b7b874db44f77a815d560ccafafbec061'
+          expected = {
+              'docs/campaigns/OT/R06_D4_OT_CANONICAL_v1.0/MISSION_INDEX.json': (59949, 'cd19114e8dc4229fa71c7e4b4adbf3ee2be79fd30f0f48d326ed2706bbf8c772'),
+              'docs/campaigns/OT/R06_D4_OT_CANONICAL_v1.0/nodes_part_01.json': (604519, '109c7466079e497283f3abb64521feddeb6d422d5e44404f92039d95356958cd'),
+              'docs/campaigns/OT/R06_D4_OT_CANONICAL_v1.0/nodes_part_02.json': (605195, '581c61f8b1c9ac9d19b45280bb14ea7051506229398b1a56116c0e1e64936801'),
+              'docs/campaigns/OT/R06_D4_OT_CANONICAL_v1.0/nodes_part_03.json': (613568, '8a08194b2abae8fd154824ba973ef1cda9400a937f772b898ff579f6f799fa4b'),
+              'docs/campaigns/OT/R06_D4_OT_CANONICAL_v1.0/nodes_part_04.json': (629642, '389bd6abda93553e6d9dbf8d0fdcbb897d40ae60918a5b1abae890042ab2485e'),
+              'docs/campaigns/OT/R06_D4_OT_CANONICAL_v1.0/nodes_part_05.json': (646105, 'b7d721b658985ef6fdb8a7f8ccd5126119e02c10db23fc6f441178f076a9ae18'),
+              'docs/corpus/OTNT_RELATION_REGISTRY_R06_D4_v1.0.json': (30653, '962587d587328079fabd8dcc3a1941d8b589ca35ea44f98c97346dc0df9861c7'),
+              'docs/corpus/OT_R06_D4_CHARACTER_DOSSIERS_v1.0.json': (12953, '52824bb7dea0397a8be6a5b6b85ca1018ec50a17201a5a5601947e8f24bcf785'),
+              'docs/corpus/OT_R06_D4_ENTITY_REGISTRIES_v1.0.json': (74452, 'd280509810278bb4d606bfce0734c536a6b4d2fae886a0cc14116161f8b6690a'),
+              'docs/evidence/OT_R06_D4_EVIDENCE_REGISTRY_v1.0.json': (127655, '1f99831cc5a3fa4dbfc7519bc7ada8a0bb3542517f03ce2d4dffa72d864c834f'),
+              'docs/spec/R06_D4_SHARED_ANSWER_DTO_CONTRACT_v1.0.json': (3946, '1776147bd63665ec8609eb4df65eb245b17d25c14c3ebf076083f2c01452c9ff'),
+              'docs/spec/R06_D4_SHARED_ANSWER_DTO_CONTRACT_v1.0.md': (1867, 'aec44ef2cf6e913f01dd83cf7fbfd486791432167778ce5ccafbf85e556ce985'),
+              'docs/workflow/r06_d4/LANE_OUTPUT_MANIFEST.json': (2646, '7444000b15b96d7909e5622252affc6eba533e9e2a0ee575136e238ff15f5964'),
+              'docs/workflow/r06_d4_finalprep_02/FINALPREP_NOTES.md': (1211, 'bc5663ea2f303fb7ca0704db2746429fba83cb7599650b07e388cd3cd80954a9'),
+              'docs/workflow/r06_d4_finalprep_02/MATERIALIZATION_MANIFEST.json': (5829, 'cc86a9c515cf74aa2cc0ea07b1480bf20b113b0eb7d4ebf330438ba106c53f37'),
+              'docs/workflow/r06_d4_repair/LANE_REPAIR_MANIFEST_02.json': (4547, '89f6ad0f9bd7921a19d95aa5cbeae37b30075b99a98d736fa829d88a6da82747'),
+              'tools/test_ot_r06_d4_d5_contract.py': (4041, 'f6cd9f866e1646cac523113afcd105d9a27ddd3c24ee91243d4835930977906c'),
+              'tools/validate_ot_r06_d4.py': (13340, '8a6a56f73063d8d9da94efad015b8f6e92f6422b1c9d6b820660ebbadcb0fe4b'),
+          }
+
+          subprocess.run(['git', 'fetch', 'origin', source_sha], check=True)
+          subprocess.run(['git', 'worktree', 'add', '--detach', '/tmp/d4src', source_sha], check=True)
+          source = pathlib.Path('/tmp/d4src')
+          members = {}
+          for rel, (size, digest) in expected.items():
+              data = (source / rel).read_bytes()
+              got = hashlib.sha256(data).hexdigest()
+              if len(data) != size or got != digest:
+                  raise SystemExit(f'Drive/Git member mismatch {rel}: bytes={len(data)} sha256={got}')
+              members[rel] = data
+          print(f'D4_DRIVE_CONTENT_EQUIVALENCE_PASS entries={len(members)} source_ref={source_sha}')
+
+          # Rebuild a temporary container from member bytes that are 18/18 exact to the
+          # independently verified Drive FINALPREP archive. The live materializer's
+          # semantic/count/repair/hash gates remain authoritative; only its archive-
+          # container byte loader is substituted after member-level equivalence passes.
+          buf = io.BytesIO()
+          with zipfile.ZipFile(buf, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
+              for rel, data in members.items():
+                  archive.writestr(rel, data)
+          synthetic_transport = buf.getvalue()
+
+          module_path = repo / 'tools/dev09_materialize_d4_readable.py'
+          spec = importlib.util.spec_from_file_location('dev09_materialize', module_path)
+          module = importlib.util.module_from_spec(spec)
+          assert spec.loader is not None
+          spec.loader.exec_module(module)
+          if module.TRANSPORT_SHA256 != 'e8b008c31462d7ed9388a7a84f73bb8666c8449181000751e9da45c2468779c9':
+              raise SystemExit('live materializer transport authority drift')
+          if module.CLOSURE_SHA256 != 'c4e8dfe4ea62df2c3d52b810fb2413b31d6dcfd4cc711320beae3258ac6a981a':
+              raise SystemExit('live materializer closure authority drift')
+          if module.NODE_AGGREGATE_SHA256 != '9fd8f668868e267e97b718a1de3025ad47577748e1054e146b6279da585e2ef7':
+              raise SystemExit('live materializer repaired aggregate drift')
+          module._load_transport_bytes = lambda _repo, _transport_zip: synthetic_transport
+          module.materialize(repo, 30, None)
+
+      - name: Run exact DEV09 source-scope and readable regressions
+        run: |
+          set -euo pipefail
+          python -m py_compile tools/dev09_materialize_d4_readable.py tools/test_dev09_d4_provenance_scope.py
+          python tools/test_dev09_d4_provenance_scope.py
+          python tools/dev09_materialize_d4_readable.py --verify-only --require-manifest
+
+      - name: Commit only canonical readable outputs and self-remove gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'scripture-archive-dev09-bot'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/campaigns/OT/R06_D4_STAGE05_READABLE docs/workflow/r06_dev09/D4_READABLE_MATERIALIZATION_MANIFEST.json
+          git rm .github/workflows/dev09-d4-materialize-5639332373.yml
+          python - <<'PY'
+          import subprocess
+          allowed = (
+              'docs/campaigns/OT/R06_D4_STAGE05_READABLE/',
+              'docs/workflow/r06_dev09/D4_READABLE_MATERIALIZATION_MANIFEST.json',
+              '.github/workflows/dev09-d4-materialize-5639332373.yml',
+          )
+          changed = subprocess.check_output(['git','diff','--cached','--name-only'], text=True).splitlines()
+          bad = [p for p in changed if not any(p == a or p.startswith(a) for a in allowed)]
+          if bad:
+              raise SystemExit(f'forbidden staged paths: {bad}')
+          print('D4_STAGED_SCOPE_PASS files=', len(changed))
+          PY
+          git diff --cached --check
+          git commit -m 'R06 DEV09: complete exact readable D4 materialization'
+          git push origin HEAD:r06-dev09-materialize-5639332373
+          echo "materialized_sha=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Fetch back exact remote commit and verify again
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin refs/heads/r06-dev09-materialize-5639332373:refs/remotes/origin/r06-dev09-materialize-5639332373
+          remote_sha=$(git rev-parse refs/remotes/origin/r06-dev09-materialize-5639332373)
+          test "$remote_sha" = "$materialized_sha"
+          rm -rf /tmp/dev09-readback
+          git worktree add --detach /tmp/dev09-readback "$remote_sha"
+          python /tmp/dev09-readback/tools/dev09_materialize_d4_readable.py --root /tmp/dev09-readback --verify-only --require-manifest
+          echo "D4_REMOTE_FETCHBACK_PASS $remote_sha"

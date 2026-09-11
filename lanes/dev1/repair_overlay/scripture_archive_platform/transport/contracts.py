@@ -11,6 +11,8 @@ ALLOWLISTED_COMMANDS = frozenset({
   "content.list_campaigns","content.list_missions","player.load_node",
   "player.submit_answer","player.request_hint","player.reveal_evidence","player.next",
   "player.get_progress","player.get_mastery","player.save_checkpoint","player.restore_checkpoint",
+  "research.list_bookmarks","research.upsert_bookmark","research.delete_bookmark",
+  "research.list_notes","research.upsert_note","research.delete_note",
   "authoring.list_drafts","authoring.new_draft","authoring.load_draft","authoring.save_draft",
   "authoring.validate_draft","authoring.preview_draft","authoring.prepare_publish_candidate",
   "authoring.export_draft","authoring.import_draft",

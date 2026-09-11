@@ -38,7 +38,6 @@ class CrossTestamentProjectionTests(unittest.TestCase):
                     "EV-OT",
                     "explicit_cross_reference",
                     "EV-NT",
-                    witness="canonical-index",
                     passage_ids=("ISA7:14", "MT1:23"),
                 )
             )
@@ -55,6 +54,7 @@ class CrossTestamentProjectionTests(unittest.TestCase):
         self.assertEqual(len(projection.links), 1)
         link = projection.links[0]
         self.assertEqual(link.relation_id, "REL-X")
+        self.assertIsNone(link.relation_witness)
         self.assertEqual(link.ot.passage_id, "ISA7:14")
         self.assertEqual(link.nt.passage_id, "MT1:23")
         self.assertEqual(link.ot.evidence[0].witness, "Isaiah")
@@ -66,6 +66,7 @@ class CrossTestamentProjectionTests(unittest.TestCase):
         self.assertIn("MT1:23", linear)
         self.assertIn("witness=Isaiah", linear)
         self.assertIn("witness=Matthew", linear)
+        self.assertNotIn("Relation witness:", linear)
         self.assertEqual(
             projection.stable_json(),
             json.dumps(
@@ -120,6 +121,72 @@ class CrossTestamentProjectionTests(unittest.TestCase):
         runtime.unlock("EV-CONFLICT")
         with self.assertRaisesRegex(ValueError, "Conflicting definitions"):
             project_cross_testament(runtime, book_testaments=BOOK_TESTAMENTS)
+
+    def test_record_passage_witness_conflict_fails_closed(self):
+        runtime = EvidenceRuntime()
+        runtime.add_evidence(
+            EvidenceRecord(
+                "EV-CONFLICT",
+                (PassageRef("MT1:23", "Matthew", 1, 23, witness="Matthew"),),
+                "contradictory witness metadata",
+                Confidence.T1,
+                witness="Mark",
+            )
+        )
+        runtime.unlock("EV-CONFLICT")
+        with self.assertRaisesRegex(ValueError, "witness conflicts with passage"):
+            project_cross_testament(runtime, book_testaments=BOOK_TESTAMENTS)
+
+    def test_relation_witness_conflict_with_supporting_provenance_fails_closed(self):
+        runtime = self.runtime(relation=False)
+        runtime.add_relation(
+            Relation(
+                "REL-CONFLICT",
+                "EV-OT",
+                "explicit_cross_reference",
+                "EV-NT",
+                witness="Matthew",
+                passage_ids=("ISA7:14", "MT1:23"),
+            )
+        )
+        with self.assertRaisesRegex(ValueError, "witness conflicts with supporting provenance"):
+            project_cross_testament(runtime, book_testaments=BOOK_TESTAMENTS)
+
+    def test_relation_witness_matching_all_explicit_support_is_preserved(self):
+        runtime = EvidenceRuntime()
+        runtime.add_evidence(
+            EvidenceRecord(
+                "EV-OT",
+                (PassageRef("ISA7:14", "Isaiah", 7, 14, witness="Corpus-A"),),
+                "OT proposition",
+                Confidence.T1,
+                witness="Corpus-A",
+            )
+        )
+        runtime.add_evidence(
+            EvidenceRecord(
+                "EV-NT",
+                (PassageRef("MT1:23", "Matthew", 1, 23, witness="Corpus-A"),),
+                "NT proposition",
+                Confidence.T1,
+                witness="Corpus-A",
+            )
+        )
+        runtime.add_relation(
+            Relation(
+                "REL-OK",
+                "EV-OT",
+                "explicit_cross_reference",
+                "EV-NT",
+                witness="Corpus-A",
+                passage_ids=("ISA7:14", "MT1:23"),
+            )
+        )
+        runtime.unlock("EV-OT")
+        runtime.unlock("EV-NT")
+        projection = project_cross_testament(runtime, book_testaments=BOOK_TESTAMENTS)
+        self.assertEqual(projection.links[0].relation_witness, "Corpus-A")
+        self.assertIn("Relation witness: Corpus-A", projection.linearize())
 
     def test_testament_classification_is_explicit_not_inferred(self):
         with self.assertRaisesRegex(ValueError, "No explicit testament classification"):

@@ -122,7 +122,7 @@ def _validate_node(node: dict[str, Any], task_registry: Any,
     if not str(node.get("player_prompt", "")).strip():
         errors.append("player_prompt is required")
     if not str(node.get("accepted_answer", "")).strip() and task_type not in {"LONG_TEXT", "COMPOSITE_MULTI_STEP"}:
-        warnings.append("accepted_answer is empty; ensure explicit structured answer_contract")
+        warnings.append("accepted_answer is empty; ensure explicit structured grading truth")
 
 
 def _task_payload_errors(node: dict[str, Any], task_type: str, task_registry: Any | None) -> list[str]:
@@ -149,34 +149,39 @@ def _task_payload_errors(node: dict[str, Any], task_type: str, task_registry: An
     answer_fields = authoring.get("answer_fields")
     if not isinstance(answer_fields, dict) or not answer_fields:
         out.append(f"{task_type} authoring_contract is missing ANSWER_DTO fields")
+    if not str(authoring.get("grader_truth", "")).strip():
+        out.append(f"{task_type} authoring_contract is missing runtime grader truth strategy")
 
     collection = authoring.get("collection")
     min_items = int(authoring.get("min_items") or 0)
     item_kind = authoring.get("item_kind")
+    values: list[Any] = []
     if collection is None:
         if authoring.get("mode") != "intrinsic":
             out.append(f"{task_type} authoring_contract has invalid intrinsic mode")
-        return out
-
-    values = ui.get(collection)
-    if not isinstance(values, list):
-        out.append(f"{task_type} requires {collection} as a list")
-        return out
-    if len(values) < min_items:
-        suffix = "item" if min_items == 1 else "items"
-        out.append(f"{task_type} requires at least {min_items} {collection} {suffix}")
-        return out
-
-    if item_kind == "option":
-        _validate_options(task_type, collection, values, out)
-    elif item_kind == "matching_pair":
-        _validate_matching_pairs(values, out)
-    elif item_kind == "composite_step":
-        _validate_composite_steps(values, authoring, out)
     else:
-        out.append(f"{task_type} authoring_contract has unknown item_kind {item_kind!r}")
+        raw_values = ui.get(collection)
+        if not isinstance(raw_values, list):
+            out.append(f"{task_type} requires {collection} as a list")
+            return out
+        values = raw_values
+        if len(values) < min_items:
+            suffix = "item" if min_items == 1 else "items"
+            out.append(f"{task_type} requires at least {min_items} {collection} {suffix}")
+            return out
 
-    _validate_answer_references(task_type, values, contract, collection, out)
+        if item_kind == "option":
+            _validate_options(task_type, collection, values, out)
+        elif item_kind == "matching_pair":
+            _validate_matching_pairs(values, out)
+        elif item_kind == "composite_step":
+            _validate_composite_steps(values, authoring, out)
+        else:
+            out.append(f"{task_type} authoring_contract has unknown item_kind {item_kind!r}")
+
+        _validate_answer_references(task_type, values, contract, collection, out)
+
+    _validate_runtime_grader_truth(node, task_type, authoring, values, collection, out)
     return out
 
 
@@ -289,3 +294,195 @@ def _validate_answer_references(task_type: str, values: list[Any],
                     errors.append("accepted_pairs must cover every MATCHING left-side ID exactly once")
                 if any(str(value) not in right_ids for value in accepted_pairs.values()):
                     errors.append("accepted_pairs values must reference declared MATCHING right-side choices")
+
+
+def _string_list(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    if isinstance(value, str):
+        return [part.strip() for part in value.split(";") if part.strip()]
+    return []
+
+
+def _declared_ids(values: list[Any], key: str = "id") -> list[str]:
+    return [
+        str(item.get(key, "")).strip()
+        for item in values if isinstance(item, dict) and str(item.get(key, "")).strip()
+    ]
+
+
+def _has_text_truth(node: dict[str, Any], grading: dict[str, Any]) -> bool:
+    propositions = grading.get("accepted_propositions")
+    if propositions:
+        if not isinstance(propositions, list):
+            return False
+        required = [
+            item for item in propositions
+            if isinstance(item, dict) and bool(item.get("required", True))
+        ]
+        if not required:
+            return False
+        for item in required:
+            aliases = item.get("aliases") or item.get("accepted") or []
+            if not _string_list(aliases):
+                return False
+        return True
+    accepted_text = grading.get("accepted_text")
+    if accepted_text is not None:
+        return bool(str(accepted_text).strip())
+    return bool(str(node.get("accepted_answer", "")).strip())
+
+
+def _validate_runtime_grader_truth(
+    node: dict[str, Any],
+    task_type: str,
+    authoring: dict[str, Any],
+    values: list[Any],
+    collection: str | None,
+    errors: list[str],
+) -> None:
+    raw_grading = node.get("grading")
+    if raw_grading is not None and not isinstance(raw_grading, dict):
+        errors.append("grading must be an object")
+        return
+    grading = raw_grading or {}
+    strategy = str(authoring.get("grader_truth", "")).strip()
+    if not strategy:
+        return
+
+    if strategy == "choice":
+        ids = set(_declared_ids(values))
+        accepted = grading.get("accepted_choice", node.get("accepted_answer"))
+        candidates = [str(accepted).strip()] if str(accepted or "").strip() else []
+        candidates.extend(_string_list(grading.get("accepted_choice_aliases") or node.get("accepted_variants")))
+        if not ids.intersection(candidates):
+            errors.append(f"{task_type} runtime grading truth must reference a declared option ID")
+        return
+
+    if strategy == "multi_select":
+        ids = set(_declared_ids(values))
+        expected = grading.get("accepted_set") if "accepted_set" in grading else node.get("accepted_answer")
+        accepted = set(_string_list(expected))
+        if not accepted or not accepted.issubset(ids):
+            errors.append("MULTI_SELECT runtime accepted set must be non-empty and reference declared option IDs")
+        return
+
+    if strategy == "text":
+        if not _has_text_truth(node, grading):
+            errors.append(f"{task_type} requires explicit runtime text grading truth")
+        return
+
+    if strategy == "ordering":
+        ids = _declared_ids(values)
+        expected = grading.get("accepted_order") if "accepted_order" in grading else node.get("accepted_answer")
+        accepted = _string_list(expected)
+        if len(accepted) != len(ids) or set(accepted) != set(ids):
+            errors.append("ORDERING runtime accepted order must reference exactly the declared item IDs")
+        return
+
+    if strategy == "matching":
+        left_ids = {
+            str(item.get("left", item.get("passage", ""))).strip()
+            for item in values if isinstance(item, dict)
+        }
+        right_ids = {
+            str(item.get("right", item.get("claim", ""))).strip()
+            for item in values if isinstance(item, dict)
+        }
+        expected = grading.get("accepted_pairs") if "accepted_pairs" in grading else node.get("accepted_answer")
+        if not isinstance(expected, dict) or not expected:
+            errors.append("MATCHING requires runtime grading.accepted_pairs (or mapping accepted_answer)")
+        else:
+            if set(map(str, expected)) != left_ids:
+                errors.append("MATCHING runtime accepted_pairs must cover every declared left-side ID exactly once")
+            if any(str(value) not in right_ids for value in expected.values()):
+                errors.append("MATCHING runtime accepted_pairs values must reference declared right-side choices")
+        return
+
+    if strategy == "evidence":
+        ids = set(_declared_ids(values))
+        expected = grading.get("required_evidence_ids") if "required_evidence_ids" in grading else node.get("required_evidence")
+        accepted = set(_string_list(expected))
+        if not accepted or not accepted.issubset(ids):
+            errors.append(f"{task_type} runtime required evidence IDs must reference declared evidence options")
+        return
+
+    if strategy == "claim_evidence":
+        if not _has_text_truth(node, grading):
+            errors.append("CLAIM_EVIDENCE requires explicit runtime claim grading truth")
+        ids = set(_declared_ids(values))
+        expected = grading.get("required_evidence_ids") if "required_evidence_ids" in grading else node.get("required_evidence")
+        accepted = set(_string_list(expected))
+        if not accepted or not accepted.issubset(ids):
+            errors.append("CLAIM_EVIDENCE runtime required evidence IDs must reference declared evidence options")
+        return
+
+    if strategy == "speaker_recipient":
+        accepted_answer = node.get("accepted_answer")
+        fallback = accepted_answer if isinstance(accepted_answer, dict) else {}
+        speaker = grading.get("speaker") or fallback.get("speaker")
+        recipient = grading.get("recipient") or fallback.get("recipient")
+        if not str(speaker or "").strip() or not str(recipient or "").strip():
+            errors.append("SPEAKER_RECIPIENT requires runtime speaker and recipient grading truth")
+        return
+
+    if strategy == "ot_nt_link":
+        link = grading.get("ot_nt_link")
+        fields = ("ot_passage", "nt_passage", "relation_category", "confidence", "evidence_id")
+        if not isinstance(link, dict) or any(not str(link.get(field, "")).strip() for field in fields):
+            errors.append("OT_NT_LINK requires complete runtime grading.ot_nt_link truth")
+            return
+        relation_ids = set(_declared_ids(values))
+        if str(link.get("relation_category")) not in relation_ids:
+            errors.append("OT_NT_LINK runtime relation_category must reference a declared relation type")
+        if str(link.get("confidence")) not in CONFIDENCE_CODES:
+            errors.append("OT_NT_LINK runtime confidence must be T1/T2/C1/I1/D1")
+        return
+
+    if strategy == "composite":
+        grade_steps = grading.get("steps")
+        if not isinstance(grade_steps, list) or not grade_steps:
+            errors.append("COMPOSITE_MULTI_STEP requires runtime grading.steps")
+            return
+        by_id: dict[str, dict[str, Any]] = {}
+        for index, step in enumerate(grade_steps):
+            if not isinstance(step, dict):
+                errors.append(f"COMPOSITE_MULTI_STEP grading.steps[{index}] must be an object")
+                continue
+            sid = str(step.get("id") or step.get("step_id") or "").strip()
+            if not sid or sid in by_id:
+                errors.append("COMPOSITE_MULTI_STEP runtime grading step IDs must be non-empty and unique")
+                continue
+            by_id[sid] = step
+        ui_ids = {
+            str(step.get("step_id", "")).strip()
+            for step in values if isinstance(step, dict)
+        }
+        if set(by_id) != ui_ids:
+            errors.append("COMPOSITE_MULTI_STEP runtime grading.steps must cover every authored step exactly once")
+            return
+        allowed = set(map(str, authoring.get("step_answer_task_types") or []))
+        for ui_step in values:
+            if not isinstance(ui_step, dict):
+                continue
+            sid = str(ui_step.get("step_id", "")).strip()
+            grade_step = by_id.get(sid)
+            if not grade_step:
+                continue
+            ui_contract = ui_step.get("answer_contract") or {}
+            ui_type = str(ui_contract.get("task_type", "")).upper()
+            nested = grade_step.get("task")
+            if isinstance(nested, dict):
+                runtime_type = str(nested.get("task_type", ui_type)).upper()
+                nested_grading = nested.get("grading") if isinstance(nested.get("grading"), dict) else {}
+                runtime_truth = nested_grading.get("accepted_text", nested.get("accepted_answer"))
+            else:
+                runtime_type = str(grade_step.get("task_type", "LONG_TEXT")).upper()
+                runtime_truth = grade_step.get("accepted_text")
+            if runtime_type not in allowed or runtime_type != ui_type:
+                errors.append(f"COMPOSITE_MULTI_STEP runtime grading task type must match authored step {sid}")
+            if not str(runtime_truth or "").strip():
+                errors.append(f"COMPOSITE_MULTI_STEP runtime grading step {sid} requires accepted text truth")
+        return
+
+    errors.append(f"{task_type} authoring_contract has unknown grader_truth strategy {strategy!r}")

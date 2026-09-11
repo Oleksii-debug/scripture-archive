@@ -50,7 +50,7 @@ jobs:
         run: python -m compileall -q scripture_archive_runtime/release_security.py tools/run_release_secret_scan.py
       - name: Scan checked-out repository for high-confidence secrets
         working-directory: runtime_engine
-        run: python tools/run_release_secret_scan.py .. --output ../dev10-secret-scan.json
+        run: python -m tools.run_release_secret_scan .. --output ../dev10-secret-scan.json
       - name: Upload sanitized scan result
         if: always()
         uses: actions/upload-artifact@v4

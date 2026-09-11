@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 from _fixture import make_repo
 from scripture_archive_platform.application.service import PlatformApplication
+from scripture_archive_platform.application.runtime_gateway import RuntimeBackedPlayerGateway
 from scripture_archive_platform.persistence.store import JsonFileStore
 
 class FakeGateway:
@@ -32,3 +33,18 @@ class DevARuntimeApplicationTests(unittest.TestCase):
         self.assertEqual('LN-01',self.call('player.get_progress',{'node_id':'LN01-N01'})['data']['progress']['mission_id']); self.assertEqual('STABLE',self.call('player.get_mastery')['data']['mastery'][0]['state'])
         nxt=self.call('player.navigate_branch',{'node_id':'LN01-N01','target_node_id':'LN01-N02'})['data']; self.assertEqual('LN01-N02',nxt['task']['node_id']); self.assertEqual('D5/runtime',nxt['truth_owner'])
         self.assertEqual('D5/runtime',self.call('player.save_checkpoint',{'campaign_id':'LN','mission_id':'LN-01','node_id':'LN01-N01'})['data']['truth_owner']); restored=self.call('player.restore_checkpoint')['data']; self.assertEqual('LN01-N01',restored['checkpoint']['node_id']); self.assertEqual(2,restored['runtime_schema_version'])
+    def test_platform_next_request_id_binds_current_context_and_replay_fails_closed(self):
+        state={'current':'LN01-N01','calls':[]}
+        def runtime(request):
+            state['calls'].append(request)
+            self.assertEqual('next',request['command']);self.assertEqual({},request['payload'])
+            state['current']='LN01-N02'
+            return {'api_version':'runtime.v1','request_id':request['request_id'],'task':{'node_id':'LN01-N02'}}
+        gateway=RuntimeBackedPlayerGateway(runtime,current_node_getter=lambda:state['current'])
+        app=PlatformApplication(self.repo,store=JsonFileStore(Path(self.t.name)/'guard-store'),player_gateway=gateway)
+        request={'api_version':'scripture.transport.v1','request_id':'outer-request-id','command':'player.next','payload':{'node_id':'LN01-N01'}}
+        first=app.handle(request)
+        self.assertTrue(first['ok']);self.assertEqual('LN01-N02',first['data']['task']['node_id']);self.assertEqual(1,len(state['calls']))
+        self.assertEqual('next-LN01-N01',state['calls'][0]['request_id']);self.assertEqual({},state['calls'][0]['payload'])
+        replay=app.handle(request)
+        self.assertFalse(replay['ok']);self.assertEqual('VALIDATION_ERROR',replay['error']['code']);self.assertIn('stale player.next current-node context',replay['error']['message']);self.assertEqual(1,len(state['calls']))

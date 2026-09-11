@@ -116,6 +116,8 @@ class ApplicationUpdateManifest:
     def from_mapping(cls, raw: Mapping[str, Any]) -> "ApplicationUpdateManifest":
         if not isinstance(raw, Mapping):
             raise ApplicationUpdateError("update manifest must be an object")
+        if any(not isinstance(key, str) for key in raw):
+            raise ApplicationUpdateError("manifest keys must be strings")
         keys = frozenset(raw.keys())
         if keys != _REQUIRED_KEYS:
             missing = sorted(_REQUIRED_KEYS - keys)
@@ -158,10 +160,16 @@ class ApplicationUpdateManifest:
                 raise ApplicationUpdateError("manifest must be UTF-8") from exc
         if not isinstance(payload, str):
             raise ApplicationUpdateError("manifest payload must be text or UTF-8 bytes")
-        if len(payload.encode("utf-8")) > 16 * 1024:
+        try:
+            encoded = payload.encode("utf-8")
+        except UnicodeEncodeError as exc:
+            raise ApplicationUpdateError("manifest must be valid UTF-8 text") from exc
+        if len(encoded) > 16 * 1024:
             raise ApplicationUpdateError("manifest exceeds size limit")
         try:
-            raw = json.loads(payload)
+            raw = json.loads(payload, object_pairs_hook=_strict_json_object)
+        except ApplicationUpdateError:
+            raise
         except (TypeError, ValueError) as exc:
             raise ApplicationUpdateError("manifest is not valid JSON") from exc
         return cls.from_mapping(raw)
@@ -291,6 +299,15 @@ def _verified(manifest: ApplicationUpdateManifest, current_version: str) -> Veri
         artifact_size=manifest.artifact_size,
         artifact_sha256=manifest.artifact_sha256,
     )
+
+
+def _strict_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in out:
+            raise ApplicationUpdateError(f"manifest contains duplicate key: {key}")
+        out[key] = value
+    return out
 
 
 def _bounded_token(value: Any, field: str, maximum: int) -> str:

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Sequence
 
 from .evidence import EvidenceRecord, EvidenceRuntime, Relation
+from .evidence_provenance import validated_claim_witness, validated_relation_witness
 
 WITNESS_MATRIX_SCHEMA = "witness-matrix.v1"
 PARALLEL_WITNESS_RELATION = "parallel_witness"
@@ -157,7 +158,16 @@ def build_witness_matrix(
     for component in components:
         component_set = set(component)
         relations = tuple(
-            _relation_payload(relation, visible_passage_ids=visible_passage_ids)
+            _relation_payload(
+                relation,
+                visible_passage_ids=visible_passage_ids,
+                witness=validated_relation_witness(
+                    runtime,
+                    relation,
+                    (relation.source_id, relation.target_id),
+                    visible_evidence_ids=component_set,
+                ),
+            )
             for relation in visible_relations
             if relation.source_id in component_set and relation.target_id in component_set
         )
@@ -183,7 +193,14 @@ def build_witness_matrix(
                 )
 
         safe_claims = tuple(
-            _claim_payload(claim)
+            _claim_payload(
+                claim,
+                witness=validated_claim_witness(
+                    runtime,
+                    claim,
+                    visible_evidence_ids=component_set,
+                ),
+            )
             for claim in sorted(runtime.claims.values(), key=lambda item: item.claim_id)
             if claim.required_evidence_ids
             and set(claim.required_evidence_ids).issubset(component_set)
@@ -358,13 +375,14 @@ def _relation_payload(
     relation: Relation,
     *,
     visible_passage_ids: set[str],
+    witness: str | None,
 ) -> dict[str, Any]:
     return {
         "relation_id": relation.relation_id,
         "source_id": relation.source_id,
         "relation_type": relation.relation_type,
         "target_id": relation.target_id,
-        "witness": relation.witness,
+        "witness": witness,
         "passage_ids": [
             passage_id for passage_id in relation.passage_ids
             if passage_id in visible_passage_ids
@@ -372,7 +390,7 @@ def _relation_payload(
     }
 
 
-def _claim_payload(claim) -> dict[str, Any]:
+def _claim_payload(claim, *, witness: str | None) -> dict[str, Any]:
     return {
         "claim_id": claim.claim_id,
         "proposition": claim.proposition,
@@ -381,7 +399,7 @@ def _claim_payload(claim) -> dict[str, Any]:
         "source_scope": claim.source_scope,
         "uncertainty": claim.uncertainty,
         "required_evidence_ids": list(claim.required_evidence_ids),
-        "witness": claim.witness,
+        "witness": witness,
     }
 
 

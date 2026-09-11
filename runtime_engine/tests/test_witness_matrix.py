@@ -80,12 +80,13 @@ class WitnessMatrixTests(unittest.TestCase):
         self.assertEqual(row["claims"][0]["confidence"], "T2")
         self.assertEqual(row["claims"][0]["source_scope"], "Mark 14:13; Luke 22:8")
         self.assertEqual(row["claims"][0]["uncertainty"], "Omission in the cited Mark verse is not denial.")
+        self.assertIsNone(row["claims"][0]["witness"])
 
         linear = "\n".join(matrix.linearize())
         self.assertIn("Selection scope: requested_witnesses", linear)
         self.assertIn("Relation REL-PARALLEL: EV-MARK --parallel_witness--> EV-LUKE", linear)
         self.assertIn("Passage IDs: MK14:13, LK22:8", linear)
-        self.assertIn("Witness: Mark/Luke comparison", linear)
+        self.assertNotIn("Witness: Mark/Luke comparison", linear)
         self.assertIn("Required evidence IDs: EV-MARK, EV-LUKE", linear)
         self.assertIn("Passage MK14:13: Mark 14:13; witness=Mark", linear)
 

@@ -47,10 +47,22 @@ class PackagedReviewQueueUiTest(unittest.TestCase):
         self.assertNotIn("insertAdjacentHTML", self.js)
         self.assertIn("textContent", self.js)
         self.assertIn("const MAX_VISIBLE_ITEMS = 500", self.js)
+        self.assertIn("const MAX_QUEUE_ITEMS = 5000", self.js)
         self.assertIn("rawQueue.map(validateQueueItem)", self.js)
         self.assertIn("Number.isInteger(raw.priority)", self.js)
         self.assertIn("slice(0, MAX_VISIBLE_ITEMS)", self.js)
         self.assertIn("показано перші", self.js)
+
+    def test_persisted_item_schema_is_defensively_validated(self):
+        self.assertIn("Object.prototype.hasOwnProperty.call(raw, name)", self.js)
+        self.assertIn("Object.prototype.hasOwnProperty.call(raw, 'node_id')", self.js)
+        self.assertIn("Object.prototype.hasOwnProperty.call(raw, 'priority')", self.js)
+        self.assertIn("CONTROL_OR_LINE_SEPARATOR", self.js)
+        self.assertIn("ISO_TIMESTAMP.test(dueAt)", self.js)
+        self.assertIn("Number.isNaN(Date.parse(dueAt))", self.js)
+        self.assertIn("REVIEW_RELATIONS.has(relation)", self.js)
+        for relation in ("EXACT", "VARIANT", "PASSAGE_REVISIT", "CROSS_CONTEXT", "SYNTHESIS", "NONE"):
+            self.assertIn(relation, self.js)
 
 
 if __name__ == "__main__":

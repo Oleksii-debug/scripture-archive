@@ -2,9 +2,11 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from scripture_archive_runtime.diagnostics import (
     DIAGNOSTICS_SCHEMA,
+    MAX_RECOVERY_DISCOVERY_ENTRIES,
     MAX_SUPPORT_SNAPSHOT_BYTES,
     DiagnosticsIdentity,
     build_support_snapshot,
@@ -27,7 +29,35 @@ class FakeStore:
         raise AssertionError("diagnostics must not call mutating load")
 
     def list_recovery_points(self):
-        return sorted(self.backups.glob("state.*.*.json"), reverse=True)
+        raise AssertionError("diagnostics must not request an unbounded recovery list")
+
+
+class _GuardedDirEntry:
+    def __init__(self, name: str):
+        self.name = name
+
+
+class _GuardedScandir:
+    def __init__(self, max_consumed: int):
+        self.max_consumed = max_consumed
+        self.consumed = 0
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        self.consumed += 1
+        if self.consumed > self.max_consumed:
+            raise AssertionError("diagnostics consumed past the bounded discovery sentinel")
+        return _GuardedDirEntry(
+            f"state.20260911T{self.consumed:06d}Z.manual.json"
+        )
 
 
 def identity():
@@ -52,6 +82,7 @@ class DiagnosticsTests(unittest.TestCase):
             self.assertEqual(report.status, "PASS")
             self.assertEqual(report.state_status, "ABSENT")
             self.assertEqual(report.backup_status, "ABSENT")
+            self.assertFalse(report.recovery_point_count_capped)
             self.assertFalse(store.load_called)
             self.assertNotIn(str(store.root), json.dumps(report.as_dict()))
 
@@ -67,6 +98,7 @@ class DiagnosticsTests(unittest.TestCase):
             self.assertEqual(report.state_status, "CURRENT")
             self.assertEqual(report.backup_status, "CURRENT")
             self.assertEqual(report.recovery_point_count, 1)
+            self.assertFalse(report.recovery_point_count_capped)
             self.assertEqual(report.valid_recovery_point_count, 1)
             snapshot = build_support_snapshot(report)
             self.assertNotIn("do-not-export", snapshot)
@@ -156,8 +188,35 @@ class DiagnosticsTests(unittest.TestCase):
             after = sorted(path.name for path in store.backups.iterdir())
             self.assertEqual(before, after)
             self.assertEqual(report.recovery_point_count, MAX_RECOVERY_POINTS + 2)
+            self.assertFalse(report.recovery_point_count_capped)
             self.assertEqual(report.inspected_recovery_point_count, MAX_RECOVERY_POINTS)
             self.assertIn("RECOVERY_POINT_LIMIT_EXCEEDED", {item.code for item in report.findings})
+
+    def test_recovery_discovery_consumes_only_hard_cap_plus_overflow_sentinel(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = FakeStore(Path(td))
+            write_state(store.state_path)
+            guarded = _GuardedScandir(MAX_RECOVERY_DISCOVERY_ENTRIES + 1)
+            with patch(
+                "scripture_archive_runtime.diagnostics.os.scandir",
+                return_value=guarded,
+            ):
+                report = inspect_persistence(store, identity())
+
+            self.assertEqual(guarded.consumed, MAX_RECOVERY_DISCOVERY_ENTRIES + 1)
+            self.assertEqual(
+                report.recovery_point_count,
+                MAX_RECOVERY_DISCOVERY_ENTRIES,
+            )
+            self.assertTrue(report.recovery_point_count_capped)
+            self.assertEqual(report.inspected_recovery_point_count, MAX_RECOVERY_POINTS)
+            self.assertIn(
+                "RECOVERY_POINT_DISCOVERY_LIMIT_EXCEEDED",
+                {item.code for item in report.findings},
+            )
+            payload = json.dumps(report.as_dict())
+            self.assertNotIn(str(store.root), payload)
+            self.assertFalse(store.load_called)
 
     def test_absent_primary_with_backup_is_warning_not_fresh_pass(self):
         with tempfile.TemporaryDirectory() as td:

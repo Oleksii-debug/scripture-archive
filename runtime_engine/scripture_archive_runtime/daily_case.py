@@ -1,0 +1,203 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime
+import math
+from numbers import Real
+from typing import Iterable, Sequence
+
+from .models import PlayerMemory, QueueKind, RetrievalRelation, SchedulerCandidate, Session
+from .scheduler import Scheduler
+
+
+DAILY_CASE_SCHEMA = "daily-case.v1"
+_MAX_CASE_ID = 128
+_MAX_TITLE = 200
+_MAX_ITEMS = 50
+
+
+@dataclass(frozen=True)
+class DailyCaseItem:
+    position: int
+    node_id: str
+    task_family: str
+    queue: str
+    relation: str
+    concept_ids: tuple[str, ...]
+    passage_keys: tuple[str, ...]
+    book_key: str | None
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "position": self.position,
+            "node_id": self.node_id,
+            "task_family": self.task_family,
+            "queue": self.queue,
+            "relation": self.relation,
+            "concept_ids": list(self.concept_ids),
+            "passage_keys": list(self.passage_keys),
+            "book_key": self.book_key,
+        }
+
+
+@dataclass(frozen=True)
+class DailyCasePlan:
+    case_id: str
+    title: str
+    items: tuple[DailyCaseItem, ...]
+    schema: str = DAILY_CASE_SCHEMA
+
+    def semantic_rows(self) -> list[dict[str, object]]:
+        return [item.to_dict() for item in self.items]
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "schema": self.schema,
+            "case_id": self.case_id,
+            "title": self.title,
+            "item_count": len(self.items),
+            "items": self.semantic_rows(),
+        }
+
+    def linearize(self) -> tuple[str, ...]:
+        lines = [f"Daily Case {self.case_id}: {self.title}"]
+        if not self.items:
+            lines.append("No eligible source-audited tasks.")
+            return tuple(lines)
+        for item in self.items:
+            concepts = ", ".join(item.concept_ids) if item.concept_ids else "none"
+            passages = ", ".join(item.passage_keys) if item.passage_keys else "none"
+            book = item.book_key or "none"
+            lines.append(
+                f"{item.position}. {item.node_id} | family={item.task_family} | "
+                f"queue={item.queue} | relation={item.relation} | "
+                f"concepts={concepts} | passages={passages} | book={book}"
+            )
+        return tuple(lines)
+
+
+class DailyCaseComposer:
+    """Build a deterministic player-visible case plan from SchedulerCandidate metadata only.
+
+    The composer delegates all eligibility and ranking decisions to the canonical Scheduler.
+    It intentionally has no access to TaskDefinition answers, grading truth, hints, or evidence
+    payloads, so it cannot become a second task/source truth store.
+    """
+
+    def __init__(self, *, scheduler: Scheduler | None = None) -> None:
+        self.scheduler = scheduler or Scheduler()
+
+    def compose(
+        self,
+        candidates: Iterable[SchedulerCandidate],
+        memory: PlayerMemory,
+        session: Session,
+        *,
+        case_id: str,
+        title: str,
+        limit: int = 10,
+        adjacent_successful_exact_ids: set[str] | None = None,
+        now: datetime | None = None,
+    ) -> DailyCasePlan:
+        normalized_case_id = _bounded_text(case_id, "case_id", _MAX_CASE_ID)
+        normalized_title = _bounded_text(title, "title", _MAX_TITLE)
+        if not isinstance(memory, PlayerMemory):
+            raise TypeError("memory must be PlayerMemory")
+        if not isinstance(session, Session):
+            raise TypeError("session must be Session")
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= _MAX_ITEMS:
+            raise ValueError(f"limit must be an integer from 1 to {_MAX_ITEMS}")
+        if now is not None and not isinstance(now, datetime):
+            raise TypeError("now must be datetime or None")
+        if adjacent_successful_exact_ids is not None:
+            if not isinstance(adjacent_successful_exact_ids, set):
+                raise TypeError("adjacent_successful_exact_ids must be a set[str] or None")
+            _validate_string_sequence(tuple(adjacent_successful_exact_ids), "adjacent_successful_exact_ids")
+
+        pool = list(candidates)
+        seen: set[str] = set()
+        for candidate in pool:
+            _validate_candidate(candidate)
+            if candidate.node_id in seen:
+                raise ValueError(f"duplicate Daily Case node_id: {candidate.node_id}")
+            seen.add(candidate.node_id)
+
+        selected = self.scheduler.compose(
+            pool,
+            memory,
+            session,
+            limit=limit,
+            adjacent_successful_exact_ids=adjacent_successful_exact_ids,
+            now=now,
+        )
+        items = tuple(
+            DailyCaseItem(
+                position=index,
+                node_id=candidate.node_id,
+                task_family=candidate.task_family,
+                queue=candidate.queue.value,
+                relation=candidate.relation.value,
+                concept_ids=tuple(candidate.concept_ids),
+                passage_keys=tuple(candidate.passage_keys),
+                book_key=candidate.book_key,
+            )
+            for index, candidate in enumerate(selected, start=1)
+        )
+        return DailyCasePlan(normalized_case_id, normalized_title, items)
+
+
+def _bounded_text(value: object, name: str, maximum: int) -> str:
+    if not isinstance(value, str):
+        raise TypeError(f"{name} must be a string")
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError(f"{name} must be non-empty")
+    if len(normalized) > maximum:
+        raise ValueError(f"{name} exceeds {maximum} characters")
+    return normalized
+
+
+def _validate_string_sequence(values: Sequence[object], name: str) -> None:
+    for value in values:
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{name} must contain only non-empty strings")
+
+
+def _validate_finite_number(value: object, name: str) -> None:
+    if isinstance(value, bool) or not isinstance(value, Real) or not math.isfinite(float(value)):
+        raise ValueError(f"{name} must be a finite number")
+
+
+def _validate_candidate(candidate: object) -> None:
+    if not isinstance(candidate, SchedulerCandidate):
+        raise TypeError("candidates must contain SchedulerCandidate values")
+    _bounded_text(candidate.node_id, "candidate.node_id", 256)
+    _bounded_text(candidate.task_family, "candidate.task_family", 128)
+    if not isinstance(candidate.queue, QueueKind):
+        raise TypeError("candidate.queue must be QueueKind")
+    if not isinstance(candidate.relation, RetrievalRelation):
+        raise TypeError("candidate.relation must be RetrievalRelation")
+    if type(candidate.source_audited) is not bool:
+        raise TypeError("candidate.source_audited must be bool")
+    if type(candidate.prerequisite_ready) is not bool:
+        raise TypeError("candidate.prerequisite_ready must be bool")
+    if type(candidate.user_requested) is not bool:
+        raise TypeError("candidate.user_requested must be bool")
+    if not isinstance(candidate.concept_ids, tuple):
+        raise TypeError("candidate.concept_ids must be tuple[str, ...]")
+    if not isinstance(candidate.passage_keys, tuple):
+        raise TypeError("candidate.passage_keys must be tuple[str, ...]")
+    _validate_string_sequence(candidate.concept_ids, "candidate.concept_ids")
+    _validate_string_sequence(candidate.passage_keys, "candidate.passage_keys")
+    if candidate.book_key is not None:
+        _bounded_text(candidate.book_key, "candidate.book_key", 128)
+    if candidate.paired_exact_node_id is not None:
+        _bounded_text(candidate.paired_exact_node_id, "candidate.paired_exact_node_id", 256)
+    if candidate.due_at is not None:
+        if not isinstance(candidate.due_at, datetime):
+            raise TypeError("candidate.due_at must be datetime or None")
+        if candidate.due_at.tzinfo is None or candidate.due_at.utcoffset() is None:
+            raise ValueError("candidate.due_at must be timezone-aware")
+    _validate_finite_number(candidate.difficulty, "candidate.difficulty")
+    _validate_finite_number(candidate.campaign_continuity, "candidate.campaign_continuity")
+    _validate_finite_number(candidate.weak_signal, "candidate.weak_signal")

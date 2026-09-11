@@ -1,0 +1,51 @@
+name: R06 QA DEV04 Integration Readiness
+
+on:
+  push:
+    branches:
+      - r06-qa-dev04-readiness
+    paths:
+      - '.github/workflows/r06-qa-dev04-readiness.yml'
+  workflow_dispatch:
+
+jobs:
+  dev04-readiness:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Bind proof-only child to exact DEV04 production head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "e14f283a3ec9701fb8b3f6a87ce1162022aacabd"
+          changed="$(git diff --name-only HEAD^ HEAD)"
+          test "$changed" = ".github/workflows/r06-qa-dev04-readiness.yml" || {
+            echo "Unexpected proof-branch delta:"; printf '%s\n' "$changed"; exit 1;
+          }
+      - name: Compile DEV04 authoring and transport overlay
+        shell: bash
+        run: |
+          python -m compileall -q \
+            lanes/dev1/repair_overlay/scripture_archive_platform/authoring \
+            lanes/dev1/repair_overlay/scripture_archive_platform/domain \
+            lanes/dev1/repair_overlay/scripture_archive_platform/application/service.py \
+            lanes/dev1/repair_overlay/scripture_archive_platform/transport/contracts.py \
+            lanes/dev1/repair_overlay/tests/test_authoring_service.py \
+            lanes/dev1/repair_overlay/tests/test_authoring_transport.py
+      - name: Execute constructor publishability and allowlisted transport regressions
+        shell: bash
+        env:
+          PYTHONPATH: lanes/dev1/repair_overlay
+        run: |
+          python -m unittest discover -s lanes/dev1/repair_overlay/tests -p 'test_authoring_service.py' -v
+          python -m unittest discover -s lanes/dev1/repair_overlay/tests -p 'test_authoring_transport.py' -v

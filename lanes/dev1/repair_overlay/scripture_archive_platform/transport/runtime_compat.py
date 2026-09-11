@@ -8,7 +8,7 @@ from scripture_archive_platform.transport.answer_contracts import validate_answe
 RUNTIME_API_VERSION = "runtime.v1"
 PLAYER_COMMAND_MAP = {
     "player.load_node": "load_task", "player.submit_answer": "submit_answer", "player.request_hint": "request_hint",
-    "player.next": "next", "player.navigate_branch": "next", "player.get_mastery": "get_mastery",
+    "player.next": "next", "player.get_mastery": "get_mastery",
     "player.save_checkpoint": "save", "player.restore_checkpoint": "restore", "player.reveal_evidence": "get_evidence",
 }
 class RuntimeContractError(ValueError): pass
@@ -16,10 +16,15 @@ class RuntimeEngineContractAdapter:
     """Boundary-only adapter from scripture.transport.v1 to canonical runtime.v1.
 
     Grading/mastery/scheduling remain runtime-owned. Player submissions are validated
-    against the runtime-owned ANSWER_DTO_v1 before crossing the boundary.
+    against the runtime-owned ANSWER_DTO_v1 before crossing the boundary. Player branch
+    targets are never caller-selected: `player.next` asks runtime.v1 to resolve the current
+    canonical branch, while legacy `player.navigate_branch` is rejected until the runtime
+    issues a versioned opaque/validated branch-choice capability.
     """
     def __init__(self, runtime_invoke: Callable[[Mapping[str, Any]], Mapping[str, Any]]): self._runtime_invoke=runtime_invoke
     def to_runtime_request(self, request: Mapping[str, Any]) -> dict[str, Any]:
+        if isinstance(request,Mapping) and request.get('command')=='player.navigate_branch':
+            raise RuntimeContractError('player.navigate_branch is disabled: player targets are runtime-owned; use player.next')
         rid,command,payload=validate_request_shape(dict(request));runtime_command=PLAYER_COMMAND_MAP.get(command)
         if not runtime_command:raise RuntimeContractError(f"No runtime mapping for platform command: {command}")
         runtime_payload=dict(payload)
@@ -28,9 +33,11 @@ class RuntimeEngineContractAdapter:
             if not isinstance(task_type,str) or not task_type:raise RuntimeContractError('player.submit_answer requires task_type for ANSWER_DTO_v1 validation')
             try:runtime_payload['answer']=validate_answer_dto(task_type,answer)
             except AnswerContractError as exc:raise RuntimeContractError(str(exc)) from exc
+        if runtime_command=='next':
+            if runtime_payload:
+                raise RuntimeContractError('player.next accepts no caller-selected target payload')
+            runtime_payload={}
         if runtime_command in {'save','restore','get_evidence','get_mastery'}:runtime_payload={}
-        if command=='player.navigate_branch' and runtime_payload.get('target_node_id'):
-            runtime_payload={'node_id':str(runtime_payload['target_node_id'])}
         return {'api_version':RUNTIME_API_VERSION,'command':runtime_command,'request_id':rid,'payload':runtime_payload}
     def invoke_runtime(self,request:Mapping[str,Any])->dict[str,Any]:
         runtime_request=self.to_runtime_request(request);response=self._runtime_invoke(runtime_request)

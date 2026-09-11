@@ -9,7 +9,7 @@ MAX_IMPORT_BYTES = 2_000_000
 ALLOWLISTED_COMMANDS = frozenset({
   "system.bootstrap",
   "content.list_campaigns","content.list_missions","player.load_node",
-  "player.submit_answer","player.request_hint","player.reveal_evidence","player.next","player.navigate_branch",
+  "player.submit_answer","player.request_hint","player.reveal_evidence","player.next",
   "player.get_progress","player.get_mastery","player.save_checkpoint","player.restore_checkpoint",
   "authoring.list_drafts","authoring.new_draft","authoring.load_draft","authoring.save_draft",
   "authoring.validate_draft","authoring.preview_draft","authoring.prepare_publish_candidate",
@@ -40,6 +40,10 @@ def validate_request_shape(request:Any)->tuple[str,str,dict[str,Any]]:
     if not isinstance(rid,str) or not rid or len(rid)>128: raise ValueError('invalid request_id')
     if cmd not in ALLOWLISTED_COMMANDS: raise ValueError('command not allowlisted')
     if not isinstance(payload,dict): raise ValueError('payload must be an object')
+    if cmd=='player.next':
+        unknown=set(payload)-{'node_id'}
+        if unknown: raise ValueError('player.next accepts only current node_id context; target selection is forbidden')
+        if 'node_id' in payload and (not isinstance(payload['node_id'],str) or not payload['node_id'] or len(payload['node_id'])>100): raise ValueError('invalid node_id')
     return rid,cmd,payload
 
 def ok_response(request_id:str,data:Any)->dict[str,Any]:

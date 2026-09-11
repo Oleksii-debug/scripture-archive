@@ -30,6 +30,9 @@ class RuntimeApplication:
         # per-visit counter prevents a hint used months ago from permanently downgrading
         # every future attempt or exhausting the H1..H7 ladder forever.
         self._active_hint_counts: dict[str, int] = {}
+        # Branch progression is valid only after grading the currently active visit.
+        # Historical TaskState.last_result must never authorize a fresh/revisited task.
+        self._current_visit_result: Correctness | None = None
 
     @staticmethod
     def _require_release_ground_truth(task: TaskDefinition) -> ProvenanceDecision:
@@ -64,6 +67,7 @@ class RuntimeApplication:
         provenance = self._require_release_ground_truth(task)
         self.current_node_id = node_id
         self._active_hint_counts[node_id] = 0
+        self._current_visit_result = None
         if node_id not in self.session.shown_node_ids: self.session.shown_node_ids.append(node_id)
         self.session.recent_task_families.append(task.task_type); self._visit_counts[node_id] = self._visit_counts.get(node_id, 0) + 1
         return self._task_response(task, provenance)
@@ -75,6 +79,7 @@ class RuntimeApplication:
         state = self.memory.node_history.setdefault(node_id, TaskState(node_id=node_id)); hint_count = self._active_hint_counts.get(node_id, 0)
         result = self.graders.grade(task, answer); independent = hint_count == 0
         state.attempts.append(Attempt(node_id, result.correctness, result.score, hint_count, independent, answer_snapshot=answer)); state.last_result = result.correctness
+        self._current_visit_result = result.correctness
         if result.correctness is Correctness.CORRECT: state.completed = True; self.session.correct_node_ids.add(node_id)
         elif result.correctness is Correctness.INCORRECT: self.memory.mistakes[node_id] = self.memory.mistakes.get(node_id, 0) + 1
         consequences = []
@@ -109,7 +114,9 @@ class RuntimeApplication:
         if explicit_node_id is not None:
             raise ValidationError("runtime.v1 player next forbids caller-selected node targets")
         if not self.current_node_id: raise ValidationError("No current task")
-        task = self.content.get(self.current_node_id); state = self.memory.node_history.get(self.current_node_id); correctness = state.last_result if state and state.last_result else Correctness.INCORRECT
+        if self._current_visit_result is None:
+            raise ValidationError("Current task must be graded before player.next")
+        task = self.content.get(self.current_node_id); correctness = self._current_visit_result
         hint_count = self._active_hint_counts.get(self.current_node_id, 0)
         resolution = self.branches.resolve(task, correctness, hint_count=hint_count, hint_threshold=6)
         if resolution.next_node_id:
@@ -131,8 +138,9 @@ class RuntimeApplication:
         state = self.persistence.load(); self.current_node_id = state.get("current_node_id"); restored_session = restore_memory(self.memory, state)
         if restored_session: self.session = restored_session
         # A process/session restore begins a new active attempt scope; historical hint uses
-        # remain persisted in TaskState for analytics but do not consume today's ladder.
+        # and grading results remain persisted for analytics but cannot authorize a new visit.
         self._active_hint_counts = {}
+        self._current_visit_result = None
         return {"api_version": self.API_VERSION, "restored": True, "current_node_id": self.current_node_id, "schema_version": state["schema_version"]}
 
     def _load_task_command(self, payload: Mapping[str, Any]) -> dict[str, Any]:

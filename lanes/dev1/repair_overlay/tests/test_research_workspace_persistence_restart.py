@@ -14,7 +14,7 @@ from scripture_archive_platform.persistence.store import JsonFileStore
 def build_canonical_fixture(root: Path):
     repo_root = root / "repo"
     campaign_dir = repo_root / "docs" / "campaigns" / "DM"
-    campaign_dir.mkdir(parents=True)
+    campaign_dir.mkdir(parents=True, exist_ok=True)
     mission_index = {
         "mission": {
             "campaign_id": "DM",

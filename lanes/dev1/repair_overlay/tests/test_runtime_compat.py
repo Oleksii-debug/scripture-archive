@@ -6,9 +6,10 @@ class RuntimeCompatTests(unittest.TestCase):
         return {'api_version':'scripture.transport.v1','request_id':'r-1','command':command,'payload':payload or {}}
     def test_player_commands_map_to_current_dev5_runtime_v1(self):
         adapter=RuntimeEngineContractAdapter(lambda r:{'api_version':'runtime.v1','request_id':r['request_id'],'echo':r})
-        expected={'player.load_node':'load_task','player.submit_answer':'submit_answer','player.request_hint':'request_hint','player.next':'next','player.save_checkpoint':'save','player.restore_checkpoint':'restore','player.reveal_evidence':'get_evidence'}
+        expected={'player.load_node':'load_task','player.submit_answer':'submit_answer','player.request_hint':'request_hint','player.next':'next','player.get_mastery':'get_mastery','player.get_review_queue':'get_review_queue','player.save_checkpoint':'save','player.restore_checkpoint':'restore','player.reveal_evidence':'get_evidence'}
+        payloadless={'player.next','player.get_mastery','player.get_review_queue','player.save_checkpoint','player.restore_checkpoint','player.reveal_evidence'}
         for public,internal in expected.items():
-            payload={} if public=='player.next' else {'node_id':'LN01-N01'}
+            payload={} if public in payloadless else {'node_id':'LN01-N01'}
             if public=='player.submit_answer':payload.update({'task_type':'SHORT_TEXT','answer':{'schema':'ANSWER_DTO_v1','task_type':'SHORT_TEXT','text':'x'}})
             rr=adapter.to_runtime_request(self.req(public,payload));self.assertEqual('runtime.v1',rr['api_version']);self.assertEqual(internal,rr['command']);self.assertEqual('r-1',rr['request_id'])
     def test_submit_answer_validates_dto_before_runtime(self):

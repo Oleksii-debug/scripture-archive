@@ -220,8 +220,8 @@ def build_research_workbench(
     By default only already-unlocked evidence participates. Claims are shown only when every
     required evidence record is visible in this projection; partially supported or zero-evidence
     claims are omitted rather than leaking hidden truth. In restricted scope, identifiers belonging
-    to non-visible evidence shadow coincident passage/claim IDs so independent runtime namespaces
-    cannot re-expose a hidden evidence identifier through another semantic row.
+    to non-visible evidence or gated claims shadow coincident visible IDs so independent runtime
+    namespaces cannot re-expose hidden identifiers through another semantic row.
     """
 
     _bool(unlocked_only, "unlocked_only")
@@ -240,7 +240,17 @@ def build_research_workbench(
     selected = runtime.select(selected_ids, unlocked_only=unlocked_only)
     record_by_id = {record.evidence_id: record for record in selected}
     visible_ids = set(record_by_id)
-    nonvisible_evidence_ids = set(runtime.evidence) - visible_ids if unlocked_only else set()
+    registered_evidence_ids = set(runtime.evidence)
+    nonvisible_evidence_ids = registered_evidence_ids - visible_ids if unlocked_only else set()
+    nonvisible_claim_ids: set[str] = set()
+    if unlocked_only:
+        for claim in runtime.claims.values():
+            if not isinstance(claim, Claim):
+                raise ValueError("runtime claims must contain Claim values")
+            _text(claim.claim_id, "claim_id", limit=256)
+            required = set(claim.required_evidence_ids)
+            if required and required.issubset(registered_evidence_ids) and not required.issubset(visible_ids):
+                nonvisible_claim_ids.add(claim.claim_id)
 
     evidence_views: list[WorkbenchEvidence] = []
     passage_by_id: dict[str, WorkbenchPassage] = {}
@@ -248,6 +258,10 @@ def build_research_workbench(
 
     for record in sorted(selected, key=lambda item: item.evidence_id):
         _text(record.evidence_id, "evidence_id", limit=256)
+        if record.evidence_id in nonvisible_claim_ids:
+            raise ValueError(
+                f"evidence {record.evidence_id} collides with non-visible claim id"
+            )
         _text(record.proposition, "evidence proposition")
         witness = _record_witness(record)
         passage_ids: list[str] = []
@@ -256,6 +270,10 @@ def build_research_workbench(
             if ref.passage_id in nonvisible_evidence_ids:
                 raise ValueError(
                     f"passage {ref.passage_id} collides with non-visible evidence id"
+                )
+            if ref.passage_id in nonvisible_claim_ids:
+                raise ValueError(
+                    f"passage {ref.passage_id} collides with non-visible claim id"
                 )
             passage_ids.append(ref.passage_id)
             candidate = WorkbenchPassage(

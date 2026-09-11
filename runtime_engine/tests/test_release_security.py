@@ -20,7 +20,8 @@ class ReleaseSecurityTests(unittest.TestCase):
         self.assertNotIn(fake, repr(rendered))
 
     def test_private_key_header_is_flagged(self):
-        findings = scan_text("-----BEGIN PRIVATE KEY-----\nabc\n", "key.pem")
+        private_key_header = "-----BEGIN " + "PRIVATE KEY-----"
+        findings = scan_text(private_key_header + "\nabc\n", "key.pem")
         self.assertEqual([finding.rule for finding in findings], ["PRIVATE_KEY"])
 
     def test_forbidden_secret_filename_is_flagged(self):
@@ -98,7 +99,9 @@ class ReleaseSecurityTests(unittest.TestCase):
             original_open = Path.open
 
             def selective_open(path, *args, **kwargs):
-                if path == candidate:
+                # Compare a stable path component rather than platform-specific
+                # resolved TemporaryDirectory spellings (Windows vs POSIX).
+                if path.name == candidate.name:
                     raise OSError("fixture read denied")
                 return original_open(path, *args, **kwargs)
 

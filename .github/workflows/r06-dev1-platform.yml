@@ -19,6 +19,10 @@ on:
 env:
   DEV01_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
+concurrency:
+  group: r06-dev1-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   linux-contract-test:
     runs-on: ubuntu-latest

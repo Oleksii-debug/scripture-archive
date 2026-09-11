@@ -8,17 +8,19 @@ on:
       - r06-swarm-dev01-windows-release
     paths:
       - 'lanes/dev1/**'
+      - 'release_inputs/dev1_finalprep02/**'
       - 'runtime_engine/**'
       - '.github/workflows/r06-dev1-platform.yml'
   pull_request:
     paths:
       - 'lanes/dev1/**'
+      - 'release_inputs/dev1_finalprep02/**'
       - 'runtime_engine/**'
       - '.github/workflows/r06-dev1-platform.yml'
 
 env:
   DEV01_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-  DEV01_BASE_SOURCE_SHA256: 3edef808a6358c3d098bd973c70fefdbb5de93e14103b080a85a6ade04fad0e2
+  DEV01_BASE_SOURCE_SHA256: 10fbd546ff4d985465b85b99f4f64bff95d9ec8b1f27132c6d21b4930c344c35
 
 jobs:
   linux-contract-test:
@@ -39,10 +41,10 @@ jobs:
         run: |
           actual="$(git rev-parse HEAD)"
           test "$actual" = "$DEV01_SOURCE_SHA" || { echo "Expected $DEV01_SOURCE_SHA, got $actual"; exit 1; }
-      - name: Reconstruct and verify immutable DEV1 base source
+      - name: Reconstruct and verify canonical FINALPREP02 DEV1 source baseline
         shell: bash
         run: |
-          cat lanes/dev1/source_parts/part-*.b64 | base64 -d > DEV1_R06_PLATFORM_SOURCE.zip
+          cat release_inputs/dev1_finalprep02/part-*.b64 | base64 -d > DEV1_R06_PLATFORM_SOURCE.zip
           python lanes/dev1/verify_source_archive.py DEV1_R06_PLATFORM_SOURCE.zip "$DEV01_BASE_SOURCE_SHA256"
           python -m zipfile -e DEV1_R06_PLATFORM_SOURCE.zip .
           test -d r06_platform || { echo "Verified archive did not extract required r06_platform directory"; exit 1; }
@@ -88,10 +90,10 @@ jobs:
         run: |
           $actual = (git rev-parse HEAD).Trim()
           if ($actual -ne $env:DEV01_SOURCE_SHA) { throw "Expected $env:DEV01_SOURCE_SHA, got $actual" }
-      - name: Reconstruct and verify immutable DEV1 base source
+      - name: Reconstruct and verify canonical FINALPREP02 DEV1 source baseline
         shell: pwsh
         run: |
-          $parts = Get-ChildItem lanes/dev1/source_parts/part-*.b64 | Sort-Object Name
+          $parts = Get-ChildItem release_inputs/dev1_finalprep02/part-*.b64 | Sort-Object Name
           $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
           [IO.File]::WriteAllBytes('DEV1_R06_PLATFORM_SOURCE.zip', [Convert]::FromBase64String($b64))
           python lanes\dev1\verify_source_archive.py DEV1_R06_PLATFORM_SOURCE.zip $env:DEV01_BASE_SOURCE_SHA256

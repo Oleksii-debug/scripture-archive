@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from html import escape as html_escape
 import json
-from typing import Mapping, Sequence
+import re
+from typing import Any, Mapping, Sequence
 
 from .evidence import EvidenceRuntime
 
@@ -179,56 +180,15 @@ class ResearchExport:
 
     def to_html(self, *, lang: str = "uk") -> str:
         payload = self.payload
-        claims_rows = "".join(
-            "<tr>"
-            f"<th scope=\"row\">{_h(c['claim_id'])}</th>"
-            f"<td>{_h(c['proposition'])}</td>"
-            f"<td>{_h(c['confidence'])}</td>"
-            f"<td>{'yes' if c['tx1'] else 'no'}</td>"
-            f"<td>{_h(c['source_scope']) or 'not stated'}</td>"
-            f"<td>{_h(c['witness']) if c['witness'] else 'not stated'}</td>"
-            f"<td>{_h(c['uncertainty']) if c['uncertainty'] else 'not stated'}</td>"
-            f"<td>{_h(', '.join(c['required_evidence_ids'])) or 'none'}</td>"
-            "</tr>"
-            for c in payload["claims"]
-        )
-        evidence_sections = "".join(_evidence_html(record) for record in payload["evidence"])
-        relation_rows = "".join(
-            "<tr>"
-            f"<th scope=\"row\">{_h(r['relation_id'])}</th>"
-            f"<td>{_h(r['source_id'])}</td>"
-            f"<td>{_h(r['relation_type'])}</td>"
-            f"<td>{_h(r['target_id'])}</td>"
-            f"<td>{_h(r['witness']) if r['witness'] else 'not stated'}</td>"
-            f"<td>{_h(', '.join(r['passage_ids'])) or 'none'}</td>"
-            "</tr>"
-            for r in payload["relations"]
-        )
-        note_sections = "".join(
-            "<article>"
-            f"<h3>{_h(n['note_id'])}</h3>"
-            f"<p>{_h(n['text'])}</p>"
-            f"<p><strong>Passage IDs:</strong> {_h(', '.join(n['passage_ids'])) or 'none'}</p>"
-            f"<p><strong>Evidence IDs:</strong> {_h(', '.join(n['evidence_ids'])) or 'none'}</p>"
-            "</article>"
-            for n in payload["workspace_notes"]
-        )
-        chronology_rows = "".join(
-            "<tr>"
-            f"<th scope=\"row\">{_h(r['entry_id'])}</th>"
-            f"<td>{_h(r['label'])}</td>"
-            f"<td>{_h(r['start_label'])}</td>"
-            f"<td>{_h(r['end_label']) if r['end_label'] else 'not stated'}</td>"
-            f"<td>{_h(r['uncertainty']) if r['uncertainty'] else 'not stated'}</td>"
-            f"<td>{_h(', '.join(r['evidence_ids'])) or 'none'}</td>"
-            "</tr>"
-            for r in payload["chronology"]
-        )
+        claims_rows = "".join(_claim_html(row) for row in payload["claims"])
+        evidence_sections = "".join(_evidence_html(row) for row in payload["evidence"])
+        relation_rows = "".join(_relation_html(row) for row in payload["relations"])
+        note_sections = "".join(_note_html(row) for row in payload["workspace_notes"])
+        chronology_rows = "".join(_chronology_html(row) for row in payload["chronology"])
         provenance_rows = "".join(
             f"<tr><th scope=\"row\">{_h(key)}</th><td>{_h(value)}</td></tr>"
             for key, value in payload["provenance"].items()
         )
-
         return (
             "<!doctype html>\n"
             f"<html lang=\"{_h(lang)}\"><head><meta charset=\"utf-8\">"
@@ -302,7 +262,6 @@ def build_research_export(
         relation for relation in runtime.relations.values()
         if _relation_is_visible(relation, runtime, visible_evidence_ids)
     ]
-
     payload: dict[str, object] = {
         "schema": EXPORT_SCHEMA,
         "workspace_id": workspace_id,
@@ -310,7 +269,7 @@ def build_research_export(
         "evidence_scope": "all_runtime_evidence" if include_locked_evidence else "unlocked_only",
         "claims": [_claim_payload(runtime.claims[key]) for key in sorted(runtime.claims)],
         "evidence": [_evidence_payload(runtime.evidence[key]) for key in sorted(visible_evidence_ids)],
-        "relations": [_relation_payload(relation) for relation in sorted(visible_relations, key=lambda item: item.relation_id)],
+        "relations": [_relation_payload(row) for row in sorted(visible_relations, key=lambda item: item.relation_id)],
         "workspace_notes": [
             {
                 "note_id": note.note_id,
@@ -333,12 +292,17 @@ def build_research_export(
             }
             for row in sorted(chronology, key=lambda item: item.entry_id)
         ],
-        "provenance": {str(key): str(value) for key, value in sorted((provenance or {}).items(), key=lambda item: str(item[0]))},
+        "provenance": {
+            str(key): str(value)
+            for key, value in sorted((provenance or {}).items(), key=lambda item: str(item[0]))
+        },
     }
     return ResearchExport(workspace_id=workspace_id, title=title, payload=payload)
 
 
-def _validate_workspace_evidence_refs(evidence_ids: Sequence[str], runtime: EvidenceRuntime, visible_evidence_ids: set[str]) -> None:
+def _validate_workspace_evidence_refs(
+    evidence_ids: Sequence[str], runtime: EvidenceRuntime, visible_evidence_ids: set[str]
+) -> None:
     for evidence_id in evidence_ids:
         if evidence_id not in runtime.evidence:
             raise KeyError(evidence_id)
@@ -346,14 +310,14 @@ def _validate_workspace_evidence_refs(evidence_ids: Sequence[str], runtime: Evid
             raise PermissionError(f"Evidence not unlocked for export: {evidence_id}")
 
 
-def _relation_is_visible(relation, runtime: EvidenceRuntime, visible_evidence_ids: set[str]) -> bool:
-    for endpoint in (relation.source_id, relation.target_id):
-        if endpoint in runtime.evidence and endpoint not in visible_evidence_ids:
-            return False
-    return True
+def _relation_is_visible(relation: Any, runtime: EvidenceRuntime, visible_evidence_ids: set[str]) -> bool:
+    return all(
+        endpoint not in runtime.evidence or endpoint in visible_evidence_ids
+        for endpoint in (relation.source_id, relation.target_id)
+    )
 
 
-def _claim_payload(claim) -> dict[str, object]:
+def _claim_payload(claim: Any) -> dict[str, object]:
     return {
         "claim_id": claim.claim_id,
         "kind": "canonical_claim",
@@ -367,8 +331,11 @@ def _claim_payload(claim) -> dict[str, object]:
     }
 
 
-def _evidence_payload(record) -> dict[str, object]:
-    passages = sorted(record.passage_refs, key=lambda p: (p.book, p.chapter, p.verse_start, p.verse_end or p.verse_start, p.passage_id))
+def _evidence_payload(record: Any) -> dict[str, object]:
+    passages = sorted(
+        record.passage_refs,
+        key=lambda p: (p.book, p.chapter, p.verse_start, p.verse_end or p.verse_start, p.passage_id),
+    )
     return {
         "evidence_id": record.evidence_id,
         "kind": "canonical_evidence",
@@ -392,7 +359,7 @@ def _evidence_payload(record) -> dict[str, object]:
     }
 
 
-def _relation_payload(relation) -> dict[str, object]:
+def _relation_payload(relation: Any) -> dict[str, object]:
     return {
         "relation_id": relation.relation_id,
         "kind": "canonical_relation",
@@ -404,22 +371,31 @@ def _relation_payload(relation) -> dict[str, object]:
     }
 
 
-def _evidence_html(record: Mapping[str, object]) -> str:
+def _claim_html(row: Mapping[str, Any]) -> str:
+    return (
+        "<tr>"
+        f"<th scope=\"row\">{_h(row['claim_id'])}</th>"
+        f"<td>{_h(row['proposition'])}</td><td>{_h(row['confidence'])}</td>"
+        f"<td>{'yes' if row['tx1'] else 'no'}</td>"
+        f"<td>{_h(row['source_scope']) or 'not stated'}</td>"
+        f"<td>{_h(row['witness']) if row['witness'] else 'not stated'}</td>"
+        f"<td>{_h(row['uncertainty']) if row['uncertainty'] else 'not stated'}</td>"
+        f"<td>{_h(', '.join(row['required_evidence_ids'])) or 'none'}</td></tr>"
+    )
+
+
+def _evidence_html(record: Mapping[str, Any]) -> str:
     passage_rows = "".join(
         "<tr>"
-        f"<th scope=\"row\">{_h(p['passage_id'])}</th>"
-        f"<td>{_h(p['book'])}</td>"
-        f"<td>{p['chapter']}</td>"
-        f"<td>{p['verse_start']}</td>"
+        f"<th scope=\"row\">{_h(p['passage_id'])}</th><td>{_h(p['book'])}</td>"
+        f"<td>{p['chapter']}</td><td>{p['verse_start']}</td>"
         f"<td>{p['verse_end'] if p['verse_end'] is not None else p['verse_start']}</td>"
-        f"<td>{_h(p['witness']) if p['witness'] else 'not stated'}</td>"
-        "</tr>"
+        f"<td>{_h(p['witness']) if p['witness'] else 'not stated'}</td></tr>"
         for p in record["passage_refs"]
     )
     return (
         "<article>"
-        f"<h3>{_h(record['evidence_id'])}</h3>"
-        f"<p>{_h(record['proposition'])}</p>"
+        f"<h3>{_h(record['evidence_id'])}</h3><p>{_h(record['proposition'])}</p>"
         f"<p><strong>Confidence:</strong> {_h(record['confidence'])}; "
         f"<strong>TX1:</strong> {'yes' if record['tx1'] else 'no'}; "
         f"<strong>Witness:</strong> {_h(record['witness']) if record['witness'] else 'not stated'}.</p>"
@@ -433,20 +409,63 @@ def _evidence_html(record: Mapping[str, object]) -> str:
     )
 
 
+def _relation_html(row: Mapping[str, Any]) -> str:
+    return (
+        "<tr>"
+        f"<th scope=\"row\">{_h(row['relation_id'])}</th><td>{_h(row['source_id'])}</td>"
+        f"<td>{_h(row['relation_type'])}</td><td>{_h(row['target_id'])}</td>"
+        f"<td>{_h(row['witness']) if row['witness'] else 'not stated'}</td>"
+        f"<td>{_h(', '.join(row['passage_ids'])) or 'none'}</td></tr>"
+    )
+
+
+def _note_html(row: Mapping[str, Any]) -> str:
+    return (
+        f"<article><h3>{_h(row['note_id'])}</h3><p>{_h(row['text'])}</p>"
+        f"<p><strong>Passage IDs:</strong> {_h(', '.join(row['passage_ids'])) or 'none'}</p>"
+        f"<p><strong>Evidence IDs:</strong> {_h(', '.join(row['evidence_ids'])) or 'none'}</p></article>"
+    )
+
+
+def _chronology_html(row: Mapping[str, Any]) -> str:
+    return (
+        "<tr>"
+        f"<th scope=\"row\">{_h(row['entry_id'])}</th><td>{_h(row['label'])}</td>"
+        f"<td>{_h(row['start_label'])}</td>"
+        f"<td>{_h(row['end_label']) if row['end_label'] else 'not stated'}</td>"
+        f"<td>{_h(row['uncertainty']) if row['uncertainty'] else 'not stated'}</td>"
+        f"<td>{_h(', '.join(row['evidence_ids'])) or 'none'}</td></tr>"
+    )
+
+
 def _h(value: object) -> str:
     return html_escape(str(value), quote=True)
 
 
 def _md(value: object) -> str:
-    text = str(value)
+    text = str(value).replace("\r\n", "\n").replace("\r", "\n")
     text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    for ch in ("\\", "`", "*", "_", "[", "]"):
+    for ch in ("\\", "`", "*", "_", "[", "]", "(", ")", "|"):
         text = text.replace(ch, "\\" + ch)
-    return text.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "  \n")
+
+    safe_lines: list[str] = []
+    ordered = re.compile(r"^(\s*\d+)\.(\s+)")
+    for line in text.split("\n"):
+        match = ordered.match(line)
+        if match:
+            line = f"{match.group(1)}\\.{match.group(2)}{line[match.end():]}"
+        else:
+            stripped = line.lstrip()
+            indent = line[: len(line) - len(stripped)]
+            if stripped.startswith("#") or stripped.startswith("+ ") or stripped.startswith("- "):
+                line = indent + "\\" + stripped
+        safe_lines.append(line)
+    return "  \n".join(safe_lines)
 
 
 def _md_code(value: object) -> str:
-    return str(value).replace("`", "\\`").replace("\n", " ")
+    text = str(value).replace("\r\n", "\n").replace("\r", "\n").replace("\n", " ")
+    return text.replace("`", "&#96;")
 
 
 def _md_join(values: Sequence[object]) -> str:

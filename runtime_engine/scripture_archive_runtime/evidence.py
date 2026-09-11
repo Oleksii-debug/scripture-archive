@@ -139,8 +139,10 @@ class EvidenceRuntime:
             from .evidence_provenance import resolve_evidence_witness
 
             declared_witness = (
-                claim.witness.strip()
-                if isinstance(claim.witness, str) and claim.witness.strip()
+                claim.witness
+                if isinstance(claim.witness, str)
+                and claim.witness
+                and claim.witness == claim.witness.strip()
                 else None
             )
             for eid in required & submitted:

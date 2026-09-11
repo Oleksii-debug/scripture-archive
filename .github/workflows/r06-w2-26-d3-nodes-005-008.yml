@@ -1,0 +1,198 @@
+name: R06 W2-26 D3 Nodes 005-008
+
+on:
+  push:
+    branches:
+      - r06-wave2-w26-d3-nodes-005-008
+    paths:
+      - '.github/workflows/r06-w2-26-d3-nodes-005-008.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  materialize-owned-range:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: r06-wave2-w26-d3-nodes-005-008
+          fetch-depth: 0
+
+      - name: Confirm exact branch checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git branch --show-current)" = 'r06-wave2-w26-d3-nodes-005-008'
+          git rev-parse HEAD
+
+      - name: Reconstruct and verify immutable D3 closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          STAGE=lanes/dev3/closure03_payload
+          COUNT=$(find "$STAGE" -maxdepth 1 -name 'part_*.b64' -type f | wc -l)
+          test "$COUNT" -eq 51
+          rm -rf /tmp/w2-26-d3
+          mkdir -p /tmp/w2-26-d3/source
+          cat "$STAGE"/part_*.b64 | base64 --decode > /tmp/w2-26-d3/payload.tar.xz
+          echo 'ea8e4d290101a6b1c95e3718844015b90abda0964705bf24b70309fa6062c35a  /tmp/w2-26-d3/payload.tar.xz' | sha256sum -c -
+          tar -xJf /tmp/w2-26-d3/payload.tar.xz -C /tmp/w2-26-d3/source
+
+      - name: Verify full corpus then materialize only owned missing records
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import pathlib
+
+          source = pathlib.Path('/tmp/w2-26-d3/source')
+          target = pathlib.Path('docs/campaigns/GW/R06_DEV3_MATERIALIZATION_05/nodes')
+          proof_path = pathlib.Path('docs/campaigns/GW/R06_DEV3_MATERIALIZATION_05/W2_26_NODE_SHARD_PROOF.json')
+
+          sums = source / 'SHA256SUMS.txt'
+          assert sums.is_file(), sums
+          checked = 0
+          expected_file_hash = {}
+          for line in sums.read_text(encoding='utf-8').splitlines():
+              if not line.strip():
+                  continue
+              expected, rel = line.split(None, 1)
+              rel = rel.strip().lstrip('*')
+              path = source / rel
+              assert path.is_file(), path
+              got = hashlib.sha256(path.read_bytes()).hexdigest()
+              assert got == expected, (rel, expected, got)
+              expected_file_hash[rel] = expected
+              checked += 1
+          assert checked == 29, checked
+
+          source_files = sorted((source / 'nodes').glob('*.json'))
+          assert len(source_files) == 15, len(source_files)
+
+          all_nodes = []
+          by_source = []
+          for path in source_files:
+              data = json.loads(path.read_text(encoding='utf-8'))
+              assert isinstance(data, dict) and isinstance(data.get('nodes'), list), path
+              nodes = data['nodes']
+              assert nodes, path
+              by_source.append((path, nodes))
+              all_nodes.extend(nodes)
+
+          assert len(all_nodes) == 360, len(all_nodes)
+          ids = [node.get('node_id') for node in all_nodes]
+          assert all(isinstance(x, str) and x for x in ids)
+          assert len(set(ids)) == 360
+
+          def canonical_bytes(record):
+              return json.dumps(record, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')
+
+          canonical_hash = {node['node_id']: hashlib.sha256(canonical_bytes(node)).hexdigest() for node in all_nodes}
+          aggregate_payload = ''.join(
+              f'{node_id}\t{digest}\n' for node_id, digest in sorted(canonical_hash.items())
+          ).encode('utf-8')
+          aggregate = hashlib.sha256(aggregate_payload).hexdigest()
+          expected_aggregate = '6bc9ceadb9a02f7eef92cf70df004f3781a3e85732b1f5d17cd93c2e876896e6'
+          assert aggregate == expected_aggregate, (expected_aggregate, aggregate)
+
+          existing = {}
+          target.mkdir(parents=True, exist_ok=True)
+          for path in sorted(target.glob('*.jsonl')):
+              for line_no, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1):
+                  if not line.strip():
+                      continue
+                  record = json.loads(line)
+                  node_id = record.get('node_id')
+                  assert isinstance(node_id, str) and node_id, (path, line_no)
+                  digest = hashlib.sha256(canonical_bytes(record)).hexdigest()
+                  if node_id in existing:
+                      assert existing[node_id] == digest, ('existing duplicate mismatch', node_id)
+                  existing[node_id] = digest
+
+          selected = by_source[4:8]
+          assert len(selected) == 4
+          selected_ids = [node['node_id'] for _, nodes in selected for node in nodes]
+          assert len(selected_ids) == len(set(selected_ids))
+
+          outputs = []
+          skipped = []
+          written_ids = []
+          for source_index, (src_path, nodes) in enumerate(selected, 5):
+              missing = []
+              for node in nodes:
+                  node_id = node['node_id']
+                  if node_id in existing:
+                      assert existing[node_id] == canonical_hash[node_id], ('readable/source mismatch', node_id)
+                      skipped.append(node_id)
+                  else:
+                      missing.append(node)
+              out_path = target / f'w2_26_src_{source_index:03d}_missing.jsonl'
+              if out_path.exists():
+                  out_path.unlink()
+              if missing:
+                  payload = b''.join(canonical_bytes(node) + b'\n' for node in missing)
+                  out_path.write_bytes(payload)
+                  outputs.append({
+                      'source_index': source_index,
+                      'source_file': src_path.name,
+                      'source_file_sha256': expected_file_hash.get(f'nodes/{src_path.name}'),
+                      'output_path': out_path.as_posix(),
+                      'record_count': len(missing),
+                      'first_node_id': missing[0]['node_id'],
+                      'last_node_id': missing[-1]['node_id'],
+                      'output_sha256': hashlib.sha256(payload).hexdigest(),
+                  })
+                  written_ids.extend(node['node_id'] for node in missing)
+
+          assert not (set(written_ids) & set(existing))
+          assert set(written_ids) | set(skipped) == set(selected_ids)
+
+          proof = {
+              'schema': 'W2_26_D3_NODE_SHARD_PROOF_v1',
+              'status': 'PASS',
+              'ownership': {
+                  'source_file_indexes_1_based': [5, 6, 7, 8],
+                  'source_file_count_total': len(source_files),
+                  'existing_ids_are_skipped': True,
+              },
+              'source_transport': 'lanes/dev3/closure03_payload/part_*.b64',
+              'source_archive_sha256': 'ea8e4d290101a6b1c95e3718844015b90abda0964705bf24b70309fa6062c35a',
+              'source_file_hashes_checked': checked,
+              'full_node_count': len(all_nodes),
+              'full_unique_node_ids': len(set(ids)),
+              'full_node_aggregate_sha256': aggregate,
+              'expected_full_node_aggregate_sha256': expected_aggregate,
+              'selected_record_count': len(selected_ids),
+              'preexisting_record_count_in_selected_range': len(skipped),
+              'new_record_count': len(written_ids),
+              'skipped_existing_node_ids': skipped,
+              'new_node_ids': written_ids,
+              'outputs': outputs,
+              'source_truth_changed': False,
+              'global_manifest_or_status_changed': False,
+          }
+          proof_path.write_text(json.dumps(proof, ensure_ascii=False, sort_keys=True, indent=2) + '\n', encoding='utf-8')
+          print(
+              'W2_26_D3_SHARD_PASS '
+              f'selected={len(selected_ids)} skipped={len(skipped)} new={len(written_ids)} aggregate={aggregate}'
+          )
+          PY
+
+      - name: Commit only W2-26 shard and proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- \
+            docs/campaigns/GW/R06_DEV3_MATERIALIZATION_05/nodes/w2_26_src_*_missing.jsonl \
+            docs/campaigns/GW/R06_DEV3_MATERIALIZATION_05/W2_26_NODE_SHARD_PROOF.json
+          git diff --cached --name-only
+          git diff --cached --quiet && { echo 'No missing records in W2-26 owned range.'; exit 0; }
+          git commit -m 'R06 W2-26: materialize D3 source files 005-008 [skip ci]'
+          git push origin HEAD:r06-wave2-w26-d3-nodes-005-008

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Mapping
 
 REVIEW_QUEUE_FIELDS = frozenset({
@@ -28,9 +29,10 @@ def _exact_nonempty_text(value: Any) -> bool:
 def validate_review_queue_projection(value: Any) -> list[dict[str, Any]]:
     """Validate the exact persisted runtime review-queue projection.
 
-    This boundary intentionally validates identity/types only. Scheduling order,
-    priority, due dates, and relation policy remain owned by D5/runtime; callers
-    may neither repair nor normalize malformed runtime truth.
+    This boundary validates canonical shape, identity/type constraints, and the
+    serialized due timestamp syntax only. Scheduling order, priority, due-date
+    policy, and relation policy remain owned by D5/runtime; callers may neither
+    repair nor normalize malformed runtime truth.
     """
 
     if not isinstance(value, list):
@@ -63,6 +65,12 @@ def validate_review_queue_projection(value: Any) -> list[dict[str, Any]]:
             raise ValueError(f"runtime review_queue[{index}].node_id is invalid")
         if not _exact_nonempty_text(due_at):
             raise ValueError(f"runtime review_queue[{index}].due_at is invalid")
+        try:
+            parsed_due_at = datetime.fromisoformat(due_at.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError(f"runtime review_queue[{index}].due_at is invalid") from exc
+        if parsed_due_at.tzinfo is None:
+            raise ValueError(f"runtime review_queue[{index}].due_at must include timezone")
         if not isinstance(priority, int) or isinstance(priority, bool):
             raise ValueError(f"runtime review_queue[{index}].priority is invalid")
         if relation not in REVIEW_RELATIONS:

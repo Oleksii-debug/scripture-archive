@@ -15,6 +15,7 @@ class HiddenClaimRelationExportTests(unittest.TestCase):
             "Visible evidence",
             Confidence.T1,
             witness="Mark",
+            relation_ids=("REL-HIDDEN",),
         ))
         runtime.add_evidence(EvidenceRecord(
             "EV-LOCKED",
@@ -44,6 +45,7 @@ class HiddenClaimRelationExportTests(unittest.TestCase):
         export = build_research_export(runtime, workspace_id="case-hidden", title="Hidden relation case")
         self.assertEqual(export.payload["evidence_scope"], "unlocked_only")
         self.assertEqual([row["evidence_id"] for row in export.payload["evidence"]], ["EV-VISIBLE"])
+        self.assertEqual(export.payload["evidence"][0]["relation_ids"], [])
         self.assertEqual(export.payload["claims"], [])
         self.assertEqual(export.payload["relations"], [])
 
@@ -60,8 +62,9 @@ class HiddenClaimRelationExportTests(unittest.TestCase):
         parsed = json.loads(json_text)
         self.assertEqual(parsed["claims"], [])
         self.assertEqual(parsed["relations"], [])
+        self.assertEqual(parsed["evidence"][0]["relation_ids"], [])
 
-    def test_full_scope_still_includes_claim_and_relation_when_evidence_is_visible(self):
+    def test_full_scope_still_includes_claim_relation_and_relation_metadata_when_evidence_is_visible(self):
         runtime = EvidenceRuntime()
         runtime.add_evidence(EvidenceRecord(
             "EV-LOCKED",
@@ -69,6 +72,7 @@ class HiddenClaimRelationExportTests(unittest.TestCase):
             "Evidence",
             Confidence.T1,
             witness="Luke",
+            relation_ids=("REL-VISIBLE-FULL",),
         ))
         runtime.add_claim(Claim(
             "CL-VISIBLE-FULL",
@@ -94,6 +98,7 @@ class HiddenClaimRelationExportTests(unittest.TestCase):
         self.assertEqual(export.payload["evidence_scope"], "all_runtime_evidence")
         self.assertEqual([row["claim_id"] for row in export.payload["claims"]], ["CL-VISIBLE-FULL"])
         self.assertEqual([row["relation_id"] for row in export.payload["relations"]], ["REL-VISIBLE-FULL"])
+        self.assertEqual(export.payload["evidence"][0]["relation_ids"], ["REL-VISIBLE-FULL"])
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ on:
     paths:
       - 'runtime_engine/**'
       - 'lanes/dev10/**'
+      - 'lanes/dev1/repair_overlay/**'
       - '.github/workflows/r06-dev10-integration.yml'
 
 permissions:

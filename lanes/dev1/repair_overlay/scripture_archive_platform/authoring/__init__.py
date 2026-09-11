@@ -1,3 +1,3 @@
-from .service import AuthoringService, AuthoringError, ValidationIssue
+from .service import AuthoringService
 
-__all__ = ["AuthoringService", "AuthoringError", "ValidationIssue"]
+__all__ = ["AuthoringService"]

@@ -93,6 +93,7 @@ class ResearchWorkspaceTests(unittest.TestCase):
     def test_input_validation_fails_closed(self):
         bad_bookmarks = [
             {"bookmark_id": "../escape", "title": "x", "target": self.target},
+            {"bookmark_id": " bm ", "title": "x", "target": self.target},
             {"bookmark_id": "bm", "title": "<b>markup</b>", "target": self.target},
             {"bookmark_id": "bm", "title": "javascript:alert(1)", "target": self.target},
             {"bookmark_id": "bm", "title": "x", "target": {"kind": "passage"}},
@@ -104,6 +105,7 @@ class ResearchWorkspaceTests(unittest.TestCase):
                     self.service.upsert_bookmark(payload)
 
         bad_notes = [
+            {"note_id": " note ", "title": "x", "body": "ok"},
             {"note_id": "note", "title": "x", "body": "<script>alert(1)</script>"},
             {"note_id": "note", "title": "x", "body": "data:text/html,bad"},
             {"note_id": "note", "title": "x", "body": "ok", "tags": ["x"] * 21},
@@ -113,6 +115,17 @@ class ResearchWorkspaceTests(unittest.TestCase):
             with self.subTest(payload=payload):
                 with self.assertRaises(ValueError):
                     self.service.upsert_note(payload)
+
+    def test_absent_collection_is_empty_but_falsey_malformed_persistence_fails_closed(self):
+        self.assertEqual([], self.service.list_bookmarks())
+        self.assertEqual([], self.service.list_notes())
+        for key in ("bookmarks", "notes"):
+            for malformed in ([], 0, "", False, None):
+                with self.subTest(key=key, malformed=malformed):
+                    self.store.data[("research_workspace", key)] = malformed
+                    with self.assertRaises(ValueError):
+                        ResearchWorkspaceService(self.store)._load(key)
+            self.store.data.pop(("research_workspace", key), None)
 
     def test_tampered_persistence_is_revalidated_and_rejected(self):
         self.store.data[("research_workspace", "notes")] = {
@@ -141,11 +154,15 @@ class ResearchWorkspaceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             ResearchWorkspaceService(self.store).list_notes()
 
-    def test_stored_key_id_mismatch_fails_closed(self):
+    def test_stored_key_id_mismatch_or_padding_fails_closed(self):
         valid = self.service.upsert_bookmark(
             {"bookmark_id": "bm-1", "title": "Valid", "target": self.target, "tags": []}
         )
         self.store.data[("research_workspace", "bookmarks")] = {"bm-2": valid}
+        with self.assertRaises(ValueError):
+            ResearchWorkspaceService(self.store).list_bookmarks()
+
+        self.store.data[("research_workspace", "bookmarks")] = {" bm-1 ": valid}
         with self.assertRaises(ValueError):
             ResearchWorkspaceService(self.store).list_bookmarks()
 

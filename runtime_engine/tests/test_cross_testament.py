@@ -94,6 +94,42 @@ class CrossTestamentProjectionTests(unittest.TestCase):
         self.assertNotIn("MT1:23", projection.stable_json())
         self.assertNotIn("EV-NT", projection.stable_json())
 
+    def test_relation_with_locked_third_endpoint_is_suppressed_whole(self):
+        runtime = self.runtime(relation=False)
+        runtime.add_evidence(
+            EvidenceRecord(
+                "EV-LOCKED",
+                (PassageRef("GEN1:1", "Genesis", 1, 1, witness="Genesis"),),
+                "locked supporting proposition",
+                Confidence.T1,
+                witness="Genesis",
+            )
+        )
+        runtime.add_relation(
+            Relation(
+                "REL-PARTIAL",
+                "EV-OT",
+                "explicit_cross_reference",
+                "EV-NT",
+                passage_ids=("ISA7:14", "MT1:23", "GEN1:1"),
+            )
+        )
+        projection = project_cross_testament(runtime, book_testaments=BOOK_TESTAMENTS)
+        self.assertEqual(projection.links, ())
+        serialized = projection.stable_json()
+        linear = "\n".join(projection.linearize())
+        self.assertNotIn("REL-PARTIAL", serialized)
+        self.assertNotIn("GEN1:1", serialized)
+        self.assertNotIn("REL-PARTIAL", linear)
+        self.assertNotIn("GEN1:1", linear)
+
+        full = project_cross_testament(
+            runtime,
+            book_testaments=BOOK_TESTAMENTS,
+            unlocked_only=False,
+        )
+        self.assertTrue(any(link.relation_id == "REL-PARTIAL" for link in full.links))
+
     def test_dangling_relation_passage_fails_closed(self):
         runtime = self.runtime(relation=False)
         runtime.add_relation(

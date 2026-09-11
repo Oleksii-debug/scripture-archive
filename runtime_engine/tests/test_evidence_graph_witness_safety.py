@@ -1,6 +1,12 @@
 import unittest
 
-from scripture_archive_runtime.evidence import EvidenceRecord, EvidenceRuntime, PassageRef, Relation
+from scripture_archive_runtime.evidence import (
+    Claim,
+    EvidenceRecord,
+    EvidenceRuntime,
+    PassageRef,
+    Relation,
+)
 from scripture_archive_runtime.evidence_graph import build_evidence_graph
 from scripture_archive_runtime.models import Confidence
 
@@ -63,6 +69,34 @@ class EvidenceGraphWitnessSafetyTests(unittest.TestCase):
             "Conflicting witness provenance for relation REL-CONFLICT",
         ):
             build_evidence_graph(runtime)
+
+    def test_single_witness_claim_does_not_surface_from_other_witness_evidence(self):
+        runtime = EvidenceRuntime()
+        runtime.add_evidence(
+            EvidenceRecord(
+                "EV-LUKE",
+                (PassageRef("LK1:1", "Luke", 1, 1, witness="Luke"),),
+                "Luke-local proposition.",
+                Confidence.T1,
+                witness="Luke",
+            )
+        )
+        runtime.add_claim(
+            Claim(
+                "CL-MARK",
+                "A claim explicitly scoped to Mark.",
+                Confidence.T2,
+                required_evidence_ids=("EV-LUKE",),
+                witness="Mark",
+            )
+        )
+        runtime.unlock("EV-LUKE")
+
+        graph = build_evidence_graph(runtime)
+        graph_ids = {node["graph_id"] for node in graph.to_dict()["nodes"]}
+        self.assertIn("evidence:EV-LUKE", graph_ids)
+        self.assertNotIn("claim:CL-MARK", graph_ids)
+        self.assertNotIn("CL-MARK", "\n".join(graph.linearize()))
 
     def test_unassigned_cross_witness_record_is_not_harmonized(self):
         runtime = EvidenceRuntime()

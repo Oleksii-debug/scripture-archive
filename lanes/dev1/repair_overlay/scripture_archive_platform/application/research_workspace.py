@@ -28,8 +28,7 @@ class ResearchWorkspaceService:
     def _identifier(value: Any, field: str) -> str:
         if not isinstance(value, str):
             raise ValueError(f"{field} must be string")
-        value = value.strip()
-        if not _ID_RE.fullmatch(value):
+        if value != value.strip() or not _ID_RE.fullmatch(value):
             raise ValueError(f"invalid {field}")
         return value
 
@@ -139,12 +138,15 @@ class ResearchWorkspaceService:
         }
 
     def _load(self, key: str) -> dict[str, dict[str, Any]]:
-        raw = self.store.get_json("research_workspace", key, {}) or {}
+        missing = object()
+        raw = self.store.get_json("research_workspace", key, missing)
+        if raw is missing:
+            return {}
         if not isinstance(raw, dict):
             raise ValueError("workspace persistence is malformed")
         out: dict[str, dict[str, Any]] = {}
         for storage_key, payload in raw.items():
-            normalized_key = self._identifier(storage_key, f"{key} storage key")
+            exact_key = self._identifier(storage_key, f"{key} storage key")
             if key == "bookmarks":
                 record = self._normalize_bookmark(payload, persisted=True)
                 record_id = record["bookmark_id"]
@@ -153,9 +155,11 @@ class ResearchWorkspaceService:
                 record_id = record["note_id"]
             else:
                 raise ValueError("unsupported workspace collection")
-            if normalized_key != record_id:
+            if exact_key != record_id:
                 raise ValueError("workspace persistence id mismatch")
-            out[normalized_key] = record
+            if exact_key in out:
+                raise ValueError("workspace persistence duplicate id")
+            out[exact_key] = record
         return out
 
     def _save(self, key: str, records: dict[str, dict[str, Any]]) -> None:

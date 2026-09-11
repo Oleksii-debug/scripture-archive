@@ -36,15 +36,26 @@ class PublicContentPackStoreTests(unittest.TestCase):
     def test_export_cannot_mutate_immutable_store_and_versions_are_semver_sorted(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            pack_12 = root / "pack-1.2.0.zip"
-            pack_110 = root / "pack-1.10.0.zip"
-            _write_pack(pack_12, version="1.2.0")
-            _write_pack(pack_110, version="1.10.0")
-
+            versions = (
+                "1.0.0-alpha",
+                "1.0.0-alpha.1",
+                "1.0.0-alpha.2",
+                "1.0.0-alpha.10",
+                "1.0.0-alpha.beta",
+                "1.0.0-beta",
+                "1.0.0-beta.2",
+                "1.0.0-beta.11",
+                "1.0.0-rc.1",
+                "1.0.0",
+                "1.2.0",
+                "1.10.0",
+            )
             store = ContentPackStore(root / "store")
-            store.install(pack_110)
-            store.install(pack_12)
-            self.assertEqual(("1.2.0", "1.10.0"), store.installed_versions("study-core"))
+            for index, version in enumerate(reversed(versions)):
+                archive = root / f"pack-{index}.zip"
+                _write_pack(archive, version=version)
+                store.install(archive)
+            self.assertEqual(versions, store.installed_versions("study-core"))
 
             with self.assertRaisesRegex(ValidationError, "outside the immutable pack store"):
                 store.export_pack("study-core", "1.2.0", store.root / "exports" / "pack.zip")
@@ -52,6 +63,18 @@ class PublicContentPackStoreTests(unittest.TestCase):
             exported = store.export_pack("study-core", "1.2.0", root / "outside.zip")
             self.assertTrue(exported.is_file())
             store.verify_installed("study-core", "1.2.0")
+
+    def test_case_distinct_semver_versions_cannot_alias_on_windows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            upper = root / "upper.zip"
+            lower = root / "lower.zip"
+            _write_pack(upper, version="1.0.0-Alpha")
+            _write_pack(lower, version="1.0.0-alpha")
+            store = ContentPackStore(root / "store")
+            store.install(upper)
+            with self.assertRaisesRegex(ValidationError, "collides case-insensitively"):
+                store.install(lower)
 
 
 if __name__ == "__main__":

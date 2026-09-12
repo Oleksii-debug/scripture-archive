@@ -59,15 +59,23 @@ jobs:
       - name: Compile and test repaired source
         shell: bash
         run: |
+          set -o pipefail
           python -m compileall -q r06_platform/scripture_archive_platform r06_platform/tests r06_platform/packaging
           # Synthetic unit fixtures explicitly opt into the reference test grader;
           # packaged/runtime execution does not receive this gate and remains fail-closed.
-          (cd r06_platform && SCRIPTURE_ARCHIVE_REFERENCE_TEST_ONLY=1 python -m unittest discover -s tests -v)
+          (cd r06_platform && SCRIPTURE_ARCHIVE_REFERENCE_TEST_ONLY=1 python -m unittest discover -s tests -v 2>&1 | tee "$RUNNER_TEMP/dev1-linux-unittest.log")
           node --check r06_platform/frontend/renderers.js
           python r06_platform/tools_smoke.py
           python r06_platform/packaging/windows_release.py diagnose \
             --platform-root r06_platform \
             --output r06_platform/diagnostics-linux.json
+      - name: Upload Linux unittest diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEV1-R06-Linux-Unittest-Diagnostics
+          path: ${{ runner.temp }}/dev1-linux-unittest.log
+          if-no-files-found: warn
       - name: Archive repaired readable source
         shell: bash
         run: python -c "import shutil; shutil.make_archive('DEV1_R06_PLATFORM_SOURCE_REPAIRED','zip','.', 'r06_platform')"

@@ -1,6 +1,7 @@
 import unittest
 
 from scripture_archive_runtime.dossiers import (
+    CURRENT_SCOPE_UNAVAILABLE,
     NOT_STATED,
     DossierAssembler,
     DossierKind,
@@ -128,14 +129,53 @@ class DossierCoreTests(unittest.TestCase):
             self.assertIn(token, linear)
         self.assertEqual(list(view.semantic_rows()), view.to_dict()["rows"])
 
-    def test_no_support_is_exact_not_stated_result(self):
+    def test_player_safe_no_support_is_scope_qualified(self):
         runtime = self.make_runtime()
         view = DossierAssembler(runtime).build(
             DossierSubject("PERSON-UNKNOWN", DossierKind.PERSON, "Unknown")
         )
         self.assertFalse(view.stated)
+        self.assertEqual(view.to_dict()["status_text"], CURRENT_SCOPE_UNAVAILABLE)
+        self.assertEqual(view.linearize()[-1], CURRENT_SCOPE_UNAVAILABLE)
+        self.assertNotEqual(view.to_dict()["status_text"], NOT_STATED)
+
+    def test_unrestricted_no_support_is_exact_not_stated_result(self):
+        runtime = self.make_runtime()
+        view = DossierAssembler(runtime).build(
+            DossierSubject("PERSON-UNKNOWN", DossierKind.PERSON, "Unknown"),
+            unlocked_only=False,
+        )
+        self.assertFalse(view.stated)
         self.assertEqual(view.to_dict()["status_text"], NOT_STATED)
         self.assertEqual(view.linearize()[-1], NOT_STATED)
+
+    def test_player_safe_locked_only_subject_is_scope_qualified_without_leak(self):
+        runtime = EvidenceRuntime()
+        runtime.add_evidence(
+            EvidenceRecord(
+                "EV-LOCKED-ONLY",
+                (PassageRef("MK-1-1", "Mark", 1, 1, witness="Mark"),),
+                "Locked support must not be disclosed.",
+                Confidence.T1,
+                witness="Mark",
+                entity_ids=("PERSON-X",),
+            )
+        )
+        view = DossierAssembler(runtime).build(
+            DossierSubject("PERSON-X", DossierKind.PERSON, "X")
+        )
+        semantic = repr(view.to_dict())
+        linear = "\n".join(view.linearize())
+        self.assertFalse(view.stated)
+        self.assertEqual(view.to_dict()["status_text"], CURRENT_SCOPE_UNAVAILABLE)
+        self.assertEqual(view.linearize()[-1], CURRENT_SCOPE_UNAVAILABLE)
+        self.assertNotEqual(view.to_dict()["status_text"], NOT_STATED)
+        self.assertNotIn("EV-LOCKED-ONLY", semantic)
+        self.assertNotIn("EV-LOCKED-ONLY", linear)
+        self.assertNotIn("MK-1-1", semantic)
+        self.assertNotIn("MK-1-1", linear)
+        self.assertNotIn("Locked support must not be disclosed.", semantic)
+        self.assertNotIn("Locked support must not be disclosed.", linear)
 
     def test_unrestricted_view_is_explicit_and_deterministic(self):
         runtime = self.make_runtime()
@@ -167,7 +207,8 @@ class DossierCoreTests(unittest.TestCase):
         semantic = repr(view.to_dict())
         linear = "\n".join(view.linearize())
         self.assertFalse(view.stated)
-        self.assertEqual(view.to_dict()["status_text"], NOT_STATED)
+        self.assertEqual(view.to_dict()["status_text"], CURRENT_SCOPE_UNAVAILABLE)
+        self.assertEqual(view.linearize()[-1], CURRENT_SCOPE_UNAVAILABLE)
         self.assertNotIn("EV-CONFLICT", semantic)
         self.assertNotIn("EV-CONFLICT", linear)
         self.assertNotIn("MK-1-1", semantic)

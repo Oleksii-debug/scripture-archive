@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Iterable
 
 from .evidence import Claim, EvidenceRecord, EvidenceRuntime, PassageRef
+from .evidence_provenance import resolve_evidence_witness, validated_claim_witness
 
 
 MAX_SELECTION = 256
@@ -48,19 +49,16 @@ def _validate_passage(ref: PassageRef) -> None:
 
 
 def _record_witness(record: EvidenceRecord) -> str | None:
+    raw_witness_present = record.witness is not None
     if record.witness is not None:
         _text(record.witness, "evidence witness", limit=256)
-    passage_witnesses: set[str] = set()
     for ref in record.passage_refs:
         _validate_passage(ref)
-        if ref.witness is not None:
-            passage_witnesses.add(ref.witness)
-    if len(passage_witnesses) > 1:
-        raise ValueError(f"evidence {record.evidence_id} mixes passage witnesses")
-    passage_witness = next(iter(passage_witnesses), None)
-    if record.witness is not None and passage_witness is not None and record.witness != passage_witness:
-        raise ValueError(f"evidence {record.evidence_id} conflicts with passage witness")
-    return record.witness or passage_witness
+        raw_witness_present = raw_witness_present or ref.witness is not None
+    witness = resolve_evidence_witness(record)
+    if raw_witness_present and witness is None:
+        raise ValueError(f"evidence {record.evidence_id} has malformed or conflicting witness attribution")
+    return witness
 
 
 @dataclass(frozen=True)
@@ -182,7 +180,12 @@ class ResearchWorkbenchView:
         }
 
 
-def _claim_view(claim: Claim, records: dict[str, EvidenceRecord]) -> WorkbenchClaim:
+def _claim_view(
+    claim: Claim,
+    records: dict[str, EvidenceRecord],
+    runtime: EvidenceRuntime,
+    visible_evidence_ids: set[str],
+) -> WorkbenchClaim:
     _text(claim.claim_id, "claim_id", limit=256)
     _text(claim.proposition, "claim proposition")
     _text(claim.source_scope, "source_scope", allow_empty=True)
@@ -190,13 +193,17 @@ def _claim_view(claim: Claim, records: dict[str, EvidenceRecord]) -> WorkbenchCl
         _text(claim.uncertainty, "uncertainty")
     if claim.witness is not None:
         _text(claim.witness, "claim witness", limit=256)
+        if validated_claim_witness(
+            runtime,
+            claim,
+            visible_evidence_ids=visible_evidence_ids,
+        ) is None:
+            raise ValueError(f"claim {claim.claim_id} witness is not established by evidence support")
     required = tuple(sorted(claim.required_evidence_ids))
     if len(required) != len(set(required)):
         raise ValueError(f"claim {claim.claim_id} repeats required evidence")
     for evidence_id in required:
-        evidence_witness = _record_witness(records[evidence_id])
-        if claim.witness is not None and evidence_witness != claim.witness:
-            raise ValueError(f"claim {claim.claim_id} witness is not established by evidence support")
+        _record_witness(records[evidence_id])
     return WorkbenchClaim(
         claim_id=claim.claim_id,
         proposition=claim.proposition,
@@ -323,6 +330,6 @@ def build_research_workbench(
             raise ValueError(
                 f"claim {claim.claim_id} collides with non-visible evidence id"
             )
-        claims.append(_claim_view(claim, record_by_id))
+        claims.append(_claim_view(claim, record_by_id, runtime, visible_ids))
 
     return ResearchWorkbenchView(passages, tuple(evidence_views), tuple(claims))

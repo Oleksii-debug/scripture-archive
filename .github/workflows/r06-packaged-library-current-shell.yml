@@ -1,0 +1,42 @@
+name: R06 Packaged Library Current Shell Qualification
+
+on:
+  pull_request:
+    paths:
+      - 'lanes/dev1/repair_overlay/frontend/transport.js'
+      - 'lanes/dev1/repair_overlay/frontend/library-ui.js'
+      - 'lanes/dev1/repair_overlay/frontend/library-shell-compat.js'
+      - 'lanes/dev1/repair_overlay/tests/test_packaged_library_current_shell.py'
+      - '.github/workflows/r06-packaged-library-current-shell.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  packaged-library-current-shell:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Confirm exact source checkout
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - name: Run packaged Library current-shell regression
+        run: python lanes/dev1/repair_overlay/tests/test_packaged_library_current_shell.py
+      - name: Diff hygiene
+        shell: bash
+        run: git diff --check

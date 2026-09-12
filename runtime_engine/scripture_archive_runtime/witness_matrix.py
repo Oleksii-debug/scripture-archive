@@ -5,6 +5,7 @@ from typing import Any, Iterable, Mapping, Sequence
 
 from .evidence import EvidenceRecord, EvidenceRuntime, Relation
 from .evidence_provenance import (
+    resolve_evidence_witness,
     validated_claim_witness,
     validated_relation_witness,
     visible_relation_passage_ids,
@@ -189,12 +190,7 @@ def build_witness_matrix(
             if resolved_witness in assigned:
                 assigned[resolved_witness].append(payload)
             else:
-                unassigned.append(
-                    {
-                        **payload,
-                        "resolved_witness": resolved_witness,
-                    }
-                )
+                unassigned.append({**payload, "resolved_witness": resolved_witness})
 
         safe_claims = tuple(
             _claim_payload(
@@ -236,13 +232,23 @@ def build_witness_matrix(
     )
 
 
+def _is_canonical_witness_token(value: object) -> bool:
+    if not isinstance(value, str) or not value or value != value.strip():
+        return False
+    for char in value:
+        codepoint = ord(char)
+        if codepoint < 32 or 127 <= codepoint <= 159 or codepoint in (8232, 8233):
+            return False
+    return True
+
+
 def _validate_witnesses(witnesses: Sequence[str]) -> tuple[str, ...]:
     normalized: list[str] = []
     seen: set[str] = set()
     for raw in witnesses:
-        if not isinstance(raw, str) or not raw.strip():
-            raise ValueError("Witness names must be non-empty strings")
-        witness = raw.strip()
+        if not _is_canonical_witness_token(raw):
+            raise ValueError("Witness names must be exact non-empty canonical-safe strings")
+        witness = raw
         if witness in seen:
             raise ValueError(f"Duplicate witness: {witness}")
         seen.add(witness)
@@ -319,30 +325,16 @@ def _parallel_components(
 
 def _record_witness_signals(record: EvidenceRecord) -> set[str]:
     signals: set[str] = set()
-    if record.witness and record.witness.strip():
-        signals.add(record.witness.strip())
-    signals.update(
-        passage.witness.strip()
-        for passage in record.passage_refs
-        if passage.witness and passage.witness.strip()
-    )
+    if _is_canonical_witness_token(record.witness):
+        signals.add(record.witness)
+    for passage in record.passage_refs:
+        if _is_canonical_witness_token(passage.witness):
+            signals.add(passage.witness)
     return signals
 
 
 def _record_witness(record: EvidenceRecord) -> str | None:
-    record_witness = record.witness.strip() if record.witness and record.witness.strip() else None
-    passage_witnesses = {
-        passage.witness.strip()
-        for passage in record.passage_refs
-        if passage.witness and passage.witness.strip()
-    }
-    if record_witness is not None:
-        if passage_witnesses and passage_witnesses != {record_witness}:
-            return None
-        return record_witness
-    if len(passage_witnesses) == 1:
-        return next(iter(passage_witnesses))
-    return None
+    return resolve_evidence_witness(record)
 
 
 def _evidence_payload(

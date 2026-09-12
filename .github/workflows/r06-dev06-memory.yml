@@ -18,6 +18,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: r06-dev06-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   memory:
     runs-on: ubuntu-latest

@@ -10,7 +10,7 @@ from .content import ContentRepository
 from .evidence import EvidenceRuntime
 from .grading import GraderRegistry
 from .mastery import MasteryEngine
-from .models import Attempt, Correctness, HintUse, MasteryState, PlayerMemory, Session, TaskDefinition, TaskState
+from .models import Attempt, BranchResolution, Correctness, HintUse, MasteryState, PlayerMemory, Session, TaskDefinition, TaskState
 from .persistence import PersistenceStore
 from .provenance import PROVENANCE_CONTRACT_VERSION, ProvenanceDecision, classify_provenance
 from .security import CommandEnvelope, ValidationError
@@ -30,6 +30,13 @@ class RuntimeApplication:
         # per-visit counter prevents a hint used months ago from permanently downgrading
         # every future attempt or exhausting the H1..H7 ladder forever.
         self._active_hint_counts: dict[str, int] = {}
+        # Branch progression is valid only after grading the currently active visit.
+        # Historical TaskState.last_result must never authorize a fresh/revisited task.
+        self._current_visit_result: Correctness | None = None
+        # Freeze the exact branch decision produced by that successful submit. Branch
+        # inputs such as hint count may still change later for audit/UI purposes, but
+        # they must never rewrite the already-authorized progression decision.
+        self._current_visit_resolution: BranchResolution | None = None
 
     @staticmethod
     def _require_release_ground_truth(task: TaskDefinition) -> ProvenanceDecision:
@@ -64,6 +71,8 @@ class RuntimeApplication:
         provenance = self._require_release_ground_truth(task)
         self.current_node_id = node_id
         self._active_hint_counts[node_id] = 0
+        self._current_visit_result = None
+        self._current_visit_resolution = None
         if node_id not in self.session.shown_node_ids: self.session.shown_node_ids.append(node_id)
         self.session.recent_task_families.append(task.task_type); self._visit_counts[node_id] = self._visit_counts.get(node_id, 0) + 1
         return self._task_response(task, provenance)
@@ -85,6 +94,10 @@ class RuntimeApplication:
         for eid in resolution.evidence_unlocks:
             if eid in self.evidence.evidence:
                 self.evidence.unlock(eid); state.evidence_unlocked.add(eid); self.memory.evidence_exposure[eid] = self.memory.evidence_exposure.get(eid, 0) + 1
+        # Authorize progression only after the whole submission path has completed.
+        # A partial/failed submit must not leave player.next enabled by an intermediate grade.
+        self._current_visit_result = result.correctness
+        self._current_visit_resolution = resolution
         return {"api_version": self.API_VERSION, "grade": result.to_dict(), "mastery_consequence": [self._consequence(c) for c in consequences], "branch": resolution.to_dict(), "accessibility": [grade_event(result, consequences).to_dict(), branch_event(resolution).to_dict()]}
 
     @staticmethod
@@ -109,11 +122,15 @@ class RuntimeApplication:
         if explicit_node_id is not None:
             raise ValidationError("runtime.v1 player next forbids caller-selected node targets")
         if not self.current_node_id: raise ValidationError("No current task")
-        task = self.content.get(self.current_node_id); state = self.memory.node_history.get(self.current_node_id); correctness = state.last_result if state and state.last_result else Correctness.INCORRECT
-        hint_count = self._active_hint_counts.get(self.current_node_id, 0)
-        resolution = self.branches.resolve(task, correctness, hint_count=hint_count, hint_threshold=6)
+        if self._current_visit_result is None or self._current_visit_resolution is None:
+            raise ValidationError("Current task must be graded before player.next")
+        resolution = self._current_visit_resolution
         if resolution.next_node_id:
             self.branches.enforce_cycle_guard(resolution.next_node_id, self._visit_counts); return self.load_task(resolution.next_node_id)
+        # Terminal/queued progression is one-shot too. No task load follows to clear
+        # authorization, so consume it explicitly before returning the terminal branch.
+        self._current_visit_result = None
+        self._current_visit_resolution = None
         return {"api_version": self.API_VERSION, "branch": resolution.to_dict(), "accessibility": branch_event(resolution).to_dict()}
 
     def get_mastery(self) -> dict[str, Any]:
@@ -128,10 +145,17 @@ class RuntimeApplication:
 
     def restore(self) -> dict[str, Any]:
         if not self.persistence: raise ValidationError("Persistence is not configured")
-        state = self.persistence.load(); self.current_node_id = state.get("current_node_id"); restored_session = restore_memory(self.memory, state)
+        # A restore attempt invalidates any authorization from the pre-restore visit
+        # immediately. Decode semantic state before publishing the restored current node,
+        # so a failed restore cannot pair node B with a stale grade/branch from node A.
+        self._current_visit_result = None
+        self._current_visit_resolution = None
+        state = self.persistence.load()
+        restored_session = restore_memory(self.memory, state)
+        self.current_node_id = state.get("current_node_id")
         if restored_session: self.session = restored_session
         # A process/session restore begins a new active attempt scope; historical hint uses
-        # remain persisted in TaskState for analytics but do not consume today's ladder.
+        # and grading results remain persisted for analytics but cannot authorize a new visit.
         self._active_hint_counts = {}
         return {"api_version": self.API_VERSION, "restored": True, "current_node_id": self.current_node_id, "schema_version": state["schema_version"]}
 

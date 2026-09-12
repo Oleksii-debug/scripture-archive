@@ -1,0 +1,41 @@
+name: R06 Library/Search Qualification
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - r06-converge-library-search-current-coord-0912-sol
+    paths:
+      - 'lanes/dev1/**'
+      - 'tools/verify_library_search_overlay.py'
+      - '.github/workflows/r06-library-search-qualification.yml'
+  pull_request:
+    paths:
+      - 'lanes/dev1/**'
+      - 'tools/verify_library_search_overlay.py'
+      - '.github/workflows/r06-library-search-qualification.yml'
+
+env:
+  LIBRARY_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+concurrency:
+  group: r06-library-search-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-overlay-qualification:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.LIBRARY_SOURCE_SHA }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Execute Library/Search composed qualification
+        run: python tools/verify_library_search_overlay.py

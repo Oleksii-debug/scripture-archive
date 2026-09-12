@@ -7,17 +7,20 @@ from scripture_archive_platform.domain.registries import build_task_registries
 from scripture_archive_platform.transport.contracts import validate_request_shape,ok_response,error_response
 from scripture_archive_platform.transport.review_queue_contract import validate_review_queue_projection
 from scripture_archive_platform.content.loader import CanonicalContentLoader,TaskPresentationMapper,ContentLoadError
+from scripture_archive_platform.content.library import CanonicalLibraryIndex
 from scripture_archive_platform.grading.reference import ReferenceGrader
 from scripture_archive_platform.persistence.store import JsonFileStore
 from scripture_archive_platform.application.keymap import KeybindingService
+from scripture_archive_platform.application.content_pack_manager import ContentPackManagerService
+from scripture_archive_platform.application.research_workspace import ResearchWorkspaceService
 from scripture_archive_platform.authoring.service import AuthoringService
 
 class PlatformApplication:
     def __init__(self,repo_root:Path,store=None,loader=None,grader=None,player_gateway=None):
         self.repo_root=Path(repo_root).resolve(); self.store=store or JsonFileStore(JsonFileStore.default_root())
-        self.loader=loader or CanonicalContentLoader(self.repo_root); self.mapper=TaskPresentationMapper(); self.grader=grader or ReferenceGrader(); self.player_gateway=player_gateway
+        self.loader=loader or CanonicalContentLoader(self.repo_root); self.library=CanonicalLibraryIndex(self.loader); self.mapper=TaskPresentationMapper(); self.grader=grader or ReferenceGrader(); self.player_gateway=player_gateway
         self.task_types,self.renderers,self.graders,self.editors,self.templates=build_task_registries()
-        self.keymap=KeybindingService(self.store); self.authoring=AuthoringService(self.store,self.task_types,self.mapper)
+        self.keymap=KeybindingService(self.store); self.research=ResearchWorkspaceService(self.store,self.loader,self.mapper); self.authoring=AuthoringService(self.store,self.task_types,self.mapper); self.content_packs=ContentPackManagerService(self.store.root)
         self._hint_level:dict[str,int]={}; self._last_node:dict[str,dict[str,Any]]={}
     def handle(self,request:dict[str,Any])->dict[str,Any]:
         rid=str(request.get('request_id','invalid')) if isinstance(request,dict) else 'invalid'
@@ -27,8 +30,17 @@ class PlatformApplication:
         except Exception as exc:return error_response(rid,'APPLICATION_ERROR','Операцію не виконано. Деталі записано в локальний журнал.')
     def _dispatch(self,cmd,p):
         if cmd=='system.bootstrap':return self._bootstrap()
+        if cmd.startswith('content_packs.'):return self.content_packs.handle(cmd,p)
         if cmd=='content.list_campaigns':return {'campaigns':self.loader.list_campaigns()}
         if cmd=='content.list_missions':return {'missions':self.loader.list_missions(self._id(p,'campaign_id'))}
+        if cmd=='library.catalog':return self.library.catalog()
+        if cmd=='library.search':return self.library.search(p.get('query'),campaign_id=p.get('campaign_id'),mission_id=p.get('mission_id'),limit=p.get('limit',25))
+        if cmd=='research.list_bookmarks':return {'bookmarks':self.research.list_bookmarks(p.get('query'))}
+        if cmd=='research.upsert_bookmark':return {'bookmark':self.research.upsert_bookmark(p.get('bookmark'))}
+        if cmd=='research.delete_bookmark':return {'deleted':self.research.delete_bookmark(p.get('bookmark_id'))}
+        if cmd=='research.list_notes':return {'notes':self.research.list_notes(p.get('query'))}
+        if cmd=='research.upsert_note':return {'note':self.research.upsert_note(p.get('note'))}
+        if cmd=='research.delete_note':return {'deleted':self.research.delete_note(p.get('note_id'))}
         if cmd=='player.load_node':return self._load_node(self._id(p,'node_id'))
         if cmd=='player.submit_answer':return self._submit(p)
         if cmd=='player.request_hint':return self._hint(self._id(p,'node_id'))
@@ -37,12 +49,22 @@ class PlatformApplication:
         if cmd=='player.get_progress':return {'progress':self._progress(self._id(p,'node_id'))}
         if cmd=='player.get_mastery':return self._mastery()
         if cmd=='player.get_review_queue':return self._review_queue()
+        if cmd=='player.get_daily_case':
+            if p:raise ValueError('player.get_daily_case accepts an empty payload')
+            return self._daily_case()
         if cmd=='player.save_checkpoint':return self._save_checkpoint(p)
         if cmd=='player.restore_checkpoint':return self._restore_checkpoint()
         if cmd=='authoring.list_drafts':return {'drafts':self.authoring.list_drafts()}
         if cmd=='authoring.new_draft':return {'draft':self.authoring.new_draft(str(p.get('title') or 'Нова чернетка'),str(p.get('kind') or 'node'))}
+        if cmd=='authoring.new_node_from_task_type':return {'draft':self.authoring.new_node_from_task_type(str(p.get('title') or 'Нова чернетка'),self._id(p,'task_type'))}
         if cmd=='authoring.load_draft':return {'draft':self.authoring.load_draft(self._id(p,'draft_id'))}
         if cmd=='authoring.save_draft':return {'draft':self.authoring.save_draft(p.get('draft'))}
+        if cmd=='authoring.delete_draft':return self.authoring.delete_draft(self._id(p,'draft_id'))
+        if cmd=='authoring.fork_record':return {'draft':self.authoring.fork_record(self._id(p,'kind'),p.get('record'),str(p.get('title') or '') or None)}
+        if cmd=='authoring.fork_canonical_node':
+            nid=self._id(p,'node_id'); node=self.loader.load_node(nid); return {'draft':self.authoring.fork_record('node',node,str(p.get('title') or f'Edit {nid}'))}
+        if cmd=='authoring.move_collection_item':
+            return {'draft':self.authoring.move_collection_item(p.get('draft'),self._id(p,'path'),p.get('index'),self._id(p,'direction'))}
         if cmd=='authoring.validate_draft':return self.authoring.validate_draft(p.get('draft'))
         if cmd=='authoring.preview_draft':return self.authoring.preview(p.get('draft'))
         if cmd=='authoring.prepare_publish_candidate':return {'candidate':self.authoring.prepare_publish_candidate(p.get('draft'))}
@@ -63,7 +85,7 @@ class PlatformApplication:
         raise ValueError('command not implemented')
     def _bootstrap(self):
         campaigns=self.loader.list_campaigns()
-        return {'app':{'name':'Архів Писання','version':'R06-3DEV-A','runtime':'Windows 11 x64 / WebView2 semantic UI','transport_api_version':TRANSPORT_API_VERSION},'registries':{'task_types':self.task_types.list(),'renderers':self.renderers.list(),'graders':self.graders.list(),'editors':self.editors.list(),'templates':self.templates.list()},'campaigns':campaigns,'keymap':self.keymap.list(),'capabilities':{'constructor':True,'draft_vs_canonical':True,'web_portable_transport':True,'allowlisted_bridge':True,'arbitrary_filesystem':False,'shell':False,'python_eval':False,'runtime_truth':bool(self.player_gateway),'review_queue':bool(self.player_gateway),'grading_truth':'D5/runtime' if self.player_gateway else 'REFERENCE_TEST_ONLY'}}
+        return {'app':{'name':'Архів Писання','version':'R06-3DEV-A','runtime':'Windows 11 x64 / WebView2 semantic UI','transport_api_version':TRANSPORT_API_VERSION},'registries':{'task_types':self.task_types.list(),'renderers':self.renderers.list(),'graders':self.graders.list(),'editors':self.editors.list(),'templates':self.templates.list()},'campaigns':campaigns,'keymap':self.keymap.list(),'capabilities':{'constructor':True,'draft_vs_canonical':True,'web_portable_transport':True,'allowlisted_bridge':True,'library_catalog_search':True,'bundled_full_bible_text':False,'research_bookmarks_notes':True,'research_workspace_persistence':True,'arbitrary_filesystem':False,'content_pack_manager':True,'content_pack_inbox_only':True,'shell':False,'python_eval':False,'runtime_truth':bool(self.player_gateway),'review_queue':bool(self.player_gateway),'grading_truth':'D5/runtime' if self.player_gateway else 'REFERENCE_TEST_ONLY'}}
     def _load_node(self,nid):
         if self.player_gateway:self.player_gateway.invoke('player.load_node',{'node_id':nid},request_id='load-'+nid)
         node=self.loader.load_node(nid); mission=self.loader.mission_for_node(nid); renderable=self.mapper.to_renderable(node,mission); self._last_node[nid]=node
@@ -98,6 +120,9 @@ class PlatformApplication:
     def _review_queue(self):
         if not self.player_gateway:return {'review_queue':[],'truth_owner':'REFERENCE_TEST_ONLY'}
         rr=self.player_gateway.invoke('player.get_review_queue',{},request_id='review-queue-player'); return {'review_queue':validate_review_queue_projection(rr.get('review_queue')),'truth_owner':'D5/runtime'}
+    def _daily_case(self):
+        if not self.player_gateway:raise ValueError('Daily Case requires canonical runtime')
+        return self.player_gateway.get_daily_case()
     def _save_checkpoint(self,p):
         checkpoint={'campaign_id':p.get('campaign_id'),'mission_id':p.get('mission_id'),'node_id':p.get('node_id'),'saved_at':int(time.time()),'checkpoint_schema':'scripture.player.checkpoint.v1'}
         if self.player_gateway:self.player_gateway.invoke('player.save_checkpoint',{},request_id='save-'+str(p.get('node_id') or 'current'))

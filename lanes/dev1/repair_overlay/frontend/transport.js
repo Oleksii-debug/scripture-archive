@@ -31,3 +31,7 @@ void import('./review-queue-ui.js');
 void import('./library-ui.js');
 // Current-shell compatibility: keep Library mutually exclusive with every direct packaged view.
 void import('./library-shell-compat.js');
+// Canonical read-only Daily Case surface from the current coordinator.
+void import('./daily-case-ui.js');
+// Canonical Content Pack Manager is capability-gated by system.bootstrap and keeps mutations in the backend allowlist.
+void import('./content-pack-manager.js').then(({installContentPackManagerSurface})=>installContentPackManagerSurface());

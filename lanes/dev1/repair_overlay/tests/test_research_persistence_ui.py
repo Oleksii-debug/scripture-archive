@@ -33,7 +33,10 @@ class ResearchPersistenceUiTests(unittest.TestCase):
         self.assertIn("kind:'canonical_node'",self.ui)
         self.assertIn('source_references:[...task.source_references]',self.ui)
         self.assertNotIn('truth_owner:OWNER',self.ui)
-        self.assertIn("target=buildResearchTarget(this.task,this.mission)",self.ui)
+        self.assertIn("const task=this.task,mission=this.mission,target=buildResearchTarget(task,mission)",self.ui)
+        self.assertIn("if(g!==this.generation||this.task!==task||this.mission!==mission)throw new Error('research context changed')",self.ui)
+        self.assertIn("if(g!==this.generation||this.task!==task||this.mission!==mission)return",self.ui)
+        self.assertIn("catch(e){if(g===this.generation)this.status.textContent=",self.ui)
         self.assertIn('this._setEditorsEnabled(false)',self.ui)
         self.assertIn('this._clearForms()',self.ui)
 

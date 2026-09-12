@@ -9,6 +9,7 @@ from scripture_archive_runtime.models import (
     SchedulerCandidate,
     Session,
 )
+from scripture_archive_runtime.scheduler import Scheduler
 
 
 NOW = datetime(2026, 9, 12, 0, 0, tzinfo=timezone.utc)
@@ -47,6 +48,26 @@ class DailyCaseQaBlockerRegressionTests(unittest.TestCase):
 
         with self.assertRaises(TypeError):
             DailyCaseComposer(scheduler=UnsafeScheduler())
+
+    def test_exact_scheduler_instance_shadow_cannot_bypass_canonical_policy(self):
+        injected = Scheduler()
+        injected.compose = lambda candidates, memory, session, **kwargs: [
+            candidate("UNAUDITED", source_audited=False)
+        ]
+
+        composer = DailyCaseComposer(scheduler=injected)
+        plan = composer.compose(
+            [candidate("ELIGIBLE")],
+            self.memory,
+            self.session,
+            case_id="case-scheduler-shadow",
+            title="Daily Case",
+            now=NOW,
+        )
+
+        self.assertIsNot(composer.scheduler, injected)
+        self.assertEqual([item.node_id for item in plan.items], ["ELIGIBLE"])
+        self.assertNotIn("UNAUDITED", "\n".join(plan.linearize()))
 
     def test_c0_c1_and_del_controls_fail_closed_before_linear_output(self):
         for control in ("\x01", "\x1b", "\x7f", "\x85"):

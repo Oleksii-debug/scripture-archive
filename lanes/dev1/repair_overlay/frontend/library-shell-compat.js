@@ -1,4 +1,5 @@
 import './chronology-lab-ui.js';
+import './library-research-persistence.js';
 
 const LIBRARY_VIEW_ID = 'library-view';
 

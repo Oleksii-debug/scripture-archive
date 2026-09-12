@@ -262,28 +262,75 @@ def build_research_export(
             )
         if required.issubset(visible_evidence_ids):
             visible_claims.append(claim)
-    visible_claim_ids = {claim.claim_id for claim in visible_claims}
 
     for note in notes:
         _validate_workspace_evidence_refs(note.evidence_ids, runtime, visible_evidence_ids)
     for row in chronology:
         _validate_workspace_evidence_refs(row.evidence_ids, runtime, visible_evidence_ids)
 
+    visible_claim_ids = {claim.claim_id for claim in visible_claims}
+    hidden_evidence_ids = set(runtime.evidence) - visible_evidence_ids
+    hidden_claim_ids = set(runtime.claims) - visible_claim_ids
+
+    visible_passage_ids = {
+        passage.passage_id
+        for evidence_id in visible_evidence_ids
+        for passage in runtime.evidence[evidence_id].passage_refs
+    }
+    hidden_passage_ids = {
+        passage.passage_id
+        for evidence_id in hidden_evidence_ids
+        for passage in runtime.evidence[evidence_id].passage_refs
+    }
+    gated_passage_ids = hidden_passage_ids - visible_passage_ids
+
+    visible_entity_ids = {
+        entity_id
+        for evidence_id in visible_evidence_ids
+        for entity_id in runtime.evidence[evidence_id].entity_ids
+    }
+    hidden_entity_ids = {
+        entity_id
+        for evidence_id in hidden_evidence_ids
+        for entity_id in runtime.evidence[evidence_id].entity_ids
+    }
+    gated_entity_ids = hidden_entity_ids - visible_entity_ids
+
+    visible_record_relation_ids = {
+        relation_id
+        for evidence_id in visible_evidence_ids
+        for relation_id in runtime.evidence[evidence_id].relation_ids
+    }
+    hidden_record_relation_ids = {
+        relation_id
+        for evidence_id in hidden_evidence_ids
+        for relation_id in runtime.evidence[evidence_id].relation_ids
+    }
+    gated_relation_ids = hidden_record_relation_ids - visible_record_relation_ids
+
+    gated_identity_ids = (
+        hidden_evidence_ids
+        | hidden_claim_ids
+        | gated_passage_ids
+        | gated_entity_ids
+        | gated_relation_ids
+    )
     visible_relations = [
         relation for relation in runtime.relations.values()
-        if _relation_is_visible(relation, runtime, visible_evidence_ids, visible_claim_ids)
+        if _relation_is_visible(
+            relation,
+            gated_identity_ids=gated_identity_ids,
+            gated_passage_ids=gated_passage_ids,
+            gated_relation_ids=gated_relation_ids,
+        )
     ]
-    visible_relation_ids = {relation.relation_id for relation in visible_relations}
     payload: dict[str, object] = {
         "schema": EXPORT_SCHEMA,
         "workspace_id": workspace_id,
         "title": title,
         "evidence_scope": "all_runtime_evidence" if include_locked_evidence else "unlocked_only",
         "claims": [_claim_payload(claim) for claim in sorted(visible_claims, key=lambda item: item.claim_id)],
-        "evidence": [
-            _evidence_payload(runtime.evidence[key], visible_relation_ids)
-            for key in sorted(visible_evidence_ids)
-        ],
+        "evidence": [_evidence_payload(runtime.evidence[key]) for key in sorted(visible_evidence_ids)],
         "relations": [_relation_payload(row) for row in sorted(visible_relations, key=lambda item: item.relation_id)],
         "workspace_notes": [
             {
@@ -327,18 +374,16 @@ def _validate_workspace_evidence_refs(
 
 def _relation_is_visible(
     relation: Any,
-    runtime: EvidenceRuntime,
-    visible_evidence_ids: set[str],
-    visible_claim_ids: set[str],
+    *,
+    gated_identity_ids: set[str],
+    gated_passage_ids: set[str],
+    gated_relation_ids: set[str],
 ) -> bool:
-    def endpoint_is_visible(endpoint: str) -> bool:
-        if endpoint in runtime.evidence:
-            return endpoint in visible_evidence_ids
-        if endpoint in runtime.claims:
-            return endpoint in visible_claim_ids
-        return True
-
-    return all(endpoint_is_visible(endpoint) for endpoint in (relation.source_id, relation.target_id))
+    if relation.relation_id in gated_relation_ids:
+        return False
+    if relation.source_id in gated_identity_ids or relation.target_id in gated_identity_ids:
+        return False
+    return not (set(relation.passage_ids) & gated_passage_ids)
 
 
 def _claim_payload(claim: Any) -> dict[str, object]:
@@ -355,7 +400,7 @@ def _claim_payload(claim: Any) -> dict[str, object]:
     }
 
 
-def _evidence_payload(record: Any, visible_relation_ids: set[str]) -> dict[str, object]:
+def _evidence_payload(record: Any) -> dict[str, object]:
     passages = sorted(
         record.passage_refs,
         key=lambda p: (p.book, p.chapter, p.verse_start, p.verse_end or p.verse_start, p.passage_id),
@@ -379,10 +424,7 @@ def _evidence_payload(record: Any, visible_relation_ids: set[str]) -> dict[str, 
             for p in passages
         ],
         "entity_ids": sorted(record.entity_ids),
-        "relation_ids": sorted(
-            relation_id for relation_id in record.relation_ids
-            if relation_id in visible_relation_ids
-        ),
+        "relation_ids": sorted(record.relation_ids),
     }
 
 

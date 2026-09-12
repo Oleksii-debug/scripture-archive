@@ -129,6 +129,39 @@ class ResearchExportCompositionTests(unittest.TestCase):
         parsed = json.loads(export["json"])
         self.assertEqual([row["evidence_id"] for row in parsed["evidence"]], ["EV-A"])
 
+    def test_packaged_helper_gates_locked_only_relation_id_used_as_endpoint(self):
+        runtime = EvidenceRuntime()
+        runtime.add_evidence(EvidenceRecord(
+            "EV-A",
+            (PassageRef("MK14:13", "Mark", 14, 13, witness="Mark"),),
+            "Visible evidence",
+            Confidence.T1,
+            witness="Mark",
+            entity_ids=("VISIBLE-ENTITY",),
+        ))
+        runtime.add_evidence(EvidenceRecord(
+            "EV-B",
+            (PassageRef("LK22:8", "Luke", 22, 8, witness="Luke"),),
+            "Locked evidence",
+            Confidence.T1,
+            witness="Luke",
+            relation_ids=("REL-LOCKED-META",),
+        ))
+        runtime.add_relation(
+            Relation("REL-PROBE", "VISIBLE-ENTITY", "references", "REL-LOCKED-META")
+        )
+        runtime.unlock("EV-A")
+
+        packaged = build_unlocked_research_export(type("Runtime", (), {"evidence": runtime})())
+        export = packaged["export"]
+        self.assertEqual(export["evidence_scope"], "unlocked_only")
+        self.assertEqual(export["counts"], {"claims": 0, "evidence": 1, "relations": 0})
+        parsed = json.loads(export["json"])
+        self.assertEqual(parsed["relations"], [])
+        for rendered in (export["json"], export["markdown"], export["html"]):
+            self.assertNotIn("REL-PROBE", rendered)
+            self.assertNotIn("REL-LOCKED-META", rendered)
+
 
 if __name__ == "__main__":
     unittest.main()

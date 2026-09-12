@@ -10,7 +10,7 @@ ALLOWLISTED_COMMANDS = frozenset({
   "system.bootstrap",
   "content.list_campaigns","content.list_missions","library.catalog","library.search","player.load_node",
   "player.submit_answer","player.request_hint","player.reveal_evidence","player.next",
-  "player.get_progress","player.get_mastery","player.get_review_queue","player.get_daily_case","player.save_checkpoint","player.restore_checkpoint",
+  "player.get_progress","player.get_mastery","player.get_review_queue","player.start_review","player.finish_review","player.get_daily_case","player.save_checkpoint","player.restore_checkpoint",
   "research.list_bookmarks","research.upsert_bookmark","research.delete_bookmark",
   "research.list_notes","research.upsert_note","research.delete_note","research.get_chronology_lab","research.get_evidence_graph","research.get_witness_matrix",
   "authoring.list_drafts","authoring.new_draft","authoring.new_node_from_task_type","authoring.load_draft","authoring.save_draft",
@@ -63,8 +63,8 @@ def validate_request_shape(request:Any)->tuple[str,str,dict[str,Any]]:
         unknown=set(payload)-{'node_id'}
         if unknown: raise ValueError('player.next accepts only current node_id context; target selection is forbidden')
         if 'node_id' in payload and (not isinstance(payload['node_id'],str) or not payload['node_id'] or len(payload['node_id'])>100): raise ValueError('invalid node_id')
-    if cmd=='player.get_review_queue' and payload:
-        raise ValueError('player.get_review_queue accepts an empty payload')
+    if cmd in {'player.get_review_queue','player.start_review','player.finish_review'} and payload:
+        raise ValueError(f'{cmd} accepts an empty payload')
     if cmd=='player.get_daily_case' and payload:
         raise ValueError('player.get_daily_case accepts an empty payload')
     if cmd=='research.get_chronology_lab' and payload:

@@ -296,6 +296,105 @@ class CrossTestamentProjectionTests(unittest.TestCase):
         self.assertEqual(projection.links, ())
         self.assertEqual(projection.linearize(), [NOT_STATED])
 
+    def test_player_visible_text_rejects_unicode_controls_and_separators(self):
+        def assert_rejected(runtime: EvidenceRuntime, book_testaments=BOOK_TESTAMENTS):
+            with self.assertRaisesRegex(ValueError, "must not contain"):
+                project_cross_testament(runtime, book_testaments=book_testaments)
+
+        relation_runtime = self.runtime(relation=False)
+        relation_runtime.add_relation(
+            Relation(
+                "REL-BAD",
+                "EV-OT",
+                "explicit\ncross_reference",
+                "EV-NT",
+                passage_ids=("ISA7:14", "MT1:23"),
+            )
+        )
+        assert_rejected(relation_runtime)
+
+        book_runtime = EvidenceRuntime()
+        book_runtime.add_evidence(
+            EvidenceRecord(
+                "EV-BAD-BOOK",
+                (PassageRef("BAD1:1", "Isaiah\u2028Injected", 1, 1),),
+                "proposition",
+                Confidence.T1,
+            )
+        )
+        book_runtime.unlock("EV-BAD-BOOK")
+        assert_rejected(book_runtime, {"Isaiah\u2028Injected": "OT"})
+
+        witness_runtime = EvidenceRuntime()
+        witness_runtime.add_evidence(
+            EvidenceRecord(
+                "EV-BAD-WITNESS",
+                (PassageRef("ISA1:1", "Isaiah", 1, 1),),
+                "proposition",
+                Confidence.T1,
+                witness="Isaiah\u200bhidden",
+            )
+        )
+        witness_runtime.unlock("EV-BAD-WITNESS")
+        assert_rejected(witness_runtime)
+
+        private_runtime = self.runtime(relation=False)
+        private_relation_id = "REL\ue000PRIVATE"
+        private_runtime.add_relation(
+            Relation(
+                private_relation_id,
+                "EV-OT",
+                "explicit_cross_reference",
+                "EV-NT",
+                passage_ids=("ISA7:14", "MT1:23"),
+            )
+        )
+        assert_rejected(private_runtime)
+
+    def test_international_unicode_remains_visible_and_deterministic(self):
+        witness = "Корпус-А"
+        runtime = EvidenceRuntime()
+        runtime.add_evidence(
+            EvidenceRecord(
+                "ДОК-СТ",
+                (PassageRef("ІС7:14", "Ісая", 7, 14, witness=witness),),
+                "старозавітне твердження",
+                Confidence.T1,
+                witness=witness,
+            )
+        )
+        runtime.add_evidence(
+            EvidenceRecord(
+                "ДОК-НТ",
+                (PassageRef("МТ1:23", "Матвій", 1, 23, witness=witness),),
+                "новозавітне твердження",
+                Confidence.T1,
+                witness=witness,
+            )
+        )
+        runtime.add_relation(
+            Relation(
+                "ЗВ-1",
+                "ДОК-СТ",
+                "явне_посилання",
+                "ДОК-НТ",
+                witness=witness,
+                passage_ids=("ІС7:14", "МТ1:23"),
+            )
+        )
+        runtime.unlock("ДОК-СТ")
+        runtime.unlock("ДОК-НТ")
+        projection = project_cross_testament(
+            runtime,
+            book_testaments={"Ісая": "OT", "Матвій": "NT"},
+        )
+        linear = "\n".join(projection.linearize())
+        stable = projection.stable_json()
+        for expected in ("ЗВ-1", "Ісая", "Матвій", witness, "явне_посилання"):
+            self.assertIn(expected, linear)
+            self.assertIn(expected, stable)
+        self.assertEqual(stable, projection.stable_json())
+
     def test_malformed_passage_ordinals_fail_closed(self):
         runtime = EvidenceRuntime()
         runtime.add_evidence(

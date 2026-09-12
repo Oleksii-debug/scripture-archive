@@ -268,9 +268,60 @@ def build_research_export(
     for row in chronology:
         _validate_workspace_evidence_refs(row.evidence_ids, runtime, visible_evidence_ids)
 
+    visible_claim_ids = {claim.claim_id for claim in visible_claims}
+    hidden_evidence_ids = set(runtime.evidence) - visible_evidence_ids
+    hidden_claim_ids = set(runtime.claims) - visible_claim_ids
+
+    visible_passage_ids = {
+        passage.passage_id
+        for evidence_id in visible_evidence_ids
+        for passage in runtime.evidence[evidence_id].passage_refs
+    }
+    hidden_passage_ids = {
+        passage.passage_id
+        for evidence_id in hidden_evidence_ids
+        for passage in runtime.evidence[evidence_id].passage_refs
+    }
+    gated_passage_ids = hidden_passage_ids - visible_passage_ids
+
+    visible_entity_ids = {
+        entity_id
+        for evidence_id in visible_evidence_ids
+        for entity_id in runtime.evidence[evidence_id].entity_ids
+    }
+    hidden_entity_ids = {
+        entity_id
+        for evidence_id in hidden_evidence_ids
+        for entity_id in runtime.evidence[evidence_id].entity_ids
+    }
+    gated_entity_ids = hidden_entity_ids - visible_entity_ids
+
+    visible_record_relation_ids = {
+        relation_id
+        for evidence_id in visible_evidence_ids
+        for relation_id in runtime.evidence[evidence_id].relation_ids
+    }
+    hidden_record_relation_ids = {
+        relation_id
+        for evidence_id in hidden_evidence_ids
+        for relation_id in runtime.evidence[evidence_id].relation_ids
+    }
+    gated_relation_ids = hidden_record_relation_ids - visible_record_relation_ids
+
+    gated_identity_ids = (
+        hidden_evidence_ids
+        | hidden_claim_ids
+        | gated_passage_ids
+        | gated_entity_ids
+    )
     visible_relations = [
         relation for relation in runtime.relations.values()
-        if _relation_is_visible(relation, runtime, visible_evidence_ids)
+        if _relation_is_visible(
+            relation,
+            gated_identity_ids=gated_identity_ids,
+            gated_passage_ids=gated_passage_ids,
+            gated_relation_ids=gated_relation_ids,
+        )
     ]
     payload: dict[str, object] = {
         "schema": EXPORT_SCHEMA,
@@ -320,11 +371,18 @@ def _validate_workspace_evidence_refs(
             raise PermissionError(f"Evidence not unlocked for export: {evidence_id}")
 
 
-def _relation_is_visible(relation: Any, runtime: EvidenceRuntime, visible_evidence_ids: set[str]) -> bool:
-    return all(
-        endpoint not in runtime.evidence or endpoint in visible_evidence_ids
-        for endpoint in (relation.source_id, relation.target_id)
-    )
+def _relation_is_visible(
+    relation: Any,
+    *,
+    gated_identity_ids: set[str],
+    gated_passage_ids: set[str],
+    gated_relation_ids: set[str],
+) -> bool:
+    if relation.relation_id in gated_relation_ids:
+        return False
+    if relation.source_id in gated_identity_ids or relation.target_id in gated_identity_ids:
+        return False
+    return not (set(relation.passage_ids) & gated_passage_ids)
 
 
 def _claim_payload(claim: Any) -> dict[str, object]:

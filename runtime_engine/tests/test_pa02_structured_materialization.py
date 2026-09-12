@@ -51,12 +51,26 @@ class PA02StructuredMaterializationTests(unittest.TestCase):
             source_dir = REPO_ROOT / "docs" / "evidence"
             shutil.copy2(source_dir / PA02_STRUCTURED_INDEX, evidence_dir / PA02_STRUCTURED_INDEX)
             shutil.copy2(source_dir / SOURCE_PACK, evidence_dir / SOURCE_PACK)
-            (evidence_dir / SOURCE_PACK).write_text(
-                (evidence_dir / SOURCE_PACK).read_text(encoding="utf-8") + "\n",
-                encoding="utf-8",
-            )
+            with (evidence_dir / SOURCE_PACK).open("ab") as handle:
+                handle.write(b"\n")
             with self.assertRaisesRegex(ValueError, "Source evidence pack drifted"):
                 load_pa02_structured_evidence(root)
+
+    def test_crlf_checkout_representation_matches_pinned_git_blob(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            evidence_dir = root / "docs" / "evidence"
+            evidence_dir.mkdir(parents=True)
+            source_dir = REPO_ROOT / "docs" / "evidence"
+            shutil.copy2(source_dir / PA02_STRUCTURED_INDEX, evidence_dir / PA02_STRUCTURED_INDEX)
+            canonical = (source_dir / SOURCE_PACK).read_bytes().replace(b"\r\n", b"\n")
+            self.assertIn(b"\n", canonical)
+            (evidence_dir / SOURCE_PACK).write_bytes(canonical.replace(b"\n", b"\r\n"))
+
+            records, node_links = load_pa02_structured_evidence(root)
+
+            self.assertEqual(set(SOURCE_IDS), set(records))
+            self.assertEqual(("EV-PA-0015",), node_links["PA02-N09"])
 
     def test_unknown_retrieval_subject_fails_closed(self):
         with tempfile.TemporaryDirectory() as temp_dir:

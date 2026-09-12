@@ -3,6 +3,8 @@ import {validateSearchResponse} from './library-ui.js';
 import {
   buildResearchTarget,
   findCurrentRecord,
+  hasTargetCollision,
+  targetMatchesContext,
   validateResearchList,
   workspaceEnabled,
 } from './research-persistence.js';
@@ -124,15 +126,16 @@ function loadEditors(bookmarks, notes, task, mission) {
 
 async function refreshCurrent(expectedGeneration = generation) {
   if (!current || expectedGeneration !== generation) return;
+  const context = current;
   const [bookmarkData, noteData] = await Promise.all([
-    invoke('research.list_bookmarks', {query: current.target.node_id}),
-    invoke('research.list_notes', {query: current.target.node_id}),
+    invoke('research.list_bookmarks', {query: context.target.node_id}),
+    invoke('research.list_notes', {query: context.target.node_id}),
   ]);
-  if (!current || expectedGeneration !== generation) return;
+  if (current !== context || expectedGeneration !== generation) return;
   const bookmarks = validateResearchList('bookmark', bookmarkData);
   const notes = validateResearchList('note', noteData);
-  loadEditors(bookmarks, notes, current.task, current.mission);
-  status(`Особисті записи для ${current.target.node_id} готові.`);
+  loadEditors(bookmarks, notes, context.task, context.mission);
+  status(`Особисті записи для ${context.target.node_id} готові.`);
 }
 
 async function activate(identity, button) {
@@ -170,41 +173,62 @@ async function activate(identity, button) {
 async function save(kind) {
   if (!current) return;
   const mine = generation;
+  const context = current;
   try {
     const isBookmark = kind === 'bookmark';
+    const listCommand = isBookmark ? 'research.list_bookmarks' : 'research.list_notes';
+    const existing = validateResearchList(kind, await invoke(listCommand, {}));
+    if (mine !== generation || current !== context) throw new Error('Research context changed; повторіть дію.');
+    if (hasTargetCollision(kind, existing, context.task, context.mission)) {
+      throw new Error('ID запису вже належить іншому canonical target; збереження заблоковано.');
+    }
     const title = byId(isBookmark ? 'library-bookmark-title' : 'library-note-title').value.trim();
     if (!title) throw new Error('Назва обов’язкова.');
     const record = {
       title,
-      target: current.target,
+      target: context.target,
       tags: tags(byId(isBookmark ? 'library-bookmark-tags' : 'library-note-tags').value),
     };
-    record[isBookmark ? 'bookmark_id' : 'note_id'] = current.target.node_id;
+    record[isBookmark ? 'bookmark_id' : 'note_id'] = context.target.node_id;
     if (!isBookmark) {
       record.body = byId('library-note-body').value.trim();
       if (!record.body) throw new Error('Текст нотатки обов’язковий.');
     }
     const command = isBookmark ? 'research.upsert_bookmark' : 'research.upsert_note';
     const response = await invoke(command, {[kind]: record});
-    validateResearchList(kind, {[isBookmark ? 'bookmarks' : 'notes']: [response[kind]]});
-    if (mine === generation) await refreshCurrent(mine);
+    const returned = response[kind];
+    validateResearchList(kind, {[isBookmark ? 'bookmarks' : 'notes']: [returned]});
+    if (!targetMatchesContext(returned?.target, context.task, context.mission)) {
+      throw new Error('Backend повернув запис для іншого canonical target.');
+    }
+    if (mine === generation && current === context) await refreshCurrent(mine);
   } catch (error) {
-    if (mine === generation) status(`Не вдалося зберегти: ${error.message}`);
+    if (mine === generation && current === context) status(`Не вдалося зберегти: ${error.message}`);
   }
 }
 
 async function remove(kind) {
   if (!current) return;
   const mine = generation;
+  const context = current;
   try {
     const isBookmark = kind === 'bookmark';
+    const listCommand = isBookmark ? 'research.list_bookmarks' : 'research.list_notes';
+    const existing = validateResearchList(kind, await invoke(listCommand, {}));
+    if (mine !== generation || current !== context) throw new Error('Research context changed; повторіть дію.');
+    if (hasTargetCollision(kind, existing, context.task, context.mission)) {
+      throw new Error('ID запису належить іншому canonical target; видалення заблоковано.');
+    }
+    if (!findCurrentRecord(kind, existing, context.task, context.mission)) {
+      throw new Error('Запис для поточного canonical target уже відсутній.');
+    }
     const idKey = isBookmark ? 'bookmark_id' : 'note_id';
     const command = isBookmark ? 'research.delete_bookmark' : 'research.delete_note';
-    const response = await invoke(command, {[idKey]: current.target.node_id});
+    const response = await invoke(command, {[idKey]: context.target.node_id});
     if (!response || typeof response.deleted !== 'boolean') throw new Error('Некоректна delete-відповідь');
-    if (mine === generation) await refreshCurrent(mine);
+    if (mine === generation && current === context) await refreshCurrent(mine);
   } catch (error) {
-    if (mine === generation) status(`Не вдалося видалити: ${error.message}`);
+    if (mine === generation && current === context) status(`Не вдалося видалити: ${error.message}`);
   }
 }
 

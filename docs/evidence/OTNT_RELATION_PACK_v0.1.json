@@ -2,7 +2,7 @@
   "schema_version": "scripture.evidence.otnt-relation-pack.v1",
   "pack_id": "OTNT_WEBU_PRIMARY_v0.1",
   "version": "0.1.0",
-  "status": "AUTHOR_COMPLETE_PENDING_INDEPENDENT_SOURCE_AUDIT",
+  "status": "SOURCE_AUDITED",
   "runtime_visibility": "GLOBAL_RESEARCH_UNLOCKED_AFTER_SOURCE_AUDIT",
   "source_edition": {
     "edition_id": "engwebu",
@@ -12,10 +12,10 @@
     "retrieved_date": "2026-09-12"
   },
   "audit": {
-    "state": "PENDING_INDEPENDENT_SOURCE_AUDIT",
-    "auditor": null,
-    "accepted_at": null,
-    "evidence_ref": null
+    "state": "SOURCE_AUDITED",
+    "auditor": "DIFFERENT_WORKER_SOURCE_AUDIT",
+    "accepted_at": "2026-09-12T17:58:18Z",
+    "evidence_ref": "github:#78/issuecomment-5647672951"
   },
   "passages": [
     {

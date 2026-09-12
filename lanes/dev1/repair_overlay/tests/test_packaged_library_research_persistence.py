@@ -203,6 +203,8 @@ class PackagedLibraryResearchPersistenceTests(unittest.TestCase):
         self.assertIn("row.kind === 'task'", module)
         self.assertIn("validateSearchResponse", module)
         self.assertIn("buildResearchTarget", module)
+        self.assertIn("hasTargetCollision", module)
+        self.assertIn("targetMatchesContext", module)
         self.assertNotIn("innerHTML", module)
         self.assertNotIn("eval(", module)
         self.assertNotIn("localStorage", module)

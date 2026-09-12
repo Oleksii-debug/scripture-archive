@@ -109,13 +109,21 @@ class ReviewTrainingSessionTests(unittest.TestCase):
         self.assertEqual(response["review_selection"]["concept_ids"], ["REVIEW-A", "REVIEW-B"])
         self.assertEqual(len(response["review_selection"]["queue_ids"]), 2)
 
-    def test_next_review_is_blocked_until_current_review_is_graded(self):
+    def test_start_review_resumes_current_ungraded_review_without_duplicate_visit(self):
         self._queue("RT01-N01", "REVIEW-A", priority=100)
         self._queue("RT02-N01", "REVIEW-B", priority=90)
         first = self._command("start_review")
         self.assertEqual(first["task"]["node_id"], "RT01-N01")
-        with self.assertRaisesRegex(ValidationError, "must be graded"):
-            self._command("start_review")
+        self.assertEqual(self.app._visit_counts["RT01-N01"], 1)
+
+        resumed = self._command("start_review")
+        self.assertEqual(resumed["task"]["node_id"], "RT01-N01")
+        self.assertTrue(resumed["review_session"]["active"])
+        self.assertEqual(resumed["review_session"]["shown"], 1)
+        self.assertEqual(resumed["review_selection"]["concept_ids"], ["REVIEW-A"])
+        self.assertEqual(self.app.current_node_id, "RT01-N01")
+        self.assertEqual(self.app._visit_counts["RT01-N01"], 1)
+        self.assertIsNone(self.app._current_visit_result)
 
     def test_after_grading_scheduler_selects_another_due_unshown_task(self):
         self._queue("RT01-N01", "REVIEW-A", priority=100)

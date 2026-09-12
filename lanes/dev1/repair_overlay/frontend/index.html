@@ -19,6 +19,7 @@
     <nav aria-label="Головна навігація" class="top-nav">
       <button type="button" data-action-id="app.home" id="nav-home">Головна</button>
       <button type="button" id="nav-research">Дослідження</button>
+      <button type="button" id="nav-mastery">Майстерність</button>
       <button type="button" id="nav-authoring">Конструктор</button>
       <button type="button" data-action-id="settings.keymap" id="nav-keymap">Клавіші</button>
       <button type="button" id="nav-application-update">Оновлення</button>
@@ -173,6 +174,20 @@
       </div>
     </section>
 
+    <section id="mastery-view" class="hidden" aria-labelledby="mastery-heading">
+      <h2 id="mastery-heading" tabindex="-1">Майстерність</h2>
+      <p>Поточний стан навчання читається безпосередньо з canonical runtime. Наступний повтор показується лише тоді, коли runtime надає <code>due_at</code>; окрема черга повторення тут не виводиться й не вгадується.</p>
+      <p id="mastery-count" class="status-text">Концептів у runtime: 0</p>
+      <p id="mastery-empty" class="notice info hidden">Даних майстерності ще немає. Завершіть source-safe завдання, щоб runtime міг сформувати стан концептів.</p>
+      <div class="surface" role="region" aria-label="Таблиця майстерності" tabindex="0">
+        <table>
+          <caption>Стан майстерності з canonical runtime</caption>
+          <thead><tr><th scope="col">Концепт</th><th scope="col">Стан</th><th scope="col">Стабільність, днів</th><th scope="col">Складність</th><th scope="col">Самостійні успіхи</th><th scope="col">Успіхи з підказкою</th><th scope="col">Помилки</th><th scope="col">Наступний повтор</th></tr></thead>
+          <tbody id="mastery-rows"></tbody>
+        </table>
+      </div>
+    </section>
+
     <section id="application-update-view" class="hidden" aria-labelledby="application-update-heading">
       <p class="eyebrow">Packaged Windows application</p>
       <h2 id="application-update-heading" tabindex="-1">Перевірка локального оновлення</h2>
@@ -305,6 +320,7 @@
   </dialog>
 
   <script type="module" src="app.js"></script>
+  <script type="module" src="mastery.js"></script>
   <script type="module" src="application-update.js"></script>
 </body>
 </html>

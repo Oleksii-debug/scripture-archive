@@ -7,6 +7,9 @@ param(
 $ErrorActionPreference = "Stop"
 $PlatformRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $Repo = (Resolve-Path (Join-Path $PlatformRoot "..")).Path
+$PythonPathParts = @($Repo, $PlatformRoot)
+if ($env:PYTHONPATH) { $PythonPathParts += $env:PYTHONPATH }
+$env:PYTHONPATH = $PythonPathParts -join [IO.Path]::PathSeparator
 $Dist = Join-Path $PlatformRoot "dist"
 $Name = "ScriptureArchive-R06-DEV01"
 $Exe = Join-Path $Dist "$Name.exe"
@@ -70,7 +73,8 @@ try {
     python -m compileall -q `
         (Join-Path $PlatformRoot "scripture_archive_platform") `
         (Join-Path $PlatformRoot "tests") `
-        (Join-Path $PlatformRoot "packaging")
+        (Join-Path $PlatformRoot "packaging") `
+        (Join-Path $Repo "runtime_engine")
     if ($LASTEXITCODE -ne 0) { throw "Python compileall failed with code $LASTEXITCODE" }
     $result.source_compile = $true
 

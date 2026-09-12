@@ -40,6 +40,13 @@ def _require_text(record: Mapping[str, Any], key: str, *, evidence_id: str = "re
     return value
 
 
+def _require_true_bool(record: Mapping[str, Any], key: str, *, evidence_id: str) -> None:
+    """Validate legacy R05 boolean gates without coercing or rewriting them."""
+
+    if record.get(key) is not True:
+        raise ValueError(f"{evidence_id}.{key} must be true")
+
+
 def _load_json_object(path: Path) -> Mapping[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -109,7 +116,7 @@ def load_r05_evidence_registry(repo_root: Path) -> EvidenceRegistryBundle:
             _require_text(raw_record, "source_scope", evidence_id=evidence_id)
             _require_text(raw_record, "required_evidence", evidence_id=evidence_id)
             _require_text(raw_record, "provenance_status", evidence_id=evidence_id)
-            _require_text(raw_record, "nonvisual_access", evidence_id=evidence_id)
+            _require_true_bool(raw_record, "nonvisual_access", evidence_id=evidence_id)
 
             runtime.add_evidence(
                 EvidenceRecord(

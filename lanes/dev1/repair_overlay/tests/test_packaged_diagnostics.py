@@ -20,9 +20,16 @@ class FakeBaseApplication:
 
 
 def repository_root() -> Path:
-    for parent in Path(__file__).resolve().parents:
-        if (parent / "runtime_engine" / "scripture_archive_runtime" / "diagnostics.py").exists():
-            return parent
+    # FINALPREP02 itself can contain a historical runtime_engine snapshot under
+    # extracted r06_platform. Qualification must bind to the live outer checkout
+    # that supplies the packaged runtime, not the first nested snapshot ancestor.
+    candidates = [
+        parent
+        for parent in Path(__file__).resolve().parents
+        if (parent / "runtime_engine" / "scripture_archive_runtime" / "diagnostics.py").exists()
+    ]
+    if candidates:
+        return candidates[-1]
     raise RuntimeError("repository root with diagnostics.py not found")
 
 

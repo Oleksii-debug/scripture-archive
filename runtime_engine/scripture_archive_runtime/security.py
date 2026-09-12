@@ -69,6 +69,8 @@ def validate_command_dto(value: Mapping[str, Any]) -> None:
     payload = value.get("payload", {})
     if not isinstance(payload, Mapping):
         raise ValidationError("payload must be an object")
+    if command == "get_review_queue" and payload:
+        raise ValidationError("runtime.v1 get_review_queue accepts an empty payload")
     _validate_json_value(payload)
     encoded = json.dumps(value, ensure_ascii=False).encode("utf-8")
     if len(encoded) > 1_000_000:

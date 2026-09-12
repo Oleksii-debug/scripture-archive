@@ -44,6 +44,8 @@ def validate_request_shape(request:Any)->tuple[str,str,dict[str,Any]]:
         unknown=set(payload)-{'node_id'}
         if unknown: raise ValueError('player.next accepts only current node_id context; target selection is forbidden')
         if 'node_id' in payload and (not isinstance(payload['node_id'],str) or not payload['node_id'] or len(payload['node_id'])>100): raise ValueError('invalid node_id')
+    if cmd=='player.get_review_queue' and payload:
+        raise ValueError('player.get_review_queue accepts an empty payload')
     if cmd=='player.get_daily_case' and payload:
         raise ValueError('player.get_daily_case accepts an empty payload')
     return rid,cmd,payload

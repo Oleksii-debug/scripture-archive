@@ -109,10 +109,18 @@ class PackagedEvidenceGraphTests(unittest.TestCase):
                 self.assertEqual((), record.entity_ids)
                 self.assertEqual((), record.relation_ids)
 
-            # Registry-backed evidence begins locked. A non-correct outcome must not
-            # expose it; only the successful canonical branch may carry unlock IDs.
+            # Registry-backed evidence begins locked. Non-correct and guided
+            # hint-threshold outcomes must not expose it. Only an unguided successful
+            # canonical branch may carry unlock IDs.
             incorrect = runtime.branches.resolve(task, Correctness.INCORRECT)
             self.assertEqual((), incorrect.evidence_unlocks)
+            guided_correct = runtime.branches.resolve(
+                task,
+                Correctness.CORRECT,
+                hint_count=6,
+                hint_threshold=6,
+            )
+            self.assertEqual((), guided_correct.evidence_unlocks)
             correct = runtime.branches.resolve(task, Correctness.CORRECT)
             self.assertTrue(set(evidence_ids).issubset(set(correct.evidence_unlocks)))
 

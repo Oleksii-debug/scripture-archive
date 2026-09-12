@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-ALLOWED_COMMANDS = {"load_task", "submit_answer", "request_hint", "next", "save", "restore", "get_mastery", "get_evidence"}
+ALLOWED_COMMANDS = {"load_task", "submit_answer", "request_hint", "next", "save", "restore", "get_mastery", "get_review_queue", "get_evidence"}
 REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 DANGEROUS_IMPORT_KEYS = {"script", "executable", "command", "shell", "python", "javascript", "__code__", "__import__"}
 

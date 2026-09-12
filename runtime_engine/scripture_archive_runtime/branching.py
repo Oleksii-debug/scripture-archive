@@ -24,7 +24,8 @@ class BranchEngine:
     max_node_visits_per_session: int = 4
 
     def resolve(self, task: TaskDefinition, correctness: Correctness, *, hint_count: int = 0, hint_threshold: int | None = None) -> BranchResolution:
-        if hint_threshold is not None and hint_count >= hint_threshold:
+        guided_hint_threshold = hint_threshold is not None and hint_count >= hint_threshold
+        if guided_hint_threshold:
             raw = task.branches.get("on_hint_threshold", "return_to_current_node")
         elif correctness is Correctness.CORRECT:
             raw = task.branches.get("on_correct", "none")
@@ -33,12 +34,14 @@ class BranchEngine:
         else:
             raw = task.branches.get("on_incorrect", "return_to_current_node")
         resolution = self.parse_target(raw, task=task)
-        # Evidence exposure is a success consequence, never a side effect of a
-        # partial/incorrect branch or a guided hint-threshold transition. Canonical
-        # evidence adapters may populate optional_evidence_unlock from an explicit
-        # node->evidence registry, so fail closed here before RuntimeApplication can
+        # Evidence exposure is a success consequence of an unguided correct branch,
+        # never a side effect of a partial/incorrect branch or a guided
+        # hint-threshold transition. The hint-threshold route has precedence above,
+        # so fail closed on that route even when the submitted answer grades CORRECT.
+        # Canonical evidence adapters may populate optional_evidence_unlock from an
+        # explicit node->evidence registry; strip it before RuntimeApplication can
         # mutate unlocked evidence state.
-        if correctness is not Correctness.CORRECT and resolution.evidence_unlocks:
+        if (guided_hint_threshold or correctness is not Correctness.CORRECT) and resolution.evidence_unlocks:
             resolution = replace(resolution, evidence_unlocks=())
         return resolution
 

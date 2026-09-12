@@ -192,6 +192,118 @@ class ResearchWorkbenchClaimShadowTests(unittest.TestCase):
         )
         self.assertEqual("John", semantic_claim["witness"])
 
+    def test_canonical_invalid_record_and_passage_witnesses_fail_closed(self):
+        malformed = (
+            " Mark",
+            "Mark ",
+            "Mark\x85",
+            "Mark\u2028",
+            "Mark\u2029",
+        )
+        for index, witness in enumerate(malformed):
+            with self.subTest(witness=repr(witness)):
+                runtime = EvidenceRuntime()
+                evidence_id = f"EV-MALFORMED-{index}"
+                runtime.add_evidence(
+                    EvidenceRecord(
+                        evidence_id,
+                        (PassageRef(f"P-MALFORMED-{index}", "Mark", 1, 1, witness=witness),),
+                        "Malformed witness attribution must not become Workbench truth",
+                        Confidence.T1,
+                        witness=witness,
+                    )
+                )
+                runtime.unlock(evidence_id)
+
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "has malformed or conflicting witness attribution",
+                ):
+                    build_research_workbench(runtime)
+
+    def test_canonical_invalid_passage_only_witness_fails_closed(self):
+        for index, witness in enumerate((" Mark", "Mark\x85", "Mark\u2028", "Mark\u2029")):
+            with self.subTest(witness=repr(witness)):
+                runtime = EvidenceRuntime()
+                evidence_id = f"EV-PASSAGE-MALFORMED-{index}"
+                runtime.add_evidence(
+                    EvidenceRecord(
+                        evidence_id,
+                        (PassageRef(f"P-PASSAGE-MALFORMED-{index}", "Mark", 1, 1, witness=witness),),
+                        "Malformed passage witness must fail closed",
+                        Confidence.T1,
+                    )
+                )
+                runtime.unlock(evidence_id)
+
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "has malformed or conflicting witness attribution",
+                ):
+                    build_research_workbench(runtime)
+
+    def test_canonical_invalid_declared_claim_witness_fails_closed(self):
+        malformed = (" Mark", "Mark ", "Mark\x85", "Mark\u2028", "Mark\u2029")
+        for index, witness in enumerate(malformed):
+            with self.subTest(witness=repr(witness)):
+                runtime = EvidenceRuntime()
+                evidence_id = f"EV-VALID-SUPPORT-{index}"
+                claim_id = f"CL-MALFORMED-WITNESS-{index}"
+                runtime.add_evidence(
+                    EvidenceRecord(
+                        evidence_id,
+                        (PassageRef(f"P-VALID-{index}", "Mark", 1, 1, witness="Mark"),),
+                        "Canonical Mark-local support",
+                        Confidence.T1,
+                        witness="Mark",
+                    )
+                )
+                runtime.add_claim(
+                    Claim(
+                        claim_id,
+                        "Malformed declared witness must not become Workbench truth",
+                        Confidence.T1,
+                        witness=witness,
+                        required_evidence_ids=(evidence_id,),
+                    )
+                )
+                runtime.unlock(evidence_id)
+
+                with self.assertRaisesRegex(
+                    ValueError,
+                    f"claim {claim_id} witness is not established by evidence support",
+                ):
+                    build_research_workbench(runtime)
+
+    def test_ordinary_unicode_witness_matches_canonical_provenance_semantics(self):
+        witness = "Марко"
+        runtime = EvidenceRuntime()
+        runtime.add_evidence(
+            EvidenceRecord(
+                "EV-UNICODE",
+                (PassageRef("P-UNICODE", "Mark", 1, 1, witness=witness),),
+                "Ordinary Unicode witness remains valid",
+                Confidence.T1,
+                witness=witness,
+            )
+        )
+        runtime.add_claim(
+            Claim(
+                "CL-UNICODE",
+                "Unicode-local claim",
+                Confidence.T1,
+                witness=witness,
+                required_evidence_ids=("EV-UNICODE",),
+            )
+        )
+        runtime.unlock("EV-UNICODE")
+
+        view = build_research_workbench(runtime).to_dict()
+        self.assertEqual(witness, view["evidence"][0]["witness"])
+        self.assertEqual(witness, view["passages"][0]["witness"])
+        self.assertEqual(witness, view["claims"][0]["witness"])
+        self.assertIn(f"witness={witness}", "\n".join(view["linear"]))
+
 
 if __name__ == "__main__":
     unittest.main()

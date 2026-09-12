@@ -5,6 +5,7 @@ from typing import Any, Iterable, Mapping, Sequence
 
 from .evidence import EvidenceRecord, EvidenceRuntime, Relation
 from .evidence_provenance import (
+    _validated_relation_tokens,
     resolve_evidence_witness,
     validated_claim_witness,
     validated_relation_witness,
@@ -142,7 +143,8 @@ def build_witness_matrix(
     visible_relations = tuple(
         relation
         for relation in sorted(runtime.relations.values(), key=lambda item: item.relation_id)
-        if relation.relation_type == PARALLEL_WITNESS_RELATION
+        if _validated_relation_tokens(relation) is not None
+        and relation.relation_type == PARALLEL_WITNESS_RELATION
         and relation.source_id in selected_ids
         and relation.target_id in selected_ids
     )

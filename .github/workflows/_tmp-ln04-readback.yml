@@ -1,0 +1,36 @@
+name: TEMP LN04 exact readback
+
+on:
+  push:
+    branches:
+      - r06-pedagogy-ln04-hints-0912-sol
+
+permissions:
+  contents: read
+
+jobs:
+  package-inputs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Bind exact checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Upload exact LN04 source bytes and validators
+        uses: actions/upload-artifact@v4
+        with:
+          name: LN04-exact-repair-inputs-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 1
+          path: |
+            docs/campaigns/LN/LN-04_CANONICAL_v1.2/nodes_part_01.json
+            docs/campaigns/LN/LN-04_CANONICAL_v1.2/nodes_part_02.json
+            docs/campaigns/LN/LN-04_CANONICAL_v1.2/nodes_part_03.json
+            docs/campaigns/LN/LN-04_CANONICAL_v1.2/nodes_part_04.json
+            tools/analyze_pedagogical_quality.py
+            tools/validate_content_nodes_v1_2.py

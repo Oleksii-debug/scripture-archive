@@ -7,12 +7,24 @@ import time
 import uuid
 from typing import Any, Callable
 
+from runtime_engine.scripture_archive_runtime.content_packs import (
+    CONTENT_PACK_SCHEMA,
+    CONTENT_SCHEMA_VERSION,
+)
 from scripture_archive_platform.transport.contracts import MAX_IMPORT_BYTES
 from .model import (
     CHANGE_RECORD_SCHEMA, DRAFT_SCHEMA, KINDS, PUBLISH_SCHEMA,
     blank_campaign, blank_mission, blank_node,
 )
 from .validation import identity, identity_errors, publish_blockers, validate_draft
+
+
+HISTORY_SCHEMA = "scripture.authoring-history.v1"
+SNAPSHOT_SCHEMA = "scripture.authoring-snapshot.v1"
+VERSION_SCHEMA = "scripture.authoring-version.v1"
+PACK_COMPAT_SCHEMA = "scripture.authoring-pack-compat.v1"
+MAX_HISTORY_DEPTH = 50
+MAX_DIFF_PATHS = 1000
 
 
 class AuthoringService:
@@ -94,12 +106,15 @@ class AuthoringService:
         out.setdefault("change_record", []).append({
             "timestamp": now, "action": "save_draft", "revision": revision,
         })
+        if stored is not None:
+            self._remember_for_undo(out["draft_id"], stored)
         self.store.put_json("drafts", out["draft_id"], out)
         return copy.deepcopy(out)
 
     def delete_draft(self, draft_id: str) -> dict[str, Any]:
         self.load_draft(draft_id)
         self.store.delete("drafts", draft_id)
+        self.store.delete("authoring_history", draft_id)
         return {"draft_id": draft_id, "deleted": True}
 
     def fork_record(self, kind: str, record: dict[str, Any], title: str | None = None) -> dict[str, Any]:
@@ -181,6 +196,154 @@ class AuthoringService:
         }
         return candidate
 
+    def pack_compatibility(self) -> dict[str, str]:
+        return {
+            "schema": PACK_COMPAT_SCHEMA,
+            "content_pack_schema": CONTENT_PACK_SCHEMA,
+            "content_schema_version": CONTENT_SCHEMA_VERSION,
+            "constructor_draft_schema": DRAFT_SCHEMA,
+        }
+
+    def create_snapshot(self, draft_id: str, label: str = "") -> dict[str, Any]:
+        draft = self.load_draft(draft_id)
+        label = self._label(label)
+        snapshot = self._snapshot_from_draft(draft, label=label)
+        return copy.deepcopy(snapshot)
+
+    def list_snapshots(self, draft_id: str) -> list[dict[str, Any]]:
+        self._validate_id(draft_id, "draft id")
+        out: list[dict[str, Any]] = []
+        for key in self.store.list_keys("authoring_snapshots"):
+            value = self.store.get_json("authoring_snapshots", key, {}) or {}
+            if value.get("draft_id") != draft_id:
+                continue
+            out.append({
+                "snapshot_id": value.get("snapshot_id", key),
+                "draft_id": draft_id,
+                "draft_revision": value.get("draft_revision"),
+                "created_at": value.get("created_at"),
+                "label": value.get("label", ""),
+            })
+        return sorted(out, key=lambda row: (int(row.get("created_at") or 0), str(row.get("snapshot_id"))))
+
+    def restore_snapshot(self, draft_id: str, snapshot_id: str) -> dict[str, Any]:
+        current = self.load_draft(draft_id)
+        snapshot = self._load_snapshot(draft_id, snapshot_id)
+        self._snapshot_from_draft(current, label="Automatic safety snapshot before snapshot restore")
+        self._remember_for_undo(draft_id, current)
+        return self._restore_draft(current, snapshot["draft"], "restore_snapshot", snapshot_id)
+
+    def diff_draft(self, draft_id: str, from_snapshot_id: str,
+                   to_snapshot_id: str | None = None) -> dict[str, Any]:
+        left = self._load_snapshot(draft_id, from_snapshot_id)["draft"]
+        if to_snapshot_id:
+            right = self._load_snapshot(draft_id, to_snapshot_id)["draft"]
+            right_ref = to_snapshot_id
+        else:
+            right = self.load_draft(draft_id)
+            right_ref = "CURRENT"
+        paths: list[str] = []
+        self._diff_paths(left, right, "$", paths)
+        return {
+            "schema": "scripture.authoring-diff.v1",
+            "draft_id": draft_id,
+            "from": from_snapshot_id,
+            "to": right_ref,
+            "changed": bool(paths),
+            "changed_paths": paths,
+            "truncated": len(paths) >= MAX_DIFF_PATHS,
+        }
+
+    def history(self, draft_id: str) -> dict[str, Any]:
+        draft = self.load_draft(draft_id)
+        state = self._history_state(draft_id)
+        return {
+            "schema": HISTORY_SCHEMA,
+            "draft_id": draft_id,
+            "revision": draft.get("revision", 1),
+            "can_undo": bool(state["undo"]),
+            "can_redo": bool(state["redo"]),
+            "change_record": self._json_copy(draft.get("change_record", [])),
+            "snapshots": self.list_snapshots(draft_id),
+            "versions": self.list_versions(draft_id),
+        }
+
+    def undo(self, draft_id: str) -> dict[str, Any]:
+        current = self.load_draft(draft_id)
+        state = self._history_state(draft_id)
+        if not state["undo"]:
+            raise ValueError("nothing to undo")
+        target = state["undo"].pop()
+        state["redo"].append(self._json_copy(current))
+        state["redo"] = state["redo"][-MAX_HISTORY_DEPTH:]
+        self._write_history(draft_id, state)
+        return self._restore_draft(current, target, "undo")
+
+    def redo(self, draft_id: str) -> dict[str, Any]:
+        current = self.load_draft(draft_id)
+        state = self._history_state(draft_id)
+        if not state["redo"]:
+            raise ValueError("nothing to redo")
+        target = state["redo"].pop()
+        state["undo"].append(self._json_copy(current))
+        state["undo"] = state["undo"][-MAX_HISTORY_DEPTH:]
+        self._write_history(draft_id, state)
+        return self._restore_draft(current, target, "redo")
+
+    def publish_version(self, draft_id: str, compatibility: Any) -> dict[str, Any]:
+        draft = self.load_draft(draft_id)
+        compat = self._validate_pack_compatibility(compatibility)
+        candidate = self.prepare_publish_candidate(draft)
+        version_id = "version-" + self.id_factory()
+        self._validate_id(version_id, "version id")
+        version = {
+            "schema": VERSION_SCHEMA,
+            "version_id": version_id,
+            "draft_id": draft_id,
+            "draft_revision": draft.get("revision", 1),
+            "created_at": int(self.clock()),
+            "kind": draft.get("kind", "node"),
+            "stable_identity": identity(draft.get("kind", "node"), draft.get(draft.get("kind", "node")) or {}),
+            "compatibility": compat,
+            "candidate": candidate,
+            "canonical_mutation_performed": False,
+            "requires_explicit_integration": True,
+        }
+        self.store.put_json("authoring_versions", version_id, version)
+        return copy.deepcopy(version)
+
+    def list_versions(self, draft_id: str) -> list[dict[str, Any]]:
+        self._validate_id(draft_id, "draft id")
+        out: list[dict[str, Any]] = []
+        for key in self.store.list_keys("authoring_versions"):
+            value = self.store.get_json("authoring_versions", key, {}) or {}
+            if value.get("draft_id") != draft_id:
+                continue
+            out.append({
+                "version_id": value.get("version_id", key),
+                "draft_id": draft_id,
+                "draft_revision": value.get("draft_revision"),
+                "created_at": value.get("created_at"),
+                "kind": value.get("kind"),
+                "stable_identity": value.get("stable_identity"),
+                "compatibility": self._json_copy(value.get("compatibility", {})),
+                "canonical_mutation_performed": False,
+            })
+        return sorted(out, key=lambda row: (int(row.get("created_at") or 0), str(row.get("version_id"))))
+
+    def rollback_version(self, draft_id: str, version_id: str) -> dict[str, Any]:
+        current = self.load_draft(draft_id)
+        version = self._load_version(draft_id, version_id)
+        target = self._json_copy(version.get("candidate") or {})
+        if target.get("draft_id") != draft_id:
+            raise ValueError("version draft identity mismatch")
+        self._snapshot_from_draft(current, label="Automatic safety snapshot before version rollback")
+        self._remember_for_undo(draft_id, current)
+        target.pop("publish_manifest", None)
+        target.pop("publish_change_record", None)
+        target.pop("canonical_mutation_performed", None)
+        return self._restore_draft(current, target, "rollback_version", version_id)
+
     def export_draft(self, draft_id: str) -> str:
         return json.dumps(self.load_draft(draft_id), ensure_ascii=False, indent=2) + "\n"
 
@@ -213,6 +376,123 @@ class AuthoringService:
                 raise ValueError(f"{key} must be an object")
         return out
 
+    def _history_state(self, draft_id: str) -> dict[str, Any]:
+        self._validate_id(draft_id, "draft id")
+        state = self.store.get_json("authoring_history", draft_id, None)
+        if state is None:
+            return {"schema": HISTORY_SCHEMA, "draft_id": draft_id, "undo": [], "redo": []}
+        if not isinstance(state, dict) or state.get("schema") != HISTORY_SCHEMA or state.get("draft_id") != draft_id:
+            raise ValueError("invalid persisted authoring history")
+        undo = state.get("undo")
+        redo = state.get("redo")
+        if not isinstance(undo, list) or not isinstance(redo, list):
+            raise ValueError("invalid persisted authoring history")
+        return self._json_copy(state)
+
+    def _write_history(self, draft_id: str, state: dict[str, Any]) -> None:
+        state = self._json_copy(state)
+        state.update({"schema": HISTORY_SCHEMA, "draft_id": draft_id})
+        state["undo"] = list(state.get("undo", []))[-MAX_HISTORY_DEPTH:]
+        state["redo"] = list(state.get("redo", []))[-MAX_HISTORY_DEPTH:]
+        self.store.put_json("authoring_history", draft_id, state)
+
+    def _remember_for_undo(self, draft_id: str, prior: dict[str, Any]) -> None:
+        state = self._history_state(draft_id)
+        state["undo"].append(self._json_copy(prior))
+        state["undo"] = state["undo"][-MAX_HISTORY_DEPTH:]
+        state["redo"] = []
+        self._write_history(draft_id, state)
+
+    def _restore_draft(self, current: dict[str, Any], target: Any,
+                       action: str, reference_id: str | None = None) -> dict[str, Any]:
+        target = self._envelope(target)
+        if target["draft_id"] != current["draft_id"]:
+            raise ValueError("restore draft identity mismatch")
+        out = self._json_copy(target)
+        now = int(self.clock())
+        out["status"] = "DRAFT"
+        out["created_at"] = int(current.get("created_at", now))
+        out["updated_at"] = now
+        out["revision"] = int(current.get("revision", 1)) + 1
+        out["base_identity"] = current.get("base_identity") or out.get("base_identity")
+        record = {"timestamp": now, "action": action, "revision": out["revision"]}
+        if reference_id:
+            record["reference_id"] = reference_id
+        out.setdefault("change_record", []).append(record)
+        self._protect_identity(out)
+        self.store.put_json("drafts", out["draft_id"], out)
+        return copy.deepcopy(out)
+
+    def _snapshot_from_draft(self, draft: dict[str, Any], *, label: str) -> dict[str, Any]:
+        snapshot_id = "snapshot-" + self.id_factory()
+        self._validate_id(snapshot_id, "snapshot id")
+        snapshot = {
+            "schema": SNAPSHOT_SCHEMA,
+            "snapshot_id": snapshot_id,
+            "draft_id": draft["draft_id"],
+            "draft_revision": draft.get("revision", 1),
+            "created_at": int(self.clock()),
+            "label": self._label(label),
+            "draft": self._json_copy(draft),
+        }
+        self.store.put_json("authoring_snapshots", snapshot_id, snapshot)
+        return snapshot
+
+    def _load_snapshot(self, draft_id: str, snapshot_id: str) -> dict[str, Any]:
+        self._validate_id(draft_id, "draft id")
+        self._validate_id(snapshot_id, "snapshot id")
+        value = self.store.get_json("authoring_snapshots", snapshot_id)
+        if not isinstance(value, dict) or value.get("schema") != SNAPSHOT_SCHEMA:
+            raise ValueError("snapshot not found")
+        if value.get("draft_id") != draft_id:
+            raise ValueError("snapshot belongs to another draft")
+        return self._json_copy(value)
+
+    def _load_version(self, draft_id: str, version_id: str) -> dict[str, Any]:
+        self._validate_id(draft_id, "draft id")
+        self._validate_id(version_id, "version id")
+        value = self.store.get_json("authoring_versions", version_id)
+        if not isinstance(value, dict) or value.get("schema") != VERSION_SCHEMA:
+            raise ValueError("version not found")
+        if value.get("draft_id") != draft_id:
+            raise ValueError("version belongs to another draft")
+        if value.get("compatibility") != self.pack_compatibility():
+            raise ValueError("version pack compatibility no longer matches this runtime")
+        return self._json_copy(value)
+
+    def _validate_pack_compatibility(self, value: Any) -> dict[str, str]:
+        expected = self.pack_compatibility()
+        if not isinstance(value, dict) or value != expected:
+            raise ValueError("pack compatibility mismatch; refresh Constructor compatibility before publish")
+        return self._json_copy(expected)
+
+    def _diff_paths(self, left: Any, right: Any, path: str, out: list[str]) -> None:
+        if len(out) >= MAX_DIFF_PATHS:
+            return
+        if type(left) is not type(right):
+            out.append(path)
+            return
+        if isinstance(left, dict):
+            for key in sorted(set(left) | set(right)):
+                if len(out) >= MAX_DIFF_PATHS:
+                    return
+                child = f"{path}.{key}"
+                if key not in left or key not in right:
+                    out.append(child)
+                else:
+                    self._diff_paths(left[key], right[key], child, out)
+            return
+        if isinstance(left, list):
+            if len(left) != len(right):
+                out.append(f"{path}.length")
+            for index, (a, b) in enumerate(zip(left, right)):
+                if len(out) >= MAX_DIFF_PATHS:
+                    return
+                self._diff_paths(a, b, f"{path}[{index}]", out)
+            return
+        if left != right:
+            out.append(path)
+
     @staticmethod
     def _protect_identity(draft: dict[str, Any]) -> None:
         errors = identity_errors(draft)
@@ -232,6 +512,15 @@ class AuthoringService:
         if not title or len(title) > 300:
             raise ValueError("title must be 1..300 characters")
         return title
+
+    @staticmethod
+    def _label(label: Any) -> str:
+        if not isinstance(label, str):
+            raise ValueError("snapshot label must be text")
+        label = label.strip()
+        if len(label) > 160:
+            raise ValueError("snapshot label must be at most 160 characters")
+        return label
 
     @staticmethod
     def _validate_id(value: Any, label: str) -> None:

@@ -75,6 +75,20 @@ class RuntimeBackedPlayerGateway:
 
         return DailyCaseProjection(self._runtime_application, self._loader).response()
 
+    def get_chronology_lab(self) -> dict[str, Any]:
+        """Project canonical chronology data without inferring it from generic evidence.
+
+        The current runtime may legitimately have no structured ChronologyLab feed.
+        In that case the packaged projection returns an explicit source-safe empty
+        state rather than manufacturing dates or ordering from prose/passage order.
+        """
+        if self._runtime_application is None:
+            raise RuntimeGatewayError("Chronology Lab requires the canonical runtime application")
+        from scripture_archive_platform.application.chronology_projection import ChronologyProjection
+
+        chronology = getattr(self._runtime_application, "chronology", None)
+        return ChronologyProjection(chronology).response()
+
     def get_witness_matrix(self) -> dict[str, Any]:
         """Project a read-only source-local Witness Matrix from canonical unlocked evidence."""
         if self._runtime_application is None:

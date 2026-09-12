@@ -324,13 +324,17 @@ def build_research_export(
             gated_relation_ids=gated_relation_ids,
         )
     ]
+    visible_relation_ids = {relation.relation_id for relation in visible_relations}
     payload: dict[str, object] = {
         "schema": EXPORT_SCHEMA,
         "workspace_id": workspace_id,
         "title": title,
         "evidence_scope": "all_runtime_evidence" if include_locked_evidence else "unlocked_only",
         "claims": [_claim_payload(claim) for claim in sorted(visible_claims, key=lambda item: item.claim_id)],
-        "evidence": [_evidence_payload(runtime.evidence[key]) for key in sorted(visible_evidence_ids)],
+        "evidence": [
+            _evidence_payload(runtime.evidence[key], visible_relation_ids)
+            for key in sorted(visible_evidence_ids)
+        ],
         "relations": [_relation_payload(row) for row in sorted(visible_relations, key=lambda item: item.relation_id)],
         "workspace_notes": [
             {
@@ -400,7 +404,7 @@ def _claim_payload(claim: Any) -> dict[str, object]:
     }
 
 
-def _evidence_payload(record: Any) -> dict[str, object]:
+def _evidence_payload(record: Any, visible_relation_ids: set[str]) -> dict[str, object]:
     passages = sorted(
         record.passage_refs,
         key=lambda p: (p.book, p.chapter, p.verse_start, p.verse_end or p.verse_start, p.passage_id),
@@ -424,7 +428,10 @@ def _evidence_payload(record: Any) -> dict[str, object]:
             for p in passages
         ],
         "entity_ids": sorted(record.entity_ids),
-        "relation_ids": sorted(record.relation_ids),
+        "relation_ids": sorted(
+            relation_id for relation_id in record.relation_ids
+            if relation_id in visible_relation_ids
+        ),
     }
 
 

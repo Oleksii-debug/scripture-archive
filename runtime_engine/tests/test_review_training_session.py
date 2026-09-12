@@ -138,6 +138,26 @@ class ReviewTrainingSessionTests(unittest.TestCase):
         self.assertIsNone(self.app.current_node_id)
         self.assertFalse(self.app._review_session_active)
 
+    def test_inactive_finish_review_cannot_reset_normal_player_progression(self):
+        self._command("load_task", {"node_id": "RT01-N01"})
+        self.app.submit_answer("RT01-N01", self.node1["accepted_answer"])
+        result_before = self.app._current_visit_result
+        resolution_before = self.app._current_visit_resolution
+        hints_before = dict(self.app._active_hint_counts)
+        session_before = self.app.session
+
+        with self.assertRaisesRegex(ValidationError, "Review Training session is not active"):
+            self._command("finish_review")
+
+        self.assertEqual(self.app.current_node_id, "RT01-N01")
+        self.assertIs(self.app._current_visit_result, result_before)
+        self.assertIs(self.app._current_visit_resolution, resolution_before)
+        self.assertEqual(self.app._active_hint_counts, hints_before)
+        self.assertIs(self.app.session, session_before)
+        self.assertFalse(self.app._review_session_active)
+        with self.assertRaisesRegex(ValidationError, "cannot change current node"):
+            self._command("load_task", {"node_id": "RT02-N01"})
+
     def test_review_start_uses_fresh_session_and_adjacent_exact_cooldown(self):
         self._queue("RT01-N01", "REVIEW-A")
         previous = Session(session_id="previous")

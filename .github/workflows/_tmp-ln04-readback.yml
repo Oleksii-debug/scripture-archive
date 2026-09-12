@@ -38,10 +38,11 @@ jobs:
           import json, subprocess
           from pathlib import Path
           root=Path('docs/campaigns/LN/LN-04_CANONICAL_v1.2')
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
           changed=0
           for path in sorted(root.glob('nodes_part_*.json')):
               rel=path.as_posix()
-              old=json.loads(subprocess.check_output(['git','show',f'{subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip()}:{rel}'],text=True))
+              old=json.loads(subprocess.check_output(['git','show',f'{head}:{rel}'],text=True))
               new=json.loads(path.read_text(encoding='utf-8'))
               assert old.keys()==new.keys(), rel
               assert len(old['nodes'])==len(new['nodes']), rel
@@ -101,7 +102,7 @@ jobs:
             .github/workflows/_tmp-ln04-readback.yml
             tools/_tmp_repair_ln04_hints.py
           )
-          mapfile -t ACTUAL < <(git diff --name-only | sort)
+          mapfile -t ACTUAL < <(git diff HEAD --name-only | sort)
           mapfile -t WANT < <(printf '%s\n' "${EXPECTED[@]}" | sort)
           diff -u <(printf '%s\n' "${WANT[@]}") <(printf '%s\n' "${ACTUAL[@]}")
           REMOTE_SHA="$(git ls-remote origin refs/heads/r06-pedagogy-ln04-hints-0912-sol | awk '{print $1}')"

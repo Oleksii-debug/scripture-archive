@@ -1,5 +1,6 @@
 import unittest
 from datetime import datetime, timedelta, timezone
+from tempfile import TemporaryDirectory
 
 from scripture_archive_runtime.application import RuntimeApplication
 from scripture_archive_runtime.content import ContentRepository
@@ -11,6 +12,7 @@ from scripture_archive_runtime.models import (
     Session,
     TaskState,
 )
+from scripture_archive_runtime.persistence import PersistenceStore
 from scripture_archive_runtime.security import ValidationError
 from tests.fixtures import LN01_N03, node_from
 
@@ -136,6 +138,84 @@ class ReviewTrainingSessionTests(unittest.TestCase):
         second = self._command("start_review")
         self.assertEqual(second["task"]["node_id"], "RT02-N01")
         self.assertEqual(second["review_session"]["shown"], 2)
+
+    def test_ungraded_review_survives_process_restart_without_duplicate_visit_or_target_bypass(self):
+        with TemporaryDirectory() as tmp:
+            self.app = RuntimeApplication(
+                ContentRepository([self.node1, self.node2]),
+                persistence=PersistenceStore(tmp),
+            )
+            self._queue("RT01-N01", "REVIEW-A", priority=100)
+            self._queue("RT02-N01", "REVIEW-B", priority=90)
+            first = self._command("start_review")
+            self.assertEqual(first["task"]["node_id"], "RT01-N01")
+            active_session_id = self.app.session.session_id
+            self._command("save")
+
+            self.app = RuntimeApplication(
+                ContentRepository([self.node1, self.node2]),
+                persistence=PersistenceStore(tmp),
+            )
+            restored = self._command("restore")
+            self.assertEqual(restored["review_resume_phase"], "AWAITING_ANSWER")
+            self.assertTrue(restored["review_session"]["active"])
+            self.assertEqual(restored["current_node_id"], "RT01-N01")
+            self.assertEqual(self.app.session.session_id, active_session_id)
+            self.assertEqual(self.app.session.shown_node_ids.count("RT01-N01"), 1)
+            self.assertEqual(len(self.app.memory.node_history["RT01-N01"].attempts), 1)
+
+            with self.assertRaisesRegex(ValidationError, "Review Training controls task selection"):
+                self._command("load_task", {"node_id": "RT02-N01"})
+            with self.assertRaisesRegex(ValidationError, "scheduler-owned"):
+                self._command("next")
+
+            resumed = self._command("start_review")
+            self.assertEqual(resumed["task"]["node_id"], "RT01-N01")
+            self.assertEqual(resumed["review_session"]["shown"], 1)
+            self.assertEqual(self.app.session.shown_node_ids.count("RT01-N01"), 1)
+            self.assertEqual(len(self.app.memory.node_history["RT01-N01"].attempts), 1)
+
+            grade = self.app.submit_answer("RT01-N01", self.node1["accepted_answer"])
+            self.assertEqual(grade["review_session"]["results"]["CORRECT"], 1)
+            with self.assertRaisesRegex(ValidationError, "already graded"):
+                self.app.submit_answer("RT01-N01", self.node1["accepted_answer"])
+
+    def test_graded_review_restart_advances_via_scheduler_without_regrading_or_direct_load(self):
+        with TemporaryDirectory() as tmp:
+            self.app = RuntimeApplication(
+                ContentRepository([self.node1, self.node2]),
+                persistence=PersistenceStore(tmp),
+            )
+            self._queue("RT01-N01", "REVIEW-A", priority=100)
+            self._queue("RT02-N01", "REVIEW-B", priority=90)
+            first = self._command("start_review")
+            self.assertEqual(first["task"]["node_id"], "RT01-N01")
+            self.app.submit_answer("RT01-N01", self.node1["accepted_answer"])
+            attempts_after_grade = len(self.app.memory.node_history["RT01-N01"].attempts)
+            self._command("save")
+
+            self.app = RuntimeApplication(
+                ContentRepository([self.node1, self.node2]),
+                persistence=PersistenceStore(tmp),
+            )
+            restored = self._command("restore")
+            self.assertEqual(restored["review_resume_phase"], "AWAITING_NEXT")
+            self.assertTrue(restored["review_session"]["active"])
+            self.assertEqual(restored["review_session"]["results"]["CORRECT"], 1)
+            self.assertIsNone(restored["current_node_id"])
+            self.assertIsNone(self.app._review_current_node_id)
+            self.assertEqual(len(self.app.memory.node_history["RT01-N01"].attempts), attempts_after_grade)
+
+            with self.assertRaisesRegex(ValidationError, "Review Training controls task selection"):
+                self._command("load_task", {"node_id": "RT02-N01"})
+
+            second = self._command("start_review")
+            self.assertEqual(second["task"]["node_id"], "RT02-N01")
+            self.assertEqual(second["review_session"]["shown"], 2)
+            self.assertEqual(second["review_session"]["results"]["CORRECT"], 1)
+            self.assertEqual(self.app.session.shown_node_ids.count("RT01-N01"), 1)
+            self.assertEqual(self.app.session.shown_node_ids.count("RT02-N01"), 1)
+            self.assertEqual(len(self.app.memory.node_history["RT01-N01"].attempts), attempts_after_grade)
 
     def test_finish_review_clears_runtime_entry_state(self):
         self._queue("RT01-N01", "REVIEW-A")

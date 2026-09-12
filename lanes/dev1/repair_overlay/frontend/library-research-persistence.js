@@ -107,6 +107,14 @@ function clearEditors() {
   }
 }
 
+export function invalidateLibraryResearchPersistence() {
+  generation += 1;
+  current = null;
+  clearEditors();
+  setPanelEnabled(false);
+  status('Виберіть task у результатах пошуку.');
+}
+
 function loadEditors(bookmarks, notes, task, mission) {
   clearEditors();
   const bookmark = findCurrentRecord('bookmark', bookmarks, task, mission);
@@ -156,7 +164,7 @@ async function activate(identity, button) {
     current = taskContext(selectExactTask(result, identity));
     setPanelEnabled(true);
     await refreshCurrent(mine);
-    if (mine === generation) byId('library-research-heading')?.focus();
+    if (mine === generation && !byId('library-view')?.classList.contains('hidden')) byId('library-research-heading')?.focus();
   } catch (error) {
     if (mine === generation) {
       current = null;
@@ -282,7 +290,12 @@ function bindResult(article) {
   const identityNode = Array.from(article.children).find(node => node.tagName === 'P' && String(node.textContent || '').startsWith('Завдання: '));
   const identity = parseTaskIdentity(identityNode?.textContent || '');
   if (!identity) return;
-  const button = element('button', 'Закладка / нотатка', {type: 'button', 'aria-busy': 'false', 'aria-controls': 'library-research-panel'});
+  const button = element('button', 'Закладка / нотатка', {
+    type: 'button',
+    'aria-busy': 'false',
+    'aria-controls': 'library-research-panel',
+    'aria-label': `Закладка / нотатка для ${identity.node_id}`,
+  });
   button.addEventListener('click', () => void activate(identity, button));
   article.append(button);
 }
@@ -298,8 +311,12 @@ function install() {
   library.dataset.researchPersistenceInstalled = 'true';
   buildPanel(library);
   bindResults(results);
-  const observer = new MutationObserver(() => bindResults(results));
-  observer.observe(results, {childList: true});
+  const resultsObserver = new MutationObserver(() => bindResults(results));
+  resultsObserver.observe(results, {childList: true});
+  const visibilityObserver = new MutationObserver(() => {
+    if (library.classList.contains('hidden')) invalidateLibraryResearchPersistence();
+  });
+  visibilityObserver.observe(library, {attributes: true, attributeFilter: ['class']});
   return true;
 }
 

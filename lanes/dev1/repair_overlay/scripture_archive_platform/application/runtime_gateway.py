@@ -83,40 +83,41 @@ class RuntimeBackedPlayerGateway:
         from runtime_engine.scripture_archive_runtime.evidence_provenance import resolve_evidence_witness
         from runtime_engine.scripture_archive_runtime.witness_matrix import build_witness_matrix
 
-        runtime = self._runtime_application.evidence
-        witnesses: set[str] = set()
-        for evidence_id in sorted(runtime.unlocked):
-            record = runtime.evidence.get(evidence_id)
-            if record is None:
-                continue
-            witness = resolve_evidence_witness(record)
-            if witness is not None:
-                witnesses.add(witness)
+        with self._runtime_lock:
+            runtime = self._runtime_application.evidence
+            witnesses: set[str] = set()
+            for evidence_id in sorted(runtime.unlocked):
+                record = runtime.evidence.get(evidence_id)
+                if record is None:
+                    continue
+                witness = resolve_evidence_witness(record)
+                if witness is not None:
+                    witnesses.add(witness)
 
-        available = sorted(witnesses)
-        if len(available) < 2:
+            available = sorted(witnesses)
+            if len(available) < 2:
+                return {
+                    "schema": "scripture.research.witness-matrix.v1",
+                    "read_only": True,
+                    "available_witnesses": available,
+                    "matrix": None,
+                    "linear": [
+                        "Witness Matrix",
+                        "At least two source-safe unlocked witnesses are required.",
+                        "No witness, contradiction, chronology, or source claim is inferred from missing data.",
+                    ],
+                    "truth_owner": "D5/runtime",
+                }
+
+            matrix = build_witness_matrix(runtime, witnesses=available)
             return {
                 "schema": "scripture.research.witness-matrix.v1",
                 "read_only": True,
                 "available_witnesses": available,
-                "matrix": None,
-                "linear": [
-                    "Witness Matrix",
-                    "At least two source-safe unlocked witnesses are required.",
-                    "No witness, contradiction, chronology, or source claim is inferred from missing data.",
-                ],
+                "matrix": matrix.to_dict(),
+                "linear": matrix.linearize(),
                 "truth_owner": "D5/runtime",
             }
-
-        matrix = build_witness_matrix(runtime, witnesses=available)
-        return {
-            "schema": "scripture.research.witness-matrix.v1",
-            "read_only": True,
-            "available_witnesses": available,
-            "matrix": matrix.to_dict(),
-            "linear": matrix.linearize(),
-            "truth_owner": "D5/runtime",
-        }
 
     def get_evidence_graph(self) -> dict[str, Any]:
         """Derive the packaged graph from the canonical in-process evidence runtime.

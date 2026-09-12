@@ -8,10 +8,15 @@ let dialog = null;
 let status = null;
 let tableHost = null;
 let linearHost = null;
+let requestGeneration = 0;
 
 async function api(command, payload = {}) {
   if (!transport) transport = chooseTransport();
   return await unwrap(transport, command, payload);
+}
+
+function invalidateRequests() {
+  requestGeneration += 1;
 }
 
 function text(value, fallback = '—') {
@@ -113,12 +118,17 @@ function render(data) {
 }
 
 async function refresh() {
+  const generation = ++requestGeneration;
+  if (!dialog?.open) return;
   status.textContent = 'Оновлення Witness Matrix…';
   tableHost.replaceChildren();
   linearHost.replaceChildren();
   try {
-    render(requirePayload(await api('research.get_witness_matrix', {})));
+    const data = requirePayload(await api('research.get_witness_matrix', {}));
+    if (generation !== requestGeneration || !dialog?.open) return;
+    render(data);
   } catch (error) {
+    if (generation !== requestGeneration || !dialog?.open) return;
     status.textContent = `Помилка Witness Matrix: ${error.message}`;
   }
 }
@@ -167,8 +177,15 @@ function buildSurface() {
     await refresh();
   });
   reload.addEventListener('click', refresh);
-  close.addEventListener('click', () => dialog.close());
-  dialog.addEventListener('close', () => trigger?.focus());
+  close.addEventListener('click', () => {
+    invalidateRequests();
+    dialog.close();
+  });
+  dialog.addEventListener('cancel', invalidateRequests);
+  dialog.addEventListener('close', () => {
+    invalidateRequests();
+    trigger?.focus();
+  });
   return true;
 }
 

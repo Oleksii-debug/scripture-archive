@@ -34,6 +34,7 @@ from .state_codec import restore_memory, serialize_mastery, serialize_memory, se
 class RuntimeApplication:
     """UI-neutral, JSON-safe runtime.v1 command/query boundary."""
     API_VERSION = "runtime.v1"
+    REVIEW_RECOVERY_VERSION = 1
 
     def __init__(self, content: ContentRepository, *, persistence: PersistenceStore | None = None, evidence: EvidenceRuntime | None = None) -> None:
         self.content, self.persistence, self.evidence = content, persistence, evidence or EvidenceRuntime()
@@ -101,6 +102,8 @@ class RuntimeApplication:
 
     def submit_answer(self, node_id: str, answer: Any) -> dict[str, Any]:
         if node_id != self.current_node_id: raise ValidationError("submit_answer node_id is not the currently loaded task")
+        if self._review_session_active and self._review_current_node_id == node_id and self._current_visit_result is not None:
+            raise ValidationError("Current Review Training task is already graded")
         task = self.content.get(node_id)
         self._require_release_ground_truth(task)
         state = self.memory.node_history.setdefault(node_id, TaskState(node_id=node_id)); hint_count = self._active_hint_counts.get(node_id, 0)
@@ -150,6 +153,8 @@ class RuntimeApplication:
         """
         if explicit_node_id is not None:
             raise ValidationError("runtime.v1 player next forbids caller-selected node targets")
+        if self._review_session_active:
+            raise ValidationError("Review Training progression is scheduler-owned; use start_review")
         if not self.current_node_id: raise ValidationError("No current task")
         if self._current_visit_result is None or self._current_visit_resolution is None:
             raise ValidationError("Current task must be graded before player.next")
@@ -246,6 +251,96 @@ class RuntimeApplication:
         if reason:
             summary["reason"] = reason
         return summary
+
+    def _serialize_review_recovery(self) -> dict[str, Any]:
+        if not self._review_session_active:
+            return {"version": self.REVIEW_RECOVERY_VERSION, "active": False}
+        if self._review_shown < 1:
+            raise ValidationError("Active Review Training session has invalid shown count")
+        phase = "AWAITING_ANSWER"
+        if self._review_current_node_id is None or self._current_visit_result is not None:
+            phase = "AWAITING_NEXT"
+        if self._review_current_node_id is not None and self.current_node_id != self._review_current_node_id:
+            raise ValidationError("Review Training current-node state is inconsistent at save")
+        hint_count = 0
+        if phase == "AWAITING_ANSWER" and self._review_current_node_id is not None:
+            hint_count = int(self._active_hint_counts.get(self._review_current_node_id, 0))
+        return {
+            "version": self.REVIEW_RECOVERY_VERSION,
+            "active": True,
+            "phase": phase,
+            "current_node_id": self._review_current_node_id,
+            "shown": self._review_shown,
+            "results": dict(self._review_results),
+            "active_hint_count": hint_count,
+        }
+
+    @classmethod
+    def _parse_review_recovery(cls, raw: Any) -> dict[str, Any]:
+        inactive = {
+            "version": cls.REVIEW_RECOVERY_VERSION,
+            "active": False,
+            "phase": None,
+            "current_node_id": None,
+            "shown": 0,
+            "results": {"CORRECT": 0, "PARTIAL": 0, "INCORRECT": 0},
+            "active_hint_count": 0,
+        }
+        if raw is None:
+            return inactive
+        if not isinstance(raw, Mapping):
+            raise ValidationError("review_training recovery state must be an object")
+        if raw.get("version") != cls.REVIEW_RECOVERY_VERSION:
+            raise ValidationError("Unsupported review_training recovery version")
+        active = raw.get("active")
+        if not isinstance(active, bool):
+            raise ValidationError("review_training active must be boolean")
+        if not active:
+            return inactive
+        phase = raw.get("phase")
+        if phase not in {"AWAITING_ANSWER", "AWAITING_NEXT"}:
+            raise ValidationError("review_training phase is invalid")
+        shown = raw.get("shown")
+        if isinstance(shown, bool) or not isinstance(shown, int) or shown < 1:
+            raise ValidationError("review_training shown must be a positive integer")
+        results_raw = raw.get("results")
+        if not isinstance(results_raw, Mapping):
+            raise ValidationError("review_training results must be an object")
+        if set(results_raw.keys()) != {"CORRECT", "PARTIAL", "INCORRECT"}:
+            raise ValidationError("review_training results keys are invalid")
+        results: dict[str, int] = {}
+        for key in ("CORRECT", "PARTIAL", "INCORRECT"):
+            value = results_raw.get(key)
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise ValidationError("review_training result counts must be non-negative integers")
+            results[key] = value
+        total_results = sum(results.values())
+        current_node_id = raw.get("current_node_id")
+        if current_node_id is not None:
+            if not isinstance(current_node_id, str) or not current_node_id:
+                raise ValidationError("review_training current_node_id must be a non-empty string or null")
+        hint_count = raw.get("active_hint_count", 0)
+        if isinstance(hint_count, bool) or not isinstance(hint_count, int) or not 0 <= hint_count <= 7:
+            raise ValidationError("review_training active_hint_count must be an integer from 0 through 7")
+        if phase == "AWAITING_ANSWER":
+            if current_node_id is None:
+                raise ValidationError("review_training awaiting-answer state requires current_node_id")
+            if total_results != shown - 1:
+                raise ValidationError("review_training awaiting-answer counters are inconsistent")
+        else:
+            if total_results != shown:
+                raise ValidationError("review_training awaiting-next counters are inconsistent")
+            if hint_count != 0:
+                raise ValidationError("review_training awaiting-next state cannot retain active hints")
+        return {
+            "version": cls.REVIEW_RECOVERY_VERSION,
+            "active": True,
+            "phase": phase,
+            "current_node_id": current_node_id,
+            "shown": shown,
+            "results": results,
+            "active_hint_count": hint_count,
+        }
 
     def start_review(self) -> dict[str, Any]:
         """Start/continue a review session using persisted queue truth and Scheduler policy.
@@ -350,25 +445,64 @@ class RuntimeApplication:
 
     def save(self) -> dict[str, Any]:
         if not self.persistence: raise ValidationError("Persistence is not configured")
-        self.persistence.save(serialize_memory(self.memory, self.session, self.current_node_id)); return {"api_version": self.API_VERSION, "saved": True}
+        state = serialize_memory(self.memory, self.session, self.current_node_id)
+        state["review_training"] = self._serialize_review_recovery()
+        self.persistence.save(state)
+        return {"api_version": self.API_VERSION, "saved": True}
 
     def restore(self) -> dict[str, Any]:
         if not self.persistence: raise ValidationError("Persistence is not configured")
         # A restore attempt invalidates any authorization from the pre-restore visit
-        # immediately. Decode semantic state before publishing the restored current node,
-        # so a failed restore cannot pair node B with a stale grade/branch from node A.
+        # immediately. Decode and validate into temporary state first so malformed Review
+        # Training recovery data cannot partially mutate the live runtime.
         self._current_visit_result = None
         self._current_visit_resolution = None
-        self._review_session_active = False
-        self._review_current_node_id = None
         state = self.persistence.load()
+        recovery = self._parse_review_recovery(state.get("review_training"))
+        candidate_memory = PlayerMemory(profile_id=self.memory.profile_id)
+        candidate_session = restore_memory(candidate_memory, state)
+        restored_current = state.get("current_node_id")
+        if recovery["active"]:
+            if candidate_session is None or candidate_session.ended_at is not None:
+                raise ValidationError("Active Review Training recovery requires an active persisted session")
+            recovery_node = recovery["current_node_id"]
+            if recovery_node is not None and restored_current != recovery_node:
+                raise ValidationError("Review Training recovery current_node_id does not match persisted runtime state")
+            if recovery["phase"] == "AWAITING_ANSWER":
+                if recovery_node not in candidate_session.shown_node_ids:
+                    raise ValidationError("Review Training recovery task is missing from the active session")
+                task_state = candidate_memory.node_history.get(recovery_node)
+                if task_state is None or not task_state.attempts:
+                    raise ValidationError("Review Training recovery task is not backed by attempted runtime history")
+                if not any(item.node_id == recovery_node for item in candidate_memory.review_queue):
+                    raise ValidationError("Review Training recovery task is no longer backed by review queue truth")
+                task = self.content.get(recovery_node)
+                self._require_release_ground_truth(task)
+
         restored_session = restore_memory(self.memory, state)
-        self.current_node_id = state.get("current_node_id")
         if restored_session: self.session = restored_session
-        # A process/session restore begins a new active attempt scope; historical hint uses
-        # and grading results remain persisted for analytics but cannot authorize a new visit.
+        self._review_session_active = bool(recovery["active"])
+        self._review_shown = int(recovery["shown"])
+        self._review_results = dict(recovery["results"])
         self._active_hint_counts = {}
-        return {"api_version": self.API_VERSION, "restored": True, "current_node_id": self.current_node_id, "schema_version": state["schema_version"]}
+        if recovery["active"] and recovery["phase"] == "AWAITING_ANSWER":
+            self._review_current_node_id = recovery["current_node_id"]
+            self.current_node_id = recovery["current_node_id"]
+            self._active_hint_counts[self.current_node_id] = int(recovery["active_hint_count"])
+        elif recovery["active"]:
+            # A graded answer is already committed to history/mastery/review queue. Do not
+            # resurrect its branch authorization or permit re-grading after restart; the
+            # next start_review call asks the Scheduler for the next eligible review item.
+            self._review_current_node_id = None
+            self.current_node_id = None
+        else:
+            self._review_current_node_id = None
+            self.current_node_id = restored_current
+        response = {"api_version": self.API_VERSION, "restored": True, "current_node_id": self.current_node_id, "schema_version": state["schema_version"]}
+        if recovery["active"]:
+            response["review_session"] = self._review_summary(reason="restored_review_training")
+            response["review_resume_phase"] = recovery["phase"]
+        return response
 
     def _load_task_command(self, payload: Mapping[str, Any]) -> dict[str, Any]:
         """Player-facing entry policy for runtime.v1 `load_task`.
@@ -380,6 +514,12 @@ class RuntimeApplication:
         (or a future explicitly authorized mission-entry capability).
         """
         node_id = str(payload["node_id"])
+        if self._review_session_active:
+            if self._review_current_node_id == node_id and self.current_node_id == node_id:
+                task = self.content.get(node_id)
+                provenance = self._require_release_ground_truth(task)
+                return self._task_response(task, provenance)
+            raise ValidationError("Review Training controls task selection; use start_review")
         if self.current_node_id is None:
             return self.load_task(node_id)
         if node_id != self.current_node_id:

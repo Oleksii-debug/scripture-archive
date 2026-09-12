@@ -134,7 +134,9 @@ class CrossTestamentProjectionTests(unittest.TestCase):
             unlocked_only=False,
         )
         self.assertEqual(full.links[0].relation_id, "REL-SECRET")
-        self.assertEqual(full.links[0].relation_witness, "secret-metadata")
+        self.assertIsNone(full.links[0].relation_witness)
+        self.assertNotIn("secret-metadata", full.stable_json())
+        self.assertNotIn("secret-metadata", "\n".join(full.linearize()))
 
     def test_nary_relation_is_not_pairwise_expanded(self):
         runtime = self.runtime(relation=False)

@@ -75,6 +75,49 @@ class RuntimeBackedPlayerGateway:
 
         return DailyCaseProjection(self._runtime_application, self._loader).response()
 
+    def get_witness_matrix(self) -> dict[str, Any]:
+        """Project a read-only source-local Witness Matrix from canonical unlocked evidence."""
+        if self._runtime_application is None:
+            raise RuntimeGatewayError("Witness Matrix requires the canonical runtime application")
+
+        from runtime_engine.scripture_archive_runtime.evidence_provenance import resolve_evidence_witness
+        from runtime_engine.scripture_archive_runtime.witness_matrix import build_witness_matrix
+
+        runtime = self._runtime_application.evidence
+        witnesses: set[str] = set()
+        for evidence_id in sorted(runtime.unlocked):
+            record = runtime.evidence.get(evidence_id)
+            if record is None:
+                continue
+            witness = resolve_evidence_witness(record)
+            if witness is not None:
+                witnesses.add(witness)
+
+        available = sorted(witnesses)
+        if len(available) < 2:
+            return {
+                "schema": "scripture.research.witness-matrix.v1",
+                "read_only": True,
+                "available_witnesses": available,
+                "matrix": None,
+                "linear": [
+                    "Witness Matrix",
+                    "At least two source-safe unlocked witnesses are required.",
+                    "No witness, contradiction, chronology, or source claim is inferred from missing data.",
+                ],
+                "truth_owner": "D5/runtime",
+            }
+
+        matrix = build_witness_matrix(runtime, witnesses=available)
+        return {
+            "schema": "scripture.research.witness-matrix.v1",
+            "read_only": True,
+            "available_witnesses": available,
+            "matrix": matrix.to_dict(),
+            "linear": matrix.linearize(),
+            "truth_owner": "D5/runtime",
+        }
+
 
 def build_runtime_gateway(repo_root: Path, platform_store_root: Path) -> RuntimeBackedPlayerGateway:
     """Build the exact D5 runtime against the same canonical repository checkout."""

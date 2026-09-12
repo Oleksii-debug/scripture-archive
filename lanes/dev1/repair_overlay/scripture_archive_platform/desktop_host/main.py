@@ -4,7 +4,7 @@ import logging
 import sys
 from pathlib import Path
 
-from scripture_archive_platform.application.service import build_default_application
+from scripture_archive_platform.application.witness_matrix_application import build_default_application
 from scripture_archive_platform.desktop_host.bridge import DesktopBridge
 from scripture_archive_platform.desktop_host.diagnostics import NativeDiagnosticsLayer
 from scripture_archive_platform.desktop_host.update_application import (

@@ -37,6 +37,9 @@ class PlatformApplication:
         if cmd in {'player.next','player.navigate_branch'}:return self._next(p)
         if cmd=='player.get_progress':return {'progress':self._progress(self._id(p,'node_id'))}
         if cmd=='player.get_mastery':return self._mastery()
+        if cmd=='player.get_daily_case':
+            if p:raise ValueError('player.get_daily_case accepts an empty payload')
+            return self._daily_case()
         if cmd=='player.save_checkpoint':return self._save_checkpoint(p)
         if cmd=='player.restore_checkpoint':return self._restore_checkpoint()
         if cmd=='authoring.list_drafts':return {'drafts':self.authoring.list_drafts()}
@@ -95,6 +98,9 @@ class PlatformApplication:
     def _mastery(self):
         if not self.player_gateway:return {'mastery':[],'truth_owner':'REFERENCE_TEST_ONLY'}
         rr=self.player_gateway.invoke('player.get_mastery',{},request_id='mastery-player'); return {'mastery':rr.get('mastery') or [],'truth_owner':'D5/runtime'}
+    def _daily_case(self):
+        if not self.player_gateway:raise ValueError('Daily Case requires canonical runtime')
+        return self.player_gateway.get_daily_case()
     def _save_checkpoint(self,p):
         checkpoint={'campaign_id':p.get('campaign_id'),'mission_id':p.get('mission_id'),'node_id':p.get('node_id'),'saved_at':int(time.time()),'checkpoint_schema':'scripture.player.checkpoint.v1'}
         if self.player_gateway:self.player_gateway.invoke('player.save_checkpoint',{},request_id='save-'+str(p.get('node_id') or 'current'))

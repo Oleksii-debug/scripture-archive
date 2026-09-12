@@ -209,7 +209,12 @@ async function save(kind) {
     if (!targetMatchesContext(returned?.target, context.task, context.mission)) {
       throw new Error('Backend повернув запис для іншого canonical target.');
     }
-    if (mine === generation && current === context) await refreshCurrent(mine);
+    if (mine === generation && current === context) {
+      await refreshCurrent(mine);
+      if (mine === generation && current === context) {
+        status(isBookmark ? 'Закладку збережено.' : 'Нотатку збережено.');
+      }
+    }
   } catch (error) {
     if (mine === generation && current === context) status(`Не вдалося зберегти: ${error.message}`);
   }
@@ -234,7 +239,14 @@ async function remove(kind) {
     const command = isBookmark ? 'research.delete_bookmark' : 'research.delete_note';
     const response = await invoke(command, {[idKey]: context.target.node_id});
     if (!response || typeof response.deleted !== 'boolean') throw new Error('Некоректна delete-відповідь');
-    if (mine === generation && current === context) await refreshCurrent(mine);
+    if (mine === generation && current === context) {
+      await refreshCurrent(mine);
+      if (mine === generation && current === context) {
+        status(response.deleted
+          ? (isBookmark ? 'Закладку видалено.' : 'Нотатку видалено.')
+          : 'Запис уже був відсутній.');
+      }
+    }
   } catch (error) {
     if (mine === generation && current === context) status(`Не вдалося видалити: ${error.message}`);
   }

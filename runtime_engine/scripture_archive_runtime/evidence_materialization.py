@@ -37,6 +37,21 @@ def _git_blob_sha1(data: bytes) -> str:
     return hashlib.sha1(header + data).hexdigest()
 
 
+def _matches_pinned_git_blob(source_bytes: bytes, expected_blob: str) -> bool:
+    """Match repository blob identity across Git's ordinary text checkout forms.
+
+    The pin names the canonical Git blob, whose checked-in Markdown uses LF. A
+    Windows checkout may expose the same tracked text as CRLF. Accept that one
+    representation-only transform, but no whitespace/content/Unicode rewriting.
+    """
+
+    if _git_blob_sha1(source_bytes) == expected_blob:
+        return True
+    if b"\r\n" not in source_bytes:
+        return False
+    return _git_blob_sha1(source_bytes.replace(b"\r\n", b"\n")) == expected_blob
+
+
 def _parse_source_pack(path: Path) -> Mapping[str, Mapping[str, str]]:
     try:
         text = path.read_text(encoding="utf-8")
@@ -80,7 +95,8 @@ def load_pa02_structured_evidence(
     Claims/confidence/TX status remain owned by the SOURCE_AUDITED Markdown pack.
     The JSON index contains only technical runtime structure: passage coordinates,
     source-local witness tokens, retrieval entity ids, and explicit node unlock links.
-    Any source-pack byte drift fails closed via the pinned Git blob id.
+    Repository blob drift fails closed; ordinary CRLF checkout representation is
+    reduced only to LF for comparison with the pinned Git blob identity.
     """
 
     repo_root = Path(repo_root).resolve()
@@ -108,7 +124,7 @@ def load_pa02_structured_evidence(
         raise ValueError(f"Cannot load source-audited evidence pack {source_path.name}: {exc}") from exc
     expected_blob = _require_text(index, "source_pack_git_blob_sha1", context="index")
     actual_blob = _git_blob_sha1(source_bytes)
-    if actual_blob != expected_blob:
+    if not _matches_pinned_git_blob(source_bytes, expected_blob):
         raise ValueError(
             f"Source evidence pack drifted: expected Git blob {expected_blob}, got {actual_blob}"
         )

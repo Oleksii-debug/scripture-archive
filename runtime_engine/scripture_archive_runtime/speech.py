@@ -225,6 +225,8 @@ class SpeechCache:
 
     def get(self, key: str, response_format: str) -> Path | None:
         path = self.path_for(key, response_format)
+        if path.is_symlink():
+            return None
         if path.is_file() and path.stat().st_size > 0:
             return path
         return None
@@ -293,6 +295,13 @@ class SpeechService:
         )
 
 
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Credential-bearing API requests must never follow redirects automatically."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 class _NetworkProviderBase:
     is_network = True
 
@@ -317,7 +326,7 @@ class _NetworkProviderBase:
             raise SpeechConfigurationError("timeout_seconds must be between 1 and 120")
         self.allow_private_text = bool(allow_private_text)
         self.retry_policy = retry_policy or RetryPolicy()
-        self._opener = opener or urllib.request.urlopen
+        self._opener = opener or urllib.request.build_opener(_NoRedirectHandler()).open
         self._sleep = sleep
         self._random_uniform = random_uniform
 

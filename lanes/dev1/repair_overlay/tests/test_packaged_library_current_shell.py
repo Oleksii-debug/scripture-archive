@@ -29,7 +29,7 @@ class PackagedLibraryCurrentShellTest(unittest.TestCase):
         self.assertEqual(completed.stdout.strip(), EXPECTED_LIBRARY_UI_BLOB)
 
     def test_current_transport_preserves_package_loaders_and_composes_coordinator_surfaces(self):
-        self.assertIn("export async function chooseTransport", self.transport)
+        self.assertIn("export function chooseTransport", self.transport)
         self.assertIn("export async function unwrap", self.transport)
         expected_loaders = {
             "./review-queue-ui.js",

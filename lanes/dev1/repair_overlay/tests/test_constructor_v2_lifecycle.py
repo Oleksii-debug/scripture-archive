@@ -10,7 +10,7 @@ for _parent in Path(__file__).resolve().parents:
         sys.path.insert(0, str(_runtime_root))
         break
 
-from scripture_archive_platform.authoring.service import AuthoringService
+from scripture_archive_platform.authoring.recoverable import RecoverableAuthoringService
 from scripture_archive_platform.content.loader import TaskPresentationMapper
 from scripture_archive_platform.domain.registries import build_task_registries
 from scripture_archive_platform.persistence.store import JsonFileStore
@@ -28,7 +28,7 @@ class ConstructorV2LifecycleTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def _service(self):
-        return AuthoringService(
+        return RecoverableAuthoringService(
             JsonFileStore(self.root), self.registry, TaskPresentationMapper(),
             clock=lambda: 1700000000,
             id_factory=lambda: f"{next(self.ids):012d}",

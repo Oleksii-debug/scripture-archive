@@ -40,6 +40,7 @@ class PA02StructuredMaterializationTests(unittest.TestCase):
             {"Acts 9 narrator", "Acts 22 Paul speech", "Acts 26 Paul speech"},
             {ref.witness for ref in mixed.passage_refs},
         )
+        self.assertEqual(("EV-PA-0015",), node_links["PA02-N09"])
         self.assertEqual(set(SOURCE_IDS), set(node_links["PA02-N13"]))
 
     def test_source_pack_byte_drift_fails_closed(self):
@@ -65,6 +66,7 @@ class PA02StructuredMaterializationTests(unittest.TestCase):
         self.assertIn("EVR-R05-0090", bundle.records)
         self.assertNotIn("EV-PA-0008", bundle.records)
         self.assertIn("EV-PA-0008", bundle.runtime.evidence)
+        self.assertIs(True, bundle.records["EVR-R05-0001"]["nonvisual_access"])
 
         # R05 grading provenance remains intentionally unparsed.
         r05 = bundle.runtime.evidence["EVR-R05-0090"]

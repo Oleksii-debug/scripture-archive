@@ -37,6 +37,7 @@ class PackagedLibraryCurrentShellTest(unittest.TestCase):
             "./library-shell-compat.js",
             "./daily-case-ui.js",
             "./content-pack-manager.js",
+            "./evidence-graph-ui.js",
         }
         imports = set(re.findall(r"void import\('([^']+)'\)", self.transport))
         self.assertEqual(imports, expected_loaders)
@@ -44,6 +45,10 @@ class PackagedLibraryCurrentShellTest(unittest.TestCase):
             self.assertEqual(self.transport.count(f"void import('{loader}')"), 1)
         self.assertIn(
             "void import('./content-pack-manager.js').then(({installContentPackManagerSurface})=>installContentPackManagerSurface());",
+            self.transport,
+        )
+        self.assertIn(
+            "void import('./evidence-graph-ui.js').then(({installEvidenceGraphSurface})=>installEvidenceGraphSurface());",
             self.transport,
         )
 
@@ -109,6 +114,7 @@ class PackagedLibraryCurrentShellTest(unittest.TestCase):
             ROOT / "library-shell-compat.js",
             ROOT / "daily-case-ui.js",
             ROOT / "content-pack-manager.js",
+            ROOT / "evidence-graph-ui.js",
         ):
             completed = subprocess.run(
                 ["node", "--check", str(path)],

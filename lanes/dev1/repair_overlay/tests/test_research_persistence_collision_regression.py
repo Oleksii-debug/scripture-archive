@@ -102,6 +102,30 @@ release();
 await pending;
 if(stale.status.textContent!==expectedStatus)throw new Error('stale refresh overwrote new context status');
 if(stale.noteForm.title.value!==''||stale.noteForm.body.value!=='')throw new Error('stale refresh hydrated old context');
+
+let releaseSave;
+const saveGate=new Promise(resolve=>{releaseSave=resolve});
+const saveCalls=[];
+async function delayedSave(command,payload={}){
+  saveCalls.push(command);
+  if(command==='research.list_notes'){await saveGate;return {notes:[]}}
+  if(command==='research.list_bookmarks')return {bookmarks:[]};
+  if(command==='research.upsert_note')return {note:{schema:'scripture.research.note.v1',...payload.note,target:exactTarget}};
+  throw new Error(`unexpected delayed-save command ${command}`);
+}
+const staleSaveHost=new Element('div');
+const staleSave=new ResearchPersistenceUI({host:staleSaveHost,invoke:delayedSave,capabilities:{research_bookmarks_notes:true,research_workspace_persistence:true}});
+staleSave.setContext({task,mission});
+staleSave.noteForm.title.value='Old context note';
+staleSave.noteForm.body.value='Must not cross context';
+const savePending=staleSave._save('note');
+staleSave.setContext({task:nextTask,mission:nextMission});
+const nextStatus=staleSave.status.textContent;
+releaseSave();
+await savePending;
+if(saveCalls.includes('research.upsert_note'))throw new Error('stale save crossed context into upsert');
+if(staleSave.status.textContent!==nextStatus)throw new Error('stale save overwrote new context status');
+if(staleSave.noteForm.title.value!==''||staleSave.noteForm.body.value!=='')throw new Error('stale save repopulated new context form');
 '''
             script = script.replace("MODULE_URI", json.dumps(module.as_uri()))
             result = subprocess.run(

@@ -1,0 +1,37 @@
+name: R06 Packaged Evidence Graph Mount Qualification
+
+on:
+  pull_request:
+    paths:
+      - 'lanes/dev1/repair_overlay/frontend/research-workbench.js'
+      - 'lanes/dev1/repair_overlay/tests/test_packaged_evidence_graph_mount.py'
+      - '.github/workflows/r06-packaged-evidence-graph-mount.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  packaged-evidence-graph-mount:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Confirm exact source checkout
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - name: Run packaged Evidence Graph live-shell mount regression
+        run: python lanes/dev1/repair_overlay/tests/test_packaged_evidence_graph_mount.py
+      - name: Diff hygiene
+        shell: bash
+        run: git diff --check

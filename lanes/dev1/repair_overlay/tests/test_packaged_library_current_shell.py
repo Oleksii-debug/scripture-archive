@@ -36,6 +36,7 @@ class PackagedLibraryCurrentShellTest(unittest.TestCase):
             "./library-ui.js",
             "./library-shell-compat.js",
             "./daily-case-ui.js",
+            "./chronology-lab-ui.js",
             "./content-pack-manager.js",
         }
         imports = set(re.findall(r"void import\('([^']+)'\)", self.transport))
@@ -108,6 +109,7 @@ class PackagedLibraryCurrentShellTest(unittest.TestCase):
             ROOT / "library-ui.js",
             ROOT / "library-shell-compat.js",
             ROOT / "daily-case-ui.js",
+            ROOT / "chronology-lab-ui.js",
             ROOT / "content-pack-manager.js",
         ):
             completed = subprocess.run(

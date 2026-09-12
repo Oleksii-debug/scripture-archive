@@ -4,6 +4,7 @@ import sys
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[4]
 
 
 class PackagedReviewTrainingSyntaxTest(unittest.TestCase):
@@ -19,8 +20,8 @@ class PackagedReviewTrainingSyntaxTest(unittest.TestCase):
 
     def test_review_python_modules_compile(self):
         paths = [
-            Path(__file__).resolve().parents[3] / "runtime_engine" / "scripture_archive_runtime" / "application.py",
-            Path(__file__).resolve().parents[3] / "runtime_engine" / "scripture_archive_runtime" / "security.py",
+            REPO_ROOT / "runtime_engine" / "scripture_archive_runtime" / "application.py",
+            REPO_ROOT / "runtime_engine" / "scripture_archive_runtime" / "security.py",
             ROOT / "scripture_archive_platform" / "transport" / "runtime_compat.py",
             ROOT / "scripture_archive_platform" / "transport" / "contracts.py",
             ROOT / "scripture_archive_platform" / "application" / "service.py",

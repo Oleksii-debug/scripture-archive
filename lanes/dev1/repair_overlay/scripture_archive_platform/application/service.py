@@ -13,14 +13,14 @@ from scripture_archive_platform.persistence.store import JsonFileStore
 from scripture_archive_platform.application.keymap import KeybindingService
 from scripture_archive_platform.application.content_pack_manager import ContentPackManagerService
 from scripture_archive_platform.application.research_workspace import ResearchWorkspaceService
-from scripture_archive_platform.authoring.service import AuthoringService
+from scripture_archive_platform.authoring.recoverable import RecoverableAuthoringService
 
 class PlatformApplication:
     def __init__(self,repo_root:Path,store=None,loader=None,grader=None,player_gateway=None):
         self.repo_root=Path(repo_root).resolve(); self.store=store or JsonFileStore(JsonFileStore.default_root())
         self.loader=loader or CanonicalContentLoader(self.repo_root); self.library=CanonicalLibraryIndex(self.loader); self.mapper=TaskPresentationMapper(); self.grader=grader or ReferenceGrader(); self.player_gateway=player_gateway
         self.task_types,self.renderers,self.graders,self.editors,self.templates=build_task_registries()
-        self.keymap=KeybindingService(self.store); self.research=ResearchWorkspaceService(self.store,self.loader,self.mapper); self.authoring=AuthoringService(self.store,self.task_types,self.mapper); self.content_packs=ContentPackManagerService(self.store.root)
+        self.keymap=KeybindingService(self.store); self.research=ResearchWorkspaceService(self.store,self.loader,self.mapper); self.authoring=RecoverableAuthoringService(self.store,self.task_types,self.mapper); self.content_packs=ContentPackManagerService(self.store.root)
         self._hint_level:dict[str,int]={}; self._last_node:dict[str,dict[str,Any]]={}
     def handle(self,request:dict[str,Any])->dict[str,Any]:
         rid=str(request.get('request_id','invalid')) if isinstance(request,dict) else 'invalid'

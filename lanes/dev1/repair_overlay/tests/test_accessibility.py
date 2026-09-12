@@ -111,8 +111,10 @@ class AccessibilityTests(unittest.TestCase):
         self.assertIn('id="task-meta"', self.html)
 
     def test_renderer_wrapper_delegates_to_current_implementation_without_content_truth(self):
-        self.assertIn("export {renderTask} from './renderers-base.js'", self.renderer_wrapper)
-        self.assertNotRegex(self.renderers, r'LN\d{2}-N\d{2}|PA\d{2}-N\d{2}|LN\d{2}N')
+        self.assertIn("renderTask as renderBaseTask", self.renderer_wrapper)
+        self.assertIn("const getAnswer=renderBaseTask(task,host)", self.renderer_wrapper)
+        self.assertIn("renderAccessibilityInspection(task)", self.renderer_wrapper)
+        self.assertNotRegex(self.renderer_wrapper + self.renderers, r'LN\d{2}-N\d{2}|PA\d{2}-N\d{2}|LN\d{2}N')
         self.assertIn('host.replaceChildren()', self.renderers)
         self.assertIn('RendererRegistry.get(task.task_type).render(task,host)', self.renderers)
 

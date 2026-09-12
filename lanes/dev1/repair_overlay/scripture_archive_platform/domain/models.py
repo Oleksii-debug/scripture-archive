@@ -14,7 +14,13 @@ BUILTIN_TASK_TYPES = (
 
 @dataclass(frozen=True)
 class TaskTypeDefinition:
-    task_type: str; renderer_id: str; grader_id: str; editor_id: str; response_shape: str; nonvisual_contract: str
+    task_type: str
+    renderer_id: str
+    grader_id: str
+    editor_id: str
+    response_shape: str
+    nonvisual_contract: str
+    authoring_contract: dict[str, Any] = field(default_factory=dict)
 
 @dataclass(frozen=True)
 class ActionDefinition:

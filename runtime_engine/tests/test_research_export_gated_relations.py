@@ -119,6 +119,72 @@ class ResearchExportGatedRelationRegressionTests(unittest.TestCase):
             self.assertIn("REL-PROBE", serialized)
             self.assertIn("REL-LOCKED-META", serialized)
 
+    def test_visible_evidence_metadata_omits_relation_hidden_by_gated_claim(self):
+        runtime = EvidenceRuntime()
+        runtime.add_evidence(
+            EvidenceRecord(
+                "EV-VISIBLE",
+                (PassageRef("MK14:13", "Mark", 14, 13, witness="Mark"),),
+                "Visible evidence",
+                Confidence.T1,
+                witness="Mark",
+                relation_ids=("REL-HIDDEN",),
+            )
+        )
+        runtime.add_evidence(
+            EvidenceRecord(
+                "EV-LOCKED",
+                (PassageRef("LK22:8", "Luke", 22, 8, witness="Luke"),),
+                "Locked evidence",
+                Confidence.T1,
+                witness="Luke",
+            )
+        )
+        runtime.add_claim(
+            Claim(
+                "CL-HIDDEN",
+                "Hidden claim requires locked evidence",
+                Confidence.T2,
+                required_evidence_ids=("EV-LOCKED",),
+                witness="Luke",
+            )
+        )
+        runtime.add_relation(
+            Relation(
+                "REL-HIDDEN",
+                "CL-HIDDEN",
+                "identifies",
+                "PERSON-X",
+                witness="Luke",
+                passage_ids=("LK22:8",),
+            )
+        )
+        runtime.unlock("EV-VISIBLE")
+
+        export = build_research_export(runtime, workspace_id="case", title="Case")
+
+        self.assertEqual(export.payload["evidence"][0]["relation_ids"], [])
+        self.assertEqual(export.payload["claims"], [])
+        self.assertEqual(export.payload["relations"], [])
+        for serialized in (export.to_json(), export.to_markdown(), export.to_html()):
+            self.assertNotIn("REL-HIDDEN", serialized)
+            self.assertNotIn("CL-HIDDEN", serialized)
+            self.assertNotIn("PERSON-X", serialized)
+            self.assertNotIn("LK22:8", serialized)
+
+        full_export = build_research_export(
+            runtime,
+            workspace_id="case",
+            title="Case",
+            include_locked_evidence=True,
+        )
+        full_evidence = {row["evidence_id"]: row for row in full_export.payload["evidence"]}
+        self.assertEqual(full_evidence["EV-VISIBLE"]["relation_ids"], ["REL-HIDDEN"])
+        self.assertEqual(
+            [row["relation_id"] for row in full_export.payload["relations"]],
+            ["REL-HIDDEN"],
+        )
+
     def test_full_scope_preserves_gated_relation_metadata_explicitly(self):
         runtime = self.runtime()
         runtime.add_relation(Relation("REL-CLAIM", "CL-GATED", "supported_by", "EV-A"))

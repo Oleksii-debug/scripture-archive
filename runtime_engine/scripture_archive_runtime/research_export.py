@@ -428,7 +428,10 @@ def _evidence_payload(record: Any, visible_relation_ids: set[str]) -> dict[str, 
             for p in passages
         ],
         "entity_ids": sorted(record.entity_ids),
-        "relation_ids": sorted(set(record.relation_ids) & visible_relation_ids),
+        "relation_ids": sorted(
+            relation_id for relation_id in record.relation_ids
+            if relation_id in visible_relation_ids
+        ),
     }
 
 

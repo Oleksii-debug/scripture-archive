@@ -13,6 +13,7 @@ on:
       - 'lanes/dev1/repair_overlay/tests/test_packaged_library_current_shell.py'
       - 'lanes/dev1/repair_overlay/tests/test_packaged_transport_composition.py'
       - 'lanes/dev1/repair_overlay/tests/test_packaged_witness_matrix_contract.py'
+      - 'lanes/dev1/repair_overlay/tests/test_packaged_witness_matrix_lifecycle.py'
       - '.github/workflows/r06-packaged-library-current-shell.yml'
   workflow_dispatch:
 
@@ -46,10 +47,7 @@ jobs:
       - name: Run packaged transport composition regression
         run: python lanes/dev1/repair_overlay/tests/test_packaged_transport_composition.py
       - name: Run packaged Witness Matrix lifecycle regression
-        working-directory: lanes/dev1/repair_overlay
-        env:
-          PYTHONPATH: ../../..
-        run: python -m unittest tests.test_packaged_witness_matrix_contract
+        run: python lanes/dev1/repair_overlay/tests/test_packaged_witness_matrix_lifecycle.py
       - name: Diff hygiene
         shell: bash
         run: git diff --check

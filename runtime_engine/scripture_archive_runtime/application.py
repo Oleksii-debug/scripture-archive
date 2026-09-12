@@ -11,9 +11,22 @@ from .evidence import EvidenceRuntime
 from .grading import GraderRegistry
 from .mastery import MasteryEngine
 from .memory import PlayerMemoryService
-from .models import Attempt, BranchResolution, Correctness, HintUse, MasteryState, PlayerMemory, Session, TaskDefinition, TaskState
+from .models import (
+    Attempt,
+    BranchResolution,
+    Correctness,
+    HintUse,
+    MasteryState,
+    PlayerMemory,
+    QueueKind,
+    SchedulerCandidate,
+    Session,
+    TaskDefinition,
+    TaskState,
+)
 from .persistence import PersistenceStore
 from .provenance import PROVENANCE_CONTRACT_VERSION, ProvenanceDecision, classify_provenance
+from .scheduler import Scheduler
 from .security import CommandEnvelope, ValidationError
 from .state_codec import restore_memory, serialize_mastery, serialize_memory, serialize_review_item
 
@@ -26,6 +39,7 @@ class RuntimeApplication:
         self.content, self.persistence, self.evidence = content, persistence, evidence or EvidenceRuntime()
         self.graders, self.branches, self.mastery_engine = GraderRegistry(), BranchEngine(), MasteryEngine()
         self.memory_service = PlayerMemoryService()
+        self.scheduler = Scheduler(memory_service=self.memory_service)
         self.memory = PlayerMemory(profile_id="default"); self.current_node_id: str | None = None
         self.session = Session(session_id=str(uuid.uuid4())); self._visit_counts: dict[str, int] = {}
         # Persisted TaskState.hint_uses is the historical audit trail. This separate
@@ -39,6 +53,12 @@ class RuntimeApplication:
         # inputs such as hint count may still change later for audit/UI purposes, but
         # they must never rewrite the already-authorized progression decision.
         self._current_visit_resolution: BranchResolution | None = None
+        # Review Training is a runtime-owned presentation mode over the existing persisted
+        # queue + deterministic Scheduler. It never becomes a second scheduling authority.
+        self._review_session_active = False
+        self._review_current_node_id: str | None = None
+        self._review_shown = 0
+        self._review_results = {"CORRECT": 0, "PARTIAL": 0, "INCORRECT": 0}
 
     @staticmethod
     def _require_release_ground_truth(task: TaskDefinition) -> ProvenanceDecision:
@@ -102,7 +122,12 @@ class RuntimeApplication:
         # A partial/failed submit must not leave player.next enabled by an intermediate grade.
         self._current_visit_result = result.correctness
         self._current_visit_resolution = resolution
-        return {"api_version": self.API_VERSION, "grade": result.to_dict(), "mastery_consequence": [self._consequence(c) for c in consequences], "branch": resolution.to_dict(), "accessibility": [grade_event(result, consequences).to_dict(), branch_event(resolution).to_dict()]}
+        if self._review_session_active and self._review_current_node_id == node_id:
+            self._review_results[result.correctness.value] += 1
+        response = {"api_version": self.API_VERSION, "grade": result.to_dict(), "mastery_consequence": [self._consequence(c) for c in consequences], "branch": resolution.to_dict(), "accessibility": [grade_event(result, consequences).to_dict(), branch_event(resolution).to_dict()]}
+        if self._review_session_active:
+            response["review_session"] = self._review_summary()
+        return response
 
     @staticmethod
     def _consequence(c: Any) -> dict[str, Any]:
@@ -144,6 +169,165 @@ class RuntimeApplication:
         """Expose persisted review scheduling truth without inventing task selection policy."""
         return {"api_version": self.API_VERSION, "review_queue": [serialize_review_item(item) for item in self.memory.review_queue]}
 
+    def _review_groups(self) -> tuple[list[SchedulerCandidate], dict[str, dict[str, Any]]]:
+        """Adapt persisted review truth into the existing Scheduler without local UI policy.
+
+        Multiple mastery concepts can enqueue the same node. They are collapsed into one
+        SchedulerCandidate because one graded task updates all of that task's mastery domains.
+        Persisted priority is used only as the existing Scheduler's normalized weak signal;
+        due time, relation, session dedupe, fatigue and EXACT cooldown remain Scheduler-owned.
+        """
+        grouped: dict[str, list[Any]] = {}
+        for item in self.memory.review_queue:
+            if item.node_id is None:
+                continue
+            state = self.memory.node_history.get(item.node_id)
+            if state is None or not state.attempts:
+                raise ValidationError(f"Review queue item {item.queue_id} is not backed by an attempted runtime task")
+            grouped.setdefault(item.node_id, []).append(item)
+
+        candidates: list[SchedulerCandidate] = []
+        metadata: dict[str, dict[str, Any]] = {}
+        for node_id, items in sorted(grouped.items()):
+            task = self.content.get(node_id)
+            self._require_release_ground_truth(task)
+            relations = {item.relation for item in items}
+            if len(relations) != 1:
+                raise ValidationError(f"Review queue has conflicting relations for {node_id}")
+            concept_ids = tuple(sorted({item.concept_id for item in items}))
+            due_at = min(item.due_at for item in items)
+            max_priority = max(item.priority for item in items)
+            relation = next(iter(relations))
+            # Queue entries are created only after a successfully rendered/attempted
+            # canonical runtime task. Re-checking provenance above preserves that invariant.
+            candidate = SchedulerCandidate(
+                node_id=node_id,
+                task_family=task.task_type,
+                queue=QueueKind.REVIEW,
+                concept_ids=concept_ids,
+                relation=relation,
+                source_audited=True,
+                due_at=due_at,
+                weak_signal=max(0.0, min(1.0, float(max_priority) / 100.0)),
+            )
+            candidates.append(candidate)
+            metadata[node_id] = {
+                "queue_ids": [item.queue_id for item in sorted(items, key=lambda x: x.queue_id)],
+                "concept_ids": list(concept_ids),
+                "relation": relation.value,
+                "reasons": [item.reason for item in sorted(items, key=lambda x: x.queue_id)],
+                "due_at": due_at.isoformat(),
+                "priority": max_priority,
+            }
+        return candidates, metadata
+
+    def _eligible_review_count(self, candidates: list[SchedulerCandidate]) -> int:
+        adjacent = self.memory_service.adjacent_successful_exact_ids(self.memory, self.session)
+        return sum(
+            1
+            for candidate in candidates
+            if self.scheduler.eligible(
+                candidate,
+                self.memory,
+                self.session,
+                adjacent_successful_exact_ids=adjacent,
+            )[0]
+        )
+
+    def _review_summary(self, *, remaining_eligible: int | None = None, reason: str | None = None) -> dict[str, Any]:
+        summary = {
+            "active": self._review_session_active,
+            "shown": self._review_shown,
+            "results": dict(self._review_results),
+            "current_node_id": self._review_current_node_id,
+        }
+        if remaining_eligible is not None:
+            summary["remaining_eligible"] = int(remaining_eligible)
+        if reason:
+            summary["reason"] = reason
+        return summary
+
+    def start_review(self) -> dict[str, Any]:
+        """Start/continue a review session using persisted queue truth and Scheduler policy.
+
+        The caller never supplies a node target. This is the explicit safe capability for
+        entering review work without reopening unrestricted player.load_task jumps.
+        """
+        if self._review_session_active and self._review_current_node_id:
+            if self.current_node_id != self._review_current_node_id:
+                raise ValidationError("Review session current-node state is inconsistent")
+            if self._current_visit_result is None:
+                raise ValidationError("Current review task must be graded before requesting another review task")
+
+        candidates, metadata = self._review_groups()
+        if self._review_session_active:
+            adjacent = self.memory_service.adjacent_successful_exact_ids(self.memory, self.session)
+            selection_session = self.session
+        else:
+            # A Review Training run is a distinct learning session. Score against an
+            # empty prospective session while treating the current session as the
+            # adjacent-session cooldown source. Do not mutate session history unless
+            # the Scheduler actually finds an eligible review task.
+            adjacent = set(self.session.successful_exact_ids or self.session.correct_node_ids)
+            selection_session = Session(session_id="review-selection-preview")
+        best = self.scheduler.choose_next(
+            candidates,
+            self.memory,
+            selection_session,
+            adjacent_successful_exact_ids=adjacent,
+        )
+        if best is None:
+            was_active = self._review_session_active
+            if was_active:
+                self.memory_service.finish_session(self.memory, self.session, reason="review_queue_exhausted")
+                self.session = self.memory_service.start_session(self.memory)
+            self._review_session_active = False
+            self._review_current_node_id = None
+            if was_active:
+                self.current_node_id = None
+                self._current_visit_result = None
+                self._current_visit_resolution = None
+                self._active_hint_counts = {}
+            return {
+                "api_version": self.API_VERSION,
+                "task": None,
+                "review_session": self._review_summary(remaining_eligible=0, reason="no_eligible_due_review"),
+            }
+
+        if not self._review_session_active:
+            self.memory_service.finish_session(self.memory, self.session, reason="review_training_switch")
+            self.session = self.memory_service.start_session(self.memory)
+            self._review_session_active = True
+            self._review_shown = 0
+            self._review_results = {"CORRECT": 0, "PARTIAL": 0, "INCORRECT": 0}
+
+        selected = best.candidate
+        task_response = self.load_task(selected.node_id)
+        self._review_current_node_id = selected.node_id
+        self._review_shown += 1
+        remaining = self._eligible_review_count(candidates)
+        return {
+            **task_response,
+            "review_selection": metadata[selected.node_id],
+            "review_session": self._review_summary(remaining_eligible=remaining),
+        }
+
+    def finish_review(self) -> dict[str, Any]:
+        """Explicitly leave Review Training and release the runtime entry point."""
+        summary = self._review_summary(reason="stopped_by_user")
+        if self._review_session_active:
+            self.memory_service.finish_session(self.memory, self.session, reason="review_training_stopped")
+            self.session = self.memory_service.start_session(self.memory)
+        self._review_session_active = False
+        self._review_current_node_id = None
+        self.current_node_id = None
+        self._current_visit_result = None
+        self._current_visit_resolution = None
+        self._active_hint_counts = {}
+        summary["active"] = False
+        summary["current_node_id"] = None
+        return {"api_version": self.API_VERSION, "review_session": summary}
+
     def get_evidence(self) -> dict[str, Any]:
         return {"api_version": self.API_VERSION, "unlocked": sorted(self.evidence.unlocked), "linear": self.evidence.linearize()}
 
@@ -158,6 +342,8 @@ class RuntimeApplication:
         # so a failed restore cannot pair node B with a stale grade/branch from node A.
         self._current_visit_result = None
         self._current_visit_resolution = None
+        self._review_session_active = False
+        self._review_current_node_id = None
         state = self.persistence.load()
         restored_session = restore_memory(self.memory, state)
         self.current_node_id = state.get("current_node_id")
@@ -207,8 +393,25 @@ class RuntimeApplication:
             raise ValidationError("runtime.v1 next accepts no caller-selected target payload")
         return self.next()
 
+    @staticmethod
+    def _empty_payload(payload: Mapping[str, Any], command: str) -> None:
+        if payload:
+            raise ValidationError(f"runtime.v1 {command} accepts an empty payload")
+
     def handle(self, command: Mapping[str, Any] | CommandEnvelope) -> dict[str, Any]:
         envelope = command if isinstance(command, CommandEnvelope) else CommandEnvelope.from_mapping(command); p = envelope.payload
-        routes = {"load_task": lambda: self._load_task_command(p), "submit_answer": lambda: self._submit_command(p), "request_hint": lambda: self.request_hint(str(p["node_id"])), "next": lambda: self._next_command(p), "save": self.save, "restore": self.restore, "get_mastery": self.get_mastery, "get_review_queue": self.get_review_queue, "get_evidence": self.get_evidence}
+        routes = {
+            "load_task": lambda: self._load_task_command(p),
+            "submit_answer": lambda: self._submit_command(p),
+            "request_hint": lambda: self.request_hint(str(p["node_id"])),
+            "next": lambda: self._next_command(p),
+            "save": self.save,
+            "restore": self.restore,
+            "get_mastery": self.get_mastery,
+            "get_review_queue": self.get_review_queue,
+            "start_review": lambda: (self._empty_payload(p, "start_review"), self.start_review())[1],
+            "finish_review": lambda: (self._empty_payload(p, "finish_review"), self.finish_review())[1],
+            "get_evidence": self.get_evidence,
+        }
         if envelope.command not in routes: raise ValidationError("Unsupported command")
         return {"request_id": envelope.request_id, **routes[envelope.command]()}

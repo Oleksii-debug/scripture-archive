@@ -22,6 +22,7 @@ on:
       - 'lanes/dev1/repair_overlay/tests/test_packaged_witness_matrix_contract.py'
       - 'lanes/dev1/repair_overlay/tests/test_packaged_witness_matrix_lifecycle.py'
       - 'lanes/dev1/repair_overlay/tests/test_research_export_current_shell.py'
+      - 'lanes/dev1/repair_overlay/tests/test_packaged_structured_evidence_population.py'
       - '.github/workflows/r06-packaged-library-current-shell.yml'
   workflow_dispatch:
 
@@ -60,6 +61,8 @@ jobs:
         run: python lanes/dev1/repair_overlay/tests/test_packaged_witness_matrix_lifecycle.py
       - name: Run packaged Research Export current-shell regression
         run: python lanes/dev1/repair_overlay/tests/test_research_export_current_shell.py
+      - name: Run packaged structured-evidence population regression
+        run: python lanes/dev1/repair_overlay/tests/test_packaged_structured_evidence_population.py
       - name: Diff hygiene
         shell: bash
         run: git diff --check

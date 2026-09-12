@@ -46,9 +46,10 @@ jobs:
       - name: Run packaged transport composition regression
         run: python lanes/dev1/repair_overlay/tests/test_packaged_transport_composition.py
       - name: Run packaged Witness Matrix lifecycle regression
+        working-directory: lanes/dev1/repair_overlay
         env:
-          PYTHONPATH: lanes/dev1/repair_overlay
-        run: python lanes/dev1/repair_overlay/tests/test_packaged_witness_matrix_contract.py
+          PYTHONPATH: ../../..
+        run: python -m unittest tests.test_packaged_witness_matrix_contract
       - name: Diff hygiene
         shell: bash
         run: git diff --check

@@ -313,11 +313,12 @@ class RuntimeApplication:
         }
 
     def finish_review(self) -> dict[str, Any]:
-        """Explicitly leave Review Training and release the runtime entry point."""
+        """Explicitly leave an active Review Training session and release its entry point."""
+        if not self._review_session_active:
+            raise ValidationError("Review Training session is not active")
         summary = self._review_summary(reason="stopped_by_user")
-        if self._review_session_active:
-            self.memory_service.finish_session(self.memory, self.session, reason="review_training_stopped")
-            self.session = self.memory_service.start_session(self.memory)
+        self.memory_service.finish_session(self.memory, self.session, reason="review_training_stopped")
+        self.session = self.memory_service.start_session(self.memory)
         self._review_session_active = False
         self._review_current_node_id = None
         self.current_node_id = None

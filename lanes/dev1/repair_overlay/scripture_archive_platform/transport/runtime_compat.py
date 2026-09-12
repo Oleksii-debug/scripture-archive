@@ -4,11 +4,12 @@ from typing import Any, Callable, Mapping
 from scripture_archive_platform.domain.models import TRANSPORT_API_VERSION
 from scripture_archive_platform.transport.contracts import validate_request_shape
 from scripture_archive_platform.transport.answer_contracts import validate_answer_dto, AnswerContractError
+from scripture_archive_platform.transport.review_queue_contract import validate_review_queue_projection
 
 RUNTIME_API_VERSION = "runtime.v1"
 PLAYER_COMMAND_MAP = {
     "player.load_node": "load_task", "player.submit_answer": "submit_answer", "player.request_hint": "request_hint",
-    "player.next": "next", "player.get_mastery": "get_mastery",
+    "player.next": "next", "player.get_mastery": "get_mastery", "player.get_review_queue": "get_review_queue",
     "player.save_checkpoint": "save", "player.restore_checkpoint": "restore", "player.reveal_evidence": "get_evidence",
 }
 class RuntimeContractError(ValueError): pass
@@ -37,7 +38,7 @@ class RuntimeEngineContractAdapter:
             if runtime_payload:
                 raise RuntimeContractError('player.next accepts no caller-selected target payload')
             runtime_payload={}
-        if runtime_command in {'save','restore','get_evidence','get_mastery'}:runtime_payload={}
+        if runtime_command in {'save','restore','get_evidence','get_mastery','get_review_queue'}:runtime_payload={}
         return {'api_version':RUNTIME_API_VERSION,'command':runtime_command,'request_id':rid,'payload':runtime_payload}
     def invoke_runtime(self,request:Mapping[str,Any])->dict[str,Any]:
         runtime_request=self.to_runtime_request(request);response=self._runtime_invoke(runtime_request)
@@ -46,6 +47,9 @@ class RuntimeEngineContractAdapter:
         if not isinstance(normalized,dict):raise RuntimeContractError('runtime response must be an object')
         if normalized.get('api_version')!=RUNTIME_API_VERSION:raise RuntimeContractError('Unexpected runtime api_version')
         if normalized.get('request_id') not in {None,runtime_request['request_id']}:raise RuntimeContractError('runtime request_id mismatch')
+        if runtime_request['command']=='get_review_queue':
+            try:validate_review_queue_projection(normalized.get('review_queue'))
+            except ValueError as exc:raise RuntimeContractError(str(exc)) from exc
         return normalized
     @staticmethod
     def platform_envelope(request_id:str,runtime_response:Mapping[str,Any])->dict[str,Any]:

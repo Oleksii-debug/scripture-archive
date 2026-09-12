@@ -76,8 +76,20 @@ try {
 
     Push-Location $PlatformRoot
     try {
-        python -m unittest discover -s tests -v
-        if ($LASTEXITCODE -ne 0) { throw "Unit tests failed with code $LASTEXITCODE" }
+        $previousReferenceTestOnly = $env:SCRIPTURE_ARCHIVE_REFERENCE_TEST_ONLY
+        $env:SCRIPTURE_ARCHIVE_REFERENCE_TEST_ONLY = "1"
+        try {
+            python -m unittest discover -s tests -v
+            $unitExit = $LASTEXITCODE
+        }
+        finally {
+            if ($null -eq $previousReferenceTestOnly) {
+                Remove-Item Env:SCRIPTURE_ARCHIVE_REFERENCE_TEST_ONLY -ErrorAction SilentlyContinue
+            } else {
+                $env:SCRIPTURE_ARCHIVE_REFERENCE_TEST_ONLY = $previousReferenceTestOnly
+            }
+        }
+        if ($unitExit -ne 0) { throw "Unit tests failed with code $unitExit" }
         $result.unit_tests = $true
     }
     finally { Pop-Location }

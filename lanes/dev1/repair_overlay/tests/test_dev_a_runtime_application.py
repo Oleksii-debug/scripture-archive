@@ -34,6 +34,12 @@ class DevARuntimeApplicationTests(unittest.TestCase):
         nxt=self.call('player.navigate_branch',{'node_id':'LN01-N01','target_node_id':'LN01-N02'})['data']; self.assertEqual('LN01-N02',nxt['task']['node_id']); self.assertEqual('D5/runtime',nxt['truth_owner'])
         self.assertEqual('D5/runtime',self.call('player.save_checkpoint',{'campaign_id':'LN','mission_id':'LN-01','node_id':'LN01-N01'})['data']['truth_owner']); restored=self.call('player.restore_checkpoint')['data']; self.assertEqual('LN01-N01',restored['checkpoint']['node_id']); self.assertEqual(2,restored['runtime_schema_version'])
     def test_default_builder_fails_closed_when_canonical_runtime_is_unavailable(self):
-        with mock.patch('scripture_archive_platform.application.runtime_gateway.build_runtime_gateway',side_effect=ImportError('runtime unavailable')):
-            with self.assertRaisesRegex(RuntimeError,'Canonical D5/runtime'):
-                build_default_application(self.repo,store_root=Path(self.t.name)/'closed-store')
+        with mock.patch.dict('os.environ',{'SCRIPTURE_ARCHIVE_REFERENCE_TEST_ONLY':'0'}):
+            with mock.patch('scripture_archive_platform.application.runtime_gateway.build_runtime_gateway',side_effect=ImportError('runtime unavailable')):
+                with self.assertRaisesRegex(RuntimeError,'Canonical D5/runtime'):
+                    build_default_application(self.repo,store_root=Path(self.t.name)/'closed-store')
+    def test_reference_fallback_requires_explicit_unittest_gate(self):
+        with mock.patch.dict('os.environ',{'SCRIPTURE_ARCHIVE_REFERENCE_TEST_ONLY':'1'}):
+            with mock.patch('scripture_archive_platform.application.runtime_gateway.build_runtime_gateway',side_effect=ImportError('runtime unavailable')):
+                app=build_default_application(self.repo,store_root=Path(self.t.name)/'reference-store')
+        self.assertIsNone(app.player_gateway)

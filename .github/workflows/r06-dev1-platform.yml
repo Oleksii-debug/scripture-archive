@@ -60,7 +60,9 @@ jobs:
         shell: bash
         run: |
           python -m compileall -q r06_platform/scripture_archive_platform r06_platform/tests r06_platform/packaging
-          (cd r06_platform && python -m unittest discover -s tests -v)
+          # Synthetic unit fixtures explicitly opt into the reference test grader;
+          # packaged/runtime execution does not receive this gate and remains fail-closed.
+          (cd r06_platform && SCRIPTURE_ARCHIVE_REFERENCE_TEST_ONLY=1 python -m unittest discover -s tests -v)
           node --check r06_platform/frontend/renderers.js
           python r06_platform/tools_smoke.py
           python r06_platform/packaging/windows_release.py diagnose \

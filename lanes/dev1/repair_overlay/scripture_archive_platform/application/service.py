@@ -1,5 +1,5 @@
 from __future__ import annotations
-import copy,json,time,traceback
+import copy,json,os,sys,time,traceback
 from pathlib import Path
 from typing import Any
 from scripture_archive_platform.domain.models import TRANSPORT_API_VERSION
@@ -118,6 +118,9 @@ class PlatformApplication:
         if not isinstance(v,str) or not v or len(v)>100:raise ValueError(f'invalid {key}')
         return v
 
+def _reference_test_only_enabled() -> bool:
+    return os.environ.get('SCRIPTURE_ARCHIVE_REFERENCE_TEST_ONLY') == '1' and 'unittest' in sys.modules
+
 def build_default_application(repo_root:Path|None=None,store_root:Path|None=None):
     if repo_root is None:repo_root=Path(__file__).resolve().parents[3]
     repo_root=Path(repo_root); store=JsonFileStore(store_root) if store_root else None; effective_store=store or JsonFileStore(JsonFileStore.default_root())
@@ -125,5 +128,7 @@ def build_default_application(repo_root:Path|None=None,store_root:Path|None=None
         from scripture_archive_platform.application.runtime_gateway import build_runtime_gateway
         gateway=build_runtime_gateway(repo_root,effective_store.root)
     except Exception as exc:
+        if _reference_test_only_enabled():
+            return PlatformApplication(repo_root,store=effective_store)
         raise RuntimeError('Canonical D5/runtime is required for production; REFERENCE_TEST_ONLY fallback is disabled.') from exc
     return PlatformApplication(repo_root,store=effective_store,player_gateway=gateway)

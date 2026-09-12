@@ -6,6 +6,7 @@ on:
     branches:
       - r06-dev1-platform-windows-constructor
       - r06-swarm-dev01-windows-release
+      - r06-repair-dev01-post-source-gates-0912-sol
     paths:
       - 'lanes/dev1/**'
       - 'release_inputs/dev1_finalprep02/**'
@@ -21,6 +22,10 @@ on:
 env:
   DEV01_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
   DEV01_BASE_SOURCE_SHA256: 10fbd546ff4d985465b85b99f4f64bff95d9ec8b1f27132c6d21b4930c344c35
+  # The repaired platform intentionally imports the one canonical runtime from
+  # repository root. Keep that dependency explicit when tests execute with
+  # cwd=r06_platform instead of copying runtime truth into the reconstructed tree.
+  PYTHONPATH: ${{ github.workspace }}
 
 jobs:
   linux-contract-test:

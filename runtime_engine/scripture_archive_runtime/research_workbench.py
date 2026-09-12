@@ -195,8 +195,8 @@ def _claim_view(claim: Claim, records: dict[str, EvidenceRecord]) -> WorkbenchCl
         raise ValueError(f"claim {claim.claim_id} repeats required evidence")
     for evidence_id in required:
         evidence_witness = _record_witness(records[evidence_id])
-        if claim.witness is not None and evidence_witness is not None and claim.witness != evidence_witness:
-            raise ValueError(f"claim {claim.claim_id} conflicts with evidence witness")
+        if claim.witness is not None and evidence_witness != claim.witness:
+            raise ValueError(f"claim {claim.claim_id} witness is not established by evidence support")
     return WorkbenchClaim(
         claim_id=claim.claim_id,
         proposition=claim.proposition,
@@ -220,8 +220,8 @@ def build_research_workbench(
     By default only already-unlocked evidence participates. Claims are shown only when every
     required evidence record is visible in this projection; partially supported or zero-evidence
     claims are omitted rather than leaking hidden truth. In restricted scope, identifiers belonging
-    to non-visible evidence or gated claims shadow coincident visible IDs so independent runtime
-    namespaces cannot re-expose hidden identifiers through another semantic row.
+    to non-visible evidence or any claim that will not be emitted shadow coincident visible IDs so
+    independent runtime namespaces cannot re-expose hidden identifiers through another semantic row.
     """
 
     _bool(unlocked_only, "unlocked_only")
@@ -249,7 +249,7 @@ def build_research_workbench(
                 raise ValueError("runtime claims must contain Claim values")
             _text(claim.claim_id, "claim_id", limit=256)
             required = set(claim.required_evidence_ids)
-            if required and required.issubset(registered_evidence_ids) and not required.issubset(visible_ids):
+            if not required or not required.issubset(visible_ids):
                 nonvisible_claim_ids.add(claim.claim_id)
 
     evidence_views: list[WorkbenchEvidence] = []

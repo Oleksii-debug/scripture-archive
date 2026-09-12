@@ -10,7 +10,7 @@ ALLOWLISTED_COMMANDS = frozenset({
   "system.bootstrap",
   "content.list_campaigns","content.list_missions","player.load_node",
   "player.submit_answer","player.request_hint","player.reveal_evidence","player.next",
-  "player.get_progress","player.get_mastery","player.save_checkpoint","player.restore_checkpoint",
+  "player.get_progress","player.get_mastery","player.get_daily_case","player.save_checkpoint","player.restore_checkpoint",
   "authoring.list_drafts","authoring.new_draft","authoring.load_draft","authoring.save_draft",
   "authoring.validate_draft","authoring.preview_draft","authoring.prepare_publish_candidate",
   "authoring.export_draft","authoring.import_draft",
@@ -44,6 +44,8 @@ def validate_request_shape(request:Any)->tuple[str,str,dict[str,Any]]:
         unknown=set(payload)-{'node_id'}
         if unknown: raise ValueError('player.next accepts only current node_id context; target selection is forbidden')
         if 'node_id' in payload and (not isinstance(payload['node_id'],str) or not payload['node_id'] or len(payload['node_id'])>100): raise ValueError('invalid node_id')
+    if cmd=='player.get_daily_case' and payload:
+        raise ValueError('player.get_daily_case accepts an empty payload')
     return rid,cmd,payload
 
 def ok_response(request_id:str,data:Any)->dict[str,Any]:

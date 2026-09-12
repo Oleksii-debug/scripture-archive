@@ -42,10 +42,10 @@ class PlatformApplication:
         if cmd=='research.upsert_note':return {'note':self.research.upsert_note(p.get('note'))}
         if cmd=='research.delete_note':return {'deleted':self.research.delete_note(p.get('note_id'))}
         if cmd=='research.get_evidence_graph':return self._evidence_graph()
+        if cmd=='research.export':return self._research_export()
         if cmd=='research.get_chronology_lab':
             if p:raise ValueError('research.get_chronology_lab accepts an empty payload')
             return self._chronology_lab()
-        if cmd=='research.export':return self._research_export(p)
         if cmd=='player.load_node':return self._load_node(self._id(p,'node_id'))
         if cmd=='player.submit_answer':return self._submit(p)
         if cmd=='player.request_hint':return self._hint(self._id(p,'node_id'))
@@ -120,11 +120,17 @@ class PlatformApplication:
     def _evidence_graph(self):
         if not self.player_gateway:raise ValueError('Evidence Graph requires canonical runtime')
         return self.player_gateway.get_evidence_graph()
-    def _research_export(self,p):
+    def _research_export(self):
         if not self.player_gateway:raise ValueError('Research Export requires canonical runtime')
-        allowed={'format','witness','source_scope','relation','confidence'}
-        if set(p)-allowed:raise ValueError('research.export payload has unknown fields')
-        return self.player_gateway.export_research(format_value=p.get('format'),filters={key:p.get(key) for key in ('witness','source_scope','relation','confidence') if p.get(key) is not None})
+        data=self.player_gateway.export_research();export=data.get('export') if isinstance(data,dict) else None
+        if not isinstance(export,dict):raise ValueError('runtime research export must be object')
+        if export.get('schema')!='research-export.v1':raise ValueError('unexpected research export schema')
+        if export.get('evidence_scope')!='unlocked_only':raise ValueError('packaged research export must remain unlocked_only')
+        for key in ('json','markdown','html'):
+            if not isinstance(export.get(key),str):raise ValueError(f'missing research export {key}')
+        counts=export.get('counts')
+        if not isinstance(counts,dict) or any(type(counts.get(key)) is not int or counts[key]<0 for key in ('claims','evidence','relations')):raise ValueError('invalid research export counts')
+        return {'export':export,'truth_owner':'D5/runtime'}
     def _next(self,p):
         nid=self._id(p,'node_id')
         if self.player_gateway:

@@ -9,6 +9,7 @@ from .models import Confidence
 
 
 NOT_STATED = "Not stated in cited text"
+CURRENT_SCOPE_UNAVAILABLE = "No cited support available in current scope"
 
 
 class DossierKind(str, Enum):
@@ -74,10 +75,19 @@ class DossierRow:
 class DossierView:
     subject: DossierSubject
     rows: tuple[DossierRow, ...]
+    source_absence_established: bool = False
 
     @property
     def stated(self) -> bool:
         return bool(self.rows)
+
+    @property
+    def status_text(self) -> str:
+        if self.stated:
+            return "Supported by cited canonical records"
+        if self.source_absence_established:
+            return NOT_STATED
+        return CURRENT_SCOPE_UNAVAILABLE
 
     def semantic_rows(self) -> tuple[dict[str, Any], ...]:
         return tuple(row.to_dict() for row in self.rows)
@@ -91,7 +101,7 @@ class DossierView:
                 "display_name": self.subject.display_name,
             },
             "stated": self.stated,
-            "status_text": "Supported by cited canonical records" if self.stated else NOT_STATED,
+            "status_text": self.status_text,
             "rows": [row.to_dict() for row in self.rows],
         }
 
@@ -101,7 +111,7 @@ class DossierView:
             f"{self.subject.display_name}"
         ]
         if not self.rows:
-            return tuple(lines + [NOT_STATED])
+            return tuple(lines + [self.status_text])
         for row in self.rows:
             fields = [f"{row.row_type} {row.row_id}: {row.proposition}"]
             if row.confidence is not None:
@@ -212,6 +222,12 @@ class DossierAssembler:
         unlocked_only: bool = True,
     ) -> DossierView:
         all_evidence = tuple(sorted(self.runtime.evidence.values(), key=lambda item: item.evidence_id))
+        canonical_subject_support = any(
+            subject.subject_id in record.entity_ids for record in all_evidence
+        ) or any(
+            subject.subject_id in {relation.source_id, relation.target_id}
+            for relation in self.runtime.relations.values()
+        )
         candidate_evidence = tuple(
             record
             for record in all_evidence
@@ -309,4 +325,9 @@ class DossierAssembler:
 
         row_order = {"EVIDENCE": 0, "CLAIM": 1, "RELATION": 2}
         rows.sort(key=lambda row: (row_order[row.row_type], row.row_id))
-        return DossierView(subject=subject, rows=tuple(rows))
+        source_absence_established = not unlocked_only and not canonical_subject_support
+        return DossierView(
+            subject=subject,
+            rows=tuple(rows),
+            source_absence_established=source_absence_established,
+        )

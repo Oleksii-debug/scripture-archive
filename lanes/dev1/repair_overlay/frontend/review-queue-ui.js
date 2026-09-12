@@ -57,7 +57,11 @@ function hideOtherViews() {
 function deactivateReviewQueue() {
   if (!reviewViewActive) return;
   reviewViewActive = false;
+  loadedOnce = false;
+  reviewTrainingAvailable = false;
   requestGate.invalidate();
+  const start = byId('review-training-start');
+  if (start) start.disabled = true;
 }
 
 function keepViewExclusive() {

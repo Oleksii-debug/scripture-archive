@@ -1,17 +1,12 @@
 from pathlib import Path
-import hashlib
 import re
 import subprocess
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1] / "frontend"
+REPO_ROOT = Path(__file__).resolve().parents[4]
+LIBRARY_UI_REPO_PATH = "lanes/dev1/repair_overlay/frontend/library-ui.js"
 EXPECTED_LIBRARY_UI_BLOB = "83469f5c54df4a78d6a45331c17e9bfe07bc0e9c"
-
-
-def git_blob_sha1(path: Path) -> str:
-    data = path.read_bytes()
-    header = f"blob {len(data)}\0".encode("ascii")
-    return hashlib.sha1(header + data).hexdigest()
 
 
 class PackagedLibraryCurrentShellTest(unittest.TestCase):
@@ -23,7 +18,15 @@ class PackagedLibraryCurrentShellTest(unittest.TestCase):
         cls.index = (ROOT / "index.html").read_text(encoding="utf-8")
 
     def test_qualified_library_donor_blob_is_exact(self):
-        self.assertEqual(git_blob_sha1(ROOT / "library-ui.js"), EXPECTED_LIBRARY_UI_BLOB)
+        completed = subprocess.run(
+            ["git", "rev-parse", f"HEAD:{LIBRARY_UI_REPO_PATH}"],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        self.assertEqual(completed.stdout.strip(), EXPECTED_LIBRARY_UI_BLOB)
 
     def test_current_transport_is_preserved_and_loads_both_read_only_surfaces(self):
         self.assertIn("export async function chooseTransport", self.transport)

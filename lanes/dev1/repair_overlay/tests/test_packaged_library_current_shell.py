@@ -4,9 +4,21 @@ import subprocess
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1] / "frontend"
-REPO_ROOT = Path(__file__).resolve().parents[4]
 LIBRARY_UI_REPO_PATH = "lanes/dev1/repair_overlay/frontend/library-ui.js"
 EXPECTED_LIBRARY_UI_BLOB = "83469f5c54df4a78d6a45331c17e9bfe07bc0e9c"
+
+
+def _find_repo_root() -> Path:
+    starts = (Path.cwd().resolve(), Path(__file__).resolve())
+    for start in starts:
+        candidates = (start, *start.parents)
+        for candidate in candidates:
+            if (candidate / ".git").exists():
+                return candidate
+    raise RuntimeError("Git repository root is required for exact donor-blob verification")
+
+
+REPO_ROOT = _find_repo_root()
 
 
 class PackagedLibraryCurrentShellTest(unittest.TestCase):

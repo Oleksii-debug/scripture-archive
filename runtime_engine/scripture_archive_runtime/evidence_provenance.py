@@ -5,10 +5,23 @@ from typing import Iterable
 from .evidence import Claim, EvidenceRecord, EvidenceRuntime, Relation
 
 
+def _contains_forbidden_control(value: str) -> bool:
+    """Return whether an identity token contains unsafe control separators."""
+
+    return any(
+        ord(character) < 0x20
+        or 0x7F <= ord(character) <= 0x9F
+        or character in {"\u2028", "\u2029"}
+        for character in value
+    )
+
+
 def _clean_witness(value: str | None) -> str | None:
     """Return an exact canonical witness token; never normalize malformed input."""
 
     if not isinstance(value, str) or not value or value != value.strip():
+        return None
+    if _contains_forbidden_control(value):
         return None
     return value
 
@@ -35,12 +48,7 @@ def _clean_relation_token(value: object) -> str | None:
 
     if not isinstance(value, str) or not value or value != value.strip():
         return None
-    if any(
-        ord(character) < 0x20
-        or 0x7F <= ord(character) <= 0x9F
-        or character in {"\u2028", "\u2029"}
-        for character in value
-    ):
+    if _contains_forbidden_control(value):
         return None
     return value
 

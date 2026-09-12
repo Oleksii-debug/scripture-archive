@@ -4,12 +4,13 @@ from pathlib import Path
 from typing import Any
 from scripture_archive_platform.domain.models import CONTENT_SCHEMA_VERSION
 from scripture_archive_platform.transport.answer_contracts import canonical_task_type, answer_contract_descriptor
+from scripture_archive_platform.composite_accessibility import inspect_packaged_task
 
 class ContentLoadError(RuntimeError): pass
 
 class CanonicalContentLoader:
     """Read-only loader over canonical mission indexes and JSON shards. No question text is hard-coded here."""
-    def __init__(self, repo_root: Path):
+    def __init__(self,repo_root: Path):
         self.repo_root=Path(repo_root).resolve(); self._missions=None; self._nodes=None; self._mission_for_node={}
     @property
     def campaigns_root(self)->Path:return self.repo_root/'docs'/'campaigns'
@@ -63,6 +64,12 @@ class CanonicalContentLoader:
 class TaskPresentationMapper:
     """Backward-compatible view mapper. It uses response/task metadata, never node IDs."""
     LONG_MARKERS=('argument','synthesis','comparison','witness','court','explain','editor')
+    COMPOSITE_HAZARD_KEYS=(
+        'mouse_only','pointer_only','drag_only','color_only','image_only','hover_only','timed_only',
+        'visual_only','spatial_only','requires_mouse','requires_pointer','requires_drag',
+        'requires_color_discrimination','requires_image_recognition','requires_hover','timed_response_only',
+        'interaction_mode','input_mode','control_mode','response_mode','visual_dependency',
+    )
     def infer_task_type(self,node:dict[str,Any])->str:
         explicit=node.get('task_type')
         if explicit:return canonical_task_type(str(explicit))
@@ -91,6 +98,67 @@ class TaskPresentationMapper:
                 value=label=str(item)
             if str(value).strip(): out.append({'id':str(value),'label':str(label)})
         return out
+    def _matching_objects(self,raw_pairs):
+        raw_pairs=list(raw_pairs or [])
+        if raw_pairs and all(isinstance(x,dict) and 'left_id' in x and 'right_options' in x for x in raw_pairs):
+            return [
+                {
+                    'left_id':str(x.get('left_id','')),
+                    'left_label':str(x.get('left_label',x.get('left_id',''))),
+                    'right_options':self._option_objects(x.get('right_options') or []),
+                }
+                for x in raw_pairs
+            ]
+        if raw_pairs and all(isinstance(x,dict) and 'passage' in x and 'claim' in x for x in raw_pairs):
+            rights=[{'id':str(x['claim']),'label':str(x['claim'])} for x in raw_pairs]
+            return [{'left_id':str(x['passage']),'left_label':str(x['passage']),'right_options':rights} for x in raw_pairs]
+        if raw_pairs and all(isinstance(x,dict) and 'left' in x and 'right' in x for x in raw_pairs):
+            rights=[{'id':str(x['right']),'label':str(x['right'])} for x in raw_pairs]
+            return [{'left_id':str(x['left']),'left_label':str(x['left']),'right_options':rights} for x in raw_pairs]
+        return []
+    def _normalize_composite_steps(self,steps,preserve_contract:bool):
+        normalized_steps=[]
+        for i,step in enumerate(steps or []):
+            if not isinstance(step,dict):
+                normalized_steps.append({'step_id':str(i+1),'label':str(step),'prompt':str(step)})
+                continue
+            normalized={
+                'step_id':str(step.get('step_id',step.get('id',step.get('step',i+1)))),
+                'label':str(step.get('label',step.get('required',step.get('type',f'Крок {i+1}')))),
+                'prompt':str(step.get('prompt',step.get('required',''))),
+            }
+            if preserve_contract:
+                child_type=step.get('task_type') or step.get('renderer_type')
+                if child_type:
+                    ctype=canonical_task_type(str(child_type))
+                    normalized['task_type']=ctype
+                    normalized['answer_contract']=answer_contract_descriptor(ctype)
+                accessibility=step.get('accessibility')
+                if isinstance(accessibility,dict):
+                    normalized['accessibility']=dict(accessibility)
+                else:
+                    nonvisual=step.get('functional_nonvisual_equivalent')
+                    if isinstance(nonvisual,str) and nonvisual.strip():
+                        normalized['accessibility']={
+                            'nonvisual_equivalent':nonvisual.strip(),
+                            'announcements':str(step.get('announcements') or 'Result, evidence, confidence/TX1 and next action are textual.'),
+                        }
+                visual=step.get('visual') if isinstance(step.get('visual'),dict) else step.get('visual_metadata')
+                if isinstance(visual,dict): normalized['visual']=dict(visual)
+                for key in self.COMPOSITE_HAZARD_KEYS:
+                    if key in step: normalized[key]=step[key]
+                if 'options' in step: normalized['options']=self._option_objects(step.get('options'))
+                if 'items' in step: normalized['items']=self._option_objects(step.get('items'))
+                if 'evidence_options' in step: normalized['evidence_options']=self._option_objects(step.get('evidence_options'))
+                if 'pairs' in step: normalized['pairs']=self._matching_objects(step.get('pairs'))
+                for key in ('fields','witnesses','relation_types'):
+                    if key in step and isinstance(step.get(key),list): normalized[key]=list(step[key])
+                if 'steps' in step:
+                    normalized['steps']=self._normalize_composite_steps(step.get('steps'),True)
+                if isinstance(step.get('source_scope'),str) and step.get('source_scope').strip():
+                    normalized['source_scope']=step.get('source_scope').strip()
+            normalized_steps.append(normalized)
+        return normalized_steps
     def to_renderable(self,node:dict[str,Any],mission:dict[str,Any]|None=None)->dict[str,Any]:
         task_type=self.infer_task_type(node)
         ui=dict(node.get('ui_metadata') or {})
@@ -98,42 +166,34 @@ class TaskPresentationMapper:
         options=self._option_objects(ui.get('options') or payload.get('options') or [])
         evidence_options=self._option_objects(ui.get('evidence_options') or payload.get('evidence_options') or [])
         if not evidence_options and task_type in {'EVIDENCE_SELECT','CLAIM_EVIDENCE'}:
-            evidence_options=self._option_objects(payload.get('options') or payload.get('evidence') or node.get('required_evidence') or [])
-        if not options and task_type in {'SINGLE_CHOICE','COMBOBOX_SELECT','PARALLEL_WITNESS_COMPARE'}:
-            accepted=str(node.get('accepted_answer','')).strip(); rejected=str(node.get('rejected_answers','')).strip()
-            if accepted: options.append({'id':accepted,'label':accepted})
-            for part in [x.strip() for x in re.split(r';|\n',rejected) if x.strip()]: options.append({'id':part,'label':part})
+            evidence_options=self._option_objects(payload.get('options') or payload.get('evidence') or [])
         raw_items=ui.get('items') or payload.get('items') or payload.get('ordered_items') or (payload.get('options') if task_type=='ORDERING' else [])
         items=[]
         for item in raw_items or []:
             if isinstance(item,dict): items.append({'id':str(item.get('id',item.get('value',item.get('label','')))),'label':str(item.get('label',item.get('value',item.get('id',''))))})
             else: items.append({'id':str(item),'label':str(item)})
         raw_pairs=ui.get('pairs') or payload.get('pairs') or []
-        if task_type=='MATCHING' and not raw_pairs:
-            accepted_pairs=(node.get('grading') or {}).get('accepted_pairs')
-            if isinstance(accepted_pairs,dict): raw_pairs=[{'left':k,'right':v} for k,v in accepted_pairs.items()]
-        pairs=[]
-        if task_type=='MATCHING':
-            if raw_pairs and all(isinstance(x,dict) and 'passage' in x and 'claim' in x for x in raw_pairs):
-                rights=[{'id':str(x['claim']),'label':str(x['claim'])} for x in raw_pairs]
-                pairs=[{'left_id':str(x['passage']),'left_label':str(x['passage']),'right_options':rights} for x in raw_pairs]
-            elif raw_pairs and all(isinstance(x,dict) and 'left' in x and 'right' in x for x in raw_pairs):
-                rights=[{'id':str(x['right']),'label':str(x['right'])} for x in raw_pairs]
-                pairs=[{'left_id':str(x['left']),'left_label':str(x['left']),'right_options':rights} for x in raw_pairs]
-        steps=list(ui.get('steps') or payload.get('steps') or (node.get('grading') or {}).get('steps') or [])
-        normalized_steps=[]
-        for i,step in enumerate(steps):
-            if isinstance(step,dict): normalized_steps.append({'step_id':str(step.get('step_id',step.get('id',step.get('step',i+1)))),'label':str(step.get('label',step.get('required',step.get('type',f'Крок {i+1}')))),'prompt':str(step.get('prompt',step.get('required','')))})
-            else: normalized_steps.append({'step_id':str(i+1),'label':str(step),'prompt':str(step)})
+        pairs=self._matching_objects(raw_pairs) if task_type=='MATCHING' else []
+        ui_steps=ui.get('steps')
+        payload_steps=payload.get('steps')
+        if ui_steps:
+            steps=list(ui_steps); preserve_step_contract=True
+        elif payload_steps:
+            steps=list(payload_steps); preserve_step_contract=True
+        else:
+            steps=[]; preserve_step_contract=False
+        normalized_steps=self._normalize_composite_steps(steps,preserve_step_contract)
         relation_types=list(ui.get('relation_types') or payload.get('relation_types') or [])
         if task_type=='OT_NT_LINK' and not relation_types and payload.get('relation_category'):
             relation_types=[{'id':str(payload['relation_category']),'label':str(payload['relation_category'])}]
         legacy_answer_contract=dict(node.get('answer_contract') or {})
         if not legacy_answer_contract:
-            if task_type in {'SINGLE_CHOICE','COMBOBOX_SELECT','PARALLEL_WITNESS_COMPARE'} and options: legacy_answer_contract={'accepted_choice_ids':[str(node.get('accepted_answer','accepted'))]}
+            if task_type in {'SINGLE_CHOICE','COMBOBOX_SELECT','PARALLEL_WITNESS_COMPARE'}:
+                accepted=str(node.get('accepted_answer','')).strip()
+                if accepted: legacy_answer_contract={'accepted_choice_ids':[accepted]}
             elif task_type=='MULTI_SELECT': legacy_answer_contract={'accepted_choice_ids':ui.get('accepted_choice_ids',payload.get('accepted_options',[]))}
         answer_contract=answer_contract_descriptor(task_type)
-        return {
+        surface={
           'node_id':node['node_id'],'mission_id':node['mission_id'],'task_type':task_type,
           'task_family':node.get('task_family'),'difficulty':node.get('difficulty'),'required':bool(node.get('required')),
           'heading':ui.get('heading') or f"Завдання {node['node_id']}",
@@ -145,12 +205,16 @@ class TaskPresentationMapper:
           'accessibility':{'nonvisual_equivalent':node.get('functional_nonvisual_equivalent',''),'announcements':'Result, evidence, confidence/TX1 and next action are textual.'},
           'visual':dict(node.get('visual_metadata') or {'state_badge':node.get('confidence_code'),'media_slot':None}),
         }
+        inspection=inspect_packaged_task(surface)
+        surface['accessibility']['inspection']=inspection.to_dict()
+        surface['accessibility']['inspection_linear']=list(inspection.linear())
+        return surface
     @staticmethod
     def _source_refs(node,mission):
         vals=[]
-        for value in [node.get('required_evidence'), node.get('source_scope_visible_to_player')]:
-            if isinstance(value,str) and value.strip(): vals.append(value.strip())
-            elif isinstance(value,list): vals.extend(map(str,value))
+        value=node.get('source_scope_visible_to_player')
+        if isinstance(value,str) and value.strip(): vals.append(value.strip())
+        elif isinstance(value,list): vals.extend(map(str,value))
         if mission:
             primary=mission.get('primary_scripture',[])
             if isinstance(primary,str): vals.append(primary)

@@ -28,14 +28,24 @@ class PackagedLibraryCurrentShellTest(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
         self.assertEqual(completed.stdout.strip(), EXPECTED_LIBRARY_UI_BLOB)
 
-    def test_current_transport_is_preserved_and_loads_both_read_only_surfaces(self):
-        self.assertIn("export async function chooseTransport", self.transport)
+    def test_current_transport_preserves_package_loaders_and_composes_coordinator_surfaces(self):
+        self.assertIn("export function chooseTransport", self.transport)
         self.assertIn("export async function unwrap", self.transport)
-        self.assertEqual(self.transport.count("void import('./review-queue-ui.js');"), 1)
-        self.assertEqual(self.transport.count("void import('./library-ui.js');"), 1)
-        self.assertEqual(self.transport.count("void import('./library-shell-compat.js');"), 1)
-        imports = set(re.findall(r"void import\('([^']+)'\);", self.transport))
-        self.assertEqual(imports, {"./review-queue-ui.js", "./library-ui.js", "./library-shell-compat.js"})
+        expected_loaders = {
+            "./review-queue-ui.js",
+            "./library-ui.js",
+            "./library-shell-compat.js",
+            "./daily-case-ui.js",
+            "./content-pack-manager.js",
+        }
+        imports = set(re.findall(r"void import\('([^']+)'\)", self.transport))
+        self.assertEqual(imports, expected_loaders)
+        for loader in expected_loaders:
+            self.assertEqual(self.transport.count(f"void import('{loader}')"), 1)
+        self.assertIn(
+            "void import('./content-pack-manager.js').then(({installContentPackManagerSurface})=>installContentPackManagerSurface());",
+            self.transport,
+        )
 
     def test_library_calls_only_read_only_canonical_contracts(self):
         commands = set(re.findall(r"api\('([^']+)'", self.library))
@@ -93,7 +103,13 @@ class PackagedLibraryCurrentShellTest(unittest.TestCase):
             self.assertIn(f'src="{script}"', self.index)
 
     def test_javascript_syntax(self):
-        for path in (ROOT / "transport.js", ROOT / "library-ui.js", ROOT / "library-shell-compat.js"):
+        for path in (
+            ROOT / "transport.js",
+            ROOT / "library-ui.js",
+            ROOT / "library-shell-compat.js",
+            ROOT / "daily-case-ui.js",
+            ROOT / "content-pack-manager.js",
+        ):
             completed = subprocess.run(
                 ["node", "--check", str(path)],
                 text=True,

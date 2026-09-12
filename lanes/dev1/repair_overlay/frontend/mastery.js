@@ -18,13 +18,25 @@ function announce(text) {
   requestAnimationFrame(() => { status.textContent = text; });
 }
 
+function clearMastery() {
+  $('mastery-rows')?.replaceChildren();
+  $('mastery-empty')?.classList.add('hidden');
+  const count = $('mastery-count');
+  if (count) count.textContent = 'Концептів у runtime: 0';
+}
+
 function hideMastery() {
   $('mastery-view')?.classList.add('hidden');
 }
 
+function failClosedMastery() {
+  hideMastery();
+  clearMastery();
+}
+
 function invalidateMastery() {
   masteryGeneration += 1;
-  hideMastery();
+  failClosedMastery();
 }
 
 function showMastery() {
@@ -33,16 +45,51 @@ function showMastery() {
   setTimeout(() => $('mastery-heading')?.focus(), 0);
 }
 
+function requireText(value, field) {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new Error(`Runtime повернув некоректне поле майстерності: ${field}`);
+  }
+  return value;
+}
+
+function requireNumber(value, field) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    throw new Error(`Runtime повернув некоректне поле майстерності: ${field}`);
+  }
+  return value;
+}
+
+function requireCount(value, field) {
+  if (!Number.isInteger(value) || value < 0) {
+    throw new Error(`Runtime повернув некоректне поле майстерності: ${field}`);
+  }
+  return value;
+}
+
+function normalizeDueAt(value) {
+  if (value === null || value === undefined) return 'Не заплановано';
+  return requireText(value, 'due_at');
+}
+
 function parseRows(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data) || !Array.isArray(data.mastery)) {
     throw new Error('Runtime повернув некоректний стан майстерності');
   }
-  for (const item of data.mastery) {
+  return data.mastery.map(item => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) {
       throw new Error('Runtime повернув некоректний запис майстерності');
     }
-  }
-  return data.mastery;
+    return [
+      requireText(item.concept_id, 'concept_id'),
+      requireText(item.state, 'state'),
+      requireNumber(item.stability_days, 'stability_days'),
+      requireNumber(item.difficulty, 'difficulty'),
+      requireCount(item.consecutive_independent_successes, 'consecutive_independent_successes'),
+      requireCount(item.guided_successes, 'guided_successes'),
+      requireCount(item.failures, 'failures'),
+      normalizeDueAt(item.due_at),
+    ];
+  });
 }
 
 function renderMastery(rows) {
@@ -50,35 +97,28 @@ function renderMastery(rows) {
   const empty = $('mastery-empty');
   const count = $('mastery-count');
   if (!host || !empty || !count) throw new Error('Екран майстерності неповний');
-  host.replaceChildren();
-  empty.classList.toggle('hidden', rows.length !== 0);
-  count.textContent = `Концептів у runtime: ${rows.length}`;
-  for (const item of rows) {
+
+  // Build every row off-DOM. The live surface changes only after the complete
+  // runtime response has already passed parseRows() validation.
+  const renderedRows = rows.map(values => {
     const tr = document.createElement('tr');
-    const values = [
-      item.concept_id,
-      item.state,
-      item.stability_days,
-      item.difficulty,
-      item.consecutive_independent_successes,
-      item.guided_successes,
-      item.failures,
-      item.due_at || 'Не заплановано',
-    ];
     for (const value of values) {
-      if (value !== null && value !== undefined && !['string', 'number', 'boolean'].includes(typeof value)) {
-        throw new Error('Runtime повернув некоректне поле майстерності');
-      }
       const td = document.createElement('td');
       td.textContent = value ?? '—';
       tr.append(td);
     }
-    host.append(tr);
-  }
+    return tr;
+  });
+
+  host.replaceChildren(...renderedRows);
+  empty.classList.toggle('hidden', rows.length !== 0);
+  count.textContent = `Концептів у runtime: ${rows.length}`;
 }
 
 async function loadMastery() {
   const generation = ++masteryGeneration;
+  // Never present an old snapshot as current while a refresh is unresolved.
+  failClosedMastery();
   try {
     const data = await api('player.get_mastery', {});
     if (generation !== masteryGeneration) return;
@@ -89,6 +129,7 @@ async function loadMastery() {
     announce(rows.length ? `Показано стан майстерності для ${rows.length} концептів` : 'Даних майстерності ще немає');
   } catch (error) {
     if (generation !== masteryGeneration) return;
+    failClosedMastery();
     announce(`Помилка: ${error.message}`);
   }
 }

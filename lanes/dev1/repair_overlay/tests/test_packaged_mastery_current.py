@@ -44,7 +44,7 @@ class PackagedMasteryCurrentCompositionTests(unittest.TestCase):
         ):
             self.assertIn(marker, HTML)
 
-    def test_runtime_fields_are_rendered_inertly(self):
+    def test_runtime_fields_are_rendered_inertly_and_atomically(self):
         for field in (
             "concept_id",
             "state",
@@ -58,8 +58,11 @@ class PackagedMasteryCurrentCompositionTests(unittest.TestCase):
             self.assertIn(f"item.{field}", JS)
         self.assertIn("td.textContent = value ?? '—'", JS)
         self.assertIn("parseRows(data)", JS)
+        self.assertIn("const renderedRows = rows.map", JS)
+        self.assertIn("host.replaceChildren(...renderedRows)", JS)
+        self.assertIn("failClosedMastery();", JS)
 
-    def test_stale_async_navigation_is_executable(self):
+    def test_stale_navigation_and_failed_refresh_are_executable(self):
         node = shutil.which("node")
         if not node:
             self.skipTest("node unavailable")
@@ -115,6 +118,11 @@ globalThis.document={
 globalThis.MutationObserver=class{constructor(fn){this.fn=fn}observe(){}};
 globalThis.requestAnimationFrame=fn=>fn();
 
+const valid = (id='C-1') => ({mastery:[{
+  concept_id:id,state:'LEARNING',stability_days:2,difficulty:0.4,
+  consecutive_independent_successes:1,guided_successes:0,failures:0,due_at:null,
+}]});
+
 let release;
 const gate=new Promise(resolve=>{release=resolve});
 globalThis.__invoke=async (command,payload)=>{
@@ -124,27 +132,54 @@ globalThis.__invoke=async (command,payload)=>{
 };
 await import(MODULE_URI);
 
+// A response that arrives after navigation away must not reopen Mastery or steal focus.
 const pending=elements.get('nav-mastery').click();
 await Promise.resolve();
 await elements.get('nav-research').click();
 elements.get('home-view').classList.add('hidden');
 elements.get('research-view').classList.remove('hidden');
-release({mastery:[{concept_id:'C-1',state:'learning',stability_days:2,difficulty:3,
-  consecutive_independent_successes:1,guided_successes:0,failures:0,due_at:null}]});
+release(valid('C-1'));
 await pending;
 if(!elements.get('mastery-view').classList.contains('hidden'))throw new Error('stale mastery response reopened mastery view');
 if(elements.get('research-view').classList.contains('hidden'))throw new Error('stale mastery response hid the intervening research view');
 if(document.activeElement===elements.get('mastery-heading'))throw new Error('stale mastery response stole focus');
 
-// A later, current request must still be allowed to render normally.
-globalThis.__invoke=async ()=>({mastery:[{concept_id:'C-2',state:'review',stability_days:5,difficulty:2,
-  consecutive_independent_successes:2,guided_successes:0,failures:1,due_at:'2030-01-01T00:00:00Z'}]});
+// A later current request renders normally.
+globalThis.__invoke=async ()=>valid('C-2');
 await elements.get('nav-mastery').click();
 await new Promise(resolve=>setTimeout(resolve,0));
 if(elements.get('mastery-view').classList.contains('hidden'))throw new Error('fresh mastery request did not open mastery view');
 if(!elements.get('research-view').classList.contains('hidden'))throw new Error('mastery view did not exclude research view');
 if(elements.get('mastery-rows').children.length!==1)throw new Error('fresh mastery row was not rendered');
 if(document.activeElement!==elements.get('mastery-heading'))throw new Error('fresh mastery view did not move focus to heading');
+
+// Malformed later data must fail closed atomically: no old row and no valid prefix
+// from the malformed response may remain visible.
+globalThis.__invoke=async ()=>({mastery:[
+  {concept_id:'C-good-prefix',state:'REVIEW',stability_days:3,difficulty:0.5,
+   consecutive_independent_successes:2,guided_successes:0,failures:0,due_at:null},
+  {concept_id:'C-bad',state:'REVIEW',stability_days:3,difficulty:{bad:true},
+   consecutive_independent_successes:2,guided_successes:0,failures:0,due_at:null},
+]});
+await elements.get('nav-mastery').click();
+if(!elements.get('mastery-view').classList.contains('hidden'))throw new Error('malformed refresh left mastery visible');
+if(elements.get('mastery-rows').children.length!==0)throw new Error('malformed refresh left stale or partial mastery rows');
+if(elements.get('mastery-count').textContent!=='Концептів у runtime: 0')throw new Error('malformed refresh left stale mastery count');
+if(!elements.get('global-status').textContent.startsWith('Помилка:'))throw new Error('malformed refresh did not announce failure');
+
+// Transport/application failure must also leave no stale Mastery truth visible.
+globalThis.__invoke=async ()=>{throw new Error('runtime unavailable')};
+await elements.get('nav-mastery').click();
+if(!elements.get('mastery-view').classList.contains('hidden'))throw new Error('failed refresh left mastery visible');
+if(elements.get('mastery-rows').children.length!==0)throw new Error('failed refresh left stale mastery rows');
+
+// Fail-closed handling must not poison a later valid refresh.
+globalThis.__invoke=async ()=>valid('C-3');
+await elements.get('nav-mastery').click();
+await new Promise(resolve=>setTimeout(resolve,0));
+if(elements.get('mastery-view').classList.contains('hidden'))throw new Error('valid recovery did not reopen mastery');
+if(elements.get('mastery-rows').children.length!==1)throw new Error('valid recovery did not render exactly one row');
+if(elements.get('mastery-rows').children[0].children[0].textContent!=='C-3')throw new Error('valid recovery rendered stale concept data');
 '''
             script = script.replace("MODULE_URI", json.dumps(module.as_uri()))
             result = subprocess.run(

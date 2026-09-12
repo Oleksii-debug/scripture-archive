@@ -3,8 +3,10 @@ name: R06 DEV02 Accessibility Qualification
 on:
   pull_request:
     paths:
+      - 'lanes/dev1/repair_overlay/frontend/app.js'
       - 'lanes/dev1/repair_overlay/frontend/hotkeys.js'
       - 'lanes/dev1/repair_overlay/frontend/keymap-ui.js'
+      - 'lanes/dev1/repair_overlay/frontend/renderers-base.js'
       - 'lanes/dev1/repair_overlay/scripture_archive_platform/accessibility/semantics.py'
       - 'lanes/dev1/repair_overlay/tests/test_accessibility.py'
       - '.github/workflows/r06-dev02-accessibility-qualification.yml'
@@ -42,8 +44,10 @@ jobs:
         working-directory: lanes/dev1/repair_overlay
         shell: bash
         run: |
+          node --check frontend/app.js
           node --check frontend/hotkeys.js
           node --check frontend/keymap-ui.js
+          node --check frontend/renderers-base.js
       - name: Run exact accessibility regression
         working-directory: lanes/dev1/repair_overlay
         run: python -m unittest discover -s tests -p "test_accessibility.py" -v

@@ -37,9 +37,11 @@ class ContentPackManagerService:
                 path = self._candidate_path(data)
                 return {"inspection": self._inspection_dict(self._inspect(path)), **self._snapshot()}
             if command == "content_packs.install":
+                activated = data.get("activate", False)
+                if not isinstance(activated, bool):
+                    raise ValueError("content pack activate must be boolean")
                 path = self._candidate_path(data)
                 inspection = self.store.install(path)
-                activated = bool(data.get("activate", False))
                 if activated:
                     self.store.activate(inspection.manifest.pack_id, inspection.manifest.version)
                 return {"inspection": self._inspection_dict(inspection), "activated": activated, **self._snapshot()}

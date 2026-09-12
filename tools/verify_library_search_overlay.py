@@ -23,8 +23,14 @@ def parse_all() -> None:
 
 
 def load_real_regression_module():
-    """Import the exact overlay regression module against the real overlay package graph."""
+    """Import the exact overlay regression module against the real repository + overlay graph."""
+    # Constructor integration made the overlay transport import the canonical runtime_engine
+    # package from repository root. Keep overlay modules first, but expose ROOT as the
+    # canonical dependency boundary instead of replacing runtime imports with stubs.
+    root = str(ROOT)
     overlay = str(OVERLAY)
+    if root not in sys.path:
+        sys.path.insert(0, root)
     if overlay not in sys.path:
         sys.path.insert(0, overlay)
 

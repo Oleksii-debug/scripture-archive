@@ -28,20 +28,42 @@ $Diagnostics = Join-Path $Dist "windows_release_diagnostics.json"
   --require-webview2 `
   --require-write
 
+$actualGitSha = $null
+if (Get-Command git -ErrorAction SilentlyContinue) {
+    $actualGitSha = (git -C $Repo rev-parse HEAD 2>$null | Out-String).Trim()
+}
+if (-not $actualGitSha) { $actualGitSha = $env:GITHUB_SHA }
+if ($actualGitSha -notmatch '^[0-9a-f]{40}$') {
+    throw "Exact 40-hex checkout SHA is required for packaged diagnostics identity"
+}
+
+$BuildIdentityDir = Join-Path ([System.IO.Path]::GetTempPath()) ("scripture-build-identity-" + [guid]::NewGuid().ToString("N"))
+New-Item -ItemType Directory -Force -Path $BuildIdentityDir | Out-Null
+$BuildIdentity = Join-Path $BuildIdentityDir "build_identity.json"
+$BuildIdentityPayload = @{ build_sha = $actualGitSha } | ConvertTo-Json -Compress
+$Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText($BuildIdentity, $BuildIdentityPayload, $Utf8NoBom)
+
 $Sep = ";"
 $Name = "ScriptureArchive-R06-DEV01"
-& (Join-Path $Venv "Scripts\pyinstaller.exe") --noconfirm --clean --onefile --windowed `
-  --name $Name `
-  --collect-all webview `
-  --add-data "$PlatformRoot\frontend${Sep}r06_platform\frontend" `
-  --add-data "$Repo\docs\campaigns${Sep}docs\campaigns" `
-  --hidden-import runtime_engine.scripture_archive_runtime.application `
-  --hidden-import runtime_engine.scripture_archive_runtime.content `
-  --hidden-import runtime_engine.scripture_archive_runtime.persistence `
-  --hidden-import runtime_engine.scripture_archive_runtime.application_update `
-  --paths $PlatformRoot --paths $Repo `
-  --distpath $Dist --workpath $Work --specpath $Spec `
-  (Join-Path $PlatformRoot "run_windows.py")
+try {
+    & (Join-Path $Venv "Scripts\pyinstaller.exe") --noconfirm --clean --onefile --windowed `
+      --name $Name `
+      --collect-all webview `
+      --add-data "$PlatformRoot\frontend${Sep}r06_platform\frontend" `
+      --add-data "$Repo\docs\campaigns${Sep}docs\campaigns" `
+      --add-data "$BuildIdentity${Sep}r06_platform" `
+      --hidden-import runtime_engine.scripture_archive_runtime.application `
+      --hidden-import runtime_engine.scripture_archive_runtime.content `
+      --hidden-import runtime_engine.scripture_archive_runtime.persistence `
+      --hidden-import runtime_engine.scripture_archive_runtime.application_update `
+      --hidden-import runtime_engine.scripture_archive_runtime.diagnostics `
+      --paths $PlatformRoot --paths $Repo `
+      --distpath $Dist --workpath $Work --specpath $Spec `
+      (Join-Path $PlatformRoot "run_windows.py")
+} finally {
+    Remove-Item -LiteralPath $BuildIdentityDir -Recurse -Force -ErrorAction SilentlyContinue
+}
 
 $Out = Join-Path $Dist "$Name.exe"
 if (-not (Test-Path $Out)) {
@@ -55,11 +77,6 @@ $sourceHash = $null
 if (Test-Path $sourceArchive) {
     $sourceHash = (Get-FileHash -Algorithm SHA256 $sourceArchive).Hash.ToLowerInvariant()
 }
-$actualGitSha = $null
-if (Get-Command git -ErrorAction SilentlyContinue) {
-    $actualGitSha = (git -C $Repo rev-parse HEAD 2>$null | Out-String).Trim()
-}
-if (-not $actualGitSha) { $actualGitSha = $env:GITHUB_SHA }
 
 $manifest = [ordered]@{
     schema_version = 1
@@ -77,12 +94,14 @@ $manifest = [ordered]@{
     proof_scope = @(
         "PyInstaller build completed",
         "artifact size/hash readback verified",
-        "WebView2 runtime presence probed before build"
+        "WebView2 runtime presence probed before build",
+        "packaged diagnostics build identity bound to exact checkout SHA"
     )
     not_proven = @(
         "human NVDA acceptance",
         "full application functional acceptance",
-        "visual correctness"
+        "visual correctness",
+        "recovery execution"
     )
 }
 $ManifestPath = Join-Path $Dist "build_manifest.json"

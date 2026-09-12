@@ -103,3 +103,4 @@ function mount(){
 }
 
 mount();
+void import('./diagnostics-ui.js');

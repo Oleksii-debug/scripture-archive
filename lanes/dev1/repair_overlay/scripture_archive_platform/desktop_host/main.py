@@ -6,6 +6,7 @@ from pathlib import Path
 
 from scripture_archive_platform.application.service import build_default_application
 from scripture_archive_platform.desktop_host.bridge import DesktopBridge
+from scripture_archive_platform.desktop_host.diagnostics import NativeDiagnosticsLayer
 from scripture_archive_platform.desktop_host.update_application import (
     NativeApplicationUpdateLayer,
     NativeUpdateFileSelector,
@@ -55,6 +56,12 @@ def main() -> int:
         platform_app,
         root,
         selector,
+        current_version=CURRENT_APPLICATION_VERSION,
+    )
+    app = NativeDiagnosticsLayer(
+        app,
+        root,
+        Path(platform_app.store.root) / "runtime-v2",
         current_version=CURRENT_APPLICATION_VERSION,
     )
     bridge = DesktopBridge(app)

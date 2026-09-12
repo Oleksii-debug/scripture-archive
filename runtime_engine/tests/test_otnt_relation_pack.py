@@ -7,7 +7,6 @@ from scripture_archive_runtime.cross_testament import project_cross_testament
 from scripture_archive_runtime.evidence import EvidenceRuntime
 from scripture_archive_runtime.otnt_relation_pack import (
     PACK_FILENAME,
-    PENDING_STATUS,
     SOURCE_AUDITED_STATUS,
     load_otnt_relation_pack,
     materialize_otnt_relation_pack,
@@ -43,11 +42,11 @@ class OTNTRelationPackTests(unittest.TestCase):
         }
         return raw
 
-    def test_checked_in_pack_is_authored_but_not_runtime_visible(self):
+    def test_checked_in_pack_is_source_audited_and_materializes_real_link(self):
         bundle = load_otnt_relation_pack(REPO_ROOT)
 
-        self.assertEqual(bundle.status, PENDING_STATUS)
-        self.assertFalse(bundle.source_audited)
+        self.assertEqual(bundle.status, SOURCE_AUDITED_STATUS)
+        self.assertTrue(bundle.source_audited)
         self.assertEqual(len(bundle.runtime.evidence), 2)
         self.assertEqual(len(bundle.runtime.relations), 1)
         self.assertEqual(bundle.runtime.unlocked, set())
@@ -55,13 +54,25 @@ class OTNTRelationPackTests(unittest.TestCase):
 
         target = EvidenceRuntime()
         result = materialize_otnt_relation_pack(target, bundle)
-        self.assertFalse(result.source_audited)
-        self.assertEqual(result.evidence_added, 0)
-        self.assertEqual(result.relations_added, 0)
-        self.assertEqual(result.evidence_unlocked, 0)
-        self.assertEqual(target.evidence, {})
-        self.assertEqual(target.relations, {})
-        self.assertEqual(target.unlocked, set())
+        self.assertTrue(result.source_audited)
+        self.assertEqual(result.evidence_added, 2)
+        self.assertEqual(result.relations_added, 1)
+        self.assertEqual(result.evidence_unlocked, 2)
+        self.assertEqual(target.unlocked, set(target.evidence))
+
+        projection = project_cross_testament(
+            target,
+            book_testaments=bundle.book_testaments,
+        )
+        self.assertEqual(projection.status, "LINKS")
+        self.assertEqual(len(projection.links), 1)
+        link = projection.links[0]
+        self.assertEqual(link.relation_id, RELATION_ID)
+        self.assertEqual(link.relation_type, "EXPLICIT_WRITTEN_QUOTATION")
+        self.assertEqual(link.ot.passage_id, "OT.ZEC.13.7.WEBU")
+        self.assertEqual(link.nt.passage_id, "NT.MAT.26.31.WEBU")
+        self.assertEqual(link.ot.evidence[0].confidence, "T1")
+        self.assertEqual(link.nt.evidence[0].confidence, "T1")
 
     def test_independently_audited_pack_materializes_and_projects_one_real_link(self):
         with TemporaryDirectory() as directory:
@@ -106,9 +117,18 @@ class OTNTRelationPackTests(unittest.TestCase):
             root = Path(directory)
             raw = self._raw_pack()
             raw["status"] = SOURCE_AUDITED_STATUS
+            raw["audit"] = {
+                "state": "SOURCE_AUDITED",
+                "auditor": None,
+                "accepted_at": None,
+                "evidence_ref": None,
+            }
             self._write_pack(root, raw)
 
-            with self.assertRaisesRegex(ValueError, "audit.state=SOURCE_AUDITED"):
+            with self.assertRaisesRegex(
+                ValueError,
+                "SOURCE_AUDITED pack requires auditor, accepted_at, and evidence_ref",
+            ):
                 load_otnt_relation_pack(root)
 
     def test_audited_materialization_collision_is_atomic(self):

@@ -2,6 +2,7 @@ from pathlib import Path
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[4]
 
 
 class PackagedReviewTrainingContractTest(unittest.TestCase):
@@ -10,8 +11,8 @@ class PackagedReviewTrainingContractTest(unittest.TestCase):
         cls.contracts = (ROOT / "scripture_archive_platform" / "transport" / "contracts.py").read_text(encoding="utf-8")
         cls.adapter = (ROOT / "scripture_archive_platform" / "transport" / "runtime_compat.py").read_text(encoding="utf-8")
         cls.service = (ROOT / "scripture_archive_platform" / "application" / "service.py").read_text(encoding="utf-8")
-        cls.runtime = (Path(__file__).resolve().parents[3] / "runtime_engine" / "scripture_archive_runtime" / "application.py").read_text(encoding="utf-8")
-        cls.security = (Path(__file__).resolve().parents[3] / "runtime_engine" / "scripture_archive_runtime" / "security.py").read_text(encoding="utf-8")
+        cls.runtime = (REPO_ROOT / "runtime_engine" / "scripture_archive_runtime" / "application.py").read_text(encoding="utf-8")
+        cls.security = (REPO_ROOT / "runtime_engine" / "scripture_archive_runtime" / "security.py").read_text(encoding="utf-8")
 
     def test_review_training_commands_are_allowlisted_at_both_boundaries(self):
         for command in ("player.start_review", "player.finish_review"):

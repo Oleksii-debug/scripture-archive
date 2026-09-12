@@ -18,6 +18,22 @@ ALLOWLISTED_COMMANDS = frozenset({
   "keymap.export","keymap.import","settings.get","settings.set"
 })
 
+_PLAYER_TRUTH_OWNERS = frozenset({"D5/runtime", "REFERENCE_TEST_ONLY"})
+_PRIVATE_PLAYER_TASK_KEYS = frozenset({
+  "legacy_answer_contract",
+  "accepted_answer",
+  "rejected_answers",
+  "accepted_choice_ids",
+  "accepted_options",
+  "accepted_pairs",
+  "correct_answer",
+  "correct_answers",
+  "answer_key",
+  "solution",
+  "grading",
+  "grader",
+})
+
 class ContentLoaderPort(Protocol):
     def list_campaigns(self)->list[dict[str,Any]]: ...
     def list_missions(self,campaign_id:str)->list[dict[str,Any]]: ...
@@ -48,8 +64,26 @@ def validate_request_shape(request:Any)->tuple[str,str,dict[str,Any]]:
         raise ValueError('player.get_daily_case accepts an empty payload')
     return rid,cmd,payload
 
+def _redact_private_player_task(value:Any)->Any:
+    if isinstance(value,dict):
+        return {
+          key:_redact_private_player_task(item)
+          for key,item in value.items()
+          if key not in _PRIVATE_PLAYER_TASK_KEYS
+        }
+    if isinstance(value,list): return [_redact_private_player_task(item) for item in value]
+    return value
+
+def _public_transport_data(data:Any)->Any:
+    if not isinstance(data,dict): return data
+    task=data.get('task')
+    if data.get('truth_owner') not in _PLAYER_TRUTH_OWNERS or not isinstance(task,dict): return data
+    public=dict(data)
+    public['task']=_redact_private_player_task(task)
+    return public
+
 def ok_response(request_id:str,data:Any)->dict[str,Any]:
-    return {"api_version":TRANSPORT_API_VERSION,"request_id":request_id,"ok":True,"data":data}
+    return {"api_version":TRANSPORT_API_VERSION,"request_id":request_id,"ok":True,"data":_public_transport_data(data)}
 def error_response(request_id:str,code:str,message:str,details:Any=None)->dict[str,Any]:
     err={"code":code,"message":message}
     if details is not None: err['details']=details

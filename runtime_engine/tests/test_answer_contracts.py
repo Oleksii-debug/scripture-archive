@@ -1,6 +1,6 @@
 import unittest
 
-from scripture_archive_runtime.answer_contracts import answer_contract_descriptor, validate_answer_dto
+from scripture_archive_runtime.answer_contracts import answer_contract_descriptor, canonical_task_type, validate_answer_dto
 from scripture_archive_runtime.security import ValidationError
 
 
@@ -27,5 +27,12 @@ class AnswerContractTests(unittest.TestCase):
 
     def test_descriptor_is_versioned(self):
         self.assertEqual(answer_contract_descriptor("OT_NT_LINK")["schema"], "ANSWER_DTO_v1")
+
+    def test_historical_free_response_aliases_preserve_text_contract(self):
+        for historical in ("short free response", "structured free response"):
+            self.assertEqual("SHORT_TEXT", canonical_task_type(historical))
+            dto = validate_answer_dto(historical, {"text": "Not stated in the cited text."})
+            self.assertEqual("SHORT_TEXT", dto["task_type"])
+            self.assertEqual("Not stated in the cited text.", dto["text"])
 
 if __name__ == '__main__': unittest.main()

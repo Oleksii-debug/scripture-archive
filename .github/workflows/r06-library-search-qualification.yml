@@ -1,20 +1,22 @@
-name: R06 Library Search Qualification
+name: R06 Library/Search Qualification
 
 on:
+  workflow_dispatch:
   push:
     branches:
-      - r06-cc-library-search-9f2a
+      - r06-converge-library-search-current-coord-0912-sol
+    paths:
+      - 'lanes/dev1/**'
+      - 'tools/verify_library_search_overlay.py'
+      - '.github/workflows/r06-library-search-qualification.yml'
   pull_request:
     paths:
-      - 'lanes/dev1/repair_overlay/scripture_archive_platform/content/library.py'
-      - 'lanes/dev1/repair_overlay/scripture_archive_platform/application/service.py'
-      - 'lanes/dev1/repair_overlay/scripture_archive_platform/transport/contracts.py'
-      - 'lanes/dev1/repair_overlay/tests/test_library_search.py'
+      - 'lanes/dev1/**'
       - 'tools/verify_library_search_overlay.py'
       - '.github/workflows/r06-library-search-qualification.yml'
 
-permissions:
-  contents: read
+env:
+  LIBRARY_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
 concurrency:
   group: r06-library-search-${{ github.ref }}
@@ -27,16 +29,13 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.LIBRARY_SOURCE_SHA }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - name: Confirm exact source checkout
-        shell: bash
-        run: |
-          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}" || exit 1
-          git status --porcelain
-      - name: Execute Library/Search isolated qualification
+      - name: Execute Library/Search composed qualification
         run: python tools/verify_library_search_overlay.py

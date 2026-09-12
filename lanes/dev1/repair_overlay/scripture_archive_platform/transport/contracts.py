@@ -8,9 +8,11 @@ MAX_IMPORT_BYTES = 2_000_000
 
 ALLOWLISTED_COMMANDS = frozenset({
   "system.bootstrap",
-  "content.list_campaigns","content.list_missions","player.load_node",
+  "content.list_campaigns","content.list_missions","library.catalog","library.search","player.load_node",
   "player.submit_answer","player.request_hint","player.reveal_evidence","player.next",
   "player.get_progress","player.get_mastery","player.get_review_queue","player.get_daily_case","player.save_checkpoint","player.restore_checkpoint",
+  "research.list_bookmarks","research.upsert_bookmark","research.delete_bookmark",
+  "research.list_notes","research.upsert_note","research.delete_note",
   "authoring.list_drafts","authoring.new_draft","authoring.new_node_from_task_type","authoring.load_draft","authoring.save_draft",
   "authoring.delete_draft","authoring.fork_record","authoring.fork_canonical_node","authoring.move_collection_item",
   "authoring.validate_draft","authoring.preview_draft","authoring.prepare_publish_candidate",

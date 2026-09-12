@@ -58,6 +58,23 @@ class PA02StructuredMaterializationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Source evidence pack drifted"):
                 load_pa02_structured_evidence(root)
 
+    def test_unknown_retrieval_subject_fails_closed(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            evidence_dir = root / "docs" / "evidence"
+            evidence_dir.mkdir(parents=True)
+            source_dir = REPO_ROOT / "docs" / "evidence"
+            shutil.copy2(source_dir / SOURCE_PACK, evidence_dir / SOURCE_PACK)
+            index = json.loads((source_dir / PA02_STRUCTURED_INDEX).read_text(encoding="utf-8"))
+            index["records"][0]["entity_ids"].append("person:not-declared")
+            (evidence_dir / PA02_STRUCTURED_INDEX).write_text(
+                json.dumps(index, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "unknown structured subject"):
+                load_pa02_structured_evidence(root)
+
     def test_canonical_registry_unlock_map_keeps_r05_and_adds_source_records(self):
         bundle = load_r05_evidence_registry(REPO_ROOT)
 

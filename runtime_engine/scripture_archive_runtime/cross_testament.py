@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 import json
+import unicodedata
 
 from .evidence import EvidenceRecord, EvidenceRuntime, PassageRef, Relation
 from .models import Confidence
@@ -408,6 +409,15 @@ def _dedupe_preserving_order(values: tuple[str, ...]) -> tuple[str, ...]:
 def _require_text(value: object, field: str, limit: int) -> str:
     if not isinstance(value, str):
         raise ValueError(f"{field} must be a string")
+    if any(
+        unicodedata.category(character).startswith("C")
+        or character in {"\u2028", "\u2029"}
+        for character in value
+    ):
+        raise ValueError(
+            f"{field} must not contain control, format, surrogate, private-use, "
+            "unassigned, or line-separator characters"
+        )
     stripped = value.strip()
     if not stripped:
         raise ValueError(f"{field} must not be empty")

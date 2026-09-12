@@ -8,6 +8,7 @@ on:
       - 'lanes/dev1/repair_overlay/frontend/library-shell-compat.js'
       - 'lanes/dev1/repair_overlay/frontend/daily-case-ui.js'
       - 'lanes/dev1/repair_overlay/frontend/content-pack-manager.js'
+      - 'lanes/dev1/repair_overlay/frontend/evidence-graph-ui.js'
       - 'lanes/dev1/repair_overlay/tests/test_packaged_library_current_shell.py'
       - 'lanes/dev1/repair_overlay/tests/test_packaged_transport_composition.py'
       - '.github/workflows/r06-packaged-library-current-shell.yml'

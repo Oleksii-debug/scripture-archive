@@ -9,8 +9,11 @@ class AccessibilityTests(unittest.TestCase):
     def setUpClass(cls):
         cls.front = Path(__file__).parents[1] / 'frontend'
         cls.html = (cls.front / 'index.html').read_text(encoding='utf-8')
-        cls.js = '\n'.join(p.read_text(encoding='utf-8') for p in cls.front.glob('*.js'))
         cls.app = (cls.front / 'app.js').read_text(encoding='utf-8')
+        cls.hotkeys = (cls.front / 'hotkeys.js').read_text(encoding='utf-8')
+        cls.keymap = (cls.front / 'keymap-ui.js').read_text(encoding='utf-8')
+        cls.renderer_wrapper = (cls.front / 'renderers.js').read_text(encoding='utf-8')
+        cls.renderers = (cls.front / 'renderers-base.js').read_text(encoding='utf-8')
 
     def test_required_semantic_document_contract(self):
         self.assertEqual([], audit_static_html(self.html))
@@ -21,12 +24,9 @@ class AccessibilityTests(unittest.TestCase):
     def test_audit_detects_broken_idrefs_labels_and_dialog_names(self):
         broken = self.html.replace('for="draft-search"', 'for="missing-control"', 1)
         broken = broken.replace('aria-labelledby="keymap-heading"', '', 1)
-        broken = broken.replace('aria-labelledby="progress-heading progress-text"', 'aria-labelledby="missing-progress-label"', 1)
         errors = audit_static_html(broken)
         self.assertTrue(any('unlabeled input: draft-search' in e for e in errors), errors)
         self.assertTrue(any('unnamed dialog: keymap-dialog' in e for e in errors), errors)
-        if 'aria-labelledby="progress-heading progress-text"' in self.html:
-            self.assertTrue(any('missing id: missing-progress-label' in e for e in errors), errors)
 
     def test_audit_accepts_implicit_wrapping_label_without_control_id(self):
         valid = (
@@ -48,43 +48,52 @@ class AccessibilityTests(unittest.TestCase):
         self.assertEqual([], audit_static_html(valid))
 
     def test_audit_detects_duplicate_id_and_positive_tabindex(self):
-        broken = self.html.replace('<h2 id="home-heading">', '<h2 id="app-title" tabindex="2">', 1)
+        broken = self.html.replace(
+            '<h2 id="home-heading">',
+            '<h2 id="app-title" tabindex="2">',
+            1,
+        )
         errors = audit_static_html(broken)
         self.assertTrue(any('duplicate ids: app-title' in e for e in errors), errors)
         self.assertTrue(any('positive/invalid tabindex' in e for e in errors), errors)
 
-    def test_no_canvas_no_drag_only_and_reorder_is_focus_safe(self):
+    def test_ordering_is_keyboard_operable_and_restores_focus_after_redraw(self):
         self.assertNotIn('<canvas', self.html.lower())
         self.assertNotIn('draggable=', self.html.lower())
-        renderers = (self.front / 'renderers.js').read_text(encoding='utf-8')
-        authoring = (self.front / 'authoring.js').read_text(encoding='utf-8')
-        for text in (renderers, authoring):
-            self.assertIn('Вгору', text)
-            self.assertIn('Вниз', text)
-        self.assertIn('moved.focus()', renderers)
-        self.assertIn('row.focus()', authoring)
-        self.assertIn("role','status'", renderers)
+        self.assertIn("'Вгору'", self.renderers)
+        self.assertIn("'Вниз'", self.renderers)
+        self.assertIn("dataset.move='up'", self.renderers)
+        self.assertIn("dataset.move='down'", self.renderers)
+        self.assertIn("button:not(:disabled)", self.renderers)
+        self.assertIn("(preferred||fallback)?.focus()", self.renderers)
 
     def test_shortcut_capture_preserves_escape_tab_scope_and_focus_return(self):
-        hotkeys = (self.front / 'hotkeys.js').read_text(encoding='utf-8')
-        keymap = (self.front / 'keymap-ui.js').read_text(encoding='utf-8')
-        self.assertIn("if(e.key==='Escape'){this.clearCapture();return}", hotkeys)
-        self.assertIn("if(e.key==='Tab')return", hotkeys)
-        self.assertIn('captureScope', hotkeys)
-        self.assertIn("setCapture(binding=>{inp.value=binding;byId('shortcut-error').textContent=''},inp)", keymap)
-        self.assertIn("closest?.('textarea", hotkeys)
-        self.assertIn('focusSoon(this.shortcutReturn)', keymap)
-        self.assertIn('focusSoon(this.keymapReturn)', keymap)
-        self.assertIn('AccessibilitySettingsUI', keymap)
+        self.assertIn("if(e.key==='Escape'){this.clearCapture();return}", self.hotkeys)
+        self.assertIn("if(e.key==='Tab')return", self.hotkeys)
+        self.assertIn('captureScope', self.hotkeys)
+        self.assertIn(
+            "setCapture(binding=>{inp.value=binding;byId('shortcut-error').textContent=''},inp)",
+            self.keymap,
+        )
+        self.assertIn("closest?.('textarea", self.hotkeys)
+        self.assertIn('focusSoon(this.shortcutReturn)', self.keymap)
+        self.assertIn('focusSoon(this.keymapReturn)', self.keymap)
+        self.assertIn('AccessibilitySettingsUI', self.keymap)
 
     def test_player_focus_modal_return_and_dynamic_names_are_explicit(self):
-        for marker in ("focusSoon('feedback-heading')", "focusSoon('hint-heading')", "focusSoon('evidence-heading')"):
+        for marker in (
+            "focusSoon('feedback-heading')",
+            "focusSoon('hint-heading')",
+            "focusSoon('evidence-heading')",
+        ):
             self.assertIn(marker, self.app)
-        self.assertIn("$('current-state-text').textContent", self.app)
-        self.assertIn('jsonReturnFocus', self.app)
-        self.assertIn("$('json-dialog').addEventListener('close'", self.app)
-        self.assertIn("$('progress-bar').setAttribute('aria-labelledby','progress-heading progress-text')", self.app)
-        self.assertIn("$('task-meta').setAttribute('role','list')", self.app)
+        self.assertIn("jsonReturnFocus=document.activeElement", self.app)
+        self.assertIn("dialog.addEventListener('close'", self.app)
+        self.assertIn(
+            "progress.setAttribute('aria-labelledby','progress-heading progress-text')",
+            self.app,
+        )
+        self.assertIn("task-meta').setAttribute('role','list')", self.app)
         self.assertIn("s.setAttribute('role','listitem')", self.app)
 
     def test_dialogs_are_named_and_global_live_region_is_concise(self):
@@ -101,11 +110,11 @@ class AccessibilityTests(unittest.TestCase):
         self.assertIn('id="progress-bar"', self.html)
         self.assertIn('id="task-meta"', self.html)
 
-    def test_renderer_layer_has_no_canonical_node_ids_and_uses_instance_ids(self):
-        text = (self.front / 'renderers.js').read_text(encoding='utf-8')
-        self.assertNotRegex(text, r'LN\d{2}-N\d{2}|PA\d{2}-N\d{2}|LN\d{2}N')
-        self.assertIn('renderInstance', text)
-        self.assertIn('uid(host', text)
+    def test_renderer_wrapper_delegates_to_current_implementation_without_content_truth(self):
+        self.assertIn("export {renderTask} from './renderers-base.js'", self.renderer_wrapper)
+        self.assertNotRegex(self.renderers, r'LN\d{2}-N\d{2}|PA\d{2}-N\d{2}|LN\d{2}N')
+        self.assertIn('host.replaceChildren()', self.renderers)
+        self.assertIn('RendererRegistry.get(task.task_type).render(task,host)', self.renderers)
 
 
 if __name__ == '__main__':

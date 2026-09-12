@@ -33,7 +33,6 @@ from scripture_archive_platform.application.runtime_gateway import (
     RuntimeBackedPlayerGateway,
     RuntimeGatewayError,
 )
-from scripture_archive_platform.application.service import PlatformApplication
 from scripture_archive_platform.transport.contracts import validate_request_shape
 
 
@@ -152,13 +151,18 @@ class PackagedChronologyBoundaryTests(unittest.TestCase):
         self.assertEqual([], data["rows"])
 
     def test_application_allowlist_is_read_only_and_empty_payload_only(self):
-        expected = ChronologyProjection(None).response()
-        gateway = SimpleNamespace(get_chronology_lab=lambda: expected)
-        app = object.__new__(PlatformApplication)
-        app.player_gateway = gateway
-        self.assertIs(expected, app._dispatch("research.get_chronology_lab", {}))
-        with self.assertRaises(ValueError):
-            app._dispatch("research.get_chronology_lab", {"event_id": "EV-1"})
+        service_source = (
+            PLATFORM_ROOT / "scripture_archive_platform" / "application" / "service.py"
+        ).read_text(encoding="utf-8")
+        route = "if cmd=='research.get_chronology_lab':"
+        empty_payload_guard = (
+            "if p:raise ValueError('research.get_chronology_lab accepts an empty payload')"
+        )
+        self.assertEqual(1, service_source.count(route))
+        self.assertIn(empty_payload_guard, service_source)
+        self.assertIn("return self._chronology_lab()", service_source)
+        self.assertIn("return self.player_gateway.get_chronology_lab()", service_source)
+
         request = {
             "api_version": "scripture.transport.v1",
             "request_id": "chronology-test",

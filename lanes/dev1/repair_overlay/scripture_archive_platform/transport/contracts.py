@@ -16,7 +16,9 @@ ALLOWLISTED_COMMANDS = frozenset({
   "authoring.list_drafts","authoring.new_draft","authoring.new_node_from_task_type","authoring.load_draft","authoring.save_draft",
   "authoring.delete_draft","authoring.fork_record","authoring.fork_canonical_node","authoring.move_collection_item",
   "authoring.validate_draft","authoring.preview_draft","authoring.prepare_publish_candidate",
-  "authoring.export_draft","authoring.import_draft",
+  "authoring.export_draft","authoring.import_draft","authoring.pack_compatibility",
+  "authoring.create_snapshot","authoring.list_snapshots","authoring.restore_snapshot","authoring.diff_draft","authoring.history",
+  "authoring.undo","authoring.redo","authoring.publish_version","authoring.list_versions","authoring.rollback_version",
   "keymap.list","keymap.rebind","keymap.clear","keymap.reset_context","keymap.reset_all",
   "keymap.export","keymap.import","settings.get","settings.set"
 })
@@ -73,6 +75,8 @@ def validate_request_shape(request:Any)->tuple[str,str,dict[str,Any]]:
         raise ValueError('research.get_evidence_graph accepts an empty payload')
     if cmd=='research.get_witness_matrix' and payload:
         raise ValueError('research.get_witness_matrix accepts an empty payload')
+    if cmd=='authoring.pack_compatibility' and payload:
+        raise ValueError('authoring.pack_compatibility accepts an empty payload')
     return rid,cmd,payload
 
 def _redact_private_player_task(value:Any)->Any:

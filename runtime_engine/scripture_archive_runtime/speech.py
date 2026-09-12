@@ -435,6 +435,11 @@ class OpenAISpeechProvider(_NetworkProviderBase):
             sleep=sleep,
             random_uniform=random_uniform,
         )
+        _require_official_endpoint(
+            self.endpoint,
+            expected_host="api.openai.com",
+            expected_path="/v1/audio/speech",
+        )
         self.default_model = _require_identifier(default_model, "default_model", max_length=128)
 
     def cache_descriptor(self, request: SpeechRequest) -> Mapping[str, Any]:
@@ -509,6 +514,11 @@ class ElevenLabsSpeechProvider(_NetworkProviderBase):
             sleep=sleep,
             random_uniform=random_uniform,
         )
+        _require_official_endpoint(
+            self.endpoint,
+            expected_host="api.elevenlabs.io",
+            expected_path="/v1/text-to-speech",
+        )
         self.default_model = _require_identifier(default_model, "default_model", max_length=128)
         self.output_format = _require_identifier(output_format, "output_format", max_length=64)
         self.response_format = _elevenlabs_response_format(self.output_format)
@@ -536,12 +546,25 @@ class ElevenLabsSpeechProvider(_NetworkProviderBase):
             raise SpeechValidationError(
                 "ElevenLabs adapter does not accept OpenAI-style speech instructions"
             )
+        if not 0.7 <= request.speed <= 1.2:
+            raise SpeechValidationError(
+                "ElevenLabs speech speed must be between 0.7 and 1.2"
+            )
+        effective_model = request.model or self.default_model
+        if request.language and effective_model == "eleven_multilingual_v2":
+            raise SpeechValidationError(
+                "ElevenLabs multilingual_v2 does not support language_code; "
+                "omit language rather than silently ignoring it"
+            )
         voice = urllib.parse.quote(request.voice_id, safe="")
         url = f"{self.endpoint.rstrip('/')}/{voice}?{urllib.parse.urlencode({'output_format': self.output_format})}"
         body: dict[str, Any] = {
             "text": request.text,
-            "model_id": request.model or self.default_model,
+            "model_id": effective_model,
+            "voice_settings": {"speed": request.speed},
         }
+        if request.language:
+            body["language_code"] = request.language
         return self._post(
             url=url,
             headers={
@@ -586,6 +609,24 @@ def _artifact_for(
         byte_length=path.stat().st_size,
         from_cache=from_cache,
     )
+
+
+def _require_official_endpoint(
+    endpoint: str,
+    *,
+    expected_host: str,
+    expected_path: str,
+) -> None:
+    parsed = urllib.parse.urlparse(endpoint)
+    if (
+        (parsed.hostname or "").lower() != expected_host
+        or parsed.path.rstrip("/") != expected_path.rstrip("/")
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise SpeechConfigurationError(
+            f"Official speech adapter endpoint must remain on {expected_host}{expected_path}"
+        )
 
 
 def _elevenlabs_response_format(output_format: str) -> str:

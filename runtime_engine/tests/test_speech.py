@@ -225,6 +225,8 @@ class OpenAISpeechProviderTests(unittest.TestCase):
             OpenAISpeechProvider(endpoint="http://api.openai.com/v1/audio/speech")
         with self.assertRaises(SpeechConfigurationError):
             OpenAISpeechProvider(endpoint="https://user:pass@example.test/speech")
+        with self.assertRaises(SpeechConfigurationError):
+            OpenAISpeechProvider(endpoint="https://example.test/v1/audio/speech")
 
 
 class ElevenLabsSpeechProviderTests(unittest.TestCase):
@@ -260,6 +262,7 @@ class ElevenLabsSpeechProviderTests(unittest.TestCase):
         body = json.loads(sent.data.decode("utf-8"))
         self.assertEqual(body["text"], "Незмінений текст уривка.")
         self.assertEqual(body["model_id"], "eleven_multilingual_v2")
+        self.assertEqual(body["voice_settings"], {"speed": 1.0})
         self.assertNotIn("eleven-secret", sent.data.decode("utf-8"))
 
     def test_openai_style_instructions_are_not_silently_ignored(self):
@@ -286,6 +289,55 @@ class ElevenLabsSpeechProviderTests(unittest.TestCase):
                         response_format="wav",
                     )
                 )
+
+    def test_provider_specific_speed_range_fails_closed(self):
+        with patch.dict(os.environ, {"ELEVENLABS_API_KEY": "secret"}, clear=False):
+            with self.assertRaises(SpeechValidationError):
+                self.provider.synthesize(
+                    SpeechRequest(
+                        text="x",
+                        provider_id="elevenlabs",
+                        voice_id="v",
+                        speed=1.5,
+                    )
+                )
+        self.assertEqual(self.opener.requests, [])
+
+    def test_multilingual_v2_rejects_language_code_instead_of_silent_ignore(self):
+        with patch.dict(os.environ, {"ELEVENLABS_API_KEY": "secret"}, clear=False):
+            with self.assertRaises(SpeechValidationError):
+                self.provider.synthesize(
+                    SpeechRequest(
+                        text="x",
+                        provider_id="elevenlabs",
+                        voice_id="v",
+                        language="uk",
+                    )
+                )
+        self.assertEqual(self.opener.requests, [])
+
+    def test_supported_model_can_forward_language_code(self):
+        with patch.dict(os.environ, {"ELEVENLABS_API_KEY": "secret"}, clear=False):
+            self.provider.synthesize(
+                SpeechRequest(
+                    text="x",
+                    provider_id="elevenlabs",
+                    voice_id="v",
+                    model="eleven_flash_v2_5",
+                    language="uk",
+                    speed=0.9,
+                )
+            )
+        sent, _ = self.opener.requests[-1]
+        body = json.loads(sent.data.decode("utf-8"))
+        self.assertEqual(body["language_code"], "uk")
+        self.assertEqual(body["voice_settings"], {"speed": 0.9})
+
+    def test_elevenlabs_official_adapter_rejects_custom_host(self):
+        with self.assertRaises(SpeechConfigurationError):
+            ElevenLabsSpeechProvider(
+                endpoint="https://example.test/v1/text-to-speech"
+            )
 
     def test_unknown_elevenlabs_output_format_is_rejected_at_configuration(self):
         with self.assertRaises(SpeechConfigurationError):

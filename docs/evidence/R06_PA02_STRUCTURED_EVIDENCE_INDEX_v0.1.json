@@ -126,7 +126,7 @@
     "PA02-N03": ["EV-PA-0008", "EV-PA-0011", "EV-PA-0014"],
     "PA02-N06": ["EV-PA-0009", "EV-PA-0012", "EV-PA-0014"],
     "PA02-N07": ["EV-PA-0009", "EV-PA-0012", "EV-PA-0016"],
-    "PA02-N09": ["EV-PA-0008", "EV-PA-0011", "EV-PA-0015"],
+    "PA02-N09": ["EV-PA-0015"],
     "PA02-N10": ["EV-PA-0010", "EV-PA-0013"],
     "PA02-N11": ["EV-PA-0013", "EV-PA-0017"],
     "PA02-N12": ["EV-PA-0013", "EV-PA-0015", "EV-PA-0017"],
@@ -139,6 +139,7 @@
     "entity_ids are technical retrieval/index keys, not new historical or harmonizing claims.",
     "cross_links from the source pack are not promoted to runtime Relation objects because the source pack does not define relation type or direction.",
     "Node links are an explicit unlock alignment. No claim-similarity, NLP or other inferred linking is permitted.",
-    "Nodes whose audited EV-PA record does not directly state the node proposition are intentionally omitted from this pilot mapping."
+    "Nodes whose audited EV-PA record does not directly state the node proposition are intentionally omitted from this pilot mapping.",
+    "PA02-N09 exposes only EV-PA-0015: EV-PA-0008 and EV-PA-0011 cite wider verse units but their audited claim fields do not encode the Acts 9/22 immediate-instruction propositions, so this technical index does not infer those missing claims."
   ]
 }

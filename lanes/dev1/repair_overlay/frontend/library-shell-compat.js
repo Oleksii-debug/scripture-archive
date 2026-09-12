@@ -1,3 +1,5 @@
+import './chronology-lab-ui.js';
+
 const LIBRARY_VIEW_ID = 'library-view';
 
 export function shellViews(main = document.querySelector('main')) {

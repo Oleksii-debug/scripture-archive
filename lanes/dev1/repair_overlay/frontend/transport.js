@@ -18,12 +18,16 @@ export class MockTransportAdapter{
   constructor(handler){this.handler=handler}
   async invoke(command,payload={}){return await this.handler(request(command,payload))}
 }
-export async function chooseTransport(){
+export function chooseTransport(){
   if(window.pywebview?.api?.invoke)return new DesktopTransportAdapter();
   if(location.protocol==='http:'||location.protocol==='https:')return new HttpTransportAdapter('');
   throw new Error('No transport adapter. Start the Windows host or run_web_mock.py.');
 }
-export async function unwrap(adapter,command,payload={}){const r=await adapter.invoke(command,payload);if(!r?.ok)throw new Error(r?.error?.message||'Transport error');return r.data}
+export async function unwrap(adapterOrResponse,command,payload={}){
+  const r=command===undefined ? await adapterOrResponse : await adapterOrResponse.invoke(command,payload);
+  if(!r?.ok)throw new Error(r?.error?.message||'Transport error');
+  return r.data;
+}
 
 // Supplemental packaged read-only canonical review surface.
 void import('./review-queue-ui.js');

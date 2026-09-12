@@ -99,6 +99,38 @@ class ReviewQueueTruthContractTests(unittest.TestCase):
         accepted = invoke_with({"review_queue": copy.deepcopy(VALID_ITEMS)}).invoke_runtime(request)
         self.assertEqual(VALID_ITEMS, accepted["review_queue"])
 
+    def test_review_queue_query_rejects_non_empty_payload_before_gateway(self):
+        request = {
+            "api_version": "scripture.transport.v1",
+            "request_id": "rq-payload",
+            "command": "player.get_review_queue",
+            "payload": {"unexpected": True},
+        }
+        adapter = RuntimeEngineContractAdapter(lambda runtime_request: self.fail("runtime must not be invoked"))
+        with self.assertRaisesRegex(ValueError, "empty payload"):
+            adapter.to_runtime_request(request)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            repo = make_repo(root / "repo")
+            gateway = StaticGateway(
+                {
+                    "api_version": "runtime.v1",
+                    "request_id": "review-queue-player",
+                    "review_queue": copy.deepcopy(VALID_ITEMS),
+                }
+            )
+            app = PlatformApplication(
+                repo,
+                store=JsonFileStore(root / "store"),
+                player_gateway=gateway,
+            )
+            result = app.handle(request)
+            self.assertFalse(result["ok"])
+            self.assertEqual("VALIDATION_ERROR", result["error"]["code"])
+            self.assertIn("empty payload", result["error"]["message"])
+            self.assertFalse(hasattr(gateway, "last_call"))
+
     def test_platform_never_attests_malformed_or_noncanonical_gateway_queue_as_d5_truth(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

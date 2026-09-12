@@ -2,6 +2,7 @@ import unittest
 
 from scripture_archive_runtime.application import RuntimeApplication
 from scripture_archive_runtime.content import ContentRepository
+from scripture_archive_runtime.security import ValidationError
 from tests.fixtures import LN01_N03, node_from
 
 
@@ -50,6 +51,25 @@ class ReviewQueueRuntimeTests(unittest.TestCase):
         self.assertEqual(response["api_version"], "runtime.v1")
         self.assertEqual(len(response["review_queue"]), 1)
         self.assertEqual(response["review_queue"][0]["concept_id"], "REVIEW-CONCEPT")
+
+    def test_runtime_v1_rejects_non_empty_review_queue_payload(self):
+        with self.assertRaisesRegex(ValidationError, "empty payload"):
+            self.app.handle({
+                "api_version": "runtime.v1",
+                "request_id": "review-payload",
+                "command": "get_review_queue",
+                "payload": {"unexpected": True},
+            })
+
+        response = self.app.handle({
+            "api_version": "runtime.v1",
+            "request_id": "review-empty",
+            "command": "get_review_queue",
+            "payload": {},
+        })
+        self.assertEqual(response["request_id"], "review-empty")
+        self.assertEqual(response["api_version"], "runtime.v1")
+        self.assertIn("review_queue", response)
 
 
 if __name__ == "__main__":

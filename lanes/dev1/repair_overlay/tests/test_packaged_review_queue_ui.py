@@ -46,6 +46,20 @@ class PackagedReviewQueueUiTest(unittest.TestCase):
         self.assertIn("reviewTraining=data.review_session;presentNode(data)", self.app)
         self.assertNotIn("scripture-review-training-started',e=>loadNode", self.app)
 
+    def test_leaving_queue_invalidates_cached_start_state_for_safe_resume(self):
+        deactivate = re.search(
+            r"function deactivateReviewQueue\(\)\s*\{(?P<body>.*?)\n\}",
+            self.js,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(deactivate)
+        body = deactivate.group("body")
+        self.assertIn("loadedOnce = false", body)
+        self.assertIn("reviewTrainingAvailable = false", body)
+        self.assertIn("requestGate.invalidate()", body)
+        self.assertIn("start.disabled = true", body)
+        self.assertIn("if (!loadedOnce) void loadReviewQueue()", self.js)
+
     def test_accessible_semantics_focus_and_exclusive_view(self):
         for token in (
             "aria-labelledby", "role: 'note'", "role: 'status'", "'aria-live': 'polite'",

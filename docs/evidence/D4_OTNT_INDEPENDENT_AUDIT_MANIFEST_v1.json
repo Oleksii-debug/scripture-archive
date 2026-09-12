@@ -1,0 +1,48 @@
+{
+  "schema_version": "scripture.evidence.d4-otnt-independent-audit.v1",
+  "source_head": "ab2ad3719781a4855a8040516bd86663e6a64d6c",
+  "source_relation_files": [
+    {
+      "path": "docs/campaigns/OT/R06_D4_STAGE05_READABLE/relations/relations_001_012.jsonl",
+      "git_blob_sha": "97d97fc9408f2874a29ce53375a3b12cd8cccd6e"
+    },
+    {
+      "path": "docs/campaigns/OT/R06_D4_STAGE05_READABLE/relations/relations_013_024.jsonl",
+      "git_blob_sha": "dbc3a99ca26a51196582ee3fa191f80f370d1635"
+    }
+  ],
+  "independent_audit": {
+    "coordination_issue": 78,
+    "comment_id": 5647653309,
+    "verdict": "PARTIAL_SOURCE_ACCEPTANCE / MAJOR_FIXES_FOR_2_OF_24 / 22_OF_24_INDEPENDENTLY_SOURCE_ACCEPTED"
+  },
+  "accepted_relation_ids": [
+    "REL-OTNT-D4-0001",
+    "REL-OTNT-D4-0002",
+    "REL-OTNT-D4-0003",
+    "REL-OTNT-D4-0004",
+    "REL-OTNT-D4-0007",
+    "REL-OTNT-D4-0008",
+    "REL-OTNT-D4-0009",
+    "REL-OTNT-D4-0010",
+    "REL-OTNT-D4-0011",
+    "REL-OTNT-D4-0012",
+    "REL-OTNT-D4-0013",
+    "REL-OTNT-D4-0014",
+    "REL-OTNT-D4-0015",
+    "REL-OTNT-D4-0016",
+    "REL-OTNT-D4-0017",
+    "REL-OTNT-D4-0018",
+    "REL-OTNT-D4-0019",
+    "REL-OTNT-D4-0020",
+    "REL-OTNT-D4-0021",
+    "REL-OTNT-D4-0022",
+    "REL-OTNT-D4-0023",
+    "REL-OTNT-D4-0024"
+  ],
+  "repair_required": {
+    "REL-OTNT-D4-0005": "W2-17 rejected the claim that both endpoints use beloved/unique-son language; John 3:16 does not call the Son beloved. Repair must preserve D1 and the disputed guard.",
+    "REL-OTNT-D4-0006": "W2-17 rejected exact Genesis 22:18 endpoint specificity at T2 because Galatians 3:16 does not identify that verse specifically. Repair requires conservative reclassification/repointing and re-audit."
+  },
+  "materialization_policy": "Only accepted_relation_ids from the exact source blobs may enter packaged runtime. repair_required IDs must remain absent until a later independent re-audit manifest supersedes this one."
+}

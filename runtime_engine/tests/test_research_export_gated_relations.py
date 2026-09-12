@@ -178,7 +178,8 @@ class ResearchExportGatedRelationRegressionTests(unittest.TestCase):
             title="Case",
             include_locked_evidence=True,
         )
-        self.assertEqual(full_export.payload["evidence"][0]["relation_ids"], ["REL-HIDDEN"])
+        full_evidence = {row["evidence_id"]: row for row in full_export.payload["evidence"]}
+        self.assertEqual(full_evidence["EV-VISIBLE"]["relation_ids"], ["REL-HIDDEN"])
         self.assertEqual(
             [row["relation_id"] for row in full_export.payload["relations"]],
             ["REL-HIDDEN"],

@@ -73,14 +73,8 @@ def validate_request_shape(request:Any)->tuple[str,str,dict[str,Any]]:
         raise ValueError('research.get_evidence_graph accepts an empty payload')
     if cmd=='research.get_witness_matrix' and payload:
         raise ValueError('research.get_witness_matrix accepts an empty payload')
-    if cmd=='research.export':
-        allowed={'format','witness','source_scope','relation','confidence'}
-        unknown=set(payload)-allowed
-        if unknown: raise ValueError('research.export payload has unknown fields')
-        if 'format' not in payload: raise ValueError('research.export requires format')
-        for key,value in payload.items():
-            if not isinstance(value,str) or not value.strip() or len(value)>160: raise ValueError(f'invalid research.export {key}')
-        if payload.get('format') not in {'json','markdown'}: raise ValueError('research.export format must be json or markdown')
+    if cmd=='research.export' and payload:
+        raise ValueError('research.export accepts an empty payload')
     return rid,cmd,payload
 
 def _redact_private_player_task(value:Any)->Any:

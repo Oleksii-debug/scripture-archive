@@ -83,6 +83,22 @@ def _mode_key(value: Any) -> str:
     return "_".join(str(value or "").replace("-", "_").replace(" ", "_").upper().split("_"))
 
 
+def _explicit_legacy_order(value: str) -> list[str]:
+    """Normalize only an authored explicit Unicode-arrow ordering representation.
+
+    Historical CONTENT_NODE_SCHEMA v1.2 ORDERING nodes can carry canonical truth as
+    one accepted_answer string whose literal U+2192 separators encode the order.
+    Splitting that canonical field is lossless adapter normalization; no prompt,
+    UI, task_payload, accepted_variants, or inferred chronology participates.
+    """
+    if "→" not in value:
+        raise ValidationError("legacy ordering lacks explicit canonical arrow sequence")
+    items = [part.strip() for part in value.split("→")]
+    if len(items) < 2 or any(not item for item in items):
+        raise ValidationError("legacy ordering has an invalid explicit canonical arrow sequence")
+    return items
+
+
 def derive_answer_dto(node: Mapping[str, Any]) -> dict[str, Any]:
     """Project canonical CONTENT_NODE_SCHEMA v1.2 ground truth into ANSWER_DTO_v1.
 
@@ -91,13 +107,16 @@ def derive_answer_dto(node: Mapping[str, Any]) -> dict[str, Any]:
 
     Historical CONTENT_NODE_SCHEMA v1.2 citation-selection nodes authored their
     explicit selection set as one semicolon-delimited accepted_answer string.
-    That representation is normalized only at this adapter boundary; authored
-    truth remains untouched in the returned runtime node. Other MULTI_SELECT
-    string representations still fail closed rather than being guessed.
+    Historical ordering nodes can likewise author an explicit sequence in the
+    canonical accepted_answer itself using Unicode arrow separators. Those
+    representations are normalized only at this adapter boundary. Other
+    MULTI_SELECT/ORDERING string representations still fail closed rather than
+    being guessed.
     """
     projection = deepcopy(dict(node))
+    task_type = _task_type(projection)
     if (
-        _task_type(projection) == "MULTI_SELECT"
+        task_type == "MULTI_SELECT"
         and isinstance(projection.get("accepted_answer"), str)
         and _mode_key(projection.get("response_mode")) == "CITATION_SELECTION"
     ):
@@ -105,13 +124,27 @@ def derive_answer_dto(node: Mapping[str, Any]) -> dict[str, Any]:
         if not choices:
             raise ValidationError("legacy citation selection lacks explicit canonical choices")
         projection["accepted_answer"] = choices
+    elif (
+        task_type == "ORDERING"
+        and isinstance(projection.get("accepted_answer"), str)
+        and _mode_key(projection.get("response_mode")) == "ORDERING"
+    ):
+        projection["accepted_answer"] = _explicit_legacy_order(projection["accepted_answer"])
     return canonical_answer_dto(projection)
 
 
 def adapt_node_for_runtime(node: Mapping[str, Any], *, lane: str = "unknown") -> dict[str, Any]:
-    """Transitional adapter: preserves authored fields and adds explicit runtime contract metadata."""
+    """Transitional adapter: preserves source truth while adding normalized runtime contract metadata."""
     adapted = deepcopy(dict(node))
     ctype = _task_type(adapted)
+    if (
+        ctype == "ORDERING"
+        and isinstance(adapted.get("accepted_answer"), str)
+        and _mode_key(adapted.get("response_mode")) == "ORDERING"
+    ):
+        # Runtime copy only: keep the source package byte-for-byte untouched while
+        # retaining an explicit canonical list for downstream provenance checks.
+        adapted["accepted_answer"] = _explicit_legacy_order(adapted["accepted_answer"])
     adapted["task_type"] = ctype
     adapted["answer_contract_version"] = ANSWER_CONTRACT_VERSION
     adapted["answer_dto"] = derive_answer_dto(adapted)

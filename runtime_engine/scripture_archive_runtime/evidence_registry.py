@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from .evidence import EvidenceRecord, EvidenceRuntime
+from .evidence_materialization import load_pa02_structured_evidence
 from .models import Confidence
 
 
@@ -14,12 +15,14 @@ R05_EVIDENCE_INDEX = "R05_EVIDENCE_PROVENANCE_REGISTRY_v0.1_INDEX.json"
 
 @dataclass(frozen=True)
 class EvidenceRegistryBundle:
-    """Source-safe runtime projection of the checked-in R05 evidence registry.
+    """Source-safe runtime projection of the checked-in evidence registries.
 
-    Free-text provenance fields are retained verbatim in ``records`` for display/audit,
-    but are deliberately not parsed into passages, witnesses, entities, relations, or
-    chronology. ``node_evidence_ids`` is derived only from the registry's explicit
-    structured ``node_id`` and ``evidence_record_id`` fields.
+    R05 free-text provenance remains verbatim and is never parsed into invented
+    passage/witness/entity/relation structure. Separately SOURCE_AUDITED PA-02
+    records may be materialized only through the pinned explicit technical index.
+    ``records`` and ``record_count`` continue to describe the R05 registry itself;
+    ``runtime`` and ``node_evidence_ids`` may additionally contain those validated
+    structured source records.
     """
 
     runtime: EvidenceRuntime
@@ -48,7 +51,7 @@ def _load_json_object(path: Path) -> Mapping[str, Any]:
 
 
 def load_r05_evidence_registry(repo_root: Path) -> EvidenceRegistryBundle:
-    """Load the canonical R05 provenance registry without inventing source structure."""
+    """Load canonical R05 grading evidence plus explicitly audited source structure."""
 
     repo_root = Path(repo_root).resolve()
     evidence_dir = (repo_root / "docs" / "evidence").resolve()
@@ -101,9 +104,8 @@ def load_r05_evidence_registry(repo_root: Path) -> EvidenceRegistryBundle:
             if tx_flag not in {"none", "TX1"}:
                 raise ValueError(f"{evidence_id}.textual_variant_flag must be none or TX1")
 
-            # These fields are required provenance truth, but remain verbatim text. Parsing
-            # them into witness/passage/relation objects would fabricate structure that the
-            # registry does not explicitly encode.
+            # These fields remain verbatim R05 grading provenance. Parsing them into
+            # source objects would fabricate structure the R05 registry does not encode.
             _require_text(raw_record, "source_scope", evidence_id=evidence_id)
             _require_text(raw_record, "required_evidence", evidence_id=evidence_id)
             _require_text(raw_record, "provenance_status", evidence_id=evidence_id)
@@ -125,6 +127,22 @@ def load_r05_evidence_registry(repo_root: Path) -> EvidenceRegistryBundle:
         raise ValueError(
             f"Evidence registry count mismatch: index={expected_count}, loaded={len(records)}"
         )
+
+    structured_records, structured_node_links = load_pa02_structured_evidence(repo_root)
+    for evidence_id, record in sorted(structured_records.items()):
+        if evidence_id in runtime.evidence:
+            raise ValueError(f"Structured evidence collides with R05 evidence id {evidence_id}")
+        runtime.add_evidence(record)
+
+    for node_id, evidence_ids in sorted(structured_node_links.items()):
+        if node_id not in node_links:
+            raise ValueError(
+                f"Structured evidence node {node_id} is absent from the canonical R05 node registry"
+            )
+        destination = node_links[node_id]
+        for evidence_id in evidence_ids:
+            if evidence_id not in destination:
+                destination.append(evidence_id)
 
     return EvidenceRegistryBundle(
         runtime=runtime,

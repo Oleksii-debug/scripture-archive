@@ -3,6 +3,7 @@ name: R06 Packaged Library Current Shell Qualification
 on:
   pull_request:
     paths:
+      - 'lanes/dev1/repair_overlay/frontend/app.js'
       - 'lanes/dev1/repair_overlay/frontend/transport.js'
       - 'lanes/dev1/repair_overlay/frontend/library-ui.js'
       - 'lanes/dev1/repair_overlay/frontend/library-shell-compat.js'
@@ -11,11 +12,16 @@ on:
       - 'lanes/dev1/repair_overlay/frontend/content-pack-manager.js'
       - 'lanes/dev1/repair_overlay/frontend/evidence-graph-ui.js'
       - 'lanes/dev1/repair_overlay/frontend/witness-matrix-ui.js'
+      - 'lanes/dev1/repair_overlay/frontend/research-export.js'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/application/runtime_gateway.py'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/application/service.py'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/transport/contracts.py'
       - 'lanes/dev1/repair_overlay/tests/test_packaged_library_current_shell.py'
       - 'lanes/dev1/repair_overlay/tests/test_packaged_chronology_lab.py'
       - 'lanes/dev1/repair_overlay/tests/test_packaged_transport_composition.py'
       - 'lanes/dev1/repair_overlay/tests/test_packaged_witness_matrix_contract.py'
       - 'lanes/dev1/repair_overlay/tests/test_packaged_witness_matrix_lifecycle.py'
+      - 'lanes/dev1/repair_overlay/tests/test_research_export_current_shell.py'
       - '.github/workflows/r06-packaged-library-current-shell.yml'
   workflow_dispatch:
 
@@ -52,6 +58,8 @@ jobs:
         run: python lanes/dev1/repair_overlay/tests/test_packaged_transport_composition.py
       - name: Run packaged Witness Matrix lifecycle regression
         run: python lanes/dev1/repair_overlay/tests/test_packaged_witness_matrix_lifecycle.py
+      - name: Run packaged Research Export current-shell regression
+        run: python lanes/dev1/repair_overlay/tests/test_research_export_current_shell.py
       - name: Diff hygiene
         shell: bash
         run: git diff --check

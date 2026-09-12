@@ -153,6 +153,39 @@ class RuntimeBackedPlayerGateway:
                 "truth_owner": "D5/runtime",
             }
 
+    def export_research(self) -> dict[str, Any]:
+        """Serialize only the canonical runtime's currently unlocked evidence."""
+        if self._runtime_application is None:
+            raise RuntimeGatewayError("Research Export requires the canonical runtime application")
+        from runtime_engine.scripture_archive_runtime.research_export import build_research_export
+
+        with self._runtime_lock:
+            export = build_research_export(
+                self._runtime_application.evidence,
+                workspace_id="runtime-unlocked",
+                title="Експорт дослідження",
+                provenance={"truth_owner": "D5/runtime"},
+                include_locked_evidence=False,
+            )
+            payload = dict(export.payload)
+            return {
+                "export": {
+                    "schema": payload.get("schema"),
+                    "workspace_id": payload.get("workspace_id"),
+                    "title": payload.get("title"),
+                    "evidence_scope": payload.get("evidence_scope"),
+                    "counts": {
+                        "claims": len(payload.get("claims") or []),
+                        "evidence": len(payload.get("evidence") or []),
+                        "relations": len(payload.get("relations") or []),
+                    },
+                    "json": export.to_json(),
+                    "markdown": export.to_markdown(),
+                    "html": export.to_html(),
+                },
+                "truth_owner": "D5/runtime",
+            }
+
 
 def build_runtime_gateway(repo_root: Path, platform_store_root: Path) -> RuntimeBackedPlayerGateway:
     """Build the exact D5 runtime against the same canonical repository checkout.

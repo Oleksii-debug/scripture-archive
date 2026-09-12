@@ -76,7 +76,7 @@ class PackagedWitnessMatrixContractTests(unittest.TestCase):
         transport = (frontend / "transport.js").read_text(encoding="utf-8")
 
         self.assertIn("research.get_witness_matrix", ui)
-        self.assertIn("document.createElement('table')", ui)
+        self.assertIn("make('table')", ui)
         self.assertIn("Повний лінійний еквівалент", ui)
         self.assertIn("not_inferred", ui)
         self.assertNotIn("innerHTML", ui)

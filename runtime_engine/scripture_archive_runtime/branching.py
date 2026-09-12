@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Iterable, Mapping
 
 from .models import BranchResolution, BranchTerminal, Correctness, TaskDefinition
@@ -32,7 +32,15 @@ class BranchEngine:
             raw = task.branches.get("on_partial", "return_to_current_node")
         else:
             raw = task.branches.get("on_incorrect", "return_to_current_node")
-        return self.parse_target(raw, task=task)
+        resolution = self.parse_target(raw, task=task)
+        # Evidence exposure is a success consequence, never a side effect of a
+        # partial/incorrect branch or a guided hint-threshold transition. Canonical
+        # evidence adapters may populate optional_evidence_unlock from an explicit
+        # node->evidence registry, so fail closed here before RuntimeApplication can
+        # mutate unlocked evidence state.
+        if correctness is not Correctness.CORRECT and resolution.evidence_unlocks:
+            resolution = replace(resolution, evidence_unlocks=())
+        return resolution
 
     def parse_target(self, raw_target: str, *, task: TaskDefinition | None = None) -> BranchResolution:
         raw = (raw_target or "none").strip()

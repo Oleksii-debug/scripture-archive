@@ -15,9 +15,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OVERLAY = ROOT / "lanes" / "dev1" / "repair_overlay"
-SOURCE_PARTS = ROOT / "lanes" / "dev1" / "source_parts"
 RUNTIME_ENGINE = ROOT / "runtime_engine"
-EXPECTED_BASE_SHA256 = "51a31a8840b57850c8d4d0fc714b124445f3b3155daea083817c3570e0b80e0e"
+CANONICAL_DEV1_SOURCE_COMMIT = "90a13aca71d2a5f832846a84acbdf0f7c89f5da9"
+CANONICAL_SOURCE_PREFIX = "release_inputs/dev1_finalprep02"
+EXPECTED_BASE_SHA256 = "10fbd546ff4d985465b85b99f4f64bff95d9ec8b1f27132c6d21b4930c344c35"
 EXPECTED_REAL_TESTS = 6
 OVERLAY_FIDELITY_PATHS = (
     Path("scripture_archive_platform/content/library.py"),
@@ -47,12 +48,73 @@ def _safe_extract(archive: zipfile.ZipFile, destination: Path) -> None:
     archive.extractall(destination)
 
 
-def compose_real_platform(temp_root: Path) -> Path:
-    parts = sorted(SOURCE_PARTS.glob("part-*.b64"))
+def _read_canonical_archive() -> bytes:
+    fetch = subprocess.run(
+        [
+            "git",
+            "fetch",
+            "--no-tags",
+            "--no-recurse-submodules",
+            "--depth=1",
+            "origin",
+            CANONICAL_DEV1_SOURCE_COMMIT,
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+    )
+    if fetch.returncode != 0:
+        detail = (fetch.stderr or fetch.stdout).strip()
+        raise AssertionError(
+            "Unable to fetch pinned canonical DEV1 source donor "
+            f"{CANONICAL_DEV1_SOURCE_COMMIT}: {detail}"
+        )
+    fetched = subprocess.check_output(
+        ["git", "rev-parse", "FETCH_HEAD"], cwd=ROOT, text=True
+    ).strip()
+    if fetched != CANONICAL_DEV1_SOURCE_COMMIT:
+        raise AssertionError(
+            f"Expected pinned DEV1 donor {CANONICAL_DEV1_SOURCE_COMMIT}, got {fetched}"
+        )
+
+    listing = subprocess.check_output(
+        [
+            "git",
+            "ls-tree",
+            "-r",
+            "--name-only",
+            CANONICAL_DEV1_SOURCE_COMMIT,
+            "--",
+            CANONICAL_SOURCE_PREFIX,
+        ],
+        cwd=ROOT,
+        text=True,
+    )
+    parts = sorted(
+        path.strip()
+        for path in listing.splitlines()
+        if Path(path.strip()).name.startswith("part-")
+        and path.strip().endswith(".b64")
+    )
     if not parts:
-        raise AssertionError("Immutable DEV1 source parts are missing")
-    encoded = "".join("".join(part.read_text(encoding="ascii").split()) for part in parts)
-    archive_bytes = base64.b64decode(encoded, validate=True)
+        raise AssertionError(
+            "Pinned canonical FINALPREP02 DEV1 source parts are missing"
+        )
+
+    encoded_chunks: list[str] = []
+    for path in parts:
+        text = subprocess.check_output(
+            ["git", "show", f"{CANONICAL_DEV1_SOURCE_COMMIT}:{path}"],
+            cwd=ROOT,
+            text=True,
+        )
+        encoded_chunks.append("".join(text.split()))
+
+    return base64.b64decode("".join(encoded_chunks), validate=True)
+
+
+def compose_real_platform(temp_root: Path) -> Path:
+    archive_bytes = _read_canonical_archive()
     digest = hashlib.sha256(archive_bytes).hexdigest()
     if digest != EXPECTED_BASE_SHA256:
         raise AssertionError(
@@ -129,11 +191,13 @@ def main() -> None:
     verify_exact_checkout()
     with tempfile.TemporaryDirectory(prefix="scripture-library-qualification-") as tmp:
         platform_root = compose_real_platform(Path(tmp))
+        verify_exact_checkout()
         parse_real_paths(platform_root)
         run_real_response_regressions(platform_root)
     print(
-        "Library/Search qualification PASS: exact candidate checkout, immutable DEV1 "
-        "base hash/CRC, overlay fidelity, and six real response-level regressions."
+        "Library/Search qualification PASS: exact candidate checkout, pinned canonical "
+        "FINALPREP02 DEV1 base hash/CRC, overlay fidelity, and six real response-level "
+        "regressions."
     )
 
 

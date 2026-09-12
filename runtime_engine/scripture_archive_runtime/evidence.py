@@ -14,6 +14,11 @@ class PassageRef:
     verse_start: int
     verse_end: int | None = None
     witness: str | None = None
+    # Optional authored citation retained verbatim when the reference cannot be
+    # represented losslessly by one contiguous numeric verse range (for example
+    # "Revelation 1:7,13"). Existing callers remain source-compatible because
+    # the field is optional and comes last.
+    reference: str | None = None
 
 
 @dataclass(frozen=True)

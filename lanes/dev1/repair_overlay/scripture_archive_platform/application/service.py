@@ -53,6 +53,12 @@ class PlatformApplication:
         if cmd=='player.get_progress':return {'progress':self._progress(self._id(p,'node_id'))}
         if cmd=='player.get_mastery':return self._mastery()
         if cmd=='player.get_review_queue':return self._review_queue()
+        if cmd=='player.start_review':
+            if p:raise ValueError('player.start_review accepts an empty payload')
+            return self._start_review()
+        if cmd=='player.finish_review':
+            if p:raise ValueError('player.finish_review accepts an empty payload')
+            return self._finish_review()
         if cmd=='player.get_daily_case':
             if p:raise ValueError('player.get_daily_case accepts an empty payload')
             return self._daily_case()
@@ -89,7 +95,7 @@ class PlatformApplication:
         raise ValueError('command not implemented')
     def _bootstrap(self):
         campaigns=self.loader.list_campaigns()
-        return {'app':{'name':'Архів Писання','version':'R06-3DEV-A','runtime':'Windows 11 x64 / WebView2 semantic UI','transport_api_version':TRANSPORT_API_VERSION},'registries':{'task_types':self.task_types.list(),'renderers':self.renderers.list(),'graders':self.graders.list(),'editors':self.editors.list(),'templates':self.templates.list()},'campaigns':campaigns,'keymap':self.keymap.list(),'capabilities':{'constructor':True,'draft_vs_canonical':True,'web_portable_transport':True,'allowlisted_bridge':True,'library_catalog_search':True,'bundled_full_bible_text':False,'research_bookmarks_notes':True,'research_workspace_persistence':True,'evidence_graph':bool(self.player_gateway),'chronology_lab':bool(self.player_gateway),'arbitrary_filesystem':False,'content_pack_manager':True,'content_pack_inbox_only':True,'shell':False,'python_eval':False,'runtime_truth':bool(self.player_gateway),'review_queue':bool(self.player_gateway),'grading_truth':'D5/runtime' if self.player_gateway else 'REFERENCE_TEST_ONLY'}}
+        return {'app':{'name':'Архів Писання','version':'R06-3DEV-A','runtime':'Windows 11 x64 / WebView2 semantic UI','transport_api_version':TRANSPORT_API_VERSION},'registries':{'task_types':self.task_types.list(),'renderers':self.renderers.list(),'graders':self.graders.list(),'editors':self.editors.list(),'templates':self.templates.list()},'campaigns':campaigns,'keymap':self.keymap.list(),'capabilities':{'constructor':True,'draft_vs_canonical':True,'web_portable_transport':True,'allowlisted_bridge':True,'library_catalog_search':True,'bundled_full_bible_text':False,'research_bookmarks_notes':True,'research_workspace_persistence':True,'evidence_graph':bool(self.player_gateway),'chronology_lab':bool(self.player_gateway),'arbitrary_filesystem':False,'content_pack_manager':True,'content_pack_inbox_only':True,'shell':False,'python_eval':False,'runtime_truth':bool(self.player_gateway),'review_queue':bool(self.player_gateway),'review_training':bool(self.player_gateway),'grading_truth':'D5/runtime' if self.player_gateway else 'REFERENCE_TEST_ONLY'}}
     def _load_node(self,nid):
         if self.player_gateway:self.player_gateway.invoke('player.load_node',{'node_id':nid},request_id='load-'+nid)
         node=self.loader.load_node(nid); mission=self.loader.mission_for_node(nid); renderable=self.mapper.to_renderable(node,mission); self._last_node[nid]=node
@@ -99,7 +105,7 @@ class PlatformApplication:
         if self.player_gateway:
             rr=self.player_gateway.invoke('player.submit_answer',{'node_id':nid,'task_type':renderable['task_type'],'answer':p.get('answer')},request_id='submit-'+nid)
             grade=dict(rr.get('grade') or {}); branch=dict(rr.get('branch') or {}); status=str(grade.get('correctness') or 'INCORRECT')
-            return {'node_id':nid,'status':status,'score':grade.get('score'),'feedback':grade.get('feedback') or '','confidence_code':grade.get('confidence'),'textual_variant_flag':'TX1' if grade.get('tx1') else 'none','evidence':grade.get('evidence') or [],'uncertainty':grade.get('uncertainty'),'next_node_id':branch.get('next_node_id'),'branch':branch,'mastery_consequence':rr.get('mastery_consequence') or [],'accessibility':rr.get('accessibility') or [],'progress':self._progress(nid),'truth_owner':'D5/runtime'}
+            return {'node_id':nid,'status':status,'score':grade.get('score'),'feedback':grade.get('feedback') or '','confidence_code':grade.get('confidence'),'textual_variant_flag':'TX1' if grade.get('tx1') else 'none','evidence':grade.get('evidence') or [],'uncertainty':grade.get('uncertainty'),'next_node_id':branch.get('next_node_id'),'branch':branch,'mastery_consequence':rr.get('mastery_consequence') or [],'review_session':rr.get('review_session'),'accessibility':rr.get('accessibility') or [],'progress':self._progress(nid),'truth_owner':'D5/runtime'}
         result=self.grader.grade(node,renderable,p.get('answer')); hist=self.store.get_json('player','history',{}) or {}; rec=hist.setdefault(nid,{'attempts':0,'hints':0,'last_status':None});rec['attempts']+=1;rec['hints']=max(rec['hints'],self._hint_level.get(nid,0));rec['last_status']=result.status;rec['updated_at']=int(time.time());self.store.put_json('player','history',hist)
         next_id=self.loader.next_node_id(nid,'correct' if result.status=='CORRECT' else 'partial' if result.status in {'PARTIAL','REVIEW_REQUIRED'} else 'incorrect'); data=result.as_dict();data.update({'node_id':nid,'next_node_id':next_id,'progress':self._progress(nid),'truth_owner':'REFERENCE_TEST_ONLY'}); return data
     def _hint(self,nid):
@@ -127,6 +133,19 @@ class PlatformApplication:
     def _review_queue(self):
         if not self.player_gateway:return {'review_queue':[],'truth_owner':'REFERENCE_TEST_ONLY'}
         rr=self.player_gateway.invoke('player.get_review_queue',{},request_id='review-queue-player'); return {'review_queue':validate_review_queue_projection(rr.get('review_queue')),'truth_owner':'D5/runtime'}
+    def _start_review(self):
+        if not self.player_gateway:raise ValueError('Review Training requires canonical runtime')
+        rr=self.player_gateway.invoke('player.start_review',{},request_id='review-start-player'); task=rr.get('task'); session=dict(rr.get('review_session') or {})
+        if task is None:return {'task':None,'review_session':session,'review_selection':rr.get('review_selection'),'truth_owner':'D5/runtime'}
+        if not isinstance(task,dict):raise ValueError('runtime review task is invalid')
+        nid=self._id(task,'node_id'); node=self.loader.load_node(nid); mission=self.loader.mission_for_node(nid)
+        if task.get('mission_id') not in {None,mission.get('mission_id')}:raise ValueError('runtime review task mission does not match canonical content')
+        renderable=self.mapper.to_renderable(node,mission); self._last_node[nid]=node
+        return {'mission':mission,'task':renderable,'progress':self._progress(nid),'hint_level':0,'review_session':session,'review_selection':rr.get('review_selection'),'truth_owner':'D5/runtime'}
+    def _finish_review(self):
+        if not self.player_gateway:raise ValueError('Review Training requires canonical runtime')
+        rr=self.player_gateway.invoke('player.finish_review',{},request_id='review-finish-player')
+        return {'review_session':rr.get('review_session') or {},'truth_owner':'D5/runtime'}
     def _daily_case(self):
         if not self.player_gateway:raise ValueError('Daily Case requires canonical runtime')
         return self.player_gateway.get_daily_case()

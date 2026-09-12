@@ -129,6 +129,21 @@ def load_pa02_structured_evidence(
             raise ValueError(f"Duplicate witness token {token}")
         witness_tokens.add(token)
 
+    raw_subjects = index.get("subjects")
+    if not isinstance(raw_subjects, list) or not raw_subjects:
+        raise ValueError("index.subjects must be a non-empty list")
+    subject_ids: set[str] = set()
+    for position, subject in enumerate(raw_subjects):
+        if not isinstance(subject, Mapping):
+            raise ValueError(f"index.subjects[{position}] must be an object")
+        context = f"index.subjects[{position}]"
+        subject_id = _require_text(subject, "subject_id", context=context)
+        _require_text(subject, "kind", context=context)
+        _require_text(subject, "display_name", context=context)
+        if subject_id in subject_ids:
+            raise ValueError(f"Duplicate structured evidence subject {subject_id}")
+        subject_ids.add(subject_id)
+
     raw_records = index.get("records")
     if not isinstance(raw_records, list) or not raw_records:
         raise ValueError("index.records must be a non-empty list")
@@ -209,6 +224,8 @@ def load_pa02_structured_evidence(
         for entity_id in raw_entities:
             if not isinstance(entity_id, str) or not entity_id or entity_id != entity_id.strip():
                 raise ValueError(f"{evidence_id}.entity_ids must be trimmed non-empty strings")
+            if entity_id not in subject_ids:
+                raise ValueError(f"{evidence_id} references unknown structured subject {entity_id}")
             if entity_id in entity_ids:
                 raise ValueError(f"{evidence_id} contains duplicate entity id {entity_id}")
             entity_ids.append(entity_id)

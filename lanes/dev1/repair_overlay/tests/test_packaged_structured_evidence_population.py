@@ -1,13 +1,33 @@
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+
+
+def _find_repo_root() -> Path:
+    """Resolve the repository root in both overlay and reconstructed DEV1 layouts."""
+
+    for candidate in Path(__file__).resolve().parents:
+        if (candidate / "docs" / "evidence").is_dir() and (candidate / "runtime_engine").is_dir():
+            return candidate
+    raise RuntimeError("Cannot locate scripture-archive repository root")
+
+
+REPO_ROOT = _find_repo_root()
+CURRENT_PLATFORM_ROOT = Path(__file__).resolve().parents[1]
+if not (CURRENT_PLATFORM_ROOT / "scripture_archive_platform").is_dir():
+    CURRENT_PLATFORM_ROOT = REPO_ROOT / "lanes" / "dev1" / "repair_overlay"
+
+# The regression must run both directly from the checked-in repair overlay and
+# after that overlay is copied over the immutable DEV1 base into r06_platform.
+sys.path.insert(0, str(REPO_ROOT))
+sys.path.insert(0, str(CURRENT_PLATFORM_ROOT))
 
 from runtime_engine.scripture_archive_runtime.models import Correctness
 from scripture_archive_platform.application.runtime_gateway import build_runtime_gateway
 
 
-REPO_ROOT = Path(__file__).resolve().parents[4]
 SOURCE_IDS = {f"EV-PA-{number:04d}" for number in range(8, 18)}
 
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -48,20 +50,27 @@ class ContentPackManagerServiceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.manager.handle("content_packs.inspect", {"file_name": candidate.name})
 
+    def test_install_rejects_non_boolean_activation_intent_before_io(self):
+        with self.assertRaisesRegex(ValueError, "activate must be boolean"):
+            self.manager.handle("content_packs.install", {"file_name": "missing.zip", "activate": "false"})
+
     def test_unknown_content_pack_command_fails_closed(self):
         with self.assertRaisesRegex(ValueError, "command not implemented"):
             self.manager.handle("content_packs.execute", {})
 
 
 class ContentPackManagerSurfaceTests(unittest.TestCase):
-    def test_frontend_uses_semantic_dom_and_exact_allowlisted_commands(self):
+    def test_frontend_uses_semantic_dom_exact_commands_and_fail_closed_shapes(self):
         overlay = Path(__file__).resolve().parents[1]
-        script = (overlay / "frontend" / "content-pack-manager.js").read_text(encoding="utf-8")
+        script_path = overlay / "frontend" / "content-pack-manager.js"
+        script = script_path.read_text(encoding="utf-8")
         wrapper = (overlay / "frontend" / "renderers.js").read_text(encoding="utf-8")
         self.assertIn("createElement('dialog')", script)
         self.assertIn("textContent", script)
         self.assertNotIn("innerHTML", script)
         self.assertNotIn("<input type=\"file\"", script)
+        self.assertIn("checkedSnapshot", script)
+        self.assertIn("checkedInspection", script)
         for command in (
             "content_packs.list",
             "content_packs.inspect",
@@ -73,6 +82,11 @@ class ContentPackManagerSurfaceTests(unittest.TestCase):
             self.assertIn(command, script)
         self.assertIn("content-pack-manager.js", wrapper)
         self.assertIn("renderers-base.js", wrapper)
+        node = shutil.which("node")
+        if node is None:
+            self.skipTest("node unavailable on this host")
+        result = subprocess.run([node, "--check", str(script_path)], capture_output=True, text=True, check=False)
+        self.assertEqual(0, result.returncode, result.stderr)
 
 
 if __name__ == "__main__":

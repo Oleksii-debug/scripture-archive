@@ -306,6 +306,7 @@ def build_evidence_graph(
             relation,
             source_id=source,
             target_id=target,
+            runtime=runtime,
             nodes=nodes,
             passage_payloads=passage_payloads,
         )
@@ -454,11 +455,30 @@ def _validate_record_witness_provenance(record: EvidenceRecord) -> None:
         )
 
 
+def _record_support_witnesses(record: EvidenceRecord, *, relation_id: str) -> set[str]:
+    witnesses: set[str] = set()
+    record_witness = _validated_witness(
+        record.witness,
+        f"relation {relation_id} evidence {record.evidence_id} witness",
+    )
+    if record_witness is not None:
+        witnesses.add(record_witness)
+    for passage in record.passage_refs:
+        passage_witness = _validated_witness(
+            passage.witness,
+            f"relation {relation_id} passage {passage.passage_id} witness",
+        )
+        if passage_witness is not None:
+            witnesses.add(passage_witness)
+    return witnesses
+
+
 def _validate_relation_witness_provenance(
     relation: Relation,
     *,
     source_id: str,
     target_id: str,
+    runtime: EvidenceRuntime,
     nodes: Mapping[str, EvidenceGraphNode],
     passage_payloads: Mapping[str, Mapping[str, Any]],
 ) -> None:
@@ -483,14 +503,38 @@ def _validate_relation_witness_provenance(
 
     for endpoint_id in (source_id, target_id):
         node = nodes[endpoint_id]
-        if node.node_type not in {EVIDENCE_NODE, PASSAGE_NODE}:
-            continue
-        witness = _validated_witness(
-            node.payload.get("witness"),
-            f"relation {relation.relation_id} endpoint {endpoint_id} witness",
+        if node.node_type == EVIDENCE_NODE:
+            record = runtime.evidence.get(node.raw_id)
+            if record is None:
+                raise ValueError(
+                    f"Visible evidence endpoint missing from runtime: {node.raw_id}"
+                )
+            supporting_witnesses.update(
+                _record_support_witnesses(record, relation_id=relation.relation_id)
+            )
+        elif node.node_type == PASSAGE_NODE:
+            witness = _validated_witness(
+                node.payload.get("witness"),
+                f"relation {relation.relation_id} endpoint {endpoint_id} witness",
+            )
+            if witness is not None:
+                supporting_witnesses.add(witness)
+        elif node.node_type == CLAIM_NODE:
+            for evidence_id in node.payload.get("required_evidence_ids", []):
+                record = runtime.evidence.get(evidence_id)
+                if record is None:
+                    raise ValueError(
+                        f"Visible claim endpoint {node.raw_id} references missing evidence {evidence_id}"
+                    )
+                supporting_witnesses.update(
+                    _record_support_witnesses(record, relation_id=relation.relation_id)
+                )
+
+    if not supporting_witnesses:
+        raise ValueError(
+            f"Relation {relation.relation_id} declares witness {relation_witness} "
+            "without explicit visible supporting witness provenance"
         )
-        if witness is not None:
-            supporting_witnesses.add(witness)
 
     conflicting = sorted(
         witness for witness in supporting_witnesses if witness != relation_witness

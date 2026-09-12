@@ -21,12 +21,15 @@ def canonical_task_type(value: str) -> str:
         # Historical canonical response/task-family aliases retained by LN/PA.
         # They map to the same public ANSWER_DTO_v1 shape as their established grader.
         "CLASSIFICATION": "SINGLE_CHOICE",
+        "CLASSIFICATION_+_EXPLANATION": "SINGLE_CHOICE",
         "CITATION_SELECTION": "MULTI_SELECT",
+        "CITATION_+_PARAPHRASE": "SHORT_TEXT",
         "FREE_RESPONSE": "SHORT_TEXT",
         "SHORT_FREE_RESPONSE": "SHORT_TEXT",
         "STRUCTURED_FREE_RESPONSE": "SHORT_TEXT",
         "FREE_RESPONSE_+_CITATION": "SHORT_TEXT",
         "FREE_RESPONSE_/_COMPARISON": "LONG_TEXT",
+        "COMPARISON_+_EXPLANATION": "LONG_TEXT",
         "WITNESS_COMPARISON": "LONG_TEXT",
     }
     return aliases.get(key, key)

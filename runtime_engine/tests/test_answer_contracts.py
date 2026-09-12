@@ -29,10 +29,14 @@ class AnswerContractTests(unittest.TestCase):
         self.assertEqual(answer_contract_descriptor("OT_NT_LINK")["schema"], "ANSWER_DTO_v1")
 
     def test_historical_free_response_aliases_preserve_text_contract(self):
-        for historical in ("short free response", "structured free response"):
+        for historical in ("short free response", "structured free response", "citation + paraphrase"):
             self.assertEqual("SHORT_TEXT", canonical_task_type(historical))
             dto = validate_answer_dto(historical, {"text": "Not stated in the cited text."})
             self.assertEqual("SHORT_TEXT", dto["task_type"])
             self.assertEqual("Not stated in the cited text.", dto["text"])
+
+    def test_historical_explanation_aliases_follow_packaged_mapper_contract(self):
+        self.assertEqual("LONG_TEXT", canonical_task_type("comparison + explanation"))
+        self.assertEqual("SINGLE_CHOICE", canonical_task_type("classification + explanation"))
 
 if __name__ == '__main__': unittest.main()

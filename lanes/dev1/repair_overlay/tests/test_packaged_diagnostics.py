@@ -156,6 +156,33 @@ class PackagedDiagnosticsTests(unittest.TestCase):
         self.assertIn('--add-data "$BuildIdentity${Sep}r06_platform"', build)
         self.assertLess(build.index("$actualGitSha = $null"), build.index("pyinstaller.exe"))
 
+    def test_builder_fails_closed_on_native_failure_and_stale_artifact(self):
+        platform = Path(__file__).resolve().parents[1]
+        build = (platform / "packaging" / "build_windows.ps1").read_text(encoding="utf-8")
+        self.assertIn("function Assert-NativeSuccess", build)
+        self.assertIn("$LASTEXITCODE -ne 0", build)
+        for step in (
+            'Assert-NativeSuccess "virtualenv creation"',
+            'Assert-NativeSuccess "pip upgrade"',
+            'Assert-NativeSuccess "build dependency install"',
+            'Assert-NativeSuccess "Windows release diagnostics"',
+            'Assert-NativeSuccess "PyInstaller build"',
+            'Assert-NativeSuccess "Python version query"',
+            'Assert-NativeSuccess "artifact verification"',
+        ):
+            self.assertIn(step, build)
+        stale_cleanup = "Remove-Item -LiteralPath $Out -Force"
+        self.assertIn(stale_cleanup, build)
+        self.assertLess(build.index(stale_cleanup), build.index("pyinstaller.exe"))
+        self.assertLess(
+            build.index('Assert-NativeSuccess "PyInstaller build"'),
+            build.index('if (-not (Test-Path -LiteralPath $Out -PathType Leaf))'),
+        )
+        self.assertLess(
+            build.index('Assert-NativeSuccess "artifact verification"'),
+            build.index('Write-Output "Built $Out'),
+        )
+
     def test_desktop_host_wraps_update_layer_with_read_only_diagnostics(self):
         platform = Path(__file__).resolve().parents[1]
         main = (

@@ -12,7 +12,7 @@ ALLOWLISTED_COMMANDS = frozenset({
   "player.submit_answer","player.request_hint","player.reveal_evidence","player.next",
   "player.get_progress","player.get_mastery","player.get_review_queue","player.get_daily_case","player.save_checkpoint","player.restore_checkpoint",
   "research.list_bookmarks","research.upsert_bookmark","research.delete_bookmark",
-  "research.list_notes","research.upsert_note","research.delete_note","research.get_chronology_lab","research.get_evidence_graph","research.get_witness_matrix",
+  "research.list_notes","research.upsert_note","research.delete_note","research.get_chronology_lab","research.get_evidence_graph","research.get_witness_matrix","research.get_cross_testament",
   "authoring.list_drafts","authoring.new_draft","authoring.new_node_from_task_type","authoring.load_draft","authoring.save_draft",
   "authoring.delete_draft","authoring.fork_record","authoring.fork_canonical_node","authoring.move_collection_item",
   "authoring.validate_draft","authoring.preview_draft","authoring.prepare_publish_candidate",
@@ -73,6 +73,8 @@ def validate_request_shape(request:Any)->tuple[str,str,dict[str,Any]]:
         raise ValueError('research.get_evidence_graph accepts an empty payload')
     if cmd=='research.get_witness_matrix' and payload:
         raise ValueError('research.get_witness_matrix accepts an empty payload')
+    if cmd=='research.get_cross_testament' and payload:
+        raise ValueError('research.get_cross_testament accepts an empty payload')
     return rid,cmd,payload
 
 def _redact_private_player_task(value:Any)->Any:

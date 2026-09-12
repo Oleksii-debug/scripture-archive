@@ -5,7 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 ENTRY = (ROOT / 'frontend' / 'styles.css').read_text(encoding='utf-8')
 FOUNDATION = (ROOT / 'frontend' / 'styles.foundation.css').read_text(encoding='utf-8')
-RENDERERS = (ROOT / 'frontend' / 'renderers.js').read_text(encoding='utf-8')
+RENDERERS = (ROOT / 'frontend' / 'renderers-base.js').read_text(encoding='utf-8')
 
 
 def _luminance(value: str) -> float:

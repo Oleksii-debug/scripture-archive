@@ -118,6 +118,23 @@ jobs:
           New-Item -ItemType Directory -Force -Path (Join-Path $smokeRoot 'docs') | Out-Null
           Copy-Item -Path docs\campaigns -Destination (Join-Path $smokeRoot 'docs\campaigns') -Recurse -Force
           python "$smokePlatform\packaging\windows_release.py" diagnose --platform-root $smokePlatform --output "$smokeRoot\unicode_path_diagnostics.json"
+      - name: Liveness probe rejects early zero exit
+        shell: pwsh
+        run: |
+          $probeJson = Join-Path $env:RUNNER_TEMP 'early-zero-liveness.json'
+          $earlyExit = Join-Path $env:SystemRoot 'System32\whoami.exe'
+          $failedClosed = $false
+          try {
+            & ./r06_platform/packaging/probe_packaged_startup.ps1 -Executable $earlyExit -ProbeSeconds 1 -OutputJson $probeJson
+          }
+          catch {
+            $failedClosed = $true
+          }
+          if (-not $failedClosed) { throw 'Liveness probe incorrectly accepted an early zero-exit process' }
+          $probe = Get-Content -Raw -Encoding utf8 $probeJson | ConvertFrom-Json
+          if (-not $probe.process_started -or $probe.survived_probe_window -or $probe.exit_code -ne 0) {
+            throw 'Early-zero liveness regression evidence was not fail-closed as expected'
+          }
       - name: Run exact Windows engineering release gate
         shell: pwsh
         run: |

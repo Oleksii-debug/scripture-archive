@@ -6,6 +6,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+if ($ProbeSeconds -lt 1) {
+    throw "ProbeSeconds must be at least 1 second"
+}
 $exe = (Resolve-Path $Executable).Path
 $process = $null
 $result = [ordered]@{
@@ -22,22 +25,20 @@ $result = [ordered]@{
 try {
     $process = Start-Process -FilePath $exe -PassThru
     $result.process_started = $true
-    Start-Sleep -Seconds $ProbeSeconds
-    $process.Refresh()
-    if ($process.HasExited) {
+    $exitedEarly = $process.WaitForExit($ProbeSeconds * 1000)
+    if ($exitedEarly) {
         $result.exit_code = $process.ExitCode
-        if ($process.ExitCode -ne 0) {
-            throw "Packaged process exited during probe with code $($process.ExitCode)"
-        }
-    } else {
-        $result.survived_probe_window = $true
-        Stop-Process -Id $process.Id -Force
-        $process.WaitForExit()
+        throw "Packaged process exited before completing the $ProbeSeconds-second liveness window with code $($process.ExitCode)"
     }
+
+    $result.survived_probe_window = $true
+    Stop-Process -Id $process.Id -Force
+    $process.WaitForExit()
 }
 finally {
     if ($process -and -not $process.HasExited) {
         Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+        $process.WaitForExit()
     }
     $json = $result | ConvertTo-Json -Depth 4
     Write-Output $json

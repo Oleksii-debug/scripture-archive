@@ -121,8 +121,9 @@ class PlatformApplication:
 def build_default_application(repo_root:Path|None=None,store_root:Path|None=None):
     if repo_root is None:repo_root=Path(__file__).resolve().parents[3]
     repo_root=Path(repo_root); store=JsonFileStore(store_root) if store_root else None; effective_store=store or JsonFileStore(JsonFileStore.default_root())
-    runtime_application=repo_root/'runtime_engine'/'scripture_archive_runtime'/'application.py'
-    if runtime_application.exists():
+    try:
         from scripture_archive_platform.application.runtime_gateway import build_runtime_gateway
-        gateway=build_runtime_gateway(repo_root,effective_store.root); return PlatformApplication(repo_root,store=effective_store,player_gateway=gateway)
-    return PlatformApplication(repo_root,store=effective_store)
+        gateway=build_runtime_gateway(repo_root,effective_store.root)
+    except Exception as exc:
+        raise RuntimeError('Canonical D5/runtime is required for production; REFERENCE_TEST_ONLY fallback is disabled.') from exc
+    return PlatformApplication(repo_root,store=effective_store,player_gateway=gateway)

@@ -129,8 +129,11 @@ try {
         -OutputJson $StartupProbe
     $probe = Get-Content -Raw -Encoding utf8 $StartupProbe | ConvertFrom-Json
     if (-not $probe.process_started) { throw "Packaged process did not start" }
-    if (-not $probe.survived_probe_window -and $probe.exit_code -ne 0) {
-        throw "Packaged process did not survive startup probe"
+    if (-not $probe.survived_probe_window) {
+        throw "Packaged process did not survive the complete startup probe window (exit_code=$($probe.exit_code))"
+    }
+    if ($null -ne $probe.exit_code) {
+        throw "Packaged process exited during startup probe with code $($probe.exit_code)"
     }
     $result.process_liveness = $true
 

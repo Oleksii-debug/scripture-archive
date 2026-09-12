@@ -186,9 +186,19 @@ def verify_artifact(artifact: Path, manifest: Path) -> dict[str, Any]:
     return {"artifact": str(artifact), "manifest": str(manifest), "actual_size_bytes": actual_size, "actual_sha256": actual_sha, "ok": not problems, "problems": problems}
 
 
+def console_safe_text(text: str) -> str:
+    """Return text representable by stdout without losing diagnostic information."""
+    encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+    try:
+        text.encode(encoding)
+        return text
+    except (LookupError, UnicodeEncodeError):
+        return text.encode("ascii", errors="backslashreplace").decode("ascii")
+
+
 def write_json(path: Path | None, payload: dict[str, Any]) -> None:
     text = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
-    print(text)
+    print(console_safe_text(text))
     if path is not None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text + "\n", encoding="utf-8")

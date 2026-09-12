@@ -6,6 +6,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "packaging" / "windows_release.py"
 SPEC = importlib.util.spec_from_file_location("dev01_windows_release", MODULE_PATH)
@@ -31,6 +32,15 @@ class WindowsReleaseToolingTests(unittest.TestCase):
             self.assertTrue(payload["path_has_spaces"])
             self.assertTrue(payload["path_has_non_ascii"])
             self.assertEqual(MODULE.evaluate(payload, require_source=True), [])
+
+    def test_console_safe_text_escapes_unicode_for_cp1252(self):
+        class Cp1252Stdout:
+            encoding = "cp1252"
+
+        with mock.patch.object(MODULE.sys, "stdout", Cp1252Stdout()):
+            safe = MODULE.console_safe_text('{"path":"Архів Писання"}')
+        self.assertTrue(safe.isascii())
+        self.assertIn("\\u0410", safe)
 
     def test_missing_source_fails_closed(self):
         with tempfile.TemporaryDirectory() as temp_dir:

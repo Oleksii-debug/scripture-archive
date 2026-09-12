@@ -1,8 +1,9 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 from _fixture import make_repo
-from scripture_archive_platform.application.service import PlatformApplication
+from scripture_archive_platform.application.service import PlatformApplication,build_default_application
 from scripture_archive_platform.persistence.store import JsonFileStore
 
 class FakeGateway:
@@ -32,3 +33,7 @@ class DevARuntimeApplicationTests(unittest.TestCase):
         self.assertEqual('LN-01',self.call('player.get_progress',{'node_id':'LN01-N01'})['data']['progress']['mission_id']); self.assertEqual('STABLE',self.call('player.get_mastery')['data']['mastery'][0]['state'])
         nxt=self.call('player.navigate_branch',{'node_id':'LN01-N01','target_node_id':'LN01-N02'})['data']; self.assertEqual('LN01-N02',nxt['task']['node_id']); self.assertEqual('D5/runtime',nxt['truth_owner'])
         self.assertEqual('D5/runtime',self.call('player.save_checkpoint',{'campaign_id':'LN','mission_id':'LN-01','node_id':'LN01-N01'})['data']['truth_owner']); restored=self.call('player.restore_checkpoint')['data']; self.assertEqual('LN01-N01',restored['checkpoint']['node_id']); self.assertEqual(2,restored['runtime_schema_version'])
+    def test_default_builder_fails_closed_when_canonical_runtime_is_unavailable(self):
+        with mock.patch('scripture_archive_platform.application.runtime_gateway.build_runtime_gateway',side_effect=ImportError('runtime unavailable')):
+            with self.assertRaisesRegex(RuntimeError,'Canonical D5/runtime'):
+                build_default_application(self.repo,store_root=Path(self.t.name)/'closed-store')

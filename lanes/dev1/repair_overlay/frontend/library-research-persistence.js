@@ -20,6 +20,7 @@ const COMMANDS = new Set([
   'research.upsert_note',
   'research.delete_note',
 ]);
+const DELETE_CONTROL_IDS = new Set(['library-bookmark-delete', 'library-note-delete']);
 const byId = id => document.getElementById(id);
 let transportPromise = null;
 let current = null;
@@ -93,7 +94,13 @@ function status(message) {
 function setPanelEnabled(enabled) {
   const panel = byId('library-research-panel');
   if (!panel) return;
-  for (const control of panel.querySelectorAll('input,textarea,button')) control.disabled = !enabled;
+  for (const control of panel.querySelectorAll('input,textarea,button')) {
+    if (!enabled) {
+      control.disabled = true;
+    } else if (!DELETE_CONTROL_IDS.has(control.id)) {
+      control.disabled = false;
+    }
+  }
 }
 
 function clearEditors() {
@@ -101,7 +108,7 @@ function clearEditors() {
     const node = byId(id);
     if (node) node.value = '';
   }
-  for (const id of ['library-bookmark-delete', 'library-note-delete']) {
+  for (const id of DELETE_CONTROL_IDS) {
     const node = byId(id);
     if (node) node.disabled = true;
   }
@@ -148,6 +155,9 @@ async function refreshCurrent(expectedGeneration = generation) {
 
 async function activate(identity, button) {
   const mine = ++generation;
+  current = null;
+  clearEditors();
+  setPanelEnabled(false);
   button.disabled = true;
   button.setAttribute('aria-busy', 'true');
   status('Перевірка canonical task перед відкриттям особистих записів…');
@@ -162,9 +172,11 @@ async function activate(identity, button) {
     });
     if (mine !== generation) return;
     current = taskContext(selectExactTask(result, identity));
-    setPanelEnabled(true);
     await refreshCurrent(mine);
-    if (mine === generation && !byId('library-view')?.classList.contains('hidden')) byId('library-research-heading')?.focus();
+    if (mine === generation && current) {
+      setPanelEnabled(true);
+      if (!byId('library-view')?.classList.contains('hidden')) byId('library-research-heading')?.focus();
+    }
   } catch (error) {
     if (mine === generation) {
       current = null;

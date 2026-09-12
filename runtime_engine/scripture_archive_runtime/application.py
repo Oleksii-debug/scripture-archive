@@ -10,11 +10,12 @@ from .content import ContentRepository
 from .evidence import EvidenceRuntime
 from .grading import GraderRegistry
 from .mastery import MasteryEngine
+from .memory import PlayerMemoryService
 from .models import Attempt, Correctness, HintUse, MasteryState, PlayerMemory, Session, TaskDefinition, TaskState
 from .persistence import PersistenceStore
 from .provenance import PROVENANCE_CONTRACT_VERSION, ProvenanceDecision, classify_provenance
 from .security import CommandEnvelope, ValidationError
-from .state_codec import restore_memory, serialize_mastery, serialize_memory
+from .state_codec import restore_memory, serialize_mastery, serialize_memory, serialize_review_item
 
 
 class RuntimeApplication:
@@ -24,6 +25,7 @@ class RuntimeApplication:
     def __init__(self, content: ContentRepository, *, persistence: PersistenceStore | None = None, evidence: EvidenceRuntime | None = None) -> None:
         self.content, self.persistence, self.evidence = content, persistence, evidence or EvidenceRuntime()
         self.graders, self.branches, self.mastery_engine = GraderRegistry(), BranchEngine(), MasteryEngine()
+        self.memory_service = PlayerMemoryService()
         self.memory = PlayerMemory(profile_id="default"); self.current_node_id: str | None = None
         self.session = Session(session_id=str(uuid.uuid4())); self._visit_counts: dict[str, int] = {}
         # Persisted TaskState.hint_uses is the historical audit trail. This separate
@@ -80,7 +82,9 @@ class RuntimeApplication:
         consequences = []
         for concept_id in task.mastery_domains:
             mastery = self.memory.concept_mastery.setdefault(concept_id, MasteryState(concept_id=concept_id))
-            consequences.append(self.mastery_engine.apply(mastery, correctness=result.correctness, independent=independent, used_hints=hint_count))
+            consequence = self.mastery_engine.apply(mastery, correctness=result.correctness, independent=independent, used_hints=hint_count)
+            consequences.append(consequence)
+            self.memory_service.enqueue_review(self.memory, consequence, node_id=node_id)
         resolution = self.branches.resolve(task, result.correctness, hint_count=hint_count, hint_threshold=6); self.branches.enforce_cycle_guard(resolution.next_node_id, self._visit_counts)
         for eid in resolution.evidence_unlocks:
             if eid in self.evidence.evidence:
@@ -118,6 +122,10 @@ class RuntimeApplication:
 
     def get_mastery(self) -> dict[str, Any]:
         return {"api_version": self.API_VERSION, "mastery": [serialize_mastery(s) for _, s in sorted(self.memory.concept_mastery.items())]}
+
+    def get_review_queue(self) -> dict[str, Any]:
+        """Expose persisted review scheduling truth without inventing task selection policy."""
+        return {"api_version": self.API_VERSION, "review_queue": [serialize_review_item(item) for item in self.memory.review_queue]}
 
     def get_evidence(self) -> dict[str, Any]:
         return {"api_version": self.API_VERSION, "unlocked": sorted(self.evidence.unlocked), "linear": self.evidence.linearize()}
@@ -177,6 +185,6 @@ class RuntimeApplication:
 
     def handle(self, command: Mapping[str, Any] | CommandEnvelope) -> dict[str, Any]:
         envelope = command if isinstance(command, CommandEnvelope) else CommandEnvelope.from_mapping(command); p = envelope.payload
-        routes = {"load_task": lambda: self._load_task_command(p), "submit_answer": lambda: self._submit_command(p), "request_hint": lambda: self.request_hint(str(p["node_id"])), "next": lambda: self._next_command(p), "save": self.save, "restore": self.restore, "get_mastery": self.get_mastery, "get_evidence": self.get_evidence}
+        routes = {"load_task": lambda: self._load_task_command(p), "submit_answer": lambda: self._submit_command(p), "request_hint": lambda: self.request_hint(str(p["node_id"])), "next": lambda: self._next_command(p), "save": self.save, "restore": self.restore, "get_mastery": self.get_mastery, "get_review_queue": self.get_review_queue, "get_evidence": self.get_evidence}
         if envelope.command not in routes: raise ValidationError("Unsupported command")
         return {"request_id": envelope.request_id, **routes[envelope.command]()}

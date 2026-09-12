@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "r06_platform"))
-from scripture_archive_platform.application.service import build_default_application
+from scripture_archive_platform.application.witness_matrix_application import build_default_application
 
 class Handler(SimpleHTTPRequestHandler):
     app = build_default_application(ROOT)

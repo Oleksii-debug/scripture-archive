@@ -38,6 +38,7 @@ class PackagedLibraryCurrentShellTest(unittest.TestCase):
             "./daily-case-ui.js",
             "./content-pack-manager.js",
             "./evidence-graph-ui.js",
+            "./witness-matrix-ui.js",
         }
         imports = set(re.findall(r"void import\('([^']+)'\)", self.transport))
         self.assertEqual(imports, expected_loaders)
@@ -49,6 +50,10 @@ class PackagedLibraryCurrentShellTest(unittest.TestCase):
         )
         self.assertIn(
             "void import('./evidence-graph-ui.js').then(({installEvidenceGraphSurface})=>installEvidenceGraphSurface());",
+            self.transport,
+        )
+        self.assertIn(
+            "void import('./witness-matrix-ui.js').then(({installWitnessMatrixSurface})=>installWitnessMatrixSurface());",
             self.transport,
         )
 
@@ -115,6 +120,7 @@ class PackagedLibraryCurrentShellTest(unittest.TestCase):
             ROOT / "daily-case-ui.js",
             ROOT / "content-pack-manager.js",
             ROOT / "evidence-graph-ui.js",
+            ROOT / "witness-matrix-ui.js",
         ):
             completed = subprocess.run(
                 ["node", "--check", str(path)],

@@ -9,8 +9,11 @@ on:
       - 'lanes/dev1/repair_overlay/frontend/daily-case-ui.js'
       - 'lanes/dev1/repair_overlay/frontend/content-pack-manager.js'
       - 'lanes/dev1/repair_overlay/frontend/evidence-graph-ui.js'
+      - 'lanes/dev1/repair_overlay/frontend/witness-matrix-ui.js'
       - 'lanes/dev1/repair_overlay/tests/test_packaged_library_current_shell.py'
       - 'lanes/dev1/repair_overlay/tests/test_packaged_transport_composition.py'
+      - 'lanes/dev1/repair_overlay/tests/test_packaged_witness_matrix_contract.py'
+      - 'lanes/dev1/repair_overlay/tests/test_packaged_witness_matrix_lifecycle.py'
       - '.github/workflows/r06-packaged-library-current-shell.yml'
   workflow_dispatch:
 
@@ -43,6 +46,8 @@ jobs:
         run: python lanes/dev1/repair_overlay/tests/test_packaged_library_current_shell.py
       - name: Run packaged transport composition regression
         run: python lanes/dev1/repair_overlay/tests/test_packaged_transport_composition.py
+      - name: Run packaged Witness Matrix lifecycle regression
+        run: python lanes/dev1/repair_overlay/tests/test_packaged_witness_matrix_lifecycle.py
       - name: Diff hygiene
         shell: bash
         run: git diff --check

@@ -13,23 +13,17 @@ if str(REPO_ROOT) not in sys.path:
 if str(PLATFORM_ROOT) not in sys.path:
     sys.path.insert(0, str(PLATFORM_ROOT))
 
-from scripture_archive_platform.application.service import PlatformApplication
+# This runtime-level suite may import only self-contained repair-overlay modules.
+# PlatformApplication depends on the immutable DEV1 base package, which is restored
+# only by r06-dev1-platform.yml before the overlay is applied. Its real composition
+# and output-attestation regression therefore lives in
+# lanes/dev1/repair_overlay/tests/test_dossier_composition.py, where that topology
+# exists. Importing PlatformApplication directly from the partial overlay here makes
+# unrelated runtime workflows fail before exercising any Dossier production bytes.
+from scripture_archive_platform.application.runtime_gateway import build_runtime_dossier
 from scripture_archive_platform.transport.contracts import validate_request_shape
-
-
-class FakeGateway:
-    def get_dossier(self, subject_id, display_name, kind):
-        return {
-            "dossier": {
-                "schema": "scripture.dossier-view.v1",
-                "subject": {"subject_id": subject_id, "display_name": display_name, "kind": kind},
-                "stated": False,
-                "status_text": "No cited support available in current scope",
-                "rows": [],
-                "linear": ["No cited support available in current scope"],
-                "evidence_scope": "unlocked_only",
-            }
-        }
+from runtime_engine.scripture_archive_runtime.evidence import Claim, EvidenceRecord, EvidenceRuntime
+from runtime_engine.scripture_archive_runtime.models import Confidence
 
 
 class PackagedDossierIntegrationTests(unittest.TestCase):
@@ -52,13 +46,39 @@ class PackagedDossierIntegrationTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     validate_request_shape({**request, "payload": payload})
 
-    def test_platform_dossier_attests_exact_runtime_subject_and_unlocked_scope(self):
-        app = object.__new__(PlatformApplication)
-        app.player_gateway = FakeGateway()
-        result = app._dossier({"subject_id": "PERSON:PAUL", "display_name": "Paul", "kind": "PERSON"})
-        self.assertEqual(result["truth_owner"], "D5/runtime")
-        self.assertEqual(result["dossier"]["evidence_scope"], "unlocked_only")
-        self.assertEqual(result["dossier"]["subject"]["subject_id"], "PERSON:PAUL")
+    def test_runtime_projection_stays_unlocked_only_and_hides_locked_dependencies(self):
+        evidence = EvidenceRuntime()
+        evidence.add_evidence(EvidenceRecord(
+            evidence_id="EV-VISIBLE",
+            passage_refs=(),
+            proposition="Visible canonical proposition",
+            confidence=Confidence.T1,
+            entity_ids=("PERSON:PAUL",),
+        ))
+        evidence.add_evidence(EvidenceRecord(
+            evidence_id="EV-LOCKED",
+            passage_refs=(),
+            proposition="Locked proposition",
+            confidence=Confidence.T1,
+            entity_ids=("PERSON:PAUL",),
+        ))
+        evidence.add_claim(Claim(
+            claim_id="CL-LOCKED",
+            proposition="Claim needing locked evidence",
+            confidence=Confidence.T2,
+            required_evidence_ids=("EV-VISIBLE", "EV-LOCKED"),
+        ))
+        evidence.unlock("EV-VISIBLE")
+        runtime = type("Runtime", (), {"evidence": evidence})()
+
+        dossier = build_runtime_dossier(runtime, "PERSON:PAUL", "Paul", "PERSON")["dossier"]
+        self.assertEqual(dossier["evidence_scope"], "unlocked_only")
+        self.assertEqual([row["row_id"] for row in dossier["rows"]], ["EV-VISIBLE"])
+        rendered = "\n".join(dossier["linear"])
+        self.assertIn("EV-VISIBLE", rendered)
+        self.assertNotIn("EV-LOCKED", rendered)
+        self.assertNotIn("CL-LOCKED", rendered)
+        self.assertNotIn("Locked proposition", rendered)
 
     def test_deferred_ui_completion_is_inert_after_leave_and_reopen(self):
         node = shutil.which("node")

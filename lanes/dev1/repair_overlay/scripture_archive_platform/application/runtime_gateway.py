@@ -78,9 +78,11 @@ class RuntimeBackedPlayerGateway:
     def get_chronology_lab(self) -> dict[str, Any]:
         """Project canonical chronology data without inferring it from generic evidence.
 
-        The current runtime may legitimately have no structured ChronologyLab feed.
-        In that case the packaged projection returns an explicit source-safe empty
-        state rather than manufacturing dates or ordering from prose/passage order.
+        Production construction binds the independently accepted fixed bundled
+        chronology pack onto the same in-process runtime instance. If a non-production
+        runtime has no structured ChronologyLab feed, the packaged projection returns
+        an explicit source-safe empty state rather than manufacturing dates or ordering
+        from prose, passage order, or other runtime state.
         """
         if self._runtime_application is None:
             raise RuntimeGatewayError("Chronology Lab requires the canonical runtime application")
@@ -194,9 +196,11 @@ def build_runtime_gateway(repo_root: Path, platform_store_root: Path) -> Runtime
     is projected into ``EvidenceRuntime`` and its explicit node_id→evidence_record_id
     links replace legacy optional unlock values only in this in-memory packaged
     runtime projection. Free-text source fields are not parsed into invented
-    passage/witness/entity/relation/chronology structure.
+    passage/witness/entity/relation/chronology structure. Independently accepted
+    chronology is loaded only through the fixed bundled fail-closed materializer.
     """
     from runtime_engine.scripture_archive_runtime.application import RuntimeApplication
+    from runtime_engine.scripture_archive_runtime.chronology_sources import materialize_audited_chronology
     from runtime_engine.scripture_archive_runtime.content import ContentRepository
     from runtime_engine.scripture_archive_runtime.evidence_registry import load_r05_evidence_registry
     from runtime_engine.scripture_archive_runtime.persistence import PersistenceStore
@@ -223,6 +227,7 @@ def build_runtime_gateway(repo_root: Path, platform_store_root: Path) -> Runtime
         persistence=runtime_store,
         evidence=evidence_bundle.runtime,
     )
+    runtime.chronology = materialize_audited_chronology()
     return RuntimeBackedPlayerGateway(
         runtime.handle,
         current_node_getter=lambda: runtime.current_node_id,

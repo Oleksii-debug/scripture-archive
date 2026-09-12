@@ -13,7 +13,7 @@ class PackagedReviewQueueUiTest(unittest.TestCase):
 
     def test_transport_loads_supplemental_review_surface(self):
         self.assertEqual(self.transport.count("import('./review-queue-ui.js')"), 1)
-        self.assertIn("export async function chooseTransport", self.transport)
+        self.assertIn("export function chooseTransport", self.transport)
         self.assertIn("export async function unwrap", self.transport)
 
     def test_ui_uses_only_truthful_read_only_contracts(self):

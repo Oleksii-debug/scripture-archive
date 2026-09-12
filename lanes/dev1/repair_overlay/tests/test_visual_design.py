@@ -6,6 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CSS = (ROOT / 'frontend' / 'styles.css').read_text(encoding='utf-8')
 HTML = (ROOT / 'frontend' / 'index.html').read_text(encoding='utf-8')
 RENDERERS = (ROOT / 'frontend' / 'renderers.js').read_text(encoding='utf-8')
+RENDERERS_BASE = (ROOT / 'frontend' / 'renderers-base.js').read_text(encoding='utf-8')
 
 class VisualDesignStaticTests(unittest.TestCase):
     def test_no_remote_assets_or_tracking(self):
@@ -24,7 +25,8 @@ class VisualDesignStaticTests(unittest.TestCase):
         for marker in ('.notice.success','.notice.warning','.notice.error','#evidence-panel','.source-panel','.card:hover','progress::-webkit-progress-value'):
             self.assertIn(marker, CSS)
     def test_task_specific_visual_hook_is_data_only(self):
-        self.assertIn('host.dataset.taskType=task.task_type', RENDERERS)
+        self.assertIn("export {renderTask} from './renderers-base.js'", RENDERERS)
+        self.assertIn('host.dataset.taskType=task.task_type', RENDERERS_BASE)
         for task_type in ('OT_NT_LINK','CLAIM_EVIDENCE','EVIDENCE_SELECT','PARALLEL_WITNESS_COMPARE','COMPOSITE_MULTI_STEP'):
             self.assertIn(task_type, CSS)
     def test_semantic_visibility_helpers_remain(self):

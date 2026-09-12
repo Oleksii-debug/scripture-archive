@@ -48,12 +48,34 @@ if ($actualGitSha -notmatch '^[0-9a-f]{40}$') {
     throw "Exact 40-hex checkout SHA is required for packaged diagnostics identity"
 }
 
+$sourceArchive = Join-Path $Repo "DEV1_R06_PLATFORM_SOURCE.zip"
+$sourceHash = $null
+if (Test-Path $sourceArchive) {
+    $sourceHash = (Get-FileHash -Algorithm SHA256 $sourceArchive).Hash.ToLowerInvariant()
+}
+
 $BuildIdentityDir = Join-Path ([System.IO.Path]::GetTempPath()) ("scripture-build-identity-" + [guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Force -Path $BuildIdentityDir | Out-Null
 $BuildIdentity = Join-Path $BuildIdentityDir "build_identity.json"
 $BuildIdentityPayload = @{ build_sha = $actualGitSha } | ConvertTo-Json -Compress
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllText($BuildIdentity, $BuildIdentityPayload, $Utf8NoBom)
+
+$PayloadManifest = Join-Path $Dist "packaged_payload_manifest.json"
+$FidelityTool = Join-Path $PSScriptRoot "packaged_payload_fidelity.py"
+$payloadManifestArgs = @(
+    "manifest",
+    "--repo-root", $Repo,
+    "--platform-root", $PlatformRoot,
+    "--build-identity", $BuildIdentity,
+    "--git-sha", $actualGitSha,
+    "--output", $PayloadManifest
+)
+if ($sourceHash) {
+    $payloadManifestArgs += @("--source-archive-sha256", $sourceHash)
+}
+& $Python $FidelityTool @payloadManifestArgs
+Assert-NativeSuccess "packaged payload manifest generation"
 
 $Sep = ";"
 $Name = "ScriptureArchive-R06-DEV01"
@@ -85,13 +107,16 @@ if (-not (Test-Path -LiteralPath $Out -PathType Leaf)) {
     throw "Expected executable not produced: $Out"
 }
 
+$PayloadReadback = Join-Path $Dist "packaged_payload_fidelity.json"
+& $Python $FidelityTool verify `
+  --artifact $Out `
+  --manifest $PayloadManifest `
+  --output $PayloadReadback
+Assert-NativeSuccess "embedded packaged payload fidelity verification"
+
 $hash = (Get-FileHash -Algorithm SHA256 $Out).Hash.ToLowerInvariant()
 $size = (Get-Item $Out).Length
-$sourceArchive = Join-Path $Repo "DEV1_R06_PLATFORM_SOURCE.zip"
-$sourceHash = $null
-if (Test-Path $sourceArchive) {
-    $sourceHash = (Get-FileHash -Algorithm SHA256 $sourceArchive).Hash.ToLowerInvariant()
-}
+$payloadEvidenceHash = (Get-FileHash -Algorithm SHA256 $PayloadReadback).Hash.ToLowerInvariant()
 $pythonVersion = (& $Python --version 2>&1 | Out-String).Trim()
 Assert-NativeSuccess "Python version query"
 
@@ -108,13 +133,19 @@ $manifest = [ordered]@{
     python_version = $pythonVersion
     source_archive_sha256 = $sourceHash
     diagnostics_file = (Split-Path -Leaf $Diagnostics)
+    packaged_payload_manifest_file = (Split-Path -Leaf $PayloadManifest)
+    packaged_payload_fidelity_file = (Split-Path -Leaf $PayloadReadback)
+    packaged_payload_fidelity_sha256 = $payloadEvidenceHash
     proof_scope = @(
         "PyInstaller build completed",
         "artifact size/hash readback verified",
+        "embedded frontend/campaign/build-identity bytes verified against exact staged manifest",
+        "Git-tracked embedded frontend overlay/campaign bytes verified against exact checkout Git blob IDs",
         "WebView2 runtime presence probed before build",
         "packaged diagnostics build identity bound to exact checkout SHA"
     )
     not_proven = @(
+        "Python module bytecode identity inside PYZ",
         "human NVDA acceptance",
         "full application functional acceptance",
         "visual correctness",

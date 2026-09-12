@@ -79,13 +79,33 @@ def _task_type(node: Mapping[str, Any]) -> str:
     return canonical_task_type(str(node.get("task_type") or node.get("response_mode") or node.get("task_family") or "SHORT_TEXT"))
 
 
+def _mode_key(value: Any) -> str:
+    return "_".join(str(value or "").replace("-", "_").replace(" ", "_").upper().split("_"))
+
+
 def derive_answer_dto(node: Mapping[str, Any]) -> dict[str, Any]:
     """Project canonical CONTENT_NODE_SCHEMA v1.2 ground truth into ANSWER_DTO_v1.
 
     Presentation fields such as task_payload.correct are deliberately excluded.
     If canonical truth is missing or ambiguous this function fails closed.
+
+    Historical CONTENT_NODE_SCHEMA v1.2 citation-selection nodes authored their
+    explicit selection set as one semicolon-delimited accepted_answer string.
+    That representation is normalized only at this adapter boundary; authored
+    truth remains untouched in the returned runtime node. Other MULTI_SELECT
+    string representations still fail closed rather than being guessed.
     """
-    return canonical_answer_dto(node)
+    projection = deepcopy(dict(node))
+    if (
+        _task_type(projection) == "MULTI_SELECT"
+        and isinstance(projection.get("accepted_answer"), str)
+        and _mode_key(projection.get("response_mode")) == "CITATION_SELECTION"
+    ):
+        choices = _listify(projection["accepted_answer"])
+        if not choices:
+            raise ValidationError("legacy citation selection lacks explicit canonical choices")
+        projection["accepted_answer"] = choices
+    return canonical_answer_dto(projection)
 
 
 def adapt_node_for_runtime(node: Mapping[str, Any], *, lane: str = "unknown") -> dict[str, Any]:

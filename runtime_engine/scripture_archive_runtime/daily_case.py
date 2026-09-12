@@ -126,12 +126,13 @@ class DailyCaseComposer:
     """
 
     def __init__(self, *, scheduler: Scheduler | None = None) -> None:
-        if scheduler is None:
-            self.scheduler = Scheduler()
-        elif type(scheduler) is Scheduler:
-            self.scheduler = scheduler
-        else:
+        if scheduler is not None and type(scheduler) is not Scheduler:
             raise TypeError("scheduler must be the canonical Scheduler implementation or None")
+        # Keep policy execution internally owned. Even an exact Scheduler instance is mutable
+        # in Python and can have compose/choose_next/eligible shadowed in its instance dict.
+        # Accepting the exact type preserves the public constructor contract, but its behavior
+        # is never trusted as the Daily Case eligibility boundary.
+        self.scheduler = Scheduler()
 
     def compose(
         self,

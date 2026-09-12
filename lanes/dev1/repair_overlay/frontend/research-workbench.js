@@ -1,4 +1,5 @@
 import {ResearchPersistenceUI} from './research-persistence.js';
+import {installEvidenceGraphSurface} from './evidence-graph-ui.js';
 
 const byId=id=>document.getElementById(id);
 
@@ -23,6 +24,7 @@ export class ResearchWorkbenchUI{
     this.tabs=['context','sources','compare'];
     this._bind();
     this.persistence=new ResearchPersistenceUI({host:byId('research-panel-context'),invoke,capabilities,announce:this.announce});
+    installEvidenceGraphSurface();
     this.render();
   }
   _bind(){

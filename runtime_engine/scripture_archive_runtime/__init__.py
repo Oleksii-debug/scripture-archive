@@ -23,6 +23,14 @@ from .content_packs import (
 )
 from .content_pack_store import ContentPackStore
 from .evidence import Claim, EvidenceRecord, EvidenceRuntime, Event, PassageRef, Person, Place, Relation
+from .evidence_provenance import (
+    resolve_evidence_witness,
+    resolve_support_witness,
+    validated_claim_witness,
+    validated_declared_witness,
+    validated_relation_witness,
+    visible_relation_passage_ids,
+)
 from .grading import GraderRegistry
 from .mastery import MasteryEngine
 from .models import *
@@ -36,6 +44,8 @@ __all__ = [
     "answer_contract_descriptor", "validate_answer_dto", "adapt_node_for_runtime", "derive_answer_dto", "load_package_nodes",
     "BranchEngine", "ContentRepository", "validate_canonical_node", "GraderRegistry", "MasteryEngine", "Scheduler",
     "PersistenceStore", "EvidenceRuntime", "EvidenceRecord", "PassageRef", "Claim", "Person", "Event", "Place",
-    "Relation", "CommandEnvelope", "ValidationError", "validate_command_dto", "validate_content_import",
-    "CONTENT_PACK_SCHEMA", "CONTENT_SCHEMA_VERSION", "ContentPackManifest", "ContentPackInspection", "ContentPackStore", "inspect_content_pack",
+    "Relation", "resolve_evidence_witness", "resolve_support_witness", "validated_declared_witness", "validated_claim_witness",
+    "validated_relation_witness", "visible_relation_passage_ids", "CommandEnvelope", "ValidationError", "validate_command_dto",
+    "validate_content_import", "CONTENT_PACK_SCHEMA", "CONTENT_SCHEMA_VERSION", "ContentPackManifest", "ContentPackInspection",
+    "ContentPackStore", "inspect_content_pack",
 ]

@@ -313,6 +313,7 @@ def build_research_export(
         | hidden_claim_ids
         | gated_passage_ids
         | gated_entity_ids
+        | gated_relation_ids
     )
     visible_relations = [
         relation for relation in runtime.relations.values()

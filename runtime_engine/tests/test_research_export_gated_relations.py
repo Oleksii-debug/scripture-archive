@@ -87,6 +87,38 @@ class ResearchExportGatedRelationRegressionTests(unittest.TestCase):
         self.assertEqual(export.payload["relations"], [])
         self.assertNotIn("REL-LOCKED-META", export.to_json())
 
+    def test_locked_only_relation_id_cannot_be_reexposed_as_relation_endpoint(self):
+        runtime = self.runtime()
+        runtime.add_relation(
+            Relation("REL-PROBE", "VISIBLE-ENTITY", "references", "REL-LOCKED-META")
+        )
+
+        export = build_research_export(runtime, workspace_id="case", title="Case")
+
+        self.assertEqual(export.payload["relations"], [])
+        for serialized in (export.to_json(), export.to_markdown(), export.to_html()):
+            self.assertNotIn("REL-PROBE", serialized)
+            self.assertNotIn("REL-LOCKED-META", serialized)
+
+        full_export = build_research_export(
+            runtime,
+            workspace_id="case",
+            title="Case",
+            include_locked_evidence=True,
+        )
+        self.assertEqual(
+            [row["relation_id"] for row in full_export.payload["relations"]],
+            ["REL-PROBE"],
+        )
+        self.assertEqual(full_export.payload["relations"][0]["target_id"], "REL-LOCKED-META")
+        for serialized in (
+            full_export.to_json(),
+            full_export.to_markdown(),
+            full_export.to_html(),
+        ):
+            self.assertIn("REL-PROBE", serialized)
+            self.assertIn("REL-LOCKED-META", serialized)
+
     def test_full_scope_preserves_gated_relation_metadata_explicitly(self):
         runtime = self.runtime()
         runtime.add_relation(Relation("REL-CLAIM", "CL-GATED", "supported_by", "EV-A"))

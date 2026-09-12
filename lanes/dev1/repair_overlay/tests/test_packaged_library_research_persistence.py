@@ -208,6 +208,11 @@ class PackagedLibraryResearchPersistenceTests(unittest.TestCase):
         self.assertIn("invalidateLibraryResearchPersistence", module)
         self.assertIn("attributeFilter: ['class']", module)
         self.assertIn("aria-label", module)
+        self.assertIn("DELETE_CONTROL_IDS", module)
+        activate = module[module.index("async function activate"):module.index("async function save")]
+        self.assertLess(activate.index("setPanelEnabled(false);"), activate.index("await refreshCurrent(mine);"))
+        self.assertLess(activate.index("await refreshCurrent(mine);"), activate.index("setPanelEnabled(true);"))
+        self.assertIn("else if (!DELETE_CONTROL_IDS.has(control.id))", module)
         self.assertNotIn("innerHTML", module)
         self.assertNotIn("eval(", module)
         self.assertNotIn("localStorage", module)

@@ -61,7 +61,10 @@ class ResearchPersistenceUiTests(unittest.TestCase):
         for forbidden in ('innerHTML','outerHTML','insertAdjacentHTML','localStorage','sessionStorage','eval(','new Function'):
             self.assertNotIn(forbidden,self.ui)
         self.assertIn("status.setAttribute('role','status')",self.ui)
-        self.assertIn("label.htmlFor",self.ui)
+        self.assertIn('sl.htmlFor=q.id',self.ui)
+        self.assertIn('titleLabel.htmlFor=title.id',self.ui)
+        self.assertIn('tagsLabel.htmlFor=tag.id',self.ui)
+        self.assertIn('l.htmlFor=body.id',self.ui)
 
     def test_session_pins_remain_separate(self):
         self.assertIn('this.pinned=new Set()',self.workbench)

@@ -8,7 +8,7 @@ FOUNDATION_PATH = ROOT / 'frontend' / 'styles.foundation.css'
 CSS_FOUNDATION = FOUNDATION_PATH.read_text(encoding='utf-8') if FOUNDATION_PATH.exists() else ''
 CSS = CSS_FOUNDATION + '\n' + CSS_ENTRY
 HTML = (ROOT / 'frontend' / 'index.html').read_text(encoding='utf-8')
-RENDERERS = (ROOT / 'frontend' / 'renderers.js').read_text(encoding='utf-8')
+RENDERERS = (ROOT / 'frontend' / 'renderers-base.js').read_text(encoding='utf-8')
 
 
 class VisualDesignStaticTests(unittest.TestCase):

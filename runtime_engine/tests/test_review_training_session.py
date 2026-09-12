@@ -1,0 +1,153 @@
+import unittest
+from datetime import datetime, timedelta, timezone
+
+from scripture_archive_runtime.application import RuntimeApplication
+from scripture_archive_runtime.content import ContentRepository
+from scripture_archive_runtime.models import (
+    Attempt,
+    Correctness,
+    ReviewQueueItem,
+    RetrievalRelation,
+    Session,
+    TaskState,
+)
+from scripture_archive_runtime.security import ValidationError
+from tests.fixtures import LN01_N03, node_from
+
+
+class ReviewTrainingSessionTests(unittest.TestCase):
+    def setUp(self):
+        self.node1 = node_from(
+            LN01_N03,
+            node_id="RT01-N01",
+            mission_id="RT-01",
+            mastery_domains=["REVIEW-A"],
+            on_correct="none",
+            on_partial="return_to_current_node",
+            on_incorrect="return_to_current_node",
+            on_hint_threshold="return_to_current_node",
+        )
+        self.node2 = node_from(
+            LN01_N03,
+            node_id="RT02-N01",
+            mission_id="RT-02",
+            mastery_domains=["REVIEW-B"],
+            on_correct="none",
+            on_partial="return_to_current_node",
+            on_incorrect="return_to_current_node",
+            on_hint_threshold="return_to_current_node",
+        )
+        self.app = RuntimeApplication(ContentRepository([self.node1, self.node2]))
+        self.now = datetime.now(timezone.utc)
+
+    def _attempted(self, node_id):
+        state = TaskState(node_id=node_id)
+        state.attempts.append(Attempt(node_id, Correctness.INCORRECT, 0.0, 0, True))
+        self.app.memory.node_history[node_id] = state
+
+    def _queue(self, node_id, concept_id, *, due_delta=-1, priority=90, relation=RetrievalRelation.EXACT, suffix=""):
+        self._attempted(node_id)
+        self.app.memory.review_queue.append(
+            ReviewQueueItem(
+                queue_id=f"review:{concept_id}:{node_id}{suffix}",
+                concept_id=concept_id,
+                node_id=node_id,
+                due_at=self.now + timedelta(hours=due_delta),
+                priority=priority,
+                relation=relation,
+                reason="test_due_review",
+            )
+        )
+
+    def _command(self, command, payload=None):
+        return self.app.handle({
+            "api_version": "runtime.v1",
+            "request_id": f"test-{command}",
+            "command": command,
+            "payload": payload or {},
+        })
+
+    def test_start_review_rejects_caller_selected_node(self):
+        self._queue("RT01-N01", "REVIEW-A")
+        with self.assertRaisesRegex(ValidationError, "empty payload"):
+            self._command("start_review", {"node_id": "RT02-N01"})
+
+    def test_start_review_uses_existing_scheduler_and_loads_due_task(self):
+        self._queue("RT01-N01", "REVIEW-A", priority=80)
+        self._queue("RT02-N01", "REVIEW-B", priority=100)
+        response = self._command("start_review")
+        self.assertEqual(response["task"]["node_id"], "RT02-N01")
+        self.assertTrue(response["review_session"]["active"])
+        self.assertEqual(response["review_session"]["shown"], 1)
+        self.assertEqual(response["review_selection"]["concept_ids"], ["REVIEW-B"])
+        self.assertEqual(self.app.current_node_id, "RT02-N01")
+
+    def test_future_due_item_is_not_opened_early(self):
+        self._queue("RT01-N01", "REVIEW-A", due_delta=24)
+        response = self._command("start_review")
+        self.assertIsNone(response["task"])
+        self.assertFalse(response["review_session"]["active"])
+        self.assertEqual(response["review_session"]["remaining_eligible"], 0)
+        self.assertIsNone(self.app.current_node_id)
+
+    def test_multiple_concepts_for_one_node_are_grouped_into_one_task(self):
+        self._queue("RT01-N01", "REVIEW-A", priority=80, suffix=":a")
+        self.app.memory.review_queue.append(
+            ReviewQueueItem(
+                queue_id="review:REVIEW-B:RT01-N01:b",
+                concept_id="REVIEW-B",
+                node_id="RT01-N01",
+                due_at=self.now - timedelta(hours=2),
+                priority=95,
+                relation=RetrievalRelation.EXACT,
+                reason="second_concept",
+            )
+        )
+        response = self._command("start_review")
+        self.assertEqual(response["task"]["node_id"], "RT01-N01")
+        self.assertEqual(response["review_session"]["shown"], 1)
+        self.assertEqual(response["review_selection"]["concept_ids"], ["REVIEW-A", "REVIEW-B"])
+        self.assertEqual(len(response["review_selection"]["queue_ids"]), 2)
+
+    def test_next_review_is_blocked_until_current_review_is_graded(self):
+        self._queue("RT01-N01", "REVIEW-A", priority=100)
+        self._queue("RT02-N01", "REVIEW-B", priority=90)
+        first = self._command("start_review")
+        self.assertEqual(first["task"]["node_id"], "RT01-N01")
+        with self.assertRaisesRegex(ValidationError, "must be graded"):
+            self._command("start_review")
+
+    def test_after_grading_scheduler_selects_another_due_unshown_task(self):
+        self._queue("RT01-N01", "REVIEW-A", priority=100)
+        self._queue("RT02-N01", "REVIEW-B", priority=90)
+        first = self._command("start_review")
+        self.assertEqual(first["task"]["node_id"], "RT01-N01")
+        grade = self.app.submit_answer("RT01-N01", self.node1["accepted_answer"])
+        self.assertTrue(grade["review_session"]["active"])
+        self.assertEqual(grade["review_session"]["results"]["CORRECT"], 1)
+        second = self._command("start_review")
+        self.assertEqual(second["task"]["node_id"], "RT02-N01")
+        self.assertEqual(second["review_session"]["shown"], 2)
+
+    def test_finish_review_clears_runtime_entry_state(self):
+        self._queue("RT01-N01", "REVIEW-A")
+        self._command("start_review")
+        response = self._command("finish_review")
+        self.assertFalse(response["review_session"]["active"])
+        self.assertIsNone(response["review_session"]["current_node_id"])
+        self.assertIsNone(self.app.current_node_id)
+        self.assertFalse(self.app._review_session_active)
+
+    def test_review_start_uses_fresh_session_and_adjacent_exact_cooldown(self):
+        self._queue("RT01-N01", "REVIEW-A")
+        previous = Session(session_id="previous")
+        previous.correct_node_ids.add("RT01-N01")
+        previous.successful_exact_ids.add("RT01-N01")
+        self.app.session = previous
+        response = self._command("start_review")
+        self.assertIsNone(response["task"])
+        self.assertFalse(response["review_session"]["active"])
+
+
+if __name__ == "__main__":
+    unittest.main()

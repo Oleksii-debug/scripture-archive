@@ -75,6 +75,26 @@ class RuntimeBackedPlayerGateway:
 
         return DailyCaseProjection(self._runtime_application, self._loader).response()
 
+    def get_evidence_graph(self) -> dict[str, Any]:
+        """Derive the packaged graph from the canonical in-process evidence runtime.
+
+        The public platform command intentionally has no scope/include-locked input.
+        `build_evidence_graph` therefore keeps its player-safe `unlocked_only`
+        default and the returned linear representation is produced from the exact
+        same immutable graph object as the structured representation.
+        """
+        if self._runtime_application is None:
+            raise RuntimeGatewayError("Evidence Graph requires the canonical runtime application")
+        from runtime_engine.scripture_archive_runtime.evidence_graph import build_evidence_graph
+
+        with self._runtime_lock:
+            graph = build_evidence_graph(self._runtime_application.evidence)
+            return {
+                **graph.to_dict(),
+                "linear": graph.linearize(),
+                "truth_owner": "D5/runtime",
+            }
+
 
 def build_runtime_gateway(repo_root: Path, platform_store_root: Path) -> RuntimeBackedPlayerGateway:
     """Build the exact D5 runtime against the same canonical repository checkout."""

@@ -3,10 +3,19 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-# DEV1 tests execute from reconstructed r06_platform; runtime_engine remains at repo root.
-REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+# This test runs both directly from the repair overlay and after DEV1 reconstruction.
+# Discover the real repository root instead of depending on one copied-path depth.
+HERE = Path(__file__).resolve()
+REPO_ROOT = next(
+    (candidate for candidate in HERE.parents if (candidate / "runtime_engine" / "scripture_archive_runtime").is_dir()),
+    None,
+)
+if REPO_ROOT is None:
+    raise RuntimeError("Unable to locate canonical runtime_engine from packaged Chronology test")
+PLATFORM_ROOT = HERE.parents[1]
+for candidate in (REPO_ROOT, PLATFORM_ROOT):
+    if str(candidate) not in sys.path:
+        sys.path.insert(0, str(candidate))
 
 from runtime_engine.scripture_archive_runtime.chronology import (
     ChronologyAssertion,

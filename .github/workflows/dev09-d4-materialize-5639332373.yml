@@ -29,13 +29,14 @@ jobs:
           test "$actual" = "$TRIGGER_HEAD"
           echo "D4_TRIGGER_HEAD_PIN_PASS $actual"
 
-      - name: Download and verify exact Drive FINALPREP authority
+      - name: Decode and verify exact staged FINALPREP authority
         shell: bash
         run: |
           set -euo pipefail
-          url='https://drive.usercontent.google.com/download?id=188Pswz0qdGZJ5h4gyM8KPpQUfTGGr0y6&export=download&confirm=t'
+          src='lanes/dev09/materialize_5639332373/transport_part_00.b64'
           out='/tmp/DEV4_FINALPREP_02_MATERIALIZATION_PAYLOAD.zip'
-          curl --fail --location --retry 2 --connect-timeout 20 --max-time 90 "$url" -o "$out"
+          test -f "$src"
+          base64 --decode "$src" > "$out"
           python - <<'PY'
           import hashlib, pathlib, zipfile
           p=pathlib.Path('/tmp/DEV4_FINALPREP_02_MATERIALIZATION_PAYLOAD.zip')
@@ -45,11 +46,11 @@ jobs:
           got=hashlib.sha256(raw).hexdigest()
           print('transport_bytes',len(raw),'sha256',got)
           if len(raw)!=expected_size or got!=expected_sha:
-              raise SystemExit('exact Drive transport byte gate failed')
+              raise SystemExit('exact staged transport byte gate failed')
           with zipfile.ZipFile(p) as z:
               bad=z.testzip()
               if bad: raise SystemExit(f'ZIP CRC failure: {bad}')
-              print('D4_EXACT_DRIVE_TRANSPORT_PASS entries=',len(z.infolist()))
+              print('D4_EXACT_STAGED_TRANSPORT_PASS entries=',len(z.infolist()))
           PY
 
       - name: Materialize with live #60-aware DEV09 implementation

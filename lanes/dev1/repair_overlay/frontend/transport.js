@@ -37,5 +37,7 @@ void import('./library-ui.js');
 void import('./library-shell-compat.js');
 // Canonical read-only Daily Case surface from the current coordinator.
 void import('./daily-case-ui.js');
+// Canonical source-safe Chronology Lab; truthful empty state when no structured chronology feed exists.
+void import('./chronology-lab-ui.js');
 // Canonical Content Pack Manager is capability-gated by system.bootstrap and keeps mutations in the backend allowlist.
 void import('./content-pack-manager.js').then(({installContentPackManagerSurface})=>installContentPackManagerSurface());

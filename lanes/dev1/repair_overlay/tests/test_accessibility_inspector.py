@@ -18,6 +18,12 @@ class AccessibilityInspectorTests(unittest.TestCase):
             "player_prompt": "Classify the claim.",
             "source_scope_visible_to_player": "Mark 14:13; Luke 22:8.",
             "response_mode": "classification",
+            "ui_metadata": {
+                "options": [
+                    {"id": "SUPPORTED", "label": "Supported"},
+                    {"id": "UNSUPPORTED", "label": "Unsupported"},
+                ]
+            },
             "accepted_answer": "SUPPORTED",
             "rejected_answers": "UNSUPPORTED",
             "required_evidence": "Mark 14:13",
@@ -68,6 +74,7 @@ class AccessibilityInspectorTests(unittest.TestCase):
                 "accepted_answer": ["first", "second"],
             }
         )
+        node.pop("ui_metadata", None)
         task = self.mapper.to_renderable(node, self.mission)
 
         inspection = task["accessibility"]["inspection"]

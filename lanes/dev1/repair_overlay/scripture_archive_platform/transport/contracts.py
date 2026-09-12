@@ -18,7 +18,8 @@ ALLOWLISTED_COMMANDS = frozenset({
   "authoring.validate_draft","authoring.preview_draft","authoring.prepare_publish_candidate",
   "authoring.export_draft","authoring.import_draft",
   "keymap.list","keymap.rebind","keymap.clear","keymap.reset_context","keymap.reset_all",
-  "keymap.export","keymap.import","settings.get","settings.set"
+  "keymap.export","keymap.import","settings.get","settings.set",
+  "application_update.select_verify","diagnostics.get_report"
 })
 
 _PLAYER_TRUTH_OWNERS = frozenset({"D5/runtime", "REFERENCE_TEST_ONLY"})

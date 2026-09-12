@@ -136,17 +136,15 @@ class EvidenceRuntime:
         if claim.witness is not None and required:
             # Import locally to keep the provenance helper layer reusable without
             # creating a module-import cycle at EvidenceRuntime definition time.
-            from .evidence_provenance import resolve_evidence_witness
+            from .evidence_provenance import validated_declared_witness
 
-            declared_witness = (
-                claim.witness
-                if isinstance(claim.witness, str)
-                and claim.witness
-                and claim.witness == claim.witness.strip()
-                else None
-            )
             for eid in required & submitted:
-                if declared_witness is None or resolve_evidence_witness(self.evidence[eid]) != declared_witness:
+                if validated_declared_witness(
+                    self,
+                    claim.witness,
+                    (eid,),
+                    visible_evidence_ids=self.unlocked,
+                ) is None:
                     missing.add(eid)
         accepted = (submitted & required) - missing
         return ProofResult(

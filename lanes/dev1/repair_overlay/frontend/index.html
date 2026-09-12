@@ -21,6 +21,7 @@
       <button type="button" id="nav-research">Дослідження</button>
       <button type="button" id="nav-authoring">Конструктор</button>
       <button type="button" data-action-id="settings.keymap" id="nav-keymap">Клавіші</button>
+      <button type="button" id="nav-application-update">Оновлення</button>
     </nav>
   </header>
 
@@ -112,8 +113,6 @@
       </div>
     </section>
 
-
-
     <section id="research-view" class="hidden" aria-labelledby="research-heading">
       <div class="research-heading-row">
         <div>
@@ -172,6 +171,20 @@
           <div id="research-linear-output" aria-live="polite"></div>
         </aside>
       </div>
+    </section>
+
+    <section id="application-update-view" class="hidden" aria-labelledby="application-update-heading">
+      <p class="eyebrow">Packaged Windows application</p>
+      <h2 id="application-update-heading" tabindex="-1">Перевірка локального оновлення</h2>
+      <p>Цей екран лише перевіряє локальний manifest і пакет через native Windows file picker. Browser не передає шлях до файлу. Перевірка не завантажує, не розпаковує, не запускає й не встановлює пакет.</p>
+      <section class="surface" aria-labelledby="application-update-action-heading">
+        <h3 id="application-update-action-heading">Локальна перевірка цілісності та сумісності</h3>
+        <p>Після натискання відкриються два системні діалоги: спочатку manifest JSON, потім локальний package. Приймається лише точний product/platform, новіша semantic version, точне ім’я, розмір і SHA-256.</p>
+        <button type="button" id="application-update-select" class="primary">Вибрати і перевірити локальне оновлення</button>
+        <p id="application-update-status" class="notice info" role="status" aria-live="polite" aria-atomic="true">Локальне оновлення ще не перевірялося.</p>
+        <dl id="application-update-details" class="details-list" aria-label="Перевірені метадані оновлення"></dl>
+        <p class="notice warning"><strong>Межа довіри:</strong> збіг локального SHA-256 не доводить автентичність підпису або походження пакета. Цей surface не виконує install/replace/rollback.</p>
+      </section>
     </section>
 
     <section id="authoring-view" class="hidden" aria-labelledby="authoring-heading">
@@ -292,5 +305,6 @@
   </dialog>
 
   <script type="module" src="app.js"></script>
+  <script type="module" src="application-update.js"></script>
 </body>
 </html>

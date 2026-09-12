@@ -168,8 +168,7 @@ function buildSurface(){
     const anotherVisible=[...document.querySelectorAll('main > section[id$="-view"]')].some(section=>section!==view&&!section.classList.contains('hidden'));
     if(anotherVisible)hideSurface();
   });
-  observer.observe(main,{subtree:false,childList:true});
-  document.querySelectorAll('main > section[id$="-view"]').forEach(section=>observer.observe(section,{attributes:true,attributeFilter:['class']}));
+  observer.observe(main,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});
 }
 
 if(typeof document!=='undefined'){

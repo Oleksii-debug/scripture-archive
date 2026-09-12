@@ -12,7 +12,7 @@ from runtime_engine.scripture_archive_runtime.models import (
 )
 
 DAILY_CASE_RESPONSE_SCHEMA = "scripture.player.daily_case.v1"
-_SOURCE_AUDIT_MARKERS = ("DEVELOPER_SOURCE_AUDITED", "SOURCE_AUDITED", "AUDITOR_ACCEPTED")
+_SOURCE_AUDIT_MARKERS = ("DEVELOPER_SOURCE_AUDITED", "SOURCE_AUDITED")
 
 
 class DailyCaseProjection:
@@ -124,7 +124,7 @@ class DailyCaseProjection:
                 "memory": "runtime.v1 PlayerMemory",
                 "session": "runtime.v1 Session",
                 "candidate_projection": "canonical mission entry + runtime current + runtime review queue",
-                "source_audit": "MISSION_INDEX.canonical_status explicit audit marker only",
+                "source_audit": "MISSION_INDEX.canonical_status explicit source-audit marker only",
                 "inferred_source_claims": False,
                 "mutation": False,
             },

@@ -75,121 +75,20 @@ class RuntimeBackedPlayerGateway:
 
         return DailyCaseProjection(self._runtime_application, self._loader).response()
 
-    def get_chronology_lab(self) -> dict[str, Any]:
-        """Project canonical chronology data without inferring it from generic evidence.
-
-        The current runtime may legitimately have no structured ChronologyLab feed.
-        In that case the packaged projection returns an explicit source-safe empty
-        state rather than manufacturing dates or ordering from prose/passage order.
-        """
-        if self._runtime_application is None:
-            raise RuntimeGatewayError("Chronology Lab requires the canonical runtime application")
-        from scripture_archive_platform.application.chronology_projection import ChronologyProjection
-
-        chronology = getattr(self._runtime_application, "chronology", None)
-        return ChronologyProjection(chronology).response()
-
-    def get_witness_matrix(self) -> dict[str, Any]:
-        """Project a read-only source-local Witness Matrix from canonical unlocked evidence."""
-        if self._runtime_application is None:
-            raise RuntimeGatewayError("Witness Matrix requires the canonical runtime application")
-
-        from runtime_engine.scripture_archive_runtime.evidence_provenance import resolve_evidence_witness
-        from runtime_engine.scripture_archive_runtime.witness_matrix import build_witness_matrix
-
-        with self._runtime_lock:
-            runtime = self._runtime_application.evidence
-            witnesses: set[str] = set()
-            for evidence_id in sorted(runtime.unlocked):
-                record = runtime.evidence.get(evidence_id)
-                if record is None:
-                    continue
-                witness = resolve_evidence_witness(record)
-                if witness is not None:
-                    witnesses.add(witness)
-
-            available = sorted(witnesses)
-            if len(available) < 2:
-                return {
-                    "schema": "scripture.research.witness-matrix.v1",
-                    "read_only": True,
-                    "available_witnesses": available,
-                    "matrix": None,
-                    "linear": [
-                        "Witness Matrix",
-                        "At least two source-safe unlocked witnesses are required.",
-                        "No witness, contradiction, chronology, or source claim is inferred from missing data.",
-                    ],
-                    "truth_owner": "D5/runtime",
-                }
-
-            matrix = build_witness_matrix(runtime, witnesses=available)
-            return {
-                "schema": "scripture.research.witness-matrix.v1",
-                "read_only": True,
-                "available_witnesses": available,
-                "matrix": matrix.to_dict(),
-                "linear": matrix.linearize(),
-                "truth_owner": "D5/runtime",
-            }
-
-    def get_evidence_graph(self) -> dict[str, Any]:
-        """Derive the packaged graph from the canonical in-process evidence runtime.
-
-        The public platform command intentionally has no scope/include-locked input.
-        ``build_evidence_graph`` therefore keeps its player-safe ``unlocked_only``
-        default and the returned linear representation is produced from the exact
-        same immutable graph object as the structured representation.
-        """
-        if self._runtime_application is None:
-            raise RuntimeGatewayError("Evidence Graph requires the canonical runtime application")
-        from runtime_engine.scripture_archive_runtime.evidence_graph import build_evidence_graph
-
-        with self._runtime_lock:
-            graph = build_evidence_graph(self._runtime_application.evidence)
-            return {
-                **graph.to_dict(),
-                "linear": graph.linearize(),
-                "truth_owner": "D5/runtime",
-            }
-
 
 def build_runtime_gateway(repo_root: Path, platform_store_root: Path) -> RuntimeBackedPlayerGateway:
-    """Build the exact D5 runtime against the same canonical repository checkout.
-
-    Canonical node bytes are not rewritten. The checked-in R05 provenance registry
-    is projected into ``EvidenceRuntime`` and its explicit node_id→evidence_record_id
-    links replace legacy optional unlock values only in this in-memory packaged
-    runtime projection. Free-text source fields are not parsed into invented
-    passage/witness/entity/relation/chronology structure.
-    """
+    """Build the exact D5 runtime against the same canonical repository checkout."""
     from runtime_engine.scripture_archive_runtime.application import RuntimeApplication
     from runtime_engine.scripture_archive_runtime.content import ContentRepository
-    from runtime_engine.scripture_archive_runtime.evidence_registry import load_r05_evidence_registry
     from runtime_engine.scripture_archive_runtime.persistence import PersistenceStore
     from scripture_archive_platform.content.loader import CanonicalContentLoader
 
-    repo_root = Path(repo_root).resolve()
-    loader = CanonicalContentLoader(repo_root)
+    loader = CanonicalContentLoader(Path(repo_root))
     loader._ensure()
-    evidence_bundle = load_r05_evidence_registry(repo_root)
-
-    nodes = []
-    for source_node in loader._nodes.values():
-        node = dict(source_node)
-        node_id = str(node.get("node_id") or "")
-        node["optional_evidence_unlock"] = list(
-            evidence_bundle.node_evidence_ids.get(node_id, ())
-        )
-        nodes.append(node)
-
+    nodes = [dict(node) for node in loader._nodes.values()]
     content = ContentRepository(nodes, adapt_legacy=True, lane="DEV-A")
     runtime_store = PersistenceStore(Path(platform_store_root) / "runtime-v2")
-    runtime = RuntimeApplication(
-        content,
-        persistence=runtime_store,
-        evidence=evidence_bundle.runtime,
-    )
+    runtime = RuntimeApplication(content, persistence=runtime_store)
     return RuntimeBackedPlayerGateway(
         runtime.handle,
         current_node_getter=lambda: runtime.current_node_id,

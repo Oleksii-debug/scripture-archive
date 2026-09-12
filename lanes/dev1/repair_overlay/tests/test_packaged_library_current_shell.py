@@ -37,8 +37,6 @@ class PackagedLibraryCurrentShellTest(unittest.TestCase):
             "./library-shell-compat.js",
             "./daily-case-ui.js",
             "./content-pack-manager.js",
-            "./evidence-graph-ui.js",
-            "./witness-matrix-ui.js",
         }
         imports = set(re.findall(r"void import\('([^']+)'\)", self.transport))
         self.assertEqual(imports, expected_loaders)
@@ -48,15 +46,6 @@ class PackagedLibraryCurrentShellTest(unittest.TestCase):
             "void import('./content-pack-manager.js').then(({installContentPackManagerSurface})=>installContentPackManagerSurface());",
             self.transport,
         )
-        self.assertIn(
-            "void import('./evidence-graph-ui.js').then(({installEvidenceGraphSurface})=>installEvidenceGraphSurface());",
-            self.transport,
-        )
-        self.assertIn(
-            "void import('./witness-matrix-ui.js').then(({installWitnessMatrixSurface})=>installWitnessMatrixSurface());",
-            self.transport,
-        )
-        self.assertIn("import './chronology-lab-ui.js';", self.compat)
 
     def test_library_calls_only_read_only_canonical_contracts(self):
         commands = set(re.findall(r"api\('([^']+)'", self.library))
@@ -119,10 +108,7 @@ class PackagedLibraryCurrentShellTest(unittest.TestCase):
             ROOT / "library-ui.js",
             ROOT / "library-shell-compat.js",
             ROOT / "daily-case-ui.js",
-            ROOT / "chronology-lab-ui.js",
             ROOT / "content-pack-manager.js",
-            ROOT / "evidence-graph-ui.js",
-            ROOT / "witness-matrix-ui.js",
         ):
             completed = subprocess.run(
                 ["node", "--check", str(path)],

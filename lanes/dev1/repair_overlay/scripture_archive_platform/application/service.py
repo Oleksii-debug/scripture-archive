@@ -41,10 +41,6 @@ class PlatformApplication:
         if cmd=='research.list_notes':return {'notes':self.research.list_notes(p.get('query'))}
         if cmd=='research.upsert_note':return {'note':self.research.upsert_note(p.get('note'))}
         if cmd=='research.delete_note':return {'deleted':self.research.delete_note(p.get('note_id'))}
-        if cmd=='research.get_evidence_graph':return self._evidence_graph()
-        if cmd=='research.get_chronology_lab':
-            if p:raise ValueError('research.get_chronology_lab accepts an empty payload')
-            return self._chronology_lab()
         if cmd=='player.load_node':return self._load_node(self._id(p,'node_id'))
         if cmd=='player.submit_answer':return self._submit(p)
         if cmd=='player.request_hint':return self._hint(self._id(p,'node_id'))
@@ -89,7 +85,7 @@ class PlatformApplication:
         raise ValueError('command not implemented')
     def _bootstrap(self):
         campaigns=self.loader.list_campaigns()
-        return {'app':{'name':'Архів Писання','version':'R06-3DEV-A','runtime':'Windows 11 x64 / WebView2 semantic UI','transport_api_version':TRANSPORT_API_VERSION},'registries':{'task_types':self.task_types.list(),'renderers':self.renderers.list(),'graders':self.graders.list(),'editors':self.editors.list(),'templates':self.templates.list()},'campaigns':campaigns,'keymap':self.keymap.list(),'capabilities':{'constructor':True,'draft_vs_canonical':True,'web_portable_transport':True,'allowlisted_bridge':True,'library_catalog_search':True,'bundled_full_bible_text':False,'research_bookmarks_notes':True,'research_workspace_persistence':True,'evidence_graph':bool(self.player_gateway),'chronology_lab':bool(self.player_gateway),'arbitrary_filesystem':False,'content_pack_manager':True,'content_pack_inbox_only':True,'shell':False,'python_eval':False,'runtime_truth':bool(self.player_gateway),'review_queue':bool(self.player_gateway),'grading_truth':'D5/runtime' if self.player_gateway else 'REFERENCE_TEST_ONLY'}}
+        return {'app':{'name':'Архів Писання','version':'R06-3DEV-A','runtime':'Windows 11 x64 / WebView2 semantic UI','transport_api_version':TRANSPORT_API_VERSION},'registries':{'task_types':self.task_types.list(),'renderers':self.renderers.list(),'graders':self.graders.list(),'editors':self.editors.list(),'templates':self.templates.list()},'campaigns':campaigns,'keymap':self.keymap.list(),'capabilities':{'constructor':True,'draft_vs_canonical':True,'web_portable_transport':True,'allowlisted_bridge':True,'library_catalog_search':True,'bundled_full_bible_text':False,'research_bookmarks_notes':True,'research_workspace_persistence':True,'arbitrary_filesystem':False,'content_pack_manager':True,'content_pack_inbox_only':True,'shell':False,'python_eval':False,'runtime_truth':bool(self.player_gateway),'review_queue':bool(self.player_gateway),'grading_truth':'D5/runtime' if self.player_gateway else 'REFERENCE_TEST_ONLY'}}
     def _load_node(self,nid):
         if self.player_gateway:self.player_gateway.invoke('player.load_node',{'node_id':nid},request_id='load-'+nid)
         node=self.loader.load_node(nid); mission=self.loader.mission_for_node(nid); renderable=self.mapper.to_renderable(node,mission); self._last_node[nid]=node
@@ -111,9 +107,6 @@ class PlatformApplication:
         if self.player_gateway:
             rr=self.player_gateway.invoke('player.reveal_evidence',{},request_id='evidence-'+nid); return {'node_id':nid,'evidence':rr.get('linear') or rr.get('unlocked') or [],'unlocked_evidence_ids':rr.get('unlocked') or [],'confidence_code':node.get('confidence_code'),'textual_variant_flag':node.get('textual_variant_flag'),'notice':'TX1 qualification must be visible before affected grading.' if node.get('textual_variant_flag')=='TX1' else None,'truth_owner':'D5/runtime'}
         v=node.get('required_evidence',[]); evidence=list(map(str,v)) if isinstance(v,list) else ([str(v)] if v else []); return {'node_id':nid,'evidence':evidence,'confidence_code':node.get('confidence_code'),'textual_variant_flag':node.get('textual_variant_flag'),'notice':'TX1 qualification must be visible before affected grading.' if node.get('textual_variant_flag')=='TX1' else None,'truth_owner':'REFERENCE_TEST_ONLY'}
-    def _evidence_graph(self):
-        if not self.player_gateway:raise ValueError('Evidence Graph requires canonical runtime')
-        return self.player_gateway.get_evidence_graph()
     def _next(self,p):
         nid=self._id(p,'node_id')
         if self.player_gateway:
@@ -130,9 +123,6 @@ class PlatformApplication:
     def _daily_case(self):
         if not self.player_gateway:raise ValueError('Daily Case requires canonical runtime')
         return self.player_gateway.get_daily_case()
-    def _chronology_lab(self):
-        if not self.player_gateway:raise ValueError('Chronology Lab requires canonical runtime')
-        return self.player_gateway.get_chronology_lab()
     def _save_checkpoint(self,p):
         checkpoint={'campaign_id':p.get('campaign_id'),'mission_id':p.get('mission_id'),'node_id':p.get('node_id'),'saved_at':int(time.time()),'checkpoint_schema':'scripture.player.checkpoint.v1'}
         if self.player_gateway:self.player_gateway.invoke('player.save_checkpoint',{},request_id='save-'+str(p.get('node_id') or 'current'))

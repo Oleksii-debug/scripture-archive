@@ -39,7 +39,3 @@ void import('./library-shell-compat.js');
 void import('./daily-case-ui.js');
 // Canonical Content Pack Manager is capability-gated by system.bootstrap and keeps mutations in the backend allowlist.
 void import('./content-pack-manager.js').then(({installContentPackManagerSurface})=>installContentPackManagerSurface());
-// Canonical unlocked-only Evidence Graph is a read-only projection inside Research Workbench.
-void import('./evidence-graph-ui.js').then(({installEvidenceGraphSurface})=>installEvidenceGraphSurface());
-// Canonical source-local Witness Matrix is a read-only projection from unlocked runtime evidence.
-void import('./witness-matrix-ui.js').then(({installWitnessMatrixSurface})=>installWitnessMatrixSurface());

@@ -7,6 +7,7 @@ on:
       - 'lanes/dev1/repair_overlay/frontend/transport.js'
       - 'lanes/dev1/repair_overlay/frontend/library-ui.js'
       - 'lanes/dev1/repair_overlay/frontend/library-shell-compat.js'
+      - 'lanes/dev1/repair_overlay/frontend/library-research-persistence.js'
       - 'lanes/dev1/repair_overlay/frontend/daily-case-ui.js'
       - 'lanes/dev1/repair_overlay/frontend/chronology-lab-ui.js'
       - 'lanes/dev1/repair_overlay/frontend/content-pack-manager.js'
@@ -17,6 +18,7 @@ on:
       - 'lanes/dev1/repair_overlay/scripture_archive_platform/application/service.py'
       - 'lanes/dev1/repair_overlay/scripture_archive_platform/transport/contracts.py'
       - 'lanes/dev1/repair_overlay/tests/test_packaged_library_current_shell.py'
+      - 'lanes/dev1/repair_overlay/tests/test_packaged_library_research_persistence.py'
       - 'lanes/dev1/repair_overlay/tests/test_packaged_chronology_lab.py'
       - 'lanes/dev1/repair_overlay/tests/test_packaged_transport_composition.py'
       - 'lanes/dev1/repair_overlay/tests/test_packaged_witness_matrix_contract.py'
@@ -52,6 +54,8 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
       - name: Run packaged Library current-shell regression
         run: python lanes/dev1/repair_overlay/tests/test_packaged_library_current_shell.py
+      - name: Run packaged Library bookmarks/notes regression
+        run: python lanes/dev1/repair_overlay/tests/test_packaged_library_research_persistence.py
       - name: Run packaged Chronology Lab regression
         run: python lanes/dev1/repair_overlay/tests/test_packaged_chronology_lab.py
       - name: Run packaged transport composition regression

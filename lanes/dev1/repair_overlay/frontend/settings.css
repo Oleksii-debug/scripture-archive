@@ -1,0 +1,82 @@
+:root[data-font-scale="100"] { font-size: 100%; }
+:root[data-font-scale="1125"] { font-size: 112.5%; }
+:root[data-font-scale="125"] { font-size: 125%; }
+:root[data-font-scale="150"] { font-size: 150%; }
+
+:root[data-high-contrast="true"] {
+  --text-1: CanvasText;
+  --text-2: CanvasText;
+  --text-muted: CanvasText;
+  --bg: Canvas;
+  --bg-deep: Canvas;
+  --surface: Canvas;
+  --surface-solid: Canvas;
+  --surface-2: Canvas;
+  --surface-3: Canvas;
+  --border: CanvasText;
+  --border-strong: CanvasText;
+  --accent: LinkText;
+  --accent-strong: LinkText;
+  --accent-soft: Canvas;
+  --accent-glow: transparent;
+  --gold: CanvasText;
+  --gold-soft: Canvas;
+  --success: CanvasText;
+  --success-soft: Canvas;
+  --warning: CanvasText;
+  --warning-soft: Canvas;
+  --error: CanvasText;
+  --error-soft: Canvas;
+  --info: LinkText;
+  --info-soft: Canvas;
+  --focus: Highlight;
+  --focus-ring: transparent;
+  --shadow-1: none;
+  --shadow-2: none;
+  --shadow-glow: none;
+}
+:root[data-high-contrast="true"] button,
+:root[data-high-contrast="true"] input,
+:root[data-high-contrast="true"] select,
+:root[data-high-contrast="true"] textarea,
+:root[data-high-contrast="true"] .surface,
+:root[data-high-contrast="true"] .card,
+:root[data-high-contrast="true"] .notice {
+  border-color: CanvasText;
+  box-shadow: none;
+}
+:root[data-high-contrast="true"] button.primary {
+  background: ButtonFace;
+  color: ButtonText;
+  border: 2px solid ButtonText;
+}
+:root[data-high-contrast="true"] :focus-visible {
+  outline: 4px solid Highlight;
+  outline-offset: 3px;
+  box-shadow: none;
+}
+
+:root[data-reduced-motion="true"] *,
+:root[data-reduced-motion="true"] *::before,
+:root[data-reduced-motion="true"] *::after {
+  animation-duration: .01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: .01ms !important;
+  scroll-behavior: auto !important;
+}
+
+.accessibility-settings-dialog {
+  width: min(38rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+  color: var(--text-1);
+  background: var(--surface-solid);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+}
+.accessibility-settings-dialog::backdrop { background: rgba(0,0,0,.48); }
+.accessibility-settings-dialog form { display: grid; gap: var(--space-3); }
+.accessibility-settings-dialog fieldset { display: grid; gap: .7rem; }
+.accessibility-settings-dialog label:not(.check-row) { font-weight: 700; }
+.accessibility-settings-dialog select { width: 100%; }

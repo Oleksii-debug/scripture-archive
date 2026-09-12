@@ -38,6 +38,7 @@ $Name = "ScriptureArchive-R06-DEV01"
   --hidden-import runtime_engine.scripture_archive_runtime.application `
   --hidden-import runtime_engine.scripture_archive_runtime.content `
   --hidden-import runtime_engine.scripture_archive_runtime.persistence `
+  --hidden-import runtime_engine.scripture_archive_runtime.application_update `
   --paths $PlatformRoot --paths $Repo `
   --distpath $Dist --workpath $Work --specpath $Spec `
   (Join-Path $PlatformRoot "run_windows.py")

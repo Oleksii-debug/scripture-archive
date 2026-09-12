@@ -108,7 +108,7 @@ class PlatformApplication:
     def _evidence(self,nid):
         node=self.loader.load_node(nid)
         if self.player_gateway:
-            rr=self.player_gateway.invoke('player.reveal_evidence',{},request_id='evidence-'+nid); return {'node_id':nid,'evidence':rr.get('linear') or rr.get('unlocked') or [],'unlocked_evidence_ids':rr.get('unlocked') or [],'confidence_code':node.get('confidence_code'),'textual_variant_flag':'TX1' if node.get('textual_variant_flag')=='TX1' else node.get('textual_variant_flag'),'notice':'TX1 qualification must be visible before affected grading.' if node.get('textual_variant_flag')=='TX1' else None,'truth_owner':'D5/runtime'}
+            rr=self.player_gateway.invoke('player.reveal_evidence',{},request_id='evidence-'+nid); return {'node_id':nid,'evidence':rr.get('linear') or rr.get('unlocked') or [],'unlocked_evidence_ids':rr.get('unlocked') or [],'confidence_code':node.get('confidence_code'),'textual_variant_flag':node.get('textual_variant_flag'),'notice':'TX1 qualification must be visible before affected grading.' if node.get('textual_variant_flag')=='TX1' else None,'truth_owner':'D5/runtime'}
         v=node.get('required_evidence',[]); evidence=list(map(str,v)) if isinstance(v,list) else ([str(v)] if v else []); return {'node_id':nid,'evidence':evidence,'confidence_code':node.get('confidence_code'),'textual_variant_flag':node.get('textual_variant_flag'),'notice':'TX1 qualification must be visible before affected grading.' if node.get('textual_variant_flag')=='TX1' else None,'truth_owner':'REFERENCE_TEST_ONLY'}
     def _next(self,p):
         nid=self._id(p,'node_id')

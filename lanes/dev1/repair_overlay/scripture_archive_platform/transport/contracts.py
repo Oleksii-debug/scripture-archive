@@ -15,7 +15,8 @@ ALLOWLISTED_COMMANDS = frozenset({
   "authoring.validate_draft","authoring.preview_draft","authoring.prepare_publish_candidate",
   "authoring.export_draft","authoring.import_draft",
   "keymap.list","keymap.rebind","keymap.clear","keymap.reset_context","keymap.reset_all",
-  "keymap.export","keymap.import","settings.get","settings.set"
+  "keymap.export","keymap.import","settings.get","settings.set",
+  "application_update.select_verify"
 })
 
 class ContentLoaderPort(Protocol):
@@ -44,6 +45,8 @@ def validate_request_shape(request:Any)->tuple[str,str,dict[str,Any]]:
         unknown=set(payload)-{'node_id'}
         if unknown: raise ValueError('player.next accepts only current node_id context; target selection is forbidden')
         if 'node_id' in payload and (not isinstance(payload['node_id'],str) or not payload['node_id'] or len(payload['node_id'])>100): raise ValueError('invalid node_id')
+    if cmd=='application_update.select_verify' and payload:
+        raise ValueError('application_update.select_verify accepts an empty payload only')
     return rid,cmd,payload
 
 def ok_response(request_id:str,data:Any)->dict[str,Any]:

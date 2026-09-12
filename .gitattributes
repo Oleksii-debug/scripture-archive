@@ -1,0 +1,2 @@
+# Exact-qualified diagnostics core must be byte-stable across Windows/Linux checkouts.
+runtime_engine/scripture_archive_runtime/diagnostics.py text eol=lf

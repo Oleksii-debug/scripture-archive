@@ -16,7 +16,7 @@ ALLOWLISTED_COMMANDS = frozenset({
   "authoring.export_draft","authoring.import_draft",
   "keymap.list","keymap.rebind","keymap.clear","keymap.reset_context","keymap.reset_all",
   "keymap.export","keymap.import","settings.get","settings.set",
-  "application_update.select_verify"
+  "application_update.select_verify","diagnostics.get_report"
 })
 
 class ContentLoaderPort(Protocol):
@@ -47,6 +47,8 @@ def validate_request_shape(request:Any)->tuple[str,str,dict[str,Any]]:
         if 'node_id' in payload and (not isinstance(payload['node_id'],str) or not payload['node_id'] or len(payload['node_id'])>100): raise ValueError('invalid node_id')
     if cmd=='application_update.select_verify' and payload:
         raise ValueError('application_update.select_verify accepts an empty payload only')
+    if cmd=='diagnostics.get_report' and payload:
+        raise ValueError('diagnostics.get_report accepts an empty payload only')
     return rid,cmd,payload
 
 def ok_response(request_id:str,data:Any)->dict[str,Any]:

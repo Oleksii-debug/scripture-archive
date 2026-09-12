@@ -79,7 +79,7 @@ class RuntimeBackedPlayerGateway:
         """Derive the packaged graph from the canonical in-process evidence runtime.
 
         The public platform command intentionally has no scope/include-locked input.
-        `build_evidence_graph` therefore keeps its player-safe `unlocked_only`
+        ``build_evidence_graph`` therefore keeps its player-safe ``unlocked_only``
         default and the returned linear representation is produced from the exact
         same immutable graph object as the structured representation.
         """
@@ -97,18 +97,41 @@ class RuntimeBackedPlayerGateway:
 
 
 def build_runtime_gateway(repo_root: Path, platform_store_root: Path) -> RuntimeBackedPlayerGateway:
-    """Build the exact D5 runtime against the same canonical repository checkout."""
+    """Build the exact D5 runtime against the same canonical repository checkout.
+
+    Canonical node bytes are not rewritten. The checked-in R05 provenance registry
+    is projected into ``EvidenceRuntime`` and its explicit node_id→evidence_record_id
+    links replace legacy optional unlock values only in this in-memory packaged
+    runtime projection. Free-text source fields are not parsed into invented
+    passage/witness/entity/relation/chronology structure.
+    """
     from runtime_engine.scripture_archive_runtime.application import RuntimeApplication
     from runtime_engine.scripture_archive_runtime.content import ContentRepository
+    from runtime_engine.scripture_archive_runtime.evidence_registry import load_r05_evidence_registry
     from runtime_engine.scripture_archive_runtime.persistence import PersistenceStore
     from scripture_archive_platform.content.loader import CanonicalContentLoader
 
-    loader = CanonicalContentLoader(Path(repo_root))
+    repo_root = Path(repo_root).resolve()
+    loader = CanonicalContentLoader(repo_root)
     loader._ensure()
-    nodes = [dict(node) for node in loader._nodes.values()]
+    evidence_bundle = load_r05_evidence_registry(repo_root)
+
+    nodes = []
+    for source_node in loader._nodes.values():
+        node = dict(source_node)
+        node_id = str(node.get("node_id") or "")
+        node["optional_evidence_unlock"] = list(
+            evidence_bundle.node_evidence_ids.get(node_id, ())
+        )
+        nodes.append(node)
+
     content = ContentRepository(nodes, adapt_legacy=True, lane="DEV-A")
     runtime_store = PersistenceStore(Path(platform_store_root) / "runtime-v2")
-    runtime = RuntimeApplication(content, persistence=runtime_store)
+    runtime = RuntimeApplication(
+        content,
+        persistence=runtime_store,
+        evidence=evidence_bundle.runtime,
+    )
     return RuntimeBackedPlayerGateway(
         runtime.handle,
         current_node_getter=lambda: runtime.current_node_id,

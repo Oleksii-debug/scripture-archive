@@ -3,8 +3,8 @@ import unittest
 from pathlib import Path
 
 from runtime_engine.scripture_archive_runtime.evidence import Claim, EvidenceRecord, EvidenceRuntime, PassageRef, Relation
-from runtime_engine.scripture_archive_runtime.models import Confidence
-from scripture_archive_platform.application.runtime_gateway import RuntimeBackedPlayerGateway
+from runtime_engine.scripture_archive_runtime.models import Confidence, Correctness
+from scripture_archive_platform.application.runtime_gateway import RuntimeBackedPlayerGateway, build_runtime_gateway
 from scripture_archive_platform.application.service import PlatformApplication
 from scripture_archive_platform.persistence.store import JsonFileStore
 from scripture_archive_platform.transport.contracts import validate_request_shape
@@ -82,6 +82,45 @@ class PackagedEvidenceGraphTests(unittest.TestCase):
         self.assertTrue(any("Evidence E-MARK" in line for line in graph["linear"]))
         self.assertFalse(any("E-LOCKED" in line or "Locked proposition" in line for line in graph["linear"]))
         self.assertTrue(any(edge["edge_id"] == "relation:R-MARK" for edge in graph["edges"]))
+
+    def test_packaged_gateway_materializes_checked_in_registry_without_invented_source_structure(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            gateway = build_runtime_gateway(REPO_ROOT, Path(temp_dir))
+            runtime = gateway._runtime_application
+            self.assertGreater(len(runtime.evidence.evidence), 0)
+            linked_tasks = []
+            for task in runtime.content.all().values():
+                raw = task.optional_evidence_unlock
+                if isinstance(raw, str):
+                    ids = tuple(item.strip() for item in raw.replace(';', ',').split(',') if item.strip() and item.strip().casefold() != 'none')
+                elif isinstance(raw, (list, tuple, set)):
+                    ids = tuple(str(item) for item in raw)
+                else:
+                    ids = ()
+                if ids:
+                    linked_tasks.append((task, ids))
+            self.assertTrue(linked_tasks, "canonical evidence registry must map at least one node")
+            task, evidence_ids = linked_tasks[0]
+            for evidence_id in evidence_ids:
+                self.assertIn(evidence_id, runtime.evidence.evidence)
+                record = runtime.evidence.evidence[evidence_id]
+                self.assertEqual((), record.passage_refs)
+                self.assertIsNone(record.witness)
+                self.assertEqual((), record.entity_ids)
+                self.assertEqual((), record.relation_ids)
+
+            # Registry-backed evidence begins locked. A non-correct outcome must not
+            # expose it; only the successful canonical branch may carry unlock IDs.
+            incorrect = runtime.branches.resolve(task, Correctness.INCORRECT)
+            self.assertEqual((), incorrect.evidence_unlocks)
+            correct = runtime.branches.resolve(task, Correctness.CORRECT)
+            self.assertTrue(set(evidence_ids).issubset(set(correct.evidence_unlocks)))
+
+            graph_before = gateway.get_evidence_graph()
+            self.assertTrue(all(eid not in {node["raw_id"] for node in graph_before["nodes"]} for eid in evidence_ids))
+            runtime.evidence.unlock(evidence_ids[0])
+            graph_after = gateway.get_evidence_graph()
+            self.assertIn(evidence_ids[0], {node["raw_id"] for node in graph_after["nodes"]})
 
     def test_transport_forbids_scope_or_locked_evidence_inputs(self):
         request_id, command, payload = validate_request_shape({

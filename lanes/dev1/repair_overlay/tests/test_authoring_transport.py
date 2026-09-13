@@ -20,6 +20,22 @@ class AuthoringTransportTests(unittest.TestCase):
   d=self.req('authoring.new_node_from_task_type',{'title':'Order','task_type':'ORDERING'})['data']['draft']; d['node']['ui_metadata']['items']=[{'id':'a'},{'id':'b'},{'id':'c'}]
   r=self.req('authoring.move_collection_item',{'draft':d,'path':'node.ui_metadata.items','index':2,'direction':'up'}); self.assertTrue(r['ok'],r); self.assertEqual(['a','c','b'],[x['id'] for x in r['data']['draft']['node']['ui_metadata']['items']])
   self.assertEqual(['a','b','c'],[x['id'] for x in d['node']['ui_metadata']['items']])
+ def test_constructor_v2_lifecycle_is_allowlisted_and_fail_closed(self):
+  expected={'authoring.pack_compatibility','authoring.create_snapshot','authoring.list_snapshots','authoring.restore_snapshot','authoring.diff_draft','authoring.history','authoring.undo','authoring.redo','authoring.publish_version','authoring.list_versions','authoring.rollback_version'}
+  self.assertTrue(expected.issubset(ALLOWLISTED_COMMANDS))
+  r=self.req('authoring.new_draft',{'title':'Campaign','kind':'campaign'}); self.assertTrue(r['ok'],r); d=r['data']['draft']; did=d['draft_id']
+  d['campaign']['campaign_id']='ZZ-CAMPAIGN'; d['campaign']['title_ua']='V1'
+  r=self.req('authoring.save_draft',{'draft':d}); self.assertTrue(r['ok'],r); d=r['data']['draft']
+  r=self.req('authoring.create_snapshot',{'draft_id':did,'label':'Known good'}); self.assertTrue(r['ok'],r); sid=r['data']['snapshot']['snapshot_id']
+  d['campaign']['title_ua']='V2'; r=self.req('authoring.save_draft',{'draft':d}); self.assertTrue(r['ok'],r); d=r['data']['draft']
+  r=self.req('authoring.diff_draft',{'draft_id':did,'from_snapshot_id':sid}); self.assertTrue(r['ok'],r); self.assertIn('$.campaign.title_ua',r['data']['changed_paths'])
+  r=self.req('authoring.undo',{'draft_id':did}); self.assertTrue(r['ok'],r); self.assertEqual('V1',r['data']['draft']['campaign']['title_ua'])
+  r=self.req('authoring.redo',{'draft_id':did}); self.assertTrue(r['ok'],r); self.assertEqual('V2',r['data']['draft']['campaign']['title_ua'])
+  compat=self.req('authoring.pack_compatibility',{}); self.assertTrue(compat['ok'],compat); compatibility=compat['data']['compatibility']
+  bad=dict(compatibility); bad['content_schema_version']='future'
+  r=self.req('authoring.publish_version',{'draft_id':did,'compatibility':bad}); self.assertFalse(r['ok'],r); self.assertEqual('VALIDATION_ERROR',r['error']['code'])
+  r=self.req('authoring.publish_version',{'draft_id':did,'compatibility':compatibility}); self.assertTrue(r['ok'],r); version=r['data']['version']; self.assertFalse(version['canonical_mutation_performed'])
+  r=self.req('authoring.list_versions',{'draft_id':did}); self.assertTrue(r['ok'],r); self.assertEqual(version['version_id'],r['data']['versions'][0]['version_id'])
  def test_player_branch_target_stays_runtime_owned(self):
   self.assertNotIn('player.navigate_branch',ALLOWLISTED_COMMANDS)
   self.assertIn('player.next',ALLOWLISTED_COMMANDS)

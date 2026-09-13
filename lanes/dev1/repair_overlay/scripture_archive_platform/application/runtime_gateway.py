@@ -186,6 +186,33 @@ class RuntimeBackedPlayerGateway:
                 "truth_owner": "D5/runtime",
             }
 
+    def get_dossier(self, subject_id: str, display_name: str, kind: str) -> dict[str, Any]:
+        """Project an unlocked-only dossier from this exact runtime instance."""
+        if self._runtime_application is None:
+            raise RuntimeGatewayError("canonical runtime dossier view is unavailable")
+        with self._runtime_lock:
+            return build_runtime_dossier(self._runtime_application, subject_id, display_name, kind)
+
+
+def build_runtime_dossier(runtime, subject_id: str, display_name: str, kind: str) -> dict[str, Any]:
+    """Build an unlocked-only dossier without creating a second evidence truth."""
+    from runtime_engine.scripture_archive_runtime.dossiers import (
+        DossierAssembler,
+        DossierKind,
+        DossierSubject,
+    )
+
+    subject = DossierSubject(
+        subject_id=subject_id,
+        display_name=display_name,
+        kind=DossierKind(kind),
+    )
+    view = DossierAssembler(runtime.evidence).build(subject, unlocked_only=True)
+    dossier = view.to_dict()
+    dossier["linear"] = list(view.linearize())
+    dossier["evidence_scope"] = "unlocked_only"
+    return {"dossier": dossier}
+
 
 def build_runtime_gateway(repo_root: Path, platform_store_root: Path) -> RuntimeBackedPlayerGateway:
     """Build the exact D5 runtime against the same canonical repository checkout.

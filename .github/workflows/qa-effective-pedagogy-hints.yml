@@ -39,6 +39,26 @@ jobs:
             lanes/dev1/repair_overlay/tests/test_effective_pedagogy_composition.py \
             lanes/dev1/repair_overlay/tests/test_effective_pedagogy_runtime_bridge.py | sort)"
           test "$changed" = "$expected"
+      - name: Inventory indexed pedagogy JSON syntax (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          errors=[]
+          for index_path in sorted(Path('docs/campaigns').rglob('R05_PEDAGOGY_OVERLAY_INDEX.json')):
+              index=json.loads(index_path.read_text(encoding='utf-8'))
+              for name in index.get('chunks', []):
+                  path=index_path.parent/name
+                  try:
+                      json.loads(path.read_text(encoding='utf-8'))
+                  except Exception as exc:
+                      errors.append((str(path), str(exc)))
+          print(f'PEDAGOGY_OVERLAY_JSON_ERRORS={len(errors)}')
+          for path, exc in errors:
+              print(f'PEDAGOGY_OVERLAY_JSON_ERROR {path}: {exc}')
+          PY
       - name: Effective pedagogy composition tests (Linux)
         if: runner.os == 'Linux'
         shell: bash

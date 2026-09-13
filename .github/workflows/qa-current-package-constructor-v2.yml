@@ -59,7 +59,7 @@ jobs:
           python -m zipfile -e DEV1_R06_PLATFORM_SOURCE.zip .
           test -d r06_platform
           cp -R lanes/dev1/repair_overlay/. r06_platform/
-          export PYTHONPATH="$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/r06_platform${PYTHONPATH:+:$PYTHONPATH}"
+          export PYTHONPATH="$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/runtime_engine:$GITHUB_WORKSPACE/r06_platform${PYTHONPATH:+:$PYTHONPATH}"
           python lanes/dev1/repair_overlay/tests/test_constructor_runtime_gradeability.py
           python lanes/dev1/repair_overlay/tests/test_constructor_v2_frontend.py
           python lanes/dev1/repair_overlay/tests/test_constructor_v2_lifecycle.py
@@ -87,7 +87,7 @@ jobs:
           Expand-Archive DEV1_R06_PLATFORM_SOURCE.zip -DestinationPath . -Force
           if (-not (Test-Path r06_platform -PathType Container)) { throw 'Verified archive did not extract r06_platform' }
           Copy-Item -Path lanes\dev1\repair_overlay\* -Destination r06_platform -Recurse -Force
-          $env:PYTHONPATH = "$env:GITHUB_WORKSPACE;$env:GITHUB_WORKSPACE\r06_platform" + $(if ($env:PYTHONPATH) { ";$env:PYTHONPATH" } else { "" })
+          $env:PYTHONPATH = "$env:GITHUB_WORKSPACE;$env:GITHUB_WORKSPACE\runtime_engine;$env:GITHUB_WORKSPACE\r06_platform" + $(if ($env:PYTHONPATH) { ";$env:PYTHONPATH" } else { "" })
           foreach ($test in @('test_constructor_runtime_gradeability.py','test_constructor_v2_frontend.py','test_constructor_v2_lifecycle.py','test_constructor_v2_recovery_atomicity.py')) {
             python "lanes\dev1\repair_overlay\tests\$test"
             if ($LASTEXITCODE -ne 0) { throw "$test failed with exit code $LASTEXITCODE" }

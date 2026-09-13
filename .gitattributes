@@ -1,0 +1,4 @@
+# Preserve the source-pinned WEBU VPL byte-for-byte on every checkout.
+# The runtime validates the exact official eBible SHA-256; CRLF conversion on
+# Windows would otherwise mutate the corpus and correctly trip the fail-closed pin.
+lanes/dev1/repair_overlay/scripture_archive_platform/content/data/engwebu_vpl.txt -text

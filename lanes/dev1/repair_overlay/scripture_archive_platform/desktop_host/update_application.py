@@ -5,6 +5,9 @@ import sys
 from pathlib import Path
 from typing import Any, Callable
 
+from scripture_archive_platform.desktop_host.authenticode import (
+    verify_same_publisher_authenticode,
+)
 from scripture_archive_platform.transport.contracts import (
     error_response,
     ok_response,
@@ -75,6 +78,8 @@ class NativeApplicationUpdateLayer:
     All ordinary commands remain owned by the wrapped application. The browser can
     request update selection only with an empty payload; local paths are created by
     the native picker and are never serialized into a successful or failed response.
+    Hash/size verification remains independent from the optional fail-closed Windows
+    same-publisher Authenticode signal. Nothing is installed or executed here.
     """
 
     def __init__(
@@ -84,11 +89,17 @@ class NativeApplicationUpdateLayer:
         selector: Callable[[], tuple[str, str] | None],
         *,
         current_version: str,
+        authenticity_verifier: Callable[[Path], bool] | None = None,
     ) -> None:
         self._app = app
         self._repo_root = Path(repo_root).resolve()
         self._selector = selector
         self._current_version = current_version
+        self._authenticity_verifier = (
+            authenticity_verifier
+            if authenticity_verifier is not None
+            else self._default_authenticity_verifier
+        )
 
     def handle(self, request: Any) -> dict[str, Any]:
         if not isinstance(request, dict) or request.get("command") != UPDATE_COMMAND:
@@ -123,6 +134,20 @@ class NativeApplicationUpdateLayer:
                 artifact_path,
                 current_version=self._current_version,
             )
+            authenticity = "not_proven_by_local_hash_verification"
+            try:
+                if self._authenticity_verifier(artifact_path):
+                    # Re-run exact byte verification after the OS signature check so
+                    # a path mutation during Authenticode inspection cannot make the
+                    # returned integrity result refer only to the earlier path state.
+                    verified = verify_local_update(
+                        manifest,
+                        artifact_path,
+                        current_version=self._current_version,
+                    )
+                    authenticity = "same_publisher_authenticode_verified"
+            except Exception:
+                authenticity = "not_proven_by_local_hash_verification"
             return ok_response(
                 rid,
                 {
@@ -136,7 +161,7 @@ class NativeApplicationUpdateLayer:
                     "artifact_name": verified.artifact_name,
                     "artifact_size": verified.artifact_size,
                     "artifact_sha256": verified.artifact_sha256,
-                    "authenticity": "not_proven_by_local_hash_verification",
+                    "authenticity": authenticity,
                 },
             )
         except ValueError as exc:
@@ -153,6 +178,9 @@ class NativeApplicationUpdateLayer:
                 "UPDATE_VERIFY_FAILED",
                 "Local application update verification failed closed.",
             )
+
+    def _default_authenticity_verifier(self, candidate: Path) -> bool:
+        return verify_same_publisher_authenticode(Path(sys.executable), candidate)
 
     def _load_update_core(self) -> tuple[Any, Any]:
         root_text = str(self._repo_root)

@@ -1,0 +1,110 @@
+name: QA Current Package Research Workbench
+
+on:
+  push:
+    branches:
+      - qa-current-package-research-workbench-0913-sol
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  BASE_PACKAGE_SHA: fa836d79fcfd9ac5d8aacbf6a6be9f5a10183012
+  DONOR_SHA: 60e8dba23e656960162afd4f7764d4d042770ea9
+  BASE_SOURCE_SHA256: 10fbd546ff4d985465b85b99f4f64bff95d9ec8b1f27132c6d21b4930c344c35
+
+jobs:
+  research-workbench:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      EXPECTED_HEAD: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Confirm exact helper checkout and package containment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test "$(git merge-base HEAD "$BASE_PACKAGE_SHA")" = "$BASE_PACKAGE_SHA"
+          test "$(git diff --name-only "$BASE_PACKAGE_SHA"...HEAD)" = ".github/workflows/qa-current-package-research-workbench.yml"
+      - name: Fetch immutable reconstruction donor
+        shell: bash
+        run: git fetch --no-tags --depth=1 origin "$DONOR_SHA"
+      - name: Reconstruct and qualify Research Workbench on Linux
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .qa_donor/release_inputs/dev1_finalprep02
+          for i in $(seq 1 11); do
+            part=$(printf 'part-%03d.b64' "$i")
+            git show "$DONOR_SHA:release_inputs/dev1_finalprep02/$part" > ".qa_donor/release_inputs/dev1_finalprep02/$part"
+          done
+          git show "$DONOR_SHA:lanes/dev1/verify_source_archive.py" > .qa_donor/verify_source_archive.py
+          git show "$DONOR_SHA:lanes/dev1/FINALPREP02_RESOLVED_SOURCE_SHA256.json" > .qa_donor/FINALPREP02_RESOLVED_SOURCE_SHA256.json
+          git show "$DONOR_SHA:lanes/dev1/FINALPREP02_RESOLVED_SOURCE_MANIFEST.json" > .qa_donor/FINALPREP02_RESOLVED_SOURCE_MANIFEST.json
+          cat .qa_donor/release_inputs/dev1_finalprep02/part-*.b64 | base64 -d > DEV1_R06_PLATFORM_SOURCE.zip
+          python .qa_donor/verify_source_archive.py DEV1_R06_PLATFORM_SOURCE.zip "$BASE_SOURCE_SHA256"
+          python -m zipfile -e DEV1_R06_PLATFORM_SOURCE.zip .
+          test -d r06_platform
+          cp -R lanes/dev1/repair_overlay/. r06_platform/
+          export PYTHONPATH="$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/runtime_engine:$GITHUB_WORKSPACE/r06_platform${PYTHONPATH:+:$PYTHONPATH}"
+          python runtime_engine/tests/test_research_workbench.py
+          python runtime_engine/tests/test_research_workbench_claim_shadow.py
+          python lanes/dev1/repair_overlay/tests/test_research_workbench_ui.py
+          python lanes/dev1/repair_overlay/tests/test_research_workspace.py
+          python lanes/dev1/repair_overlay/tests/test_research_persistence_collision_regression.py
+          python lanes/dev1/repair_overlay/tests/test_research_workspace_persistence_restart.py
+          node --check lanes/dev1/repair_overlay/frontend/research-workbench.js
+          node --check r06_platform/frontend/research-workbench.js
+          git diff --check
+      - name: Reconstruct and qualify Research Workbench on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path .qa_donor\release_inputs\dev1_finalprep02 | Out-Null
+          $parts = @()
+          1..11 | ForEach-Object {
+            $part = 'part-{0:D3}.b64' -f $_
+            $parts += (git show "$($env:DONOR_SHA):release_inputs/dev1_finalprep02/$part")
+            if ($LASTEXITCODE -ne 0) { throw "Failed reading donor $part" }
+          }
+          [IO.File]::WriteAllBytes('DEV1_R06_PLATFORM_SOURCE.zip', [Convert]::FromBase64String($parts -join ''))
+          git show "$($env:DONOR_SHA):lanes/dev1/verify_source_archive.py" | Set-Content -Encoding utf8NoBOM .qa_donor\verify_source_archive.py
+          git show "$($env:DONOR_SHA):lanes/dev1/FINALPREP02_RESOLVED_SOURCE_SHA256.json" | Set-Content -Encoding utf8NoBOM .qa_donor\FINALPREP02_RESOLVED_SOURCE_SHA256.json
+          git show "$($env:DONOR_SHA):lanes/dev1/FINALPREP02_RESOLVED_SOURCE_MANIFEST.json" | Set-Content -Encoding utf8NoBOM .qa_donor\FINALPREP02_RESOLVED_SOURCE_MANIFEST.json
+          if ($LASTEXITCODE -ne 0) { throw 'Failed reading donor verifier/manifests' }
+          python .qa_donor\verify_source_archive.py DEV1_R06_PLATFORM_SOURCE.zip $env:BASE_SOURCE_SHA256
+          if ($LASTEXITCODE -ne 0) { throw "Archive verification failed with exit code $LASTEXITCODE" }
+          Expand-Archive DEV1_R06_PLATFORM_SOURCE.zip -DestinationPath . -Force
+          if (-not (Test-Path r06_platform -PathType Container)) { throw 'Verified archive did not extract r06_platform' }
+          Copy-Item -Path lanes\dev1\repair_overlay\* -Destination r06_platform -Recurse -Force
+          $env:PYTHONPATH = "$env:GITHUB_WORKSPACE;$env:GITHUB_WORKSPACE\runtime_engine;$env:GITHUB_WORKSPACE\r06_platform" + $(if ($env:PYTHONPATH) { ";$env:PYTHONPATH" } else { "" })
+          foreach ($test in @(
+            'runtime_engine\tests\test_research_workbench.py',
+            'runtime_engine\tests\test_research_workbench_claim_shadow.py',
+            'lanes\dev1\repair_overlay\tests\test_research_workbench_ui.py',
+            'lanes\dev1\repair_overlay\tests\test_research_workspace.py',
+            'lanes\dev1\repair_overlay\tests\test_research_persistence_collision_regression.py',
+            'lanes\dev1\repair_overlay\tests\test_research_workspace_persistence_restart.py'
+          )) {
+            python $test
+            if ($LASTEXITCODE -ne 0) { throw "$test failed with exit code $LASTEXITCODE" }
+          }
+          node --check lanes\dev1\repair_overlay\frontend\research-workbench.js
+          if ($LASTEXITCODE -ne 0) { throw "Research Workbench overlay JS syntax failed with exit code $LASTEXITCODE" }
+          node --check r06_platform\frontend\research-workbench.js
+          if ($LASTEXITCODE -ne 0) { throw "Research Workbench composed JS syntax failed with exit code $LASTEXITCODE" }
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { throw "Diff hygiene failed with exit code $LASTEXITCODE" }

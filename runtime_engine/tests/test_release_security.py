@@ -24,6 +24,13 @@ class ReleaseSecurityTests(unittest.TestCase):
         findings = scan_text(private_key_header + "\nabc\n", "key.pem")
         self.assertEqual([finding.rule for finding in findings], ["PRIVATE_KEY"])
 
+    def test_armored_private_key_header_variants_are_flagged(self):
+        for label in ("ENCRYPTED PRIVATE KEY", "DSA PRIVATE KEY", "PGP PRIVATE KEY BLOCK"):
+            with self.subTest(label=label):
+                private_key_header = "-----BEGIN " + label + "-----"
+                findings = scan_text(private_key_header + "\nabc\n", "key.pem")
+                self.assertEqual([finding.rule for finding in findings], ["PRIVATE_KEY"])
+
     def test_private_key_container_files_are_tree_scanned_and_blocking(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

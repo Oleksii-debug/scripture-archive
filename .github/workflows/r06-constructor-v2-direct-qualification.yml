@@ -36,7 +36,7 @@ jobs:
     timeout-minutes: 15
     env:
       EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-      PYTHONPATH: "${{ github.workspace }}/lanes/dev1/repair_overlay${{ matrix.pathsep }}${{ github.workspace }}"
+      PYTHONPATH: "${{ github.workspace }}/r06_platform${{ matrix.pathsep }}${{ github.workspace }}"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -50,25 +50,50 @@ jobs:
       - name: Confirm exact source checkout
         shell: bash
         run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
-      - name: Compile Constructor V2 direct-overlay surface
+      - name: Reconstruct exact-head DEV1 test substrate and apply overlay
+        shell: bash
+        run: |
+          python - <<'PY'
+          import base64, hashlib, shutil, zipfile
+          from pathlib import Path
+
+          parts = sorted(Path('lanes/dev1/source_parts').glob('part-*.b64'))
+          if not parts:
+              raise SystemExit('missing DEV1 source parts')
+          encoded = ''.join(path.read_text(encoding='ascii') for path in parts)
+          archive_bytes = base64.b64decode(encoded)
+          archive = Path('DEV1_R06_PLATFORM_SOURCE_TEST_SUBSTRATE.zip')
+          archive.write_bytes(archive_bytes)
+          print('exact-head test-substrate sha256=', hashlib.sha256(archive_bytes).hexdigest())
+          with zipfile.ZipFile(archive) as zf:
+              bad = zf.testzip()
+              if bad:
+                  raise SystemExit(f'corrupt DEV1 test substrate member: {bad}')
+              zf.extractall('.')
+          root = Path('r06_platform')
+          if not (root / 'scripture_archive_platform' / 'persistence' / 'store.py').is_file():
+              raise SystemExit('DEV1 test substrate missing persistence/store.py')
+          shutil.copytree('lanes/dev1/repair_overlay', root, dirs_exist_ok=True)
+          PY
+      - name: Compile composed Constructor V2 surface
         run: >-
           python -m compileall -q
-          lanes/dev1/repair_overlay/scripture_archive_platform/authoring
-          lanes/dev1/repair_overlay/scripture_archive_platform/application/service.py
-          lanes/dev1/repair_overlay/scripture_archive_platform/transport/contracts.py
-          lanes/dev1/repair_overlay/tests/test_constructor_v2_lifecycle.py
-          lanes/dev1/repair_overlay/tests/test_constructor_v2_recovery_atomicity.py
-          lanes/dev1/repair_overlay/tests/test_authoring_transport.py
+          r06_platform/scripture_archive_platform/authoring
+          r06_platform/scripture_archive_platform/application/service.py
+          r06_platform/scripture_archive_platform/transport/contracts.py
+          r06_platform/tests/test_constructor_v2_lifecycle.py
+          r06_platform/tests/test_constructor_v2_recovery_atomicity.py
+          r06_platform/tests/test_authoring_transport.py
       - name: Run Constructor V2 lifecycle regression
-        run: python lanes/dev1/repair_overlay/tests/test_constructor_v2_lifecycle.py
+        run: python r06_platform/tests/test_constructor_v2_lifecycle.py
       - name: Run Constructor V2 crash-recovery regression
-        run: python lanes/dev1/repair_overlay/tests/test_constructor_v2_recovery_atomicity.py
+        run: python r06_platform/tests/test_constructor_v2_recovery_atomicity.py
       - name: Run Constructor V2 allowlist and source-isolation regression
-        run: python lanes/dev1/repair_overlay/tests/test_authoring_transport.py
+        run: python r06_platform/tests/test_authoring_transport.py
       - name: Run Constructor V2 semantic frontend regression
-        run: python lanes/dev1/repair_overlay/tests/test_constructor_v2_frontend.py
+        run: python r06_platform/tests/test_constructor_v2_frontend.py
       - name: Verify Constructor V2 frontend module syntax
-        run: node --check lanes/dev1/repair_overlay/frontend/constructor-v2-ui.js
+        run: node --check r06_platform/frontend/constructor-v2-ui.js
       - name: Diff hygiene
         shell: bash
         run: git diff --check

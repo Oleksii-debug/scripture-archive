@@ -84,11 +84,10 @@ def validate_request_shape(request:Any)->tuple[str,str,dict[str,Any]]:
     if cmd=='speech.status' and payload:
         raise ValueError('speech.status accepts an empty payload')
     if cmd=='speech.synthesize_prompt':
-        allowed={'node_id','provider_id','voice_id','speed','allow_network'}
+        allowed={'provider_id','voice_id','speed','allow_network'}
         unknown=set(payload)-allowed
         if unknown:
-            raise ValueError('speech.synthesize_prompt accepts canonical node context and presentation preferences only')
-        _validate_short_string(payload,'node_id',max_length=100)
+            raise ValueError('speech.synthesize_prompt accepts presentation preferences only')
         _validate_short_string(payload,'provider_id',max_length=100)
         _validate_short_string(payload,'voice_id',max_length=256)
         if type(payload.get('allow_network')) is not bool:

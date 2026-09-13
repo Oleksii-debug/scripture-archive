@@ -124,6 +124,24 @@ class ConstructorV2RecoveryAtomicityTests(unittest.TestCase):
         redone = restarted.redo(second["draft_id"])
         self.assertEqual("Version two", redone["campaign"]["title_ua"])
 
+    def test_redo_recovers_consumed_history_and_draft_as_one_revision(self):
+        first = self._campaign("Version one")
+        first["campaign"]["title_ua"] = "Version two"
+        second = self.service.save_draft(first)
+        undone = self.service.undo(second["draft_id"])
+        self.assertEqual("Version one", undone["campaign"]["title_ua"])
+
+        crashing = FailAfterWriteStore(self.base_store)
+        crashing.arm("authoring_history")
+        self.service.store = crashing
+        with self.assertRaises(SimulatedCrash):
+            self.service.redo(second["draft_id"])
+
+        restarted = self._restart()
+        recovered = self._assert_recovered(restarted, second["draft_id"])
+        self.assertEqual("Version two", recovered["campaign"]["title_ua"])
+        self.assertTrue(restarted.history(second["draft_id"])["can_undo"])
+
     def test_snapshot_restore_recovers_after_safety_snapshot_write(self):
         original = self._campaign("Before snapshot")
         snapshot = self.service.create_snapshot(original["draft_id"], "Known good")
@@ -166,6 +184,118 @@ class ConstructorV2RecoveryAtomicityTests(unittest.TestCase):
         self.assertNotIn("canonical_mutation_performed", recovered)
         labels = {row["label"] for row in restarted.list_snapshots(later["draft_id"])}
         self.assertIn("Automatic safety snapshot before version rollback", labels)
+
+    def test_all_state_mutations_replay_from_every_durable_write_boundary(self):
+        """Exercise intent/component/draft crash boundaries for every V2 mutation.
+
+        The earlier independent QA finding required restart recovery at every
+        inter-write boundary, including redo.  Each subcase gets an isolated
+        store so a pending transaction from one simulated process death cannot
+        contaminate another scenario.
+        """
+
+        cases = {
+            "save": ("authoring_transactions", "authoring_history", "drafts"),
+            "undo": ("authoring_transactions", "authoring_history", "drafts"),
+            "redo": ("authoring_transactions", "authoring_history", "drafts"),
+            "restore_snapshot": (
+                "authoring_transactions",
+                "authoring_history",
+                "authoring_snapshots",
+                "drafts",
+            ),
+            "rollback_version": (
+                "authoring_transactions",
+                "authoring_history",
+                "authoring_snapshots",
+                "drafts",
+            ),
+        }
+
+        for operation, fail_categories in cases.items():
+            for fail_category in fail_categories:
+                with self.subTest(operation=operation, fail_category=fail_category):
+                    with tempfile.TemporaryDirectory() as directory:
+                        root = Path(directory)
+                        ids = itertools.count(1)
+                        base_store = JsonFileStore(root)
+
+                        def make_service(store):
+                            return RecoverableAuthoringService(
+                                store,
+                                self.registry,
+                                TaskPresentationMapper(),
+                                clock=lambda: 1700000000,
+                                id_factory=lambda: f"{next(ids):012d}",
+                            )
+
+                        service = make_service(base_store)
+
+                        def campaign(title):
+                            draft = service.new_draft("Campaign draft", "campaign")
+                            draft["campaign"].update({
+                                "campaign_id": "ZZ-CAMPAIGN",
+                                "title_ua": title,
+                                "scope": "Bounded fixture scope",
+                                "player_promise": "Fixture promise",
+                                "estimated_total_time": "5 min",
+                                "completion_reward_type": "none",
+                                "editorial_status": "DRAFT",
+                                "source_audit_status": "NOT_AUDITED",
+                            })
+                            return service.save_draft(draft)
+
+                        if operation == "save":
+                            current = campaign("Version one")
+                            current["campaign"]["title_ua"] = "Version two"
+                            draft_id = current["draft_id"]
+                            expected_title = "Version two"
+                            invoke = lambda: service.save_draft(current)
+                        elif operation == "undo":
+                            current = campaign("Version one")
+                            current["campaign"]["title_ua"] = "Version two"
+                            current = service.save_draft(current)
+                            draft_id = current["draft_id"]
+                            expected_title = "Version one"
+                            invoke = lambda: service.undo(draft_id)
+                        elif operation == "redo":
+                            current = campaign("Version one")
+                            current["campaign"]["title_ua"] = "Version two"
+                            current = service.save_draft(current)
+                            draft_id = current["draft_id"]
+                            service.undo(draft_id)
+                            expected_title = "Version two"
+                            invoke = lambda: service.redo(draft_id)
+                        elif operation == "restore_snapshot":
+                            current = campaign("Before snapshot")
+                            snapshot = service.create_snapshot(current["draft_id"], "Known good")
+                            current["campaign"]["title_ua"] = "After snapshot"
+                            current = service.save_draft(current)
+                            draft_id = current["draft_id"]
+                            expected_title = "Before snapshot"
+                            invoke = lambda: service.restore_snapshot(draft_id, snapshot["snapshot_id"])
+                        else:
+                            current = campaign("Publishable")
+                            version = service.publish_version(
+                                current["draft_id"],
+                                service.pack_compatibility(),
+                            )
+                            current["campaign"]["title_ua"] = "Later edit"
+                            current = service.save_draft(current)
+                            draft_id = current["draft_id"]
+                            expected_title = "Publishable"
+                            invoke = lambda: service.rollback_version(draft_id, version["version_id"])
+
+                        crashing = FailAfterWriteStore(base_store)
+                        crashing.arm(fail_category)
+                        service.store = crashing
+                        with self.assertRaises(SimulatedCrash):
+                            invoke()
+
+                        restarted = make_service(JsonFileStore(root))
+                        self.assertEqual([], restarted.store.list_keys(TRANSACTION_CATEGORY))
+                        recovered = restarted.load_draft(draft_id)
+                        self.assertEqual(expected_title, recovered["campaign"]["title_ua"])
 
 
 if __name__ == "__main__":

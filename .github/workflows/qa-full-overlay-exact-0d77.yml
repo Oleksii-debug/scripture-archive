@@ -1,0 +1,51 @@
+name: QA Full Overlay Exact Package 0d77
+
+on:
+  push:
+    branches:
+      - qa-full-overlay-0d77-0913-sol
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  full-overlay:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      EXPECTED_PACKAGE: 0d77bb7dd202409b98da71952bd346ad7e01c1ab
+      HELPER_PATH: .github/workflows/qa-full-overlay-exact-0d77.yml
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Assert immutable package parent and helper-only containment
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PACKAGE"
+          test "$(git diff --name-only "$EXPECTED_PACKAGE" HEAD | wc -l | tr -d ' ')" = "1"
+          test "$(git diff --name-only "$EXPECTED_PACKAGE" HEAD)" = "$HELPER_PATH"
+      - name: Run complete overlay Python regression corpus
+        run: >-
+          python -c "import sys,unittest; sys.path[:0]=['lanes/dev1/repair_overlay','runtime_engine']; suite=unittest.defaultTestLoader.discover('lanes/dev1/repair_overlay/tests', pattern='test_*.py'); result=unittest.TextTestRunner(verbosity=2).run(suite); raise SystemExit(0 if result.wasSuccessful() else 1)"
+      - name: Compile overlay Python
+        if: always()
+        run: python -m compileall -q lanes/dev1/repair_overlay
+      - name: Check frontend JavaScript syntax
+        if: always()
+        run: >-
+          python -c "import pathlib,subprocess; files=sorted(pathlib.Path('lanes/dev1/repair_overlay/frontend').rglob('*.js')); print('JS files:', len(files)); [subprocess.run(['node','--check',str(f)],check=True) for f in files]"
+      - name: Diff hygiene
+        if: always()
+        shell: bash
+        run: git diff --check "$EXPECTED_PACKAGE" HEAD

@@ -1,0 +1,105 @@
+name: R06 Current Package Evidence Witness Qualification
+
+on:
+  push:
+    branches:
+      - r06-qa-current-package-evidence-witness-0913-sol
+
+permissions:
+  contents: read
+
+jobs:
+  evidence-witness:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      EXPECTED_PACKAGE: fa836d79fcfd9ac5d8aacbf6a6be9f5a10183012
+      WORKFLOW_PATH: .github/workflows/r06-current-package-evidence-witness-qualification.yml
+    steps:
+      - name: Checkout exact helper head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Verify exact package parent and helper-only diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PACKAGE"
+          actual="$(git diff --name-only HEAD^ HEAD | tr -d '\r')"
+          test "$actual" = "$WORKFLOW_PATH"
+          product_changed="$(git diff --name-only "$EXPECTED_PACKAGE" HEAD | grep -v -F "$WORKFLOW_PATH" || true)"
+          test -z "$product_changed"
+          git diff --check HEAD^
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Packaged Evidence Graph
+        id: packaged_evidence
+        continue-on-error: true
+        shell: bash
+        working-directory: lanes/dev1/repair_overlay
+        run: python -m unittest discover -s tests -p 'test_packaged_evidence_graph.py' -v
+
+      - name: Packaged Witness Matrix
+        id: packaged_witness
+        continue-on-error: true
+        shell: bash
+        working-directory: lanes/dev1/repair_overlay
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s tests -p 'test_packaged_witness_matrix_contract.py' -v
+          python -m unittest discover -s tests -p 'test_packaged_witness_matrix_lifecycle.py' -v
+
+      - name: Runtime Evidence safety and provenance
+        id: runtime_evidence
+        continue-on-error: true
+        shell: bash
+        working-directory: runtime_engine
+        run: python -m unittest discover -s tests -p 'test_evidence*.py' -v
+
+      - name: Runtime Witness Matrix safety and provenance
+        id: runtime_witness
+        continue-on-error: true
+        shell: bash
+        working-directory: runtime_engine
+        run: python -m unittest discover -s tests -p 'test_witness*.py' -v
+
+      - name: Relevant frontend JavaScript syntax
+        id: syntax
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check lanes/dev1/repair_overlay/frontend/evidence-graph-ui.js
+          node --check lanes/dev1/repair_overlay/frontend/witness-matrix-ui.js
+          node --check lanes/dev1/repair_overlay/frontend/app.js
+
+      - name: Enforce complete qualification gate
+        if: always()
+        shell: bash
+        env:
+          PACKAGED_EVIDENCE: ${{ steps.packaged_evidence.outcome }}
+          PACKAGED_WITNESS: ${{ steps.packaged_witness.outcome }}
+          RUNTIME_EVIDENCE: ${{ steps.runtime_evidence.outcome }}
+          RUNTIME_WITNESS: ${{ steps.runtime_witness.outcome }}
+          SYNTAX: ${{ steps.syntax.outcome }}
+        run: |
+          set -euo pipefail
+          printf 'packaged_evidence=%s packaged_witness=%s runtime_evidence=%s runtime_witness=%s syntax=%s\n' "$PACKAGED_EVIDENCE" "$PACKAGED_WITNESS" "$RUNTIME_EVIDENCE" "$RUNTIME_WITNESS" "$SYNTAX"
+          test "$PACKAGED_EVIDENCE" = success
+          test "$PACKAGED_WITNESS" = success
+          test "$RUNTIME_EVIDENCE" = success
+          test "$RUNTIME_WITNESS" = success
+          test "$SYNTAX" = success

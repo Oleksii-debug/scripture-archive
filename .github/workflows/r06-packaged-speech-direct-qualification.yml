@@ -1,0 +1,113 @@
+name: R06 Packaged Speech Direct Qualification
+
+on:
+  pull_request:
+    paths:
+      - 'runtime_engine/scripture_archive_runtime/speech.py'
+      - 'lanes/dev1/repair_overlay/frontend/speech-ui.js'
+      - 'lanes/dev1/repair_overlay/frontend/transport.js'
+      - 'lanes/dev1/repair_overlay/run_web_mock.py'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/application/speech_application.py'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/desktop_host/main.py'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/transport/contracts.py'
+      - 'lanes/dev1/repair_overlay/tests/test_packaged_speech.py'
+      - '.github/workflows/r06-packaged-speech-direct-qualification.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: r06-packaged-speech-direct-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  packaged-speech-direct-overlay:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            pathsep: ':'
+          - os: windows-latest
+            pathsep: ';'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      PYTHONPATH: "${{ github.workspace }}/r06_platform${{ matrix.pathsep }}${{ github.workspace }}"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Confirm exact source checkout
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - name: Reconstruct verified speech dependency substrate and apply overlay
+        shell: bash
+        run: |
+          python - <<'PY'
+          import base64, shutil, zipfile
+          from pathlib import Path, PurePosixPath
+
+          parts = sorted(Path('lanes/dev1/source_parts').glob('part-*.b64'))
+          if not parts:
+              raise SystemExit('missing DEV1 source parts')
+          archive_bytes = base64.b64decode(''.join(path.read_text(encoding='ascii') for path in parts))
+          archive = Path('DEV1_R06_PLATFORM_SOURCE_SPEECH_SUBSTRATE.zip')
+          archive.write_bytes(archive_bytes)
+
+          # Whole-archive release fidelity remains owned by #146. This bounded
+          # gate CRC-verifies only the Python platform dependency subtree and
+          # canonical test fixture required to execute speech composition tests.
+          platform_prefix = PurePosixPath('r06_platform/scripture_archive_platform')
+          exact_dependencies = {PurePosixPath('r06_platform/tests/_fixture.py')}
+          extracted = 0
+          with zipfile.ZipFile(archive) as zf:
+              for info in zf.infolist():
+                  member = PurePosixPath(info.filename)
+                  wanted = member == platform_prefix or platform_prefix in member.parents or member in exact_dependencies
+                  if not wanted:
+                      continue
+                  try:
+                      zf.extract(info, '.')
+                  except (zipfile.BadZipFile, OSError) as exc:
+                      raise SystemExit(f'corrupt speech dependency member {info.filename}: {exc}') from exc
+                  extracted += 1
+          if extracted == 0:
+              raise SystemExit('DEV1 source parts contain no speech dependency subtree')
+
+          root = Path('r06_platform')
+          required = [
+              root / 'scripture_archive_platform' / 'persistence' / 'store.py',
+              root / 'scripture_archive_platform' / 'content' / 'loader.py',
+              root / 'scripture_archive_platform' / 'application' / 'service.py',
+              root / 'tests' / '_fixture.py',
+          ]
+          missing = [str(path) for path in required if not path.is_file()]
+          if missing:
+              raise SystemExit('speech dependency substrate missing: ' + ', '.join(missing))
+          shutil.copytree('lanes/dev1/repair_overlay', root, dirs_exist_ok=True)
+          PY
+      - name: Compile packaged speech composition
+        run: >-
+          python -m compileall -q
+          r06_platform/scripture_archive_platform/application/speech_application.py
+          r06_platform/scripture_archive_platform/transport/contracts.py
+          r06_platform/scripture_archive_platform/desktop_host/main.py
+          r06_platform/tests/test_packaged_speech.py
+      - name: Run packaged speech security and composition regression
+        run: python r06_platform/tests/test_packaged_speech.py
+      - name: Verify speech frontend module syntax
+        run: node --check r06_platform/frontend/speech-ui.js
+      - name: Verify transport frontend module syntax
+        run: node --check r06_platform/frontend/transport.js
+      - name: Diff hygiene
+        shell: bash
+        run: git diff --check

@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "r06_platform"))
-from scripture_archive_platform.application.witness_matrix_application import build_default_application
+from scripture_archive_platform.application.speech_application import build_default_application
 
 class Handler(SimpleHTTPRequestHandler):
     app = build_default_application(ROOT)
@@ -38,7 +38,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
-            self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'")
+            self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' data:; connect-src 'self'")
             self.send_header("Content-Length", str(len(data)))
             self.end_headers(); self.wfile.write(data)
         except Exception:

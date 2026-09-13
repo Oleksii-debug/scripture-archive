@@ -230,8 +230,9 @@ def verify_offline_bundle(
 
     Every public call revalidates the manifest, so directly constructing the frozen
     dataclasses cannot bypass path/hash/size/network-policy invariants. The root and every
-    path component must be non-symlink. Each dependency is checked before and after
-    streaming SHA-256 hashing so mutation during verification fails closed.
+    path component must be non-symlink. Each dependency path is identity-bound to the
+    actually opened descriptor before and after streaming SHA-256 so substitutions or
+    mutation during verification fail closed.
     """
 
     manifest = _validated_manifest(manifest)
@@ -314,10 +315,30 @@ def _verify_dependency(root: Path, dependency: OfflineDependency) -> None:
     if before.st_size != dependency.size:
         raise OfflineReadinessError("dependency_size", "offline dependency size does not match manifest", path=dependency.path)
 
+    before_identity = (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
     digest = hashlib.sha256()
     total = 0
     try:
         with cursor.open("rb") as handle:
+            opened_before = os.fstat(handle.fileno())
+            if not stat.S_ISREG(opened_before.st_mode):
+                raise OfflineReadinessError(
+                    "dependency_changed",
+                    "opened offline dependency is not a regular file",
+                    path=dependency.path,
+                )
+            opened_before_identity = (
+                opened_before.st_dev,
+                opened_before.st_ino,
+                opened_before.st_size,
+                opened_before.st_mtime_ns,
+            )
+            if opened_before_identity != before_identity:
+                raise OfflineReadinessError(
+                    "dependency_changed",
+                    "opened dependency identity does not match verified path",
+                    path=dependency.path,
+                )
             while True:
                 chunk = handle.read(1024 * 1024)
                 if not chunk:
@@ -330,6 +351,19 @@ def _verify_dependency(root: Path, dependency: OfflineDependency) -> None:
                         path=dependency.path,
                     )
                 digest.update(chunk)
+            opened_after = os.fstat(handle.fileno())
+            opened_after_identity = (
+                opened_after.st_dev,
+                opened_after.st_ino,
+                opened_after.st_size,
+                opened_after.st_mtime_ns,
+            )
+            if opened_after_identity != opened_before_identity:
+                raise OfflineReadinessError(
+                    "dependency_changed",
+                    "opened dependency changed during verification",
+                    path=dependency.path,
+                )
         after = cursor.lstat()
     except OfflineReadinessError:
         raise
@@ -341,7 +375,6 @@ def _verify_dependency(root: Path, dependency: OfflineDependency) -> None:
         ) from exc
     if stat.S_ISLNK(after.st_mode) or not stat.S_ISREG(after.st_mode):
         raise OfflineReadinessError("dependency_changed", "offline dependency type changed during verification", path=dependency.path)
-    before_identity = (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
     after_identity = (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
     if before_identity != after_identity or total != dependency.size:
         raise OfflineReadinessError("dependency_changed", "offline dependency changed during verification", path=dependency.path)

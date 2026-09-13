@@ -1,0 +1,74 @@
+name: R06 Constructor V2 Direct Qualification
+
+on:
+  pull_request:
+    paths:
+      - 'lanes/dev1/repair_overlay/frontend/constructor-v2-ui.js'
+      - 'lanes/dev1/repair_overlay/frontend/transport.js'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/application/service.py'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/authoring/**'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/transport/contracts.py'
+      - 'lanes/dev1/repair_overlay/tests/test_authoring_transport.py'
+      - 'lanes/dev1/repair_overlay/tests/test_constructor_v2_frontend.py'
+      - 'lanes/dev1/repair_overlay/tests/test_constructor_v2_lifecycle.py'
+      - 'lanes/dev1/repair_overlay/tests/test_constructor_v2_recovery_atomicity.py'
+      - '.github/workflows/r06-constructor-v2-direct-qualification.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: r06-constructor-v2-direct-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  constructor-v2-direct-overlay:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            pathsep: ':'
+          - os: windows-latest
+            pathsep: ';'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      PYTHONPATH: "${{ github.workspace }}/lanes/dev1/repair_overlay${{ matrix.pathsep }}${{ github.workspace }}"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Confirm exact source checkout
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - name: Compile Constructor V2 direct-overlay surface
+        run: >-
+          python -m compileall -q
+          lanes/dev1/repair_overlay/scripture_archive_platform/authoring
+          lanes/dev1/repair_overlay/scripture_archive_platform/application/service.py
+          lanes/dev1/repair_overlay/scripture_archive_platform/transport/contracts.py
+          lanes/dev1/repair_overlay/tests/test_constructor_v2_lifecycle.py
+          lanes/dev1/repair_overlay/tests/test_constructor_v2_recovery_atomicity.py
+          lanes/dev1/repair_overlay/tests/test_authoring_transport.py
+      - name: Run Constructor V2 lifecycle regression
+        run: python lanes/dev1/repair_overlay/tests/test_constructor_v2_lifecycle.py
+      - name: Run Constructor V2 crash-recovery regression
+        run: python lanes/dev1/repair_overlay/tests/test_constructor_v2_recovery_atomicity.py
+      - name: Run Constructor V2 allowlist and source-isolation regression
+        run: python lanes/dev1/repair_overlay/tests/test_authoring_transport.py
+      - name: Run Constructor V2 semantic frontend regression
+        run: python lanes/dev1/repair_overlay/tests/test_constructor_v2_frontend.py
+      - name: Verify Constructor V2 frontend module syntax
+        run: node --check lanes/dev1/repair_overlay/frontend/constructor-v2-ui.js
+      - name: Diff hygiene
+        shell: bash
+        run: git diff --check

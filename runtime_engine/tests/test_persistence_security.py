@@ -1,8 +1,11 @@
 import json
 import tempfile
+import threading
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+import scripture_archive_runtime.persistence as persistence_module
 from scripture_archive_runtime.persistence import CURRENT_SCHEMA_VERSION, PersistenceStore
 from scripture_archive_runtime.security import ValidationError, validate_command_dto, validate_content_import
 
@@ -12,6 +15,53 @@ class PersistenceSecurityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             store=PersistenceStore(td); state=store.default_state(); state["profile"]={"name":"Олексій"}; store.save(state); state["profile"]={"name":"Олексій 2"}; store.save(state)
             self.assertTrue(store.backup_path.exists()); self.assertEqual(store.load()["profile"]["name"],"Олексій 2")
+
+    def test_concurrent_saves_use_independent_atomic_temp_files(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = PersistenceStore(td)
+            initial = store.default_state()
+            initial["profile"] = {"writer": "initial"}
+            store.save(initial)
+
+            barrier = threading.Barrier(2)
+            seen_temp_sources: list[Path] = []
+            errors: list[BaseException] = []
+            seen_lock = threading.Lock()
+            real_replace = persistence_module.os.replace
+
+            def synchronized_replace(source, destination):
+                source_path = Path(source)
+                destination_path = Path(destination)
+                if destination_path == store.state_path and source_path.name.startswith(".state."):
+                    with seen_lock:
+                        seen_temp_sources.append(source_path)
+                    barrier.wait(timeout=5)
+                return real_replace(source, destination)
+
+            def save_writer(writer: str) -> None:
+                state = store.default_state()
+                state["profile"] = {"writer": writer}
+                try:
+                    store.save(state)
+                except BaseException as exc:
+                    errors.append(exc)
+
+            with patch.object(persistence_module.os, "replace", side_effect=synchronized_replace):
+                threads = [
+                    threading.Thread(target=save_writer, args=("one",)),
+                    threading.Thread(target=save_writer, args=("two",)),
+                ]
+                for thread in threads:
+                    thread.start()
+                for thread in threads:
+                    thread.join(timeout=10)
+
+            self.assertTrue(all(not thread.is_alive() for thread in threads))
+            self.assertEqual(errors, [])
+            self.assertEqual(len(seen_temp_sources), 2)
+            self.assertEqual(len({path.name for path in seen_temp_sources}), 2)
+            self.assertIn(store.load()["profile"]["writer"], {"one", "two"})
+
     def test_migration_creates_pre_migration_backup(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td); (root/"state.json").write_text(json.dumps({"schema_version":2,"profile":{},"settings":{},"sessions":[],"history":{},"mastery":{},"review_queue":[],"constructor_drafts":{},"keymap":{},"evidence_exposure":{},"accessibility_state":{}}),encoding="utf-8")

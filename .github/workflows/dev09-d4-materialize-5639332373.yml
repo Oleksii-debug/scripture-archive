@@ -15,6 +15,7 @@ jobs:
     env:
       TRIGGER_HEAD: ${{ github.event.pull_request.head.sha }}
       MATERIALIZE_BRANCH: r06-dev09-materialize-5639332373
+      TRANSPORT_ZIP: /tmp/DEV4_FINALPREP_02_MATERIALIZATION_PAYLOAD.zip
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,38 +30,41 @@ jobs:
           test "$actual" = "$TRIGGER_HEAD"
           echo "D4_TRIGGER_HEAD_PIN_PASS $actual"
 
-      - name: Decode and verify exact staged FINALPREP authority
+      - name: Download and verify exact Drive FINALPREP authority
         shell: bash
         run: |
           set -euo pipefail
-          src='lanes/dev09/materialize_5639332373/transport_part_00.b64'
-          out='/tmp/DEV4_FINALPREP_02_MATERIALIZATION_PAYLOAD.zip'
-          test -f "$src"
-          base64 --decode "$src" > "$out"
+          url='https://drive.usercontent.google.com/download?id=188Pswz0qdGZJ5h4gyM8KPpQUfTGGr0y6&export=download&confirm=t'
+          curl --fail --location --retry 2 --connect-timeout 20 --max-time 90 "$url" -o "$TRANSPORT_ZIP"
           python - <<'PY'
-          import hashlib, pathlib, zipfile
-          p=pathlib.Path('/tmp/DEV4_FINALPREP_02_MATERIALIZATION_PAYLOAD.zip')
+          import hashlib, os, pathlib, zipfile
+          p=pathlib.Path(os.environ['TRANSPORT_ZIP'])
           raw=p.read_bytes()
           expected_size=286787
           expected_sha='e8b008c31462d7ed9388a7a84f73bb8666c8449181000751e9da45c2468779c9'
           got=hashlib.sha256(raw).hexdigest()
           print('transport_bytes',len(raw),'sha256',got)
           if len(raw)!=expected_size or got!=expected_sha:
-              raise SystemExit('exact staged transport byte gate failed')
+              raise SystemExit('exact Drive transport byte gate failed')
           with zipfile.ZipFile(p) as z:
               bad=z.testzip()
               if bad: raise SystemExit(f'ZIP CRC failure: {bad}')
-              print('D4_EXACT_STAGED_TRANSPORT_PASS entries=',len(z.infolist()))
+              print('D4_EXACT_DRIVE_TRANSPORT_PASS entries=',len(z.infolist()))
           PY
 
-      - name: Materialize with live #60-aware DEV09 implementation
+      - name: Materialize and prove node plus evidence fidelity
         shell: bash
         run: |
           set -euo pipefail
-          python -m py_compile tools/dev09_materialize_d4_readable.py tools/test_dev09_d4_provenance_scope.py
-          python tools/dev09_materialize_d4_readable.py --transport-zip /tmp/DEV4_FINALPREP_02_MATERIALIZATION_PAYLOAD.zip --chunk-size 30
-          python tools/test_dev09_d4_provenance_scope.py
+          python -m py_compile \
+            tools/dev09_materialize_d4_readable.py \
+            tools/dev09_d4_evidence_fidelity.py \
+            tools/test_dev09_d4_provenance_scope.py
+          python tools/dev09_materialize_d4_readable.py --transport-zip "$TRANSPORT_ZIP" --chunk-size 30
+          python tools/dev09_d4_evidence_fidelity.py --seal
+          DEV09_D4_TRANSPORT_ZIP="$TRANSPORT_ZIP" python tools/test_dev09_d4_provenance_scope.py
           python tools/dev09_materialize_d4_readable.py --verify-only --require-manifest
+          python tools/dev09_d4_evidence_fidelity.py --verify
 
       - name: Compare-and-swap remote parent, commit canonical outputs, self-remove temporary machinery
         shell: bash
@@ -97,7 +101,7 @@ jobs:
           git push origin "HEAD:refs/heads/$MATERIALIZE_BRANCH"
           echo "materialized_sha=$materialized_sha" >> "$GITHUB_ENV"
 
-      - name: Fetch back exact remote commit and verify again
+      - name: Fetch back exact remote commit and verify nodes plus evidence again
         shell: bash
         run: |
           set -euo pipefail
@@ -107,4 +111,5 @@ jobs:
           rm -rf /tmp/dev09-readback
           git worktree add --detach /tmp/dev09-readback "$remote_sha"
           python /tmp/dev09-readback/tools/dev09_materialize_d4_readable.py --root /tmp/dev09-readback --verify-only --require-manifest
+          python /tmp/dev09-readback/tools/dev09_d4_evidence_fidelity.py --root /tmp/dev09-readback --verify
           echo "D4_REMOTE_FETCHBACK_PASS $remote_sha"

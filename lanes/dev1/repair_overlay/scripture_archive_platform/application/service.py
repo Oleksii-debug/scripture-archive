@@ -8,6 +8,7 @@ from scripture_archive_platform.transport.contracts import validate_request_shap
 from scripture_archive_platform.transport.review_queue_contract import validate_review_queue_projection
 from scripture_archive_platform.content.loader import CanonicalContentLoader,TaskPresentationMapper,ContentLoadError
 from scripture_archive_platform.content.library import CanonicalLibraryIndex
+from scripture_archive_platform.content.scripture_text import BundledScriptureText
 from scripture_archive_platform.grading.reference import ReferenceGrader
 from scripture_archive_platform.persistence.store import JsonFileStore
 from scripture_archive_platform.application.keymap import KeybindingService
@@ -18,7 +19,7 @@ from scripture_archive_platform.authoring.recoverable import RecoverableAuthorin
 class PlatformApplication:
     def __init__(self,repo_root:Path,store=None,loader=None,grader=None,player_gateway=None):
         self.repo_root=Path(repo_root).resolve(); self.store=store or JsonFileStore(JsonFileStore.default_root())
-        self.loader=loader or CanonicalContentLoader(self.repo_root); self.library=CanonicalLibraryIndex(self.loader); self.mapper=TaskPresentationMapper(); self.grader=grader or ReferenceGrader(); self.player_gateway=player_gateway
+        self.loader=loader or CanonicalContentLoader(self.repo_root); self.library=CanonicalLibraryIndex(self.loader); self.scripture_text=BundledScriptureText(); self.mapper=TaskPresentationMapper(); self.grader=grader or ReferenceGrader(); self.player_gateway=player_gateway
         self.task_types,self.renderers,self.graders,self.editors,self.templates=build_task_registries()
         self.keymap=KeybindingService(self.store); self.research=ResearchWorkspaceService(self.store,self.loader,self.mapper); self.authoring=RecoverableAuthoringService(self.store,self.task_types,self.mapper); self.content_packs=ContentPackManagerService(self.store.root)
         self._hint_level:dict[str,int]={}; self._last_node:dict[str,dict[str,Any]]={}
@@ -33,8 +34,13 @@ class PlatformApplication:
         if cmd.startswith('content_packs.'):return self.content_packs.handle(cmd,p)
         if cmd=='content.list_campaigns':return {'campaigns':self.loader.list_campaigns()}
         if cmd=='content.list_missions':return {'missions':self.loader.list_missions(self._id(p,'campaign_id'))}
-        if cmd=='library.catalog':return self.library.catalog()
-        if cmd=='library.search':return self.library.search(p.get('query'),campaign_id=p.get('campaign_id'),mission_id=p.get('mission_id'),limit=p.get('limit',25))
+        if cmd=='library.catalog':
+            data=self.library.catalog();data.update(self.scripture_text.catalog_projection());return data
+        if cmd=='library.search':
+            data=self.library.search(p.get('query'),campaign_id=p.get('campaign_id'),mission_id=p.get('mission_id'),limit=p.get('limit',25));data['bundled_full_bible_text']=self.scripture_text.available;return data
+        if cmd=='library.text_catalog':return self.scripture_text.catalog()
+        if cmd=='library.read_chapter':return self.scripture_text.chapter(p.get('book'),p.get('chapter'))
+        if cmd=='library.text_search':return self.scripture_text.search(p.get('query'),limit=p.get('limit',50))
         if cmd=='research.list_bookmarks':return {'bookmarks':self.research.list_bookmarks(p.get('query'))}
         if cmd=='research.upsert_bookmark':return {'bookmark':self.research.upsert_bookmark(p.get('bookmark'))}
         if cmd=='research.delete_bookmark':return {'deleted':self.research.delete_bookmark(p.get('bookmark_id'))}
@@ -106,7 +112,7 @@ class PlatformApplication:
         raise ValueError('command not implemented')
     def _bootstrap(self):
         campaigns=self.loader.list_campaigns()
-        return {'app':{'name':'Архів Писання','version':'R06-3DEV-A','runtime':'Windows 11 x64 / WebView2 semantic UI','transport_api_version':TRANSPORT_API_VERSION},'registries':{'task_types':self.task_types.list(),'renderers':self.renderers.list(),'graders':self.graders.list(),'editors':self.editors.list(),'templates':self.templates.list()},'campaigns':campaigns,'keymap':self.keymap.list(),'capabilities':{'constructor':True,'draft_vs_canonical':True,'constructor_v2_history':True,'constructor_v2_snapshots':True,'constructor_v2_undo_redo':True,'constructor_v2_versioned_publish_rollback':True,'constructor_v2_pack_compatibility':True,'constructor_canonical_write':False,'web_portable_transport':True,'allowlisted_bridge':True,'library_catalog_search':True,'bundled_full_bible_text':False,'research_bookmarks_notes':True,'research_workspace_persistence':True,'evidence_graph':bool(self.player_gateway),'chronology_lab':bool(self.player_gateway),'research_export':bool(self.player_gateway),'arbitrary_filesystem':False,'content_pack_manager':True,'content_pack_inbox_only':True,'shell':False,'python_eval':False,'runtime_truth':bool(self.player_gateway),'review_queue':bool(self.player_gateway),'review_training':bool(self.player_gateway),'grading_truth':'D5/runtime' if self.player_gateway else 'REFERENCE_TEST_ONLY'}}
+        return {'app':{'name':'Архів Писання','version':'R06-3DEV-A','runtime':'Windows 11 x64 / WebView2 semantic UI','transport_api_version':TRANSPORT_API_VERSION},'registries':{'task_types':self.task_types.list(),'renderers':self.renderers.list(),'graders':self.graders.list(),'editors':self.editors.list(),'templates':self.templates.list()},'campaigns':campaigns,'keymap':self.keymap.list(),'capabilities':{'constructor':True,'draft_vs_canonical':True,'constructor_v2_history':True,'constructor_v2_snapshots':True,'constructor_v2_undo_redo':True,'constructor_v2_versioned_publish_rollback':True,'constructor_v2_pack_compatibility':True,'constructor_canonical_write':False,'web_portable_transport':True,'allowlisted_bridge':True,'library_catalog_search':True,'bundled_full_bible_text':self.scripture_text.available,'research_bookmarks_notes':True,'research_workspace_persistence':True,'evidence_graph':bool(self.player_gateway),'chronology_lab':bool(self.player_gateway),'research_export':bool(self.player_gateway),'arbitrary_filesystem':False,'content_pack_manager':True,'content_pack_inbox_only':True,'shell':False,'python_eval':False,'runtime_truth':bool(self.player_gateway),'review_queue':bool(self.player_gateway),'review_training':bool(self.player_gateway),'grading_truth':'D5/runtime' if self.player_gateway else 'REFERENCE_TEST_ONLY'}}
     def _load_node(self,nid):
         if self.player_gateway:self.player_gateway.invoke('player.load_node',{'node_id':nid},request_id='load-'+nid)
         node=self.loader.load_node(nid); mission=self.loader.mission_for_node(nid); renderable=self.mapper.to_renderable(node,mission); self._last_node[nid]=node

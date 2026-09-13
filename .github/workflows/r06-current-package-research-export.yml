@@ -1,0 +1,66 @@
+name: R06 Current Package Research Export
+
+on:
+  push:
+    branches:
+      - r06-qa-current-package-research-export-0913-sol
+    paths:
+      - '.github/workflows/r06-current-package-research-export.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  research-export:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: runtime_engine
+      PACKAGE_SHA: fa836d79fcfd9ac5d8aacbf6a6be9f5a10183012
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fa836d79fcfd9ac5d8aacbf6a6be9f5a10183012
+          fetch-depth: 0
+
+      - name: Bind exact canonical package
+        shell: pwsh
+        run: |
+          $actual = (git rev-parse HEAD).Trim()
+          if ($actual -ne $env:PACKAGE_SHA) { throw "Expected package $env:PACKAGE_SHA, got $actual" }
+          Write-Host "RESEARCH_EXPORT_PACKAGE_BIND_PASS $actual"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run backend export source-safety and rendering tests
+        shell: pwsh
+        run: |
+          python -m unittest discover -s runtime_engine/tests -p 'test_research_export*.py' -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run packaged current-shell export bridge/UI tests
+        shell: pwsh
+        run: |
+          python -m unittest discover -s lanes/dev1/repair_overlay/tests -p 'test_research_export_current_shell.py' -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify canonical export surface remains present
+        shell: pwsh
+        run: |
+          $required = @(
+            'runtime_engine/scripture_archive_runtime/research_export.py',
+            'lanes/dev1/repair_overlay/frontend/research-export.js',
+            'lanes/dev1/repair_overlay/scripture_archive_platform/transport/contracts.py',
+            'lanes/dev1/repair_overlay/scripture_archive_platform/application/runtime_gateway.py'
+          )
+          foreach ($path in $required) {
+            if (-not (Test-Path $path -PathType Leaf)) { throw "Missing packaged export surface: $path" }
+          }
+          Write-Host 'RESEARCH_EXPORT_SURFACE_PASS'

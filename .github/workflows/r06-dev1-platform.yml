@@ -49,15 +49,21 @@ jobs:
           python lanes/dev1/verify_source_archive.py DEV1_R06_PLATFORM_SOURCE.zip "$DEV01_BASE_SOURCE_SHA256"
           python -m zipfile -e DEV1_R06_PLATFORM_SOURCE.zip .
           test -d r06_platform || { echo "Verified archive did not extract required r06_platform directory"; exit 1; }
-      - name: Apply readable pre-integration repair overlay
-        shell: bash
-        run: cp -R lanes/dev1/repair_overlay/. r06_platform/
-      - name: Compile and test repaired source
+      - name: Qualify immutable FINALPREP02 baseline before overlay
         shell: bash
         run: |
           export PYTHONPATH="$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/r06_platform${PYTHONPATH:+:$PYTHONPATH}"
-          python -m compileall -q r06_platform/scripture_archive_platform r06_platform/tests r06_platform/packaging runtime_engine
-          python -m unittest discover -s r06_platform/tests -v
+          python -m compileall -q r06_platform/scripture_archive_platform r06_platform/tests r06_platform/packaging
+          (cd r06_platform && python -m unittest discover -s tests -v)
+      - name: Apply readable pre-integration repair overlay
+        shell: bash
+        run: cp -R lanes/dev1/repair_overlay/. r06_platform/
+      - name: Compile and test composed repaired source
+        shell: bash
+        run: |
+          export PYTHONPATH="$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/r06_platform${PYTHONPATH:+:$PYTHONPATH}"
+          python -m compileall -q r06_platform/scripture_archive_platform r06_platform/packaging lanes/dev1/repair_overlay/tests runtime_engine
+          python -m unittest discover -s lanes/dev1/repair_overlay/tests -v
           node --check r06_platform/frontend/renderers.js
           python r06_platform/tools_smoke.py
           python r06_platform/packaging/windows_release.py diagnose \
@@ -102,6 +108,17 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "DEV1 source archive verification failed with exit code $LASTEXITCODE" }
           Expand-Archive DEV1_R06_PLATFORM_SOURCE.zip -DestinationPath . -Force
           if (-not (Test-Path r06_platform -PathType Container)) { throw 'Verified archive did not extract required r06_platform directory' }
+      - name: Qualify immutable FINALPREP02 baseline before overlay
+        shell: pwsh
+        run: |
+          $env:PYTHONPATH = "$env:GITHUB_WORKSPACE;$env:GITHUB_WORKSPACE\r06_platform" + $(if ($env:PYTHONPATH) { ";$env:PYTHONPATH" } else { "" })
+          python -m compileall -q r06_platform\scripture_archive_platform r06_platform\tests r06_platform\packaging
+          Push-Location r06_platform
+          try {
+            python -m unittest discover -s tests -v
+            if ($LASTEXITCODE -ne 0) { throw "FINALPREP02 baseline unit tests failed with exit code $LASTEXITCODE" }
+          }
+          finally { Pop-Location }
       - name: Apply readable pre-integration repair overlay
         shell: pwsh
         run: Copy-Item -Path lanes\dev1\repair_overlay\* -Destination r06_platform -Recurse -Force

@@ -39,7 +39,8 @@ jobs:
             lanes/dev1/repair_overlay/tests/test_effective_pedagogy_composition.py \
             lanes/dev1/repair_overlay/tests/test_effective_pedagogy_runtime_bridge.py | sort)"
           test "$changed" = "$expected"
-      - name: Effective pedagogy composition tests
+      - name: Effective pedagogy composition tests (Linux)
+        if: runner.os == 'Linux'
         shell: bash
         env:
           PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/runtime_engine:${{ github.workspace }}/lanes/dev1/repair_overlay

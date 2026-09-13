@@ -61,7 +61,10 @@ class ResearchPersistenceUiTests(unittest.TestCase):
         for forbidden in ('innerHTML','outerHTML','insertAdjacentHTML','localStorage','sessionStorage','eval(','new Function'):
             self.assertNotIn(forbidden,self.ui)
         self.assertIn("status.setAttribute('role','status')",self.ui)
-        self.assertIn("label.htmlFor",self.ui)
+        label_vars=set(re.findall(r"\b([A-Za-z_$][\w$]*)\s*=\s*text\('label'",self.ui))
+        bound_vars=set(re.findall(r"\b([A-Za-z_$][\w$]*)\.htmlFor\s*=\s*[A-Za-z_$][\w$]*\.id\b",self.ui))
+        self.assertGreaterEqual(len(label_vars),4)
+        self.assertTrue(label_vars.issubset(bound_vars),f"labels missing htmlFor bindings: {sorted(label_vars-bound_vars)}")
 
     def test_session_pins_remain_separate(self):
         self.assertIn('this.pinned=new Set()',self.workbench)

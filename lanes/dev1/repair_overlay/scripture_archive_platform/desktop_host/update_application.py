@@ -134,20 +134,24 @@ class NativeApplicationUpdateLayer:
                 artifact_path,
                 current_version=self._current_version,
             )
-            authenticity = "not_proven_by_local_hash_verification"
+
+            authenticity_verified = False
             try:
-                if self._authenticity_verifier(artifact_path):
-                    # Re-run exact byte verification after the OS signature check so
-                    # a path mutation during Authenticode inspection cannot make the
-                    # returned integrity result refer only to the earlier path state.
-                    verified = verify_local_update(
-                        manifest,
-                        artifact_path,
-                        current_version=self._current_version,
-                    )
-                    authenticity = "same_publisher_authenticode_verified"
+                authenticity_verified = bool(self._authenticity_verifier(artifact_path))
             except Exception:
-                authenticity = "not_proven_by_local_hash_verification"
+                authenticity_verified = False
+            authenticity = "not_proven_by_local_hash_verification"
+            if authenticity_verified:
+                # Bind the positive signature result to bytes that still satisfy the
+                # exact manifest after OS signature inspection. Failure here aborts
+                # the whole request rather than returning stale `verified=true`.
+                verified = verify_local_update(
+                    manifest,
+                    artifact_path,
+                    current_version=self._current_version,
+                )
+                authenticity = "same_publisher_authenticode_verified"
+
             return ok_response(
                 rid,
                 {

@@ -1,0 +1,54 @@
+name: R06 Current Package Command System Qualification
+
+on:
+  push:
+    branches:
+      - qa-current-package-command-system-0913-sol
+    paths:
+      - .github/workflows/r06-current-package-command-system-qualification.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  command-system:
+    name: command-system (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout exact canonical package
+        uses: actions/checkout@v4
+        with:
+          ref: fa836d79fcfd9ac5d8aacbf6a6be9f5a10183012
+          persist-credentials: false
+
+      - name: Verify immutable package bind
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "fa836d79fcfd9ac5d8aacbf6a6be9f5a10183012"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run packaged command-system regression
+        shell: bash
+        run: |
+          python lanes/dev1/repair_overlay/tests/test_command_system_ui.py
+
+      - name: Syntax-check packaged command-system modules
+        shell: bash
+        run: |
+          node --check lanes/dev1/repair_overlay/frontend/action-registry.js
+          node --check lanes/dev1/repair_overlay/frontend/command-palette.js
+          node --check lanes/dev1/repair_overlay/frontend/app.js

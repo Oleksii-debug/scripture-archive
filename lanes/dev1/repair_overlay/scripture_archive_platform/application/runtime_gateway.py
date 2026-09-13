@@ -133,6 +133,15 @@ class RuntimeBackedPlayerGateway:
                 "truth_owner": "D5/runtime",
             }
 
+    def get_cross_testament(self) -> dict[str, Any]:
+        """Project explicit source-backed OT↔NT links from canonical unlocked evidence."""
+        if self._runtime_application is None:
+            raise RuntimeGatewayError("Cross-Testament requires the canonical runtime application")
+        from scripture_archive_platform.application.cross_testament_projection import project_packaged_cross_testament
+
+        with self._runtime_lock:
+            return project_packaged_cross_testament(self._runtime_application.evidence)
+
     def get_evidence_graph(self) -> dict[str, Any]:
         """Derive the packaged graph from the canonical in-process evidence runtime.
 

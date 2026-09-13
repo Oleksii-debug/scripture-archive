@@ -1,0 +1,76 @@
+name: R06 Current Package Diagnostics Qualification
+
+on:
+  push:
+    branches:
+      - r06-qa-current-package-diagnostics-0913-sol
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostics:
+    name: diagnostics (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      EXPECTED_PACKAGE_SHA: fa836d79fcfd9ac5d8aacbf6a6be9f5a10183012
+      HELPER_WORKFLOW: .github/workflows/r06-current-package-diagnostics.yml
+    steps:
+      - name: Checkout helper evidence commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify immutable package ancestry and workflow-only delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "${EXPECTED_PACKAGE_SHA}^{commit}"
+          test "$(git merge-base "${EXPECTED_PACKAGE_SHA}" HEAD)" = "${EXPECTED_PACKAGE_SHA}"
+          mapfile -t changed < <(git diff --name-only "${EXPECTED_PACKAGE_SHA}"..HEAD)
+          printf 'helper delta:\n%s\n' "${changed[*]}"
+          test "${#changed[@]}" -eq 1
+          test "${changed[0]}" = "${HELPER_WORKFLOW}"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Compile diagnostics runtime and packaged layer
+        run: >-
+          python -m compileall -q
+          runtime_engine/scripture_archive_runtime/diagnostics.py
+          runtime_engine/tests/test_diagnostics.py
+          lanes/dev1/repair_overlay/scripture_archive_platform/desktop_host/diagnostics.py
+          lanes/dev1/repair_overlay/tests/test_packaged_diagnostics.py
+
+      - name: Run canonical diagnostics regressions
+        working-directory: runtime_engine/tests
+        env:
+          PYTHONPATH: ..
+        run: python -m unittest -v test_diagnostics
+
+      - name: Run packaged diagnostics regressions
+        working-directory: lanes/dev1/repair_overlay
+        run: python tests/test_packaged_diagnostics.py -v
+
+      - name: Validate diagnostics and update bootstrap syntax
+        working-directory: lanes/dev1/repair_overlay/frontend
+        run: |
+          node --check diagnostics-ui.js
+          node --check application-update.js
+
+      - name: Diff hygiene
+        shell: bash
+        run: git diff --check

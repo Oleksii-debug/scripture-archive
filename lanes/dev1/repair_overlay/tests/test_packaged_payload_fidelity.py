@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import struct
 import tempfile
 import unittest
 from pathlib import Path
@@ -19,6 +20,47 @@ class FakeArchive:
 
     def extract(self, name: str) -> bytes:
         return self.entries[name]
+
+
+class FakeRawArchive(FakeArchive):
+    _COOKIE_MAGIC_PATTERN = b"MEI\014\013\012\013\016"
+    _COOKIE_FORMAT = "!8sIIII64s"
+    _COOKIE_LENGTH = struct.calcsize(_COOKIE_FORMAT)
+    _TOC_ENTRY_FORMAT = "!IIIIBc"
+    _TOC_ENTRY_LENGTH = struct.calcsize(_TOC_ENTRY_FORMAT)
+
+    def __init__(self, entries: dict[str, bytes], raw_names: list[str]):
+        super().__init__(entries)
+        toc = bytearray()
+        for name in raw_names:
+            encoded_name = name.encode("utf-8") + b"\0"
+            entry_length = self._TOC_ENTRY_LENGTH + len(encoded_name)
+            toc.extend(
+                struct.pack(
+                    self._TOC_ENTRY_FORMAT,
+                    entry_length,
+                    0,
+                    0,
+                    0,
+                    0,
+                    b"x",
+                )
+            )
+            toc.extend(encoded_name)
+        archive_length = len(toc) + self._COOKIE_LENGTH
+        cookie = struct.pack(
+            self._COOKIE_FORMAT,
+            self._COOKIE_MAGIC_PATTERN,
+            archive_length,
+            0,
+            len(toc),
+            312,
+            b"python312.dll".ljust(64, b"\0"),
+        )
+        self._raw_pkg = bytes(toc) + cookie
+
+    def raw_pkg_data(self) -> bytes:
+        return self._raw_pkg
 
 
 class PackagedPayloadFidelityTests(unittest.TestCase):
@@ -176,6 +218,33 @@ class PackagedPayloadFidelityTests(unittest.TestCase):
         self.assertEqual(result["files_verified"], 1)
         self.assertIn(
             "UNEXPECTED_PROTECTED_PAYLOAD r06_platform/frontend/injected.js",
+            result["errors"],
+        )
+
+    def test_raw_carchive_readback_rejects_exact_duplicate_member_names(self):
+        app = b"console.log('archive');\n"
+        path = "r06_platform/frontend/app.js"
+        manifest = {
+            "schema_version": 1,
+            "entries": [
+                {
+                    "package_path": path,
+                    "size_bytes": len(app),
+                    "sha256": MODULE.sha256_hex(app),
+                    "git_blob_sha1": MODULE.git_blob_sha(app),
+                    "provenance": "git_overlay",
+                }
+            ],
+        }
+        reader = FakeRawArchive({path: app}, [path, path])
+
+        raw_names = MODULE._raw_carchive_member_names(reader)
+        result = MODULE.verify_reader(reader, manifest, archive_names=raw_names)
+
+        self.assertEqual(raw_names, [path, path])
+        self.assertFalse(result["ok"])
+        self.assertIn(
+            f"DUPLICATE_NORMALIZED_PATH {path}: {path!r} vs {path!r}",
             result["errors"],
         )
 

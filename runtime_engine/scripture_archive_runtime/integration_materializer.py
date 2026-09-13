@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import shutil
 import zipfile
@@ -21,6 +22,8 @@ _WINDOWS_RESERVED_LANES = {
     *(f"COM{i}" for i in range(1, 10)),
     *(f"LPT{i}" for i in range(1, 10)),
 }
+_STAGE_SUFFIX = ".scripture-archive-staging"
+_BACKUP_SUFFIX = ".scripture-archive-backup"
 
 
 @dataclass(frozen=True)
@@ -93,6 +96,126 @@ def _record_id(record: Mapping[str, Any], names: tuple[str, ...]) -> str:
     raise MaterializationError(f"record lacks stable id ({', '.join(names)})")
 
 
+def _publication_paths(out: Path) -> tuple[Path, Path]:
+    if not out.name:
+        raise MaterializationError("output directory must have a filesystem name")
+    return (
+        out.parent / f".{out.name}{_STAGE_SUFFIX}",
+        out.parent / f".{out.name}{_BACKUP_SUFFIX}",
+    )
+
+
+def _fsync_directory(path: Path) -> None:
+    if os.name == "nt":
+        return
+    try:
+        fd = os.open(path, os.O_RDONLY)
+    except OSError as exc:
+        raise MaterializationError(f"cannot open directory for durability sync: {path}") from exc
+    try:
+        os.fsync(fd)
+    except OSError as exc:
+        raise MaterializationError(f"cannot durability-sync directory: {path}") from exc
+    finally:
+        os.close(fd)
+
+
+def _write_bytes_durable(path: Path, payload: bytes) -> None:
+    with path.open("wb") as fh:
+        fh.write(payload)
+        fh.flush()
+        os.fsync(fh.fileno())
+
+
+def _remove_publication_directory(path: Path) -> None:
+    if not path.exists() and not path.is_symlink():
+        return
+    if path.is_symlink() or not path.is_dir():
+        raise MaterializationError(f"unsafe publication artifact: {path}")
+    shutil.rmtree(path)
+
+
+def _recover_interrupted_publication(out: Path) -> tuple[Path, Path]:
+    staging, backup = _publication_paths(out)
+    if out.is_symlink():
+        raise MaterializationError("output directory must not be symlink")
+    if out.exists() and not out.is_dir():
+        raise MaterializationError("output path must be a directory")
+
+    if backup.exists() or backup.is_symlink():
+        if backup.is_symlink() or not backup.is_dir():
+            raise MaterializationError("publication backup must be a real directory")
+        if out.exists():
+            _remove_publication_directory(backup)
+            _fsync_directory(out.parent)
+        else:
+            try:
+                os.replace(backup, out)
+                _fsync_directory(out.parent)
+            except OSError as exc:
+                raise MaterializationError("failed to recover previous materialized corpus") from exc
+
+    if staging.exists() or staging.is_symlink():
+        _remove_publication_directory(staging)
+        _fsync_directory(out.parent)
+    return staging, backup
+
+
+def _publish_staged_directory(staging: Path, out: Path, backup: Path) -> None:
+    parent = out.parent
+    had_previous = out.exists()
+    previous_moved = False
+    replacement_moved = False
+    try:
+        if had_previous:
+            os.replace(out, backup)
+            previous_moved = True
+            _fsync_directory(parent)
+        os.replace(staging, out)
+        replacement_moved = True
+        _fsync_directory(parent)
+    except Exception as exc:
+        rollback_error: Exception | None = None
+        try:
+            if previous_moved:
+                if out.exists():
+                    os.replace(out, staging)
+                    replacement_moved = False
+                if backup.exists():
+                    os.replace(backup, out)
+                    _fsync_directory(parent)
+            elif replacement_moved and out.exists():
+                os.replace(out, staging)
+                replacement_moved = False
+                _fsync_directory(parent)
+        except Exception as rollback_exc:
+            rollback_error = rollback_exc
+
+        if rollback_error is None:
+            try:
+                _remove_publication_directory(staging)
+            except Exception:
+                pass
+            preserved = "previous corpus restored" if had_previous else "no previous corpus was replaced"
+            raise MaterializationError(
+                f"failed to publish materialized corpus; {preserved}: {type(exc).__name__}: {exc}"
+            ) from exc
+        raise MaterializationError(
+            "failed to publish materialized corpus and rollback failed; "
+            f"publication={type(exc).__name__}: {exc}; "
+            f"rollback={type(rollback_error).__name__}: {rollback_error}"
+        ) from exc
+
+    if backup.exists():
+        try:
+            _remove_publication_directory(backup)
+            _fsync_directory(parent)
+        except Exception:
+            # Publication is already durable. A leftover backup is recoverable
+            # and will be cleaned on the next materialization attempt.
+            pass
+
+
 def materialize_packages(specs: Iterable[PackageSpec], output_dir: str | Path) -> dict[str, Any]:
     specs = tuple(specs)
     lane_names = tuple(_validated_lane_name(spec.lane) for spec in specs)
@@ -100,8 +223,7 @@ def materialize_packages(specs: Iterable[PackageSpec], output_dir: str | Path) -
         raise MaterializationError("package lanes must be unique case-insensitively")
 
     out = Path(output_dir)
-    if out.exists() and out.is_symlink():
-        raise MaterializationError("output directory must not be symlink")
+    staging, backup = _recover_interrupted_publication(out)
 
     global_nodes: dict[str, tuple[bytes, str]] = {}
     global_evidence: dict[str, tuple[bytes, str]] = {}
@@ -198,37 +320,64 @@ def materialize_packages(specs: Iterable[PackageSpec], output_dir: str | Path) -
     if unresolved:
         raise MaterializationError(f"unresolved evidence refs: {len(unresolved)}")
 
-    if out.exists():
-        shutil.rmtree(out)
-    out.mkdir(parents=True, exist_ok=False)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        staging.mkdir(exist_ok=False)
+        for spec, lane_name, nodes, evidence in prepared_lanes:
+            lane_dir = staging / lane_name
+            lane_dir.mkdir(parents=True, exist_ok=False)
+            _write_bytes_durable(
+                lane_dir / "nodes.json",
+                _canonical_json_bytes({"nodes": [dict(n) for n in nodes]}),
+            )
+            _write_bytes_durable(
+                lane_dir / "evidence.json",
+                _canonical_json_bytes({"records": [dict(r) for r in evidence]}),
+            )
+            _write_bytes_durable(
+                lane_dir / "ground_truth_index.json",
+                _canonical_json_bytes({
+                    "schema": "CANONICAL_GROUND_TRUTH_INDEX_v1",
+                    "records": ground_truth_indexes[spec.lane],
+                }),
+            )
+            _fsync_directory(lane_dir)
 
-    for spec, lane_name, nodes, evidence in prepared_lanes:
-        lane_dir = out / lane_name
-        lane_dir.mkdir(parents=True, exist_ok=False)
-        (lane_dir / "nodes.json").write_bytes(_canonical_json_bytes({"nodes": [dict(n) for n in nodes]}))
-        (lane_dir / "evidence.json").write_bytes(_canonical_json_bytes({"records": [dict(r) for r in evidence]}))
-        (lane_dir / "ground_truth_index.json").write_bytes(_canonical_json_bytes({"schema": "CANONICAL_GROUND_TRUTH_INDEX_v1", "records": ground_truth_indexes[spec.lane]}))
+        output_hashes: dict[str, str] = {}
+        for path in sorted(p for p in staging.rglob("*") if p.is_file()):
+            output_hashes[path.relative_to(staging).as_posix()] = sha256_file(path)
 
-    output_hashes: dict[str, str] = {}
-    for path in sorted(p for p in out.rglob("*") if p.is_file()):
-        output_hashes[path.relative_to(out).as_posix()] = sha256_file(path)
+        manifest = {
+            "schema": "R06_INTEGRATION_MATERIALIZER_MANIFEST_v2",
+            "content_schema": "CONTENT_NODE_SCHEMA_v1.2",
+            "provenance_contract": PROVENANCE_CONTRACT_VERSION,
+            "inputs": inputs,
+            "lane_counts": lane_counts,
+            "provenance_counts": provenance_counts,
+            "total_nodes": len(global_nodes),
+            "total_evidence": len(global_evidence),
+            "duplicate_node_ids": 0,
+            "conflicting_node_ids": 0,
+            "duplicate_evidence_ids": 0,
+            "conflicting_evidence_ids": 0,
+            "unresolved_required_evidence_refs": 0,
+            "output_hashes": output_hashes,
+        }
+        manifest_path = staging / "INTEGRATION_MANIFEST.json"
+        _write_bytes_durable(manifest_path, _canonical_json_bytes(manifest))
+        manifest_sha256 = sha256_file(manifest_path)
+        _fsync_directory(staging)
+    except Exception as exc:
+        try:
+            _remove_publication_directory(staging)
+        except Exception:
+            pass
+        if isinstance(exc, MaterializationError):
+            raise
+        raise MaterializationError(
+            f"failed to stage materialized corpus: {type(exc).__name__}: {exc}"
+        ) from exc
 
-    manifest = {
-        "schema": "R06_INTEGRATION_MATERIALIZER_MANIFEST_v2",
-        "content_schema": "CONTENT_NODE_SCHEMA_v1.2",
-        "provenance_contract": PROVENANCE_CONTRACT_VERSION,
-        "inputs": inputs,
-        "lane_counts": lane_counts,
-        "provenance_counts": provenance_counts,
-        "total_nodes": len(global_nodes),
-        "total_evidence": len(global_evidence),
-        "duplicate_node_ids": 0,
-        "conflicting_node_ids": 0,
-        "duplicate_evidence_ids": 0,
-        "conflicting_evidence_ids": 0,
-        "unresolved_required_evidence_refs": 0,
-        "output_hashes": output_hashes,
-    }
-    (out / "INTEGRATION_MANIFEST.json").write_bytes(_canonical_json_bytes(manifest))
-    manifest["manifest_sha256"] = sha256_file(out / "INTEGRATION_MANIFEST.json")
+    _publish_staged_directory(staging, out, backup)
+    manifest["manifest_sha256"] = manifest_sha256
     return manifest

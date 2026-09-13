@@ -1,0 +1,60 @@
+name: QA Dossier 153be
+
+on:
+  push:
+    branches:
+      - qa-dossier-153be-0913-sol
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dossier-targeted:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      EXPECTED_CANDIDATE: 153be509c17e312321aaf9de991df09a2e1da745
+      EXPECTED_RUNTIME_GATEWAY_BLOB: 0fdaa37f245b040fb6a797ae08741419e7bf553c
+      EXPECTED_CONTRACTS_BLOB: 70ca376792e0fbcea7072d99785720247821c575
+      EXPECTED_DOSSIERS_BLOB: 4cef458bf3f1dd4e3dda6c4bb096e24ee4b3495e
+      EXPECTED_DOSSIER_UI_BLOB: da520efba5ad4ba9ba7df5e31d915eab3b810daf
+      EXPECTED_PACKAGED_TEST_BLOB: 81cc99af6dec9e44cf33f46950800ab497a4b1f4
+      HELPER_PATH: .github/workflows/qa-dossier-153be.yml
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Assert immutable candidate parent and helper-only containment
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_CANDIDATE"
+          test "$(git diff --name-only "$EXPECTED_CANDIDATE" HEAD | wc -l | tr -d ' ')" = "1"
+          test "$(git diff --name-only "$EXPECTED_CANDIDATE" HEAD)" = "$HELPER_PATH"
+      - name: Verify exact Dossier identities
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD:lanes/dev1/repair_overlay/scripture_archive_platform/application/runtime_gateway.py)" = "$EXPECTED_RUNTIME_GATEWAY_BLOB"
+          test "$(git rev-parse HEAD:lanes/dev1/repair_overlay/scripture_archive_platform/transport/contracts.py)" = "$EXPECTED_CONTRACTS_BLOB"
+          test "$(git rev-parse HEAD:runtime_engine/scripture_archive_runtime/dossiers.py)" = "$EXPECTED_DOSSIERS_BLOB"
+          test "$(git rev-parse HEAD:lanes/dev1/repair_overlay/frontend/dossier-ui.js)" = "$EXPECTED_DOSSIER_UI_BLOB"
+          test "$(git rev-parse HEAD:runtime_engine/tests/test_packaged_dossier_integration.py)" = "$EXPECTED_PACKAGED_TEST_BLOB"
+      - name: Run runtime Dossier provenance regression
+        working-directory: runtime_engine
+        run: python -m unittest tests.test_dossier_witness_regressions -v
+      - name: Run self-contained packaged Dossier integration
+        run: python runtime_engine/tests/test_packaged_dossier_integration.py
+      - name: Run Dossier UI contract/lifecycle regression
+        run: python lanes/dev1/repair_overlay/tests/test_dossier_ui.py
+      - name: Diff hygiene
+        shell: bash
+        run: git diff --check "$EXPECTED_CANDIDATE" HEAD

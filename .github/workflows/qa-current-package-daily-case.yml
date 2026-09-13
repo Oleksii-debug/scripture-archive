@@ -1,0 +1,38 @@
+name: QA Current Package Daily Case
+
+on:
+  push:
+    branches:
+      - qa-current-package-daily-case-0913-sol
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  packaged-daily-case:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      EXPECTED_HEAD: ${{ github.sha }}
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Confirm exact source checkout
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - name: Run packaged Daily Case projection and UI regression
+        run: python -m unittest discover -s lanes/dev1/repair_overlay/tests -p 'test_packaged_daily_case.py' -t lanes/dev1/repair_overlay
+      - name: Run packaged Daily Case transport regression
+        run: python -m unittest discover -s lanes/dev1/repair_overlay/tests -p 'test_packaged_daily_case_transport_contract.py' -t lanes/dev1/repair_overlay
+      - name: Diff hygiene
+        shell: bash
+        run: git diff --check

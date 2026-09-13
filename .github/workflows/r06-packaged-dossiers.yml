@@ -17,6 +17,11 @@ on:
 permissions:
   contents: read
 
+env:
+  DEV1_DONOR_SHA: 60e8dba23e656960162afd4f7764d4d042770ea9
+  DEV1_BASE_SOURCE_SHA256: 10fbd546ff4d985465b85b99f4f64bff95d9ec8b1f27132c6d21b4930c344c35
+  PYTHONUTF8: '1'
+
 jobs:
   packaged-dossiers:
     strategy:
@@ -24,16 +29,35 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    env:
-      PYTHONPATH: ${{ github.workspace }}/runtime_engine${{ runner.os == 'Windows' && ';' || ':' }}${{ github.workspace }}/lanes/dev1/repair_overlay${{ runner.os == 'Windows' && ';' || ':' }}${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
+      - name: Checkout immutable verified FINALPREP02 donor
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEV1_DONOR_SHA }}
+          path: _qa_donor
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Reconstruct and verify immutable FINALPREP02 baseline
+        run: >-
+          python -c "from pathlib import Path; import base64; parts=sorted(Path('_qa_donor/release_inputs/dev1_finalprep02').glob('part-*.b64')); assert parts, 'missing FINALPREP02 parts'; raw=''.join(p.read_text(encoding='utf-8') for p in parts); Path('DEV1_R06_PLATFORM_SOURCE.zip').write_bytes(base64.b64decode(raw))"
+      - name: Verify canonical source archive and extraction fidelity
+        run: python _qa_donor/lanes/dev1/verify_source_archive.py DEV1_R06_PLATFORM_SOURCE.zip ${{ env.DEV1_BASE_SOURCE_SHA256 }}
+      - name: Extract verified baseline
+        run: >-
+          python -c "from pathlib import Path; import zipfile; zipfile.ZipFile('DEV1_R06_PLATFORM_SOURCE.zip').extractall('.'); assert Path('r06_platform').is_dir(), 'verified archive missing r06_platform'"
+      - name: Apply exact PR candidate overlay
+        run: >-
+          python -c "import shutil; shutil.copytree('lanes/dev1/repair_overlay','r06_platform',dirs_exist_ok=True)"
       - name: Canonical runtime dossier regressions
-        run: python runtime_engine/tests/test_dossiers.py
-      - name: Packaged dossier regressions
-        run: python lanes/dev1/repair_overlay/tests/test_packaged_dossiers.py
-      - name: Frontend syntax
-        run: node --check lanes/dev1/repair_overlay/frontend/dossiers-ui.js
+        run: >-
+          python -c "import runpy,sys; sys.path.insert(0,'runtime_engine'); runpy.run_path('runtime_engine/tests/test_dossiers.py',run_name='__main__')"
+      - name: Packaged dossier regressions on composed platform
+        run: python r06_platform/tests/test_packaged_dossiers.py
+      - name: Frontend syntax on composed platform
+        run: node --check r06_platform/frontend/dossiers-ui.js

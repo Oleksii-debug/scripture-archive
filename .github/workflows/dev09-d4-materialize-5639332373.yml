@@ -1,0 +1,115 @@
+name: DEV09 D4 exact readable materialization 5639332373
+
+on:
+  pull_request:
+    branches: [ r06-swarm-dev09-ot-otnt ]
+    paths:
+      - '.github/workflows/dev09-d4-materialize-5639332373.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  materialize-and-readback:
+    runs-on: ubuntu-latest
+    env:
+      TRIGGER_HEAD: ${{ github.event.pull_request.head.sha }}
+      MATERIALIZE_BRANCH: r06-dev09-materialize-5639332373
+      TRANSPORT_ZIP: /tmp/DEV4_FINALPREP_02_MATERIALIZATION_PAYLOAD.zip
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Assert immutable triggering head
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual=$(git rev-parse HEAD)
+          test "$actual" = "$TRIGGER_HEAD"
+          echo "D4_TRIGGER_HEAD_PIN_PASS $actual"
+
+      - name: Download and verify exact Drive FINALPREP authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          url='https://drive.usercontent.google.com/download?id=188Pswz0qdGZJ5h4gyM8KPpQUfTGGr0y6&export=download&confirm=t'
+          curl --fail --location --retry 2 --connect-timeout 20 --max-time 90 "$url" -o "$TRANSPORT_ZIP"
+          python - <<'PY'
+          import hashlib, os, pathlib, zipfile
+          p=pathlib.Path(os.environ['TRANSPORT_ZIP'])
+          raw=p.read_bytes()
+          expected_size=286787
+          expected_sha='e8b008c31462d7ed9388a7a84f73bb8666c8449181000751e9da45c2468779c9'
+          got=hashlib.sha256(raw).hexdigest()
+          print('transport_bytes',len(raw),'sha256',got)
+          if len(raw)!=expected_size or got!=expected_sha:
+              raise SystemExit('exact Drive transport byte gate failed')
+          with zipfile.ZipFile(p) as z:
+              bad=z.testzip()
+              if bad: raise SystemExit(f'ZIP CRC failure: {bad}')
+              print('D4_EXACT_DRIVE_TRANSPORT_PASS entries=',len(z.infolist()))
+          PY
+
+      - name: Materialize and prove node plus evidence fidelity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile \
+            tools/dev09_materialize_d4_readable.py \
+            tools/dev09_d4_evidence_fidelity.py \
+            tools/test_dev09_d4_provenance_scope.py
+          python tools/dev09_materialize_d4_readable.py --transport-zip "$TRANSPORT_ZIP" --chunk-size 30
+          python tools/dev09_d4_evidence_fidelity.py --seal
+          DEV09_D4_TRANSPORT_ZIP="$TRANSPORT_ZIP" python tools/test_dev09_d4_provenance_scope.py
+          python tools/dev09_materialize_d4_readable.py --verify-only --require-manifest
+          python tools/dev09_d4_evidence_fidelity.py --verify
+
+      - name: Compare-and-swap remote parent, commit canonical outputs, self-remove temporary machinery
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "+refs/heads/$MATERIALIZE_BRANCH:refs/remotes/origin/$MATERIALIZE_BRANCH"
+          remote_before=$(git rev-parse "refs/remotes/origin/$MATERIALIZE_BRANCH")
+          test "$remote_before" = "$TRIGGER_HEAD"
+          echo "D4_REMOTE_PARENT_PIN_PASS $remote_before"
+
+          git config user.name 'scripture-archive-dev09-bot'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/campaigns/OT/R06_D4_STAGE05_READABLE docs/workflow/r06_dev09/D4_READABLE_MATERIALIZATION_MANIFEST.json
+          git rm .github/workflows/dev09-d4-materialize-5639332373.yml
+          git rm sitecustomize.py
+          git rm -f lanes/dev09/materialize_5639332373/transport_part_00.b64 || true
+          python - <<'PY'
+          import subprocess
+          allowed=(
+            'docs/campaigns/OT/R06_D4_STAGE05_READABLE/',
+            'docs/workflow/r06_dev09/D4_READABLE_MATERIALIZATION_MANIFEST.json',
+            '.github/workflows/dev09-d4-materialize-5639332373.yml',
+            'sitecustomize.py',
+            'lanes/dev09/materialize_5639332373/transport_part_00.b64',
+          )
+          changed=subprocess.check_output(['git','diff','--cached','--name-only'],text=True).splitlines()
+          bad=[p for p in changed if not any(p==a or p.startswith(a) for a in allowed)]
+          if bad: raise SystemExit(f'forbidden staged paths: {bad}')
+          print('D4_STAGED_SCOPE_PASS files=',len(changed))
+          PY
+          git diff --cached --check
+          git commit -m 'R06 DEV09: complete exact readable D4 materialization'
+          materialized_sha=$(git rev-parse HEAD)
+          git push origin "HEAD:refs/heads/$MATERIALIZE_BRANCH"
+          echo "materialized_sha=$materialized_sha" >> "$GITHUB_ENV"
+
+      - name: Fetch back exact remote commit and verify nodes plus evidence again
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "+refs/heads/$MATERIALIZE_BRANCH:refs/remotes/origin/$MATERIALIZE_BRANCH"
+          remote_sha=$(git rev-parse "refs/remotes/origin/$MATERIALIZE_BRANCH")
+          test "$remote_sha" = "$materialized_sha"
+          rm -rf /tmp/dev09-readback
+          git worktree add --detach /tmp/dev09-readback "$remote_sha"
+          python /tmp/dev09-readback/tools/dev09_materialize_d4_readable.py --root /tmp/dev09-readback --verify-only --require-manifest
+          python /tmp/dev09-readback/tools/dev09_d4_evidence_fidelity.py --root /tmp/dev09-readback --verify
+          echo "D4_REMOTE_FETCHBACK_PASS $remote_sha"

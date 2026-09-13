@@ -37,6 +37,8 @@ _WINDOWS_RESERVED = {
     "CON", "PRN", "AUX", "NUL",
     *(f"COM{i}" for i in range(1, 10)),
     *(f"LPT{i}" for i in range(1, 10)),
+    *(f"COM{i}" for i in "¹²³"),
+    *(f"LPT{i}" for i in "¹²³"),
 }
 _DEPENDENCY_KEYS = frozenset({"path", "role", "size", "sha256"})
 _MANIFEST_KEYS = frozenset(

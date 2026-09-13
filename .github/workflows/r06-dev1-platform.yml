@@ -22,6 +22,7 @@ on:
 env:
   DEV01_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
   DEV01_BASE_SOURCE_SHA256: 10fbd546ff4d985465b85b99f4f64bff95d9ec8b1f27132c6d21b4930c344c35
+  PYTHONUTF8: '1'
 
 jobs:
   linux-contract-test:
@@ -61,7 +62,7 @@ jobs:
       - name: Compile and test composed repaired source
         shell: bash
         run: |
-          export PYTHONPATH="$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/r06_platform${PYTHONPATH:+:$PYTHONPATH}"
+          export PYTHONPATH="$GITHUB_WORKSPACE/lanes/dev1/repair_overlay/tests:$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/r06_platform${PYTHONPATH:+:$PYTHONPATH}"
           python -m compileall -q r06_platform/scripture_archive_platform r06_platform/packaging lanes/dev1/repair_overlay/tests runtime_engine
           python -m unittest discover -s lanes/dev1/repair_overlay/tests -v
           node --check r06_platform/frontend/renderers.js

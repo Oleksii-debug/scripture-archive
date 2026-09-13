@@ -1,0 +1,86 @@
+name: QA current package player progression fa836d
+
+on:
+  push:
+    branches:
+      - qa-current-package-player-progression-fa836d-0913-sol
+    paths:
+      - '.github/workflows/qa-current-package-player-progression-fa836d.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  player-progression:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - name: Checkout helper evidence branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Verify helper-only containment
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD^)" = "fa836d79fcfd9ac5d8aacbf6a6be9f5a10183012"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/qa-current-package-player-progression-fa836d.yml"
+      - name: Checkout immutable current package
+        uses: actions/checkout@v4
+        with:
+          ref: fa836d79fcfd9ac5d8aacbf6a6be9f5a10183012
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Confirm exact package checkout
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "fa836d79fcfd9ac5d8aacbf6a6be9f5a10183012"
+      - name: Packaged Next UI single-flight and retry gate
+        working-directory: lanes/dev1/repair_overlay
+        run: python tests/test_player_next_gate.py
+      - name: Packaged runtime gateway replay and target boundary
+        working-directory: lanes/dev1/repair_overlay
+        run: python tests/test_dev_a_runtime_gateway.py
+      - name: Packaged transport forbids legacy caller-selected branch command
+        working-directory: lanes/dev1/repair_overlay
+        shell: python
+        run: |
+          from scripture_archive_platform.transport.contracts import ALLOWLISTED_COMMANDS, validate_request_shape
+          assert 'player.next' in ALLOWLISTED_COMMANDS
+          assert 'player.navigate_branch' not in ALLOWLISTED_COMMANDS
+          try:
+              validate_request_shape({'api_version':'scripture.transport.v1','request_id':'qa-target','command':'player.next','payload':{'target_node_id':'X'}})
+          except ValueError as exc:
+              assert 'target selection is forbidden' in str(exc)
+          else:
+              raise AssertionError('caller-selected player.next target unexpectedly accepted')
+      - name: Runtime branch integrity
+        working-directory: runtime_engine
+        env:
+          PYTHONPATH: ${{ github.workspace }}/runtime_engine
+        run: python tests/test_runtime_branch_integrity.py
+      - name: Runtime next requires current visit grade
+        working-directory: runtime_engine
+        env:
+          PYTHONPATH: ${{ github.workspace }}/runtime_engine
+        run: python tests/test_runtime_next_requires_grade.py
+      - name: Runtime next authorization lifecycle and restore invalidation
+        working-directory: runtime_engine
+        env:
+          PYTHONPATH: ${{ github.workspace }}/runtime_engine
+        run: python tests/test_runtime_next_authorization_lifecycle.py
+      - name: Player flow hint/accessibility/state fail-closed gate
+        working-directory: runtime_engine
+        env:
+          PYTHONPATH: ${{ github.workspace }}/runtime_engine
+        run: python tests/test_player_flow_gate.py
+      - name: Diff hygiene
+        shell: bash
+        run: git diff --check

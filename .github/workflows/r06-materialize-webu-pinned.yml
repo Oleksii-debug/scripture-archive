@@ -1,0 +1,94 @@
+name: R06 Materialize Pinned WEBU
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - r06-compose-packaged-full-bible-webu-0913-sol
+    paths:
+      - '.github/workflows/r06-materialize-webu-pinned.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    env:
+      WEBU_URL: https://ebible.org/Scriptures/engwebu_vpl.zip
+      EXPECTED_ARCHIVE_SHA256: 6442f15ee3b4360786c9cd0996ea3af8f3124744a61b7a9bd69e77ac5deab397
+      EXPECTED_VPL_SHA256: 71c2ea1ecba86b62871b0e818c4302ea0a559a5cb9643ff05197a6243836fc2f
+      DEST: lanes/dev1/repair_overlay/scripture_archive_platform/content/data
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: r06-compose-packaged-full-bible-webu-0913-sol
+          fetch-depth: 0
+      - name: Download and pin official source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .webu "$DEST"
+          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --retry 3 --retry-all-errors --max-filesize 20000000 -o .webu/engwebu_vpl.zip "$WEBU_URL"
+          printf '%s  %s\n' "$EXPECTED_ARCHIVE_SHA256" .webu/engwebu_vpl.zip | sha256sum --check --strict
+      - name: Extract only pinned non-executable VPL and write authority manifest
+        shell: python
+        run: |
+          import hashlib, json, os, pathlib, zipfile
+          archive = pathlib.Path('.webu/engwebu_vpl.zip')
+          dest = pathlib.Path(os.environ['DEST'])
+          expected_vpl = os.environ['EXPECTED_VPL_SHA256']
+          with zipfile.ZipFile(archive) as zf:
+              names = {i.filename: i for i in zf.infolist()}
+              wanted = 'engwebu_vpl.txt'
+              if wanted not in names:
+                  raise SystemExit('official archive missing engwebu_vpl.txt')
+              info = names[wanted]
+              if info.file_size > 10_000_000:
+                  raise SystemExit('VPL exceeds safety bound')
+              raw = zf.read(wanted)
+          actual_vpl = hashlib.sha256(raw).hexdigest()
+          if actual_vpl != expected_vpl:
+              raise SystemExit(f'VPL SHA mismatch: {actual_vpl}')
+          text = raw.decode('utf-8-sig')
+          lines = text.splitlines()
+          if len(lines) != 38058:
+              raise SystemExit(f'unexpected VPL row count: {len(lines)}')
+          if not lines[0].startswith('GEN 1:1 ') or not lines[-1].startswith('REV 22:21 '):
+              raise SystemExit('unexpected VPL boundary records')
+          (dest / wanted).write_bytes(raw)
+          authority = {
+              'schema': 'scripture.webu.bundled-authority.v1',
+              'translation_id': 'engwebu',
+              'translation_name': 'World English Bible Updated',
+              'source_url': os.environ['WEBU_URL'],
+              'source_site': 'https://ebible.org/engwebu/',
+              'license': 'Public Domain',
+              'source_tier': 'TX1',
+              'archive_sha256': os.environ['EXPECTED_ARCHIVE_SHA256'],
+              'vpl_sha256': expected_vpl,
+              'vpl_rows': 38058,
+              'empty_text_rows': 29,
+              'book_codes': 81,
+              'runtime_network_required': False,
+              'materialization_rule': 'Exact engwebu_vpl.txt bytes from the pinned official eBible archive; no verse normalization or interpolation.',
+          }
+          (dest / 'engwebu_authority.json').write_text(json.dumps(authority, ensure_ascii=False, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+      - name: Verify diff hygiene
+        shell: bash
+        run: |
+          git diff --check
+          test "$(sha256sum "$DEST/engwebu_vpl.txt" | cut -d' ' -f1)" = "$EXPECTED_VPL_SHA256"
+      - name: Commit materialized source bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add "$DEST/engwebu_vpl.txt" "$DEST/engwebu_authority.json"
+          if git diff --cached --quiet; then
+            echo 'Pinned WEBU bytes already materialized; no commit required.'
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m 'Materialize pinned WEBU full-text source'
+          git push origin HEAD:r06-compose-packaged-full-bible-webu-0913-sol

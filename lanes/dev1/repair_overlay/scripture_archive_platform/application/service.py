@@ -42,6 +42,9 @@ class PlatformApplication:
         if cmd=='research.upsert_note':return {'note':self.research.upsert_note(p.get('note'))}
         if cmd=='research.delete_note':return {'deleted':self.research.delete_note(p.get('note_id'))}
         if cmd=='research.get_evidence_graph':return self._evidence_graph()
+        if cmd=='research.get_cross_testament':
+            if p:raise ValueError('research.get_cross_testament accepts an empty payload')
+            return self._cross_testament()
         if cmd=='research.export':return self._research_export()
         if cmd=='research.get_chronology_lab':
             if p:raise ValueError('research.get_chronology_lab accepts an empty payload')
@@ -106,7 +109,7 @@ class PlatformApplication:
         raise ValueError('command not implemented')
     def _bootstrap(self):
         campaigns=self.loader.list_campaigns()
-        return {'app':{'name':'Архів Писання','version':'R06-3DEV-A','runtime':'Windows 11 x64 / WebView2 semantic UI','transport_api_version':TRANSPORT_API_VERSION},'registries':{'task_types':self.task_types.list(),'renderers':self.renderers.list(),'graders':self.graders.list(),'editors':self.editors.list(),'templates':self.templates.list()},'campaigns':campaigns,'keymap':self.keymap.list(),'capabilities':{'constructor':True,'draft_vs_canonical':True,'constructor_v2_history':True,'constructor_v2_snapshots':True,'constructor_v2_undo_redo':True,'constructor_v2_versioned_publish_rollback':True,'constructor_v2_pack_compatibility':True,'constructor_canonical_write':False,'web_portable_transport':True,'allowlisted_bridge':True,'library_catalog_search':True,'bundled_full_bible_text':False,'research_bookmarks_notes':True,'research_workspace_persistence':True,'evidence_graph':bool(self.player_gateway),'chronology_lab':bool(self.player_gateway),'research_export':bool(self.player_gateway),'arbitrary_filesystem':False,'content_pack_manager':True,'content_pack_inbox_only':True,'shell':False,'python_eval':False,'runtime_truth':bool(self.player_gateway),'review_queue':bool(self.player_gateway),'review_training':bool(self.player_gateway),'grading_truth':'D5/runtime' if self.player_gateway else 'REFERENCE_TEST_ONLY'}}
+        return {'app':{'name':'Архів Писання','version':'R06-3DEV-A','runtime':'Windows 11 x64 / WebView2 semantic UI','transport_api_version':TRANSPORT_API_VERSION},'registries':{'task_types':self.task_types.list(),'renderers':self.renderers.list(),'graders':self.graders.list(),'editors':self.editors.list(),'templates':self.templates.list()},'campaigns':campaigns,'keymap':self.keymap.list(),'capabilities':{'constructor':True,'draft_vs_canonical':True,'constructor_v2_history':True,'constructor_v2_snapshots':True,'constructor_v2_undo_redo':True,'constructor_v2_versioned_publish_rollback':True,'constructor_v2_pack_compatibility':True,'constructor_canonical_write':False,'web_portable_transport':True,'allowlisted_bridge':True,'library_catalog_search':True,'bundled_full_bible_text':False,'research_bookmarks_notes':True,'research_workspace_persistence':True,'evidence_graph':bool(self.player_gateway),'cross_testament':bool(self.player_gateway),'chronology_lab':bool(self.player_gateway),'research_export':bool(self.player_gateway),'arbitrary_filesystem':False,'content_pack_manager':True,'content_pack_inbox_only':True,'shell':False,'python_eval':False,'runtime_truth':bool(self.player_gateway),'review_queue':bool(self.player_gateway),'review_training':bool(self.player_gateway),'grading_truth':'D5/runtime' if self.player_gateway else 'REFERENCE_TEST_ONLY'}}
     def _load_node(self,nid):
         if self.player_gateway:self.player_gateway.invoke('player.load_node',{'node_id':nid},request_id='load-'+nid)
         node=self.loader.load_node(nid); mission=self.loader.mission_for_node(nid); renderable=self.mapper.to_renderable(node,mission); self._last_node[nid]=node
@@ -131,6 +134,9 @@ class PlatformApplication:
     def _evidence_graph(self):
         if not self.player_gateway:raise ValueError('Evidence Graph requires canonical runtime')
         return self.player_gateway.get_evidence_graph()
+    def _cross_testament(self):
+        if not self.player_gateway:raise ValueError('Cross-Testament requires canonical runtime')
+        return self.player_gateway.get_cross_testament()
     def _research_export(self):
         if not self.player_gateway:raise ValueError('Research Export requires canonical runtime')
         data=self.player_gateway.export_research();export=data.get('export') if isinstance(data,dict) else None

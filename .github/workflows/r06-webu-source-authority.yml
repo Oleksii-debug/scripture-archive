@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   source-authority:
@@ -15,14 +15,18 @@ jobs:
     env:
       EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
       WEBU_URL: https://ebible.org/Scriptures/engwebu_vpl.zip
+      EXPECTED_ARCHIVE_SHA256: 6442f15ee3b4360786c9cd0996ea3af8f3124744a61b7a9bd69e77ac5deab397
+      EXPECTED_VPL_SHA256: 71c2ea1ecba86b62871b0e818c4302ea0a559a5cb9643ff05197a6243836fc2f
+      DEST: lanes/dev1/repair_overlay/scripture_archive_platform/content/data
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
       - name: Confirm exact source checkout
         shell: bash
         run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
-      - name: Fetch official WEBU developer artifact
+      - name: Fetch exact official WEBU developer artifact
         shell: bash
         run: |
           set -euo pipefail
@@ -32,52 +36,59 @@ jobs:
             --max-filesize 20000000 \
             --dump-header .webu-source/http-headers.txt \
             --output .webu-source/engwebu_vpl.zip "$WEBU_URL"
-          test -s .webu-source/engwebu_vpl.zip
-      - name: Verify archive confinement and record authority
+          printf '%s  %s\n' "$EXPECTED_ARCHIVE_SHA256" .webu-source/engwebu_vpl.zip | sha256sum --check --strict
+      - name: Verify archive confinement and materialize exact VPL bytes
         shell: python
         run: |
-          import hashlib, json, pathlib, zipfile
+          import hashlib, json, os, pathlib, zipfile
           root = pathlib.Path('.webu-source')
           archive = root / 'engwebu_vpl.zip'
           raw = archive.read_bytes()
           if len(raw) > 20_000_000:
               raise SystemExit('WEBU archive exceeds 20 MB safety bound')
           sha256 = hashlib.sha256(raw).hexdigest()
+          if sha256 != os.environ['EXPECTED_ARCHIVE_SHA256']:
+              raise SystemExit(f'archive SHA mismatch: {sha256}')
           with zipfile.ZipFile(archive) as zf:
               bad = zf.testzip()
               if bad:
                   raise SystemExit(f'WEBU ZIP CRC failure: {bad}')
-              rows = []
-              total = 0
+              entries=[]; total=0
               for info in zf.infolist():
-                  name = info.filename.replace('\\', '/')
-                  p = pathlib.PurePosixPath(name)
+                  name=info.filename.replace('\\','/'); p=pathlib.PurePosixPath(name)
                   if p.is_absolute() or '..' in p.parts or name.startswith('/'):
                       raise SystemExit(f'unsafe WEBU archive member: {name!r}')
-                  if info.is_dir():
-                      continue
+                  if info.is_dir(): continue
                   total += info.file_size
-                  if total > 50_000_000:
-                      raise SystemExit('WEBU uncompressed size exceeds 50 MB safety bound')
-                  rows.append({'path': name, 'size': info.file_size, 'crc32': f'{info.CRC:08x}'})
-              names = [row['path'].lower() for row in rows]
-              if not any(name.endswith(('.txt', '.vpl', '.sql')) for name in names):
-                  raise SystemExit('WEBU VPL archive contains no expected text/VPL/SQL payload')
-          report = {
-              'schema': 'scripture.webu.source-authority.v1',
-              'translation_id': 'engwebu',
-              'translation_name': 'World English Bible Updated',
-              'source_url': 'https://ebible.org/Scriptures/engwebu_vpl.zip',
-              'source_site': 'https://ebible.org/engwebu/',
-              'license': 'Public Domain',
-              'archive_sha256': sha256,
-              'archive_size': len(raw),
-              'entry_count': len(rows),
-              'uncompressed_size': total,
-              'entries': rows,
+                  if total > 50_000_000: raise SystemExit('WEBU uncompressed size exceeds 50 MB safety bound')
+                  entries.append({'path':name,'size':info.file_size,'crc32':f'{info.CRC:08x}'})
+              vpl = zf.read('engwebu_vpl.txt')
+          vpl_sha = hashlib.sha256(vpl).hexdigest()
+          if vpl_sha != os.environ['EXPECTED_VPL_SHA256']:
+              raise SystemExit(f'VPL SHA mismatch: {vpl_sha}')
+          text=vpl.decode('utf-8-sig'); lines=text.splitlines()
+          if len(lines)!=38058 or not lines[0].startswith('GEN 1:1 ') or not lines[-1].startswith('REV 22:21 '):
+              raise SystemExit('unexpected VPL boundaries/count')
+          empty=sum(1 for line in lines if line.endswith(' '))
+          if empty!=29: raise SystemExit(f'unexpected source-empty row count: {empty}')
+          book_codes=[]
+          for line in lines:
+              code=line.split(' ',1)[0]
+              if code not in book_codes: book_codes.append(code)
+          if len(book_codes)!=81: raise SystemExit(f'unexpected book count: {len(book_codes)}')
+          dest=pathlib.Path(os.environ['DEST']); dest.mkdir(parents=True,exist_ok=True)
+          (dest/'engwebu_vpl.txt').write_bytes(vpl)
+          report={
+            'schema':'scripture.webu.bundled-authority.v1','translation_id':'engwebu','translation_name':'World English Bible Updated',
+            'source_url':os.environ['WEBU_URL'],'source_site':'https://ebible.org/engwebu/','license':'Public Domain','source_tier':'TX1',
+            'archive_sha256':sha256,'archive_size':len(raw),'vpl_sha256':vpl_sha,'vpl_rows':len(lines),'empty_text_rows':empty,
+            'book_codes':book_codes,'runtime_network_required':False,
+            'materialization_rule':'Exact engwebu_vpl.txt bytes from the pinned official eBible archive; no verse normalization or interpolation.',
+            'entries':entries,
           }
-          (root / 'authority.json').write_text(json.dumps(report, indent=2, sort_keys=True) + '\n', encoding='utf-8')
-          print(json.dumps({k: v for k, v in report.items() if k != 'entries'}, sort_keys=True))
+          (dest/'engwebu_authority.json').write_text(json.dumps(report,ensure_ascii=False,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+          (root/'authority.json').write_text(json.dumps(report,ensure_ascii=False,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+          print(json.dumps({k:v for k,v in report.items() if k not in {'entries','book_codes'}},sort_keys=True))
       - name: Upload immutable source capture
         uses: actions/upload-artifact@v4
         with:
@@ -88,6 +99,22 @@ jobs:
             .webu-source/http-headers.txt
           if-no-files-found: error
           retention-days: 7
-      - name: Diff hygiene
+      - name: Diff hygiene and exact VPL proof
         shell: bash
-        run: git diff --check
+        run: |
+          git diff --check
+          test "$(sha256sum "$DEST/engwebu_vpl.txt" | cut -d' ' -f1)" = "$EXPECTED_VPL_SHA256"
+      - name: Commit exact source bytes to candidate lineage
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add "$DEST/engwebu_vpl.txt" "$DEST/engwebu_authority.json"
+          if git diff --cached --quiet; then
+            echo 'Exact pinned WEBU bytes already present.'
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m 'Materialize exact pinned WEBU source bytes'
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"

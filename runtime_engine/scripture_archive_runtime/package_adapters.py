@@ -79,6 +79,28 @@ def _task_type(node: Mapping[str, Any]) -> str:
     return canonical_task_type(str(node.get("task_type") or node.get("response_mode") or node.get("task_family") or "SHORT_TEXT"))
 
 
+def _legacy_mode_key(value: str) -> str:
+    prepared = value.replace("-", "_").replace(" ", "_").casefold()
+    return "_".join(part for part in prepared.split("_") if part)
+
+
+def _normalize_explicit_legacy_answer(adapted: dict[str, Any]) -> None:
+    """Normalize only documented historical representations on the in-memory adapter copy."""
+    response_mode = adapted.get("response_mode")
+    if not isinstance(response_mode, str) or _legacy_mode_key(response_mode) != "citation_selection":
+        return
+    accepted = adapted.get("accepted_answer")
+    if not isinstance(accepted, str):
+        return
+    raw = accepted.strip()
+    parts = [part.strip() for part in raw.split(";")]
+    if ";" not in raw or len(parts) < 2 or any(not part for part in parts):
+        raise ValidationError(
+            "legacy citation selection accepted_answer must be an unambiguous semicolon-delimited non-empty list"
+        )
+    adapted["accepted_answer"] = parts
+
+
 def derive_answer_dto(node: Mapping[str, Any]) -> dict[str, Any]:
     """Project canonical CONTENT_NODE_SCHEMA v1.2 ground truth into ANSWER_DTO_v1.
 
@@ -89,8 +111,9 @@ def derive_answer_dto(node: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def adapt_node_for_runtime(node: Mapping[str, Any], *, lane: str = "unknown") -> dict[str, Any]:
-    """Transitional adapter: preserves authored fields and adds explicit runtime contract metadata."""
+    """Transitional adapter over a deep copy; canonical source objects are never mutated."""
     adapted = deepcopy(dict(node))
+    _normalize_explicit_legacy_answer(adapted)
     ctype = _task_type(adapted)
     adapted["task_type"] = ctype
     adapted["answer_contract_version"] = ANSWER_CONTRACT_VERSION

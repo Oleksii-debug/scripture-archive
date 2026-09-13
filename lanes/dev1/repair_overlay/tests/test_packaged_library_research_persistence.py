@@ -10,7 +10,11 @@ if str(OVERLAY_ROOT) not in sys.path:
 
 from scripture_archive_platform.application.research_workspace import ResearchWorkspaceService
 from scripture_archive_platform.content.library import CanonicalLibraryIndex
-from scripture_archive_platform.content.loader import CanonicalContentLoader, TaskPresentationMapper
+from scripture_archive_platform.content.loader import (
+    CanonicalContentLoader,
+    ContentLoadError,
+    TaskPresentationMapper,
+)
 
 
 class _LocalJsonStore:
@@ -203,7 +207,9 @@ class PackagedLibraryResearchPersistenceTests(unittest.TestCase):
             "node_id": "DM-01",
             "source_references": ["Luke 22:8-13"],
         }
-        with self.assertRaises((ValueError, KeyError)):
+        with self.assertRaisesRegex(
+            ContentLoadError, "unknown machine-readable canonical node DM-01"
+        ):
             workspace.upsert_bookmark(
                 {
                     "bookmark_id": "DM-01",

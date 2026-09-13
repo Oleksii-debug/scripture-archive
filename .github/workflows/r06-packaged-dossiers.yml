@@ -37,3 +37,5 @@ jobs:
         run: python lanes/dev1/repair_overlay/tests/test_packaged_dossiers.py
       - name: Frontend syntax
         run: node --check lanes/dev1/repair_overlay/frontend/dossiers-ui.js
+
+# QA helper child changes only this comment; product bytes remain exact PR #173 head 05c0fa60ed16f492a53b285166cd2e8fe7ada702.

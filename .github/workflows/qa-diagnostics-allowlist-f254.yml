@@ -1,0 +1,49 @@
+name: QA Diagnostics Allowlist f254
+
+on:
+  push:
+    branches:
+      - qa-diagnostics-allowlist-f254-0913-sol
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostics-allowlist:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      EXPECTED_CANDIDATE: f2543c262e7a71566b31e7c6958790f0d88ebf4a
+      HELPER_PATH: .github/workflows/qa-diagnostics-allowlist-f254.yml
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Assert immutable candidate parent and helper-only containment
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_CANDIDATE"
+          test "$(git diff --name-only "$EXPECTED_CANDIDATE" HEAD | wc -l | tr -d ' ')" = "1"
+          test "$(git diff --name-only "$EXPECTED_CANDIDATE" HEAD)" = "$HELPER_PATH"
+      - name: Run runtime Diagnostics regression
+        working-directory: runtime_engine
+        run: python -m unittest tests.test_diagnostics -v
+      - name: Run packaged Diagnostics regression
+        run: python -c "import runpy,sys; sys.path[:0]=['lanes/dev1/repair_overlay','runtime_engine']; runpy.run_path('lanes/dev1/repair_overlay/tests/test_packaged_diagnostics.py',run_name='__main__')"
+      - name: Run transport composition regression
+        run: python -c "import runpy,sys; sys.path[:0]=['lanes/dev1/repair_overlay','runtime_engine']; runpy.run_path('lanes/dev1/repair_overlay/tests/test_packaged_transport_composition.py',run_name='__main__')"
+      - name: Check Diagnostics frontend syntax
+        run: node --check lanes/dev1/repair_overlay/frontend/diagnostics-ui.js
+      - name: Diff hygiene
+        shell: bash
+        run: git diff --check "$EXPECTED_CANDIDATE" HEAD

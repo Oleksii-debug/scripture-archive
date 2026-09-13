@@ -1,0 +1,37 @@
+name: R06 Packaged Dossiers
+
+on:
+  pull_request:
+    paths:
+      - 'runtime_engine/scripture_archive_runtime/dossiers.py'
+      - 'runtime_engine/tests/test_dossiers.py'
+      - 'lanes/dev1/repair_overlay/frontend/dossiers-ui.js'
+      - 'lanes/dev1/repair_overlay/frontend/mastery.js'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/application/dossier_projection.py'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/application/service.py'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/transport/contracts.py'
+      - 'lanes/dev1/repair_overlay/tests/test_packaged_dossiers.py'
+      - '.github/workflows/r06-packaged-dossiers.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  packaged-dossiers:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Canonical runtime dossier regressions
+        run: python runtime_engine/tests/test_dossiers.py
+      - name: Packaged dossier regressions
+        run: python lanes/dev1/repair_overlay/tests/test_packaged_dossiers.py
+      - name: Frontend syntax
+        run: node --check lanes/dev1/repair_overlay/frontend/dossiers-ui.js

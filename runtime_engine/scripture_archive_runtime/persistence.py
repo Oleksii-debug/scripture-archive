@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import threading
+import uuid
 from dataclasses import asdict, is_dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -13,6 +15,18 @@ from .security import ValidationError
 CURRENT_SCHEMA_VERSION = 3
 MAX_RECOVERY_POINTS = 5
 MAX_STATE_BYTES = 64 * 1024 * 1024
+
+_SAVE_LOCKS_GUARD = threading.Lock()
+_SAVE_LOCKS: dict[Path, threading.RLock] = {}
+
+
+def _save_lock_for(root: Path):
+    with _SAVE_LOCKS_GUARD:
+        lock = _SAVE_LOCKS.get(root)
+        if lock is None:
+            lock = threading.RLock()
+            _SAVE_LOCKS[root] = lock
+        return lock
 
 
 def _json_default(value: Any) -> Any:
@@ -35,6 +49,7 @@ class PersistenceStore:
         self.backups.mkdir(exist_ok=True)
         self.state_path = self.root / "state.json"
         self.backup_path = self.root / "state.json.bak"
+        self._save_lock = _save_lock_for(self.root)
 
     def _ensure_inside(self, path: Path) -> Path:
         resolved = path.resolve()
@@ -65,23 +80,24 @@ class PersistenceStore:
         }
 
     def save(self, state: Mapping[str, Any]) -> None:
-        data = dict(state)
-        data["schema_version"] = CURRENT_SCHEMA_VERSION
-        payload = json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True, default=_json_default) + "\n"
-        if len(payload.encode("utf-8")) > MAX_STATE_BYTES:
-            raise ValidationError("State exceeds 64 MB safety limit")
-        tmp = self._ensure_inside(self.root / f".state.{os.getpid()}.tmp")
-        try:
-            self._backup_current_if_valid()
-            with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
-                fh.write(payload)
-                fh.flush()
-                os.fsync(fh.fileno())
-            os.replace(tmp, self.state_path)
-            self._fsync_directory(self.root)
-        finally:
-            if tmp.exists():
-                tmp.unlink(missing_ok=True)
+        with self._save_lock:
+            data = dict(state)
+            data["schema_version"] = CURRENT_SCHEMA_VERSION
+            payload = json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True, default=_json_default) + "\n"
+            if len(payload.encode("utf-8")) > MAX_STATE_BYTES:
+                raise ValidationError("State exceeds 64 MB safety limit")
+            tmp = self._ensure_inside(self.root / f".state.{os.getpid()}.{uuid.uuid4().hex}.tmp")
+            try:
+                self._backup_current_if_valid()
+                with open(tmp, "x", encoding="utf-8", newline="\n") as fh:
+                    fh.write(payload)
+                    fh.flush()
+                    os.fsync(fh.fileno())
+                os.replace(tmp, self.state_path)
+                self._fsync_directory(self.root)
+            finally:
+                if tmp.exists():
+                    tmp.unlink(missing_ok=True)
 
     def load(self) -> dict[str, Any]:
         if not self.state_path.exists():

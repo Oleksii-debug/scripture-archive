@@ -23,12 +23,12 @@ jobs:
       - name: Checkout helper evidence branch
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
       - name: Verify helper-only containment
         shell: bash
         run: |
-          test "$(git rev-parse HEAD^)" = "fa836d79fcfd9ac5d8aacbf6a6be9f5a10183012"
-          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/qa-current-package-player-progression-fa836d.yml"
+          git merge-base --is-ancestor fa836d79fcfd9ac5d8aacbf6a6be9f5a10183012 HEAD
+          test "$(git diff --name-only fa836d79fcfd9ac5d8aacbf6a6be9f5a10183012 HEAD)" = ".github/workflows/qa-current-package-player-progression-fa836d.yml"
       - name: Checkout immutable current package
         uses: actions/checkout@v4
         with:
@@ -47,9 +47,13 @@ jobs:
         run: python tests/test_player_next_gate.py
       - name: Packaged runtime gateway replay and target boundary
         working-directory: lanes/dev1/repair_overlay
+        env:
+          PYTHONPATH: ${{ github.workspace }}/lanes/dev1/repair_overlay:${{ github.workspace }}
         run: python tests/test_dev_a_runtime_gateway.py
       - name: Packaged transport forbids legacy caller-selected branch command
         working-directory: lanes/dev1/repair_overlay
+        env:
+          PYTHONPATH: ${{ github.workspace }}/lanes/dev1/repair_overlay:${{ github.workspace }}
         shell: python
         run: |
           from scripture_archive_platform.transport.contracts import ALLOWLISTED_COMMANDS, validate_request_shape

@@ -18,7 +18,8 @@ ALLOWLISTED_COMMANDS = frozenset({
   "authoring.validate_draft","authoring.preview_draft","authoring.prepare_publish_candidate",
   "authoring.export_draft","authoring.import_draft",
   "keymap.list","keymap.rebind","keymap.clear","keymap.reset_context","keymap.reset_all",
-  "keymap.export","keymap.import","settings.get","settings.set"
+  "keymap.export","keymap.import","settings.get","settings.set",
+  "speech.status","speech.synthesize_prompt"
 })
 
 _PLAYER_TRUTH_OWNERS = frozenset({"D5/runtime", "REFERENCE_TEST_ONLY"})
@@ -52,6 +53,11 @@ class PersistencePort(Protocol):
 class TransportAdapterPort(Protocol):
     def invoke(self,request:dict[str,Any])->dict[str,Any]: ...
 
+def _validate_short_string(payload:dict[str,Any], key:str, *, max_length:int=256)->None:
+    value=payload.get(key)
+    if not isinstance(value,str) or not value.strip() or len(value)>max_length or any(ord(ch)<32 for ch in value):
+        raise ValueError(f'invalid {key}')
+
 def validate_request_shape(request:Any)->tuple[str,str,dict[str,Any]]:
     if not isinstance(request,dict): raise ValueError('request must be an object')
     if request.get('api_version')!=TRANSPORT_API_VERSION: raise ValueError('unsupported api_version')
@@ -75,6 +81,21 @@ def validate_request_shape(request:Any)->tuple[str,str,dict[str,Any]]:
         raise ValueError('research.get_witness_matrix accepts an empty payload')
     if cmd=='research.export' and payload:
         raise ValueError('research.export accepts an empty payload')
+    if cmd=='speech.status' and payload:
+        raise ValueError('speech.status accepts an empty payload')
+    if cmd=='speech.synthesize_prompt':
+        allowed={'node_id','provider_id','voice_id','speed','allow_network'}
+        unknown=set(payload)-allowed
+        if unknown:
+            raise ValueError('speech.synthesize_prompt accepts canonical node context and presentation preferences only')
+        _validate_short_string(payload,'node_id',max_length=100)
+        _validate_short_string(payload,'provider_id',max_length=100)
+        _validate_short_string(payload,'voice_id',max_length=256)
+        if type(payload.get('allow_network')) is not bool:
+            raise ValueError('allow_network must be boolean')
+        try: speed=float(payload.get('speed',1.0))
+        except (TypeError,ValueError) as exc: raise ValueError('speech speed must be numeric') from exc
+        if not 0.25<=speed<=4.0: raise ValueError('speech speed must be between 0.25 and 4.0')
     return rid,cmd,payload
 
 def _redact_private_player_task(value:Any)->Any:

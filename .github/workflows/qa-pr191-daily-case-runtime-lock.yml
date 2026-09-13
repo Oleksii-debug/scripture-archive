@@ -24,13 +24,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Bind helper to exact PR head
         run: >-
-          python -c "import subprocess,sys; p=subprocess.check_output(['git','rev-parse','HEAD^'], text=True).strip(); e='deac1d2d7dad357d624d89f76d8cfc30f1f9ffac'; print('candidate_parent='+p); sys.exit(0 if p==e else 1)"
+          python -c "import subprocess,sys; e='deac1d2d7dad357d624d89f76d8cfc30f1f9ffac'; rc=subprocess.run(['git','merge-base','--is-ancestor',e,'HEAD']).returncode; files=subprocess.check_output(['git','diff','--name-only',e+'..HEAD'], text=True).splitlines(); print('candidate='+e); print('helper_diff='+repr(files)); sys.exit(0 if rc==0 and files==['.github/workflows/qa-pr191-daily-case-runtime-lock.yml'] else 1)"
       - name: Compile repaired gateway and regression
         run: >-
           python -m py_compile

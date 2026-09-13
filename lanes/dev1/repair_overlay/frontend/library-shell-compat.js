@@ -1,4 +1,5 @@
 import './chronology-lab-ui.js';
+import './library-research-persistence.js';
 
 const LIBRARY_VIEW_ID = 'library-view';
 
@@ -21,11 +22,20 @@ export function enforceLibraryExclusivity(main = document.querySelector('main'))
   return true;
 }
 
+function disableResearchEditorsDuringTargetChange(event) {
+  const trigger = event.target?.closest?.('button[aria-controls="library-research-panel"]');
+  if (!trigger) return;
+  const panel = document.getElementById('library-research-panel');
+  if (!panel) return;
+  for (const control of panel.querySelectorAll('input,textarea,button')) control.disabled = true;
+}
+
 function install() {
   const main = document.querySelector('main');
   if (!main) return;
 
   document.addEventListener('click', event => {
+    disableResearchEditorsDuringTargetChange(event);
     const target = event.target?.closest?.('#nav-library');
     if (target) hideShellViews(main);
   }, true);

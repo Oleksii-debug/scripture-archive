@@ -1,0 +1,50 @@
+name: R06 Current Package Content Pack Qualification
+
+on:
+  push:
+    branches:
+      - qa-current-package-content-packs-0913-sol
+    paths:
+      - '.github/workflows/r06-current-package-content-packs-qualification.yml'
+      - 'lanes/dev1/repair_overlay/frontend/content-pack-manager.js'
+      - 'lanes/dev1/repair_overlay/frontend/renderers.js'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/application/content_pack_manager.py'
+      - 'lanes/dev1/repair_overlay/tests/test_content_pack_manager.py'
+      - 'runtime_engine/scripture_archive_runtime/content_packs.py'
+      - 'runtime_engine/scripture_archive_runtime/content_pack_store.py'
+      - 'runtime_engine/tests/test_content_packs.py'
+      - 'runtime_engine/tests/test_content_pack_store.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: r06-current-package-content-packs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  content-pack-qualification:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Qualify packaged Content Pack Manager adapter and semantic surface
+        env:
+          PYTHONPATH: lanes/dev1/repair_overlay
+        run: python -m unittest discover -s lanes/dev1/repair_overlay/tests -p test_content_pack_manager.py -v
+      - name: Qualify canonical Content Pack V1 lifecycle and security
+        working-directory: runtime_engine/tests
+        env:
+          PYTHONPATH: ..
+        run: python -m unittest -v test_content_packs test_content_pack_store

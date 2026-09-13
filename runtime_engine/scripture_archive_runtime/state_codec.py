@@ -55,11 +55,22 @@ def serialize_task_state(state: TaskState) -> dict[str, Any]:
 
 def deserialize_task_state(raw: Mapping[str, Any]) -> TaskState:
     state = TaskState(node_id=str(raw.get("node_id", "")))
-    for a in raw.get("attempts") or []:
+
+    attempts = raw.get("attempts") or []
+    if not isinstance(attempts, list):
+        raise ValidationError("task-state attempts must be a list")
+    for a in attempts:
+        if not isinstance(a, Mapping):
+            raise ValidationError("task-state attempt items must be objects")
+        attempt_node_id = str(a.get("node_id", state.node_id))
+        if attempt_node_id != state.node_id:
+            raise ValidationError(
+                f"Task-state attempt node_id mismatch: {state.node_id} != {attempt_node_id}"
+            )
         used_hints = int(a.get("used_hints", 0))
         state.attempts.append(
             Attempt(
-                str(a.get("node_id", state.node_id)),
+                attempt_node_id,
                 Correctness(str(a.get("correctness", "INCORRECT"))),
                 float(a.get("score", 0.0)),
                 used_hints,
@@ -68,9 +79,26 @@ def deserialize_task_state(raw: Mapping[str, Any]) -> TaskState:
                 a.get("answer_snapshot"),
             )
         )
-    for h in raw.get("hint_uses") or []:
-        state.hint_uses.append(HintUse(state.node_id, int(h.get("level", 0)), str(h.get("text", "")), parse_dt(h.get("created_at")) or datetime.now(timezone.utc)))
-    state.evidence_unlocked = set(str(x) for x in raw.get("evidence_unlocked") or [])
+
+    hint_uses = raw.get("hint_uses") or []
+    if not isinstance(hint_uses, list):
+        raise ValidationError("task-state hint_uses must be a list")
+    for h in hint_uses:
+        if not isinstance(h, Mapping):
+            raise ValidationError("task-state hint-use items must be objects")
+        state.hint_uses.append(
+            HintUse(
+                state.node_id,
+                int(h.get("level", 0)),
+                str(h.get("text", "")),
+                parse_dt(h.get("created_at")) or datetime.now(timezone.utc),
+            )
+        )
+
+    evidence_unlocked = raw.get("evidence_unlocked") or []
+    if not isinstance(evidence_unlocked, list):
+        raise ValidationError("task-state evidence_unlocked must be a list")
+    state.evidence_unlocked = set(str(x) for x in evidence_unlocked)
     state.completed = bool(raw.get("completed", False))
     state.last_result = Correctness(str(raw["last_result"])) if raw.get("last_result") else None
     return state

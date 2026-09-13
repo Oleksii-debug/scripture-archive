@@ -1,0 +1,48 @@
+name: R06 Offline Reserved Device QA
+
+on:
+  push:
+    branches:
+      - r06-qa-offline-reserved-0913-sol
+
+permissions:
+  contents: read
+
+jobs:
+  exact-offline-readiness:
+    name: Offline readiness (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout immutable repair candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 8ccd8acce16eaef6b60378085c9ac37d95f87219
+          persist-credentials: false
+
+      - name: Bind exact candidate SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "8ccd8acce16eaef6b60378085c9ac37d95f87219"
+
+      - name: Compile offline readiness surface
+        run: >-
+          python -m compileall -q
+          runtime_engine/scripture_archive_runtime/offline_readiness.py
+          runtime_engine/tests/test_offline_readiness.py
+          runtime_engine/tests/test_offline_readiness_windows_paths.py
+
+      - name: Run complete offline readiness regression family
+        env:
+          PYTHONPATH: ${{ github.workspace }}/runtime_engine
+        run: >-
+          python -m unittest discover
+          -s runtime_engine/tests
+          -p "test_offline_readiness*.py"
+          -v

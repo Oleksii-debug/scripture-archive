@@ -55,12 +55,11 @@ jobs:
           lanes/dev1/repair_overlay/tests/test_accessibility.py
 
       - name: Run packaged composite accessibility and renderer regressions
-        working-directory: lanes/dev1/repair_overlay
         env:
-          PYTHONPATH: .
+          PYTHONPATH: lanes/dev1/repair_overlay
         run: |
-          python tests/test_composite_accessibility.py -v
-          python tests/test_accessibility.py -v
+          python -m unittest discover -s lanes/dev1/repair_overlay/tests -p "test_composite_accessibility.py" -v
+          python -m unittest discover -s lanes/dev1/repair_overlay/tests -p "test_accessibility.py" -v
 
       - name: Run public composite answer-contract regression
         working-directory: runtime_engine/tests

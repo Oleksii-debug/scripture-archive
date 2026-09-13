@@ -1,0 +1,81 @@
+name: R06 Current Package Mastery Review Qualification
+
+on:
+  push:
+    branches:
+      - r06-qa-current-package-mastery-review-0913-sol
+
+permissions:
+  contents: read
+
+jobs:
+  mastery-review:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      EXPECTED_PACKAGE: fa836d79fcfd9ac5d8aacbf6a6be9f5a10183012
+      WORKFLOW_PATH: .github/workflows/r06-current-package-mastery-review-qualification.yml
+    steps:
+      - name: Checkout exact helper head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Verify exact package parent and helper-only diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PACKAGE"
+          actual="$(git diff --name-only HEAD^ HEAD | tr -d '\r')"
+          test "$actual" = "$WORKFLOW_PATH"
+          product_changed="$(git diff --name-only "$EXPECTED_PACKAGE" HEAD | grep -v -F "$WORKFLOW_PATH" || true)"
+          test -z "$product_changed"
+          git diff --check HEAD^
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Qualify packaged mastery
+        shell: bash
+        working-directory: lanes/dev1/repair_overlay
+        run: python -m unittest discover -s tests -p 'test_packaged_mastery_current.py' -v
+
+      - name: Qualify review queue lifecycle, UI and truth
+        shell: bash
+        working-directory: lanes/dev1/repair_overlay
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s tests -p 'test_packaged_review_queue_lifecycle.py' -v
+          python -m unittest discover -s tests -p 'test_packaged_review_queue_ui.py' -v
+          python -m unittest discover -s tests -p 'test_review_queue_truth_contract.py' -v
+          node tests/review_queue_lifecycle_harness.cjs
+
+      - name: Qualify review training contracts
+        shell: bash
+        working-directory: lanes/dev1/repair_overlay
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s tests -p 'test_packaged_review_training_contract.py' -v
+          python -m unittest discover -s tests -p 'test_packaged_review_training_player_ui.py' -v
+          python -m unittest discover -s tests -p 'test_packaged_review_training_static_syntax.py' -v
+          python -m unittest discover -s tests -p 'test_packaged_review_training_transport.py' -v
+
+      - name: Verify relevant frontend JavaScript syntax
+        shell: bash
+        working-directory: lanes/dev1/repair_overlay
+        run: |
+          set -euo pipefail
+          node --check frontend/mastery.js
+          node --check frontend/review-queue-request-gate.js
+          node --check frontend/review-queue-ui.js
+          node --check frontend/app.js

@@ -45,3 +45,5 @@ void import('./evidence-graph-ui.js').then(({installEvidenceGraphSurface})=>inst
 void import('./witness-matrix-ui.js').then(({installWitnessMatrixSurface})=>installWitnessMatrixSurface());
 // Constructor V2 augments the existing AuthoringUI; it remains draft/version-only and capability-gated.
 void import('./constructor-v2-ui.js').then(({installConstructorV2Surface})=>installConstructorV2Surface());
+// Presentation-only speech uses the current canonical runtime task and never accepts arbitrary browser text.
+void import('./speech-ui.js').then(({installSpeechSurface})=>installSpeechSurface());

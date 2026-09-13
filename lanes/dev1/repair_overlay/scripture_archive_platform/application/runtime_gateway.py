@@ -68,12 +68,13 @@ class RuntimeBackedPlayerGateway:
             return dict(response)
 
     def get_daily_case(self) -> dict[str, Any]:
-        """Project Daily Case without adding a second runtime command or mutating player state."""
+        """Project Daily Case from one atomic snapshot of canonical runtime state."""
         if self._runtime_application is None or self._loader is None:
             raise RuntimeGatewayError("Daily Case requires the canonical runtime application and content loader")
         from scripture_archive_platform.application.daily_case_projection import DailyCaseProjection
 
-        return DailyCaseProjection(self._runtime_application, self._loader).response()
+        with self._runtime_lock:
+            return DailyCaseProjection(self._runtime_application, self._loader).response()
 
     def get_chronology_lab(self) -> dict[str, Any]:
         """Project canonical chronology data without inferring it from generic evidence.

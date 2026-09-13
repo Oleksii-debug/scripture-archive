@@ -18,7 +18,9 @@ ALLOWLISTED_COMMANDS = frozenset({
   "authoring.validate_draft","authoring.preview_draft","authoring.prepare_publish_candidate",
   "authoring.export_draft","authoring.import_draft",
   "keymap.list","keymap.rebind","keymap.clear","keymap.reset_context","keymap.reset_all",
-  "keymap.export","keymap.import","settings.get","settings.set"
+  "keymap.export","keymap.import","settings.get","settings.set",
+  "application_update.select_verify","diagnostics.get_report",
+  "content_packs.list","content_packs.inspect","content_packs.install","content_packs.verify","content_packs.activate","content_packs.rollback"
 })
 
 _PLAYER_TRUTH_OWNERS = frozenset({"D5/runtime", "REFERENCE_TEST_ONLY"})
@@ -52,6 +54,15 @@ class PersistencePort(Protocol):
 class TransportAdapterPort(Protocol):
     def invoke(self,request:dict[str,Any])->dict[str,Any]: ...
 
+def _require_only(payload:dict[str,Any],allowed:set[str],command:str)->None:
+    unknown=set(payload)-allowed
+    if unknown: raise ValueError(f'{command} contains unsupported payload fields')
+
+def _require_identity(payload:dict[str,Any],key:str,command:str)->str:
+    value=payload.get(key)
+    if not isinstance(value,str) or not value or len(value)>160: raise ValueError(f'{command} has invalid {key}')
+    return value
+
 def validate_request_shape(request:Any)->tuple[str,str,dict[str,Any]]:
     if not isinstance(request,dict): raise ValueError('request must be an object')
     if request.get('api_version')!=TRANSPORT_API_VERSION: raise ValueError('unsupported api_version')
@@ -63,18 +74,20 @@ def validate_request_shape(request:Any)->tuple[str,str,dict[str,Any]]:
         unknown=set(payload)-{'node_id'}
         if unknown: raise ValueError('player.next accepts only current node_id context; target selection is forbidden')
         if 'node_id' in payload and (not isinstance(payload['node_id'],str) or not payload['node_id'] or len(payload['node_id'])>100): raise ValueError('invalid node_id')
-    if cmd=='player.get_review_queue' and payload:
-        raise ValueError('player.get_review_queue accepts an empty payload')
-    if cmd=='player.get_daily_case' and payload:
-        raise ValueError('player.get_daily_case accepts an empty payload')
-    if cmd=='research.get_chronology_lab' and payload:
-        raise ValueError('research.get_chronology_lab accepts an empty payload')
-    if cmd=='research.get_evidence_graph' and payload:
-        raise ValueError('research.get_evidence_graph accepts an empty payload')
-    if cmd=='research.get_witness_matrix' and payload:
-        raise ValueError('research.get_witness_matrix accepts an empty payload')
-    if cmd=='research.export' and payload:
-        raise ValueError('research.export accepts an empty payload')
+    if cmd in {
+        'player.get_review_queue','player.get_daily_case','research.get_chronology_lab','research.get_evidence_graph',
+        'research.get_witness_matrix','research.export','application_update.select_verify','diagnostics.get_report','content_packs.list'
+    } and payload:
+        raise ValueError(f'{cmd} accepts an empty payload')
+    if cmd=='content_packs.inspect':
+        _require_only(payload,{'file_name'},cmd); _require_identity(payload,'file_name',cmd)
+    if cmd=='content_packs.install':
+        _require_only(payload,{'file_name','activate'},cmd); _require_identity(payload,'file_name',cmd)
+        if 'activate' in payload and not isinstance(payload['activate'],bool): raise ValueError('content_packs.install activate must be boolean')
+    if cmd in {'content_packs.verify','content_packs.activate'}:
+        _require_only(payload,{'pack_id','version'},cmd); _require_identity(payload,'pack_id',cmd); _require_identity(payload,'version',cmd)
+    if cmd=='content_packs.rollback':
+        _require_only(payload,{'pack_id'},cmd); _require_identity(payload,'pack_id',cmd)
     return rid,cmd,payload
 
 def _redact_private_player_task(value:Any)->Any:

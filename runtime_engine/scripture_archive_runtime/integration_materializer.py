@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import zipfile
 from dataclasses import dataclass, asdict
@@ -12,6 +13,14 @@ from .package_adapters import iter_nodes_from_payload
 from .security import ValidationError
 from .content import validate_canonical_node
 from .provenance import classify_provenance, RELEASE_PASS_CLASSES, PROVENANCE_CONTRACT_VERSION
+
+
+_LANE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+_WINDOWS_RESERVED_LANES = {
+    "CON", "PRN", "AUX", "NUL",
+    *(f"COM{i}" for i in range(1, 10)),
+    *(f"LPT{i}" for i in range(1, 10)),
+}
 
 
 @dataclass(frozen=True)
@@ -42,6 +51,14 @@ def sha256_file(path: str | Path) -> str:
 def _safe_member(name: str) -> bool:
     p = PurePosixPath(name)
     return not p.is_absolute() and ".." not in p.parts and not any(part in {"", "."} for part in p.parts)
+
+
+def _validated_lane_name(value: Any) -> str:
+    if not isinstance(value, str) or _LANE_RE.fullmatch(value) is None:
+        raise MaterializationError("lane must be a bounded single path segment")
+    if value.endswith((".", " ")) or value.split(".", 1)[0].upper() in _WINDOWS_RESERVED_LANES:
+        raise MaterializationError("lane uses unsafe Windows path semantics")
+    return value.lower()
 
 
 def _load_json_member(zf: zipfile.ZipFile, member: str) -> Any:
@@ -77,6 +94,11 @@ def _record_id(record: Mapping[str, Any], names: tuple[str, ...]) -> str:
 
 
 def materialize_packages(specs: Iterable[PackageSpec], output_dir: str | Path) -> dict[str, Any]:
+    specs = tuple(specs)
+    lane_names = tuple(_validated_lane_name(spec.lane) for spec in specs)
+    if len(lane_names) != len(set(lane_names)):
+        raise MaterializationError("package lanes must be unique case-insensitively")
+
     out = Path(output_dir)
     if out.exists():
         if out.is_symlink():
@@ -92,7 +114,7 @@ def materialize_packages(specs: Iterable[PackageSpec], output_dir: str | Path) -
     provenance_counts: dict[str, dict[str, int]] = {}
     ground_truth_indexes: dict[str, list[dict[str, str]]] = {}
 
-    for spec in specs:
+    for spec, lane_name in zip(specs, lane_names):
         path = Path(spec.zip_path)
         actual_sha = sha256_file(path)
         if actual_sha.lower() != spec.expected_sha256.lower():
@@ -155,7 +177,7 @@ def materialize_packages(specs: Iterable[PackageSpec], output_dir: str | Path) -
                 raise MaterializationError(f"duplicate evidence_id {evidence_id}")
             global_evidence[evidence_id] = (raw, spec.lane)
 
-        lane_dir = out / spec.lane.lower()
+        lane_dir = out / lane_name
         lane_dir.mkdir(parents=True, exist_ok=False)
         (lane_dir / "nodes.json").write_bytes(_canonical_json_bytes({"nodes": [dict(n) for n in nodes]}))
         (lane_dir / "evidence.json").write_bytes(_canonical_json_bytes({"records": [dict(r) for r in evidence]}))

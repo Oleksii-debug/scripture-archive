@@ -45,3 +45,5 @@ void import('./evidence-graph-ui.js').then(({installEvidenceGraphSurface})=>inst
 void import('./witness-matrix-ui.js').then(({installWitnessMatrixSurface})=>installWitnessMatrixSurface());
 // Constructor V2 augments the existing AuthoringUI; it remains draft/version-only and capability-gated.
 void import('./constructor-v2-ui.js').then(({installConstructorV2Surface})=>installConstructorV2Surface());
+// Explicit source-backed OT↔NT relations share the same unlocked canonical runtime and Research Workbench.
+void import('./cross-testament-ui.js').then(({installCrossTestamentSurface})=>installCrossTestamentSurface());

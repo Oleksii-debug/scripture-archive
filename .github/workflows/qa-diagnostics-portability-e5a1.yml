@@ -1,0 +1,51 @@
+name: QA Diagnostics Portability e5a1
+
+on:
+  push:
+    branches:
+      - qa-diagnostics-portability-e5a1-0913-sol
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostics-portability:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      EXPECTED_CANDIDATE: e5a1a6895f8955e0823aaa0cbd7a30f23022d360
+      EXPECTED_DIAGNOSTICS_BLOB: 037bfa655d745cfdd041399250e324da038d8ebf
+      EXPECTED_TEST_BLOB: 38488669a3de33785cabc99c2f46eccbd7fedaa8
+      HELPER_PATH: .github/workflows/qa-diagnostics-portability-e5a1.yml
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Assert immutable candidate parent and helper-only containment
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_CANDIDATE"
+          test "$(git diff --name-only "$EXPECTED_CANDIDATE" HEAD | wc -l | tr -d ' ')" = "1"
+          test "$(git diff --name-only "$EXPECTED_CANDIDATE" HEAD)" = "$HELPER_PATH"
+      - name: Verify exact committed Diagnostics identities
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD:runtime_engine/scripture_archive_runtime/diagnostics.py)" = "$EXPECTED_DIAGNOSTICS_BLOB"
+          test "$(git rev-parse HEAD:lanes/dev1/repair_overlay/tests/test_packaged_diagnostics.py)" = "$EXPECTED_TEST_BLOB"
+      - name: Run runtime Diagnostics regression
+        working-directory: runtime_engine
+        run: python -m unittest tests.test_diagnostics -v
+      - name: Run FULL packaged Diagnostics regression including portable identity assertion
+        run: python -c "import runpy,sys; sys.path[:0]=['lanes/dev1/repair_overlay','runtime_engine']; runpy.run_path('lanes/dev1/repair_overlay/tests/test_packaged_diagnostics.py',run_name='__main__')"
+      - name: Run transport composition regression
+        run: python -c "import runpy,sys; sys.path[:0]=['lanes/dev1/repair_overlay','runtime_engine']; runpy.run_path('lanes/dev1/repair_overlay/tests/test_packaged_transport_composition.py',run_name='__main__')"
+      - name: Diff hygiene
+        shell: bash
+        run: git diff --check "$EXPECTED_CANDIDATE" HEAD

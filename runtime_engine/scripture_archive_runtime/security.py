@@ -5,7 +5,10 @@ import re
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-ALLOWED_COMMANDS = {"load_task", "submit_answer", "request_hint", "next", "save", "restore", "get_mastery", "get_review_queue", "get_evidence"}
+ALLOWED_COMMANDS = {
+    "load_task", "submit_answer", "request_hint", "next", "save", "restore",
+    "get_mastery", "get_review_queue", "start_review", "finish_review", "get_evidence",
+}
 REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 DANGEROUS_IMPORT_KEYS = {"script", "executable", "command", "shell", "python", "javascript", "__code__", "__import__"}
 
@@ -69,8 +72,8 @@ def validate_command_dto(value: Mapping[str, Any]) -> None:
     payload = value.get("payload", {})
     if not isinstance(payload, Mapping):
         raise ValidationError("payload must be an object")
-    if command == "get_review_queue" and payload:
-        raise ValidationError("runtime.v1 get_review_queue accepts an empty payload")
+    if command in {"get_review_queue", "start_review", "finish_review"} and payload:
+        raise ValidationError(f"runtime.v1 {command} accepts an empty payload")
     _validate_json_value(payload)
     encoded = json.dumps(value, ensure_ascii=False).encode("utf-8")
     if len(encoded) > 1_000_000:

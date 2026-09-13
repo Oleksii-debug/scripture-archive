@@ -1,0 +1,38 @@
+name: QA PR177 Offline Readiness
+
+on:
+  push:
+    branches:
+      - qa-pr177-offline-readiness-0913-sol
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-readiness:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Prove helper-only exact parent
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "8ccd8acce16eaef6b60378085c9ac37d95f87219"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/qa-pr177-offline-readiness.yml"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compile offline readiness implementation and regressions
+        working-directory: runtime_engine
+        run: python -m compileall -q scripture_archive_runtime tests/test_offline_readiness.py tests/test_offline_readiness_windows_paths.py
+      - name: Execute offline readiness regressions
+        working-directory: runtime_engine
+        run: python -m unittest discover -s tests -p "test_offline_readiness*.py" -v

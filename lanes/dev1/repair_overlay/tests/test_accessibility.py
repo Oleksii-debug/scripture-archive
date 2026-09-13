@@ -67,6 +67,14 @@ class AccessibilityTests(unittest.TestCase):
         self.assertIn("button:not(:disabled)", self.renderers)
         self.assertIn("(preferred||fallback)?.focus()", self.renderers)
 
+    def test_composite_renderer_dispatches_child_registry_and_scopes_ids(self):
+        self.assertIn('RendererRegistry.get(child.task_type).render(child,childHost)', self.renderers)
+        self.assertIn('scopeIds(childHost,', self.renderers)
+        self.assertIn('answer:getChild()', self.renderers)
+        self.assertIn("section.setAttribute('aria-labelledby',h.id)", self.renderers)
+        self.assertIn("failure.setAttribute('role','alert')", self.renderers)
+        self.assertNotIn("answer:{text:input.value}", self.renderers)
+
     def test_shortcut_capture_preserves_escape_tab_scope_and_focus_return(self):
         self.assertIn("if(e.key==='Escape'){this.clearCapture();return}", self.hotkeys)
         self.assertIn("if(e.key==='Tab')return", self.hotkeys)

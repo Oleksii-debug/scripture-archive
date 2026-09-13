@@ -1,0 +1,101 @@
+name: R06 Current Package Speech Qualification
+
+on:
+  push:
+    branches:
+      - r06-qa-current-package-speech-0913-sol
+
+permissions:
+  contents: read
+
+jobs:
+  speech:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      EXPECTED_PACKAGE: fa836d79fcfd9ac5d8aacbf6a6be9f5a10183012
+      WORKFLOW_PATH: .github/workflows/r06-current-package-speech-qualification.yml
+      EXPECTED_SOURCE_SHA: 51a31a8840b57850c8d4d0fc714b124445f3b3155daea083817c3570e0b80e0e
+    steps:
+      - name: Checkout exact helper head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Verify exact package parent and helper-only diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PACKAGE"
+          actual="$(git diff --name-only HEAD^ HEAD | tr -d '\r')"
+          test "$actual" = "$WORKFLOW_PATH"
+          product_changed="$(git diff --name-only "$EXPECTED_PACKAGE" HEAD | grep -v -F "$WORKFLOW_PATH" || true)"
+          test -z "$product_changed"
+          git diff --check HEAD^
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Reconstruct exact package DEV1 source and overlay
+        shell: python
+        run: |
+          from pathlib import Path
+          import base64
+          import hashlib
+          import shutil
+          import zipfile
+          import os
+
+          expected = os.environ["EXPECTED_SOURCE_SHA"]
+          parts = sorted(Path("lanes/dev1/source_parts").glob("part-*.b64"))
+          assert parts, "missing package-encoded DEV1 source parts"
+          encoded = "".join(p.read_text(encoding="ascii") for p in parts)
+          data = base64.b64decode("".join(encoded.split()))
+          digest = hashlib.sha256(data).hexdigest()
+          print(f"DEV1 archive sha256={digest} parts={len(parts)}")
+          assert digest == expected, (digest, expected)
+
+          archive = Path("DEV1_R06_PLATFORM_SOURCE.zip")
+          archive.write_bytes(data)
+          with zipfile.ZipFile(archive) as zf:
+              zf.extractall(".")
+          base = Path("r06_platform")
+          assert base.is_dir(), "reconstructed r06_platform missing"
+          assert (base / "scripture_archive_platform" / "persistence" / "store.py").is_file()
+
+          shutil.copytree("lanes/dev1/repair_overlay", base, dirs_exist_ok=True)
+          assert (base / "tests" / "test_packaged_speech.py").is_file()
+          assert (base / "frontend" / "speech-ui.js").is_file()
+          print("DEV1 exact-package reconstruction + overlay PASS")
+
+      - name: Qualify composed packaged Speech TTS
+        shell: bash
+        working-directory: r06_platform
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s tests -p 'test_packaged_speech.py' -v
+
+      - name: Qualify runtime Speech security edges
+        shell: bash
+        working-directory: runtime_engine
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s tests -p 'test_speech*.py' -v
+
+      - name: Verify Speech frontend syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check r06_platform/frontend/speech-ui.js
+          node --check r06_platform/frontend/app.js
+          python -m compileall -q r06_platform/scripture_archive_platform

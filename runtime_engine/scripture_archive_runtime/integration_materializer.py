@@ -100,11 +100,8 @@ def materialize_packages(specs: Iterable[PackageSpec], output_dir: str | Path) -
         raise MaterializationError("package lanes must be unique case-insensitively")
 
     out = Path(output_dir)
-    if out.exists():
-        if out.is_symlink():
-            raise MaterializationError("output directory must not be symlink")
-        shutil.rmtree(out)
-    out.mkdir(parents=True, exist_ok=False)
+    if out.exists() and out.is_symlink():
+        raise MaterializationError("output directory must not be symlink")
 
     global_nodes: dict[str, tuple[bytes, str]] = {}
     global_evidence: dict[str, tuple[bytes, str]] = {}
@@ -113,7 +110,12 @@ def materialize_packages(specs: Iterable[PackageSpec], output_dir: str | Path) -
     lane_counts: dict[str, dict[str, int]] = {}
     provenance_counts: dict[str, dict[str, int]] = {}
     ground_truth_indexes: dict[str, list[dict[str, str]]] = {}
+    prepared_lanes: list[
+        tuple[PackageSpec, str, list[Mapping[str, Any]], list[Mapping[str, Any]]]
+    ] = []
 
+    # Validate every package and all cross-package relationships before any
+    # destructive mutation of an existing materialized output.
     for spec, lane_name in zip(specs, lane_names):
         path = Path(spec.zip_path)
         actual_sha = sha256_file(path)
@@ -177,13 +179,9 @@ def materialize_packages(specs: Iterable[PackageSpec], output_dir: str | Path) -
                 raise MaterializationError(f"duplicate evidence_id {evidence_id}")
             global_evidence[evidence_id] = (raw, spec.lane)
 
-        lane_dir = out / lane_name
-        lane_dir.mkdir(parents=True, exist_ok=False)
-        (lane_dir / "nodes.json").write_bytes(_canonical_json_bytes({"nodes": [dict(n) for n in nodes]}))
-        (lane_dir / "evidence.json").write_bytes(_canonical_json_bytes({"records": [dict(r) for r in evidence]}))
-        (lane_dir / "ground_truth_index.json").write_bytes(_canonical_json_bytes({"schema": "CANONICAL_GROUND_TRUTH_INDEX_v1", "records": ground_truth_indexes[spec.lane]}))
         lane_counts[spec.lane] = {"nodes": len(nodes), "evidence": len(evidence)}
         inputs.append({**asdict(spec), "zip_path": path.name, "actual_sha256": actual_sha})
+        prepared_lanes.append((spec, lane_name, nodes, evidence))
 
     evidence_ids = set(global_evidence)
     for node_id, (raw, lane) in global_nodes.items():
@@ -199,6 +197,17 @@ def materialize_packages(specs: Iterable[PackageSpec], output_dir: str | Path) -
                 unresolved.append({"lane": lane, "node_id": node_id, "evidence_id": evidence_id})
     if unresolved:
         raise MaterializationError(f"unresolved evidence refs: {len(unresolved)}")
+
+    if out.exists():
+        shutil.rmtree(out)
+    out.mkdir(parents=True, exist_ok=False)
+
+    for spec, lane_name, nodes, evidence in prepared_lanes:
+        lane_dir = out / lane_name
+        lane_dir.mkdir(parents=True, exist_ok=False)
+        (lane_dir / "nodes.json").write_bytes(_canonical_json_bytes({"nodes": [dict(n) for n in nodes]}))
+        (lane_dir / "evidence.json").write_bytes(_canonical_json_bytes({"records": [dict(r) for r in evidence]}))
+        (lane_dir / "ground_truth_index.json").write_bytes(_canonical_json_bytes({"schema": "CANONICAL_GROUND_TRUTH_INDEX_v1", "records": ground_truth_indexes[spec.lane]}))
 
     output_hashes: dict[str, str] = {}
     for path in sorted(p for p in out.rglob("*") if p.is_file()):

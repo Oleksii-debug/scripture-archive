@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Fail closed when canonical task type and accepted-answer shape disagree.
+"""Exercise canonical MULTI_SELECT truth through the production legacy adapter.
 
-This gate intentionally validates source-of-truth node bytes before the packaged
-runtime adapts them. It does not infer answers from presentation payloads or
-rewrite canonical truth.
+This gate scans the real canonical mission corpus.  It permits only the narrow,
+explicit historical representation already supported by the packaged runtime:
+semicolon-delimited ``citation selection`` truth.  The production normalizer is
+then followed by the strict canonical ANSWER_DTO projection, so ambiguous or
+presentation-derived truth still fails closed.
 """
 from __future__ import annotations
 
@@ -12,6 +14,8 @@ import sys
 from pathlib import Path
 
 from runtime_engine.scripture_archive_runtime.answer_contracts import canonical_task_type
+from runtime_engine.scripture_archive_runtime.package_adapters import normalize_legacy_multiselect_truth
+from runtime_engine.scripture_archive_runtime.provenance import canonical_answer_dto
 
 
 def _task_type(node: dict) -> str:
@@ -24,6 +28,7 @@ def main(root: str) -> int:
     errors: list[str] = []
     checked = 0
     multi_select = 0
+    legacy_normalized = 0
 
     for index_path in sorted(base.rglob("MISSION_INDEX.json")):
         index = json.loads(index_path.read_text(encoding="utf-8"))
@@ -44,13 +49,26 @@ def main(root: str) -> int:
                 if task_type != "MULTI_SELECT":
                     continue
                 multi_select += 1
-                answer = node.get("accepted_answer")
-                if not isinstance(answer, list) or not answer or any(not isinstance(v, str) or not v.strip() for v in answer):
-                    errors.append(
-                        f"{node_path}:{node_id}: MULTI_SELECT accepted_answer must be a non-empty array of non-empty strings"
-                    )
+                try:
+                    normalized = normalize_legacy_multiselect_truth(node)
+                    answer = normalized.get("accepted_answer")
+                    if answer is not node.get("accepted_answer"):
+                        legacy_normalized += 1
+                    if not isinstance(answer, list) or not answer or any(
+                        not isinstance(value, str) or not value.strip() for value in answer
+                    ):
+                        raise ValueError("normalized accepted_answer is not a non-empty string array")
+                    dto = canonical_answer_dto(normalized)
+                    if dto.get("type") != "MULTI_SELECT" or dto.get("choices") != answer:
+                        raise ValueError("strict canonical ANSWER_DTO does not preserve the normalized choice set")
+                except Exception as exc:
+                    errors.append(f"{node_path}:{node_id}: {exc}")
 
-    print(f"CANONICAL_ANSWER_SHAPES checked={checked} multi_select={multi_select} errors={len(errors)}")
+    print(
+        "CANONICAL_ANSWER_SHAPES "
+        f"checked={checked} multi_select={multi_select} "
+        f"legacy_normalized={legacy_normalized} errors={len(errors)}"
+    )
     for error in errors:
         print("ERROR", error)
     return 0 if not errors else 1

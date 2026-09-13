@@ -11,6 +11,7 @@ const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+
 let transportPromise = null;
 let loadedOnce = false;
 let reviewViewActive = false;
+let reviewTrainingAvailable = false;
 
 const byId = id => document.getElementById(id);
 const requestGate = createRequestGenerationGate(() => {
@@ -35,9 +36,8 @@ function setStatus(message) {
 }
 
 async function api(command, payload = {}) {
-  if (command !== 'system.bootstrap' && command !== 'player.get_review_queue') {
-    throw new Error('Review Queue UI attempted a non-read-only review command');
-  }
+  const allowed = new Set(['system.bootstrap', 'player.get_review_queue', 'player.start_review']);
+  if (!allowed.has(command)) throw new Error('Review Queue UI attempted an unsupported review command');
   if (!transportPromise) transportPromise = chooseTransport();
   return await unwrap(await transportPromise, command, payload);
 }
@@ -57,7 +57,11 @@ function hideOtherViews() {
 function deactivateReviewQueue() {
   if (!reviewViewActive) return;
   reviewViewActive = false;
+  loadedOnce = false;
+  reviewTrainingAvailable = false;
   requestGate.invalidate();
+  const start = byId('review-training-start');
+  if (start) start.disabled = true;
 }
 
 function keepViewExclusive() {
@@ -92,22 +96,14 @@ function validateQueueItem(raw, index) {
   const relation = requireSafeText(raw, 'relation', index, {maxLength: 32});
   const reason = requireSafeText(raw, 'reason', index, {allowEmpty: true, maxLength: MAX_REASON_LENGTH});
 
-  if (!Object.prototype.hasOwnProperty.call(raw, 'node_id')) {
-    throw new Error(`Відсутнє поле node_id у review item #${index + 1}`);
-  }
+  if (!Object.prototype.hasOwnProperty.call(raw, 'node_id')) throw new Error(`Відсутнє поле node_id у review item #${index + 1}`);
   const nodeId = raw.node_id;
   if (nodeId !== null && (typeof nodeId !== 'string' || !nodeId || nodeId.length > MAX_ID_LENGTH || CONTROL_OR_LINE_SEPARATOR.test(nodeId))) {
     throw new Error(`Некоректне поле node_id у review item #${index + 1}`);
   }
-  if (!Object.prototype.hasOwnProperty.call(raw, 'priority') || !Number.isInteger(raw.priority)) {
-    throw new Error(`Некоректне поле priority у review item #${index + 1}`);
-  }
-  if (!REVIEW_RELATIONS.has(relation)) {
-    throw new Error(`Невідоме поле relation у review item #${index + 1}`);
-  }
-  if (!ISO_TIMESTAMP.test(dueAt) || Number.isNaN(Date.parse(dueAt))) {
-    throw new Error(`Некоректне поле due_at у review item #${index + 1}`);
-  }
+  if (!Object.prototype.hasOwnProperty.call(raw, 'priority') || !Number.isInteger(raw.priority)) throw new Error(`Некоректне поле priority у review item #${index + 1}`);
+  if (!REVIEW_RELATIONS.has(relation)) throw new Error(`Невідоме поле relation у review item #${index + 1}`);
+  if (!ISO_TIMESTAMP.test(dueAt) || Number.isNaN(Date.parse(dueAt))) throw new Error(`Некоректне поле due_at у review item #${index + 1}`);
   return {queueId, conceptId, nodeId, dueAt, priority: raw.priority, relation, reason};
 }
 
@@ -125,16 +121,12 @@ function renderQueue(rawQueue) {
   const caption = element('caption', 'Canonical review queue у порядку, повернутому runtime');
   const head = element('thead');
   const headerRow = element('tr');
-  for (const label of ['Queue ID', 'Concept', 'Node', 'Due at', 'Priority', 'Relation', 'Reason']) {
-    headerRow.append(element('th', label, {scope: 'col'}));
-  }
+  for (const label of ['Queue ID', 'Concept', 'Node', 'Due at', 'Priority', 'Relation', 'Reason']) headerRow.append(element('th', label, {scope: 'col'}));
   head.append(headerRow);
   const body = element('tbody');
   for (const item of validated.slice(0, MAX_VISIBLE_ITEMS)) {
     const row = element('tr');
-    for (const value of [item.queueId, item.conceptId, item.nodeId || '—', item.dueAt, item.priority, item.relation, item.reason || '—']) {
-      row.append(element('td', value));
-    }
+    for (const value of [item.queueId, item.conceptId, item.nodeId || '—', item.dueAt, item.priority, item.relation, item.reason || '—']) row.append(element('td', value));
     body.append(row);
   }
   table.append(caption, head, body);
@@ -149,28 +141,53 @@ async function loadReviewQueue() {
   try {
     const bootstrap = await api('system.bootstrap');
     if (!requestGate.isCurrent(generation)) return;
-    if (bootstrap?.capabilities?.review_queue !== true) {
-      throw new Error('Canonical runtime review queue недоступна в цьому запуску');
-    }
+    if (bootstrap?.capabilities?.review_queue !== true) throw new Error('Canonical runtime review queue недоступна в цьому запуску');
+    reviewTrainingAvailable = bootstrap?.capabilities?.review_training === true;
+    const start = byId('review-training-start');
+    if (start) start.disabled = !reviewTrainingAvailable;
     const data = await api('player.get_review_queue');
     if (!requestGate.isCurrent(generation)) return;
-    if (data?.truth_owner !== 'D5/runtime') {
-      throw new Error('Review queue response не підтверджує D5/runtime truth ownership');
-    }
+    if (data?.truth_owner !== 'D5/runtime') throw new Error('Review queue response не підтверджує D5/runtime truth ownership');
     const rendered = renderQueue(data.review_queue);
     if (!requestGate.isCurrent(generation)) return;
     loadedOnce = true;
-    if (rendered.total > rendered.shown) {
-      setStatus(`Canonical queue містить ${rendered.total} записів; показано перші ${rendered.shown} у runtime order без локального re-ranking.`);
-    } else {
-      setStatus(`Canonical queue: ${rendered.total} записів. Порядок і поля відображені без локальної scheduling policy.`);
-    }
+    const suffix = reviewTrainingAvailable ? ' Тренування обирає завдання тільки через canonical runtime Scheduler.' : ' Режим тренування в цьому запуску недоступний.';
+    if (rendered.total > rendered.shown) setStatus(`Canonical queue містить ${rendered.total} записів; показано перші ${rendered.shown} у runtime order без локального re-ranking.${suffix}`);
+    else setStatus(`Canonical queue: ${rendered.total} записів. Порядок і поля відображені без локальної scheduling policy.${suffix}`);
     byId('review-queue-heading')?.focus();
   } catch (error) {
     if (!requestGate.isCurrent(generation)) return;
     loadedOnce = false;
+    reviewTrainingAvailable = false;
+    const start = byId('review-training-start');
+    if (start) start.disabled = true;
     byId('review-queue-results')?.replaceChildren();
     setStatus(`Review queue недоступна: ${error.message}`);
+  }
+}
+
+async function startReviewTraining() {
+  if (!reviewTrainingAvailable) return;
+  const generation = requestGate.begin();
+  if (!requestGate.isCurrent(generation)) return;
+  const button = byId('review-training-start');
+  if (button) button.disabled = true;
+  setStatus('Canonical runtime обирає наступне доступне повторення…');
+  try {
+    const data = await api('player.start_review');
+    if (!requestGate.isCurrent(generation)) return;
+    if (data?.truth_owner !== 'D5/runtime' || !data.review_session || typeof data.review_session !== 'object') throw new Error('Некоректна відповідь Review Training');
+    if (!data.task) {
+      setStatus('Зараз немає повторень, дозволених canonical runtime Scheduler. Майбутні due items не відкриваються достроково.');
+      loadedOnce = false;
+      await loadReviewQueue();
+      return;
+    }
+    document.dispatchEvent(new CustomEvent('scripture-review-training-started', {detail: data}));
+  } catch (error) {
+    if (!requestGate.isCurrent(generation)) return;
+    setStatus(`Тренування не запущено: ${error.message}`);
+    if (button) button.disabled = !reviewTrainingAvailable;
   }
 }
 
@@ -185,12 +202,14 @@ function buildSurface() {
 
   const section = element('section', '', {id: 'review-queue-view', className: 'hidden', 'aria-labelledby': 'review-queue-heading'});
   const heading = element('h2', 'Черга повторення', {id: 'review-queue-heading', tabIndex: '-1'});
-  const note = element('p', 'Read-only проєкція persisted canonical review queue. Цей екран не визначає due/priority policy, не пересортовує чергу і не обирає наступне завдання.', {id: 'review-queue-contract-note', role: 'note'});
-  const status = element('p', '', {id: 'review-queue-status', role: 'status', 'aria-live': 'polite'});
+  const note = element('p', 'Черга є read-only проєкцією persisted canonical review state. Кнопка тренування не вибирає рядок у браузері: наступний task визначає існуючий D5/runtime Scheduler з його due, cooldown, fatigue та session-dedup правилами.', {id: 'review-queue-contract-note', role: 'note'});
+  const status = element('p', '', {id: 'review-queue-status', role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true'});
   const actions = element('div', '', {className: 'actions'});
+  const start = element('button', 'Почати тренування', {id: 'review-training-start', type: 'button', className: 'primary'});
+  start.disabled = true;
   const refresh = element('button', 'Оновити чергу', {id: 'review-queue-refresh', type: 'button'});
   const back = element('button', 'Повернутися на головну', {id: 'review-queue-back', type: 'button'});
-  actions.append(refresh, back);
+  actions.append(start, refresh, back);
   const results = element('div', '', {id: 'review-queue-results'});
   section.append(heading, note, status, actions, results);
   main.append(section);
@@ -202,6 +221,7 @@ function buildSurface() {
     heading.focus();
     if (!loadedOnce) void loadReviewQueue();
   });
+  start.addEventListener('click', () => { void startReviewTraining(); });
   refresh.addEventListener('click', () => { void loadReviewQueue(); });
   back.addEventListener('click', () => {
     deactivateReviewQueue();

@@ -66,6 +66,7 @@ try {
       --name $Name `
       --collect-all webview `
       --add-data "$PlatformRoot\frontend${Sep}r06_platform\frontend" `
+      --add-data "$PlatformRoot\scripture_archive_platform\content\data${Sep}scripture_archive_platform\content\data" `
       --add-data "$Repo\docs\campaigns${Sep}docs\campaigns" `
       --add-data "$BuildIdentity${Sep}r06_platform" `
       --hidden-import runtime_engine.scripture_archive_runtime.application `

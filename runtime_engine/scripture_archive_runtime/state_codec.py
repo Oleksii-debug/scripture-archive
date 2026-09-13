@@ -56,7 +56,9 @@ def serialize_task_state(state: TaskState) -> dict[str, Any]:
 def deserialize_task_state(raw: Mapping[str, Any]) -> TaskState:
     state = TaskState(node_id=str(raw.get("node_id", "")))
 
-    attempts = raw.get("attempts") or []
+    attempts = raw.get("attempts")
+    if attempts is None:
+        attempts = []
     if not isinstance(attempts, list):
         raise ValidationError("task-state attempts must be a list")
     for a in attempts:
@@ -80,7 +82,9 @@ def deserialize_task_state(raw: Mapping[str, Any]) -> TaskState:
             )
         )
 
-    hint_uses = raw.get("hint_uses") or []
+    hint_uses = raw.get("hint_uses")
+    if hint_uses is None:
+        hint_uses = []
     if not isinstance(hint_uses, list):
         raise ValidationError("task-state hint_uses must be a list")
     for h in hint_uses:
@@ -95,7 +99,9 @@ def deserialize_task_state(raw: Mapping[str, Any]) -> TaskState:
             )
         )
 
-    evidence_unlocked = raw.get("evidence_unlocked") or []
+    evidence_unlocked = raw.get("evidence_unlocked")
+    if evidence_unlocked is None:
+        evidence_unlocked = []
     if not isinstance(evidence_unlocked, list):
         raise ValidationError("task-state evidence_unlocked must be a list")
     state.evidence_unlocked = set(str(x) for x in evidence_unlocked)

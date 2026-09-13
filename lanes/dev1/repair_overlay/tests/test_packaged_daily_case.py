@@ -189,11 +189,11 @@ class PackagedDailyCaseBoundaryTests(unittest.TestCase):
         with self.assertRaises(RuntimeGatewayError):
             gateway.get_daily_case()
 
-    def test_supplemental_ui_keeps_immutable_base_and_safe_semantics(self):
+    def test_composed_ui_keeps_daily_case_read_only_and_safe(self):
         overlay = Path(__file__).resolve().parents[1]
         frontend = overlay / "frontend"
-        self.assertFalse((frontend / "index.html").exists())
-        self.assertFalse((frontend / "app.js").exists())
+        self.assertTrue((frontend / "index.html").is_file())
+        self.assertTrue((frontend / "app.js").is_file())
         transport = (frontend / "transport.js").read_text(encoding="utf-8")
         ui = (frontend / "daily-case-ui.js").read_text(encoding="utf-8")
         self.assertEqual(1, transport.count("void import('./daily-case-ui.js')"))

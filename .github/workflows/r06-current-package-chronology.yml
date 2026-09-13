@@ -1,0 +1,71 @@
+name: R06 Current Package Chronology Lab Qualification
+
+on:
+  push:
+    branches:
+      - r06-qa-current-package-chronology-0913-sol
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  chronology:
+    name: chronology (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      EXPECTED_PACKAGE_SHA: fa836d79fcfd9ac5d8aacbf6a6be9f5a10183012
+      HELPER_WORKFLOW: .github/workflows/r06-current-package-chronology.yml
+    steps:
+      - name: Checkout helper evidence commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify immutable package ancestry and workflow-only delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "${EXPECTED_PACKAGE_SHA}^{commit}"
+          test "$(git merge-base "${EXPECTED_PACKAGE_SHA}" HEAD)" = "${EXPECTED_PACKAGE_SHA}"
+          mapfile -t changed < <(git diff --name-only "${EXPECTED_PACKAGE_SHA}"..HEAD)
+          printf 'helper delta:\n%s\n' "${changed[*]}"
+          test "${#changed[@]}" -eq 1
+          test "${changed[0]}" = "${HELPER_WORKFLOW}"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile Chronology runtime and packaged projection
+        run: >-
+          python -m compileall -q
+          runtime_engine/scripture_archive_runtime/chronology.py
+          runtime_engine/tests/test_chronology_lab.py
+          runtime_engine/tests/test_chronology_text_safety.py
+          lanes/dev1/repair_overlay/scripture_archive_platform/application/chronology_projection.py
+          lanes/dev1/repair_overlay/tests/test_packaged_chronology_lab.py
+
+      - name: Run canonical Chronology source-safety regressions
+        working-directory: runtime_engine/tests
+        env:
+          PYTHONPATH: ..
+        run: >-
+          python -m unittest -v
+          test_chronology_lab
+          test_chronology_text_safety
+
+      - name: Run packaged Chronology projection and bridge regressions
+        working-directory: lanes/dev1/repair_overlay
+        run: python tests/test_packaged_chronology_lab.py -v
+
+      - name: Validate packaged Chronology frontend syntax
+        working-directory: lanes/dev1/repair_overlay/frontend
+        run: |
+          node --check chronology-lab-ui.js
+          node --check library-shell-compat.js

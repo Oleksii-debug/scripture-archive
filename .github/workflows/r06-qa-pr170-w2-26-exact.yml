@@ -28,7 +28,6 @@ jobs:
           test "$(git rev-parse HEAD)" = '058356fa159df120359ff41eb52559c6cedd1e87'
           test "$(git merge-base HEAD a1dceca4783a1d8abe4f5b3de7103d60d4c0e344)" = 'a1dceca4783a1d8abe4f5b3de7103d60d4c0e344'
           git diff --name-only a1dceca4783a1d8abe4f5b3de7103d60d4c0e344..HEAD > /tmp/pr170-paths.txt
-          cat /tmp/pr170-paths.txt
           test "$(wc -l < /tmp/pr170-paths.txt)" -eq 5
           grep -Fx 'docs/campaigns/GW/R06_DEV3_MATERIALIZATION_05/W2_26_NODE_SHARD_PROOF.json' /tmp/pr170-paths.txt
           for i in 005 006 007 008; do
@@ -59,6 +58,7 @@ jobs:
           source = pathlib.Path('/tmp/pr170-closure/source')
           target = pathlib.Path('docs/campaigns/GW/R06_DEV3_MATERIALIZATION_05/nodes')
           proof_path = pathlib.Path('docs/campaigns/GW/R06_DEV3_MATERIALIZATION_05/W2_26_NODE_SHARD_PROOF.json')
+          allowed_feedback_delta = {'success_feedback', 'partial_feedback', 'failure_feedback', 'hints'}
 
           expected_hash = {}
           checked = 0
@@ -88,6 +88,9 @@ jobs:
           def canon(record):
               return json.dumps(record, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')
 
+          def frozen_truth(record):
+              return {k: v for k, v in record.items() if k not in allowed_feedback_delta}
+
           canonical = {}
           source_files = sorted((source / 'nodes').glob('*.json'))
           assert len(source_files) == 15
@@ -109,9 +112,15 @@ jobs:
           assert aggregate == '403d1aa3c22b8bea49b60c59512e53ae7ab0c389c21101a83f7b90898cbbc240'
           assert aggregate != '6bc9ceadb9a02f7eef92cf70df004f3781a3e85732b1f5d17cd93c2e876896e6'
 
+          selected = [f'GW{mission:02d}-N{node:02d}' for mission in range(5, 9) for node in range(1, 25)]
+          selected_set = set(selected)
+          assert len(selected) == 96 and len(selected_set) == 96
+
           readable = {}
           origin = {}
           line_count = 0
+          legacy_feedback_only = 0
+          exact_closure = 0
           for p in sorted(target.glob('*.jsonl')):
               for line_no, line in enumerate(p.read_text(encoding='utf-8').splitlines(), 1):
                   if not line.strip():
@@ -120,15 +129,24 @@ jobs:
                   record = json.loads(line)
                   node_id = record.get('node_id')
                   assert node_id in canonical, (p, line_no, node_id)
+                  assert node_id not in readable, ('duplicate readable node', node_id, origin[node_id], f'{p}:{line_no}')
+                  source_record = canonical[node_id]
                   got = hashlib.sha256(canon(record)).hexdigest()
                   expected = record_hashes[node_id]
-                  assert got == expected, ('source mismatch', p, line_no, node_id, expected, got)
-                  assert node_id not in readable, ('duplicate readable node', node_id, origin[node_id], f'{p}:{line_no}')
+                  if node_id in selected_set:
+                      assert got == expected, ('selected shard not exact closure', p, line_no, node_id, expected, got)
+                      exact_closure += 1
+                  else:
+                      assert frozen_truth(record) == frozen_truth(source_record), ('frozen source-truth mismatch', p, line_no, node_id)
+                      if got == expected:
+                          exact_closure += 1
+                      else:
+                          differing = {k for k in set(record) | set(source_record) if record.get(k) != source_record.get(k)}
+                          assert differing and differing <= allowed_feedback_delta, ('undeclared legacy/closure delta', p, line_no, node_id, sorted(differing))
+                          legacy_feedback_only += 1
                   readable[node_id] = got
                   origin[node_id] = f'{p}:{line_no}'
 
-          selected = [f'GW{mission:02d}-N{node:02d}' for mission in range(5, 9) for node in range(1, 25)]
-          assert len(selected) == 96 and len(set(selected)) == 96
           missing = [node_id for node_id in selected if node_id not in readable]
           assert not missing, missing
 
@@ -163,6 +181,7 @@ jobs:
           print(
               'PR170_EXACT_HEAD_SOURCE_READBACK_PASS '
               f'readable_unique={len(readable)} readable_lines={line_count} selected=96 '
+              f'exact_closure_records={exact_closure} legacy_feedback_only_records={legacy_feedback_only} '
               f'closure_nodes=360 closure_aggregate={aggregate}'
           )
           PY

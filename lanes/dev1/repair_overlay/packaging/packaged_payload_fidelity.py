@@ -182,10 +182,82 @@ def build_manifest(
     }
 
 
+def _cookie_package_from_file(
+    reader: Any,
+    *,
+    cookie_format: str,
+    cookie_length: int,
+    cookie_magic: bytes,
+) -> bytes:
+    """Read exactly the embedded CArchive package from the real reader-backed file.
+
+    PyInstaller executables can contain bytes before the package and platform signing
+    data after the package cookie.  Locate a structurally valid cookie from the end,
+    and when the reader exposes a start offset require the cookie's declared archive
+    length to resolve to that exact start.  This avoids treating the physical file EOF
+    as the CArchive EOF.
+    """
+    filename = getattr(reader, "_filename", None)
+    if not filename:
+        raise RuntimeError("CArchive reader filename unavailable")
+    try:
+        file_bytes = Path(filename).read_bytes()
+    except (OSError, TypeError, ValueError) as exc:
+        raise RuntimeError(f"CArchive backing file read failed: {exc}") from exc
+
+    start_value = getattr(reader, "_start_offset", None)
+    start_hint: int | None = None
+    if start_value is not None:
+        try:
+            start_hint = int(start_value)
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError(f"CArchive start offset is invalid: {start_value!r}") from exc
+        if start_hint < 0 or start_hint > len(file_bytes):
+            raise RuntimeError(
+                f"CArchive start offset outside backing file: {start_hint} / {len(file_bytes)}"
+            )
+
+    search_end = len(file_bytes)
+    lower_bound = start_hint if start_hint is not None else 0
+    while search_end > lower_bound:
+        magic_pos = file_bytes.rfind(cookie_magic, lower_bound, search_end)
+        if magic_pos < 0:
+            break
+        cookie_end = magic_pos + cookie_length
+        search_end = magic_pos
+        if cookie_end > len(file_bytes):
+            continue
+        cookie_bytes = file_bytes[magic_pos:cookie_end]
+        try:
+            unpacked = struct.unpack(cookie_format, cookie_bytes)
+        except struct.error:
+            continue
+        if len(unpacked) < 4 or unpacked[0] != cookie_magic:
+            continue
+        try:
+            archive_length = int(unpacked[1])
+            toc_offset = int(unpacked[2])
+            toc_length = int(unpacked[3])
+        except (TypeError, ValueError):
+            continue
+        if archive_length < cookie_length or toc_offset < 0 or toc_length < 0:
+            continue
+        package_start = cookie_end - archive_length
+        if package_start < 0:
+            continue
+        if start_hint is not None and package_start != start_hint:
+            continue
+        cookie_start_in_package = archive_length - cookie_length
+        if toc_offset + toc_length > cookie_start_in_package:
+            continue
+        return file_bytes[package_start:cookie_end]
+
+    raise RuntimeError("Unable to locate a valid CArchive cookie in reader backing file")
+
+
 def _raw_carchive_member_names(reader: Any) -> list[str]:
     """Read non-option member names before CArchiveReader collapses duplicate dict keys."""
     try:
-        raw_pkg = reader.raw_pkg_data()
         cookie_format = reader._COOKIE_FORMAT
         cookie_length = int(reader._COOKIE_LENGTH)
         cookie_magic = bytes(reader._COOKIE_MAGIC_PATTERN)
@@ -194,19 +266,43 @@ def _raw_carchive_member_names(reader: Any) -> list[str]:
     except (AttributeError, TypeError, ValueError) as exc:
         raise RuntimeError(f"CArchive reader metadata unavailable: {exc}") from exc
 
-    if not isinstance(raw_pkg, (bytes, bytearray)):
-        raise RuntimeError(f"CArchive raw package has invalid type: {type(raw_pkg).__name__}")
-    raw_pkg = bytes(raw_pkg)
-    if cookie_length <= 0 or len(raw_pkg) < cookie_length:
-        raise RuntimeError("CArchive raw package is shorter than its cookie")
+    if cookie_length <= 0 or toc_entry_length <= 0 or not cookie_magic:
+        raise RuntimeError("CArchive reader metadata contains invalid lengths or magic")
 
-    try:
-        magic, archive_length, toc_offset, toc_length, _pyvers, _pylib = struct.unpack(
-            cookie_format, raw_pkg[-cookie_length:]
+    if getattr(reader, "_filename", None):
+        raw_pkg = _cookie_package_from_file(
+            reader,
+            cookie_format=cookie_format,
+            cookie_length=cookie_length,
+            cookie_magic=cookie_magic,
         )
+    else:
+        raw_pkg_data = getattr(reader, "raw_pkg_data", None)
+        if not callable(raw_pkg_data):
+            raise RuntimeError("CArchive reader exposes neither backing filename nor raw package data")
+        try:
+            raw_pkg = raw_pkg_data()
+        except Exception as exc:
+            raise RuntimeError(f"CArchive raw package read failed: {exc}") from exc
+        if not isinstance(raw_pkg, (bytes, bytearray)):
+            raise RuntimeError(f"CArchive raw package has invalid type: {type(raw_pkg).__name__}")
+        raw_pkg = bytes(raw_pkg)
+
+    if len(raw_pkg) < cookie_length:
+        raise RuntimeError("CArchive raw package is shorter than its cookie")
+    try:
+        unpacked_cookie = struct.unpack(cookie_format, raw_pkg[-cookie_length:])
     except struct.error as exc:
         raise RuntimeError(f"CArchive cookie parse failed: {exc}") from exc
-
+    if len(unpacked_cookie) < 4:
+        raise RuntimeError("CArchive cookie does not contain required archive/TOC fields")
+    magic = unpacked_cookie[0]
+    try:
+        archive_length = int(unpacked_cookie[1])
+        toc_offset = int(unpacked_cookie[2])
+        toc_length = int(unpacked_cookie[3])
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError(f"CArchive cookie numeric fields are invalid: {exc}") from exc
     if magic != cookie_magic:
         raise RuntimeError("CArchive raw package cookie magic mismatch")
     if archive_length != len(raw_pkg):
@@ -228,21 +324,38 @@ def _raw_carchive_member_names(reader: Any) -> list[str]:
             raise RuntimeError("CArchive TOC contains a truncated entry header")
         header = toc_data[cur_pos:(cur_pos + toc_entry_length)]
         try:
-            entry_length, _entry_offset, _data_length, _uncompressed_length, _compression_flag, typecode = \
-                struct.unpack(toc_entry_format, header)
+            unpacked = struct.unpack(toc_entry_format, header)
         except struct.error as exc:
             raise RuntimeError(f"CArchive TOC entry parse failed: {exc}") from exc
+        if len(unpacked) != 6:
+            raise RuntimeError(f"CArchive TOC entry has unexpected field count: {len(unpacked)}")
+        entry_length, _entry_offset, _data_length, _uncompressed_length, _compression_flag, typecode = unpacked
+        try:
+            entry_length = int(entry_length)
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError(f"CArchive TOC entry length is invalid: {entry_length!r}") from exc
         if entry_length < toc_entry_length:
             raise RuntimeError(f"CArchive TOC entry length is invalid: {entry_length}")
         next_pos = cur_pos + entry_length
-        if next_pos > len(toc_data):
+        if next_pos <= cur_pos or next_pos > len(toc_data):
             raise RuntimeError("CArchive TOC entry exceeds declared TOC bounds")
         raw_name = toc_data[cur_pos + toc_entry_length:next_pos].rstrip(b"\0")
         try:
             name = raw_name.decode("utf-8")
-            typecode_text = typecode.decode("ascii")
         except UnicodeDecodeError as exc:
-            raise RuntimeError(f"CArchive TOC text decode failed: {exc}") from exc
+            raise RuntimeError(f"CArchive TOC name decode failed: {exc}") from exc
+        if isinstance(typecode, int):
+            if not 0 <= typecode <= 255:
+                raise RuntimeError(f"CArchive TOC integer typecode out of range: {typecode}")
+            typecode_raw = bytes([typecode])
+        elif isinstance(typecode, (bytes, bytearray)) and len(typecode) == 1:
+            typecode_raw = bytes(typecode)
+        else:
+            raise RuntimeError(f"CArchive TOC typecode has invalid shape: {typecode!r}")
+        try:
+            typecode_text = typecode_raw.decode("ascii")
+        except UnicodeDecodeError as exc:
+            raise RuntimeError(f"CArchive TOC typecode decode failed: {exc}") from exc
         if typecode_text != "o":
             names.append(name)
         cur_pos = next_pos
@@ -317,7 +430,7 @@ def verify_reader(
             continue
         try:
             data = reader.extract(actual_name)
-        except Exception as exc:  # fail closed on archive reader errors
+        except Exception as exc:
             errors.append(f"EXTRACT_ERROR {package_path}: {exc}")
             row["error"] = "extract_error"
             checked.append(row)
@@ -336,23 +449,17 @@ def verify_reader(
         expected_sha = expected.get("sha256")
         mismatch = False
         if actual_size != expected_size:
-            errors.append(
-                f"SIZE_MISMATCH {package_path}: expected={expected_size} actual={actual_size}"
-            )
+            errors.append(f"SIZE_MISMATCH {package_path}: expected={expected_size} actual={actual_size}")
             mismatch = True
         if actual_sha != expected_sha:
-            errors.append(
-                f"SHA256_MISMATCH {package_path}: expected={expected_sha} actual={actual_sha}"
-            )
+            errors.append(f"SHA256_MISMATCH {package_path}: expected={expected_sha} actual={actual_sha}")
             mismatch = True
         expected_blob = expected.get("git_blob_sha1")
         if expected_blob:
             actual_blob = git_blob_sha(actual)
             row["git_blob_sha1"] = actual_blob
             if actual_blob != expected_blob:
-                errors.append(
-                    f"GIT_BLOB_MISMATCH {package_path}: expected={expected_blob} actual={actual_blob}"
-                )
+                errors.append(f"GIT_BLOB_MISMATCH {package_path}: expected={expected_blob} actual={actual_blob}")
                 mismatch = True
         row["ok"] = not mismatch
         if row["ok"]:

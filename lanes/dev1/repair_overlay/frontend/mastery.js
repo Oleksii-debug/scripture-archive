@@ -155,3 +155,4 @@ function bindMastery() {
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bindMastery, {once: true});
 else bindMastery();
+void import('./dossiers-ui.js');

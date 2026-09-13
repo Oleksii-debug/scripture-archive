@@ -41,7 +41,7 @@ jobs:
           assert patch["schema"] == "GW_REPAIR05_GIT_MATERIALIZATION_PATCH_v1"
           assert patch["source_package"]["drive_file_id"] == "1lEqRYSoYirSRHA7Il-C1AsoF-bQGPxul"
           assert patch["source_package"]["sha256"] == "da20f4084d5134af49c35da0fb05508cfd3e003b9ade015c5368b5b019223288"
-          assert patch["different_worker_qa_comment_id"] == 5651622207
+          assert patch["source_package"]["qa_comment_id"] == 5651622207
           assert patch["record_count"] == 78 == len(patch["records"])
           ids = [r["node_id"] for r in patch["records"]]
           assert len(set(ids)) == 78

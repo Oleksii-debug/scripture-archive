@@ -28,7 +28,7 @@ class CompositeAccessibilityTests(unittest.TestCase):
     @staticmethod
     def _child_accessibility() -> dict[str, str]:
         return {
-            "nonvisual_equivalent": "Labelled text field reachable and operable from the keyboard.",
+            "nonvisual_equivalent": "Labelled control reachable and operable from the keyboard.",
             "announcements": "Result and next action are announced as text.",
         }
 
@@ -85,7 +85,7 @@ class CompositeAccessibilityTests(unittest.TestCase):
             {(item["code"], item["path"]) for item in inspection["findings"]},
         )
 
-    def test_keyboard_complete_nested_child_passes(self) -> None:
+    def test_keyboard_complete_nested_text_child_passes(self) -> None:
         task = self._render(
             [
                 {
@@ -104,7 +104,7 @@ class CompositeAccessibilityTests(unittest.TestCase):
         self.assertEqual("SHORT_TEXT", child["task_type"])
         self.assertEqual("ANSWER_DTO_v1", child["answer_contract"]["schema"])
 
-    def test_nested_single_choice_fails_packaged_renderer_answer_parity(self) -> None:
+    def test_nested_single_choice_passes_semantic_renderer_parity(self) -> None:
         task = self._render(
             [
                 {
@@ -122,19 +122,14 @@ class CompositeAccessibilityTests(unittest.TestCase):
         )
 
         inspection = task["accessibility"]["inspection"]
-        self.assertFalse(inspection["passed"])
-        self.assertIn(
-            (
-                "A11Y_COMPOSITE_CHILD_RENDERER_PARITY_MISMATCH",
-                "task.steps[0].task_type",
-            ),
-            {(item["code"], item["path"]) for item in inspection["findings"]},
-        )
-        linear = "\n".join(task["accessibility"]["inspection_linear"])
-        self.assertIn("A11Y_COMPOSITE_CHILD_RENDERER_PARITY_MISMATCH", linear)
-        self.assertIn("task.steps[0].task_type", linear)
+        self.assertTrue(inspection["passed"])
+        self.assertEqual([], inspection["findings"])
+        child = task["steps"][0]
+        self.assertEqual("SINGLE_CHOICE", child["task_type"])
+        self.assertEqual("ANSWER_DTO_v1", child["answer_contract"]["schema"])
+        self.assertEqual(["a", "b"], [item["id"] for item in child["options"]])
 
-    def test_nested_ordering_fails_packaged_renderer_answer_parity(self) -> None:
+    def test_nested_ordering_passes_semantic_renderer_parity(self) -> None:
         task = self._render(
             [
                 {
@@ -152,14 +147,42 @@ class CompositeAccessibilityTests(unittest.TestCase):
         )
 
         inspection = task["accessibility"]["inspection"]
-        self.assertFalse(inspection["passed"])
-        self.assertIn(
-            (
-                "A11Y_COMPOSITE_CHILD_RENDERER_PARITY_MISMATCH",
-                "task.steps[0].task_type",
-            ),
-            {(item["code"], item["path"]) for item in inspection["findings"]},
+        self.assertTrue(inspection["passed"])
+        self.assertEqual([], inspection["findings"])
+        child = task["steps"][0]
+        self.assertEqual("ORDERING", child["task_type"])
+        self.assertEqual(["first", "second"], [item["id"] for item in child["items"]])
+
+    def test_nested_composite_recurses_into_child_contracts(self) -> None:
+        task = self._render(
+            [
+                {
+                    "step_id": "outer",
+                    "task_type": "COMPOSITE_MULTI_STEP",
+                    "label": "Outer",
+                    "prompt": "Complete the nested step.",
+                    "accessibility": self._child_accessibility(),
+                    "steps": [
+                        {
+                            "step_id": "inner",
+                            "task_type": "SINGLE_CHOICE",
+                            "label": "Inner choice",
+                            "prompt": "Choose one.",
+                            "options": [
+                                {"id": "x", "label": "X"},
+                                {"id": "y", "label": "Y"},
+                            ],
+                            "accessibility": self._child_accessibility(),
+                        }
+                    ],
+                }
+            ]
         )
+
+        self.assertTrue(task["accessibility"]["inspection"]["passed"])
+        inner = task["steps"][0]["steps"][0]
+        self.assertEqual("SINGLE_CHOICE", inner["task_type"])
+        self.assertEqual("ANSWER_DTO_v1", inner["answer_contract"]["schema"])
 
     def test_grading_only_step_cannot_be_promoted_to_accessibility_contract(self) -> None:
         node = dict(self.base_node)
@@ -177,11 +200,11 @@ class CompositeAccessibilityTests(unittest.TestCase):
         inspection = task["accessibility"]["inspection"]
         self.assertFalse(inspection["passed"])
         self.assertIn(
-            ("A11Y_COMPOSITE_CHILD_CONTRACT_MISSING", "task.steps[0].task_type"),
+            ("A11Y_COMPOSITE_STEPS_MISSING", "task.steps"),
             {(item["code"], item["path"]) for item in inspection["findings"]},
         )
-        self.assertNotIn("task_type", task["steps"][0])
-        self.assertNotIn("answer_contract", task["steps"][0])
+        self.assertEqual([], task["steps"])
+        self.assertNotIn("grading", task)
 
     def test_incomplete_nested_child_still_exposes_explicit_hazard(self) -> None:
         task = self._render(
@@ -205,6 +228,22 @@ class CompositeAccessibilityTests(unittest.TestCase):
             ("A11Y_EXPLICIT_VISUAL_OR_POINTER_DEPENDENCY", "task.steps[0].visual_only"),
             pairs,
         )
+
+    def test_unknown_nested_child_type_still_fails_closed(self) -> None:
+        node = dict(self.base_node)
+        node["response_contract"] = {
+            "steps": [
+                {
+                    "step_id": "s1",
+                    "task_type": "UNREGISTERED_WIDGET",
+                    "label": "Unsupported",
+                    "prompt": "Unsupported step.",
+                    "accessibility": self._child_accessibility(),
+                }
+            ]
+        }
+        with self.assertRaises(Exception):
+            self.mapper.to_renderable(node, self.mission)
 
 
 if __name__ == "__main__":

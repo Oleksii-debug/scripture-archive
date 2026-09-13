@@ -38,6 +38,8 @@ jobs:
     env:
       EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
       PYTHONPATH: ${{ github.workspace }}
+      DEV01_BASE_DONOR: 90a13aca71d2a5f832846a84acbdf0f7c89f5da9
+      DEV01_BASE_SOURCE_SHA256: 10fbd546ff4d985465b85b99f4f64bff95d9ec8b1f27132c6d21b4930c344c35
     steps:
       - uses: actions/checkout@v4
         with:
@@ -48,8 +50,25 @@ jobs:
       - name: Confirm exact source checkout
         shell: bash
         run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - name: Materialize independently verified FINALPREP02 base donor
+        shell: bash
+        run: |
+          git fetch --no-tags --depth=1 origin "$DEV01_BASE_DONOR"
+          git archive --format=zip --output=dev1-base-donor.zip "$DEV01_BASE_DONOR" \
+            release_inputs/dev1_finalprep02 \
+            lanes/dev1/verify_source_archive.py \
+            lanes/dev1/FINALPREP02_RESOLVED_SOURCE_SHA256.json \
+            lanes/dev1/FINALPREP02_RESOLVED_SOURCE_MANIFEST.json
+          python -m zipfile -e dev1-base-donor.zip .
+          python -c "from pathlib import Path; import base64; p=sorted(Path('release_inputs/dev1_finalprep02').glob('part-*.b64')); assert p; Path('DEV1_R06_PLATFORM_SOURCE.zip').write_bytes(base64.b64decode(''.join(x.read_text(encoding='ascii') for x in p)))"
+          python lanes/dev1/verify_source_archive.py DEV1_R06_PLATFORM_SOURCE.zip "$DEV01_BASE_SOURCE_SHA256"
+          python -m zipfile -e DEV1_R06_PLATFORM_SOURCE.zip .
+          test -d r06_platform
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - name: Compose exact candidate overlay onto verified base
+        run: python -c "import shutil; shutil.copytree('lanes/dev1/repair_overlay', 'r06_platform', dirs_exist_ok=True)"
       - name: Run packaged Cross-Testament production-gateway regression
-        run: python -c "import runpy,sys; sys.path.insert(0, 'lanes/dev1/repair_overlay'); runpy.run_path('lanes/dev1/repair_overlay/tests/test_packaged_cross_testament_contract.py', run_name='__main__')"
+        run: python -c "import runpy,sys; sys.path.insert(0, 'r06_platform'); runpy.run_path('lanes/dev1/repair_overlay/tests/test_packaged_cross_testament_contract.py', run_name='__main__')"
       - name: Diff hygiene
         shell: bash
         run: git diff --check

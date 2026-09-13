@@ -35,7 +35,7 @@ jobs:
         shell: bash
         run: |
           test "$(git rev-parse HEAD:runtime_engine/scripture_archive_runtime/diagnostics.py)" = "037bfa655d745cfdd041399250e324da038d8ebf"
-      - name: Run newline-portable qualified-core assertion
+      - name: Run newline-portable packaged Diagnostics regression
         env:
           PYTHONPATH: lanes/dev1/repair_overlay
-        run: python lanes/dev1/repair_overlay/tests/test_packaged_diagnostics.py PackagedDiagnosticsTests.test_packaged_stack_reuses_exact_qualified_diagnostics_core_blob -v
+        run: python -m unittest discover -s lanes/dev1/repair_overlay/tests -p "test_packaged_diagnostics.py" -v

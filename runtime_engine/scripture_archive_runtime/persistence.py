@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import uuid
 from dataclasses import asdict, is_dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -70,10 +71,10 @@ class PersistenceStore:
         payload = json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True, default=_json_default) + "\n"
         if len(payload.encode("utf-8")) > MAX_STATE_BYTES:
             raise ValidationError("State exceeds 64 MB safety limit")
-        tmp = self._ensure_inside(self.root / f".state.{os.getpid()}.tmp")
+        tmp = self._ensure_inside(self.root / f".state.{os.getpid()}.{uuid.uuid4().hex}.tmp")
         try:
             self._backup_current_if_valid()
-            with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
+            with open(tmp, "x", encoding="utf-8", newline="\n") as fh:
                 fh.write(payload)
                 fh.flush()
                 os.fsync(fh.fileno())

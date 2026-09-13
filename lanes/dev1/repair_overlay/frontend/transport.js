@@ -43,3 +43,5 @@ void import('./content-pack-manager.js').then(({installContentPackManagerSurface
 void import('./evidence-graph-ui.js').then(({installEvidenceGraphSurface})=>installEvidenceGraphSurface());
 // Canonical source-local Witness Matrix is a read-only projection from unlocked runtime evidence.
 void import('./witness-matrix-ui.js').then(({installWitnessMatrixSurface})=>installWitnessMatrixSurface());
+// Constructor V2 augments the existing AuthoringUI; it remains draft/version-only and capability-gated.
+void import('./constructor-v2-ui.js').then(({installConstructorV2Surface})=>installConstructorV2Surface());

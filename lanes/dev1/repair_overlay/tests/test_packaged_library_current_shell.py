@@ -39,6 +39,7 @@ class PackagedLibraryCurrentShellTest(unittest.TestCase):
             "./content-pack-manager.js",
             "./evidence-graph-ui.js",
             "./witness-matrix-ui.js",
+            "./constructor-v2-ui.js",
         }
         imports = set(re.findall(r"void import\('([^']+)'\)", self.transport))
         self.assertEqual(imports, expected_loaders)
@@ -123,6 +124,7 @@ class PackagedLibraryCurrentShellTest(unittest.TestCase):
             ROOT / "content-pack-manager.js",
             ROOT / "evidence-graph-ui.js",
             ROOT / "witness-matrix-ui.js",
+            ROOT / "constructor-v2-ui.js",
         ):
             completed = subprocess.run(
                 ["node", "--check", str(path)],

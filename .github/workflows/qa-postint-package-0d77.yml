@@ -1,0 +1,86 @@
+name: QA Canonical Package 0d77 Post-Integration
+
+on:
+  push:
+    branches:
+      - qa-postint-package-0d77-0913-sol
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  canonical-package-regression:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      EXPECTED_PACKAGE: 0d77bb7dd202409b98da71952bd346ad7e01c1ab
+      HELPER_PATH: .github/workflows/qa-postint-package-0d77.yml
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Assert immutable package parent and helper-only containment
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PACKAGE"
+          test "$(git diff --name-only "$EXPECTED_PACKAGE" HEAD | wc -l | tr -d ' ')" = "1"
+          test "$(git diff --name-only "$EXPECTED_PACKAGE" HEAD)" = "$HELPER_PATH"
+      - name: Compile complete runtime
+        working-directory: runtime_engine
+        run: python -m compileall -q scripture_archive_runtime tests tools
+      - name: Run complete runtime regression suite
+        working-directory: runtime_engine
+        run: python -m unittest discover -s tests -v
+      - name: Run packaged current-shell regressions
+        shell: bash
+        run: |
+          python -c "import runpy,sys; sys.path[:0]=['lanes/dev1/repair_overlay','runtime_engine']; runpy.run_path('lanes/dev1/repair_overlay/tests/test_packaged_library_current_shell.py',run_name='__main__')"
+          python -c "import runpy,sys; sys.path[:0]=['lanes/dev1/repair_overlay','runtime_engine']; runpy.run_path('lanes/dev1/repair_overlay/tests/test_packaged_library_research_persistence.py',run_name='__main__')"
+          python -c "import runpy,sys; sys.path[:0]=['lanes/dev1/repair_overlay','runtime_engine']; runpy.run_path('lanes/dev1/repair_overlay/tests/test_packaged_chronology_lab.py',run_name='__main__')"
+          python -c "import runpy,sys; sys.path[:0]=['lanes/dev1/repair_overlay','runtime_engine']; runpy.run_path('lanes/dev1/repair_overlay/tests/test_packaged_transport_composition.py',run_name='__main__')"
+          python -c "import runpy,sys; sys.path[:0]=['lanes/dev1/repair_overlay','runtime_engine']; runpy.run_path('lanes/dev1/repair_overlay/tests/test_packaged_witness_matrix_lifecycle.py',run_name='__main__')"
+          python -c "import runpy,sys; sys.path[:0]=['lanes/dev1/repair_overlay','runtime_engine']; runpy.run_path('lanes/dev1/repair_overlay/tests/test_research_export_current_shell.py',run_name='__main__')"
+          python -c "import runpy,sys; sys.path[:0]=['lanes/dev1/repair_overlay','runtime_engine']; runpy.run_path('lanes/dev1/repair_overlay/tests/test_packaged_review_queue_ui.py',run_name='__main__')"
+          python -c "import runpy,sys; sys.path[:0]=['lanes/dev1/repair_overlay','runtime_engine']; runpy.run_path('lanes/dev1/repair_overlay/tests/test_packaged_review_training_contract.py',run_name='__main__')"
+          python -c "import runpy,sys; sys.path[:0]=['lanes/dev1/repair_overlay','runtime_engine']; runpy.run_path('lanes/dev1/repair_overlay/tests/test_packaged_review_training_player_ui.py',run_name='__main__')"
+          python -c "import runpy,sys; sys.path[:0]=['lanes/dev1/repair_overlay','runtime_engine']; runpy.run_path('lanes/dev1/repair_overlay/tests/test_packaged_review_training_transport.py',run_name='__main__')"
+          python -c "import runpy,sys; sys.path[:0]=['lanes/dev1/repair_overlay','runtime_engine']; runpy.run_path('lanes/dev1/repair_overlay/tests/test_packaged_review_training_static_syntax.py',run_name='__main__')"
+          python -c "import runpy,sys; sys.path[:0]=['lanes/dev1/repair_overlay','runtime_engine']; runpy.run_path('lanes/dev1/repair_overlay/tests/test_packaged_application_update.py',run_name='__main__')"
+      - name: Verify Application Update frontend syntax
+        run: node --check lanes/dev1/repair_overlay/frontend/application-update.js
+      - name: Diff hygiene
+        shell: bash
+        run: git diff --check "$EXPECTED_PACKAGE" HEAD
+
+  release-secret-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      EXPECTED_PACKAGE: 0d77bb7dd202409b98da71952bd346ad7e01c1ab
+      HELPER_PATH: .github/workflows/qa-postint-package-0d77.yml
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Assert helper-only containment
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PACKAGE"
+          test "$(git diff --name-only "$EXPECTED_PACKAGE" HEAD)" = "$HELPER_PATH"
+      - name: Run repository secret scan
+        working-directory: runtime_engine
+        run: python -m tools.run_release_secret_scan .. --output ../postint-secret-scan.json

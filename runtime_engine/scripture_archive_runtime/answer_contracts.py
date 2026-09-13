@@ -23,6 +23,7 @@ def canonical_task_type(value: str) -> str:
         "CLASSIFICATION": "SINGLE_CHOICE",
         "CITATION_SELECTION": "MULTI_SELECT",
         "FREE_RESPONSE": "SHORT_TEXT",
+        "SHORT_FREE_RESPONSE": "SHORT_TEXT",
         "FREE_RESPONSE_+_CITATION": "SHORT_TEXT",
         "FREE_RESPONSE_/_COMPARISON": "LONG_TEXT",
         "WITNESS_COMPARISON": "LONG_TEXT",

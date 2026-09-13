@@ -1,5 +1,5 @@
-import hashlib
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -35,9 +35,12 @@ def diagnostics_request(payload=None):
     }
 
 
-def git_blob_sha(payload: bytes) -> str:
-    header = f"blob {len(payload)}\0".encode("ascii")
-    return hashlib.sha1(header + payload).hexdigest()
+def committed_blob_sha(root: Path, path: Path) -> str:
+    relative = path.relative_to(root).as_posix()
+    return subprocess.check_output(
+        ["git", "-C", str(root), "rev-parse", f"HEAD:{relative}"],
+        text=True,
+    ).strip()
 
 
 class PackagedDiagnosticsTests(unittest.TestCase):
@@ -127,8 +130,9 @@ class PackagedDiagnosticsTests(unittest.TestCase):
         self.assertEqual([request], self.base.calls)
 
     def test_packaged_stack_reuses_exact_qualified_diagnostics_core_blob(self):
-        core = repository_root() / "runtime_engine" / "scripture_archive_runtime" / "diagnostics.py"
-        self.assertEqual(QUALIFIED_DIAGNOSTICS_BLOB, git_blob_sha(core.read_bytes()))
+        root = repository_root()
+        core = root / "runtime_engine" / "scripture_archive_runtime" / "diagnostics.py"
+        self.assertEqual(QUALIFIED_DIAGNOSTICS_BLOB, committed_blob_sha(root, core))
 
     def test_frontend_is_semantic_empty_payload_and_text_only(self):
         platform = Path(__file__).resolve().parents[1]

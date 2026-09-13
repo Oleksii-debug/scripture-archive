@@ -5,6 +5,7 @@ from copy import deepcopy
 from pathlib import Path
 import unittest
 
+from scripture_archive_runtime.answer_contracts import canonical_task_type
 from scripture_archive_runtime.package_adapters import adapt_node_for_runtime, iter_nodes_from_payload
 from scripture_archive_runtime.security import ValidationError
 
@@ -49,6 +50,15 @@ class LegacyCitationSelectionAdapterTests(unittest.TestCase):
         )
         self.assertEqual(adapted["accepted_answer"], ["A", "B"])
         self.assertEqual(adapted["answer_dto"]["choices"], ["A", "B"])
+
+    def test_short_free_response_uses_established_short_text_contract(self) -> None:
+        self.assertEqual("SHORT_TEXT", canonical_task_type("SHORT_FREE_RESPONSE"))
+        adapted = adapt_node_for_runtime(
+            {"task_type": "SHORT_FREE_RESPONSE", "accepted_answer": "Explicit authored answer"},
+            lane="DEV1-regression",
+        )
+        self.assertEqual("SHORT_TEXT", adapted["task_type"])
+        self.assertEqual("Explicit authored answer", adapted["answer_dto"]["text"])
 
 
 if __name__ == "__main__":

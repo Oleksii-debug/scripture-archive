@@ -1,0 +1,64 @@
+name: R06 Current Package Accessibility Qualification
+
+on:
+  push:
+    branches:
+      - qa-current-package-accessibility-0913-sol
+    paths:
+      - '.github/workflows/r06-current-package-accessibility-qualification.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: r06-current-package-accessibility-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  accessibility-qualification:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    env:
+      PACKAGE_SHA: fa836d79fcfd9ac5d8aacbf6a6be9f5a10183012
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PACKAGE_SHA }}
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Confirm exact canonical package checkout
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$PACKAGE_SHA"
+      - name: Compile accessibility contracts
+        working-directory: lanes/dev1/repair_overlay
+        run: python -m py_compile scripture_archive_platform/accessibility/semantics.py tests/test_accessibility.py tests/test_packaged_accessibility_inspector_surface.py
+      - name: Check keyboard and accessibility ES modules
+        working-directory: lanes/dev1/repair_overlay
+        shell: bash
+        run: |
+          node --check frontend/app.js
+          node --check frontend/hotkeys.js
+          node --check frontend/keymap-ui.js
+          node --check frontend/renderers-base.js
+          node --check frontend/renderers.js
+          node --check frontend/accessibility-inspector-ui.js
+      - name: Run accessibility semantic and keyboard regression
+        working-directory: lanes/dev1/repair_overlay
+        env:
+          PYTHONPATH: .
+        run: python -m unittest discover -s tests -p test_accessibility.py -v
+      - name: Run packaged Accessibility Inspector regression
+        working-directory: lanes/dev1/repair_overlay
+        env:
+          PYTHONPATH: .
+        run: python -m unittest discover -s tests -p test_packaged_accessibility_inspector_surface.py -v

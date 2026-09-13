@@ -1,0 +1,73 @@
+name: R06 Composite Renderer Parity Qualification
+
+on:
+  push:
+    branches:
+      - qa-composite-renderer-parity-0913-sol
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  composite-renderer:
+    name: composite-renderer (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      EXPECTED_CANDIDATE_SHA: 563f302983c40103e2ee50e8bd3e7040f71581ce
+      HELPER_WORKFLOW: .github/workflows/r06-composite-renderer-parity-qualification.yml
+    steps:
+      - name: Checkout helper evidence commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify immutable candidate ancestry and workflow-only helper delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "${EXPECTED_CANDIDATE_SHA}^{commit}"
+          test "$(git merge-base "${EXPECTED_CANDIDATE_SHA}" HEAD)" = "${EXPECTED_CANDIDATE_SHA}"
+          mapfile -t changed < <(git diff --name-only "${EXPECTED_CANDIDATE_SHA}"..HEAD)
+          printf 'helper delta:\n%s\n' "${changed[*]}"
+          test "${#changed[@]}" -eq 1
+          test "${changed[0]}" = "${HELPER_WORKFLOW}"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Compile repaired composite contracts
+        run: >-
+          python -m compileall -q
+          lanes/dev1/repair_overlay/scripture_archive_platform/accessibility_inspector.py
+          lanes/dev1/repair_overlay/scripture_archive_platform/composite_accessibility.py
+          lanes/dev1/repair_overlay/scripture_archive_platform/content/loader.py
+          lanes/dev1/repair_overlay/tests/test_composite_accessibility.py
+          lanes/dev1/repair_overlay/tests/test_accessibility.py
+
+      - name: Run packaged composite accessibility and renderer regressions
+        working-directory: lanes/dev1/repair_overlay
+        run: |
+          python tests/test_composite_accessibility.py -v
+          python tests/test_accessibility.py -v
+
+      - name: Run public composite answer-contract regression
+        working-directory: runtime_engine/tests
+        env:
+          PYTHONPATH: ..
+        run: python -m unittest -v test_answer_contracts
+
+      - name: Validate repaired renderer syntax
+        working-directory: lanes/dev1/repair_overlay/frontend
+        run: |
+          node --check renderers-base.js
+          node --check renderers.js

@@ -16,14 +16,18 @@ class PersistenceSecurityTests(unittest.TestCase):
             store=PersistenceStore(td); state=store.default_state(); state["profile"]={"name":"Олексій"}; store.save(state); state["profile"]={"name":"Олексій 2"}; store.save(state)
             self.assertTrue(store.backup_path.exists()); self.assertEqual(store.load()["profile"]["name"],"Олексій 2")
 
-    def test_concurrent_saves_use_independent_atomic_temp_files(self):
+    def test_concurrent_saves_serialize_per_root_and_use_independent_temp_files(self):
         with tempfile.TemporaryDirectory() as td:
-            store = PersistenceStore(td)
-            initial = store.default_state()
+            first_store = PersistenceStore(td)
+            second_store = PersistenceStore(td)
+            initial = first_store.default_state()
             initial["profile"] = {"writer": "initial"}
-            store.save(initial)
+            first_store.save(initial)
 
-            barrier = threading.Barrier(2)
+            first_at_commit = threading.Event()
+            second_started = threading.Event()
+            release_first = threading.Event()
+            second_at_commit = threading.Event()
             seen_temp_sources: list[Path] = []
             errors: list[BaseException] = []
             seen_lock = threading.Lock()
@@ -32,35 +36,46 @@ class PersistenceSecurityTests(unittest.TestCase):
             def synchronized_replace(source, destination):
                 source_path = Path(source)
                 destination_path = Path(destination)
-                if destination_path == store.state_path and source_path.name.startswith(".state."):
+                if destination_path == first_store.state_path and source_path.name.startswith(".state."):
                     with seen_lock:
                         seen_temp_sources.append(source_path)
-                    barrier.wait(timeout=5)
+                        commit_index = len(seen_temp_sources)
+                    if commit_index == 1:
+                        first_at_commit.set()
+                        if not release_first.wait(timeout=5):
+                            raise AssertionError("first save commit was not released")
+                    else:
+                        second_at_commit.set()
                 return real_replace(source, destination)
 
-            def save_writer(writer: str) -> None:
+            def save_writer(store: PersistenceStore, writer: str, started: threading.Event | None = None) -> None:
                 state = store.default_state()
                 state["profile"] = {"writer": writer}
+                if started is not None:
+                    started.set()
                 try:
                     store.save(state)
                 except BaseException as exc:
                     errors.append(exc)
 
             with patch.object(persistence_module.os, "replace", side_effect=synchronized_replace):
-                threads = [
-                    threading.Thread(target=save_writer, args=("one",)),
-                    threading.Thread(target=save_writer, args=("two",)),
-                ]
-                for thread in threads:
-                    thread.start()
-                for thread in threads:
-                    thread.join(timeout=10)
+                first_thread = threading.Thread(target=save_writer, args=(first_store, "one"))
+                second_thread = threading.Thread(target=save_writer, args=(second_store, "two", second_started))
+                first_thread.start()
+                self.assertTrue(first_at_commit.wait(timeout=5))
+                second_thread.start()
+                self.assertTrue(second_started.wait(timeout=5))
+                self.assertFalse(second_at_commit.wait(timeout=0.5))
+                release_first.set()
+                first_thread.join(timeout=10)
+                second_thread.join(timeout=10)
 
-            self.assertTrue(all(not thread.is_alive() for thread in threads))
+            self.assertFalse(first_thread.is_alive())
+            self.assertFalse(second_thread.is_alive())
             self.assertEqual(errors, [])
             self.assertEqual(len(seen_temp_sources), 2)
             self.assertEqual(len({path.name for path in seen_temp_sources}), 2)
-            self.assertIn(store.load()["profile"]["writer"], {"one", "two"})
+            self.assertIn(first_store.load()["profile"]["writer"], {"one", "two"})
 
     def test_migration_creates_pre_migration_backup(self):
         with tempfile.TemporaryDirectory() as td:

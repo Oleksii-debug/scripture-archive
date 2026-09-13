@@ -12,7 +12,12 @@ class ContentRepository:
     def __init__(self, nodes: Iterable[Mapping[str, Any]] = (), *, adapt_legacy: bool = False, lane: str = "unknown") -> None:
         self._nodes: dict[str, TaskDefinition] = {}
         for node in nodes:
-            self.add(adapt_node_for_runtime(node, lane=lane) if adapt_legacy else node)
+            try:
+                adapted = adapt_node_for_runtime(node, lane=lane) if adapt_legacy else node
+                self.add(adapted)
+            except ValidationError as exc:
+                node_id = str(node.get("node_id") or "<unknown>") if isinstance(node, Mapping) else "<non-object>"
+                raise ValidationError(f"Canonical node {node_id}: {exc}") from exc
 
     def add(self, node: Mapping[str, Any]) -> TaskDefinition:
         validate_canonical_node(node)

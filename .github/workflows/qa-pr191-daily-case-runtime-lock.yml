@@ -1,0 +1,41 @@
+name: QA PR191 Daily Case Runtime Lock
+
+on:
+  push:
+    branches:
+      - qa-pr191-daily-case-runtime-lock-0913-sol
+
+permissions:
+  contents: read
+
+jobs:
+  runtime-lock:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            pythonpath: ".:lanes/dev1/repair_overlay"
+          - os: windows-latest
+            pythonpath: ".;lanes/dev1/repair_overlay"
+    runs-on: ${{ matrix.os }}
+    env:
+      PYTHONPATH: ${{ matrix.pythonpath }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Bind helper to exact PR head
+        run: >-
+          python -c "import subprocess,sys; p=subprocess.check_output(['git','rev-parse','HEAD^'], text=True).strip(); e='deac1d2d7dad357d624d89f76d8cfc30f1f9ffac'; print('candidate_parent='+p); sys.exit(0 if p==e else 1)"
+      - name: Compile repaired gateway and regression
+        run: >-
+          python -m py_compile
+          lanes/dev1/repair_overlay/scripture_archive_platform/application/runtime_gateway.py
+          lanes/dev1/repair_overlay/tests/test_packaged_daily_case_runtime_lock.py
+      - name: Execute Daily Case lock and transport regressions
+        run: >-
+          python -m unittest -v
+          lanes.dev1.repair_overlay.tests.test_packaged_daily_case_runtime_lock
+          lanes.dev1.repair_overlay.tests.test_packaged_daily_case_transport_contract

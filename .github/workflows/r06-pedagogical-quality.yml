@@ -1,0 +1,46 @@
+name: R06 Pedagogical Quality Inventory
+
+on:
+  pull_request:
+    paths:
+      - 'docs/campaigns/**'
+      - 'tools/analyze_pedagogical_quality.py'
+      - 'tools/test_analyze_pedagogical_quality.py'
+      - 'docs/spec/PEDAGOGICAL_QUALITY_GATE_v1.md'
+      - '.github/workflows/r06-pedagogical-quality.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: r06-pedagogy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pedagogical-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Compile analyzer and tests
+        run: python -m compileall -q tools/analyze_pedagogical_quality.py tools/test_analyze_pedagogical_quality.py
+      - name: Run analyzer regressions
+        run: python -m unittest -v tools.test_analyze_pedagogical_quality
+      - name: Inventory canonical pedagogical quality
+        run: >-
+          python tools/analyze_pedagogical_quality.py docs/campaigns
+          --json-output pedagogical-quality-report.json
+          --markdown-output pedagogical-quality-report.md
+          --fail-on none
+      - name: Upload review report
+        uses: actions/upload-artifact@v4
+        with:
+          name: R06-pedagogical-quality-report
+          path: |
+            pedagogical-quality-report.json
+            pedagogical-quality-report.md
+          if-no-files-found: error

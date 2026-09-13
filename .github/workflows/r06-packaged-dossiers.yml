@@ -61,3 +61,5 @@ jobs:
         run: python r06_platform/tests/test_packaged_dossiers.py
       - name: Frontend syntax on composed platform
         run: node --check r06_platform/frontend/dossiers-ui.js
+
+# QA helper child only: exact product parent is PR #173 head cc04b08b0b9a833426931b986d6de05e6dcf7cab.

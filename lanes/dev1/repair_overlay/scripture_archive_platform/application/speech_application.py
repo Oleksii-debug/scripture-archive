@@ -34,10 +34,10 @@ _MIME_TYPES = {
 class SpeechPlatformApplication(WitnessMatrixPlatformApplication):
     """Package presentation-only speech without moving content or grading truth.
 
-    The public command accepts a canonical node id plus presentation preferences.
-    It deliberately does *not* accept speech text. The exact visible player prompt
-    is resolved again from the canonical loader on the host side, preventing the
-    browser bridge from becoming an arbitrary-text exfiltration channel.
+    The public synthesis command accepts presentation preferences only. It does
+    not accept node ids or speech text. The host resolves the runtime's current
+    canonical node and then resolves the exact visible player prompt from the
+    canonical loader, so the bridge cannot become an arbitrary-text channel.
     """
 
     def __init__(
@@ -69,7 +69,7 @@ class SpeechPlatformApplication(WitnessMatrixPlatformApplication):
     def _bootstrap(self):
         data = super()._bootstrap()
         configured = bool(self.speech_service.registry.provider_ids())
-        data["capabilities"]["speech"] = True
+        data["capabilities"]["speech"] = bool(self.player_gateway)
         data["capabilities"]["speech_network_configured"] = configured
         return data
 
@@ -86,16 +86,25 @@ class SpeechPlatformApplication(WitnessMatrixPlatformApplication):
             )
         return {
             "schema": "scripture.packaged-speech.v1",
-            "available": bool(providers),
+            "available": bool(self.player_gateway and providers),
             "providers": providers,
             "network_consent_required": True,
-            "supported_surface": "canonical_task_prompt_only",
+            "supported_surface": "current_canonical_task_prompt_only",
             "private_text_supported": False,
             "truth_owner": "presentation-only",
         }
 
+    def _current_node_id(self) -> str:
+        gateway = self.player_gateway
+        getter = getattr(gateway, "_current_node_getter", None) if gateway is not None else None
+        if not callable(getter):
+            raise ValueError("speech requires the canonical packaged runtime")
+        node_id = getter()
+        if not isinstance(node_id, str) or not node_id.strip():
+            raise ValueError("load a canonical task before requesting speech")
+        return node_id.strip()
+
     def _synthesize_prompt(self, payload: dict[str, Any]) -> dict[str, Any]:
-        node_id = self._id(payload, "node_id")
         provider_id = self._id(payload, "provider_id")
         voice_id = self._id(payload, "voice_id")
         allow_network = payload.get("allow_network")
@@ -108,6 +117,7 @@ class SpeechPlatformApplication(WitnessMatrixPlatformApplication):
         except (TypeError, ValueError) as exc:
             raise ValueError("speech speed must be numeric") from exc
 
+        node_id = self._current_node_id()
         node = self.loader.load_node(node_id)
         mission = self.loader.mission_for_node(node_id)
         renderable = self.mapper.to_renderable(node, mission)
@@ -156,7 +166,7 @@ class SpeechPlatformApplication(WitnessMatrixPlatformApplication):
             "audio_base64": base64.b64encode(audio).decode("ascii"),
             "byte_length": size,
             "from_cache": bool(artifact.from_cache),
-            "spoken_surface": "canonical_task_prompt_only",
+            "spoken_surface": "current_canonical_task_prompt_only",
             "truth_owner": "presentation-only",
         }
 

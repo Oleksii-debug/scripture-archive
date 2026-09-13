@@ -128,7 +128,7 @@ class PackagedDiagnosticsTests(unittest.TestCase):
 
     def test_packaged_stack_reuses_exact_qualified_diagnostics_core_blob(self):
         core = repository_root() / "runtime_engine" / "scripture_archive_runtime" / "diagnostics.py"
-        self.assertEqual(QUALIFIED_DIAGNOSTICS_BLOB, git_blob_sha(core.read_bytes()))
+        self.assertEqual(QUALIFIED_DIAGNOSTICS_BLOB, git_blob_sha(core.read_text(encoding="utf-8").encode("utf-8")))
 
     def test_frontend_is_semantic_empty_payload_and_text_only(self):
         platform = Path(__file__).resolve().parents[1]

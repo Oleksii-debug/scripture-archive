@@ -513,14 +513,23 @@ class ContentPackStore:
         os.close(fd)
         tmp = Path(temp_name)
         try:
+            manifest_bytes = (json.dumps(manifest.as_dict(), ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8")
             with zipfile.ZipFile(tmp, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
-                for name in [MANIFEST_NAME, *sorted(manifest.files)]:
+                info = zipfile.ZipInfo(MANIFEST_NAME, date_time=(1980, 1, 1, 0, 0, 0))
+                info.compress_type = zipfile.ZIP_DEFLATED
+                info.external_attr = (stat.S_IFREG | 0o644) << 16
+                zf.writestr(info, manifest_bytes)
+                for name, expected_digest in sorted(manifest.files.items()):
                     data = pack_dir.joinpath(*PurePosixPath(name).parts).read_bytes()
+                    if _sha256_bytes(data) != expected_digest:
+                        raise ValidationError(f"Installed content pack changed during export: {name}")
                     info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
                     info.compress_type = zipfile.ZIP_DEFLATED
                     info.external_attr = (stat.S_IFREG | 0o644) << 16
                     zf.writestr(info, data)
-            inspect_content_pack(tmp)
+            inspection = inspect_content_pack(tmp)
+            if inspection.manifest != manifest:
+                raise ValidationError("Exported content pack does not match verified manifest")
             os.replace(tmp, target)
             self._fsync_directory(target.parent)
         finally:

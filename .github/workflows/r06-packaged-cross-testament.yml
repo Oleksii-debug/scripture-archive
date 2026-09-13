@@ -1,0 +1,55 @@
+name: R06 Packaged Cross-Testament Qualification
+
+on:
+  push:
+    paths:
+      - 'lanes/dev1/repair_overlay/frontend/cross-testament-ui.js'
+      - 'lanes/dev1/repair_overlay/frontend/transport.js'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/application/cross_testament_projection.py'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/application/runtime_gateway.py'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/application/service.py'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/transport/contracts.py'
+      - 'lanes/dev1/repair_overlay/tests/test_packaged_cross_testament_contract.py'
+      - 'lanes/dev1/repair_overlay/tests/test_packaged_library_current_shell.py'
+      - '.github/workflows/r06-packaged-cross-testament.yml'
+  pull_request:
+    paths:
+      - 'lanes/dev1/repair_overlay/frontend/cross-testament-ui.js'
+      - 'lanes/dev1/repair_overlay/frontend/transport.js'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/application/cross_testament_projection.py'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/application/runtime_gateway.py'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/application/service.py'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/transport/contracts.py'
+      - 'lanes/dev1/repair_overlay/tests/test_packaged_cross_testament_contract.py'
+      - 'lanes/dev1/repair_overlay/tests/test_packaged_library_current_shell.py'
+      - '.github/workflows/r06-packaged-cross-testament.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  packaged-cross-testament:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Confirm exact source checkout
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - name: Run packaged Cross-Testament production-gateway regression
+        run: python lanes/dev1/repair_overlay/tests/test_packaged_cross_testament_contract.py
+      - name: Diff hygiene
+        shell: bash
+        run: git diff --check

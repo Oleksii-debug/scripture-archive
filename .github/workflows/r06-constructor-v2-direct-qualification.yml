@@ -50,29 +50,50 @@ jobs:
       - name: Confirm exact source checkout
         shell: bash
         run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
-      - name: Reconstruct exact-head DEV1 test substrate and apply overlay
+      - name: Reconstruct verified Constructor dependency substrate and apply overlay
         shell: bash
         run: |
           python - <<'PY'
           import base64, hashlib, shutil, zipfile
-          from pathlib import Path
+          from pathlib import Path, PurePosixPath
 
           parts = sorted(Path('lanes/dev1/source_parts').glob('part-*.b64'))
           if not parts:
               raise SystemExit('missing DEV1 source parts')
           encoded = ''.join(path.read_text(encoding='ascii') for path in parts)
           archive_bytes = base64.b64decode(encoded)
-          archive = Path('DEV1_R06_PLATFORM_SOURCE_TEST_SUBSTRATE.zip')
+          archive = Path('DEV1_R06_PLATFORM_SOURCE_CONSTRUCTOR_SUBSTRATE.zip')
           archive.write_bytes(archive_bytes)
-          print('exact-head test-substrate sha256=', hashlib.sha256(archive_bytes).hexdigest())
+          print('exact-head source-parts sha256=', hashlib.sha256(archive_bytes).hexdigest())
+
+          # Shared DEV1 release qualification owns whole-archive fidelity (#146).
+          # Constructor qualification needs only the Python platform dependency
+          # subtree. Verify CRC while extracting every member of that subtree and
+          # fail closed on any corruption there; do not treat unrelated corrupt
+          # frontend members as Constructor evidence or as a release-gate pass.
+          prefix = PurePosixPath('r06_platform/scripture_archive_platform')
+          extracted = 0
           with zipfile.ZipFile(archive) as zf:
-              bad = zf.testzip()
-              if bad:
-                  raise SystemExit(f'corrupt DEV1 test substrate member: {bad}')
-              zf.extractall('.')
+              for info in zf.infolist():
+                  member = PurePosixPath(info.filename)
+                  if member == prefix or prefix in member.parents:
+                      try:
+                          zf.extract(info, '.')
+                      except (zipfile.BadZipFile, OSError) as exc:
+                          raise SystemExit(f'corrupt Constructor dependency member {info.filename}: {exc}') from exc
+                      extracted += 1
+          if extracted == 0:
+              raise SystemExit('DEV1 source parts contain no Constructor dependency subtree')
+
           root = Path('r06_platform')
-          if not (root / 'scripture_archive_platform' / 'persistence' / 'store.py').is_file():
-              raise SystemExit('DEV1 test substrate missing persistence/store.py')
+          required = [
+              root / 'scripture_archive_platform' / 'persistence' / 'store.py',
+              root / 'scripture_archive_platform' / 'content' / 'loader.py',
+              root / 'scripture_archive_platform' / 'domain' / 'registries.py',
+          ]
+          missing = [str(path) for path in required if not path.is_file()]
+          if missing:
+              raise SystemExit('Constructor dependency substrate missing: ' + ', '.join(missing))
           shutil.copytree('lanes/dev1/repair_overlay', root, dirs_exist_ok=True)
           PY
       - name: Compile composed Constructor V2 surface

@@ -33,6 +33,31 @@ class PublicContentPackStoreTests(unittest.TestCase):
             self.assertFalse(inspected_paths[0].exists())
             store.verify_installed("study-core", "1.0.0")
 
+    def test_failed_verification_does_not_publish_or_block_retry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "pack.zip"
+            _write_pack(source)
+            store = ContentPackStore(root / "store")
+            target = store.packs_root / "study-core" / "1.0.0"
+
+            with patch.object(
+                store,
+                "verify_installed",
+                side_effect=ValidationError("forced staged verification failure"),
+            ):
+                with self.assertRaisesRegex(ValidationError, "forced staged verification failure"):
+                    store.install(source)
+
+            self.assertFalse(target.exists())
+            self.assertEqual((), store.installed_versions("study-core"))
+            self.assertEqual([], list(store.staging_root.iterdir()))
+
+            installed = store.install(source)
+            self.assertEqual("study-core", installed.manifest.pack_id)
+            self.assertTrue(target.is_dir())
+            store.verify_installed("study-core", "1.0.0")
+
     def test_export_cannot_mutate_immutable_store_and_versions_are_semver_sorted(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

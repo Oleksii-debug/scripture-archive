@@ -1,10 +1,20 @@
 import unittest
 
-from scripture_archive_platform.application.runtime_gateway import build_runtime_dossier
+from scripture_archive_platform.application.runtime_gateway import RuntimeGatewayError, build_runtime_dossier
 from scripture_archive_platform.application.service import PlatformApplication
 from scripture_archive_platform.transport.contracts import validate_request_shape
 from scripture_archive_runtime.evidence import Claim, EvidenceRecord, EvidenceRuntime
 from scripture_archive_runtime.models import Confidence
+
+
+def canonical_subject_catalog():
+    return {
+        "PERSON:PAUL": {
+            "subject_id": "PERSON:PAUL",
+            "display_name": "Paul",
+            "kind": "PERSON",
+        }
+    }
 
 
 def safe_dossier(subject_id="PERSON:PAUL", display_name="Paul", kind="PERSON"):
@@ -106,7 +116,13 @@ class DossierCompositionTests(unittest.TestCase):
         evidence.unlock("EV-VISIBLE")
         runtime = type("Runtime", (), {"evidence": evidence})()
 
-        packaged = build_runtime_dossier(runtime, "PERSON:PAUL", "Paul", "PERSON")["dossier"]
+        packaged = build_runtime_dossier(
+            runtime,
+            "PERSON:PAUL",
+            "Paul",
+            "PERSON",
+            subject_catalog=canonical_subject_catalog(),
+        )["dossier"]
         self.assertEqual(packaged["evidence_scope"], "unlocked_only")
         self.assertEqual([row["row_id"] for row in packaged["rows"]], ["EV-VISIBLE"])
         rendered = "\n".join(packaged["linear"])
@@ -114,6 +130,37 @@ class DossierCompositionTests(unittest.TestCase):
         self.assertNotIn("EV-LOCKED", rendered)
         self.assertNotIn("CL-LOCKED", rendered)
         self.assertNotIn("Locked proposition", rendered)
+
+
+    def test_packaged_helper_fails_closed_on_noncanonical_subject_metadata(self):
+        evidence = EvidenceRuntime()
+        runtime = type("Runtime", (), {"evidence": evidence})()
+        catalog = canonical_subject_catalog()
+
+        for display_name, kind in (("Not Paul", "PERSON"), ("Paul", "PLACE")):
+            with self.subTest(display_name=display_name, kind=kind):
+                with self.assertRaisesRegex(
+                    RuntimeGatewayError,
+                    "does not match canonical catalog",
+                ):
+                    build_runtime_dossier(
+                        runtime,
+                        "PERSON:PAUL",
+                        display_name,
+                        kind,
+                        subject_catalog=catalog,
+                    )
+
+        with self.assertRaisesRegex(RuntimeGatewayError, "catalog is unavailable"):
+            build_runtime_dossier(runtime, "PERSON:PAUL", "Paul", "PERSON")
+        with self.assertRaisesRegex(RuntimeGatewayError, "unknown canonical dossier subject"):
+            build_runtime_dossier(
+                runtime,
+                "PERSON:UNKNOWN",
+                "Unknown",
+                "PERSON",
+                subject_catalog=catalog,
+            )
 
 
 if __name__ == "__main__":

@@ -33,11 +33,13 @@ class RuntimeBackedPlayerGateway:
         current_node_getter: Callable[[], str | None] | None = None,
         runtime_application=None,
         loader=None,
+        subject_catalog: Mapping[str, Any] | None = None,
     ):
         self.adapter = RuntimeEngineContractAdapter(runtime_invoke)
         self._current_node_getter = current_node_getter
         self._runtime_application = runtime_application
         self._loader = loader
+        self._subject_catalog = subject_catalog
         self._runtime_lock = threading.RLock()
 
     @staticmethod
@@ -192,21 +194,79 @@ class RuntimeBackedPlayerGateway:
         if self._runtime_application is None:
             raise RuntimeGatewayError("canonical runtime dossier view is unavailable")
         with self._runtime_lock:
-            return build_runtime_dossier(self._runtime_application, subject_id, display_name, kind)
+            return build_runtime_dossier(
+                self._runtime_application,
+                subject_id,
+                display_name,
+                kind,
+                subject_catalog=self._subject_catalog,
+            )
 
 
-def build_runtime_dossier(runtime, subject_id: str, display_name: str, kind: str) -> dict[str, Any]:
-    """Build an unlocked-only dossier without creating a second evidence truth."""
+def _canonical_dossier_subject(
+    subject_catalog: Mapping[str, Any] | None,
+    subject_id: str,
+    display_name: str,
+    kind: str,
+) -> tuple[str, str, str]:
+    """Resolve caller metadata against the canonical audited subject catalog."""
+    if subject_catalog is None:
+        raise RuntimeGatewayError("canonical dossier subject catalog is unavailable")
+
+    metadata = subject_catalog.get(subject_id)
+    if metadata is None:
+        raise RuntimeGatewayError("unknown canonical dossier subject")
+
+    def field(name: str):
+        if isinstance(metadata, Mapping):
+            return metadata.get(name)
+        return getattr(metadata, name, None)
+
+    canonical_subject_id = field("subject_id")
+    canonical_display_name = field("display_name")
+    canonical_kind = field("kind")
+    if not all(
+        isinstance(value, str) and value.strip()
+        for value in (canonical_subject_id, canonical_display_name, canonical_kind)
+    ):
+        raise RuntimeGatewayError("canonical dossier subject metadata is invalid")
+    if canonical_subject_id != subject_id:
+        raise RuntimeGatewayError("canonical dossier subject id mismatch")
+    if (display_name, kind) != (canonical_display_name, canonical_kind):
+        raise RuntimeGatewayError("dossier subject metadata does not match canonical catalog")
+    return canonical_subject_id, canonical_display_name, canonical_kind
+
+
+def build_runtime_dossier(
+    runtime,
+    subject_id: str,
+    display_name: str,
+    kind: str,
+    *,
+    subject_catalog: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build an unlocked-only dossier from canonical subject metadata."""
     from runtime_engine.scripture_archive_runtime.dossiers import (
         DossierAssembler,
         DossierKind,
         DossierSubject,
     )
 
+    canonical_subject_id, canonical_display_name, canonical_kind = _canonical_dossier_subject(
+        subject_catalog,
+        subject_id,
+        display_name,
+        kind,
+    )
+    try:
+        dossier_kind = DossierKind(canonical_kind)
+    except (TypeError, ValueError) as exc:
+        raise RuntimeGatewayError("canonical dossier subject kind is invalid") from exc
+
     subject = DossierSubject(
-        subject_id=subject_id,
-        display_name=display_name,
-        kind=DossierKind(kind),
+        subject_id=canonical_subject_id,
+        display_name=canonical_display_name,
+        kind=dossier_kind,
     )
     view = DossierAssembler(runtime.evidence).build(subject, unlocked_only=True)
     dossier = view.to_dict()
@@ -264,4 +324,5 @@ def build_runtime_gateway(repo_root: Path, platform_store_root: Path) -> Runtime
         current_node_getter=lambda: runtime.current_node_id,
         runtime_application=runtime,
         loader=loader,
+        subject_catalog=getattr(evidence_bundle, "subject_catalog", None),
     )

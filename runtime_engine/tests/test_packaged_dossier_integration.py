@@ -20,10 +20,20 @@ if str(PLATFORM_ROOT) not in sys.path:
 # lanes/dev1/repair_overlay/tests/test_dossier_composition.py, where that topology
 # exists. Importing PlatformApplication directly from the partial overlay here makes
 # unrelated runtime workflows fail before exercising any Dossier production bytes.
-from scripture_archive_platform.application.runtime_gateway import build_runtime_dossier
+from scripture_archive_platform.application.runtime_gateway import RuntimeGatewayError, build_runtime_dossier
 from scripture_archive_platform.transport.contracts import validate_request_shape
 from runtime_engine.scripture_archive_runtime.evidence import Claim, EvidenceRecord, EvidenceRuntime
 from runtime_engine.scripture_archive_runtime.models import Confidence
+
+
+def canonical_subject_catalog():
+    return {
+        "PERSON:PAUL": {
+            "subject_id": "PERSON:PAUL",
+            "display_name": "Paul",
+            "kind": "PERSON",
+        }
+    }
 
 
 class PackagedDossierIntegrationTests(unittest.TestCase):
@@ -71,7 +81,13 @@ class PackagedDossierIntegrationTests(unittest.TestCase):
         evidence.unlock("EV-VISIBLE")
         runtime = type("Runtime", (), {"evidence": evidence})()
 
-        dossier = build_runtime_dossier(runtime, "PERSON:PAUL", "Paul", "PERSON")["dossier"]
+        dossier = build_runtime_dossier(
+            runtime,
+            "PERSON:PAUL",
+            "Paul",
+            "PERSON",
+            subject_catalog=canonical_subject_catalog(),
+        )["dossier"]
         self.assertEqual(dossier["evidence_scope"], "unlocked_only")
         self.assertEqual([row["row_id"] for row in dossier["rows"]], ["EV-VISIBLE"])
         rendered = "\n".join(dossier["linear"])
@@ -79,6 +95,25 @@ class PackagedDossierIntegrationTests(unittest.TestCase):
         self.assertNotIn("EV-LOCKED", rendered)
         self.assertNotIn("CL-LOCKED", rendered)
         self.assertNotIn("Locked proposition", rendered)
+
+
+    def test_runtime_projection_rejects_canonical_subject_relabeling(self):
+        runtime = type("Runtime", (), {"evidence": EvidenceRuntime()})()
+        catalog = canonical_subject_catalog()
+
+        for display_name, kind in (("Peter", "PERSON"), ("Paul", "PLACE")):
+            with self.subTest(display_name=display_name, kind=kind):
+                with self.assertRaisesRegex(
+                    RuntimeGatewayError,
+                    "does not match canonical catalog",
+                ):
+                    build_runtime_dossier(
+                        runtime,
+                        "PERSON:PAUL",
+                        display_name,
+                        kind,
+                        subject_catalog=catalog,
+                    )
 
     def test_deferred_ui_completion_is_inert_after_leave_and_reopen(self):
         node = shutil.which("node")

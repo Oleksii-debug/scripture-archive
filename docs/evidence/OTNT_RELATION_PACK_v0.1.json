@@ -1,0 +1,87 @@
+{
+  "schema_version": "scripture.evidence.otnt-relation-pack.v1",
+  "pack_id": "OTNT_WEBU_PRIMARY_v0.1",
+  "version": "0.1.0",
+  "status": "SOURCE_AUDITED",
+  "runtime_visibility": "GLOBAL_RESEARCH_UNLOCKED_AFTER_SOURCE_AUDIT",
+  "source_edition": {
+    "edition_id": "engwebu",
+    "name": "World English Bible Updated",
+    "license": "Public Domain",
+    "license_url": "https://worldenglish.bible/",
+    "retrieved_date": "2026-09-12"
+  },
+  "audit": {
+    "state": "SOURCE_AUDITED",
+    "auditor": "DIFFERENT_WORKER_SOURCE_AUDIT",
+    "accepted_at": "2026-09-12T17:58:18Z",
+    "evidence_ref": "github:#78/issuecomment-5647672951"
+  },
+  "passages": [
+    {
+      "passage_id": "OT.ZEC.13.7.WEBU",
+      "testament": "OT",
+      "book": "Zechariah",
+      "chapter": 13,
+      "verse_start": 7,
+      "verse_end": 7,
+      "witness": "Zechariah 13:7 (WEBU)",
+      "source_classification": "T1",
+      "tx1": false,
+      "source_url": "https://ebible.org/engwebu/ZEC13.htm",
+      "excerpt": "Strike the shepherd, and the sheep will be scattered; and I will turn my hand against the little ones.",
+      "excerpt_sha256": "fff7553a917407606b00c9696df0adee33a026c7aad390cb1db8a697c14f34e3"
+    },
+    {
+      "passage_id": "NT.MAT.26.31.WEBU",
+      "testament": "NT",
+      "book": "Matthew",
+      "chapter": 26,
+      "verse_start": 31,
+      "verse_end": 31,
+      "witness": "Matthew 26:31 (WEBU)",
+      "source_classification": "T1",
+      "tx1": false,
+      "source_url": "https://ebible.org/study/content/texts/engwebu/MT26.html",
+      "excerpt": "for it is written, ‘I will strike the shepherd, and the sheep of the flock will be scattered.’",
+      "excerpt_sha256": "bb640d245ad5907e7b096beffafa8d7283814c26d3683fa3cdd063290a50ef73"
+    }
+  ],
+  "evidence": [
+    {
+      "evidence_id": "EV.OTNT.WEBU.ZEC.13.7",
+      "passage_id": "OT.ZEC.13.7.WEBU",
+      "proposition": "Zechariah 13:7 contains the shepherd-struck and sheep-scattered wording represented by the cited WEBU excerpt.",
+      "confidence_code": "T1",
+      "tx1": false,
+      "witness": "Zechariah 13:7 (WEBU)",
+      "relation_ids": ["REL.OTNT.EXPLICIT_WRITTEN_QUOTATION.MAT26_31.ZEC13_7"]
+    },
+    {
+      "evidence_id": "EV.OTNT.WEBU.MAT.26.31",
+      "passage_id": "NT.MAT.26.31.WEBU",
+      "proposition": "Matthew 26:31 explicitly introduces the shepherd-struck and flock-scattered wording with ‘it is written’ in the cited WEBU excerpt.",
+      "confidence_code": "T1",
+      "tx1": false,
+      "witness": "Matthew 26:31 (WEBU)",
+      "relation_ids": ["REL.OTNT.EXPLICIT_WRITTEN_QUOTATION.MAT26_31.ZEC13_7"]
+    }
+  ],
+  "relations": [
+    {
+      "relation_id": "REL.OTNT.EXPLICIT_WRITTEN_QUOTATION.MAT26_31.ZEC13_7",
+      "source_evidence_id": "EV.OTNT.WEBU.ZEC.13.7",
+      "target_evidence_id": "EV.OTNT.WEBU.MAT.26.31",
+      "relation_type": "EXPLICIT_WRITTEN_QUOTATION",
+      "relation_confidence": "T2",
+      "tx1": false,
+      "witness": null,
+      "passage_ids": ["OT.ZEC.13.7.WEBU", "NT.MAT.26.31.WEBU"],
+      "source_basis": "The cited Matthew 26:31 text explicitly says ‘it is written’ and gives the shepherd/flock wording; the cited Zechariah 13:7 text contains the corresponding shepherd/sheep wording. This relation records that explicit textual cross-reference only and does not add chronology, motive, consensus, or harmonized detail.",
+      "source_urls": [
+        "https://ebible.org/engwebu/ZEC13.htm",
+        "https://ebible.org/study/content/texts/engwebu/MT26.html"
+      ]
+    }
+  ]
+}

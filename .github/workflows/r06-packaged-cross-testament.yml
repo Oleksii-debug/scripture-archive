@@ -49,7 +49,7 @@ jobs:
         shell: bash
         run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
       - name: Run packaged Cross-Testament production-gateway regression
-        run: python lanes/dev1/repair_overlay/tests/test_packaged_cross_testament_contract.py
+        run: python -c "import runpy,sys; sys.path.insert(0, 'lanes/dev1/repair_overlay'); runpy.run_path('lanes/dev1/repair_overlay/tests/test_packaged_cross_testament_contract.py', run_name='__main__')"
       - name: Diff hygiene
         shell: bash
         run: git diff --check

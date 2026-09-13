@@ -1,0 +1,41 @@
+name: QA Diagnostics Blob Portability
+
+on:
+  pull_request:
+    branches:
+      - r06-repair-diagnostics-blob-portability-0913-sol
+    paths:
+      - lanes/dev1/repair_overlay/tests/test_packaged_diagnostics.py
+      - .github/workflows/qa-diagnostics-blob-portability.yml
+
+permissions:
+  contents: read
+
+jobs:
+  qualified-core-hash:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify exact helper containment
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD^)" = "aaab89d4c60cb08e76f38fb9be0278433a4d29a5"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/qa-diagnostics-blob-portability.yml"
+      - name: Verify committed qualified Diagnostics blob
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD:runtime_engine/scripture_archive_runtime/diagnostics.py)" = "037bfa655d745cfdd041399250e324da038d8ebf"
+      - name: Run newline-portable qualified-core assertion
+        env:
+          PYTHONPATH: lanes/dev1/repair_overlay
+        run: python lanes/dev1/repair_overlay/tests/test_packaged_diagnostics.py PackagedDiagnosticsTests.test_packaged_stack_reuses_exact_qualified_diagnostics_core_blob -v

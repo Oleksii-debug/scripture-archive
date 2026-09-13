@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import shutil
+import uuid
 import zipfile
 from dataclasses import dataclass, asdict
 from pathlib import Path, PurePosixPath
@@ -93,6 +95,40 @@ def _record_id(record: Mapping[str, Any], names: tuple[str, ...]) -> str:
     raise MaterializationError(f"record lacks stable id ({', '.join(names)})")
 
 
+def _publish_staged_tree(staging: Path, out: Path) -> None:
+    """Publish one complete staged tree and restore the old tree on ordinary failure."""
+    backup = out.parent / f".{out.name}.backup-{uuid.uuid4().hex}"
+    had_existing_output = out.exists()
+
+    if not had_existing_output:
+        try:
+            os.replace(staging, out)
+        except OSError as exc:
+            raise MaterializationError("failed to publish staged materialized output") from exc
+        return
+
+    try:
+        os.replace(out, backup)
+    except OSError as exc:
+        raise MaterializationError("failed to move existing materialized output into recovery backup") from exc
+
+    try:
+        os.replace(staging, out)
+    except OSError as publish_exc:
+        try:
+            os.replace(backup, out)
+        except OSError as rollback_exc:
+            raise MaterializationError(
+                f"failed to publish staged materialized output and rollback failed; recovery backup retained as {backup.name}"
+            ) from rollback_exc
+        raise MaterializationError("failed to publish staged materialized output; previous output restored") from publish_exc
+
+    # The new tree is complete and canonical at this point. Backup cleanup is
+    # intentionally best-effort: cleanup failure must not roll back or damage a
+    # successfully published replacement.
+    shutil.rmtree(backup, ignore_errors=True)
+
+
 def materialize_packages(specs: Iterable[PackageSpec], output_dir: str | Path) -> dict[str, Any]:
     specs = tuple(specs)
     lane_names = tuple(_validated_lane_name(spec.lane) for spec in specs)
@@ -102,6 +138,8 @@ def materialize_packages(specs: Iterable[PackageSpec], output_dir: str | Path) -
     out = Path(output_dir)
     if out.exists() and out.is_symlink():
         raise MaterializationError("output directory must not be symlink")
+    if out.exists() and not out.is_dir():
+        raise MaterializationError("output path must be a directory")
 
     global_nodes: dict[str, tuple[bytes, str]] = {}
     global_evidence: dict[str, tuple[bytes, str]] = {}
@@ -198,37 +236,56 @@ def materialize_packages(specs: Iterable[PackageSpec], output_dir: str | Path) -
     if unresolved:
         raise MaterializationError(f"unresolved evidence refs: {len(unresolved)}")
 
-    if out.exists():
-        shutil.rmtree(out)
-    out.mkdir(parents=True, exist_ok=False)
+    # Build a complete sibling tree before touching the current output. Keeping
+    # staging beside the destination ensures directory renames stay on one
+    # filesystem for the publish/rollback transaction.
+    try:
+        out.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise MaterializationError("failed to prepare materialized output parent") from exc
+    staging = out.parent / f".{out.name}.staging-{uuid.uuid4().hex}"
+    try:
+        staging.mkdir(parents=False, exist_ok=False)
+        for spec, lane_name, nodes, evidence in prepared_lanes:
+            lane_dir = staging / lane_name
+            lane_dir.mkdir(parents=True, exist_ok=False)
+            (lane_dir / "nodes.json").write_bytes(_canonical_json_bytes({"nodes": [dict(n) for n in nodes]}))
+            (lane_dir / "evidence.json").write_bytes(_canonical_json_bytes({"records": [dict(r) for r in evidence]}))
+            (lane_dir / "ground_truth_index.json").write_bytes(_canonical_json_bytes({"schema": "CANONICAL_GROUND_TRUTH_INDEX_v1", "records": ground_truth_indexes[spec.lane]}))
 
-    for spec, lane_name, nodes, evidence in prepared_lanes:
-        lane_dir = out / lane_name
-        lane_dir.mkdir(parents=True, exist_ok=False)
-        (lane_dir / "nodes.json").write_bytes(_canonical_json_bytes({"nodes": [dict(n) for n in nodes]}))
-        (lane_dir / "evidence.json").write_bytes(_canonical_json_bytes({"records": [dict(r) for r in evidence]}))
-        (lane_dir / "ground_truth_index.json").write_bytes(_canonical_json_bytes({"schema": "CANONICAL_GROUND_TRUTH_INDEX_v1", "records": ground_truth_indexes[spec.lane]}))
+        output_hashes: dict[str, str] = {}
+        for path in sorted(p for p in staging.rglob("*") if p.is_file()):
+            output_hashes[path.relative_to(staging).as_posix()] = sha256_file(path)
 
-    output_hashes: dict[str, str] = {}
-    for path in sorted(p for p in out.rglob("*") if p.is_file()):
-        output_hashes[path.relative_to(out).as_posix()] = sha256_file(path)
+        manifest = {
+            "schema": "R06_INTEGRATION_MATERIALIZER_MANIFEST_v2",
+            "content_schema": "CONTENT_NODE_SCHEMA_v1.2",
+            "provenance_contract": PROVENANCE_CONTRACT_VERSION,
+            "inputs": inputs,
+            "lane_counts": lane_counts,
+            "provenance_counts": provenance_counts,
+            "total_nodes": len(global_nodes),
+            "total_evidence": len(global_evidence),
+            "duplicate_node_ids": 0,
+            "conflicting_node_ids": 0,
+            "duplicate_evidence_ids": 0,
+            "conflicting_evidence_ids": 0,
+            "unresolved_required_evidence_refs": 0,
+            "output_hashes": output_hashes,
+        }
+        manifest_path = staging / "INTEGRATION_MANIFEST.json"
+        manifest_path.write_bytes(_canonical_json_bytes(manifest))
+        manifest["manifest_sha256"] = sha256_file(manifest_path)
+    except OSError as exc:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise MaterializationError("failed to stage complete materialized integration output") from exc
 
-    manifest = {
-        "schema": "R06_INTEGRATION_MATERIALIZER_MANIFEST_v2",
-        "content_schema": "CONTENT_NODE_SCHEMA_v1.2",
-        "provenance_contract": PROVENANCE_CONTRACT_VERSION,
-        "inputs": inputs,
-        "lane_counts": lane_counts,
-        "provenance_counts": provenance_counts,
-        "total_nodes": len(global_nodes),
-        "total_evidence": len(global_evidence),
-        "duplicate_node_ids": 0,
-        "conflicting_node_ids": 0,
-        "duplicate_evidence_ids": 0,
-        "conflicting_evidence_ids": 0,
-        "unresolved_required_evidence_refs": 0,
-        "output_hashes": output_hashes,
-    }
-    (out / "INTEGRATION_MANIFEST.json").write_bytes(_canonical_json_bytes(manifest))
-    manifest["manifest_sha256"] = sha256_file(out / "INTEGRATION_MANIFEST.json")
+    try:
+        _publish_staged_tree(staging, out)
+    finally:
+        # If publication failed before the staging rename, never leave a stale
+        # candidate tree that could later be mistaken for canonical output.
+        if staging.exists():
+            shutil.rmtree(staging, ignore_errors=True)
+
     return manifest

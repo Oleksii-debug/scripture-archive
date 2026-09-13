@@ -1,0 +1,144 @@
+name: R06 Current Package Keymap Qualification
+
+on:
+  push:
+    branches:
+      - qa-current-package-keymap-0913-sol
+    paths:
+      - .github/workflows/r06-current-package-keymap-qualification.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  keymap-contract:
+    name: keymap-contract (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout exact canonical package
+        uses: actions/checkout@v4
+        with:
+          ref: fa836d79fcfd9ac5d8aacbf6a6be9f5a10183012
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Verify immutable package bind
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "fa836d79fcfd9ac5d8aacbf6a6be9f5a10183012"
+
+      - name: Reconstruct verified baseline and compose repair overlay
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import base64, hashlib, shutil, zipfile
+
+          parts = sorted(Path('lanes/dev1/source_parts').glob('part-*.b64'))
+          assert parts, 'DEV1 source parts missing'
+          encoded = ''.join(p.read_text(encoding='ascii') for p in parts)
+          payload = base64.b64decode(encoded)
+          digest = hashlib.sha256(payload).hexdigest()
+          expected = '51a31a8840b57850c8d4d0fc714b124445f3b3155daea083817c3570e0b80e0e'
+          assert digest == expected, f'base source archive hash mismatch: {digest}'
+          archive = Path('DEV1_R06_PLATFORM_SOURCE.zip')
+          archive.write_bytes(payload)
+          with zipfile.ZipFile(archive) as zf:
+              zf.extractall('.')
+          root = Path('r06_platform')
+          assert root.is_dir(), 'reconstructed r06_platform missing'
+          shutil.copytree('lanes/dev1/repair_overlay', root, dirs_exist_ok=True)
+          keymap = root / 'scripture_archive_platform/application/keymap.py'
+          assert keymap.is_file(), 'KeybindingService baseline module missing after verified reconstruction'
+          print(f'RECONSTRUCTED_KEYMAP={keymap}')
+          PY
+
+      - name: Verify backend KeybindingService public contract
+        shell: bash
+        run: |
+          python - <<'PY'
+          import sys
+          from pathlib import Path
+          root = Path('r06_platform').resolve()
+          sys.path.insert(0, str(root))
+          from scripture_archive_platform.application.keymap import KeybindingService
+          required = {'list','rebind','clear','reset_context','reset_all','export_data','import_data'}
+          missing = sorted(name for name in required if not callable(getattr(KeybindingService, name, None)))
+          assert not missing, f'KeybindingService missing methods: {missing}'
+          print('KEYBINDING_SERVICE_METHODS_OK=' + ','.join(sorted(required)))
+          PY
+
+      - name: Run reconstructed keymap/hotkey unit regressions
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess, sys
+          root = Path('r06_platform').resolve()
+          tests = root / 'tests'
+          selected = []
+          needles = ('keymap', 'hotkey', 'keybind', 'KeybindingService')
+          for path in sorted(tests.glob('test*.py')):
+              text = path.read_text(encoding='utf-8')
+              haystack = path.name + '\n' + text
+              if any(needle.lower() in haystack.lower() for needle in needles):
+                  selected.append(path.stem)
+          assert selected, 'No reconstructed keymap/hotkey regression modules found'
+          print('SELECTED_KEYMAP_TEST_MODULES=' + ','.join(selected))
+          for stem in selected:
+              subprocess.run([sys.executable, '-m', 'unittest', f'tests.{stem}', '-v'], cwd=root, check=True)
+          PY
+
+      - name: Verify packaged frontend hotkey/keymap wiring
+        shell: bash
+        run: |
+          node --check r06_platform/frontend/hotkeys.js
+          node --check r06_platform/frontend/keymap-ui.js
+          node --check r06_platform/frontend/app.js
+          python - <<'PY'
+          from pathlib import Path
+          hot = Path('r06_platform/frontend/hotkeys.js').read_text(encoding='utf-8')
+          ui = Path('r06_platform/frontend/keymap-ui.js').read_text(encoding='utf-8')
+          app = Path('r06_platform/frontend/app.js').read_text(encoding='utf-8')
+          service = Path('r06_platform/scripture_archive_platform/application/service.py').read_text(encoding='utf-8')
+
+          hot_contract = [
+              'this.captureScope', "if(e.key==='Escape')", "if(e.key==='Tab')return",
+              '(a.allowed_contexts||[]).includes(activeContext)',
+              'if(editable&&!e.ctrlKey&&!e.altKey&&!e.metaKey)return',
+              'this.execute(action.action_id)'
+          ]
+          ui_contract = [
+              "this.api('keymap.list')", "this.api('keymap.clear'", "this.api('keymap.rebind'",
+              "this.api('keymap.reset_context'", "this.api('keymap.reset_all')",
+              "this.api('keymap.export')", "this.api('keymap.import'",
+              'this.dispatcher.setCapture', 'this.dispatcher.clearCapture', '.textContent='
+          ]
+          app_contract = ['HotkeyDispatcher', 'KeymapUI']
+          backend_contract = [
+              "cmd=='keymap.list'", "cmd=='keymap.rebind'", "cmd=='keymap.clear'",
+              "cmd=='keymap.reset_context'", "cmd=='keymap.reset_all'",
+              "cmd=='keymap.export'", "cmd=='keymap.import'"
+          ]
+          for label, text, expected in [
+              ('hotkeys', hot, hot_contract), ('keymap-ui', ui, ui_contract),
+              ('app', app, app_contract), ('backend', service, backend_contract)
+          ]:
+              missing = [token for token in expected if token not in text]
+              assert not missing, f'{label} contract tokens missing: {missing}'
+          print('PACKAGED_KEYMAP_HOTKEY_WIRING_OK')
+          PY

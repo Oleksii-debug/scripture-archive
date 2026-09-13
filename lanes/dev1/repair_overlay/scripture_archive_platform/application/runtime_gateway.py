@@ -193,12 +193,18 @@ def build_runtime_gateway(repo_root: Path, platform_store_root: Path) -> Runtime
     Canonical node bytes are not rewritten. The checked-in R05 provenance registry
     is projected into ``EvidenceRuntime`` and its explicit node_id→evidence_record_id
     links replace legacy optional unlock values only in this in-memory packaged
-    runtime projection. Free-text source fields are not parsed into invented
-    passage/witness/entity/relation/chronology structure.
+    runtime projection. The explicit OT↔NT relation pack is validated through its
+    typed loader but materializes into the same EvidenceRuntime only after an
+    independent source-audit promotion. Free-text source fields are never parsed
+    into invented passage/witness/entity/relation/chronology structure.
     """
     from runtime_engine.scripture_archive_runtime.application import RuntimeApplication
     from runtime_engine.scripture_archive_runtime.content import ContentRepository
     from runtime_engine.scripture_archive_runtime.evidence_registry import load_r05_evidence_registry
+    from runtime_engine.scripture_archive_runtime.otnt_relation_pack import (
+        load_otnt_relation_pack,
+        materialize_otnt_relation_pack,
+    )
     from runtime_engine.scripture_archive_runtime.persistence import PersistenceStore
     from scripture_archive_platform.content.loader import CanonicalContentLoader
 
@@ -206,6 +212,8 @@ def build_runtime_gateway(repo_root: Path, platform_store_root: Path) -> Runtime
     loader = CanonicalContentLoader(repo_root)
     loader._ensure()
     evidence_bundle = load_r05_evidence_registry(repo_root)
+    otnt_bundle = load_otnt_relation_pack(repo_root)
+    materialize_otnt_relation_pack(evidence_bundle.runtime, otnt_bundle)
 
     nodes = []
     for source_node in loader._nodes.values():

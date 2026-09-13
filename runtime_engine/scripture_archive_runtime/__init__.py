@@ -34,6 +34,17 @@ from .evidence_provenance import (
 from .grading import GraderRegistry
 from .mastery import MasteryEngine
 from .models import *
+from .offline_readiness import (
+    NETWORK_POLICY_FORBIDDEN,
+    OFFLINE_MANIFEST_SCHEMA,
+    OFFLINE_REPORT_SCHEMA,
+    OfflineDependency,
+    OfflineReadinessError,
+    OfflineReadinessManifest,
+    OfflineReadinessReport,
+    VerifiedOfflineDependency,
+    verify_offline_bundle,
+)
 from .persistence import PersistenceStore
 from .scheduler import Scheduler
 from .security import CommandEnvelope, ValidationError, validate_command_dto, validate_content_import
@@ -47,5 +58,7 @@ __all__ = [
     "Relation", "resolve_evidence_witness", "resolve_support_witness", "validated_declared_witness", "validated_claim_witness",
     "validated_relation_witness", "visible_relation_passage_ids", "CommandEnvelope", "ValidationError", "validate_command_dto",
     "validate_content_import", "CONTENT_PACK_SCHEMA", "CONTENT_SCHEMA_VERSION", "ContentPackManifest", "ContentPackInspection",
-    "ContentPackStore", "inspect_content_pack",
+    "ContentPackStore", "inspect_content_pack", "NETWORK_POLICY_FORBIDDEN", "OFFLINE_MANIFEST_SCHEMA", "OFFLINE_REPORT_SCHEMA",
+    "OfflineDependency", "OfflineReadinessError", "OfflineReadinessManifest", "OfflineReadinessReport",
+    "VerifiedOfflineDependency", "verify_offline_bundle",
 ]

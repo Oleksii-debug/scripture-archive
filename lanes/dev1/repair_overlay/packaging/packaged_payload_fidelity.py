@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import re
+import struct
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -181,10 +182,81 @@ def build_manifest(
     }
 
 
-def _archive_index(reader: Any) -> tuple[dict[str, str], list[str]]:
+def _raw_carchive_member_names(reader: Any) -> list[str]:
+    """Read non-option member names before CArchiveReader collapses duplicate dict keys."""
+    try:
+        raw_pkg = reader.raw_pkg_data()
+        cookie_format = reader._COOKIE_FORMAT
+        cookie_length = int(reader._COOKIE_LENGTH)
+        cookie_magic = bytes(reader._COOKIE_MAGIC_PATTERN)
+        toc_entry_format = reader._TOC_ENTRY_FORMAT
+        toc_entry_length = int(reader._TOC_ENTRY_LENGTH)
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise RuntimeError(f"CArchive reader metadata unavailable: {exc}") from exc
+
+    if not isinstance(raw_pkg, (bytes, bytearray)):
+        raise RuntimeError(f"CArchive raw package has invalid type: {type(raw_pkg).__name__}")
+    raw_pkg = bytes(raw_pkg)
+    if cookie_length <= 0 or len(raw_pkg) < cookie_length:
+        raise RuntimeError("CArchive raw package is shorter than its cookie")
+
+    try:
+        magic, archive_length, toc_offset, toc_length, _pyvers, _pylib = struct.unpack(
+            cookie_format, raw_pkg[-cookie_length:]
+        )
+    except struct.error as exc:
+        raise RuntimeError(f"CArchive cookie parse failed: {exc}") from exc
+
+    if magic != cookie_magic:
+        raise RuntimeError("CArchive raw package cookie magic mismatch")
+    if archive_length != len(raw_pkg):
+        raise RuntimeError(
+            f"CArchive raw package length mismatch: cookie={archive_length} actual={len(raw_pkg)}"
+        )
+    toc_end = toc_offset + toc_length
+    cookie_start = len(raw_pkg) - cookie_length
+    if toc_offset < 0 or toc_length < 0 or toc_end > cookie_start:
+        raise RuntimeError(
+            f"CArchive TOC bounds invalid: offset={toc_offset} length={toc_length} cookie_start={cookie_start}"
+        )
+
+    toc_data = raw_pkg[toc_offset:toc_end]
+    names: list[str] = []
+    cur_pos = 0
+    while cur_pos < len(toc_data):
+        if len(toc_data) - cur_pos < toc_entry_length:
+            raise RuntimeError("CArchive TOC contains a truncated entry header")
+        header = toc_data[cur_pos:(cur_pos + toc_entry_length)]
+        try:
+            entry_length, _entry_offset, _data_length, _uncompressed_length, _compression_flag, typecode = \
+                struct.unpack(toc_entry_format, header)
+        except struct.error as exc:
+            raise RuntimeError(f"CArchive TOC entry parse failed: {exc}") from exc
+        if entry_length < toc_entry_length:
+            raise RuntimeError(f"CArchive TOC entry length is invalid: {entry_length}")
+        next_pos = cur_pos + entry_length
+        if next_pos > len(toc_data):
+            raise RuntimeError("CArchive TOC entry exceeds declared TOC bounds")
+        raw_name = toc_data[cur_pos + toc_entry_length:next_pos].rstrip(b"\0")
+        try:
+            name = raw_name.decode("utf-8")
+            typecode_text = typecode.decode("ascii")
+        except UnicodeDecodeError as exc:
+            raise RuntimeError(f"CArchive TOC text decode failed: {exc}") from exc
+        if typecode_text != "o":
+            names.append(name)
+        cur_pos = next_pos
+
+    if cur_pos != len(toc_data):
+        raise RuntimeError("CArchive TOC parser did not consume the declared TOC length")
+    return names
+
+
+def _archive_index(reader: Any, archive_names: list[str] | None = None) -> tuple[dict[str, str], list[str]]:
     index: dict[str, str] = {}
     errors: list[str] = []
-    for raw_name in getattr(reader, "toc", {}):
+    names = archive_names if archive_names is not None else [str(name) for name in getattr(reader, "toc", {})]
+    for raw_name in names:
         name = str(raw_name)
         try:
             normalized = normalize_archive_path(name)
@@ -192,14 +264,19 @@ def _archive_index(reader: Any) -> tuple[dict[str, str], list[str]]:
             errors.append(f"INVALID_ARCHIVE_PATH {name!r}: {exc}")
             continue
         existing = index.get(normalized)
-        if existing is not None and existing != name:
+        if existing is not None:
             errors.append(f"DUPLICATE_NORMALIZED_PATH {normalized}: {existing!r} vs {name!r}")
         else:
             index[normalized] = name
     return index, errors
 
 
-def verify_reader(reader: Any, manifest: dict[str, Any]) -> dict[str, Any]:
+def verify_reader(
+    reader: Any,
+    manifest: dict[str, Any],
+    *,
+    archive_names: list[str] | None = None,
+) -> dict[str, Any]:
     entries = manifest.get("entries")
     if manifest.get("schema_version") != 1 or not isinstance(entries, list):
         return {
@@ -211,7 +288,7 @@ def verify_reader(reader: Any, manifest: dict[str, Any]) -> dict[str, Any]:
             "entries": [],
         }
 
-    index, errors = _archive_index(reader)
+    index, errors = _archive_index(reader, archive_names)
     checked: list[dict[str, Any]] = []
     expected_paths: set[str] = set()
     verified = 0
@@ -312,7 +389,8 @@ def verify_artifact(artifact: Path, manifest: dict[str, Any]) -> dict[str, Any]:
     except Exception as exc:  # pragma: no cover - exercised in Windows build environment
         raise RuntimeError(f"PyInstaller archive reader unavailable: {exc}") from exc
     reader = CArchiveReader(str(artifact))
-    result = verify_reader(reader, manifest)
+    archive_names = _raw_carchive_member_names(reader)
+    result = verify_reader(reader, manifest, archive_names=archive_names)
     result["artifact"] = str(artifact)
     result["artifact_sha256"] = sha256_hex(artifact.read_bytes())
     return result

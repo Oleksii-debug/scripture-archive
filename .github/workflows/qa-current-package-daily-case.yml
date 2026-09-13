@@ -18,7 +18,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       EXPECTED_HEAD: ${{ github.sha }}
-      PYTHONPATH: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -30,11 +29,9 @@ jobs:
         shell: bash
         run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
       - name: Run packaged Daily Case projection and UI regression
-        working-directory: lanes/dev1/repair_overlay
-        run: python tests/test_packaged_daily_case.py
+        run: python -c "import pathlib,runpy,sys; root=pathlib.Path.cwd(); sys.path[:0]=[str(root/'lanes/dev1/repair_overlay'),str(root)]; runpy.run_path(str(root/'lanes/dev1/repair_overlay/tests/test_packaged_daily_case.py'),run_name='__main__')"
       - name: Run packaged Daily Case transport regression
-        working-directory: lanes/dev1/repair_overlay
-        run: python tests/test_packaged_daily_case_transport_contract.py
+        run: python -c "import pathlib,runpy,sys; root=pathlib.Path.cwd(); sys.path[:0]=[str(root/'lanes/dev1/repair_overlay'),str(root)]; runpy.run_path(str(root/'lanes/dev1/repair_overlay/tests/test_packaged_daily_case_transport_contract.py'),run_name='__main__')"
       - name: Diff hygiene
         shell: bash
         run: git diff --check

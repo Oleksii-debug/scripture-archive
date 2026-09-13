@@ -23,6 +23,7 @@ _WINDOWS_RESERVED_LANES = {
     *(f"COM{i}" for i in range(1, 10)),
     *(f"LPT{i}" for i in range(1, 10)),
 }
+_TRANSACTION_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 
 
 @dataclass(frozen=True)
@@ -95,6 +96,66 @@ def _record_id(record: Mapping[str, Any], names: tuple[str, ...]) -> str:
     raise MaterializationError(f"record lacks stable id ({', '.join(names)})")
 
 
+def _fsync_directory(path: Path) -> None:
+    if os.name == "nt":
+        return
+    fd = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _write_bytes_durable(path: Path, payload: bytes) -> None:
+    path.write_bytes(payload)
+    with path.open("r+b") as fh:
+        fh.flush()
+        os.fsync(fh.fileno())
+
+
+def _recovery_backups(out: Path) -> list[Path]:
+    if not out.parent.exists():
+        return []
+    prefix = f".{out.name}.backup-"
+    backups: list[Path] = []
+    for candidate in out.parent.iterdir():
+        if not candidate.name.startswith(prefix):
+            continue
+        transaction_id = candidate.name[len(prefix):]
+        if _TRANSACTION_ID_RE.fullmatch(transaction_id) is None:
+            continue
+        if candidate.is_symlink() or not candidate.is_dir():
+            raise MaterializationError(f"unsafe materializer recovery backup: {candidate.name}")
+        backups.append(candidate)
+    return sorted(backups, key=lambda path: path.name)
+
+
+def _recover_interrupted_publication(out: Path) -> None:
+    backups = _recovery_backups(out)
+    if not backups:
+        return
+
+    if out.exists():
+        try:
+            for backup in backups:
+                shutil.rmtree(backup)
+            _fsync_directory(out.parent)
+        except OSError as exc:
+            raise MaterializationError("failed to clean stale materializer recovery backup") from exc
+        return
+
+    if len(backups) != 1:
+        raise MaterializationError(
+            f"multiple materializer recovery backups found while canonical output is absent: {len(backups)}"
+        )
+
+    try:
+        os.replace(backups[0], out)
+        _fsync_directory(out.parent)
+    except OSError as exc:
+        raise MaterializationError("failed to recover previous materialized output after interrupted publish") from exc
+
+
 def _publish_staged_tree(staging: Path, out: Path) -> None:
     """Publish one complete staged tree and restore the old tree on ordinary failure."""
     backup = out.parent / f".{out.name}.backup-{uuid.uuid4().hex}"
@@ -103,20 +164,42 @@ def _publish_staged_tree(staging: Path, out: Path) -> None:
     if not had_existing_output:
         try:
             os.replace(staging, out)
+            _fsync_directory(out.parent)
         except OSError as exc:
+            if out.exists() and not staging.exists():
+                try:
+                    os.replace(out, staging)
+                    _fsync_directory(out.parent)
+                except OSError:
+                    pass
             raise MaterializationError("failed to publish staged materialized output") from exc
         return
 
+    previous_moved = False
     try:
         os.replace(out, backup)
+        previous_moved = True
+        _fsync_directory(out.parent)
     except OSError as exc:
+        if previous_moved and backup.exists() and not out.exists():
+            try:
+                os.replace(backup, out)
+                _fsync_directory(out.parent)
+            except OSError as rollback_exc:
+                raise MaterializationError(
+                    f"failed to durably move existing output and rollback failed; recovery backup retained as {backup.name}"
+                ) from rollback_exc
         raise MaterializationError("failed to move existing materialized output into recovery backup") from exc
 
     try:
         os.replace(staging, out)
+        _fsync_directory(out.parent)
     except OSError as publish_exc:
         try:
+            if out.exists() and not staging.exists():
+                os.replace(out, staging)
             os.replace(backup, out)
+            _fsync_directory(out.parent)
         except OSError as rollback_exc:
             raise MaterializationError(
                 f"failed to publish staged materialized output and rollback failed; recovery backup retained as {backup.name}"
@@ -127,6 +210,10 @@ def _publish_staged_tree(staging: Path, out: Path) -> None:
     # intentionally best-effort: cleanup failure must not roll back or damage a
     # successfully published replacement.
     shutil.rmtree(backup, ignore_errors=True)
+    try:
+        _fsync_directory(out.parent)
+    except OSError:
+        pass
 
 
 def materialize_packages(specs: Iterable[PackageSpec], output_dir: str | Path) -> dict[str, Any]:
@@ -136,10 +223,13 @@ def materialize_packages(specs: Iterable[PackageSpec], output_dir: str | Path) -
         raise MaterializationError("package lanes must be unique case-insensitively")
 
     out = Path(output_dir)
-    if out.exists() and out.is_symlink():
+    if not out.name:
+        raise MaterializationError("output directory must have a filesystem name")
+    if out.is_symlink():
         raise MaterializationError("output directory must not be symlink")
     if out.exists() and not out.is_dir():
         raise MaterializationError("output path must be a directory")
+    _recover_interrupted_publication(out)
 
     global_nodes: dict[str, tuple[bytes, str]] = {}
     global_evidence: dict[str, tuple[bytes, str]] = {}
@@ -249,9 +339,19 @@ def materialize_packages(specs: Iterable[PackageSpec], output_dir: str | Path) -
         for spec, lane_name, nodes, evidence in prepared_lanes:
             lane_dir = staging / lane_name
             lane_dir.mkdir(parents=True, exist_ok=False)
-            (lane_dir / "nodes.json").write_bytes(_canonical_json_bytes({"nodes": [dict(n) for n in nodes]}))
-            (lane_dir / "evidence.json").write_bytes(_canonical_json_bytes({"records": [dict(r) for r in evidence]}))
-            (lane_dir / "ground_truth_index.json").write_bytes(_canonical_json_bytes({"schema": "CANONICAL_GROUND_TRUTH_INDEX_v1", "records": ground_truth_indexes[spec.lane]}))
+            _write_bytes_durable(
+                lane_dir / "nodes.json",
+                _canonical_json_bytes({"nodes": [dict(n) for n in nodes]}),
+            )
+            _write_bytes_durable(
+                lane_dir / "evidence.json",
+                _canonical_json_bytes({"records": [dict(r) for r in evidence]}),
+            )
+            _write_bytes_durable(
+                lane_dir / "ground_truth_index.json",
+                _canonical_json_bytes({"schema": "CANONICAL_GROUND_TRUTH_INDEX_v1", "records": ground_truth_indexes[spec.lane]}),
+            )
+            _fsync_directory(lane_dir)
 
         output_hashes: dict[str, str] = {}
         for path in sorted(p for p in staging.rglob("*") if p.is_file()):
@@ -274,8 +374,9 @@ def materialize_packages(specs: Iterable[PackageSpec], output_dir: str | Path) -
             "output_hashes": output_hashes,
         }
         manifest_path = staging / "INTEGRATION_MANIFEST.json"
-        manifest_path.write_bytes(_canonical_json_bytes(manifest))
+        _write_bytes_durable(manifest_path, _canonical_json_bytes(manifest))
         manifest["manifest_sha256"] = sha256_file(manifest_path)
+        _fsync_directory(staging)
     except OSError as exc:
         shutil.rmtree(staging, ignore_errors=True)
         raise MaterializationError("failed to stage complete materialized integration output") from exc

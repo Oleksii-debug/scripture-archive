@@ -63,6 +63,8 @@ jobs:
 
       - name: Run packaged diagnostics regressions
         working-directory: lanes/dev1/repair_overlay
+        env:
+          PYTHONPATH: .
         run: python tests/test_packaged_diagnostics.py -v
 
       - name: Validate diagnostics and update bootstrap syntax

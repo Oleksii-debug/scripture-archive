@@ -77,7 +77,7 @@ try {
     $result.source_compile = $true
 
     $PriorPythonPath = $env:PYTHONPATH
-    $env:PYTHONPATH = "$Repo;$PlatformRoot" + $(if ($PriorPythonPath) { ";$PriorPythonPath" } else { "" })
+    $env:PYTHONPATH = "$OverlayTests;$Repo;$PlatformRoot" + $(if ($PriorPythonPath) { ";$PriorPythonPath" } else { "" })
     Push-Location $PlatformRoot
     try {
         python -m unittest discover -s $OverlayTests -v

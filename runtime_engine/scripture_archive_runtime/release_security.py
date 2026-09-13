@@ -9,7 +9,7 @@ from typing import Iterable
 SKIP_DIRS = {".git", ".venv", "venv", "__pycache__", "build", "dist", ".pytest_cache", ".mypy_cache"}
 FORBIDDEN_BASENAMES = {".env", "token.json", "credentials.json", "cookies.txt", "cookies.sqlite", "session.json"}
 TEXT_SUFFIXES = {
-    "", ".cfg", ".css", ".csv", ".html", ".ini", ".js", ".json", ".md", ".ps1", ".py", ".toml", ".tsv", ".txt", ".xml", ".yaml", ".yml",
+    "", ".cfg", ".css", ".csv", ".html", ".ini", ".js", ".json", ".key", ".md", ".pem", ".ps1", ".py", ".toml", ".tsv", ".txt", ".xml", ".yaml", ".yml",
 }
 PLACEHOLDER_MARKERS = ("EXAMPLE", "PLACEHOLDER", "REDACTED", "CHANGEME", "YOUR_KEY", "YOUR-KEY")
 

@@ -12,16 +12,23 @@ on:
       - 'lanes/dev1/repair_overlay/frontend/content-pack-manager.js'
       - 'lanes/dev1/repair_overlay/frontend/evidence-graph-ui.js'
       - 'lanes/dev1/repair_overlay/frontend/witness-matrix-ui.js'
+      - 'lanes/dev1/repair_overlay/frontend/review-queue-ui.js'
       - 'lanes/dev1/repair_overlay/frontend/research-export.js'
       - 'lanes/dev1/repair_overlay/scripture_archive_platform/application/runtime_gateway.py'
       - 'lanes/dev1/repair_overlay/scripture_archive_platform/application/service.py'
       - 'lanes/dev1/repair_overlay/scripture_archive_platform/transport/contracts.py'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/transport/runtime_compat.py'
       - 'lanes/dev1/repair_overlay/tests/test_packaged_library_current_shell.py'
       - 'lanes/dev1/repair_overlay/tests/test_packaged_chronology_lab.py'
       - 'lanes/dev1/repair_overlay/tests/test_packaged_transport_composition.py'
       - 'lanes/dev1/repair_overlay/tests/test_packaged_witness_matrix_contract.py'
       - 'lanes/dev1/repair_overlay/tests/test_packaged_witness_matrix_lifecycle.py'
       - 'lanes/dev1/repair_overlay/tests/test_research_export_current_shell.py'
+      - 'lanes/dev1/repair_overlay/tests/test_packaged_review_queue_ui.py'
+      - 'lanes/dev1/repair_overlay/tests/test_packaged_review_training_contract.py'
+      - 'lanes/dev1/repair_overlay/tests/test_packaged_review_training_player_ui.py'
+      - 'lanes/dev1/repair_overlay/tests/test_packaged_review_training_static_syntax.py'
+      - 'lanes/dev1/repair_overlay/tests/test_packaged_review_training_transport.py'
       - 'lanes/dev1/repair_overlay/tests/test_packaged_structured_evidence_population.py'
       - '.github/workflows/r06-packaged-library-current-shell.yml'
   workflow_dispatch:
@@ -61,6 +68,16 @@ jobs:
         run: python lanes/dev1/repair_overlay/tests/test_packaged_witness_matrix_lifecycle.py
       - name: Run packaged Research Export current-shell regression
         run: python lanes/dev1/repair_overlay/tests/test_research_export_current_shell.py
+      - name: Run packaged Review Queue regression
+        run: python lanes/dev1/repair_overlay/tests/test_packaged_review_queue_ui.py
+      - name: Run packaged Review Training contract regression
+        run: python lanes/dev1/repair_overlay/tests/test_packaged_review_training_contract.py
+      - name: Run packaged Review Training player UI regression
+        run: python lanes/dev1/repair_overlay/tests/test_packaged_review_training_player_ui.py
+      - name: Run packaged Review Training transport regression
+        run: python lanes/dev1/repair_overlay/tests/test_packaged_review_training_transport.py
+      - name: Run packaged Review Training syntax regression
+        run: python lanes/dev1/repair_overlay/tests/test_packaged_review_training_static_syntax.py
       - name: Run packaged structured-evidence population regression
         run: python lanes/dev1/repair_overlay/tests/test_packaged_structured_evidence_population.py
       - name: Diff hygiene

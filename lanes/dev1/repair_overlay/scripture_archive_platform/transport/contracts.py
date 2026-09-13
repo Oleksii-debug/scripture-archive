@@ -8,6 +8,7 @@ MAX_IMPORT_BYTES = 2_000_000
 
 ALLOWLISTED_COMMANDS = frozenset({
   "system.bootstrap",
+  "content_packs.list","content_packs.inspect","content_packs.install","content_packs.verify","content_packs.activate","content_packs.rollback",
   "content.list_campaigns","content.list_missions","library.catalog","library.search","player.load_node",
   "player.submit_answer","player.request_hint","player.reveal_evidence","player.next",
   "player.get_progress","player.get_mastery","player.get_review_queue","player.start_review","player.finish_review","player.get_daily_case","player.save_checkpoint","player.restore_checkpoint",

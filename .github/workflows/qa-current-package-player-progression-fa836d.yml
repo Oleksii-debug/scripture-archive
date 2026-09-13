@@ -47,15 +47,14 @@ jobs:
         run: python tests/test_player_next_gate.py
       - name: Packaged runtime gateway replay and target boundary
         working-directory: lanes/dev1/repair_overlay
-        env:
-          PYTHONPATH: ${{ github.workspace }}/lanes/dev1/repair_overlay:${{ github.workspace }}
-        run: python tests/test_dev_a_runtime_gateway.py
+        run: python -c "import runpy,sys; sys.path.insert(0,'.'); sys.path.insert(0,'../../..'); runpy.run_path('tests/test_dev_a_runtime_gateway.py',run_name='__main__')"
       - name: Packaged transport forbids legacy caller-selected branch command
         working-directory: lanes/dev1/repair_overlay
-        env:
-          PYTHONPATH: ${{ github.workspace }}/lanes/dev1/repair_overlay:${{ github.workspace }}
         shell: python
         run: |
+          import sys
+          sys.path.insert(0,'.')
+          sys.path.insert(0,'../../..')
           from scripture_archive_platform.transport.contracts import ALLOWLISTED_COMMANDS, validate_request_shape
           assert 'player.next' in ALLOWLISTED_COMMANDS
           assert 'player.navigate_branch' not in ALLOWLISTED_COMMANDS

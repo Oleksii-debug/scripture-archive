@@ -1,0 +1,16 @@
+{
+  "archive_sha256": "6442f15ee3b4360786c9cd0996ea3af8f3124744a61b7a9bd69e77ac5deab397",
+  "book_codes": 81,
+  "empty_text_rows": 29,
+  "license": "Public Domain",
+  "materialization_rule": "Exact engwebu_vpl.txt bytes from the pinned official eBible archive; no verse normalization or interpolation.",
+  "runtime_network_required": false,
+  "schema": "scripture.webu.bundled-authority.v1",
+  "source_site": "https://ebible.org/engwebu/",
+  "source_tier": "TX1",
+  "source_url": "https://ebible.org/Scriptures/engwebu_vpl.zip",
+  "translation_id": "engwebu",
+  "translation_name": "World English Bible Updated",
+  "vpl_rows": 38058,
+  "vpl_sha256": "71c2ea1ecba86b62871b0e818c4302ea0a559a5cb9643ff05197a6243836fc2f"
+}

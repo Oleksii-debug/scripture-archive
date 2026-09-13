@@ -200,11 +200,11 @@ class CompositeAccessibilityTests(unittest.TestCase):
         inspection = task["accessibility"]["inspection"]
         self.assertFalse(inspection["passed"])
         self.assertIn(
-            ("A11Y_COMPOSITE_CHILD_CONTRACT_MISSING", "task.steps[0].task_type"),
+            ("A11Y_COMPOSITE_STEPS_MISSING", "task.steps"),
             {(item["code"], item["path"]) for item in inspection["findings"]},
         )
-        self.assertNotIn("task_type", task["steps"][0])
-        self.assertNotIn("answer_contract", task["steps"][0])
+        self.assertEqual([], task["steps"])
+        self.assertNotIn("grading", task)
 
     def test_incomplete_nested_child_still_exposes_explicit_hazard(self) -> None:
         task = self._render(

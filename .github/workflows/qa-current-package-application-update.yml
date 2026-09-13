@@ -1,0 +1,63 @@
+name: QA Current Package Application Update
+
+on:
+  push:
+    branches:
+      - qa-current-package-application-update-fa836d-0913-closer
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  BASE_SHA: fa836d79fcfd9ac5d8aacbf6a6be9f5a10183012
+  WORKFLOW_PATH: .github/workflows/qa-current-package-application-update.yml
+
+jobs:
+  application-update:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Prove immutable package ancestry and workflow-only containment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$BASE_SHA"
+          test "$(git merge-base HEAD "$BASE_SHA")" = "$BASE_SHA"
+          mapfile -t changed < <(git diff --name-only "$BASE_SHA"...HEAD)
+          test "${#changed[@]}" -eq 1
+          test "${changed[0]}" = "$WORKFLOW_PATH"
+          git diff --check "$BASE_SHA"...HEAD
+      - name: Compile Application Update Python surfaces
+        run: >-
+          python -m py_compile
+          runtime_engine/scripture_archive_runtime/application_update.py
+          lanes/dev1/repair_overlay/scripture_archive_platform/desktop_host/update_application.py
+          lanes/dev1/repair_overlay/tests/test_packaged_application_update.py
+          runtime_engine/tests/test_application_update.py
+      - name: Run packaged Application Update regression
+        run: >-
+          python -c "import runpy,sys; sys.path[:0]=['.', 'runtime_engine', 'lanes/dev1/repair_overlay']; runpy.run_path('lanes/dev1/repair_overlay/tests/test_packaged_application_update.py', run_name='__main__')"
+      - name: Run runtime Application Update security regression
+        run: >-
+          python -c "import runpy,sys; sys.path[:0]=['.', 'runtime_engine', 'lanes/dev1/repair_overlay']; runpy.run_path('runtime_engine/tests/test_application_update.py', run_name='__main__')"
+      - name: Validate frontend syntax and import target
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check lanes/dev1/repair_overlay/frontend/application-update.js
+          test -f lanes/dev1/repair_overlay/frontend/diagnostics-ui.js
+          grep -F "payload:{}" lanes/dev1/repair_overlay/frontend/application-update.js
+          if grep -F "payload:{path" lanes/dev1/repair_overlay/frontend/application-update.js; then
+            echo 'Browser-controlled update path detected' >&2
+            exit 1
+          fi

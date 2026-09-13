@@ -1,0 +1,93 @@
+name: R06 WEBU Source Authority
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/r06-webu-source-authority.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-authority:
+    runs-on: ubuntu-latest
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      WEBU_URL: https://ebible.org/Scriptures/engwebu_vpl.zip
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+      - name: Confirm exact source checkout
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+      - name: Fetch official WEBU developer artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .webu-source
+          curl --fail --silent --show-error --location \
+            --proto '=https' --tlsv1.2 --retry 3 --retry-all-errors \
+            --max-filesize 20000000 \
+            --dump-header .webu-source/http-headers.txt \
+            --output .webu-source/engwebu_vpl.zip "$WEBU_URL"
+          test -s .webu-source/engwebu_vpl.zip
+      - name: Verify archive confinement and record authority
+        shell: python
+        run: |
+          import hashlib, json, pathlib, zipfile
+          root = pathlib.Path('.webu-source')
+          archive = root / 'engwebu_vpl.zip'
+          raw = archive.read_bytes()
+          if len(raw) > 20_000_000:
+              raise SystemExit('WEBU archive exceeds 20 MB safety bound')
+          sha256 = hashlib.sha256(raw).hexdigest()
+          with zipfile.ZipFile(archive) as zf:
+              bad = zf.testzip()
+              if bad:
+                  raise SystemExit(f'WEBU ZIP CRC failure: {bad}')
+              rows = []
+              total = 0
+              for info in zf.infolist():
+                  name = info.filename.replace('\\', '/')
+                  p = pathlib.PurePosixPath(name)
+                  if p.is_absolute() or '..' in p.parts or name.startswith('/'):
+                      raise SystemExit(f'unsafe WEBU archive member: {name!r}')
+                  if info.is_dir():
+                      continue
+                  total += info.file_size
+                  if total > 50_000_000:
+                      raise SystemExit('WEBU uncompressed size exceeds 50 MB safety bound')
+                  rows.append({'path': name, 'size': info.file_size, 'crc32': f'{info.CRC:08x}'})
+              names = [row['path'].lower() for row in rows]
+              if not any(name.endswith(('.txt', '.vpl', '.sql')) for name in names):
+                  raise SystemExit('WEBU VPL archive contains no expected text/VPL/SQL payload')
+          report = {
+              'schema': 'scripture.webu.source-authority.v1',
+              'translation_id': 'engwebu',
+              'translation_name': 'World English Bible Updated',
+              'source_url': 'https://ebible.org/Scriptures/engwebu_vpl.zip',
+              'source_site': 'https://ebible.org/engwebu/',
+              'license': 'Public Domain',
+              'archive_sha256': sha256,
+              'archive_size': len(raw),
+              'entry_count': len(rows),
+              'uncompressed_size': total,
+              'entries': rows,
+          }
+          (root / 'authority.json').write_text(json.dumps(report, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          print(json.dumps({k: v for k, v in report.items() if k != 'entries'}, sort_keys=True))
+      - name: Upload immutable source capture
+        uses: actions/upload-artifact@v4
+        with:
+          name: webu-source-authority-${{ env.EXPECTED_HEAD }}
+          path: |
+            .webu-source/engwebu_vpl.zip
+            .webu-source/authority.json
+            .webu-source/http-headers.txt
+          if-no-files-found: error
+          retention-days: 7
+      - name: Diff hygiene
+        shell: bash
+        run: git diff --check

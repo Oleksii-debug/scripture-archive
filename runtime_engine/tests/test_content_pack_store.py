@@ -141,6 +141,89 @@ class PublicContentPackStoreTests(unittest.TestCase):
             self.assertTrue(target.is_dir())
             store.verify_installed("study-core", "1.0.0")
 
+    def test_activation_transactions_are_shared_per_root_across_store_instances(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            store_root = root / "store"
+            alpha = root / "alpha.zip"
+            beta = root / "beta.zip"
+            _write_pack(alpha, pack_id="study-alpha")
+            _write_pack(beta, pack_id="study-beta")
+
+            store_a = ContentPackStore(store_root)
+            store_b = ContentPackStore(store_root)
+            self.assertIs(store_a._state_transaction_lock, store_b._state_transaction_lock)
+            store_a.install(alpha)
+            store_b.install(beta)
+
+            real_first_load = store_a._load_state
+            real_second_load = store_b._load_state
+            first_loaded = threading.Event()
+            release_first = threading.Event()
+            second_started = threading.Event()
+            second_loaded = threading.Event()
+            errors = []
+
+            def blocking_first_load():
+                state = real_first_load()
+                first_loaded.set()
+                if not release_first.wait(timeout=5):
+                    raise AssertionError("first activation was not released")
+                return state
+
+            def observed_second_load():
+                second_loaded.set()
+                return real_second_load()
+
+            def activate(store, pack_id, started=None):
+                if started is not None:
+                    started.set()
+                try:
+                    store.activate(pack_id, "1.0.0")
+                except BaseException as exc:
+                    errors.append(exc)
+
+            with (
+                patch.object(store_a, "_load_state", side_effect=blocking_first_load),
+                patch.object(store_b, "_load_state", side_effect=observed_second_load),
+            ):
+                first_thread = threading.Thread(target=activate, args=(store_a, "study-alpha"))
+                second_thread = threading.Thread(
+                    target=activate,
+                    args=(store_b, "study-beta", second_started),
+                )
+                first_thread.start()
+                self.assertTrue(first_loaded.wait(timeout=5))
+                second_thread.start()
+                self.assertTrue(second_started.wait(timeout=5))
+
+                # The second store shares the same per-root transaction lock and
+                # therefore cannot read stale activation state while the first
+                # read-modify-write transaction is paused.
+                self.assertFalse(second_loaded.wait(timeout=0.5))
+                release_first.set()
+                first_thread.join(timeout=10)
+                second_thread.join(timeout=10)
+
+            self.assertFalse(first_thread.is_alive())
+            self.assertFalse(second_thread.is_alive())
+            self.assertEqual([], errors)
+            self.assertEqual(
+                {"study-alpha": "1.0.0", "study-beta": "1.0.0"},
+                store_a.active_versions(),
+            )
+
+            alpha_next = root / "alpha-next.zip"
+            _write_pack(alpha_next, pack_id="study-alpha", version="1.1.0")
+            store_a.install(alpha_next)
+            store_a.activate("study-alpha", "1.1.0")
+            rolled_back = store_b.rollback("study-alpha")
+            self.assertEqual("1.0.0", rolled_back.version)
+            self.assertEqual(
+                {"study-alpha": "1.0.0", "study-beta": "1.0.0"},
+                store_b.active_versions(),
+            )
+
     def test_export_cannot_mutate_immutable_store_and_versions_are_semver_sorted(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -25,6 +25,60 @@ class PersistedIdentityValidationTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             restore_memory(PlayerMemory("original"), state)
 
+    def test_task_state_nested_shapes_fail_closed_without_memory_mutation(self):
+        malformed_cases = [
+            ({"attempts": {"not": "a list"}}, "task-state attempts must be a list"),
+            ({"attempts": {}}, "task-state attempts must be a list"),
+            ({"attempts": ""}, "task-state attempts must be a list"),
+            ({"attempts": False}, "task-state attempts must be a list"),
+            ({"attempts": [7]}, "task-state attempt items must be objects"),
+            ({"hint_uses": "not-a-list"}, "task-state hint_uses must be a list"),
+            ({"hint_uses": {}}, "task-state hint_uses must be a list"),
+            ({"hint_uses": ""}, "task-state hint_uses must be a list"),
+            ({"hint_uses": False}, "task-state hint_uses must be a list"),
+            ({"hint_uses": [False]}, "task-state hint-use items must be objects"),
+            ({"evidence_unlocked": "EVIDENCE-1"}, "task-state evidence_unlocked must be a list"),
+            ({"evidence_unlocked": {}}, "task-state evidence_unlocked must be a list"),
+            ({"evidence_unlocked": ""}, "task-state evidence_unlocked must be a list"),
+            ({"evidence_unlocked": False}, "task-state evidence_unlocked must be a list"),
+        ]
+        for malformed, expected_error in malformed_cases:
+            with self.subTest(malformed=malformed, expected_error=expected_error):
+                state = base_state()
+                state["profile"] = {"profile_id": "replacement"}
+                state["history"] = {"NODE-A": {"node_id": "NODE-A", **malformed}}
+                memory = PlayerMemory("original")
+                memory.sessions = [Session("keep")]
+                with self.assertRaisesRegex(ValidationError, expected_error):
+                    restore_memory(memory, state)
+                self.assertEqual(memory.profile_id, "original")
+                self.assertEqual([session.session_id for session in memory.sessions], ["keep"])
+                self.assertEqual(memory.node_history, {})
+
+    def test_attempt_node_id_must_match_containing_task_state(self):
+        state = base_state()
+        state["history"] = {
+            "NODE-A": {
+                "node_id": "NODE-A",
+                "attempts": [
+                    {
+                        "node_id": "NODE-B",
+                        "correctness": "CORRECT",
+                        "score": 1.0,
+                        "used_hints": 0,
+                        "independent": True,
+                    }
+                ],
+            }
+        }
+        memory = PlayerMemory("original")
+        memory.sessions = [Session("keep")]
+        with self.assertRaisesRegex(ValidationError, "Task-state attempt node_id mismatch"):
+            restore_memory(memory, state)
+        self.assertEqual(memory.profile_id, "original")
+        self.assertEqual([session.session_id for session in memory.sessions], ["keep"])
+        self.assertEqual(memory.node_history, {})
+
     def test_duplicate_mastery_concept_ids_are_rejected(self):
         state = base_state()
         state["mastery"] = [

@@ -62,10 +62,8 @@ jobs:
         run: python -m unittest -v test_diagnostics
 
       - name: Run packaged diagnostics regressions
-        working-directory: lanes/dev1/repair_overlay
-        env:
-          PYTHONPATH: .
-        run: python tests/test_packaged_diagnostics.py -v
+        run: >-
+          python -c "import runpy,sys; sys.path[:0]=['lanes/dev1/repair_overlay','.']; runpy.run_path('lanes/dev1/repair_overlay/tests/test_packaged_diagnostics.py',run_name='__main__')"
 
       - name: Validate diagnostics and update bootstrap syntax
         working-directory: lanes/dev1/repair_overlay/frontend

@@ -21,7 +21,8 @@ ALLOWLISTED_COMMANDS = frozenset({
   "authoring.undo","authoring.redo","authoring.publish_version","authoring.list_versions","authoring.rollback_version",
   "keymap.list","keymap.rebind","keymap.clear","keymap.reset_context","keymap.reset_all",
   "keymap.export","keymap.import","settings.get","settings.set",
-  "speech.status","speech.synthesize_prompt"
+  "speech.status","speech.synthesize_prompt",
+  "application_update.select_verify","diagnostics.get_report"
 })
 
 _PLAYER_TRUTH_OWNERS = frozenset({"D5/runtime", "REFERENCE_TEST_ONLY"})
@@ -87,6 +88,8 @@ def validate_request_shape(request:Any)->tuple[str,str,dict[str,Any]]:
         raise ValueError('authoring.pack_compatibility accepts an empty payload')
     if cmd=='speech.status' and payload:
         raise ValueError('speech.status accepts an empty payload')
+    if cmd in {'application_update.select_verify','diagnostics.get_report'} and payload:
+        raise ValueError(f'{cmd} accepts an empty payload')
     if cmd=='speech.synthesize_prompt':
         allowed={'provider_id','voice_id','speed','allow_network'}
         unknown=set(payload)-allowed

@@ -1,0 +1,56 @@
+name: R06 Current Package Deterministic Grading Qualification
+
+on:
+  push:
+    branches:
+      - r06-qa-current-package-grading-0913-sol
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  grading-contracts:
+    name: grading-contracts (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      EXPECTED_PACKAGE_SHA: fa836d79fcfd9ac5d8aacbf6a6be9f5a10183012
+      HELPER_WORKFLOW: .github/workflows/r06-current-package-grading-qualification.yml
+    steps:
+      - name: Checkout helper evidence commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify immutable package ancestry and workflow-only delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "${EXPECTED_PACKAGE_SHA}^{commit}"
+          test "$(git merge-base "${EXPECTED_PACKAGE_SHA}" HEAD)" = "${EXPECTED_PACKAGE_SHA}"
+          mapfile -t changed < <(git diff --name-only "${EXPECTED_PACKAGE_SHA}"..HEAD)
+          printf 'helper delta:\n%s\n' "${changed[*]}"
+          test "${#changed[@]}" -eq 1
+          test "${changed[0]}" = "${HELPER_WORKFLOW}"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile grading runtime and tests
+        working-directory: runtime_engine
+        run: python -m compileall -q scripture_archive_runtime tests
+
+      - name: Run deterministic grading and answer-contract regressions
+        working-directory: runtime_engine
+        run: >-
+          python -m unittest -v
+          tests.test_grading
+          tests.test_answer_contracts
+          tests.test_runtime_ground_truth_gate
+          tests.test_attempt_independence_semantics

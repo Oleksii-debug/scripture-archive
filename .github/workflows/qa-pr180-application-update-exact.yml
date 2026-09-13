@@ -1,0 +1,50 @@
+name: QA PR180 Application Update Exact Head
+
+on:
+  push:
+    branches:
+      - qa-pr180-app-update-d405-0913-sol
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  application-update-exact:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      EXPECTED_CANDIDATE: d405280fb94780ab591e7dbabc5e8a028b799df3
+      HELPER_PATH: .github/workflows/qa-pr180-application-update-exact.yml
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Assert immutable candidate parent and helper-only containment
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_CANDIDATE"
+          test "$(git diff --name-only "$EXPECTED_CANDIDATE" HEAD | wc -l | tr -d ' ')" = "1"
+          test "$(git diff --name-only "$EXPECTED_CANDIDATE" HEAD)" = "$HELPER_PATH"
+      - name: Compile bounded update surfaces
+        run: python -m compileall -q lanes/dev1/repair_overlay/scripture_archive_platform runtime_engine/scripture_archive_runtime
+      - name: Run packaged Application Update regression
+        run: python -c "import runpy,sys; sys.path[:0]=['lanes/dev1/repair_overlay','runtime_engine']; runpy.run_path('lanes/dev1/repair_overlay/tests/test_packaged_application_update.py',run_name='__main__')"
+      - name: Run runtime Application Update security regression
+        run: python -c "import runpy,sys; sys.path[:0]=['runtime_engine']; runpy.run_path('runtime_engine/tests/test_application_update.py',run_name='__main__')"
+      - name: Run packaged transport composition regression
+        run: python -c "import runpy,sys; sys.path[:0]=['lanes/dev1/repair_overlay','runtime_engine']; runpy.run_path('lanes/dev1/repair_overlay/tests/test_packaged_transport_composition.py',run_name='__main__')"
+      - name: Check update frontend syntax
+        run: node --check lanes/dev1/repair_overlay/frontend/application-update.js
+      - name: Diff hygiene
+        shell: bash
+        run: git diff --check "$EXPECTED_CANDIDATE" HEAD

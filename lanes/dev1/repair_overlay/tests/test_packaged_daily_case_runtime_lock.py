@@ -1,4 +1,11 @@
+import sys
 import unittest
+from pathlib import Path
+
+# DEV1 tests execute from reconstructed r06_platform; runtime_engine remains at repo root.
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from runtime_engine.scripture_archive_runtime.models import PlayerMemory, Session
 from scripture_archive_platform.application.runtime_gateway import RuntimeBackedPlayerGateway

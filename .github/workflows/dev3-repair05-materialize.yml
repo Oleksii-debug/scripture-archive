@@ -1,0 +1,185 @@
+name: DEV3 Repair05 Corpus Materialization
+
+on:
+  push:
+    branches:
+      - r06-dev3-gospels-finalprep-02
+    paths:
+      - lanes/dev3/repair05_materialization/READY
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact triggering commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Verify and materialize QA-accepted Repair05
+        shell: bash
+        run: |
+          set -euo pipefail
+          STAGE=lanes/dev3/repair05_materialization
+          ROOT=docs/campaigns/GW/R06_DEV3_CLOSURE_03
+          test -f "$STAGE/READY"
+          test "$(find "$STAGE" -maxdepth 1 -name 'part_*.b64' -type f | wc -l)" -eq 4
+          cat "$STAGE"/part_*.b64 | base64 --decode > /tmp/repair05_patch.xz
+          echo '4fa50129bd4223e579573728f862364cf7c4b240f49a3644537020cbb14c38aa  /tmp/repair05_patch.xz' | sha256sum -c -
+          xz -dc /tmp/repair05_patch.xz > /tmp/repair05_patch.json
+          echo 'f04ecf8572fdb07ecc0754255d48d86f70070ef3563573b226389170aa89384d  /tmp/repair05_patch.json' | sha256sum -c -
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+
+          root = Path("docs/campaigns/GW/R06_DEV3_CLOSURE_03")
+          patch = json.loads(Path("/tmp/repair05_patch.json").read_text(encoding="utf-8"))
+          assert patch["schema"] == "GW_REPAIR05_GIT_MATERIALIZATION_PATCH_v1"
+          assert patch["source_package"]["drive_file_id"] == "1lEqRYSoYirSRHA7Il-C1AsoF-bQGPxul"
+          assert patch["source_package"]["sha256"] == "da20f4084d5134af49c35da0fb05508cfd3e003b9ade015c5368b5b019223288"
+          assert patch["different_worker_qa_comment_id"] == 5651622207
+          assert patch["record_count"] == 78 == len(patch["records"])
+          ids = [r["node_id"] for r in patch["records"]]
+          assert len(set(ids)) == 78
+
+          sums_path = root / "SHA256SUMS.txt"
+          old_sums = {}
+          for line in sums_path.read_text(encoding="utf-8").splitlines():
+              if not line.strip():
+                  continue
+              h, rel = line.split(None, 1)
+              rel = rel.strip().lstrip("*")
+              old_sums[rel] = h
+              got = hashlib.sha256((root / rel).read_bytes()).hexdigest()
+              assert got == h, (rel, h, got)
+          assert len(old_sums) == 29
+          assert old_sums["GW_GITHUB_MATERIALIZATION_MANIFEST_v1.2.json"] == "7a8bcd3a92a15d03004154fc85fbbc5ace9faa62bc3b2bc2c3564c68f62c94cd"
+
+          node_files = sorted((root / "nodes").glob("GW-*_NODES_v1.2.json"))
+          assert len(node_files) == 15
+          containers, by_id = {}, {}
+          for p in node_files:
+              data = json.loads(p.read_text(encoding="utf-8"))
+              assert data["schema"] == "GW_CANONICAL_NODE_FILESET_v1.2"
+              assert data["node_count"] == 24 == len(data["nodes"])
+              containers[p] = data
+              for node in data["nodes"]:
+                  assert node["node_id"] not in by_id
+                  by_id[node["node_id"]] = node
+          assert len(by_id) == 360
+          assert sum(n["textual_variant_flag"] == "TX1" for n in by_id.values()) == 22
+
+          allowed = {
+              "comparison_provenance_id","confidence_code","failure_feedback","grading",
+              "hints","partial_feedback","player_prompt","rejected_answers","rejection_reason",
+              "repair_provenance","required_evidence","response_mode","skill_target",
+              "source_scope_visible_to_player","success_feedback","task_contract","task_family",
+              "task_type","why_this_node_exists"
+          }
+          for rec in patch["records"]:
+              fields = rec["fields"]
+              assert set(fields) <= allowed, (rec["node_id"], sorted(set(fields)-allowed))
+              by_id[rec["node_id"]].update(fields)
+
+          for p, data in containers.items():
+              head = {k:v for k,v in data.items() if k != "nodes"}
+              prefix = json.dumps(head, ensure_ascii=False, separators=(",", ":"))[:-1] + ',"nodes":[\n'
+              lines = [json.dumps(n, ensure_ascii=False, separators=(",", ":")) for n in data["nodes"]]
+              p.write_text(prefix + ",\n".join(lines) + "]}\n", encoding="utf-8", newline="\n")
+
+          reread = {}
+          for p in node_files:
+              d = json.loads(p.read_text(encoding="utf-8"))
+              for n in d["nodes"]:
+                  reread[n["node_id"]] = n
+          assert len(reread) == 360
+          for rec in patch["records"]:
+              n = reread[rec["node_id"]]
+              for key, value in rec["fields"].items():
+                  assert n[key] == value, (rec["node_id"], key)
+
+          ce = [n for n in reread.values() if n["task_type"] == "CLAIM_EVIDENCE"]
+          assert len(ce) == 60
+          witness_labels = {"Matthew","Mark","Luke","John"}
+          for n in ce:
+              assert n["response_mode"] == "claim_evidence"
+              assert n["task_contract"]["answer_shape"] == "claim_evidence_pair"
+              assert n["grading"]["runtime_grader_key"] == "claim_evidence"
+              req = set(n["required_evidence"])
+              assert req <= set(n["task_contract"]["options"])
+              assert req <= set(n["grading"]["options"])
+              assert not (set(n["grading"]["options"]) & witness_labels)
+              accepted = n["accepted_answer"]
+              assert isinstance(accepted, dict) and set(accepted["evidence"]) == req
+
+          manifest_old = root / "GW_GITHUB_MATERIALIZATION_MANIFEST_v1.2.json"
+          manifest = json.loads(manifest_old.read_text(encoding="utf-8"))
+          manifest["schema"] = "GW_GITHUB_MATERIALIZATION_MANIFEST_v1.3"
+          manifest["stage"] = "FINALPREP_02_REPAIR05"
+          manifest["supersedes"] = "GW_GITHUB_MATERIALIZATION_MANIFEST_v1.2"
+          manifest["materialization_parent"] = os.environ["GITHUB_SHA"]
+          manifest["source_package"] = {
+              "file_name":"DEV_LANE_SCRIPTURE_R06_D3_REPAIR_05.zip",
+              "drive_file_id":"1lEqRYSoYirSRHA7Il-C1AsoF-bQGPxul",
+              "sha256":"da20f4084d5134af49c35da0fb05508cfd3e003b9ade015c5368b5b019223288",
+              "different_worker_qa_comment_id":5651622207,
+              "qa_status":"DIFFERENT_WORKER_SOURCE_AUDIT_ACCEPTED"
+          }
+          manifest["source_truth_freeze"] = (
+              "Repair05 materializes QA-accepted comparison-provenance and interaction-contract "
+              "corrections without changing source-registry or witness-matrix bytes; "
+              "source_truth_changed=false; unlisted witnesses remain outside graded comparison scope."
+          )
+          manifest["repair05_counts"] = {
+              "comparison_repairs":78,
+              "claim_evidence_nodes":60,
+              "repair05_changed_node_ids":["GW01-N08","GW06-N12"]
+          }
+          for entry in manifest["node_files"]:
+              p = root / entry["path"]
+              entry["sha256"] = hashlib.sha256(p.read_bytes()).hexdigest()
+              entry["size"] = p.stat().st_size
+
+          manifest_new = root / "GW_GITHUB_MATERIALIZATION_MANIFEST_v1.3.json"
+          manifest_new.write_text(json.dumps(manifest, ensure_ascii=False, separators=(",", ":")) + "\n",
+                                  encoding="utf-8", newline="\n")
+          manifest_old.unlink()
+
+          new_sums = dict(old_sums)
+          del new_sums["GW_GITHUB_MATERIALIZATION_MANIFEST_v1.2.json"]
+          new_sums["GW_GITHUB_MATERIALIZATION_MANIFEST_v1.3.json"] = hashlib.sha256(manifest_new.read_bytes()).hexdigest()
+          for p in node_files:
+              rel = p.relative_to(root).as_posix()
+              new_sums[rel] = hashlib.sha256(p.read_bytes()).hexdigest()
+
+          order = (
+              ["GW_GITHUB_MATERIALIZATION_MANIFEST_v1.3.json"] +
+              sorted(k for k in new_sums if k.startswith("evidence/")) +
+              sorted(k for k in new_sums if k.startswith("nodes/")) +
+              sorted(k for k in new_sums if k.startswith("registries/")) +
+              sorted(k for k in new_sums if k.startswith("spec/"))
+          )
+          assert len(order) == 29 == len(new_sums)
+          sums_path.write_text("".join(f"{new_sums[rel]}  {rel}\n" for rel in order),
+                               encoding="utf-8", newline="\n")
+          for rel, h in new_sums.items():
+              assert hashlib.sha256((root / rel).read_bytes()).hexdigest() == h, rel
+
+          print("R06_DEV3_REPAIR05_GIT_MATERIALIZATION_PASS "
+                "nodes=360 comparison_repairs=78 claim_evidence_nodes=60 tx1=22 hashed_files=29")
+          PY
+          rm -rf "$STAGE"
+      - name: Commit readable Repair05 corpus
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A -- lanes/dev3/repair05_materialization docs/campaigns/GW/R06_DEV3_CLOSURE_03
+          git diff --cached --check
+          git commit -m 'R06 DEV3: materialize QA-accepted Repair05 Gospel corpus'
+          git push origin HEAD:r06-dev3-gospels-finalprep-02

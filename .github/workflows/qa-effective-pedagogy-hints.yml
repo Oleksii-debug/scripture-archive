@@ -1,0 +1,67 @@
+name: QA Effective Pedagogy Hints
+
+on:
+  push:
+    branches:
+      - r06-compose-effective-pedagogy-hints-0913-sol
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  effective-pedagogy:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Exact parent and diff containment
+        shell: bash
+        env:
+          BASE_PACKAGE_SHA: fa836d79fcfd9ac5d8aacbf6a6be9f5a10183012
+        run: |
+          set -euo pipefail
+          test "$(git merge-base HEAD "$BASE_PACKAGE_SHA")" = "$BASE_PACKAGE_SHA"
+          git diff --check "$BASE_PACKAGE_SHA"...HEAD
+          changed="$(git diff --name-only "$BASE_PACKAGE_SHA"...HEAD | sort)"
+          expected="$(printf '%s\n' \
+            .github/workflows/qa-effective-pedagogy-hints.yml \
+            lanes/dev1/repair_overlay/scripture_archive_platform/content/effective_pedagogy.py \
+            lanes/dev1/repair_overlay/scripture_archive_platform/content/loader.py \
+            lanes/dev1/repair_overlay/tests/test_effective_pedagogy_composition.py \
+            lanes/dev1/repair_overlay/tests/test_effective_pedagogy_runtime_bridge.py | sort)"
+          test "$changed" = "$expected"
+      - name: Effective pedagogy composition tests
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/runtime_engine:${{ github.workspace }}/lanes/dev1/repair_overlay
+        run: |
+          set -euo pipefail
+          python -m py_compile \
+            lanes/dev1/repair_overlay/scripture_archive_platform/content/effective_pedagogy.py \
+            lanes/dev1/repair_overlay/scripture_archive_platform/content/loader.py
+          python lanes/dev1/repair_overlay/tests/test_effective_pedagogy_composition.py
+          python lanes/dev1/repair_overlay/tests/test_effective_pedagogy_runtime_bridge.py
+          python tools/test_r05_effective_canonical_state.py
+      - name: Effective pedagogy composition tests (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          PYTHONPATH: ${{ github.workspace }};${{ github.workspace }}\runtime_engine;${{ github.workspace }}\lanes\dev1\repair_overlay
+        run: |
+          python -m py_compile lanes\dev1\repair_overlay\scripture_archive_platform\content\effective_pedagogy.py lanes\dev1\repair_overlay\scripture_archive_platform\content\loader.py
+          if ($LASTEXITCODE -ne 0) { throw "py_compile failed" }
+          python lanes\dev1\repair_overlay\tests\test_effective_pedagogy_composition.py
+          if ($LASTEXITCODE -ne 0) { throw "composition tests failed" }
+          python lanes\dev1\repair_overlay\tests\test_effective_pedagogy_runtime_bridge.py
+          if ($LASTEXITCODE -ne 0) { throw "runtime bridge tests failed" }
+          python tools\test_r05_effective_canonical_state.py
+          if ($LASTEXITCODE -ne 0) { throw "R05 effective canonical regression failed" }

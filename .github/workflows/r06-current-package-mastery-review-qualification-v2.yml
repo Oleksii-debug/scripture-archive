@@ -1,0 +1,121 @@
+name: R06 Current Package Mastery Review Qualification V2
+
+on:
+  push:
+    branches:
+      - r06-qa-current-package-mastery-review-0913-sol-v2
+
+permissions:
+  contents: read
+
+jobs:
+  mastery-review:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      EXPECTED_PACKAGE: fa836d79fcfd9ac5d8aacbf6a6be9f5a10183012
+      WORKFLOW_PATH: .github/workflows/r06-current-package-mastery-review-qualification-v2.yml
+    steps:
+      - name: Checkout exact helper head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Verify exact package parent and helper-only diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PACKAGE"
+          actual="$(git diff --name-only HEAD^ HEAD | tr -d '\r')"
+          test "$actual" = "$WORKFLOW_PATH"
+          product_changed="$(git diff --name-only "$EXPECTED_PACKAGE" HEAD | grep -v -F "$WORKFLOW_PATH" || true)"
+          test -z "$product_changed"
+          git diff --check HEAD^
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Qualify packaged mastery
+        id: mastery
+        continue-on-error: true
+        shell: bash
+        working-directory: lanes/dev1/repair_overlay
+        run: python -m unittest discover -s tests -p 'test_packaged_mastery_current.py' -v
+
+      - name: Qualify review queue packaged lifecycle and UI
+        id: queue
+        continue-on-error: true
+        shell: bash
+        working-directory: lanes/dev1/repair_overlay
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s tests -p 'test_packaged_review_queue_lifecycle.py' -v
+          python -m unittest discover -s tests -p 'test_packaged_review_queue_ui.py' -v
+
+      - name: Qualify review queue truth contract
+        id: truth
+        continue-on-error: true
+        shell: bash
+        working-directory: lanes/dev1/repair_overlay
+        run: python -m unittest discover -s tests -p 'test_review_queue_truth_contract.py' -v
+
+      - name: Qualify review lifecycle harness
+        id: harness
+        continue-on-error: true
+        shell: bash
+        working-directory: lanes/dev1/repair_overlay
+        run: node tests/review_queue_lifecycle_harness.cjs
+
+      - name: Qualify review training contracts
+        id: training
+        continue-on-error: true
+        shell: bash
+        working-directory: lanes/dev1/repair_overlay
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s tests -p 'test_packaged_review_training_contract.py' -v
+          python -m unittest discover -s tests -p 'test_packaged_review_training_player_ui.py' -v
+          python -m unittest discover -s tests -p 'test_packaged_review_training_static_syntax.py' -v
+          python -m unittest discover -s tests -p 'test_packaged_review_training_transport.py' -v
+
+      - name: Verify relevant frontend JavaScript syntax
+        id: syntax
+        continue-on-error: true
+        shell: bash
+        working-directory: lanes/dev1/repair_overlay
+        run: |
+          set -euo pipefail
+          node --check frontend/mastery.js
+          node --check frontend/review-queue-request-gate.js
+          node --check frontend/review-queue-ui.js
+          node --check frontend/app.js
+
+      - name: Enforce complete gate
+        if: always()
+        shell: bash
+        env:
+          MASTERY: ${{ steps.mastery.outcome }}
+          QUEUE: ${{ steps.queue.outcome }}
+          TRUTH: ${{ steps.truth.outcome }}
+          HARNESS: ${{ steps.harness.outcome }}
+          TRAINING: ${{ steps.training.outcome }}
+          SYNTAX: ${{ steps.syntax.outcome }}
+        run: |
+          set -euo pipefail
+          printf 'mastery=%s queue=%s truth=%s harness=%s training=%s syntax=%s\n' "$MASTERY" "$QUEUE" "$TRUTH" "$HARNESS" "$TRAINING" "$SYNTAX"
+          test "$MASTERY" = success
+          test "$QUEUE" = success
+          test "$TRUTH" = success
+          test "$HARNESS" = success
+          test "$TRAINING" = success
+          test "$SYNTAX" = success

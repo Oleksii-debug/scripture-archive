@@ -1,0 +1,42 @@
+name: QA PR179 Offline Readiness
+
+on:
+  push:
+    branches:
+      - qa-pr179-offline-readiness-0913-sol
+
+permissions:
+  contents: read
+
+jobs:
+  exact-head-offline-readiness:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout QA helper
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Prove immutable candidate parent and workflow-only delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "1aa87c9db2903902e49b03c84b46164c13ef802c"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/qa-pr179-offline-readiness.yml"
+
+      - name: Compile and run Offline Readiness exact-head regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd runtime_engine
+          python -m compileall -q scripture_archive_runtime tests/test_offline_readiness.py tests/test_offline_readiness_windows_paths.py
+          python -m unittest discover -s tests -p 'test_offline_readiness*.py' -v

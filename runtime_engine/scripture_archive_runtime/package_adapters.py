@@ -79,6 +79,29 @@ def _task_type(node: Mapping[str, Any]) -> str:
     return canonical_task_type(str(node.get("task_type") or node.get("response_mode") or node.get("task_family") or "SHORT_TEXT"))
 
 
+def normalize_legacy_multiselect_truth(node: Mapping[str, Any]) -> dict[str, Any]:
+    """Losslessly project the explicit historical citation-selection serialization.
+
+    Some source-audited CONTENT_NODE_SCHEMA_v1.2 nodes predate ANSWER_DTO_v1 and
+    store a citation-selection set as one semicolon-delimited accepted_answer
+    string.  The authored separators already define the members; splitting them
+    requires no semantic inference.  No other MULTI_SELECT string form is
+    accepted here, so strict provenance remains fail-closed for ambiguous truth.
+    """
+    adapted = deepcopy(dict(node))
+    if _task_type(adapted) != "MULTI_SELECT" or not isinstance(adapted.get("accepted_answer"), str):
+        return adapted
+    mode = " ".join(str(adapted.get("response_mode") or "").strip().casefold().split())
+    raw = str(adapted["accepted_answer"])
+    choices = _listify(raw)
+    if mode != "citation selection" or ";" not in raw or len(choices) < 2:
+        raise ValidationError(
+            "Legacy MULTI_SELECT string truth is permitted only for explicit semicolon-delimited citation selection"
+        )
+    adapted["accepted_answer"] = choices
+    return adapted
+
+
 def derive_answer_dto(node: Mapping[str, Any]) -> dict[str, Any]:
     """Project canonical CONTENT_NODE_SCHEMA v1.2 ground truth into ANSWER_DTO_v1.
 
@@ -90,7 +113,7 @@ def derive_answer_dto(node: Mapping[str, Any]) -> dict[str, Any]:
 
 def adapt_node_for_runtime(node: Mapping[str, Any], *, lane: str = "unknown") -> dict[str, Any]:
     """Transitional adapter: preserves authored fields and adds explicit runtime contract metadata."""
-    adapted = deepcopy(dict(node))
+    adapted = normalize_legacy_multiselect_truth(node)
     ctype = _task_type(adapted)
     adapted["task_type"] = ctype
     adapted["answer_contract_version"] = ANSWER_CONTRACT_VERSION
@@ -102,6 +125,12 @@ def adapt_node_for_runtime(node: Mapping[str, Any], *, lane: str = "unknown") ->
         "canonical_truth_fields": ["accepted_answer", "accepted_variants", "required_evidence"],
         "presentation_fields": ["task_contract", "task_payload"],
         "truth_inference_from_presentation": False,
+        "legacy_truth_normalization": (
+            "explicit_semicolon_citation_selection_v1"
+            if isinstance(node.get("accepted_answer"), str)
+            and _task_type(node) == "MULTI_SELECT"
+            else None
+        ),
     }
     grading = dict(adapted.get("grading") or {})
     contract = adapted.get("task_contract") if isinstance(adapted.get("task_contract"), Mapping) else {}

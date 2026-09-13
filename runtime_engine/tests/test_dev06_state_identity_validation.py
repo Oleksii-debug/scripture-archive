@@ -28,13 +28,22 @@ class PersistedIdentityValidationTests(unittest.TestCase):
     def test_task_state_nested_shapes_fail_closed_without_memory_mutation(self):
         malformed_cases = [
             ({"attempts": {"not": "a list"}}, "task-state attempts must be a list"),
+            ({"attempts": {}}, "task-state attempts must be a list"),
+            ({"attempts": ""}, "task-state attempts must be a list"),
+            ({"attempts": False}, "task-state attempts must be a list"),
             ({"attempts": [7]}, "task-state attempt items must be objects"),
             ({"hint_uses": "not-a-list"}, "task-state hint_uses must be a list"),
+            ({"hint_uses": {}}, "task-state hint_uses must be a list"),
+            ({"hint_uses": ""}, "task-state hint_uses must be a list"),
+            ({"hint_uses": False}, "task-state hint_uses must be a list"),
             ({"hint_uses": [False]}, "task-state hint-use items must be objects"),
             ({"evidence_unlocked": "EVIDENCE-1"}, "task-state evidence_unlocked must be a list"),
+            ({"evidence_unlocked": {}}, "task-state evidence_unlocked must be a list"),
+            ({"evidence_unlocked": ""}, "task-state evidence_unlocked must be a list"),
+            ({"evidence_unlocked": False}, "task-state evidence_unlocked must be a list"),
         ]
         for malformed, expected_error in malformed_cases:
-            with self.subTest(expected_error=expected_error):
+            with self.subTest(malformed=malformed, expected_error=expected_error):
                 state = base_state()
                 state["profile"] = {"profile_id": "replacement"}
                 state["history"] = {"NODE-A": {"node_id": "NODE-A", **malformed}}

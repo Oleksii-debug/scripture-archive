@@ -23,6 +23,8 @@ class FakeArchive:
 
 
 class FakeRawArchive(FakeArchive):
+    """Legacy/test-double shape retained to prove fallback compatibility."""
+
     _COOKIE_MAGIC_PATTERN = b"MEI\014\013\012\013\016"
     _COOKIE_FORMAT = "!8sIIII64s"
     _COOKIE_LENGTH = struct.calcsize(_COOKIE_FORMAT)
@@ -61,6 +63,52 @@ class FakeRawArchive(FakeArchive):
 
     def raw_pkg_data(self) -> bytes:
         return self._raw_pkg
+
+
+class FileBackedArchive(FakeArchive):
+    """Production-shaped reader: file/start-offset backed, integer typecodes, no raw_pkg_data()."""
+
+    _COOKIE_MAGIC_PATTERN = b"MEI\014\013\012\013\016"
+    _COOKIE_FORMAT = "!8sIIII64s"
+    _COOKIE_LENGTH = struct.calcsize(_COOKIE_FORMAT)
+    _TOC_ENTRY_FORMAT = "!iIIIBB"
+    _TOC_ENTRY_LENGTH = struct.calcsize(_TOC_ENTRY_FORMAT)
+
+    def __init__(self, entries: dict[str, bytes], raw_names: list[str], path: Path):
+        super().__init__(entries)
+        toc = bytearray()
+        for name in raw_names:
+            encoded_name = name.encode("utf-8") + b"\0"
+            entry_length = self._TOC_ENTRY_LENGTH + len(encoded_name)
+            toc.extend(
+                struct.pack(
+                    self._TOC_ENTRY_FORMAT,
+                    entry_length,
+                    0,
+                    0,
+                    0,
+                    0,
+                    ord("x"),
+                )
+            )
+            toc.extend(encoded_name)
+
+        archive_length = len(toc) + self._COOKIE_LENGTH
+        cookie = struct.pack(
+            self._COOKIE_FORMAT,
+            self._COOKIE_MAGIC_PATTERN,
+            archive_length,
+            0,
+            len(toc),
+            312,
+            b"python312.dll".ljust(64, b"\0"),
+        )
+        prefix = b"MZ\x90\x00FAKE-PE-PREFIX"
+        suffix = b"AUTHENTICODE-CERTIFICATE-TRAILER"
+        self._start_offset = len(prefix)
+        self._end_offset = self._start_offset + archive_length
+        self._filename = str(path)
+        path.write_bytes(prefix + bytes(toc) + cookie + suffix)
 
 
 class PackagedPayloadFidelityTests(unittest.TestCase):
@@ -247,6 +295,72 @@ class PackagedPayloadFidelityTests(unittest.TestCase):
             f"DUPLICATE_NORMALIZED_PATH {path}: {path!r} vs {path!r}",
             result["errors"],
         )
+
+    def test_file_backed_real_shape_handles_prefix_trailer_and_integer_typecode(self):
+        app = b"console.log('archive');\n"
+        package_path = "r06_platform/frontend/app.js"
+        manifest = {
+            "schema_version": 1,
+            "entries": [
+                {
+                    "package_path": package_path,
+                    "size_bytes": len(app),
+                    "sha256": MODULE.sha256_hex(app),
+                    "git_blob_sha1": MODULE.git_blob_sha(app),
+                    "provenance": "git_overlay",
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            artifact = Path(temp_dir) / "ScriptureArchive.exe"
+            reader = FileBackedArchive({package_path: app}, [package_path], artifact)
+
+            self.assertFalse(hasattr(reader, "raw_pkg_data"))
+            raw_names = MODULE._raw_carchive_member_names(reader)
+            result = MODULE.verify_reader(reader, manifest, archive_names=raw_names)
+
+        self.assertEqual(raw_names, [package_path])
+        self.assertTrue(result["ok"], result["errors"])
+        self.assertEqual(result["files_verified"], 1)
+
+    def test_file_backed_real_shape_preserves_duplicate_multiplicity(self):
+        app = b"console.log('archive');\n"
+        package_path = "r06_platform/frontend/app.js"
+        manifest = {
+            "schema_version": 1,
+            "entries": [
+                {
+                    "package_path": package_path,
+                    "size_bytes": len(app),
+                    "sha256": MODULE.sha256_hex(app),
+                    "git_blob_sha1": MODULE.git_blob_sha(app),
+                    "provenance": "git_overlay",
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            artifact = Path(temp_dir) / "ScriptureArchive.exe"
+            reader = FileBackedArchive(
+                {package_path: app},
+                [package_path, package_path],
+                artifact,
+            )
+            raw_names = MODULE._raw_carchive_member_names(reader)
+            result = MODULE.verify_reader(reader, manifest, archive_names=raw_names)
+
+        self.assertEqual(raw_names, [package_path, package_path])
+        self.assertFalse(result["ok"])
+        self.assertTrue(any(error.startswith("DUPLICATE_NORMALIZED_PATH") for error in result["errors"]))
+
+    def test_file_backed_reader_fails_closed_when_declared_start_offset_is_wrong(self):
+        app = b"console.log('archive');\n"
+        package_path = "r06_platform/frontend/app.js"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            artifact = Path(temp_dir) / "ScriptureArchive.exe"
+            reader = FileBackedArchive({package_path: app}, [package_path], artifact)
+            reader._start_offset += 1
+            with self.assertRaisesRegex(RuntimeError, "Unable to locate a valid CArchive cookie"):
+                MODULE._raw_carchive_member_names(reader)
 
 
 if __name__ == "__main__":

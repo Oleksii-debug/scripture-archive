@@ -5,6 +5,7 @@ from typing import Any
 from scripture_archive_platform.domain.models import CONTENT_SCHEMA_VERSION
 from scripture_archive_platform.transport.answer_contracts import canonical_task_type, answer_contract_descriptor
 from scripture_archive_platform.composite_accessibility import inspect_packaged_task
+from scripture_archive_platform.content.effective_pedagogy import EffectivePedagogyError, apply_r05_pedagogy_overlays
 
 class ContentLoadError(RuntimeError): pass
 
@@ -37,6 +38,10 @@ class CanonicalContentLoader:
                     nid=node.get('node_id')
                     if not nid or nid in nodes: raise ContentLoadError(f'duplicate/empty node_id {nid!r}')
                     nodes[nid]=node; mission_for_node[nid]=entry
+        try:
+            nodes=apply_r05_pedagogy_overlays(self.repo_root,nodes)
+        except EffectivePedagogyError as exc:
+            raise ContentLoadError(str(exc)) from exc
         self._missions=missions; self._nodes=nodes; self._mission_for_node=mission_for_node
     def refresh(self): self._scan()
     def _ensure(self):

@@ -1,4 +1,5 @@
 import itertools
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -128,6 +129,38 @@ class ConstructorV2LifecycleTests(unittest.TestCase):
             self.service.restore_snapshot(second["draft_id"], snapshot["snapshot_id"])
         with self.assertRaisesRegex(ValueError, "another draft"):
             self.service.rollback_version(second["draft_id"], version["version_id"])
+
+    def test_import_draft_validates_envelope_before_persistence(self):
+        source = self._campaign("Import source")
+        exported = json.loads(self.service.export_draft(source["draft_id"]))
+        baseline = set(self.service.store.list_keys("drafts"))
+
+        malformed = []
+        bad_kind = json.loads(json.dumps(exported))
+        bad_kind["kind"] = "bogus"
+        bad_kind["base_identity"] = {"bogus": "ZZ-CAMPAIGN"}
+        malformed.append((bad_kind, "kind must be campaign, mission or node"))
+
+        bad_title = json.loads(json.dumps(exported))
+        bad_title["title"] = ""
+        malformed.append((bad_title, "title must be 1..300 characters"))
+
+        bad_record = json.loads(json.dumps(exported))
+        bad_record["node"] = []
+        malformed.append((bad_record, "node must be an object"))
+
+        for payload, expected_error in malformed:
+            with self.subTest(expected_error=expected_error):
+                with self.assertRaisesRegex(ValueError, expected_error):
+                    self.service.import_draft(json.dumps(payload))
+                self.assertEqual(baseline, set(self.service.store.list_keys("drafts")))
+
+        exported["campaign"]["player_promise"] = "<script>literal inert data only</script>"
+        imported = self.service.import_draft(json.dumps(exported))
+        self.assertNotEqual(source["draft_id"], imported["draft_id"])
+        self.assertEqual("import_data_only", imported["change_record"][0]["action"])
+        self.assertIn("<script>", imported["campaign"]["player_promise"])
+        self.assertEqual(baseline | {imported["draft_id"]}, set(self.service.store.list_keys("drafts")))
 
 
 if __name__ == "__main__":

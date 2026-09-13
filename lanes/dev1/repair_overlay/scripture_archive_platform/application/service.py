@@ -46,6 +46,7 @@ class PlatformApplication:
         if cmd=='research.get_chronology_lab':
             if p:raise ValueError('research.get_chronology_lab accepts an empty payload')
             return self._chronology_lab()
+        if cmd=='dossier.get':return self._dossier(p)
         if cmd=='player.load_node':return self._load_node(self._id(p,'node_id'))
         if cmd=='player.submit_answer':return self._submit(p)
         if cmd=='player.request_hint':return self._hint(self._id(p,'node_id'))
@@ -90,7 +91,7 @@ class PlatformApplication:
         raise ValueError('command not implemented')
     def _bootstrap(self):
         campaigns=self.loader.list_campaigns()
-        return {'app':{'name':'Архів Писання','version':'R06-3DEV-A','runtime':'Windows 11 x64 / WebView2 semantic UI','transport_api_version':TRANSPORT_API_VERSION},'registries':{'task_types':self.task_types.list(),'renderers':self.renderers.list(),'graders':self.graders.list(),'editors':self.editors.list(),'templates':self.templates.list()},'campaigns':campaigns,'keymap':self.keymap.list(),'capabilities':{'constructor':True,'draft_vs_canonical':True,'web_portable_transport':True,'allowlisted_bridge':True,'library_catalog_search':True,'bundled_full_bible_text':False,'research_bookmarks_notes':True,'research_workspace_persistence':True,'evidence_graph':bool(self.player_gateway),'chronology_lab':bool(self.player_gateway),'research_export':bool(self.player_gateway),'arbitrary_filesystem':False,'content_pack_manager':True,'content_pack_inbox_only':True,'shell':False,'python_eval':False,'runtime_truth':bool(self.player_gateway),'review_queue':bool(self.player_gateway),'grading_truth':'D5/runtime' if self.player_gateway else 'REFERENCE_TEST_ONLY'}}
+        return {'app':{'name':'Архів Писання','version':'R06-3DEV-A','runtime':'Windows 11 x64 / WebView2 semantic UI','transport_api_version':TRANSPORT_API_VERSION},'registries':{'task_types':self.task_types.list(),'renderers':self.renderers.list(),'graders':self.graders.list(),'editors':self.editors.list(),'templates':self.templates.list()},'campaigns':campaigns,'keymap':self.keymap.list(),'capabilities':{'constructor':True,'draft_vs_canonical':True,'web_portable_transport':True,'allowlisted_bridge':True,'library_catalog_search':True,'bundled_full_bible_text':False,'research_bookmarks_notes':True,'research_workspace_persistence':True,'evidence_graph':bool(self.player_gateway),'chronology_lab':bool(self.player_gateway),'research_export':bool(self.player_gateway),'arbitrary_filesystem':False,'content_pack_manager':True,'content_pack_inbox_only':True,'shell':False,'python_eval':False,'dossiers':bool(self.player_gateway and hasattr(self.player_gateway,'get_dossier')),'runtime_truth':bool(self.player_gateway),'review_queue':bool(self.player_gateway),'grading_truth':'D5/runtime' if self.player_gateway else 'REFERENCE_TEST_ONLY'}}
     def _load_node(self,nid):
         if self.player_gateway:self.player_gateway.invoke('player.load_node',{'node_id':nid},request_id='load-'+nid)
         node=self.loader.load_node(nid); mission=self.loader.mission_for_node(nid); renderable=self.mapper.to_renderable(node,mission); self._last_node[nid]=node
@@ -126,6 +127,34 @@ class PlatformApplication:
         counts=export.get('counts')
         if not isinstance(counts,dict) or any(type(counts.get(key)) is not int or counts[key]<0 for key in ('claims','evidence','relations')):raise ValueError('invalid research export counts')
         return {'export':export,'truth_owner':'D5/runtime'}
+    def _dossier(self,p):
+        if not self.player_gateway or not hasattr(self.player_gateway,'get_dossier'):
+            raise ValueError('dossier requires canonical runtime')
+        subject_id=p['subject_id']; display_name=p['display_name']; kind=p['kind']
+        data=self.player_gateway.get_dossier(subject_id,display_name,kind)
+        dossier=data.get('dossier') if isinstance(data,dict) else None
+        if not isinstance(dossier,dict):raise ValueError('runtime dossier must be object')
+        if dossier.get('schema')!='scripture.dossier-view.v1':raise ValueError('unexpected dossier schema')
+        if dossier.get('evidence_scope')!='unlocked_only':raise ValueError('packaged dossier must remain unlocked_only')
+        subject=dossier.get('subject')
+        if not isinstance(subject,dict) or subject!={'subject_id':subject_id,'kind':kind,'display_name':display_name}:
+            raise ValueError('runtime dossier subject mismatch')
+        if type(dossier.get('stated')) is not bool:raise ValueError('runtime dossier stated must be boolean')
+        if not isinstance(dossier.get('status_text'),str) or len(dossier['status_text'])>500:raise ValueError('invalid dossier status_text')
+        rows=dossier.get('rows'); linear=dossier.get('linear')
+        if not isinstance(rows,list) or len(rows)>1000:raise ValueError('invalid dossier rows')
+        if not isinstance(linear,list) or len(linear)>2000 or any(not isinstance(line,str) or len(line)>4000 for line in linear):raise ValueError('invalid dossier linear representation')
+        for row in rows:
+            if not isinstance(row,dict):raise ValueError('invalid dossier row')
+            if row.get('row_type') not in {'EVIDENCE','CLAIM','RELATION'}:raise ValueError('invalid dossier row type')
+            if not isinstance(row.get('row_id'),str) or not row['row_id'] or len(row['row_id'])>160:raise ValueError('invalid dossier row id')
+            if not isinstance(row.get('proposition'),str) or len(row['proposition'])>4000:raise ValueError('invalid dossier proposition')
+            if row.get('confidence') not in {None,'T1','T2','C1','I1','D1'}:raise ValueError('invalid dossier confidence')
+            if type(row.get('tx1')) is not bool:raise ValueError('invalid dossier TX1 flag')
+            for key in ('passage_ids','evidence_ids'):
+                values=row.get(key)
+                if not isinstance(values,list) or len(values)>500 or any(not isinstance(value,str) or not value or len(value)>200 for value in values):raise ValueError(f'invalid dossier {key}')
+        return {'dossier':dossier,'truth_owner':'D5/runtime'}
     def _next(self,p):
         nid=self._id(p,'node_id')
         if self.player_gateway:

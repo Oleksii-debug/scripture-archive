@@ -24,6 +24,22 @@ class ReleaseSecurityTests(unittest.TestCase):
         findings = scan_text(private_key_header + "\nabc\n", "key.pem")
         self.assertEqual([finding.rule for finding in findings], ["PRIVATE_KEY"])
 
+    def test_private_key_container_files_are_tree_scanned_and_blocking(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            private_key_header = "-----BEGIN " + "PRIVATE KEY-----"
+            for filename in ("release.pem", "signing.key"):
+                (root / filename).write_text(private_key_header + "\nabc\n", encoding="utf-8")
+            report = scan_tree_report(root)
+            self.assertFalse(report.passed)
+            self.assertEqual(report.unverified_file_count, 0)
+            self.assertEqual(report.skipped_file_count, 0)
+            self.assertEqual(report.verified_file_count, 2)
+            self.assertEqual(
+                {(finding.path, finding.rule) for finding in report.findings},
+                {("release.pem", "PRIVATE_KEY"), ("signing.key", "PRIVATE_KEY")},
+            )
+
     def test_forbidden_secret_filename_is_flagged(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

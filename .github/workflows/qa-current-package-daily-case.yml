@@ -47,6 +47,8 @@ jobs:
             git show "$DONOR_SHA:release_inputs/dev1_finalprep02/$part" > ".qa_donor/release_inputs/dev1_finalprep02/$part"
           done
           git show "$DONOR_SHA:lanes/dev1/verify_source_archive.py" > .qa_donor/verify_source_archive.py
+          git show "$DONOR_SHA:lanes/dev1/FINALPREP02_RESOLVED_SOURCE_SHA256.json" > .qa_donor/FINALPREP02_RESOLVED_SOURCE_SHA256.json
+          git show "$DONOR_SHA:lanes/dev1/FINALPREP02_RESOLVED_SOURCE_MANIFEST.json" > .qa_donor/FINALPREP02_RESOLVED_SOURCE_MANIFEST.json
           cat .qa_donor/release_inputs/dev1_finalprep02/part-*.b64 | base64 -d > DEV1_R06_PLATFORM_SOURCE.zip
           python .qa_donor/verify_source_archive.py DEV1_R06_PLATFORM_SOURCE.zip "$BASE_SOURCE_SHA256"
           python -m zipfile -e DEV1_R06_PLATFORM_SOURCE.zip .
@@ -70,7 +72,9 @@ jobs:
           $b64 = $parts -join ''
           [IO.File]::WriteAllBytes('DEV1_R06_PLATFORM_SOURCE.zip', [Convert]::FromBase64String($b64))
           git show "$($env:DONOR_SHA):lanes/dev1/verify_source_archive.py" | Set-Content -Encoding utf8NoBOM .qa_donor\verify_source_archive.py
-          if ($LASTEXITCODE -ne 0) { throw 'Failed reading donor verifier' }
+          git show "$($env:DONOR_SHA):lanes/dev1/FINALPREP02_RESOLVED_SOURCE_SHA256.json" | Set-Content -Encoding utf8NoBOM .qa_donor\FINALPREP02_RESOLVED_SOURCE_SHA256.json
+          git show "$($env:DONOR_SHA):lanes/dev1/FINALPREP02_RESOLVED_SOURCE_MANIFEST.json" | Set-Content -Encoding utf8NoBOM .qa_donor\FINALPREP02_RESOLVED_SOURCE_MANIFEST.json
+          if ($LASTEXITCODE -ne 0) { throw 'Failed reading donor verifier/manifests' }
           python .qa_donor\verify_source_archive.py DEV1_R06_PLATFORM_SOURCE.zip $env:BASE_SOURCE_SHA256
           if ($LASTEXITCODE -ne 0) { throw "Archive verification failed with exit code $LASTEXITCODE" }
           Expand-Archive DEV1_R06_PLATFORM_SOURCE.zip -DestinationPath . -Force

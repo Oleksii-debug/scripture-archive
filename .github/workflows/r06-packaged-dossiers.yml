@@ -24,6 +24,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    env:
+      PYTHONPATH: ${{ github.workspace }}/runtime_engine${{ runner.os == 'Windows' && ';' || ':' }}${{ github.workspace }}/lanes/dev1/repair_overlay${{ runner.os == 'Windows' && ';' || ':' }}${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

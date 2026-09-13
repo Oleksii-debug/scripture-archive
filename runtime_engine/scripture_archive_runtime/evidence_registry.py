@@ -37,6 +37,13 @@ def _require_text(record: Mapping[str, Any], key: str, *, evidence_id: str = "re
     return value
 
 
+def _require_bool(record: Mapping[str, Any], key: str, *, evidence_id: str = "registry") -> bool:
+    value = record.get(key)
+    if not isinstance(value, bool):
+        raise ValueError(f"{evidence_id}.{key} must be a boolean")
+    return value
+
+
 def _load_json_object(path: Path) -> Mapping[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -101,13 +108,13 @@ def load_r05_evidence_registry(repo_root: Path) -> EvidenceRegistryBundle:
             if tx_flag not in {"none", "TX1"}:
                 raise ValueError(f"{evidence_id}.textual_variant_flag must be none or TX1")
 
-            # These fields are required provenance truth, but remain verbatim text. Parsing
-            # them into witness/passage/relation objects would fabricate structure that the
-            # registry does not explicitly encode.
+            # These fields are required provenance truth. Free-text fields remain verbatim;
+            # nonvisual_access is an explicit boolean flag in the canonical checked-in R05
+            # registry and must stay boolean rather than being coerced to invented text.
             _require_text(raw_record, "source_scope", evidence_id=evidence_id)
             _require_text(raw_record, "required_evidence", evidence_id=evidence_id)
             _require_text(raw_record, "provenance_status", evidence_id=evidence_id)
-            _require_text(raw_record, "nonvisual_access", evidence_id=evidence_id)
+            _require_bool(raw_record, "nonvisual_access", evidence_id=evidence_id)
 
             runtime.add_evidence(
                 EvidenceRecord(

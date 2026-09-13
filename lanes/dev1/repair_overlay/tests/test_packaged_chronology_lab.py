@@ -1,4 +1,5 @@
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -32,6 +33,7 @@ from scripture_archive_platform.application.chronology_projection import (
 from scripture_archive_platform.application.runtime_gateway import (
     RuntimeBackedPlayerGateway,
     RuntimeGatewayError,
+    build_runtime_gateway,
 )
 from scripture_archive_platform.transport.contracts import validate_request_shape
 
@@ -149,6 +151,31 @@ class PackagedChronologyBoundaryTests(unittest.TestCase):
         data = gateway.get_chronology_lab()
         self.assertEqual("NO_SOURCE_BACKED_ASSERTIONS", data["source_status"])
         self.assertEqual([], data["rows"])
+
+    def test_production_gateway_materializes_independently_accepted_pa02_pack(self):
+        with tempfile.TemporaryDirectory() as temp_root:
+            gateway = build_runtime_gateway(REPO_ROOT, Path(temp_root))
+            data = gateway.get_chronology_lab()
+
+        self.assertEqual("SOURCE_BACKED_ASSERTIONS", data["source_status"])
+        self.assertEqual(7, data["assertion_count"])
+        self.assertEqual(7, len(data["linear"]))
+        self.assertEqual(
+            {
+                "CHR-PA02-A9-0008-BEFORE-AFTERMATH",
+                "CHR-PA02-A9-0009-AFTER-VOICE",
+                "CHR-PA02-A9-0010-AFTER-ENCOUNTER",
+                "CHR-PA02-A9-0010-BEFORE-ANANIAS",
+                "CHR-PA02-A22-0011-ABOUT-NOON",
+                "CHR-PA02-A22-0013-AFTER-ENCOUNTER",
+                "CHR-PA02-A26-0014-MIDDAY",
+            },
+            {row["assertion_id"] for row in data["rows"]},
+        )
+        self.assertTrue(all(row["confidence"] == "T1" for row in data["rows"]))
+        self.assertTrue(all(row["tx1"] is False for row in data["rows"]))
+        self.assertFalse(data["truth"]["inferred_chronology"])
+        self.assertFalse(data["truth"]["automatic_harmonization"])
 
     def test_application_allowlist_is_read_only_and_empty_payload_only(self):
         service_source = (

@@ -47,3 +47,5 @@ void import('./witness-matrix-ui.js').then(({installWitnessMatrixSurface})=>inst
 void import('./constructor-v2-ui.js').then(({installConstructorV2Surface})=>installConstructorV2Surface());
 // Presentation-only speech uses the current canonical runtime task and never accepts arbitrary browser text.
 void import('./speech-ui.js').then(({installSpeechSurface})=>installSpeechSurface());
+// Explicit source-backed OT↔NT relations share the same unlocked canonical runtime and Research Workbench.
+void import('./cross-testament-ui.js').then(({installCrossTestamentSurface})=>installCrossTestamentSurface());

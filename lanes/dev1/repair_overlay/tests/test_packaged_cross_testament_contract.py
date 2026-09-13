@@ -1,12 +1,15 @@
 import ast
 import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from scripture_archive_platform.application.cross_testament_projection import project_packaged_cross_testament
+from scripture_archive_platform.application.runtime_gateway import build_runtime_gateway
 from scripture_archive_platform.application.service import PlatformApplication
 from scripture_archive_platform.transport.contracts import validate_request_shape
 from runtime_engine.scripture_archive_runtime.evidence import EvidenceRecord, EvidenceRuntime, PassageRef, Relation
 from runtime_engine.scripture_archive_runtime.models import Confidence
+from runtime_engine.scripture_archive_runtime.otnt_relation_pack import load_otnt_relation_pack
 
 
 class _CrossTestamentGateway:
@@ -99,6 +102,27 @@ class PackagedCrossTestamentContractTests(unittest.TestCase):
         self.assertFalse(rejected["ok"])
         self.assertEqual(rejected["error"]["code"], "VALIDATION_ERROR")
         self.assertEqual(gateway.calls, 1)
+
+    def test_production_gateway_materializes_checked_in_source_audited_pack(self):
+        repo_root = Path(__file__).resolve().parents[4]
+        source_bundle = load_otnt_relation_pack(repo_root)
+        self.assertTrue(source_bundle.source_audited)
+        expected_relation_ids = sorted(source_bundle.runtime.relations)
+        self.assertTrue(expected_relation_ids)
+
+        with TemporaryDirectory() as directory:
+            gateway = build_runtime_gateway(repo_root, Path(directory))
+            data = gateway.get_cross_testament()
+
+        self.assertEqual(data["schema"], "scripture.research.cross-testament.v1")
+        self.assertEqual(data["status"], "LINKS")
+        self.assertTrue(data["read_only"])
+        self.assertEqual(data["evidence_scope"], "unlocked_only")
+        self.assertEqual(data["truth_owner"], "D5/runtime")
+        self.assertEqual(
+            [link["relation_id"] for link in data["links"]],
+            expected_relation_ids,
+        )
 
     def test_packaged_projection_preserves_explicit_relation_provenance(self):
         data = project_packaged_cross_testament(self._runtime())

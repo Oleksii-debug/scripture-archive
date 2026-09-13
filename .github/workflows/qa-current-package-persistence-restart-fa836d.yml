@@ -1,0 +1,55 @@
+name: QA current package persistence restart fa836d
+
+on:
+  push:
+    branches:
+      - qa-current-package-persistence-restart-fa836d-0913-sol
+    paths:
+      - '.github/workflows/qa-current-package-persistence-restart-fa836d.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  persistence-restart:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fa836d79fcfd9ac5d8aacbf6a6be9f5a10183012
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Confirm exact canonical package checkout
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "fa836d79fcfd9ac5d8aacbf6a6be9f5a10183012"
+      - name: Packaged Library and Research persistence
+        working-directory: lanes/dev1/repair_overlay
+        run: python tests/test_packaged_library_research_persistence.py
+      - name: Research workspace restart and readback
+        working-directory: lanes/dev1/repair_overlay
+        run: python tests/test_research_workspace_persistence_restart.py
+      - name: Research persistence collision regression
+        working-directory: lanes/dev1/repair_overlay
+        run: python tests/test_research_persistence_collision_regression.py
+      - name: Research persistence UI contract
+        working-directory: lanes/dev1/repair_overlay
+        run: python tests/test_research_persistence_ui.py
+      - name: Runtime memory persistence
+        working-directory: runtime_engine
+        run: python tests/test_dev06_memory_persistence.py
+      - name: Runtime persistence hardening
+        working-directory: runtime_engine
+        run: python tests/test_dev06_persistence_hardening.py
+      - name: Runtime persistence security
+        working-directory: runtime_engine
+        run: python tests/test_persistence_security.py
+      - name: Diff hygiene
+        shell: bash
+        run: git diff --check

@@ -353,7 +353,7 @@ class AuthoringService:
         obj = json.loads(text)
         if not isinstance(obj, dict) or obj.get("draft_schema") != DRAFT_SCHEMA:
             raise ValueError("invalid imported draft")
-        obj = self._json_copy(obj)
+        obj = self._envelope(obj)
         now = int(self.clock())
         obj["draft_id"] = "draft-" + self.id_factory()
         obj["status"] = "DRAFT"

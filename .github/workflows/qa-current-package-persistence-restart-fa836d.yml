@@ -41,20 +41,26 @@ jobs:
         working-directory: lanes/dev1/repair_overlay
         run: python -c "import runpy,sys; sys.path.insert(0,'.'); runpy.run_path('tests/test_research_workspace_persistence_restart.py', run_name='__main__')"
       - name: Research persistence collision regression
+        if: always()
         working-directory: lanes/dev1/repair_overlay
         run: python tests/test_research_persistence_collision_regression.py
       - name: Research persistence UI contract
+        if: always()
         working-directory: lanes/dev1/repair_overlay
         run: python tests/test_research_persistence_ui.py
       - name: Runtime memory persistence
+        if: always()
         working-directory: runtime_engine
         run: python tests/test_dev06_memory_persistence.py
       - name: Runtime persistence hardening
+        if: always()
         working-directory: runtime_engine
         run: python tests/test_dev06_persistence_hardening.py
       - name: Runtime persistence security
+        if: always()
         working-directory: runtime_engine
         run: python tests/test_persistence_security.py
       - name: Diff hygiene
+        if: always()
         shell: bash
         run: git diff --check

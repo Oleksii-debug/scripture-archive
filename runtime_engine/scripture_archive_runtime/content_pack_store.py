@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import threading
 import uuid
 from pathlib import Path
 
@@ -39,11 +40,15 @@ class ContentPackStore(_CoreContentPackStore):
 
     def __init__(self, root: str | Path) -> None:
         super().__init__(root)
-        self._install_target_override: tuple[str, str, Path] | None = None
+        # Core install and verify dynamically route through ``self._pack_dir``.
+        # Keep the private target override local to the calling thread so one
+        # overlapping install cannot redirect another install/verification (or
+        # an unrelated read) onto the wrong target.
+        self._install_context = threading.local()
 
     def _pack_dir(self, pack_id: str, version: str) -> Path:
         real_target = super()._pack_dir(pack_id, version)
-        override = self._install_target_override
+        override = getattr(self._install_context, "target_override", None)
         if override is not None and override[0] == pack_id and override[1] == version:
             return override[2]
         return real_target
@@ -81,11 +86,11 @@ class ContentPackStore(_CoreContentPackStore):
             real_target.parent.mkdir(parents=True, exist_ok=True)
 
             verified_target = self.staging_root / f".verified-{uuid.uuid4().hex}"
-            self._install_target_override = (manifest.pack_id, manifest.version, verified_target)
+            self._install_context.target_override = (manifest.pack_id, manifest.version, verified_target)
             try:
                 installed = super().install(snapshot)
             finally:
-                self._install_target_override = None
+                self._install_context.target_override = None
 
             if installed.manifest != manifest or installed.archive_sha256 != inspection.archive_sha256:
                 raise ValidationError("Content pack installation snapshot changed during verification")
@@ -98,7 +103,7 @@ class ContentPackStore(_CoreContentPackStore):
             verified_target = None
             return inspection
         finally:
-            self._install_target_override = None
+            self._install_context.target_override = None
             if verified_target is not None and verified_target.exists():
                 shutil.rmtree(verified_target, ignore_errors=True)
             snapshot.unlink(missing_ok=True)

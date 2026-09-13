@@ -30,9 +30,11 @@ jobs:
         shell: bash
         run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
       - name: Run packaged Daily Case projection and UI regression
-        run: python -m unittest discover -s lanes/dev1/repair_overlay/tests -p 'test_packaged_daily_case.py' -t lanes/dev1/repair_overlay
+        working-directory: lanes/dev1/repair_overlay
+        run: python tests/test_packaged_daily_case.py
       - name: Run packaged Daily Case transport regression
-        run: python -m unittest discover -s lanes/dev1/repair_overlay/tests -p 'test_packaged_daily_case_transport_contract.py' -t lanes/dev1/repair_overlay
+        working-directory: lanes/dev1/repair_overlay
+        run: python tests/test_packaged_daily_case_transport_contract.py
       - name: Diff hygiene
         shell: bash
         run: git diff --check

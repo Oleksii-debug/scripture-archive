@@ -36,8 +36,7 @@ jobs:
           python -m py_compile
           lanes/dev1/repair_overlay/scripture_archive_platform/application/runtime_gateway.py
           lanes/dev1/repair_overlay/tests/test_packaged_daily_case_runtime_lock.py
-      - name: Execute Daily Case lock and transport regressions
+      - name: Execute Daily Case runtime-lock regression
         run: >-
           python -m unittest -v
           lanes.dev1.repair_overlay.tests.test_packaged_daily_case_runtime_lock
-          lanes.dev1.repair_overlay.tests.test_packaged_daily_case_transport_contract

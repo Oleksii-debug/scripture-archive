@@ -1,0 +1,37 @@
+name: R06 Content Pack Atomic Install Qualification
+
+on:
+  pull_request:
+    paths:
+      - "runtime_engine/scripture_archive_runtime/content_pack_store.py"
+      - "runtime_engine/tests/test_content_pack_store.py"
+      - ".github/workflows/r06-content-pack-atomic-install-qualification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: r06-content-pack-atomic-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  content-pack-atomic-install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: runtime_engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compile content-pack runtime and tests
+        run: python -m compileall -q scripture_archive_runtime tests/test_content_packs.py tests/test_content_pack_store.py
+      - name: Run content-pack atomic install regressions
+        run: python -m unittest discover -s tests -p "test_content_pack_store.py" -v

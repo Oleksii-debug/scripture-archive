@@ -1,0 +1,204 @@
+name: R06 QA PR170 Current DEV08 Exact Head
+
+on:
+  push:
+    branches:
+      - r06-qa-pr170-w2-26-exact-0913-sol
+    paths:
+      - '.github/workflows/r06-qa-pr170-current-dev08.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  exact-head-source-readback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aab58a9c5c0398b5ebb4baf612c6f32f8fa8f029
+          fetch-depth: 0
+
+      - name: Prove current DEV08 binding and exact five-path delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          HEAD_SHA='aab58a9c5c0398b5ebb4baf612c6f32f8fa8f029'
+          BASE_SHA='5c291b9483e3c71cf2eb593a86b0c10d9cc4cd3b'
+          OLD_SHA='058356fa159df120359ff41eb52559c6cedd1e87'
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+          test "$(git rev-parse HEAD^1)" = "$BASE_SHA"
+          test "$(git rev-parse HEAD^2)" = "$OLD_SHA"
+          test "$(git merge-base HEAD "$BASE_SHA")" = "$BASE_SHA"
+          git diff --name-only "$BASE_SHA"..HEAD | sort > /tmp/pr170-paths.txt
+          cat > /tmp/pr170-expected.txt <<'EOF'
+          docs/campaigns/GW/R06_DEV3_MATERIALIZATION_05/W2_26_NODE_SHARD_PROOF.json
+          docs/campaigns/GW/R06_DEV3_MATERIALIZATION_05/nodes/w2_26_src_005_missing.jsonl
+          docs/campaigns/GW/R06_DEV3_MATERIALIZATION_05/nodes/w2_26_src_006_missing.jsonl
+          docs/campaigns/GW/R06_DEV3_MATERIALIZATION_05/nodes/w2_26_src_007_missing.jsonl
+          docs/campaigns/GW/R06_DEV3_MATERIALIZATION_05/nodes/w2_26_src_008_missing.jsonl
+          EOF
+          sed -i 's/^          //' /tmp/pr170-expected.txt
+          diff -u /tmp/pr170-expected.txt /tmp/pr170-paths.txt
+          git diff --quiet "$BASE_SHA"..HEAD -- \
+            docs/campaigns/GW/R06_DEV3_MATERIALIZATION_05/W2_28_NODE_SHARD_PROOF.json \
+            docs/campaigns/GW/R06_DEV3_MATERIALIZATION_05/nodes/w2_28_src_013_missing.jsonl \
+            docs/campaigns/GW/R06_DEV3_MATERIALIZATION_05/nodes/w2_28_src_014_missing.jsonl \
+            docs/campaigns/GW/R06_DEV3_MATERIALIZATION_05/nodes/w2_28_src_015_missing.jsonl
+
+      - name: Reconstruct and verify immutable closure transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          STAGE=lanes/dev3/closure03_payload
+          test "$(find "$STAGE" -maxdepth 1 -name 'part_*.b64' -type f | wc -l)" -eq 51
+          rm -rf /tmp/pr170-current-closure
+          mkdir -p /tmp/pr170-current-closure/source
+          cat "$STAGE"/part_*.b64 | base64 --decode > /tmp/pr170-current-closure/payload.tar.xz
+          echo 'ea8e4d290101a6b1c95e3718844015b90abda0964705bf24b70309fa6062c35a  /tmp/pr170-current-closure/payload.tar.xz' | sha256sum -c -
+          tar -xJf /tmp/pr170-current-closure/payload.tar.xz -C /tmp/pr170-current-closure/source
+
+      - name: Verify source truth, selected bytes, duplicates, and post-W2-28 aggregate invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import pathlib
+
+          source = pathlib.Path('/tmp/pr170-current-closure/source')
+          target = pathlib.Path('docs/campaigns/GW/R06_DEV3_MATERIALIZATION_05/nodes')
+          proof_path = pathlib.Path('docs/campaigns/GW/R06_DEV3_MATERIALIZATION_05/W2_26_NODE_SHARD_PROOF.json')
+          allowed_feedback_delta = {'success_feedback', 'partial_feedback', 'failure_feedback', 'hints'}
+
+          expected_hash = {}
+          for raw_line in (source / 'SHA256SUMS.txt').read_text(encoding='utf-8').splitlines():
+              if not raw_line.strip():
+                  continue
+              expected, rel = raw_line.split(None, 1)
+              rel = rel.strip().lstrip('*')
+              p = source / rel
+              assert p.is_file(), p
+              got = hashlib.sha256(p.read_bytes()).hexdigest()
+              assert got == expected, (rel, expected, got)
+              expected_hash[rel] = expected
+          assert len(expected_hash) == 29
+          assert expected_hash['GW_GITHUB_MATERIALIZATION_MANIFEST_v1.2.json'] == '7a8bcd3a92a15d03004154fc85fbbc5ace9faa62bc3b2bc2c3564c68f62c94cd'
+
+          manifest = json.loads((source / 'GW_GITHUB_MATERIALIZATION_MANIFEST_v1.2.json').read_text(encoding='utf-8'))
+          assert manifest['schema'] == 'GW_GITHUB_MATERIALIZATION_MANIFEST_v1.2'
+          assert manifest['lane'] == 'DEV3' and manifest['round'] == 'R06' and manifest['stage'] == 'FINALPREP_02'
+          assert manifest['node_count'] == 360
+          assert manifest['source_truth_freeze'] == (
+              'Only success_feedback, partial_feedback, failure_feedback and hints differ from DEV3 REPAIR_01; '
+              'all answer/source/evidence/confidence/TX1/witness/branch/mastery/accessibility fields are preserved.'
+          )
+
+          def canon(record):
+              return json.dumps(record, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')
+
+          def frozen_truth(record):
+              return {k: v for k, v in record.items() if k not in allowed_feedback_delta}
+
+          canonical = {}
+          source_files = sorted((source / 'nodes').glob('*.json'))
+          assert len(source_files) == 15
+          for p in source_files:
+              rel = f'nodes/{p.name}'
+              assert hashlib.sha256(p.read_bytes()).hexdigest() == expected_hash[rel]
+              data = json.loads(p.read_text(encoding='utf-8'))
+              assert len(data['nodes']) == 24
+              for record in data['nodes']:
+                  node_id = record['node_id']
+                  assert node_id not in canonical, node_id
+                  canonical[node_id] = record
+          assert len(canonical) == 360
+
+          record_hashes = {
+              node_id: hashlib.sha256(canon(record)).hexdigest()
+              for node_id, record in canonical.items()
+          }
+          aggregate = hashlib.sha256(''.join(
+              f'{node_id}\t{digest}\n' for node_id, digest in sorted(record_hashes.items())
+          ).encode('utf-8')).hexdigest()
+          assert aggregate == '403d1aa3c22b8bea49b60c59512e53ae7ab0c389c21101a83f7b90898cbbc240'
+
+          selected = {f'GW{mission:02d}-N{node:02d}' for mission in range(5, 9) for node in range(1, 25)}
+          w228 = {f'GW{mission:02d}-N{node:02d}' for mission in range(13, 16) for node in range(1, 25)}
+          assert len(selected) == 96 and len(w228) == 72
+
+          readable = {}
+          origin = {}
+          selected_exact = 0
+          w228_exact = 0
+          legacy_feedback_only = 0
+          for p in sorted(target.glob('*.jsonl')):
+              for line_no, line in enumerate(p.read_text(encoding='utf-8').splitlines(), 1):
+                  if not line.strip():
+                      continue
+                  record = json.loads(line)
+                  node_id = record.get('node_id')
+                  assert node_id in canonical, (p, line_no, node_id)
+                  assert node_id not in readable, ('duplicate readable node', node_id, origin.get(node_id), f'{p}:{line_no}')
+                  source_record = canonical[node_id]
+                  got = hashlib.sha256(canon(record)).hexdigest()
+                  expected = record_hashes[node_id]
+                  assert frozen_truth(record) == frozen_truth(source_record), ('frozen source-truth mismatch', p, line_no, node_id)
+                  if node_id in selected:
+                      assert got == expected, ('W2-26 selected shard not exact closure', p, line_no, node_id)
+                      selected_exact += 1
+                  elif node_id in w228:
+                      assert got == expected, ('integrated W2-28 shard not exact closure', p, line_no, node_id)
+                      w228_exact += 1
+                  elif got != expected:
+                      differing = {k for k in set(record) | set(source_record) if record.get(k) != source_record.get(k)}
+                      assert differing and differing <= allowed_feedback_delta, ('undeclared legacy/closure delta', p, line_no, node_id, sorted(differing))
+                      legacy_feedback_only += 1
+                  readable[node_id] = got
+                  origin[node_id] = f'{p}:{line_no}'
+
+          assert len(readable) == 242, len(readable)
+          assert selected <= readable.keys()
+          assert w228 <= readable.keys()
+          assert selected_exact == 96
+          assert w228_exact == 72
+          assert legacy_feedback_only == 74
+
+          expected_outputs = {
+              'w2_26_src_005_missing.jsonl': ('27cb01f93283b36676405461ccdbf007d87c5cc82699fd1073af438f3e7dc6c6', 'GW05-N01', 'GW05-N24'),
+              'w2_26_src_006_missing.jsonl': ('34d3cd93fa2d78529b181f24715bd61693e716347a966b966852fd17b2c754ac', 'GW06-N01', 'GW06-N24'),
+              'w2_26_src_007_missing.jsonl': ('85de74edc02ea159c50f79ebcb3ec572f64484ac613bdd2b395b367f98da0eb1', 'GW07-N01', 'GW07-N24'),
+              'w2_26_src_008_missing.jsonl': ('107734da679247f9a9b4e919f54ccf0dc473b9b82306deb1357a1e611dc2cffb', 'GW08-N01', 'GW08-N24'),
+          }
+          for name, (expected_sha, first_id, last_id) in expected_outputs.items():
+              p = target / name
+              raw = p.read_bytes()
+              assert hashlib.sha256(raw).hexdigest() == expected_sha, name
+              records = [json.loads(line) for line in raw.decode('utf-8').splitlines() if line.strip()]
+              assert len(records) == 24
+              assert records[0]['node_id'] == first_id and records[-1]['node_id'] == last_id
+
+          proof = json.loads(proof_path.read_text(encoding='utf-8'))
+          assert proof['schema'] == 'W2_26_D3_NODE_SHARD_PROOF_v2'
+          assert proof['status'] == 'PASS'
+          assert proof['source_archive_sha256'] == 'ea8e4d290101a6b1c95e3718844015b90abda0964705bf24b70309fa6062c35a'
+          assert proof['closure_manifest_sha256'] == '7a8bcd3a92a15d03004154fc85fbbc5ace9faa62bc3b2bc2c3564c68f62c94cd'
+          assert proof['full_node_count'] == proof['full_unique_node_ids'] == 360
+          assert proof['full_node_aggregate_sha256'] == aggregate
+          assert proof['selected_record_count'] == proof['new_record_count'] == 96
+          assert proof['preexisting_record_count_in_selected_range'] == 0
+          assert proof['skipped_existing_node_ids'] == []
+          assert proof['source_truth_changed'] is False
+          assert proof['global_manifest_or_status_changed'] is False
+          assert set(proof['new_node_ids']) == selected
+
+          print(
+              'PR170_CURRENT_DEV08_SOURCE_READBACK_PASS '
+              f'readable_unique={len(readable)} w2_26_exact={selected_exact} '
+              f'w2_28_exact={w228_exact} legacy_feedback_only={legacy_feedback_only} '
+              f'closure_nodes={len(canonical)} closure_aggregate={aggregate}'
+          )
+          PY

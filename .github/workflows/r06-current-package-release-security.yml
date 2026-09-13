@@ -1,0 +1,65 @@
+name: R06 Current Package Release Security Qualification
+
+on:
+  push:
+    branches:
+      - r06-qa-current-package-release-security-0913-sol
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-security:
+    name: release-security (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      EXPECTED_PACKAGE_SHA: fa836d79fcfd9ac5d8aacbf6a6be9f5a10183012
+      HELPER_WORKFLOW: .github/workflows/r06-current-package-release-security.yml
+    steps:
+      - name: Checkout helper evidence commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify immutable package ancestry and workflow-only delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "${EXPECTED_PACKAGE_SHA}^{commit}"
+          test "$(git merge-base "${EXPECTED_PACKAGE_SHA}" HEAD)" = "${EXPECTED_PACKAGE_SHA}"
+          mapfile -t changed < <(git diff --name-only "${EXPECTED_PACKAGE_SHA}"..HEAD)
+          printf 'helper delta:\n%s\n' "${changed[*]}"
+          test "${#changed[@]}" -eq 1
+          test "${changed[0]}" = "${HELPER_WORKFLOW}"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile release security runtime and tests
+        working-directory: runtime_engine
+        run: python -m compileall -q scripture_archive_runtime tests tools
+
+      - name: Run release security and import-confinement regressions
+        working-directory: runtime_engine
+        run: >-
+          python -m unittest -v
+          tests.test_release_security
+          tests.test_persistence_security
+          tests.test_content_packs
+
+      - name: Scan exact helper tree for release secrets
+        working-directory: runtime_engine
+        env:
+          PYTHONPATH: .
+        run: python tools/run_release_secret_scan.py .. --output release-secret-scan.json
+
+      - name: Run loopback web-mock security regression
+        working-directory: lanes/dev1/repair_overlay
+        run: python -m unittest -v tests.test_web_mock_security

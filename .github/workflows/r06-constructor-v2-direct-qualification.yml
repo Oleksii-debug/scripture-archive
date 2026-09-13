@@ -67,21 +67,29 @@ jobs:
           print('exact-head source-parts sha256=', hashlib.sha256(archive_bytes).hexdigest())
 
           # Shared DEV1 release qualification owns whole-archive fidelity (#146).
-          # Constructor qualification needs only the Python platform dependency
-          # subtree. Verify CRC while extracting every member of that subtree and
-          # fail closed on any corruption there; do not treat unrelated corrupt
-          # frontend members as Constructor evidence or as a release-gate pass.
-          prefix = PurePosixPath('r06_platform/scripture_archive_platform')
+          # Constructor qualification needs the Python platform dependency subtree
+          # plus the canonical test fixture used by the transport regression.
+          # CRC-verify every extracted dependency and fail closed on corruption in
+          # those dependencies; unrelated corrupt members are not evidence for or
+          # against this bounded Constructor qualification and remain #146-owned.
+          platform_prefix = PurePosixPath('r06_platform/scripture_archive_platform')
+          exact_dependencies = {PurePosixPath('r06_platform/tests/_fixture.py')}
           extracted = 0
           with zipfile.ZipFile(archive) as zf:
               for info in zf.infolist():
                   member = PurePosixPath(info.filename)
-                  if member == prefix or prefix in member.parents:
-                      try:
-                          zf.extract(info, '.')
-                      except (zipfile.BadZipFile, OSError) as exc:
-                          raise SystemExit(f'corrupt Constructor dependency member {info.filename}: {exc}') from exc
-                      extracted += 1
+                  wanted = (
+                      member == platform_prefix
+                      or platform_prefix in member.parents
+                      or member in exact_dependencies
+                  )
+                  if not wanted:
+                      continue
+                  try:
+                      zf.extract(info, '.')
+                  except (zipfile.BadZipFile, OSError) as exc:
+                      raise SystemExit(f'corrupt Constructor dependency member {info.filename}: {exc}') from exc
+                  extracted += 1
           if extracted == 0:
               raise SystemExit('DEV1 source parts contain no Constructor dependency subtree')
 
@@ -90,6 +98,7 @@ jobs:
               root / 'scripture_archive_platform' / 'persistence' / 'store.py',
               root / 'scripture_archive_platform' / 'content' / 'loader.py',
               root / 'scripture_archive_platform' / 'domain' / 'registries.py',
+              root / 'tests' / '_fixture.py',
           ]
           missing = [str(path) for path in required if not path.is_file()]
           if missing:

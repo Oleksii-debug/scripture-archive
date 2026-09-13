@@ -63,6 +63,33 @@ class IntegrationMaterializerLaneSafetyTests(unittest.TestCase):
 
             self.assertEqual(sentinel.read_text(encoding="utf-8"), "preserve")
 
+    def test_sha_mismatch_fails_before_output_mutation(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            output = root / "materialized"
+            output.mkdir()
+            sentinel = output / "keep.txt"
+            sentinel.write_text("preserve", encoding="utf-8")
+            package = root / "corrupt.zip"
+            package.write_bytes(b"not-the-expected-package")
+
+            spec = PackageSpec(
+                lane="DEV1",
+                zip_path=str(package),
+                expected_sha256="0" * 64,
+                drive_id="drive-id",
+                branch_head="head",
+                node_members=(),
+                evidence_members=(),
+                expected_nodes=0,
+                expected_evidence=0,
+            )
+
+            with self.assertRaisesRegex(MaterializationError, "SHA256 mismatch"):
+                materialize_packages([spec], output)
+
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "preserve")
+
 
 if __name__ == "__main__":
     unittest.main()

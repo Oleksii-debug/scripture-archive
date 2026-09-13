@@ -222,9 +222,10 @@ def verify_local_update(
     """Verify a local regular file without unpacking or executing it.
 
     The file name must exactly match the manifest. Symlinks and non-regular files
-    are rejected. Metadata is checked before and after hashing to fail closed if
-    the file changes during verification. A host must still bind any later install
-    step to this exact digest/size rather than trusting a mutable path.
+    are rejected. The opened file descriptor is identity-bound to the path both
+    before and after hashing so path-resolution swaps fail closed. A host must
+    still bind any later install step to this exact digest/size rather than
+    trusting a mutable path.
     """
 
     manifest = _validated_manifest(manifest)
@@ -240,10 +241,23 @@ def verify_local_update(
         raise ApplicationUpdateError("local artifact must be a regular non-symlink file")
     if before.st_size != manifest.artifact_size:
         raise ApplicationUpdateError("artifact size does not match manifest")
+
+    before_identity = (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
     digest = hashlib.sha256()
     total = 0
     try:
         with path.open("rb") as handle:
+            opened_before = os.fstat(handle.fileno())
+            if not stat.S_ISREG(opened_before.st_mode):
+                raise ApplicationUpdateError("opened local artifact must be a regular file")
+            opened_before_identity = (
+                opened_before.st_dev,
+                opened_before.st_ino,
+                opened_before.st_size,
+                opened_before.st_mtime_ns,
+            )
+            if opened_before_identity != before_identity:
+                raise ApplicationUpdateError("opened artifact identity does not match verified path")
             while True:
                 chunk = handle.read(1024 * 1024)
                 if not chunk:
@@ -252,6 +266,15 @@ def verify_local_update(
                 if total > manifest.artifact_size:
                     raise ApplicationUpdateError("artifact grew during verification")
                 digest.update(chunk)
+            opened_after = os.fstat(handle.fileno())
+            opened_after_identity = (
+                opened_after.st_dev,
+                opened_after.st_ino,
+                opened_after.st_size,
+                opened_after.st_mtime_ns,
+            )
+            if opened_after_identity != opened_before_identity:
+                raise ApplicationUpdateError("opened artifact changed during verification")
         after = path.lstat()
     except ApplicationUpdateError:
         raise
@@ -259,7 +282,6 @@ def verify_local_update(
         raise ApplicationUpdateError("local artifact could not be verified") from exc
     if stat.S_ISLNK(after.st_mode) or not stat.S_ISREG(after.st_mode):
         raise ApplicationUpdateError("local artifact type changed during verification")
-    before_identity = (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
     after_identity = (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
     if before_identity != after_identity or total != manifest.artifact_size:
         raise ApplicationUpdateError("local artifact changed during verification")

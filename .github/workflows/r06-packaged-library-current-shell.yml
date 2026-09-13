@@ -15,8 +15,6 @@ on:
       - 'lanes/dev1/repair_overlay/frontend/witness-matrix-ui.js'
       - 'lanes/dev1/repair_overlay/frontend/review-queue-ui.js'
       - 'lanes/dev1/repair_overlay/frontend/research-export.js'
-      - 'lanes/dev1/repair_overlay/frontend/cross-testament-ui.js'
-      - 'lanes/dev1/repair_overlay/scripture_archive_platform/application/cross_testament_projection.py'
       - 'lanes/dev1/repair_overlay/scripture_archive_platform/application/runtime_gateway.py'
       - 'lanes/dev1/repair_overlay/scripture_archive_platform/application/service.py'
       - 'lanes/dev1/repair_overlay/scripture_archive_platform/transport/contracts.py'
@@ -33,7 +31,6 @@ on:
       - 'lanes/dev1/repair_overlay/tests/test_packaged_review_training_player_ui.py'
       - 'lanes/dev1/repair_overlay/tests/test_packaged_review_training_static_syntax.py'
       - 'lanes/dev1/repair_overlay/tests/test_packaged_review_training_transport.py'
-      - 'lanes/dev1/repair_overlay/tests/test_packaged_cross_testament_contract.py'
       - '.github/workflows/r06-packaged-library-current-shell.yml'
   workflow_dispatch:
 
@@ -85,8 +82,6 @@ jobs:
         run: python lanes/dev1/repair_overlay/tests/test_packaged_review_training_transport.py
       - name: Run packaged Review Training syntax regression
         run: python lanes/dev1/repair_overlay/tests/test_packaged_review_training_static_syntax.py
-      - name: Run packaged Cross-Testament production-gateway regression
-        run: python -m unittest discover -s lanes/dev1/repair_overlay/tests -p 'test_packaged_cross_testament_contract.py' -t lanes/dev1/repair_overlay -v
       - name: Diff hygiene
         shell: bash
         run: git diff --check

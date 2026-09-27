@@ -10,6 +10,13 @@ from scripture_archive_platform.persistence.store import JsonFileStore
 from scripture_archive_platform.transport.contracts import ALLOWLISTED_COMMANDS
 
 
+class _BootstrapOnlyLoader:
+    """Provide only the canonical bootstrap dependency this transport test needs."""
+
+    def list_campaigns(self):
+        return []
+
+
 class BundledScriptureTextTests(unittest.TestCase):
     def test_exact_pinned_corpus_and_catalog(self):
         provider = BundledScriptureText()
@@ -49,13 +56,18 @@ class BundledScriptureTextTests(unittest.TestCase):
             self.assertIn(command, ALLOWLISTED_COMMANDS)
         with tempfile.TemporaryDirectory() as td:
             root = Path(td); repo = root / 'repo'; repo.mkdir()
-            app = PlatformApplication(repo, store=JsonFileStore(root / 'store'))
+            app = PlatformApplication(
+                repo,
+                store=JsonFileStore(root / 'store'),
+                loader=_BootstrapOnlyLoader(),
+            )
             def call(command, payload=None):
                 return app.handle({'api_version':'scripture.transport.v1','request_id':'webu-test','command':command,'payload':payload or {}})
             catalog = call('library.text_catalog')
             self.assertTrue(catalog['ok'])
             self.assertEqual('engwebu', catalog['data']['translation_id'])
             bootstrap = call('system.bootstrap')
+            self.assertTrue(bootstrap['ok'])
             self.assertTrue(bootstrap['data']['capabilities']['bundled_full_bible_text'])
             chapter = call('library.read_chapter', {'book':'GEN','chapter':1})
             self.assertTrue(chapter['ok'])

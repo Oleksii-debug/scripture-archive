@@ -4,7 +4,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGING = ROOT / "packaging"
-WORKFLOW = ROOT.parents[3] / ".github" / "workflows" / "r06-no-admin-acceptance.yml"
+WORKFLOW = ROOT.parents[2] / ".github" / "workflows" / "r06-no-admin-acceptance.yml"
 
 
 class NoAdminAcceptanceContractTests(unittest.TestCase):
@@ -19,7 +19,8 @@ class NoAdminAcceptanceContractTests(unittest.TestCase):
         self.assertIn("WindowsBuiltInRole]::Administrator", self.harness)
         self.assertIn("if ($result.is_admin)", self.harness)
         self.assertIn("Standard-user token required", self.harness)
-        self.assertIn("$env:LOCALAPPDATA", self.harness)
+        self.assertIn("LocalApplicationData", self.harness)
+        self.assertIn("$result.local_app_data = $localAppData", self.harness)
         self.assertIn("per_user_state_writable", self.harness)
         self.assertIn('status = "NO_ADMIN_ACCEPTANCE_PASS"', self.harness)
         self.assertIn('status = "NO_ADMIN_ACCEPTANCE_FAIL"', self.harness)

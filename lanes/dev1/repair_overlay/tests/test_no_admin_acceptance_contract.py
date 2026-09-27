@@ -73,12 +73,17 @@ class NoAdminAcceptanceContractTests(unittest.TestCase):
             "WaitForExit(120000)",
             "Standard-user acceptance process exceeded the 120-second bound",
             "Standard-user identity evidence is incomplete",
+            "NO_ADMIN_ADMIN_NEGATIVE_CONTROL_PASS",
+            "Admin negative control returned unexpected exit code",
+            "NO_ADMIN_ACCEPTANCE_FAIL",
             "S-1-5-32-544",
             "Standard-user account unexpectedly belongs to the Administrators group",
         ):
             self.assertIn(token, self.workflow)
         self.assertNotIn("Add-LocalGroupMember", self.workflow)
         self.assertNotIn("net localgroup administrators", self.workflow.lower())
+        self.assertIn('if ($result.is_admin -ne $true)', self.workflow)
+        self.assertIn('if ($negative.ExitCode -ne 2)', self.workflow)
 
     def test_workflow_does_not_echo_or_persist_generated_password(self):
         self.assertIn("ConvertTo-SecureString", self.workflow)

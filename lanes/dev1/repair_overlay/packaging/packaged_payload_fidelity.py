@@ -560,7 +560,7 @@ def verify_reader(
             actual_blob = git_blob_sha(actual)
             row["git_blob_sha1"] = actual_blob
             eol_policy = expected.get("git_eol_policy", _GIT_EOL_EXACT)
-            if eol_policy not in _GIT_EOL_POLICIES:
+            if not isinstance(eol_policy, str) or eol_policy not in _GIT_EOL_POLICIES:
                 errors.append(
                     f"INVALID_GIT_EOL_POLICY {package_path}: {eol_policy!r}"
                 )

@@ -1,6 +1,12 @@
 import unittest
 
-from scripture_archive_runtime.answer_contracts import answer_contract_descriptor, validate_answer_dto
+from scripture_archive_runtime.answer_contracts import (
+    answer_contract_descriptor,
+    canonical_task_type,
+    validate_answer_dto,
+)
+from scripture_archive_runtime.package_adapters import adapt_node_for_runtime
+from scripture_archive_runtime.provenance import canonical_answer_dto
 from scripture_archive_runtime.security import ValidationError
 
 
@@ -27,5 +33,35 @@ class AnswerContractTests(unittest.TestCase):
 
     def test_descriptor_is_versioned(self):
         self.assertEqual(answer_contract_descriptor("OT_NT_LINK")["schema"], "ANSWER_DTO_v1")
+
+    def test_short_free_response_uses_existing_short_text_contract_and_grader(self):
+        self.assertEqual(canonical_task_type("short free response"), "SHORT_TEXT")
+        dto = validate_answer_dto(
+            "SHORT_FREE_RESPONSE",
+            {"task_type": "SHORT_TEXT", "text": "До в'язниці і до смерті."},
+        )
+        self.assertEqual(dto["task_type"], "SHORT_TEXT")
+        self.assertEqual(dto["text"], "До в'язниці і до смерті.")
+
+        # Exact canonical semantics from LN04-N07: historical spelling is a
+        # short semantic text response, not a new grader or answer shape.
+        node = {
+            "node_id": "LN04-N07",
+            "mission_id": "LN-04",
+            "response_mode": "short free response",
+            "accepted_answer": "До в'язниці і до смерті.",
+            "accepted_variants": "prison/imprisonment + death.",
+            "required_evidence": "Lk 22:33.",
+        }
+        projected = canonical_answer_dto(node)
+        self.assertEqual(projected["task_type"], "SHORT_TEXT")
+        self.assertEqual(projected["text"], node["accepted_answer"])
+
+        adapted = adapt_node_for_runtime(node, lane="LN-04")
+        self.assertEqual(adapted["task_type"], "SHORT_TEXT")
+        self.assertEqual(adapted["answer_dto"], projected)
+        self.assertEqual(adapted["grading"]["accepted_text"], node["accepted_answer"])
+        self.assertEqual(adapted["grading"]["accepted_text_aliases"], [node["accepted_variants"]])
+
 
 if __name__ == '__main__': unittest.main()

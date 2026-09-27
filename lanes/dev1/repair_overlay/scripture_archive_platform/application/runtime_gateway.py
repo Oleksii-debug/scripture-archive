@@ -194,13 +194,19 @@ def build_runtime_gateway(repo_root: Path, platform_store_root: Path) -> Runtime
     Canonical node bytes are not rewritten. The checked-in R05 provenance registry
     is projected into ``EvidenceRuntime`` and its explicit node_id→evidence_record_id
     links replace legacy optional unlock values only in this in-memory packaged
-    runtime projection. The explicit OT↔NT relation pack is validated through its
-    typed loader but materializes into the same EvidenceRuntime only after an
-    independent source-audit promotion. Free-text source fields are never parsed
-    into invented passage/witness/entity/relation/chronology structure.
+    runtime projection. The explicit #161 OT↔NT relation pack and the separately
+    audited D4 OT↔NT registry materialize into that same EvidenceRuntime only from
+    their respective explicit audit authorities. The D4 gate admits exactly the
+    22 relation IDs accepted by independent W2-17 audit and excludes repair-required
+    0005/0006. Free-text source fields are never parsed into invented
+    passage/witness/entity/relation/chronology structure.
     """
     from runtime_engine.scripture_archive_runtime.application import RuntimeApplication
     from runtime_engine.scripture_archive_runtime.content import ContentRepository
+    from runtime_engine.scripture_archive_runtime.d4_otnt_relation_registry import (
+        load_independently_audited_d4_otnt,
+        materialize_independently_audited_d4_otnt,
+    )
     from runtime_engine.scripture_archive_runtime.evidence_registry import load_r05_evidence_registry
     from runtime_engine.scripture_archive_runtime.otnt_relation_pack import (
         load_otnt_relation_pack,
@@ -215,6 +221,8 @@ def build_runtime_gateway(repo_root: Path, platform_store_root: Path) -> Runtime
     evidence_bundle = load_r05_evidence_registry(repo_root)
     otnt_bundle = load_otnt_relation_pack(repo_root)
     materialize_otnt_relation_pack(evidence_bundle.runtime, otnt_bundle)
+    d4_otnt_bundle = load_independently_audited_d4_otnt(repo_root)
+    materialize_independently_audited_d4_otnt(evidence_bundle.runtime, d4_otnt_bundle)
 
     nodes = []
     for source_node in loader._nodes.values():

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import struct
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -130,6 +131,7 @@ class PackagedPayloadFidelityTests(unittest.TestCase):
                 windows_checkout,
                 expected_blob,
                 repo_path=repo_path,
+                eol_policy=MODULE._GIT_EOL_CRLF_TO_LF,
             )
         )
         self.assertTrue(
@@ -137,6 +139,7 @@ class PackagedPayloadFidelityTests(unittest.TestCase):
                 windows_checkout,
                 expected_blob,
                 repo_path="docs/campaigns/example.json",
+                eol_policy=MODULE._GIT_EOL_CRLF_TO_LF,
             )
         )
         self.assertFalse(
@@ -144,6 +147,7 @@ class PackagedPayloadFidelityTests(unittest.TestCase):
                 b"line one\r\nline TWO\r\n",
                 expected_blob,
                 repo_path=repo_path,
+                eol_policy=MODULE._GIT_EOL_CRLF_TO_LF,
             )
         )
         self.assertFalse(
@@ -160,6 +164,7 @@ class PackagedPayloadFidelityTests(unittest.TestCase):
                 staged,
                 expected_blob,
                 repo_path="lanes/dev1/repair_overlay/frontend/icon.png",
+                eol_policy=MODULE._GIT_EOL_CRLF_TO_LF,
             )
         )
 
@@ -170,7 +175,106 @@ class PackagedPayloadFidelityTests(unittest.TestCase):
                 nul_staged,
                 MODULE.git_blob_sha(nul_canonical),
                 repo_path="lanes/dev1/repair_overlay/frontend/app.js",
+                eol_policy=MODULE._GIT_EOL_CRLF_TO_LF,
             )
+        )
+
+    def test_git_attribute_policy_forces_lf_relation_sources_to_exact_bytes(self):
+        self.assertEqual(
+            MODULE._GIT_EOL_EXACT,
+            MODULE._policy_from_git_attributes(
+                "docs/campaigns/OT/R06_D4_STAGE05_READABLE/relations/relations_001_012.jsonl",
+                "set",
+                "lf",
+            ),
+        )
+        self.assertEqual(
+            MODULE._GIT_EOL_EXACT,
+            MODULE._policy_from_git_attributes(
+                "docs/campaigns/example.json",
+                "unset",
+                "unspecified",
+            ),
+        )
+        self.assertEqual(
+            MODULE._GIT_EOL_CRLF_TO_LF,
+            MODULE._policy_from_git_attributes(
+                "docs/campaigns/example.json",
+                "unspecified",
+                "unspecified",
+            ),
+        )
+
+    def test_exact_head_git_attributes_resolve_d4_relation_jsonl_to_forced_lf(self):
+        repo_root = MODULE_PATH.parents[4]
+        git_sha = subprocess.run(
+            ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        self.assertEqual(
+            MODULE._GIT_EOL_EXACT,
+            MODULE._git_eol_policy(
+                repo_root,
+                git_sha,
+                "docs/campaigns/OT/R06_D4_STAGE05_READABLE/relations/relations_001_012.jsonl",
+            ),
+        )
+
+    def test_verify_reader_rejects_crlf_for_forced_lf_campaign_source(self):
+        canonical = b'{"relation_id":"OTNT-0001"}\n'
+        staged = canonical.replace(b"\n", b"\r\n")
+        path = "docs/campaigns/OT/R06_D4_STAGE05_READABLE/relations/relations_001_012.jsonl"
+        manifest = {
+            "schema_version": 1,
+            "git_sha": "1" * 40,
+            "entries": [
+                {
+                    "package_path": path,
+                    "size_bytes": len(staged),
+                    "sha256": MODULE.sha256_hex(staged),
+                    "git_blob_sha1": MODULE.git_blob_sha(canonical),
+                    "git_eol_policy": MODULE._GIT_EOL_EXACT,
+                    "repo_path": path,
+                    "provenance": "git_campaign",
+                }
+            ],
+        }
+
+        result = MODULE.verify_reader(FakeArchive({path: staged}), manifest)
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(0, result["files_verified"])
+        self.assertTrue(
+            any(error.startswith("GIT_BLOB_MISMATCH") for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_verify_reader_rejects_unknown_git_eol_policy(self):
+        payload = b"console.log('archive');\r\n"
+        path = "r06_platform/frontend/app.js"
+        manifest = {
+            "schema_version": 1,
+            "entries": [
+                {
+                    "package_path": path,
+                    "size_bytes": len(payload),
+                    "sha256": MODULE.sha256_hex(payload),
+                    "git_blob_sha1": MODULE.git_blob_sha(payload),
+                    "git_eol_policy": "guess",
+                    "repo_path": "lanes/dev1/repair_overlay/frontend/app.js",
+                    "provenance": "git_overlay",
+                }
+            ],
+        }
+
+        result = MODULE.verify_reader(FakeArchive({path: payload}), manifest)
+
+        self.assertFalse(result["ok"])
+        self.assertTrue(
+            any(error.startswith("INVALID_GIT_EOL_POLICY") for error in result["errors"]),
+            result["errors"],
         )
 
     def test_verify_reader_rejects_binary_crlf_lookalike_even_with_exact_staged_hash(self):
@@ -214,6 +318,7 @@ class PackagedPayloadFidelityTests(unittest.TestCase):
                 "git_overlay",
                 repo_path="lanes/dev1/repair_overlay/frontend/app.js",
                 git_blob=expected_blob,
+                git_eol_policy=MODULE._GIT_EOL_CRLF_TO_LF,
             )
 
         self.assertEqual(len(windows_checkout), entry["size_bytes"])
@@ -233,6 +338,7 @@ class PackagedPayloadFidelityTests(unittest.TestCase):
                     "size_bytes": len(staged),
                     "sha256": MODULE.sha256_hex(staged),
                     "git_blob_sha1": MODULE.git_blob_sha(canonical),
+                    "git_eol_policy": MODULE._GIT_EOL_CRLF_TO_LF,
                     "repo_path": "lanes/dev1/repair_overlay/frontend/app.js",
                     "provenance": "git_overlay",
                 }

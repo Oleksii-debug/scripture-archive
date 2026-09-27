@@ -1,0 +1,111 @@
+import unittest
+
+from scripture_archive_runtime.dossiers import DossierAssembler, DossierKind, DossierSubject
+from scripture_archive_runtime.evidence import Claim, EvidenceRecord, EvidenceRuntime, PassageRef, Relation
+from scripture_archive_runtime.models import Confidence
+
+
+class DossierWitnessRegressionTests(unittest.TestCase):
+    def test_clean_mixed_passage_provenance_remains_visible_without_aggregate_witness(self):
+        runtime = EvidenceRuntime()
+        runtime.add_evidence(
+            EvidenceRecord(
+                evidence_id="EV-MIXED",
+                passage_refs=(
+                    PassageRef("Acts.9.7", "Acts", 9, 7, witness="Acts 9 narrator"),
+                    PassageRef("Acts.22.9", "Acts", 22, 9, witness="Acts 22 Paul speech"),
+                ),
+                proposition="Canonical mixed-provenance proposition.",
+                confidence=Confidence.T1,
+                witness=None,
+                entity_ids=("EVENT-X",),
+            )
+        )
+        runtime.unlock("EV-MIXED")
+
+        view = DossierAssembler(runtime).build(
+            DossierSubject("EVENT-X", DossierKind.EVENT, "X")
+        )
+        row = next(row for row in view.rows if row.row_id == "EV-MIXED")
+        self.assertIsNone(row.witness)
+        self.assertEqual(
+            (
+                ("Acts.22.9", "Acts 22 Paul speech"),
+                ("Acts.9.7", "Acts 9 narrator"),
+            ),
+            row.passage_witnesses,
+        )
+
+    def test_malformed_mixed_passage_witness_remains_fail_closed(self):
+        for suffix, malformed in (
+            ("SPACE", " Acts 22 Paul speech"),
+            ("U2028", "Acts 22\u2028Paul speech"),
+        ):
+            with self.subTest(suffix=suffix):
+                runtime = EvidenceRuntime()
+                evidence_id = f"EV-MALFORMED-{suffix}"
+                runtime.add_evidence(
+                    EvidenceRecord(
+                        evidence_id=evidence_id,
+                        passage_refs=(
+                            PassageRef("Acts.9.7", "Acts", 9, 7, witness="Acts 9 narrator"),
+                            PassageRef("Acts.22.9", "Acts", 22, 9, witness=malformed),
+                        ),
+                        proposition="Malformed witness metadata must not become visible.",
+                        confidence=Confidence.T1,
+                        witness=None,
+                        entity_ids=("EVENT-X",),
+                    )
+                )
+                runtime.unlock(evidence_id)
+
+                view = DossierAssembler(runtime).build(
+                    DossierSubject("EVENT-X", DossierKind.EVENT, "X")
+                )
+                self.assertNotIn(evidence_id, {row.row_id for row in view.rows})
+
+    def test_declared_claim_and_relation_witness_require_positive_visible_support(self):
+        runtime = EvidenceRuntime()
+        runtime.add_evidence(
+            EvidenceRecord(
+                evidence_id="EV-WITNESSLESS",
+                passage_refs=(),
+                proposition="Canonical proposition with no witness attribution.",
+                confidence=Confidence.T1,
+                entity_ids=("PERSON-X",),
+                relation_ids=("REL-WITNESSLESS",),
+            )
+        )
+        runtime.add_claim(
+            Claim(
+                claim_id="CLAIM-WITNESSLESS",
+                proposition="A declared witness must not be borrowed from metadata alone.",
+                confidence=Confidence.T2,
+                required_evidence_ids=("EV-WITNESSLESS",),
+                witness="Luke",
+            )
+        )
+        runtime.add_relation(
+            Relation(
+                relation_id="REL-WITNESSLESS",
+                source_id="PERSON-X",
+                relation_type="appears_in",
+                target_id="EVENT-X",
+                witness="Luke",
+            )
+        )
+        runtime.unlock("EV-WITNESSLESS")
+
+        view = DossierAssembler(runtime).build(
+            DossierSubject("PERSON-X", DossierKind.PERSON, "X")
+        )
+        ids = [row.row_id for row in view.rows]
+        self.assertIn("EV-WITNESSLESS", ids)
+        self.assertNotIn("CLAIM-WITNESSLESS", ids)
+        self.assertNotIn("REL-WITNESSLESS", ids)
+        rendered = "\n".join(view.linearize())
+        self.assertNotIn("witness=Luke", rendered)
+
+
+if __name__ == "__main__":
+    unittest.main()

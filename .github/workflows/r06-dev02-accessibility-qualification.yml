@@ -14,6 +14,8 @@ on:
       - 'lanes/dev1/repair_overlay/frontend/settings.css'
       - 'lanes/dev1/repair_overlay/scripture_archive_platform/accessibility/semantics.py'
       - 'lanes/dev1/repair_overlay/scripture_archive_platform/composite_accessibility.py'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/content/loader.py'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/transport/answer_contracts.py'
       - 'lanes/dev1/repair_overlay/tests/test_accessibility.py'
       - 'lanes/dev1/repair_overlay/tests/test_accessibility_settings_ui.py'
       - 'lanes/dev1/repair_overlay/tests/test_composite_accessibility.py'

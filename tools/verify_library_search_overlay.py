@@ -19,12 +19,17 @@ RUNTIME_ENGINE = ROOT / "runtime_engine"
 CANONICAL_DEV1_SOURCE_COMMIT = "90a13aca71d2a5f832846a84acbdf0f7c89f5da9"
 CANONICAL_SOURCE_PREFIX = "release_inputs/dev1_finalprep02"
 EXPECTED_BASE_SHA256 = "10fbd546ff4d985465b85b99f4f64bff95d9ec8b1f27132c6d21b4930c344c35"
-EXPECTED_REAL_TESTS = 6
+EXPECTED_REAL_TESTS = 11
 OVERLAY_FIDELITY_PATHS = (
     Path("scripture_archive_platform/content/library.py"),
     Path("scripture_archive_platform/application/service.py"),
     Path("scripture_archive_platform/transport/contracts.py"),
     Path("tests/test_library_search.py"),
+    Path("tests/test_d4_readable_library_consumption.py"),
+)
+REGRESSION_MODULES = (
+    ("library_search_real_regression", Path("tests/test_library_search.py")),
+    ("d4_readable_library_consumption_real_regression", Path("tests/test_d4_readable_library_consumption.py")),
 )
 
 
@@ -150,7 +155,7 @@ def parse_real_paths(platform_root: Path) -> None:
         )
 
 
-def load_real_regression_module(platform_root: Path):
+def _reset_platform_imports(platform_root: Path) -> None:
     for name in tuple(sys.modules):
         if name == "scripture_archive_platform" or name.startswith(
             "scripture_archive_platform."
@@ -164,23 +169,26 @@ def load_real_regression_module(platform_root: Path):
             sys.path.remove(value)
         sys.path.insert(0, value)
 
-    module_path = platform_root / "tests" / "test_library_search.py"
-    spec = importlib.util.spec_from_file_location(
-        "library_search_real_regression", module_path
-    )
+
+def load_real_regression_module(platform_root: Path, name: str, relative: Path):
+    _reset_platform_imports(platform_root)
+    module_path = platform_root / relative
+    spec = importlib.util.spec_from_file_location(name, module_path)
     if spec is None or spec.loader is None:
-        raise AssertionError("Unable to load real Library/Search regression module")
+        raise AssertionError(f"Unable to load real Library/Search regression module {relative}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
 def run_real_response_regressions(platform_root: Path) -> None:
-    module = load_real_regression_module(platform_root)
-    suite = unittest.defaultTestLoader.loadTestsFromModule(module)
+    suite = unittest.TestSuite()
+    for name, relative in REGRESSION_MODULES:
+        module = load_real_regression_module(platform_root, name, relative)
+        suite.addTests(unittest.defaultTestLoader.loadTestsFromModule(module))
     if suite.countTestCases() != EXPECTED_REAL_TESTS:
         raise AssertionError(
-            f"Expected {EXPECTED_REAL_TESTS} Library/Search tests, got {suite.countTestCases()}"
+            f"Expected {EXPECTED_REAL_TESTS} Library/Search + D4 read-only tests, got {suite.countTestCases()}"
         )
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     if not result.wasSuccessful():
@@ -196,8 +204,8 @@ def main() -> None:
         run_real_response_regressions(platform_root)
     print(
         "Library/Search qualification PASS: exact candidate checkout, pinned canonical "
-        "FINALPREP02 DEV1 base hash/CRC, overlay fidelity, and six real response-level "
-        "regressions."
+        "FINALPREP02 DEV1 base hash/CRC, overlay fidelity, six legacy Library/Search "
+        "regressions, and five real qualified-D4 read-only/runtime-eligibility regressions."
     )
 
 

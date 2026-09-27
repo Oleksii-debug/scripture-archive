@@ -75,49 +75,6 @@ def _validate_value(value: object, field: str, *, depth: int = 0) -> None:
     raise ValueError(f"{field} contains unsupported packaged value")
 
 
-def _relation_scoped_runtime(runtime: EvidenceRuntime) -> EvidenceRuntime:
-    """Copy only explicit Cross-Testament relation support into a read-only snapshot.
-
-    The canonical runtime also contains evidence for unrelated research surfaces.
-    Those records are not Cross-Testament inputs merely because they share the same
-    EvidenceRuntime. Keep every explicit relation, every evidence-backed endpoint,
-    and every record that names a passage explicitly declared by a relation. The
-    unchanged generic projector then retains its strict validation for all relevant
-    support, while unrelated mixed-provenance evidence cannot block this surface.
-    """
-    if not isinstance(runtime, EvidenceRuntime):
-        raise TypeError("runtime must be an EvidenceRuntime")
-
-    relation_passage_ids = {
-        passage_id
-        for relation in runtime.relations.values()
-        for passage_id in relation.passage_ids
-    }
-    endpoint_evidence_ids = {
-        endpoint_id
-        for relation in runtime.relations.values()
-        for endpoint_id in (relation.source_id, relation.target_id)
-        if endpoint_id in runtime.evidence
-    }
-
-    scoped = EvidenceRuntime()
-    for evidence_id, record in sorted(runtime.evidence.items()):
-        supports_relation_passage = any(
-            passage.passage_id in relation_passage_ids
-            for passage in record.passage_refs
-        )
-        if evidence_id in endpoint_evidence_ids or supports_relation_passage:
-            scoped.add_evidence(record)
-
-    for relation_id in sorted(runtime.relations):
-        scoped.add_relation(runtime.relations[relation_id])
-
-    for evidence_id in sorted(runtime.unlocked):
-        if evidence_id in scoped.evidence:
-            scoped.unlock(evidence_id)
-    return scoped
-
-
 def project_packaged_cross_testament(runtime: EvidenceRuntime) -> dict[str, object]:
     """Return the bounded read-only OT↔NT projection used by the packaged app.
 
@@ -126,7 +83,7 @@ def project_packaged_cross_testament(runtime: EvidenceRuntime) -> dict[str, obje
     topics, entities, chronology, or prose similarity.
     """
     projection = project_cross_testament(
-        _relation_scoped_runtime(runtime),
+        runtime,
         book_testaments=BOOK_TESTAMENTS,
         unlocked_only=True,
     )

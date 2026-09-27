@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "packaging" / "windows_release.py"
+GATE_PATH = Path(__file__).resolve().parents[1] / "packaging" / "run_windows_release_gate.ps1"
 SPEC = importlib.util.spec_from_file_location("dev01_windows_release", MODULE_PATH)
 assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC)
@@ -58,6 +59,14 @@ class WindowsReleaseToolingTests(unittest.TestCase):
             result = MODULE.verify_artifact(artifact, manifest)
             self.assertTrue(result["ok"])
             self.assertEqual(result["problems"], [])
+
+
+    def test_tools_smoke_temporarily_includes_repo_runtime_on_pythonpath(self):
+        source = GATE_PATH.read_text(encoding="utf-8")
+        self.assertIn("$SmokePriorPythonPath = $env:PYTHONPATH", source)
+        self.assertIn('$env:PYTHONPATH = "$Repo;$PlatformRoot"', source)
+        self.assertIn('python (Join-Path $PlatformRoot "tools_smoke.py")', source)
+        self.assertIn("$env:PYTHONPATH = $SmokePriorPythonPath", source)
 
 
 if __name__ == "__main__":

@@ -93,9 +93,16 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax check failed with code $LASTEXITCODE" }
     $result.javascript_syntax = $true
 
-    python (Join-Path $PlatformRoot "tools_smoke.py")
-    if ($LASTEXITCODE -ne 0) { throw "tools_smoke.py failed with code $LASTEXITCODE" }
-    $result.tools_smoke = $true
+    $SmokePriorPythonPath = $env:PYTHONPATH
+    $env:PYTHONPATH = "$Repo;$PlatformRoot" + $(if ($SmokePriorPythonPath) { ";$SmokePriorPythonPath" } else { "" })
+    try {
+        python (Join-Path $PlatformRoot "tools_smoke.py")
+        if ($LASTEXITCODE -ne 0) { throw "tools_smoke.py failed with code $LASTEXITCODE" }
+        $result.tools_smoke = $true
+    }
+    finally {
+        $env:PYTHONPATH = $SmokePriorPythonPath
+    }
 
     & (Join-Path $PSScriptRoot "build_windows.ps1")
     if (-not (Test-Path $Exe) -or -not (Test-Path $BuildManifest) -or -not (Test-Path $Diagnostics)) {

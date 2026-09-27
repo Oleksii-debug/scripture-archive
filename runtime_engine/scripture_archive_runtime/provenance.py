@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Mapping, Sequence
 
-from .answer_contracts import ANSWER_CONTRACT_VERSION, canonical_task_type, validate_answer_dto
+from .answer_contracts import ANSWER_CONTRACT_VERSION, canonical_node_task_type, canonical_task_type, validate_answer_dto
 from .security import ValidationError
 
 PROVENANCE_CONTRACT_VERSION = "GROUND_TRUTH_PROVENANCE_v1"
@@ -50,7 +50,7 @@ class ProvenanceDecision:
 
 
 def _type(n: Mapping[str, Any]) -> str:
-    return canonical_task_type(str(n.get("task_type") or n.get("response_mode") or n.get("task_family") or "SHORT_TEXT"))
+    return canonical_node_task_type(n)
 
 
 def _nonempty(v: Any) -> bool:

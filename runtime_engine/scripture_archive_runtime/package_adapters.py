@@ -5,7 +5,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Mapping, Sequence
 
-from .answer_contracts import ANSWER_CONTRACT_VERSION, canonical_task_type, validate_answer_dto
+from .answer_contracts import ANSWER_CONTRACT_VERSION, canonical_node_task_type, canonical_task_type, validate_answer_dto
 from .security import ValidationError, validate_content_import
 from .provenance import canonical_answer_dto
 
@@ -76,7 +76,7 @@ def _concrete_variants(value: Any) -> list[str]:
 
 
 def _task_type(node: Mapping[str, Any]) -> str:
-    return canonical_task_type(str(node.get("task_type") or node.get("response_mode") or node.get("task_family") or "SHORT_TEXT"))
+    return canonical_node_task_type(node)
 
 
 def normalize_legacy_multiselect_truth(node: Mapping[str, Any]) -> dict[str, Any]:
@@ -102,6 +102,30 @@ def normalize_legacy_multiselect_truth(node: Mapping[str, Any]) -> dict[str, Any
     return adapted
 
 
+def normalize_legacy_ordering_truth(node: Mapping[str, Any]) -> dict[str, Any]:
+    """Losslessly project explicit historical arrow-delimited ordering truth.
+
+    Canonical legacy ordering nodes predate ANSWER_DTO_v1 and may serialize an
+    authored sequence in one accepted_answer string using the visible right-arrow
+    as the item boundary. The node-context resolver must independently classify
+    the node as ORDERING; without an explicit arrow serialization this path fails
+    closed.
+    """
+    adapted = deepcopy(dict(node))
+    if _task_type(adapted) != "ORDERING" or not isinstance(adapted.get("accepted_answer"), str):
+        return adapted
+    raw = str(adapted["accepted_answer"])
+    if "→" not in raw:
+        raise ValidationError(
+            "Legacy ORDERING string truth is permitted only for explicit arrow-delimited ordering"
+        )
+    items = [part.strip() for part in raw.split("→")]
+    if len(items) < 2 or any(not item for item in items):
+        raise ValidationError("Legacy ORDERING arrow serialization contains an empty item")
+    adapted["accepted_answer"] = items
+    return adapted
+
+
 def derive_answer_dto(node: Mapping[str, Any]) -> dict[str, Any]:
     """Project canonical CONTENT_NODE_SCHEMA v1.2 ground truth into ANSWER_DTO_v1.
 
@@ -114,6 +138,7 @@ def derive_answer_dto(node: Mapping[str, Any]) -> dict[str, Any]:
 def adapt_node_for_runtime(node: Mapping[str, Any], *, lane: str = "unknown") -> dict[str, Any]:
     """Transitional adapter: preserves authored fields and adds explicit runtime contract metadata."""
     adapted = normalize_legacy_multiselect_truth(node)
+    adapted = normalize_legacy_ordering_truth(adapted)
     ctype = _task_type(adapted)
     adapted["task_type"] = ctype
     adapted["answer_contract_version"] = ANSWER_CONTRACT_VERSION
@@ -129,6 +154,10 @@ def adapt_node_for_runtime(node: Mapping[str, Any], *, lane: str = "unknown") ->
             "explicit_semicolon_citation_selection_v1"
             if isinstance(node.get("accepted_answer"), str)
             and _task_type(node) == "MULTI_SELECT"
+            else "explicit_arrow_ordering_v1"
+            if isinstance(node.get("accepted_answer"), str)
+            and _task_type(node) == "ORDERING"
+            and isinstance(adapted.get("accepted_answer"), list)
             else None
         ),
     }

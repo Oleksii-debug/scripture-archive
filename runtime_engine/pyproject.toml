@@ -11,3 +11,6 @@ dependencies = []
 
 [tool.setuptools]
 packages = ["scripture_archive_runtime"]
+
+[tool.setuptools.package-data]
+scripture_archive_runtime = ["data/*.json"]

@@ -37,11 +37,13 @@ def _require_text(record: Mapping[str, Any], key: str, *, evidence_id: str = "re
     return value
 
 
-def _require_bool(record: Mapping[str, Any], key: str, *, evidence_id: str = "registry") -> bool:
+def _require_true(record: Mapping[str, Any], key: str, *, evidence_id: str) -> bool:
+    """Require an explicit JSON boolean true without coercing provenance truth."""
+
     value = record.get(key)
-    if not isinstance(value, bool):
-        raise ValueError(f"{evidence_id}.{key} must be a boolean")
-    return value
+    if value is not True:
+        raise ValueError(f"{evidence_id}.{key} must be literal true")
+    return True
 
 
 def _load_json_object(path: Path) -> Mapping[str, Any]:
@@ -108,14 +110,15 @@ def load_r05_evidence_registry(repo_root: Path) -> EvidenceRegistryBundle:
             if tx_flag not in {"none", "TX1"}:
                 raise ValueError(f"{evidence_id}.textual_variant_flag must be none or TX1")
 
-            # Required source/provenance fields remain in their canonical JSON types.
-            # Free text is validated as text and deliberately not interpreted as extra
-            # witness/passage/relation structure; the accessibility marker is an explicit
-            # boolean in the canonical R05 registry and is only type-checked here.
+            # These fields are required provenance truth, but remain verbatim. Parsing
+            # them into witness/passage/relation objects would fabricate structure that the
+            # registry does not explicitly encode. ``nonvisual_access`` is the registry's
+            # explicit boolean accessibility gate, not free text, and must never be coerced
+            # into invented descriptive prose.
             _require_text(raw_record, "source_scope", evidence_id=evidence_id)
             _require_text(raw_record, "required_evidence", evidence_id=evidence_id)
             _require_text(raw_record, "provenance_status", evidence_id=evidence_id)
-            _require_bool(raw_record, "nonvisual_access", evidence_id=evidence_id)
+            _require_true(raw_record, "nonvisual_access", evidence_id=evidence_id)
 
             runtime.add_evidence(
                 EvidenceRecord(

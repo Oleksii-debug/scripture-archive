@@ -3,6 +3,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from runtime_engine.scripture_archive_runtime.application_update import (
     ApplicationUpdateError,
@@ -10,6 +11,7 @@ from runtime_engine.scripture_archive_runtime.application_update import (
 )
 from runtime_engine.scripture_archive_runtime.application_update_staging import (
     STAGING_JOURNAL_SCHEMA,
+    _copy_exact_bytes,
     stage_local_update,
 )
 from scripture_archive_platform.desktop_host.update_application import (
@@ -157,6 +159,13 @@ class PackagedApplicationUpdateStagingTests(unittest.TestCase):
                 same_publisher_authenticode_verified=False,
             )
         self.assertFalse(self.staging.exists())
+
+    def test_copy_does_not_create_destination_if_source_open_fails_after_lstat(self):
+        destination = self.root / "copy-never-created.tmp"
+        with patch.object(Path, "open", side_effect=OSError("source disappeared")):
+            with self.assertRaises(ApplicationUpdateError):
+                _copy_exact_bytes(self.artifact, destination)
+        self.assertFalse(destination.exists())
 
 
 if __name__ == "__main__":

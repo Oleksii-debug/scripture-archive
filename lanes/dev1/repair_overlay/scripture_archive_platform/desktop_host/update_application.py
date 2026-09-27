@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import stat
 import sys
 from pathlib import Path
@@ -258,10 +259,35 @@ class NativeApplicationUpdateLayer:
             raise ValueError("update manifest must be a regular non-symlink file")
         if before.st_size <= 0 or before.st_size > MAX_UPDATE_MANIFEST_BYTES:
             raise ValueError("update manifest is empty or exceeds the size limit")
-        payload = path.read_bytes()
-        after = path.lstat()
         before_identity = (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
+
+        with path.open("rb") as handle:
+            opened = os.fstat(handle.fileno())
+            opened_identity = (
+                opened.st_dev,
+                opened.st_ino,
+                opened.st_size,
+                opened.st_mtime_ns,
+            )
+            if opened_identity != before_identity or not stat.S_ISREG(opened.st_mode):
+                raise ValueError("update manifest changed before being read")
+            payload = handle.read(MAX_UPDATE_MANIFEST_BYTES + 1)
+            opened_after = os.fstat(handle.fileno())
+            opened_after_identity = (
+                opened_after.st_dev,
+                opened_after.st_ino,
+                opened_after.st_size,
+                opened_after.st_mtime_ns,
+            )
+            if opened_after_identity != opened_identity:
+                raise ValueError("update manifest changed while being read")
+
+        after = path.lstat()
         after_identity = (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
-        if before_identity != after_identity or len(payload) != before.st_size:
+        if (
+            after_identity != before_identity
+            or len(payload) != before.st_size
+            or len(payload) > MAX_UPDATE_MANIFEST_BYTES
+        ):
             raise ValueError("update manifest changed while being read")
         return payload

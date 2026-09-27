@@ -8,7 +8,8 @@ from typing import Any
 
 AUTHORITY_FILE = "engwebu_authority.json"
 VPL_FILE = "engwebu_vpl.txt"
-EXPECTED_VPL_SHA256 = "71c2ea1ecba86b62871b0e818c4302ea0a559a5cb9643ff05197a6243836fc2f"
+EXPECTED_VPL_SHA256 = "8cac735abda379045fa2c5f43217410ad47a45ac592f3801116ab0da41a810d8"
+PREVIOUS_VPL_SHA256 = "71c2ea1ecba86b62871b0e818c4302ea0a559a5cb9643ff05197a6243836fc2f"
 CATALOG_SCHEMA = "scripture.library.text-catalog.v1"
 CHAPTER_SCHEMA = "scripture.library.chapter.v1"
 SEARCH_SCHEMA = "scripture.library.text-search.v1"
@@ -43,26 +44,36 @@ class BundledScriptureText:
             raise ValueError("WEBU authority is not the pinned offline corpus")
         if data.get("source_snapshot_status") != "AUDITED_PINNED_SNAPSHOT":
             raise ValueError("WEBU authority must identify the bundled source as an audited pinned snapshot")
+
         upstream = data.get("upstream_monitoring")
-        if not isinstance(upstream, dict) or upstream.get("status") != "SOURCE_REAUDIT_REQUIRED":
-            raise ValueError("WEBU authority must expose unresolved upstream source drift")
-        changed = upstream.get("changed_references")
+        if not isinstance(upstream, dict) or upstream.get("status") != "MATCH_PINNED_AUTHORITY":
+            raise ValueError("WEBU authority must bind the last verified upstream source to the bundled snapshot")
         if (
-            not isinstance(changed, list)
-            or any(not isinstance(ref, str) or not ref for ref in changed)
-            or len(set(changed)) != len(changed)
-            or upstream.get("changed_reference_count") != len(changed)
+            upstream.get("observed_vpl_sha256") != EXPECTED_VPL_SHA256
+            or upstream.get("observed_archive_sha256") != data.get("archive_sha256")
+            or upstream.get("changed_reference_count") != 0
             or upstream.get("added_reference_count") != 0
             or upstream.get("removed_reference_count") != 0
+            or upstream.get("changed_references") != []
         ):
-            raise ValueError("invalid WEBU upstream drift inventory")
-        observed_vpl = upstream.get("observed_vpl_sha256")
+            raise ValueError("invalid WEBU upstream source-identity state")
+
+        reaudit = data.get("source_reaudit")
+        if not isinstance(reaudit, dict) or reaudit.get("status") != "SOURCE_IDENTITY_RECONCILED":
+            raise ValueError("WEBU source re-audit evidence is missing")
+        if reaudit.get("independent_audit_claimed") is not False:
+            raise ValueError("WEBU source identity reconciliation cannot claim independent audit")
+        changed = reaudit.get("changed_references")
         if (
-            not isinstance(observed_vpl, str)
-            or len(observed_vpl) != 64
-            or observed_vpl == EXPECTED_VPL_SHA256
+            reaudit.get("previous_vpl_sha256") != PREVIOUS_VPL_SHA256
+            or reaudit.get("changed_reference_count") != 10
+            or reaudit.get("added_reference_count") != 0
+            or reaudit.get("removed_reference_count") != 0
+            or not isinstance(changed, list)
+            or len(changed) != 10
+            or len(set(changed)) != 10
         ):
-            raise ValueError("invalid WEBU observed upstream VPL identity")
+            raise ValueError("invalid WEBU source re-audit boundary")
         return data
 
     def _verify_vpl(self) -> bool:
@@ -140,6 +151,7 @@ class BundledScriptureText:
                 "runtime_network_required": False,
                 "source_snapshot_status": self._authority["source_snapshot_status"],
                 "upstream_monitoring": dict(self._authority["upstream_monitoring"]),
+                "source_reaudit": dict(self._authority["source_reaudit"]),
             },
         }
 

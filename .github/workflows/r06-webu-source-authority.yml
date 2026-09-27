@@ -6,6 +6,8 @@ on:
       - '.github/workflows/r06-webu-source-authority.yml'
       - 'lanes/dev1/repair_overlay/scripture_archive_platform/content/data/engwebu_authority.json'
       - 'lanes/dev1/repair_overlay/scripture_archive_platform/content/data/engwebu_vpl.txt'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/content/scripture_text.py'
+      - 'lanes/dev1/repair_overlay/tests/test_scripture_text_provider.py'
   workflow_dispatch:
 
 permissions:
@@ -14,11 +16,12 @@ permissions:
 jobs:
   source-authority:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
       WEBU_URL: https://ebible.org/Scriptures/engwebu_vpl.zip
-      HISTORICAL_CAPTURE_ARCHIVE_SHA256: 6442f15ee3b4360786c9cd0996ea3af8f3124744a61b7a9bd69e77ac5deab397
-      EXPECTED_VPL_SHA256: 71c2ea1ecba86b62871b0e818c4302ea0a559a5cb9643ff05197a6243836fc2f
+      PINNED_ARCHIVE_SHA256: 1007fb45782a4abd9444d4225fd768fb00a150466b9fb9fcf6f6ad175b73feb6
+      PINNED_VPL_SHA256: 8cac735abda379045fa2c5f43217410ad47a45ac592f3801116ab0da41a810d8
       DEST: lanes/dev1/repair_overlay/scripture_archive_platform/content/data
     steps:
       - uses: actions/checkout@v4
@@ -40,16 +43,9 @@ jobs:
             --max-filesize 20000000 \
             --dump-header .webu-source/http-headers.txt \
             --output .webu-source/engwebu_vpl.zip "$WEBU_URL"
-          observed="$(sha256sum .webu-source/engwebu_vpl.zip | cut -d' ' -f1)"
-          printf '%s\n' "$observed" > .webu-source/observed-archive-sha256.txt
-          if [ "$observed" = "$HISTORICAL_CAPTURE_ARCHIVE_SHA256" ]; then
-            echo "WEBU archive container matches historical audited capture: $observed"
-          else
-            echo "WEBU archive container drift observed: historical=$HISTORICAL_CAPTURE_ARCHIVE_SHA256 current=$observed"
-            echo "The job will continue only to verify the pinned Scripture payload byte-for-byte; container drift is not treated as payload equivalence."
-          fi
+          sha256sum .webu-source/engwebu_vpl.zip | cut -d' ' -f1 > .webu-source/observed-archive-sha256.txt
 
-      - name: Audit safe archive and capture reference-level upstream diff
+      - name: Verify pinned source and capture any future upstream drift
         id: source_audit
         shell: python
         run: |
@@ -64,10 +60,7 @@ jobs:
           raw = archive.read_bytes()
           if len(raw) > 20_000_000:
               raise SystemExit('WEBU archive exceeds 20 MB safety bound')
-
           observed_archive_sha = hashlib.sha256(raw).hexdigest()
-          historical_archive_sha = os.environ['HISTORICAL_CAPTURE_ARCHIVE_SHA256']
-          expected_vpl_sha = os.environ['EXPECTED_VPL_SHA256']
 
           with zipfile.ZipFile(archive) as zf:
               bad = zf.testzip()
@@ -87,18 +80,18 @@ jobs:
                       raise SystemExit('WEBU uncompressed size exceeds 50 MB safety bound')
                   entries.append({'path': name, 'size': info.file_size, 'crc32': f'{info.CRC:08x}'})
               try:
-                  vpl = zf.read('engwebu_vpl.txt')
+                  live_vpl = zf.read('engwebu_vpl.txt')
               except KeyError as exc:
                   raise SystemExit('official WEBU archive is missing engwebu_vpl.txt') from exc
 
-          def inspect_vpl(payload: bytes, label: str) -> dict:
+          def inspect(payload: bytes, label: str):
               try:
                   text = payload.decode('utf-8-sig')
               except UnicodeDecodeError as exc:
                   raise SystemExit(f'{label} VPL is not valid UTF-8: {exc}') from exc
               lines = text.splitlines()
               by_ref = {}
-              book_codes = []
+              books = []
               for lineno, line in enumerate(lines, 1):
                   parts = line.split(' ', 2)
                   if len(parts) < 2 or ':' not in parts[1]:
@@ -107,52 +100,35 @@ jobs:
                   if ref in by_ref:
                       raise SystemExit(f'{label} duplicate VPL reference {ref}')
                   by_ref[ref] = line
-                  if parts[0] not in book_codes:
-                      book_codes.append(parts[0])
-              return {
-                  'lines': lines,
-                  'by_ref': by_ref,
-                  'book_codes': book_codes,
-                  'empty_text_rows': sum(1 for line in lines if line.endswith(' ')),
-                  'first_reference': next(iter(by_ref), None),
-                  'last_reference': next(reversed(by_ref), None) if by_ref else None,
-              }
+                  if parts[0] not in books:
+                      books.append(parts[0])
+              return lines, by_ref, books
 
           dest = pathlib.Path(os.environ['DEST'])
-          checked_vpl = dest / 'engwebu_vpl.txt'
-          if not checked_vpl.is_file():
-              raise SystemExit('checked-in pinned WEBU VPL is missing')
-          checked_bytes = checked_vpl.read_bytes()
-          checked_sha = hashlib.sha256(checked_bytes).hexdigest()
-          if checked_sha != expected_vpl_sha:
-              raise SystemExit(
-                  f'checked-in WEBU VPL authority drift: expected {expected_vpl_sha}, observed {checked_sha}'
-              )
+          pinned_path = dest / 'engwebu_vpl.txt'
+          authority_path = dest / 'engwebu_authority.json'
+          pinned = pinned_path.read_bytes()
+          pinned_sha = hashlib.sha256(pinned).hexdigest()
+          live_sha = hashlib.sha256(live_vpl).hexdigest()
+          if pinned_sha != os.environ['PINNED_VPL_SHA256']:
+              raise SystemExit(f'checked-in WEBU VPL authority drift: {pinned_sha}')
 
-          current = inspect_vpl(vpl, 'current official')
-          pinned = inspect_vpl(checked_bytes, 'checked-in pinned')
-          vpl_sha = hashlib.sha256(vpl).hexdigest()
-
-          current_refs = set(current['by_ref'])
-          pinned_refs = set(pinned['by_ref'])
-          added_refs = sorted(current_refs - pinned_refs)
-          removed_refs = sorted(pinned_refs - current_refs)
-          changed_refs = sorted(
-              ref for ref in current_refs & pinned_refs
-              if current['by_ref'][ref] != pinned['by_ref'][ref]
-          )
+          pinned_lines, pinned_refs, pinned_books = inspect(pinned, 'checked-in pinned')
+          live_lines, live_refs, live_books = inspect(live_vpl, 'current official')
+          added = sorted(set(live_refs) - set(pinned_refs))
+          removed = sorted(set(pinned_refs) - set(live_refs))
+          changed = sorted(ref for ref in set(live_refs) & set(pinned_refs) if live_refs[ref] != pinned_refs[ref])
           changed_detail = [
               {
                   'reference': ref,
-                  'pinned_line': pinned['by_ref'][ref],
-                  'current_line': current['by_ref'][ref],
-                  'pinned_line_sha256': hashlib.sha256(pinned['by_ref'][ref].encode('utf-8')).hexdigest(),
-                  'current_line_sha256': hashlib.sha256(current['by_ref'][ref].encode('utf-8')).hexdigest(),
+                  'pinned_line': pinned_refs[ref],
+                  'current_line': live_refs[ref],
+                  'pinned_line_sha256': hashlib.sha256(pinned_refs[ref].encode('utf-8')).hexdigest(),
+                  'current_line_sha256': hashlib.sha256(live_refs[ref].encode('utf-8')).hexdigest(),
               }
-              for ref in changed_refs
+              for ref in changed
           ]
 
-          authority_path = dest / 'engwebu_authority.json'
           authority = json.loads(authority_path.read_text(encoding='utf-8'))
           required = {
               'schema': 'scripture.webu.bundled-authority.v1',
@@ -162,96 +138,82 @@ jobs:
               'source_site': 'https://ebible.org/engwebu/',
               'license': 'Public Domain',
               'source_tier': 'TX1',
-              'archive_sha256': historical_archive_sha,
-              'vpl_sha256': expected_vpl_sha,
+              'archive_sha256': os.environ['PINNED_ARCHIVE_SHA256'],
+              'vpl_sha256': os.environ['PINNED_VPL_SHA256'],
               'vpl_rows': 38058,
               'empty_text_rows': 29,
               'runtime_network_required': False,
+              'source_snapshot_status': 'AUDITED_PINNED_SNAPSHOT',
           }
           for key, expected in required.items():
               if authority.get(key) != expected:
                   raise SystemExit(f'checked-in authority mismatch for {key}: {authority.get(key)!r} != {expected!r}')
-          if authority.get('book_codes') != pinned['book_codes']:
-              raise SystemExit('checked-in authority book-code order differs from pinned bundled payload')
-          if authority.get('source_snapshot_status') != 'AUDITED_PINNED_SNAPSHOT':
-              raise SystemExit('checked-in authority must identify an audited pinned source snapshot')
-          monitoring = authority.get('upstream_monitoring')
-          if not isinstance(monitoring, dict) or monitoring.get('status') != 'SOURCE_REAUDIT_REQUIRED':
-              raise SystemExit('checked-in authority must expose unresolved upstream source drift')
-          expected_changed_refs = monitoring.get('changed_references')
-          if (
-              monitoring.get('observed_archive_sha256') != observed_archive_sha
-              or monitoring.get('observed_vpl_sha256') != vpl_sha
-              or monitoring.get('changed_reference_count') != len(changed_refs)
-              or monitoring.get('added_reference_count') != len(added_refs)
-              or monitoring.get('removed_reference_count') != len(removed_refs)
-              or expected_changed_refs != changed_refs
-          ):
-              raise SystemExit(
-                  'official WEBU source moved beyond the checked-in upstream drift inventory; '
-                  'refresh source re-audit evidence before changing bundled Scripture'
-              )
+          if authority.get('archive_size') != 5_347_563 or authority.get('entries') != entries:
+              raise SystemExit('checked-in WEBU archive inventory differs from pinned official archive')
+          if authority.get('book_codes') != pinned_books:
+              raise SystemExit('checked-in WEBU book order differs from bundled payload')
+          if len(pinned_lines) != 38058 or sum(line.endswith(' ') for line in pinned_lines) != 29:
+              raise SystemExit('checked-in WEBU structural counts changed')
 
-          payload_matches = vpl_sha == expected_vpl_sha and checked_bytes == vpl
+          monitoring = authority.get('upstream_monitoring')
+          if not isinstance(monitoring, dict) or monitoring.get('status') != 'MATCH_PINNED_AUTHORITY':
+              raise SystemExit('WEBU upstream monitoring must be MATCH_PINNED_AUTHORITY')
+          if (
+              monitoring.get('observed_archive_sha256') != os.environ['PINNED_ARCHIVE_SHA256']
+              or monitoring.get('observed_vpl_sha256') != os.environ['PINNED_VPL_SHA256']
+              or monitoring.get('changed_reference_count') != 0
+              or monitoring.get('added_reference_count') != 0
+              or monitoring.get('removed_reference_count') != 0
+              or monitoring.get('changed_references') != []
+          ):
+              raise SystemExit('WEBU upstream monitoring does not bind the reconciled snapshot')
+
+          reaudit = authority.get('source_reaudit')
+          if not isinstance(reaudit, dict) or reaudit.get('status') != 'SOURCE_IDENTITY_RECONCILED':
+              raise SystemExit('WEBU source reconciliation evidence missing')
+          if reaudit.get('independent_audit_claimed') is not False:
+              raise SystemExit('WEBU source reconciliation must not claim independent audit')
+          if reaudit.get('changed_reference_count') != 10 or reaudit.get('added_reference_count') != 0 or reaudit.get('removed_reference_count') != 0:
+              raise SystemExit('WEBU source reconciliation scope changed')
+          line_hashes = reaudit.get('current_line_sha256')
+          refs = reaudit.get('changed_references')
+          if not isinstance(line_hashes, dict) or not isinstance(refs, list) or set(line_hashes) != set(refs) or len(refs) != 10:
+              raise SystemExit('WEBU source reconciliation line-hash evidence is malformed')
+          for ref in refs:
+              line = pinned_refs.get(ref)
+              if line is None or hashlib.sha256(line.encode('utf-8')).hexdigest() != line_hashes[ref]:
+                  raise SystemExit(f'WEBU reconciled line identity mismatch for {ref}')
+
+          live_matches = (
+              observed_archive_sha == os.environ['PINNED_ARCHIVE_SHA256']
+              and live_sha == os.environ['PINNED_VPL_SHA256']
+              and live_vpl == pinned
+              and live_books == pinned_books
+              and not added and not removed and not changed
+          )
           report = {
-              'schema': 'scripture.webu.current-source-reaudit.v2',
+              'schema': 'scripture.webu.current-source-verification.v3',
               'translation_id': 'engwebu',
               'source_url': os.environ['WEBU_URL'],
-              'historical_capture_archive_sha256': historical_archive_sha,
+              'pinned_archive_sha256': os.environ['PINNED_ARCHIVE_SHA256'],
               'observed_archive_sha256': observed_archive_sha,
-              'archive_container_matches_historical_capture': observed_archive_sha == historical_archive_sha,
-              'observed_archive_size': len(raw),
-              'pinned_vpl_sha256': expected_vpl_sha,
-              'observed_vpl_sha256': vpl_sha,
-              'scripture_payload_matches_pinned_source': payload_matches,
-              'pinned': {
-                  'bytes': len(checked_bytes),
-                  'vpl_rows': len(pinned['lines']),
-                  'empty_text_rows': pinned['empty_text_rows'],
-                  'book_codes': pinned['book_codes'],
-                  'first_reference': pinned['first_reference'],
-                  'last_reference': pinned['last_reference'],
-              },
-              'current': {
-                  'bytes': len(vpl),
-                  'vpl_rows': len(current['lines']),
-                  'empty_text_rows': current['empty_text_rows'],
-                  'book_codes': current['book_codes'],
-                  'first_reference': current['first_reference'],
-                  'last_reference': current['last_reference'],
-              },
+              'pinned_vpl_sha256': os.environ['PINNED_VPL_SHA256'],
+              'observed_vpl_sha256': live_sha,
+              'pinned_rows': len(pinned_lines),
+              'current_rows': len(live_lines),
               'reference_diff': {
-                  'added_count': len(added_refs),
-                  'removed_count': len(removed_refs),
-                  'changed_count': len(changed_refs),
-                  'added_refs': added_refs,
-                  'removed_refs': removed_refs,
-                  'changed': changed_detail,
+                  'added_count': len(added), 'removed_count': len(removed), 'changed_count': len(changed),
+                  'added_refs': added, 'removed_refs': removed, 'changed': changed_detail,
               },
               'entries': entries,
-              'decision': 'MATCH_PINNED_AUTHORITY' if payload_matches else 'SOURCE_REAUDIT_REQUIRED',
+              'decision': 'MATCH_PINNED_AUTHORITY' if live_matches else 'SOURCE_REAUDIT_REQUIRED',
           }
           (root / 'current-source-verification.json').write_text(
-              json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + '\n',
-              encoding='utf-8',
+              json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + '\n', encoding='utf-8'
           )
-          output = pathlib.Path(os.environ['GITHUB_OUTPUT'])
-          with output.open('a', encoding='utf-8') as fh:
-              fh.write(f"payload_changed={'false' if payload_matches else 'true'}\n")
-              fh.write(f"observed_vpl_sha256={vpl_sha}\n")
-              fh.write(f"changed_refs={len(changed_refs)}\n")
-              fh.write(f"added_refs={len(added_refs)}\n")
-              fh.write(f"removed_refs={len(removed_refs)}\n")
-          print(json.dumps({
-              'observed_archive_sha256': observed_archive_sha,
-              'observed_vpl_sha256': vpl_sha,
-              'payload_matches_pinned_source': payload_matches,
-              'pinned_rows': len(pinned['lines']),
-              'current_rows': len(current['lines']),
-              'added_refs': len(added_refs),
-              'removed_refs': len(removed_refs),
-              'changed_refs': len(changed_refs),
-          }, sort_keys=True))
+          with pathlib.Path(os.environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as fh:
+              fh.write(f"source_matches={'true' if live_matches else 'false'}\n")
+          print(json.dumps({'decision': report['decision'], 'archive': observed_archive_sha, 'vpl': live_sha}, sort_keys=True))
 
       - name: Upload current official-source verification evidence
         if: always()
@@ -265,19 +227,13 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Enforce source identity after evidence capture
+      - name: Enforce current official source identity
         if: always()
         shell: bash
         run: |
           set -euo pipefail
-          changed="${{ steps.source_audit.outputs.payload_changed }}"
-          if [ "$changed" != "false" ]; then
-            echo "OFFICIAL WEBU SCRIPTURE PAYLOAD CHANGED; source re-audit/reconciliation required. Structured reference diff was uploaded."
-            echo "observed_vpl_sha256=${{ steps.source_audit.outputs.observed_vpl_sha256 }}"
-            echo "changed_refs=${{ steps.source_audit.outputs.changed_refs }} added_refs=${{ steps.source_audit.outputs.added_refs }} removed_refs=${{ steps.source_audit.outputs.removed_refs }}"
-            exit 1
-          fi
-          echo "WEBU_SOURCE_IDENTITY_PASS"
+          test "${{ steps.source_audit.outputs.source_matches }}" = 'true'
+          echo 'WEBU_SOURCE_IDENTITY_PASS'
 
       - name: Prove qualification is read-only and checkout remains exact
         shell: bash
@@ -285,4 +241,4 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
           git diff --check
           git diff --exit-code
-          test "$(sha256sum "$DEST/engwebu_vpl.txt" | cut -d' ' -f1)" = "$EXPECTED_VPL_SHA256"
+          test "$(sha256sum "$DEST/engwebu_vpl.txt" | cut -d' ' -f1)" = "$PINNED_VPL_SHA256"

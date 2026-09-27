@@ -1,5 +1,4 @@
 import hashlib
-import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -32,17 +31,33 @@ class BundledScriptureTextTests(unittest.TestCase):
         self.assertFalse(catalog['runtime_network_required'])
         self.assertEqual('AUDITED_PINNED_SNAPSHOT', catalog['source_snapshot_status'])
         upstream = catalog['upstream_monitoring']
-        self.assertEqual('SOURCE_REAUDIT_REQUIRED', upstream['status'])
-        self.assertEqual(10, upstream['changed_reference_count'])
+        self.assertEqual('MATCH_PINNED_AUTHORITY', upstream['status'])
+        self.assertEqual(EXPECTED_VPL_SHA256, upstream['observed_vpl_sha256'])
+        self.assertEqual(0, upstream['changed_reference_count'])
         self.assertEqual(0, upstream['added_reference_count'])
         self.assertEqual(0, upstream['removed_reference_count'])
-        self.assertEqual(10, len(upstream['changed_references']))
-        self.assertNotEqual(EXPECTED_VPL_SHA256, upstream['observed_vpl_sha256'])
+        self.assertEqual([], upstream['changed_references'])
+        reaudit = catalog['source_reaudit']
+        self.assertEqual('SOURCE_IDENTITY_RECONCILED', reaudit['status'])
+        self.assertFalse(reaudit['independent_audit_claimed'])
+        self.assertEqual(10, reaudit['changed_reference_count'])
+        self.assertEqual(0, reaudit['added_reference_count'])
+        self.assertEqual(0, reaudit['removed_reference_count'])
+        self.assertEqual(10, len(reaudit['changed_references']))
 
-    def test_chapter_preserves_exact_text_and_source_empty_rows(self):
+    def test_chapter_preserves_current_official_text_and_source_empty_rows(self):
         provider = BundledScriptureText()
         gen = provider.chapter('GEN', 1)
         self.assertEqual('In the beginning, God created the heavens and the earth.', gen['verses'][0]['text'])
+        dan4 = provider.chapter('DAN', 4)
+        dan426 = next(row for row in dan4['verses'] if row['verse'] == 26)
+        self.assertEqual(
+            'Whereas it was commanded to leave the stump of the roots of the tree, your kingdom will be restored to you after you learn that Heaven rules.',
+            dan426['text'],
+        )
+        dan9 = provider.chapter('DAN', 9)
+        dan911 = next(row for row in dan9['verses'] if row['verse'] == 11)
+        self.assertIn('turning aside, and not obeying your voice.', dan911['text'])
         acts = provider.chapter('ACT', 8)
         v37 = next(row for row in acts['verses'] if row['verse'] == 37)
         self.assertEqual('', v37['text'])
@@ -55,41 +70,53 @@ class BundledScriptureTextTests(unittest.TestCase):
         self.assertLessEqual(len(result['results']), 3)
         self.assertTrue(all(row['text'] for row in result['results']))
         for bad in ('', ' ' * 4, 'x' * 129):
-            with self.assertRaises(ValueError): provider.search(bad)
+            with self.assertRaises(ValueError):
+                provider.search(bad)
         for bad in (0, 101, True, '2'):
-            with self.assertRaises(ValueError): provider.search('God', limit=bad)
+            with self.assertRaises(ValueError):
+                provider.search('God', limit=bad)
 
     def test_transport_is_allowlisted_and_fail_closed(self):
         for command in ('library.text_catalog', 'library.read_chapter', 'library.text_search'):
             self.assertIn(command, ALLOWLISTED_COMMANDS)
         with tempfile.TemporaryDirectory() as td:
-            root = Path(td); repo = root / 'repo'; repo.mkdir()
+            root = Path(td)
+            repo = root / 'repo'
+            repo.mkdir()
             app = PlatformApplication(
                 repo,
                 store=JsonFileStore(root / 'store'),
                 loader=_BootstrapOnlyLoader(),
             )
+
             def call(command, payload=None):
-                return app.handle({'api_version':'scripture.transport.v1','request_id':'webu-test','command':command,'payload':payload or {}})
+                return app.handle({
+                    'api_version': 'scripture.transport.v1',
+                    'request_id': 'webu-test',
+                    'command': command,
+                    'payload': payload or {},
+                })
+
             catalog = call('library.text_catalog')
             self.assertTrue(catalog['ok'])
             self.assertEqual('engwebu', catalog['data']['translation_id'])
+            self.assertEqual('MATCH_PINNED_AUTHORITY', catalog['data']['upstream_monitoring']['status'])
             bootstrap = call('system.bootstrap')
             self.assertTrue(bootstrap['ok'])
             self.assertTrue(bootstrap['data']['capabilities']['bundled_full_bible_text'])
-            chapter = call('library.read_chapter', {'book':'GEN','chapter':1})
+            chapter = call('library.read_chapter', {'book': 'GEN', 'chapter': 1})
             self.assertTrue(chapter['ok'])
             self.assertEqual('GEN 1:1', chapter['data']['verses'][0]['reference'])
-            self.assertFalse(call('library.read_chapter', {'book':'../../etc/passwd','chapter':1})['ok'])
-            self.assertFalse(call('library.text_search', {'query':'God','limit':1000})['ok'])
+            self.assertFalse(call('library.read_chapter', {'book': '../../etc/passwd', 'chapter': 1})['ok'])
+            self.assertFalse(call('library.text_search', {'query': 'God', 'limit': 1000})['ok'])
 
     def test_packaging_and_frontend_bindings_are_explicit(self):
         overlay = Path(__file__).resolve().parents[1]
         build = (overlay / 'packaging' / 'build_windows.ps1').read_text(encoding='utf-8')
         self.assertIn('scripture_archive_platform\\content\\data', build)
         frontend = (overlay / 'frontend' / 'scripture-reader-ui.js').read_text(encoding='utf-8')
-        self.assertIn("library.read_chapter", frontend)
-        self.assertIn("library.text_search", frontend)
+        self.assertIn('library.read_chapter', frontend)
+        self.assertIn('library.text_search', frontend)
         self.assertIn('textContent', frontend)
         self.assertNotIn('innerHTML', frontend)
         self.assertIn("role: 'status'", frontend)

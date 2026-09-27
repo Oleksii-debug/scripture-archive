@@ -31,6 +31,30 @@ def canonical_task_type(value: str) -> str:
     return aliases.get(key, key)
 
 
+_STRUCTURED_FREE_RESPONSE_LONG_MARKERS = (
+    "argument", "synthesis", "comparison", "witness", "court", "explain", "editor",
+)
+
+
+def canonical_node_task_type(node: Mapping[str, Any]) -> str:
+    """Resolve one canonical node to an existing ANSWER_DTO_v1 task type.
+
+    Explicit task_type remains authoritative. Historical structured-free-response
+    nodes predate that field and are disambiguated losslessly by the same authored
+    task_family semantics already used by the packaged presentation mapper.
+    """
+    explicit = node.get("task_type")
+    if explicit:
+        return canonical_task_type(str(explicit))
+    response_mode = str(node.get("response_mode") or "").strip()
+    task_family = str(node.get("task_family") or "").strip()
+    ctype = canonical_task_type(response_mode or task_family or "SHORT_TEXT")
+    if ctype != "STRUCTURED_FREE_RESPONSE":
+        return ctype
+    context = f"{response_mode} {task_family}".casefold()
+    return "LONG_TEXT" if any(marker in context for marker in _STRUCTURED_FREE_RESPONSE_LONG_MARKERS) else "SHORT_TEXT"
+
+
 def _require_str(value: Any, name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValidationError(f"{name} must be a non-empty string")

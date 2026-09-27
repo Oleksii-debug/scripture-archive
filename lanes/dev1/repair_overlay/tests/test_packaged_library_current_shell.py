@@ -37,6 +37,7 @@ class PackagedLibraryCurrentShellTest(unittest.TestCase):
             "./evidence-graph-ui.js",
             "./witness-matrix-ui.js",
             "./constructor-v2-ui.js",
+            "./cross-testament-ui.js",
             "./speech-ui.js",
         }
         imports = set(re.findall(r"void import\('([^']+)'\)", self.transport))
@@ -53,6 +54,10 @@ class PackagedLibraryCurrentShellTest(unittest.TestCase):
         )
         self.assertIn(
             "void import('./witness-matrix-ui.js').then(({installWitnessMatrixSurface})=>installWitnessMatrixSurface());",
+            self.transport,
+        )
+        self.assertIn(
+            "void import('./cross-testament-ui.js').then(({installCrossTestamentSurface})=>installCrossTestamentSurface());",
             self.transport,
         )
         self.assertIn(
@@ -127,6 +132,7 @@ class PackagedLibraryCurrentShellTest(unittest.TestCase):
             ROOT / "evidence-graph-ui.js",
             ROOT / "witness-matrix-ui.js",
             ROOT / "constructor-v2-ui.js",
+            ROOT / "cross-testament-ui.js",
             ROOT / "speech-ui.js",
         ):
             completed = subprocess.run(

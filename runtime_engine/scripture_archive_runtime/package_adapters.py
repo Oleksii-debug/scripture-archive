@@ -5,7 +5,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Mapping, Sequence
 
-from .answer_contracts import ANSWER_CONTRACT_VERSION, canonical_task_type, validate_answer_dto
+from .answer_contracts import ANSWER_CONTRACT_VERSION, canonical_node_task_type, canonical_task_type, validate_answer_dto
 from .security import ValidationError, validate_content_import
 from .provenance import canonical_answer_dto
 
@@ -76,7 +76,7 @@ def _concrete_variants(value: Any) -> list[str]:
 
 
 def _task_type(node: Mapping[str, Any]) -> str:
-    return canonical_task_type(str(node.get("task_type") or node.get("response_mode") or node.get("task_family") or "SHORT_TEXT"))
+    return canonical_node_task_type(node)
 
 
 def normalize_legacy_multiselect_truth(node: Mapping[str, Any]) -> dict[str, Any]:
@@ -105,17 +105,17 @@ def normalize_legacy_multiselect_truth(node: Mapping[str, Any]) -> dict[str, Any
 def normalize_legacy_ordering_truth(node: Mapping[str, Any]) -> dict[str, Any]:
     """Losslessly project explicit historical arrow-delimited ordering truth.
 
-    Canonical LN ordering nodes predate ANSWER_DTO_v1 and serialize an authored
-    sequence in one accepted_answer string using the visible right-arrow as the
-    item boundary.  Only exact response_mode="ordering" uses this compatibility
-    path; other ORDERING-like strings remain fail-closed.
+    Canonical legacy ordering nodes predate ANSWER_DTO_v1 and may serialize an
+    authored sequence in one accepted_answer string using the visible right-arrow
+    as the item boundary. The node-context resolver must independently classify
+    the node as ORDERING; without an explicit arrow serialization this path fails
+    closed.
     """
     adapted = deepcopy(dict(node))
     if _task_type(adapted) != "ORDERING" or not isinstance(adapted.get("accepted_answer"), str):
         return adapted
-    mode = " ".join(str(adapted.get("response_mode") or "").strip().casefold().split())
     raw = str(adapted["accepted_answer"])
-    if mode != "ordering" or "→" not in raw:
+    if "→" not in raw:
         raise ValidationError(
             "Legacy ORDERING string truth is permitted only for explicit arrow-delimited ordering"
         )

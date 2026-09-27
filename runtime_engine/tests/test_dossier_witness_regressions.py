@@ -37,26 +37,32 @@ class DossierWitnessRegressionTests(unittest.TestCase):
         )
 
     def test_malformed_mixed_passage_witness_remains_fail_closed(self):
-        runtime = EvidenceRuntime()
-        runtime.add_evidence(
-            EvidenceRecord(
-                evidence_id="EV-MALFORMED",
-                passage_refs=(
-                    PassageRef("Acts.9.7", "Acts", 9, 7, witness="Acts 9 narrator"),
-                    PassageRef("Acts.22.9", "Acts", 22, 9, witness=" Acts 22 Paul speech"),
-                ),
-                proposition="Malformed witness metadata must not become visible.",
-                confidence=Confidence.T1,
-                witness=None,
-                entity_ids=("EVENT-X",),
-            )
-        )
-        runtime.unlock("EV-MALFORMED")
+        for suffix, malformed in (
+            ("SPACE", " Acts 22 Paul speech"),
+            ("U2028", "Acts 22\u2028Paul speech"),
+        ):
+            with self.subTest(suffix=suffix):
+                runtime = EvidenceRuntime()
+                evidence_id = f"EV-MALFORMED-{suffix}"
+                runtime.add_evidence(
+                    EvidenceRecord(
+                        evidence_id=evidence_id,
+                        passage_refs=(
+                            PassageRef("Acts.9.7", "Acts", 9, 7, witness="Acts 9 narrator"),
+                            PassageRef("Acts.22.9", "Acts", 22, 9, witness=malformed),
+                        ),
+                        proposition="Malformed witness metadata must not become visible.",
+                        confidence=Confidence.T1,
+                        witness=None,
+                        entity_ids=("EVENT-X",),
+                    )
+                )
+                runtime.unlock(evidence_id)
 
-        view = DossierAssembler(runtime).build(
-            DossierSubject("EVENT-X", DossierKind.EVENT, "X")
-        )
-        self.assertNotIn("EV-MALFORMED", {row.row_id for row in view.rows})
+                view = DossierAssembler(runtime).build(
+                    DossierSubject("EVENT-X", DossierKind.EVENT, "X")
+                )
+                self.assertNotIn(evidence_id, {row.row_id for row in view.rows})
 
     def test_declared_claim_and_relation_witness_require_positive_visible_support(self):
         runtime = EvidenceRuntime()

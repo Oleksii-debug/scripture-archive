@@ -238,6 +238,8 @@ class AuthenticodePayloadTests(unittest.TestCase):
                 self.assertFalse(_same_valid_signer_payload(payload))
 
     def test_non_windows_verifier_fails_closed_before_subprocess(self):
+        current = Path("current.exe")
+        candidate = Path("candidate.exe")
         with mock.patch(
             "scripture_archive_platform.desktop_host.authenticode.os.name",
             "posix",
@@ -246,8 +248,8 @@ class AuthenticodePayloadTests(unittest.TestCase):
         ) as run:
             self.assertFalse(
                 verify_same_publisher_authenticode(
-                    Path("current.exe"),
-                    Path("candidate.exe"),
+                    current,
+                    candidate,
                 )
             )
             run.assert_not_called()

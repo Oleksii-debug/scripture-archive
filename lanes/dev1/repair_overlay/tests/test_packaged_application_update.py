@@ -199,6 +199,9 @@ class PackagedApplicationUpdateTests(unittest.TestCase):
         self.assertIn('role="status"', html)
         self.assertIn("application_update.select_verify", script)
         self.assertIn("payload:{}", script)
+        self.assertIn("same_publisher_authenticode_verified", script)
+        self.assertIn("Підтверджено: чинний Authenticode", script)
+        self.assertIn("Автентичність видавця не підтверджена", script)
         self.assertNotIn("innerHTML", script)
         self.assertNotIn("payload:{path", script.replace(" ", ""))
 

@@ -18,6 +18,8 @@ on:
       - 'lanes/dev1/repair_overlay/scripture_archive_platform/content/loader.py'
       - 'lanes/dev1/repair_overlay/scripture_archive_platform/domain/models.py'
       - 'lanes/dev1/repair_overlay/scripture_archive_platform/transport/answer_contracts.py'
+      - 'runtime_engine/scripture_archive_runtime/answer_contracts.py'
+      - 'runtime_engine/scripture_archive_runtime/security.py'
       - 'lanes/dev1/repair_overlay/tests/test_accessibility.py'
       - 'lanes/dev1/repair_overlay/tests/test_accessibility_settings_ui.py'
       - 'lanes/dev1/repair_overlay/tests/test_composite_accessibility.py'

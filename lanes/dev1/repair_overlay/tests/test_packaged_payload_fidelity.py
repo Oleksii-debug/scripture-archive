@@ -118,6 +118,68 @@ class PackagedPayloadFidelityTests(unittest.TestCase):
             "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
         )
 
+    def test_git_blob_match_accepts_only_crlf_checkout_equivalence(self):
+        canonical = b"line one\nline two\n"
+        windows_checkout = b"line one\r\nline two\r\n"
+        expected_blob = MODULE.git_blob_sha(canonical)
+
+        self.assertTrue(MODULE.git_blob_matches_checkout(canonical, expected_blob))
+        self.assertTrue(
+            MODULE.git_blob_matches_checkout(windows_checkout, expected_blob)
+        )
+        self.assertFalse(
+            MODULE.git_blob_matches_checkout(
+                b"line one\r\nline TWO\r\n",
+                expected_blob,
+            )
+        )
+        self.assertFalse(
+            MODULE.git_blob_matches_checkout(canonical + b" ", expected_blob)
+        )
+
+    def test_entry_preserves_exact_staged_bytes_while_accepting_crlf_git_identity(self):
+        canonical = b"const answer = 42;\nconsole.log(answer);\n"
+        windows_checkout = canonical.replace(b"\n", b"\r\n")
+        expected_blob = MODULE.git_blob_sha(canonical)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source = Path(temp_dir) / "app.js"
+            source.write_bytes(windows_checkout)
+            entry = MODULE._entry(
+                source,
+                "r06_platform/frontend/app.js",
+                "git_overlay",
+                repo_path="lanes/dev1/repair_overlay/frontend/app.js",
+                git_blob=expected_blob,
+            )
+
+        self.assertEqual(len(windows_checkout), entry["size_bytes"])
+        self.assertEqual(MODULE.sha256_hex(windows_checkout), entry["sha256"])
+        self.assertEqual(expected_blob, entry["git_blob_sha1"])
+
+    def test_verify_reader_accepts_exact_crlf_staged_payload_with_lf_git_pin(self):
+        canonical = b"const answer = 42;\nconsole.log(answer);\n"
+        staged = canonical.replace(b"\n", b"\r\n")
+        path = "r06_platform/frontend/app.js"
+        manifest = {
+            "schema_version": 1,
+            "git_sha": "1" * 40,
+            "entries": [
+                {
+                    "package_path": path,
+                    "size_bytes": len(staged),
+                    "sha256": MODULE.sha256_hex(staged),
+                    "git_blob_sha1": MODULE.git_blob_sha(canonical),
+                    "provenance": "git_overlay",
+                }
+            ],
+        }
+
+        result = MODULE.verify_reader(FakeArchive({path: staged}), manifest)
+
+        self.assertTrue(result["ok"], result["errors"])
+        self.assertEqual(1, result["files_verified"])
+        self.assertEqual([], result["errors"])
+
     def test_verify_reader_accepts_exact_bytes_and_normalizes_windows_paths(self):
         app = b"console.log('archive');\n"
         campaign = b'{"id":"case-1"}\n'

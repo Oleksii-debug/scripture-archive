@@ -3,8 +3,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from scripture_archive_platform.application.service import PlatformApplication
 from scripture_archive_platform.content.library import CanonicalLibraryIndex
 from scripture_archive_platform.content.loader import CanonicalContentLoader, ContentLoadError
+from scripture_archive_platform.persistence.store import JsonFileStore
 
 
 D4_CAMPAIGN = "OT-R06-D4"
@@ -18,6 +20,15 @@ def repository_root() -> Path:
         if (root / "docs" / "campaigns" / "OT" / "R06_D4_STAGE05_READABLE").is_dir():
             return root
     raise RuntimeError("qualified readable D4 repository root not found")
+
+
+def request(command: str, payload=None) -> dict:
+    return {
+        "api_version": "scripture.transport.v1",
+        "request_id": "d4-readable-library-test",
+        "command": command,
+        "payload": {} if payload is None else payload,
+    }
 
 
 class D4ReadableLibraryConsumptionTests(unittest.TestCase):
@@ -78,6 +89,23 @@ class D4ReadableLibraryConsumptionTests(unittest.TestCase):
         self.assertEqual(1, len(rows))
         self.assertEqual("GRADEABLE_RUNTIME", rows[0]["content_access"])
         self.assertTrue(rows[0]["gradeable_runtime_eligible"])
+
+    def test_packaged_application_exposes_d4_only_through_read_only_library(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app = PlatformApplication(self.repo, store=JsonFileStore(Path(tmp) / "store"))
+            catalog = app.handle(request("library.catalog"))
+            self.assertTrue(catalog["ok"])
+            campaigns = {row["campaign_id"]: row for row in catalog["data"]["campaigns"]}
+            self.assertEqual("READ_ONLY_LIBRARY", campaigns[D4_CAMPAIGN]["content_access"])
+            self.assertFalse(campaigns[D4_CAMPAIGN]["gradeable_runtime_eligible"])
+
+            search = app.handle(request("library.search", {"query": "Genesis 12:1", "campaign_id": D4_CAMPAIGN, "limit": 100}))
+            self.assertTrue(search["ok"])
+            self.assertIn(D4_FIRST_NODE, {row["id"] for row in search["data"]["results"]})
+
+            player = app.handle(request("player.load_node", {"node_id": D4_FIRST_NODE}))
+            self.assertFalse(player["ok"])
+            self.assertEqual("VALIDATION_ERROR", player["error"]["code"])
 
     def test_unqualified_readable_canary_cannot_enter_gradeable_loader(self):
         with tempfile.TemporaryDirectory() as tmp:

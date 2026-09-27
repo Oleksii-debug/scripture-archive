@@ -18,13 +18,17 @@ BUNDLE_REL = Path("docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05")
 DONOR_COMMIT = "e1f2e98a2c074663218de4954efa19458f8714f9"
 EXPECTED_AGGREGATE = "88e197fd1c91b7787040e81bdd066d959d42b8ba64ac01acac667ffd8ad346ba"
 EXPECTED_RECORD_COUNT = 184
+# Derived from the exact raw-pinned donor evidence bytes below. The historical
+# materializer pins those bytes, the 184-record index and aggregate, but did not
+# author a separate per-mission distribution. Keep this redundant invariant bound
+# to the immutable corpus rather than to pre-materialization planning counts.
 EXPECTED_MISSION_COUNTS = {
-    "PA-03": 23,
-    "PA-04": 25,
-    "PA-05": 37,
-    "PA-06": 26,
-    "PA-07": 37,
-    "PA-08": 36,
+    "PA-03": 25,
+    "PA-04": 30,
+    "PA-05": 29,
+    "PA-06": 20,
+    "PA-07": 29,
+    "PA-08": 51,
 }
 EXPECTED_RAW_SHA256 = {
     "evidence/part_001.jsonl": "2348bec5eda878762293b3218dc30a6b458d6f61907fd541631072243329fb7e",

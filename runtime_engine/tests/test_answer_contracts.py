@@ -2,6 +2,7 @@ import unittest
 
 from scripture_archive_runtime.answer_contracts import (
     answer_contract_descriptor,
+    canonical_node_task_type,
     canonical_task_type,
     validate_answer_dto,
 )
@@ -33,6 +34,36 @@ class AnswerContractTests(unittest.TestCase):
 
     def test_descriptor_is_versioned(self):
         self.assertEqual(answer_contract_descriptor("OT_NT_LINK")["schema"], "ANSWER_DTO_v1")
+
+    def test_structured_free_response_reuses_existing_text_contract_by_authored_family(self):
+        short_node = {
+            "node_id": "LN01-N08",
+            "response_mode": "structured free response",
+            "task_family": "evidence extraction",
+            "accepted_answer": "A large upper/upstairs room that was furnished, where the preparation was to be made.",
+        }
+        long_nodes = [
+            {
+                "node_id": "LN01-N13",
+                "response_mode": "structured free response",
+                "task_family": "free-response synthesis",
+                "accepted_answer": "Source-grounded synthesis.",
+            },
+            {
+                "node_id": "LN04-N06",
+                "response_mode": "structured free response",
+                "task_family": "witness-specific extraction",
+                "accepted_answer": "Witness-specific extraction.",
+            },
+        ]
+        self.assertEqual(canonical_node_task_type(short_node), "SHORT_TEXT")
+        self.assertEqual(canonical_answer_dto(short_node)["task_type"], "SHORT_TEXT")
+        self.assertEqual(adapt_node_for_runtime(short_node, lane="LN-01")["task_type"], "SHORT_TEXT")
+        for node in long_nodes:
+            with self.subTest(node_id=node["node_id"]):
+                self.assertEqual(canonical_node_task_type(node), "LONG_TEXT")
+                self.assertEqual(canonical_answer_dto(node)["task_type"], "LONG_TEXT")
+                self.assertEqual(adapt_node_for_runtime(node, lane="legacy")["task_type"], "LONG_TEXT")
 
     def test_short_free_response_uses_existing_short_text_contract_and_grader(self):
         self.assertEqual(canonical_task_type("short free response"), "SHORT_TEXT")

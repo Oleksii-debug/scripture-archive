@@ -99,13 +99,16 @@ jobs:
             $acl.SetAccessRule($rule)
             Set-Acl -LiteralPath $publicRoot -AclObject $acl
 
+            $buildExe = (Resolve-Path r06_platform/dist/ScriptureArchive-R06-DEV01.exe).Path
+            $hash = (Get-FileHash -LiteralPath $buildExe -Algorithm SHA256).Hash.ToLowerInvariant()
             $exe = Join-Path $publicRoot "ScriptureArchive-R06-DEV01.exe"
             $harness = Join-Path $publicRoot "run_no_admin_acceptance.ps1"
             $startupProbe = Join-Path $publicRoot "probe_packaged_startup.ps1"
-            Copy-Item r06_platform/dist/ScriptureArchive-R06-DEV01.exe $exe -Force
+            Copy-Item -LiteralPath $buildExe -Destination $exe -Force
             Copy-Item r06_platform/packaging/run_no_admin_acceptance.ps1 $harness -Force
             Copy-Item r06_platform/packaging/probe_packaged_startup.ps1 $startupProbe -Force
-            $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+            $publicHash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($publicHash -ne $hash) { throw "Public staging copy does not match the exact build artifact SHA-256" }
 
             $arguments = @(
               "-NoLogo",
@@ -137,6 +140,8 @@ jobs:
             if (-not $result.webview2_detected) { throw "WebView2 was not detected in standard-user context" }
             if (-not $result.unicode_spaced_path) { throw "Unicode + spaced per-user launch path was not proven" }
             if (-not $result.process_started) { throw "Packaged process did not start under standard-user token" }
+            if (-not $result.survived_probe_window) { throw "Packaged process did not survive the standard-user probe window" }
+            if ($result.source_sha256 -ne $hash -or $result.copied_sha256 -ne $hash) { throw "No-admin evidence SHA-256 does not match the exact build artifact" }
             Write-Output "NO_ADMIN_ACCEPTANCE_PASS user=$user sha256=$($result.source_sha256)"
           }
           finally {

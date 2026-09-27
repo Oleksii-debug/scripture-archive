@@ -29,6 +29,8 @@ class NoAdminAcceptanceContractTests(unittest.TestCase):
         self.assertIn("Test-IsAdministrator", self.harness)
         self.assertIn("WindowsBuiltInRole]::Administrator", self.harness)
         self.assertIn("if ($result.is_admin)", self.harness)
+        self.assertIn("$result.identity_name = $identity.Name", self.harness)
+        self.assertIn("$result.user_sid = $identity.User.Value", self.harness)
         self.assertIn("Standard-user token required", self.harness)
         self.assertIn("LocalApplicationData", self.harness)
         self.assertIn("$result.local_app_data = $localAppData", self.harness)
@@ -68,6 +70,9 @@ class NoAdminAcceptanceContractTests(unittest.TestCase):
             "NO_ADMIN_ACCEPTANCE_PASS",
             "is_admin",
             "Remove-LocalUser",
+            "WaitForExit(120000)",
+            "Standard-user acceptance process exceeded the 120-second bound",
+            "Standard-user identity evidence is incomplete",
             "S-1-5-32-544",
             "Standard-user account unexpectedly belongs to the Administrators group",
         ):

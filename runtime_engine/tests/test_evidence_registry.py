@@ -18,7 +18,9 @@ class EvidenceRegistryTests(unittest.TestCase):
         bundle = load_r05_evidence_registry(repo_root)
 
         self.assertGreater(bundle.record_count, 0)
-        self.assertEqual(len(bundle.runtime.evidence), bundle.record_count)
+        self.assertEqual(len(bundle.records), bundle.record_count)
+        self.assertTrue(set(bundle.records).issubset(bundle.runtime.evidence))
+        self.assertGreater(len(bundle.runtime.evidence), bundle.record_count)
         self.assertTrue(
             all(record["nonvisual_access"] is True for record in bundle.records.values())
         )
@@ -65,7 +67,7 @@ class EvidenceRegistryTests(unittest.TestCase):
 
                     with self.assertRaisesRegex(
                         ValueError,
-                        r"EVR-TEST-0001\.nonvisual_access must be literal true",
+                        r"EVR-TEST-0001\.nonvisual_access must be true",
                     ):
                         load_r05_evidence_registry(repo_root)
 

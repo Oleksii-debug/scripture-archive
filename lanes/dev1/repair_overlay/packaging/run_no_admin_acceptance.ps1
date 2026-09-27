@@ -41,7 +41,8 @@ function Get-WebView2Candidates {
         }
     }
 
-    foreach ($root in @($env:ProgramFiles, ${env:ProgramFiles(x86)}, $env:LOCALAPPDATA)) {
+    $currentLocalAppData = [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)
+    foreach ($root in @($env:ProgramFiles, ${env:ProgramFiles(x86)}, $currentLocalAppData)) {
         if (-not $root) { continue }
         $path = Join-Path $root "Microsoft\EdgeWebView\Application"
         if (Test-Path -LiteralPath $path -PathType Container) {
@@ -73,7 +74,7 @@ $result = [ordered]@{
     started_utc = (Get-Date).ToUniversalTime().ToString("o")
     user = [Environment]::UserName
     is_admin = $null
-    local_app_data = $env:LOCALAPPDATA
+    local_app_data = $null
     per_user_state_writable = $false
     webview2_detected = $false
     webview2_candidate_count = 0
@@ -109,9 +110,11 @@ try {
         throw "Standard-user token required: current process is elevated/administrator."
     }
 
-    if (-not $env:LOCALAPPDATA) {
-        throw "LOCALAPPDATA is unavailable for the current standard-user profile."
+    $localAppData = [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)
+    if (-not $localAppData) {
+        throw "LocalApplicationData is unavailable for the current standard-user profile."
     }
+    $result.local_app_data = $localAppData
 
     $source = (Resolve-Path -LiteralPath $Executable -ErrorAction Stop).Path
     if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
@@ -131,7 +134,7 @@ try {
         }
     }
 
-    $stateRoot = Join-Path $env:LOCALAPPDATA "ScriptureArchive"
+    $stateRoot = Join-Path $localAppData "ScriptureArchive"
     $diagnosticsRoot = Join-Path $stateRoot "diagnostics"
     New-Item -ItemType Directory -Force -Path $diagnosticsRoot | Out-Null
     $writeProbe = Join-Path $diagnosticsRoot ("no-admin-write-probe-" + $PID + ".tmp")

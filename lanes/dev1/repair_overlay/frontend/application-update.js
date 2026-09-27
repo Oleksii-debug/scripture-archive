@@ -30,6 +30,16 @@ function clearDetails(){
   $('application-update-details')?.replaceChildren();
 }
 
+function authenticityLabel(status){
+  if(status==='same_publisher_authenticode_verified'){
+    return 'Підтверджено: чинний Authenticode; сертифікат видавця збігається з поточною програмою';
+  }
+  if(status==='not_proven_by_local_hash_verification'){
+    return 'Не підтверджено: локальний SHA-256 не доводить автентичність підпису або походження';
+  }
+  return 'Не підтверджено: невідомий статус автентичності';
+}
+
 function renderDetails(data){
   const host=$('application-update-details');
   if(!host)return;
@@ -44,7 +54,7 @@ function renderDetails(data){
     ['Файл пакета',data.artifact_name],
     ['Розмір',Number.isFinite(Number(data.artifact_size))?`${data.artifact_size} байт`:'—'],
     ['SHA-256',data.artifact_sha256],
-    ['Автентичність',data.authenticity==='not_proven_by_local_hash_verification'?'Локальний hash не доводить автентичність підпису/джерела':'—'],
+    ['Автентичність',authenticityLabel(data.authenticity)],
   ];
   for(const [label,value] of rows){
     const dt=document.createElement('dt');dt.textContent=label;
@@ -75,7 +85,10 @@ async function selectAndVerify(){
     const data=await invokeNativeVerification();
     if(data.verified===true&&data.status==='verified'){
       renderDetails(data);
-      announce(`Локальний пакет перевірено: ${data.artifact_name??'пакет'} → ${data.target_version??'цільова версія'}. Нічого не встановлено.`);
+      const publisherStatus=data.authenticity==='same_publisher_authenticode_verified'
+        ?' Видавець підтверджений чинним Authenticode і збігається з поточною програмою.'
+        :' Автентичність видавця не підтверджена.';
+      announce(`Локальний пакет перевірено: ${data.artifact_name??'пакет'} → ${data.target_version??'цільова версія'}.${publisherStatus} Нічого не встановлено.`);
     }else if(data.status==='cancelled'){
       announce(data.message||'Вибір локального оновлення скасовано.');
     }else{

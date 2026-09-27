@@ -3,7 +3,12 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
+from scripture_archive_platform.desktop_host.authenticode import (
+    _same_valid_signer_payload,
+    verify_same_publisher_authenticode,
+)
 from scripture_archive_platform.desktop_host.update_application import (
     NativeApplicationUpdateLayer,
     NativeUpdateFileSelector,
@@ -130,6 +135,60 @@ class PackagedApplicationUpdateTests(unittest.TestCase):
         self.assertEqual([request], self.base.calls)
         self.assertEqual(0, self.selection_calls)
 
+    def _layer_with_authenticity_verifier(self, verifier):
+        def selector():
+            self.selection_calls += 1
+            return str(self.manifest), str(self.artifact)
+
+        return NativeApplicationUpdateLayer(
+            self.base,
+            repository_root(),
+            selector,
+            current_version="0.6.0-r06.3dev.a",
+            authenticity_verifier=verifier,
+        )
+
+    def test_positive_same_publisher_signal_is_reported_only_after_byte_recheck(self):
+        calls = []
+
+        def verifier(candidate):
+            calls.append(candidate)
+            return True
+
+        response = self._layer_with_authenticity_verifier(verifier).handle(update_request())
+        self.assertTrue(response["ok"])
+        self.assertTrue(response["data"]["verified"])
+        self.assertEqual("same_publisher_authenticode_verified", response["data"]["authenticity"])
+        self.assertEqual([self.artifact], calls)
+
+    def test_negative_or_unavailable_authenticity_does_not_fake_publisher_proof(self):
+        for verifier in (
+            lambda candidate: False,
+            lambda candidate: (_ for _ in ()).throw(RuntimeError("unavailable")),
+        ):
+            with self.subTest(verifier=verifier):
+                response = self._layer_with_authenticity_verifier(verifier).handle(update_request())
+                self.assertTrue(response["ok"])
+                self.assertTrue(response["data"]["verified"])
+                self.assertEqual(
+                    "not_proven_by_local_hash_verification",
+                    response["data"]["authenticity"],
+                )
+
+    def test_positive_signature_then_mutated_bytes_fails_entire_request_closed(self):
+        original_size = self.artifact.stat().st_size
+
+        def mutate_after_signature(candidate):
+            candidate.write_bytes(b"x" * original_size)
+            return True
+
+        response = self._layer_with_authenticity_verifier(mutate_after_signature).handle(update_request())
+        self.assertFalse(response["ok"])
+        self.assertEqual("VALIDATION_ERROR", response["error"]["code"])
+        serialized = json.dumps(response, ensure_ascii=False)
+        self.assertNotIn(str(self.root), serialized)
+        self.assertNotIn(str(self.artifact), serialized)
+
     def test_frontend_materializes_semantic_empty_payload_update_surface(self):
         platform = Path(__file__).resolve().parents[1]
         html = (platform / "frontend" / "index.html").read_text(encoding="utf-8")
@@ -140,8 +199,109 @@ class PackagedApplicationUpdateTests(unittest.TestCase):
         self.assertIn('role="status"', html)
         self.assertIn("application_update.select_verify", script)
         self.assertIn("payload:{}", script)
+        self.assertIn("same_publisher_authenticode_verified", script)
+        self.assertIn("Підтверджено: чинний Authenticode", script)
+        self.assertIn("Автентичність видавця не підтверджена", script)
         self.assertNotIn("innerHTML", script)
         self.assertNotIn("payload:{path", script.replace(" ", ""))
+
+
+class AuthenticodePayloadTests(unittest.TestCase):
+    VALID_A = "0123456789ABCDEF0123456789ABCDEF01234567"
+    VALID_B = "89ABCDEF0123456789ABCDEF0123456789ABCDEF"
+
+    @staticmethod
+    def payload(left_status="Valid", right_status="Valid", left_thumb=None, right_thumb=None, extra=False):
+        left = {"status": left_status, "thumbprint": left_thumb or AuthenticodePayloadTests.VALID_A}
+        right = {"status": right_status, "thumbprint": right_thumb or AuthenticodePayloadTests.VALID_A}
+        if extra:
+            left["unexpected"] = True
+        return json.dumps([left, right])
+
+    def test_parser_accepts_only_two_valid_matching_signers(self):
+        self.assertTrue(_same_valid_signer_payload(self.payload()))
+
+    def test_parser_rejects_signer_mismatch_invalid_status_and_extra_fields(self):
+        self.assertFalse(_same_valid_signer_payload(self.payload(right_thumb=self.VALID_B)))
+        self.assertFalse(_same_valid_signer_payload(self.payload(right_status="HashMismatch")))
+        self.assertFalse(_same_valid_signer_payload(self.payload(extra=True)))
+
+    def test_parser_rejects_malformed_shapes_and_thumbprints(self):
+        for payload in (
+            "not-json",
+            "{}",
+            "[]",
+            json.dumps([{"status": "Valid", "thumbprint": self.VALID_A}]),
+            json.dumps([
+                {"status": "Valid", "thumbprint": "xyz"},
+                {"status": "Valid", "thumbprint": "xyz"},
+            ]),
+        ):
+            with self.subTest(payload=payload):
+                self.assertFalse(_same_valid_signer_payload(payload))
+
+    def test_non_windows_verifier_fails_closed_before_subprocess(self):
+        current = Path("current.exe")
+        candidate = Path("candidate.exe")
+        with mock.patch(
+            "scripture_archive_platform.desktop_host.authenticode.os.name",
+            "posix",
+        ), mock.patch(
+            "scripture_archive_platform.desktop_host.authenticode.subprocess.run"
+        ) as run:
+            self.assertFalse(
+                verify_same_publisher_authenticode(
+                    current,
+                    candidate,
+                )
+            )
+            run.assert_not_called()
+
+
+    def test_windows_verifier_uses_native_system_directory_not_hostile_environment(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            current = root / "current.exe"
+            candidate = root / "candidate.exe"
+            current.write_bytes(b"current")
+            candidate.write_bytes(b"candidate")
+            system32 = root / "trusted-system32"
+            powershell_root = system32 / "WindowsPowerShell" / "v1.0"
+            modules = powershell_root / "Modules"
+            modules.mkdir(parents=True)
+            powershell = powershell_root / "powershell.exe"
+            powershell.write_bytes(b"fake-powershell")
+            payload = self.payload()
+
+            completed = mock.Mock(returncode=0, stdout=payload)
+            with mock.patch(
+                "scripture_archive_platform.desktop_host.authenticode.os.name",
+                "nt",
+            ), mock.patch(
+                "scripture_archive_platform.desktop_host.authenticode._windows_system_directory",
+                return_value=system32,
+            ), mock.patch.dict(
+                "scripture_archive_platform.desktop_host.authenticode.os.environ",
+                {
+                    "WINDIR": str(root / "attacker-windir"),
+                    "PSModulePath": str(root / "attacker-modules"),
+                },
+                clear=False,
+            ), mock.patch(
+                "scripture_archive_platform.desktop_host.authenticode.subprocess.run",
+                return_value=completed,
+            ) as run:
+                self.assertTrue(verify_same_publisher_authenticode(current, candidate))
+
+            args, kwargs = run.call_args
+            self.assertEqual(str(powershell), args[0][0])
+            self.assertNotIn("attacker-windir", args[0][0])
+            self.assertEqual(str(modules), kwargs["env"]["PSModulePath"])
+            self.assertNotIn("attacker-modules", kwargs["env"]["PSModulePath"])
+            self.assertIn(
+                "Microsoft.PowerShell.Security\\Get-AuthenticodeSignature",
+                args[0][-1],
+            )
 
 
 class NativeUpdateFileSelectorTests(unittest.TestCase):

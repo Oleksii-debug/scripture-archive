@@ -15,7 +15,49 @@ function Test-IsAdministrator {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+function Resolve-CurrentUserLocalAppData {
+    param([Security.Principal.WindowsIdentity]$Identity)
+
+    if (-not $Identity -or -not $Identity.User) {
+        throw "Current Windows identity does not expose a user SID."
+    }
+    $sid = $Identity.User.Value
+    $profileKey = "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$sid"
+    if (-not (Test-Path -LiteralPath $profileKey)) {
+        throw "Current standard-user SID is not bound to a Windows profile."
+    }
+
+    $profileRaw = [string](Get-ItemProperty -LiteralPath $profileKey -Name ProfileImagePath -ErrorAction Stop).ProfileImagePath
+    if (-not $profileRaw) {
+        throw "Current standard-user profile does not expose ProfileImagePath."
+    }
+    $profilePath = [Environment]::ExpandEnvironmentVariables($profileRaw)
+    if (-not [IO.Path]::IsPathRooted($profilePath)) {
+        throw "Current standard-user ProfileImagePath is not absolute."
+    }
+    $profilePath = [IO.Path]::GetFullPath($profilePath).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+    if (-not (Test-Path -LiteralPath $profilePath -PathType Container)) {
+        throw "Current standard-user profile directory is unavailable."
+    }
+
+    $localAppData = Join-Path $profilePath "AppData\Local"
+    New-Item -ItemType Directory -Force -Path $localAppData | Out-Null
+    $localAppData = (Resolve-Path -LiteralPath $localAppData -ErrorAction Stop).Path
+    $prefix = $profilePath + [IO.Path]::DirectorySeparatorChar
+    if (-not $localAppData.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Resolved LocalApplicationData escaped the current SID-bound profile."
+    }
+
+    return [ordered]@{
+        profile_path = $profilePath
+        local_app_data = $localAppData
+        profile_sid_bound = $true
+    }
+}
+
 function Get-WebView2Candidates {
+    param([string]$LocalAppData)
+
     $matches = @()
     $registryRoots = @(
         "HKCU:\SOFTWARE\Microsoft\EdgeUpdate\Clients",
@@ -41,8 +83,7 @@ function Get-WebView2Candidates {
         }
     }
 
-    $currentLocalAppData = [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)
-    foreach ($root in @($env:ProgramFiles, ${env:ProgramFiles(x86)}, $currentLocalAppData)) {
+    foreach ($root in @($env:ProgramFiles, ${env:ProgramFiles(x86)}, $LocalAppData)) {
         if (-not $root) { continue }
         $path = Join-Path $root "Microsoft\EdgeWebView\Application"
         if (Test-Path -LiteralPath $path -PathType Container) {
@@ -76,7 +117,10 @@ $result = [ordered]@{
     identity_name = $null
     user_sid = $null
     is_admin = $null
+    profile_image_path = $null
     local_app_data = $null
+    local_app_data_source = $null
+    profile_sid_bound = $false
     per_user_state_writable = $false
     webview2_detected = $false
     webview2_candidate_count = 0
@@ -115,11 +159,12 @@ try {
         throw "Standard-user token required: current process is elevated/administrator."
     }
 
-    $localAppData = [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)
-    if (-not $localAppData) {
-        throw "LocalApplicationData is unavailable for the current standard-user profile."
-    }
+    $profile = Resolve-CurrentUserLocalAppData -Identity $identity
+    $localAppData = [string]$profile.local_app_data
+    $result.profile_image_path = [string]$profile.profile_path
     $result.local_app_data = $localAppData
+    $result.local_app_data_source = "HKLM_ProfileList_current_sid"
+    $result.profile_sid_bound = [bool]$profile.profile_sid_bound
 
     $source = (Resolve-Path -LiteralPath $Executable -ErrorAction Stop).Path
     if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
@@ -149,7 +194,7 @@ try {
     }
     $result.per_user_state_writable = $true
 
-    $webviewCandidates = @(Get-WebView2Candidates)
+    $webviewCandidates = @(Get-WebView2Candidates -LocalAppData $localAppData)
     $result.webview2_candidate_count = $webviewCandidates.Count
     $result.webview2_detected = $webviewCandidates.Count -gt 0
     if (-not $result.webview2_detected) {

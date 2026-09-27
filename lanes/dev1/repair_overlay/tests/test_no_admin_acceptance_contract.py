@@ -33,6 +33,9 @@ class NoAdminAcceptanceContractTests(unittest.TestCase):
         self.assertIn("Архів Писання Standard User", self.harness)
         self.assertIn("unicode_spaced_path", self.harness)
         self.assertIn("Copy-Item -LiteralPath $source", self.harness)
+        self.assertIn("Get-FileHash -LiteralPath $buildExe -Algorithm SHA256", self.workflow)
+        self.assertIn("Public staging copy does not match the exact build artifact SHA-256", self.workflow)
+        self.assertIn("No-admin evidence SHA-256 does not match the exact build artifact", self.workflow)
 
     def test_harness_requires_webview2_and_real_packaged_startup(self):
         self.assertIn("Get-WebView2Candidates", self.harness)
@@ -40,6 +43,7 @@ class NoAdminAcceptanceContractTests(unittest.TestCase):
         self.assertIn("probe_packaged_startup.ps1", self.harness)
         self.assertIn("process_started", self.harness)
         self.assertIn("survived_probe_window", self.harness)
+        self.assertIn("did not remain alive for the full no-admin probe window", self.harness)
         self.assertIn("Packaged process did not start under the standard-user token", self.harness)
         self.assertIn("Start-Process -FilePath $exe -PassThru", self.probe)
 

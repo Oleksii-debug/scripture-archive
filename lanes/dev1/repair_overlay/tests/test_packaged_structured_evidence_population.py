@@ -52,13 +52,26 @@ class PackagedStructuredEvidencePopulationTests(unittest.TestCase):
             correct = application.branches.resolve(task, Correctness.CORRECT)
             self.assertTrue(SOURCE_IDS.issubset(set(correct.evidence_unlocks)))
 
+            baseline_witnesses = set(gateway.get_witness_matrix()["available_witnesses"])
+            expected_pa02_witnesses = {
+                "Acts 22 Paul speech",
+                "Acts 26 Paul speech",
+                "Acts 9 narrator",
+            }
+            self.assertTrue(expected_pa02_witnesses.isdisjoint(baseline_witnesses))
+
             for evidence_id in correct.evidence_unlocks:
                 application.evidence.unlock(evidence_id)
 
             matrix = gateway.get_witness_matrix()
+            available_witnesses = set(matrix["available_witnesses"])
             self.assertEqual(
-                ["Acts 22 Paul speech", "Acts 26 Paul speech", "Acts 9 narrator"],
-                matrix["available_witnesses"],
+                baseline_witnesses | expected_pa02_witnesses,
+                available_witnesses,
+            )
+            self.assertEqual(
+                expected_pa02_witnesses,
+                available_witnesses - baseline_witnesses,
             )
             serialized_matrix = json.dumps(matrix, ensure_ascii=False, sort_keys=True)
             self.assertIn("EV-PA-0008", serialized_matrix)

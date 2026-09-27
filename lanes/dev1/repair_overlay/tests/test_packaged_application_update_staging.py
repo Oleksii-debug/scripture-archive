@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,7 +12,9 @@ from runtime_engine.scripture_archive_runtime.application_update import (
 )
 from runtime_engine.scripture_archive_runtime.application_update_staging import (
     STAGING_JOURNAL_SCHEMA,
+    StagedApplicationUpdate,
     _copy_exact_bytes,
+    _write_pending_journal,
     stage_local_update,
 )
 from scripture_archive_platform.desktop_host.update_application import (
@@ -166,6 +169,31 @@ class PackagedApplicationUpdateStagingTests(unittest.TestCase):
             with self.assertRaises(ApplicationUpdateError):
                 _copy_exact_bytes(self.artifact, destination)
         self.assertFalse(destination.exists())
+
+    def test_pending_journal_fdopen_failure_closes_descriptor_and_temp_file(self):
+        self.staging.mkdir(parents=True)
+        staged = StagedApplicationUpdate(
+            product_id="scripture-archive",
+            target_platform="windows-x64",
+            current_version="0.6.0-r06.3dev.a",
+            target_version="0.6.1",
+            source_head="b" * 40,
+            artifact_name=self.artifact.name,
+            artifact_size=self.artifact.stat().st_size,
+            artifact_sha256=self.digest,
+        )
+        with patch(
+            "runtime_engine.scripture_archive_runtime.application_update_staging.os.fdopen",
+            side_effect=OSError("fdopen failed"),
+        ), patch(
+            "runtime_engine.scripture_archive_runtime.application_update_staging.os.close",
+            wraps=os.close,
+        ) as close_mock:
+            with self.assertRaises(OSError):
+                _write_pending_journal(self.staging, staged)
+        close_mock.assert_called_once()
+        self.assertFalse((self.staging / "pending-update.json").exists())
+        self.assertEqual([], list(self.staging.glob(".pending-update.json.tmp-*")))
 
 
 if __name__ == "__main__":

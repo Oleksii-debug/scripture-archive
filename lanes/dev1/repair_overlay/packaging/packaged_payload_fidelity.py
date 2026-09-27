@@ -13,6 +13,7 @@ _HEX40 = re.compile(r"^[0-9a-f]{40}$")
 _DRIVE_PATH = re.compile(r"^[A-Za-z]:")
 _PROTECTED_PREFIXES = ("r06_platform/frontend/", "docs/campaigns/")
 _PROTECTED_EXACT = {"r06_platform/build_identity.json"}
+_TEXT_EOL_SUFFIXES = frozenset({".css", ".html", ".htm", ".js", ".json", ".jsonl", ".md", ".svg", ".txt", ".xml"})
 
 
 def sha256_hex(data: bytes) -> str:
@@ -24,19 +25,29 @@ def git_blob_sha(data: bytes) -> str:
     return hashlib.sha1(header + data).hexdigest()
 
 
-def git_blob_matches_checkout(data: bytes, expected_blob: str) -> bool:
-    """Match canonical Git identity across ordinary text checkout EOL forms.
+def git_blob_matches_checkout(
+    data: bytes,
+    expected_blob: str,
+    *,
+    repo_path: str | None = None,
+) -> bool:
+    """Match canonical Git identity across ordinary tracked-text EOL forms.
 
-    The manifest keeps the repository Git blob as authority while SHA-256/size
-    keep the exact staged bytes as the artifact-fidelity authority. On Windows,
-    Git may materialize tracked text with CRLF although the canonical blob is LF.
-    Accept only that one CRLF->LF representation transform; arbitrary content,
-    whitespace, Unicode or lone-CR changes still fail closed.
+    Exact Git bytes are always accepted. CRLF->LF fallback is deliberately
+    narrower: the repository path must be an explicitly supported text class
+    and the checkout bytes must be strict UTF-8 text without NUL. Binary or
+    unknown payload classes therefore require exact Git blob identity.
     """
 
     if git_blob_sha(data) == expected_blob:
         return True
-    if b"\r\n" not in data:
+    if not isinstance(repo_path, str) or Path(repo_path).suffix.lower() not in _TEXT_EOL_SUFFIXES:
+        return False
+    if b"\r\n" not in data or b"\x00" in data:
+        return False
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError:
         return False
     return git_blob_sha(data.replace(b"\r\n", b"\n")) == expected_blob
 
@@ -97,7 +108,7 @@ def _entry(
         entry["repo_path"] = repo_path
     if git_blob is not None:
         actual_blob = git_blob_sha(data)
-        if not git_blob_matches_checkout(data, git_blob):
+        if not git_blob_matches_checkout(data, git_blob, repo_path=repo_path):
             raise RuntimeError(
                 f"Staged Git blob mismatch for {repo_path}: expected={git_blob} actual={actual_blob}"
             )
@@ -475,7 +486,11 @@ def verify_reader(
         if expected_blob:
             actual_blob = git_blob_sha(actual)
             row["git_blob_sha1"] = actual_blob
-            if not git_blob_matches_checkout(actual, expected_blob):
+            if not git_blob_matches_checkout(
+                actual,
+                expected_blob,
+                repo_path=expected.get("repo_path"),
+            ):
                 errors.append(f"GIT_BLOB_MISMATCH {package_path}: expected={expected_blob} actual={actual_blob}")
                 mismatch = True
         row["ok"] = not mismatch

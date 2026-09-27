@@ -136,13 +136,9 @@ def _recover_interrupted_publication(out: Path) -> None:
         return
 
     if out.exists():
-        try:
-            for backup in backups:
-                shutil.rmtree(backup)
-            _fsync_directory(out.parent)
-        except OSError as exc:
-            raise MaterializationError("failed to clean stale materializer recovery backup") from exc
-        return
+        raise MaterializationError(
+            f"ambiguous materializer recovery state: canonical output coexists with {len(backups)} recovery backup(s)"
+        )
 
     if len(backups) != 1:
         raise MaterializationError(

@@ -73,6 +73,8 @@ $result = [ordered]@{
     schema = "R06_NO_ADMIN_ACCEPTANCE_v1"
     started_utc = (Get-Date).ToUniversalTime().ToString("o")
     user = [Environment]::UserName
+    identity_name = $null
+    user_sid = $null
     is_admin = $null
     local_app_data = $null
     per_user_state_writable = $false
@@ -105,6 +107,9 @@ try {
         throw "No-admin packaged acceptance requires Windows."
     }
 
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $result.identity_name = $identity.Name
+    $result.user_sid = $identity.User.Value
     $result.is_admin = [bool](Test-IsAdministrator)
     if ($result.is_admin) {
         throw "Standard-user token required: current process is elevated/administrator."

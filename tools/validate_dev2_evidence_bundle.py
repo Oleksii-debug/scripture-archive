@@ -67,20 +67,31 @@ def _canonical_sha256(value: Any) -> str:
 def _load_json(path: Path) -> Any:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise BundleError(f"cannot load JSON {path}: {exc}") from exc
+
+
+def _require_safe_regular_file(path: Path, label: str) -> None:
+    if path.is_symlink() or not path.is_file():
+        raise BundleError(f"unsafe or missing regular bundle file: {label}")
+
+
+def _reject_bundle_symlinks(root: Path) -> None:
+    if root.is_symlink() or not root.is_dir():
+        raise BundleError(f"missing or unsafe D2 evidence bundle: {root}")
+    for path in root.rglob("*"):
+        if path.is_symlink():
+            raise BundleError(f"symlink is forbidden in D2 evidence bundle: {path.relative_to(root)}")
 
 
 def validate_bundle(repo_root: Path, *, enforce_raw_pins: bool = True) -> dict[str, Any]:
     root = repo_root / BUNDLE_REL
-    if not root.is_dir():
-        raise BundleError(f"missing D2 evidence bundle: {root}")
+    _reject_bundle_symlinks(root)
 
-    if enforce_raw_pins:
-        for rel, expected in EXPECTED_RAW_SHA256.items():
-            path = root / rel
-            if not path.is_file():
-                raise BundleError(f"missing pinned bundle file: {rel}")
+    for rel, expected in EXPECTED_RAW_SHA256.items():
+        path = root / rel
+        _require_safe_regular_file(path, rel)
+        if enforce_raw_pins:
             actual = _sha256_bytes(path.read_bytes())
             if actual != expected:
                 raise BundleError(f"raw SHA256 mismatch for {rel}: {actual} != {expected}")
@@ -132,8 +143,6 @@ def validate_bundle(repo_root: Path, *, enforce_raw_pins: bool = True) -> dict[s
     cross_links: list[tuple[str, str]] = []
     for rel in ("evidence/part_001.jsonl", "evidence/part_002.jsonl", "evidence/part_003.jsonl"):
         path = root / rel
-        if not path.is_file():
-            raise BundleError(f"missing evidence part: {rel}")
         for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             if not line.strip():
                 continue

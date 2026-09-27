@@ -277,6 +277,32 @@ class PackagedPayloadFidelityTests(unittest.TestCase):
             result["errors"],
         )
 
+    def test_verify_reader_rejects_non_string_git_eol_policy_without_crashing(self):
+        payload = b"console.log('archive');\n"
+        path = "r06_platform/frontend/app.js"
+        manifest = {
+            "schema_version": 1,
+            "entries": [
+                {
+                    "package_path": path,
+                    "size_bytes": len(payload),
+                    "sha256": MODULE.sha256_hex(payload),
+                    "git_blob_sha1": MODULE.git_blob_sha(payload),
+                    "git_eol_policy": ["crlf_to_lf"],
+                    "repo_path": "lanes/dev1/repair_overlay/frontend/app.js",
+                    "provenance": "git_overlay",
+                }
+            ],
+        }
+
+        result = MODULE.verify_reader(FakeArchive({path: payload}), manifest)
+
+        self.assertFalse(result["ok"])
+        self.assertTrue(
+            any(error.startswith("INVALID_GIT_EOL_POLICY") for error in result["errors"]),
+            result["errors"],
+        )
+
     def test_verify_reader_rejects_binary_crlf_lookalike_even_with_exact_staged_hash(self):
         canonical = b"header\npayload\n"
         staged = canonical.replace(b"\n", b"\r\n")

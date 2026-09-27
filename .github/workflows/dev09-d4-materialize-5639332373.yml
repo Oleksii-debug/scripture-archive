@@ -36,21 +36,42 @@ jobs:
           set -euo pipefail
           src='lanes/dev09/materialize_5639332373/transport_part_00.b64'
           test -f "$src"
-          base64 --decode "$src" > "$TRANSPORT_ZIP"
           python - <<'PY'
-          import hashlib, os, pathlib, zipfile
-          p=pathlib.Path(os.environ['TRANSPORT_ZIP'])
-          raw=p.read_bytes()
-          expected_size=286787
-          expected_sha='e8b008c31462d7ed9388a7a84f73bb8666c8449181000751e9da45c2468779c9'
-          got=hashlib.sha256(raw).hexdigest()
-          print('transport_bytes',len(raw),'sha256',got)
-          if len(raw)!=expected_size or got!=expected_sha:
+          import base64, hashlib, os, pathlib, re, zipfile
+
+          source = pathlib.Path('lanes/dev09/materialize_5639332373/transport_part_00.b64')
+          text = source.read_text(encoding='ascii')
+          compact = ''.join(text.split())
+          if not compact:
+              raise SystemExit('empty staged transport payload')
+          if not re.fullmatch(r'[A-Za-z0-9+/]*={0,2}', compact):
+              raise SystemExit('staged transport contains non-Base64 characters')
+          if '=' in compact[:-2]:
+              raise SystemExit('staged transport contains non-terminal Base64 padding')
+          unpadded = compact.rstrip('=')
+          if len(unpadded) % 4 == 1:
+              raise SystemExit('staged transport has impossible Base64 length')
+          normalized = unpadded + '=' * ((-len(unpadded)) % 4)
+          try:
+              raw = base64.b64decode(normalized, validate=True)
+          except Exception as exc:
+              raise SystemExit(f'strict staged Base64 decode failed: {exc}') from exc
+
+          expected_size = 286787
+          expected_sha = 'e8b008c31462d7ed9388a7a84f73bb8666c8449181000751e9da45c2468779c9'
+          got = hashlib.sha256(raw).hexdigest()
+          print('transport_base64_chars', len(unpadded), 'restored_padding', len(normalized)-len(unpadded))
+          print('transport_bytes', len(raw), 'sha256', got)
+          if len(raw) != expected_size or got != expected_sha:
               raise SystemExit('exact staged transport byte gate failed')
-          with zipfile.ZipFile(p) as z:
-              bad=z.testzip()
-              if bad: raise SystemExit(f'ZIP CRC failure: {bad}')
-              print('D4_EXACT_STAGED_TRANSPORT_PASS entries=',len(z.infolist()))
+
+          output = pathlib.Path(os.environ['TRANSPORT_ZIP'])
+          output.write_bytes(raw)
+          with zipfile.ZipFile(output) as z:
+              bad = z.testzip()
+              if bad:
+                  raise SystemExit(f'ZIP CRC failure: {bad}')
+              print('D4_EXACT_STAGED_TRANSPORT_PASS entries=', len(z.infolist()))
           PY
 
       - name: Materialize and prove node plus evidence fidelity

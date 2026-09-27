@@ -169,7 +169,7 @@ class DossierAssembler:
         if any(
             ord(character) < 0x20
             or 0x7F <= ord(character) <= 0x9F
-            or character in {"\\u2028", "\\u2029"}
+            or character in {"\u2028", "\u2029"}
             for character in value
         ):
             return None

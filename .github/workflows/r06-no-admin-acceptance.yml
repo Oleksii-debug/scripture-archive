@@ -86,6 +86,13 @@ jobs:
               Remove-LocalUser -Name $user
             }
             New-LocalUser -Name $user -Password $secure -PasswordNeverExpires -UserMayNotChangePassword | Out-Null
+            $administrators = Get-LocalGroup -SID "S-1-5-32-544"
+            $isAdminMember = @(Get-LocalGroupMember -Group $administrators.Name -ErrorAction Stop | Where-Object {
+              $_.Name -eq "$env:COMPUTERNAME\$user" -or $_.Name -eq ".\$user"
+            }).Count -gt 0
+            if ($isAdminMember) {
+              throw "Standard-user account unexpectedly belongs to the Administrators group"
+            }
 
             New-Item -ItemType Directory -Force -Path $publicRoot | Out-Null
             $acl = Get-Acl -LiteralPath $publicRoot

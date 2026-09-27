@@ -1,0 +1,74 @@
+name: R06 D4 Readable Qualification
+
+on:
+  pull_request:
+    paths:
+      - 'docs/campaigns/OT/R06_D4_STAGE05_READABLE/**'
+      - 'docs/workflow/r06_dev09/D4_READABLE_MATERIALIZATION_MANIFEST.json'
+      - 'docs/workflow/r06_dev09/D4_PROVENANCE_SCOPE_REPAIR_04.json'
+      - 'tools/dev09_materialize_d4_readable.py'
+      - 'tools/dev09_d4_evidence_fidelity.py'
+      - '.github/workflows/r06-d4-readable-qualification.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: r06-d4-readable-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  d4-readable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Confirm exact source checkout
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+
+      - name: Reject symlinks in qualified authority surface
+        shell: bash
+        run: |
+          if find docs/campaigns/OT/R06_D4_STAGE05_READABLE -type l -print -quit | grep -q .; then
+            echo 'D4 readable authority contains a symlink' >&2
+            exit 1
+          fi
+          test ! -L docs/workflow/r06_dev09/D4_READABLE_MATERIALIZATION_MANIFEST.json
+          test ! -L docs/workflow/r06_dev09/D4_PROVENANCE_SCOPE_REPAIR_04.json
+
+      - name: Confirm qualified Git object identities
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD:docs/campaigns/OT/R06_D4_STAGE05_READABLE/contracts)" = 'b1a5850d6e473f95b40cb7dafdb5c8f86a2bdb0a'
+          test "$(git rev-parse HEAD:docs/campaigns/OT/R06_D4_STAGE05_READABLE/dossiers)" = 'b441a27ad615f2e6fda3f76ea2df7848ea8edb87'
+          test "$(git rev-parse HEAD:docs/campaigns/OT/R06_D4_STAGE05_READABLE/entity_registry)" = '03801ef3c81efe95e3efc34b1a9b59e3c5121bc2'
+          test "$(git rev-parse HEAD:docs/campaigns/OT/R06_D4_STAGE05_READABLE/evidence)" = '5510907544eda0ba40bfcff41d34f2b3cd1183f4'
+          test "$(git rev-parse HEAD:docs/campaigns/OT/R06_D4_STAGE05_READABLE/metadata)" = 'c06b5c0b21acc35f773f103e08ccadfbd422080e'
+          test "$(git rev-parse HEAD:docs/campaigns/OT/R06_D4_STAGE05_READABLE/nodes)" = '37c71c451cb2f536ef8c538f97e3b58ece00ceeb'
+          test "$(git rev-parse HEAD:docs/campaigns/OT/R06_D4_STAGE05_READABLE/record_hashes)" = 'afa5a937fc01ebe9b7c9fec3b696e05a8434ca33'
+          test "$(git rev-parse HEAD:docs/campaigns/OT/R06_D4_STAGE05_READABLE/registries)" = 'db0c596ee3afef96e06cdf59ace765790d696f1f'
+          test "$(git rev-parse HEAD:docs/campaigns/OT/R06_D4_STAGE05_READABLE/relations)" = 'd07b3bd017bb592cbb4b0b27a40fab15e363fc2b'
+          test "$(git rev-parse HEAD:docs/workflow/r06_dev09/D4_READABLE_MATERIALIZATION_MANIFEST.json)" = 'b7840a593bca78ea28457ec3bc8c8300369bc41c'
+          test "$(git rev-parse HEAD:docs/workflow/r06_dev09/D4_PROVENANCE_SCOPE_REPAIR_04.json)" = 'c52cb1b0754a0005fbca30f2092b399f7b2cb427'
+          test "$(git rev-parse HEAD:tools/dev09_materialize_d4_readable.py)" = '4fba383e5f772291008d8032272b4a6796797cb1'
+          test "$(git rev-parse HEAD:tools/dev09_d4_evidence_fidelity.py)" = 'ca7cf118900cb09d153f609dbca7e08132e0ecf8'
+
+      - name: Compile historical verify-only authorities
+        run: python -m compileall -q tools/dev09_materialize_d4_readable.py tools/dev09_d4_evidence_fidelity.py
+
+      - name: Verify readable node, provenance and manifest fidelity
+        run: python tools/dev09_materialize_d4_readable.py --root . --verify-only --require-manifest
+
+      - name: Verify readable evidence byte and record fidelity
+        run: python tools/dev09_d4_evidence_fidelity.py --root . --verify

@@ -1,0 +1,156 @@
+name: R06 No-Admin Packaged Acceptance
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - r06-gospel-no-admin-acceptance-0927-sol
+    paths:
+      - 'lanes/dev1/repair_overlay/packaging/run_no_admin_acceptance.ps1'
+      - 'lanes/dev1/repair_overlay/packaging/probe_packaged_startup.ps1'
+      - 'lanes/dev1/repair_overlay/tests/test_no_admin_acceptance_contract.py'
+      - '.github/workflows/r06-no-admin-acceptance.yml'
+  pull_request:
+    paths:
+      - 'lanes/dev1/repair_overlay/packaging/run_no_admin_acceptance.ps1'
+      - 'lanes/dev1/repair_overlay/packaging/probe_packaged_startup.ps1'
+      - 'lanes/dev1/repair_overlay/tests/test_no_admin_acceptance_contract.py'
+      - '.github/workflows/r06-no-admin-acceptance.yml'
+
+env:
+  DEV01_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  DEV01_BASE_SOURCE_SHA256: 10fbd546ff4d985465b85b99f4f64bff95d9ec8b1f27132c6d21b4930c344c35
+  PYTHONUTF8: '1'
+
+jobs:
+  no-admin-packaged-acceptance:
+    runs-on: windows-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEV01_SOURCE_SHA }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Confirm exact source checkout
+        shell: pwsh
+        run: |
+          $actual = (git rev-parse HEAD).Trim()
+          if ($actual -ne $env:DEV01_SOURCE_SHA) { throw "Expected $env:DEV01_SOURCE_SHA, got $actual" }
+
+      - name: Reconstruct and verify canonical FINALPREP02 source
+        shell: pwsh
+        run: |
+          $parts = Get-ChildItem release_inputs/dev1_finalprep02/part-*.b64 | Sort-Object Name
+          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          [IO.File]::WriteAllBytes('DEV1_R06_PLATFORM_SOURCE.zip', [Convert]::FromBase64String($b64))
+          python lanes\dev1\verify_source_archive.py DEV1_R06_PLATFORM_SOURCE.zip $env:DEV01_BASE_SOURCE_SHA256
+          if ($LASTEXITCODE -ne 0) { throw "DEV1 source archive verification failed with exit code $LASTEXITCODE" }
+          Expand-Archive DEV1_R06_PLATFORM_SOURCE.zip -DestinationPath . -Force
+          if (-not (Test-Path r06_platform -PathType Container)) { throw "Verified archive did not extract r06_platform" }
+          Copy-Item -Path lanes\dev1\repair_overlay\* -Destination r06_platform -Recurse -Force
+
+      - name: Run no-admin contract regressions
+        shell: pwsh
+        run: |
+          python -m unittest discover -s lanes\dev1\repair_overlay\tests -p test_no_admin_acceptance_contract.py -v
+          if ($LASTEXITCODE -ne 0) { throw "No-admin contract regressions failed with exit code $LASTEXITCODE" }
+
+      - name: Build exact packaged executable
+        shell: pwsh
+        run: |
+          ./r06_platform/packaging/build_windows.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Packaged build failed with exit code $LASTEXITCODE" }
+          if (-not (Test-Path r06_platform/dist/ScriptureArchive-R06-DEV01.exe -PathType Leaf)) {
+            throw "Expected packaged executable was not produced"
+          }
+
+      - name: Execute packaged acceptance as ephemeral standard user
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $user = "ScriptureNoAdmin"
+          $publicRoot = Join-Path $env:PUBLIC "ScriptureArchive-NoAdmin"
+          $resultPath = Join-Path $publicRoot "no_admin_acceptance.json"
+          $childLog = Join-Path $publicRoot "child-output.log"
+          $childError = Join-Path $publicRoot "child-error.log"
+          $password = [guid]::NewGuid().ToString("N") + "!Aa7"
+          $secure = ConvertTo-SecureString $password -AsPlainText -Force
+          $credential = New-Object System.Management.Automation.PSCredential(".\$user", $secure)
+
+          try {
+            if (Get-LocalUser -Name $user -ErrorAction SilentlyContinue) {
+              Remove-LocalUser -Name $user
+            }
+            New-LocalUser -Name $user -Password $secure -PasswordNeverExpires -UserMayNotChangePassword | Out-Null
+
+            New-Item -ItemType Directory -Force -Path $publicRoot | Out-Null
+            $acl = Get-Acl -LiteralPath $publicRoot
+            $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+              "$env:COMPUTERNAME\$user",
+              "Modify",
+              "ContainerInherit,ObjectInherit",
+              "None",
+              "Allow"
+            )
+            $acl.SetAccessRule($rule)
+            Set-Acl -LiteralPath $publicRoot -AclObject $acl
+
+            $exe = Join-Path $publicRoot "ScriptureArchive-R06-DEV01.exe"
+            $harness = Join-Path $publicRoot "run_no_admin_acceptance.ps1"
+            $startupProbe = Join-Path $publicRoot "probe_packaged_startup.ps1"
+            Copy-Item r06_platform/dist/ScriptureArchive-R06-DEV01.exe $exe -Force
+            Copy-Item r06_platform/packaging/run_no_admin_acceptance.ps1 $harness -Force
+            Copy-Item r06_platform/packaging/probe_packaged_startup.ps1 $startupProbe -Force
+            $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+
+            $arguments = @(
+              "-NoLogo",
+              "-NoProfile",
+              "-NonInteractive",
+              "-ExecutionPolicy", "Bypass",
+              "-File", ('"' + $harness + '"'),
+              "-Executable", ('"' + $exe + '"'),
+              "-ExpectedSha256", $hash,
+              "-ProbeSeconds", "8",
+              "-OutputJson", ('"' + $resultPath + '"'),
+              "-StartupProbeScript", ('"' + $startupProbe + '"')
+            )
+            $powershell = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
+            $child = Start-Process -FilePath $powershell -ArgumentList $arguments -Credential $credential -LoadUserProfile -WorkingDirectory $publicRoot -RedirectStandardOutput $childLog -RedirectStandardError $childError -Wait -PassThru
+
+            if ($child.ExitCode -ne 0) {
+              if (Test-Path $childLog) { Get-Content $childLog }
+              if (Test-Path $childError) { Get-Content $childError }
+              throw "Standard-user acceptance process failed with exit code $($child.ExitCode)"
+            }
+            if (-not (Test-Path -LiteralPath $resultPath -PathType Leaf)) {
+              throw "Standard-user acceptance did not emit result JSON"
+            }
+            $result = Get-Content -Raw -Encoding utf8 -LiteralPath $resultPath | ConvertFrom-Json
+            if ($result.status -ne "NO_ADMIN_ACCEPTANCE_PASS") { throw "No-admin result status was $($result.status)" }
+            if ($result.is_admin -ne $false) { throw "Child acceptance token was not standard-user" }
+            if (-not $result.per_user_state_writable) { throw "Per-user state write/readback was not proven" }
+            if (-not $result.webview2_detected) { throw "WebView2 was not detected in standard-user context" }
+            if (-not $result.unicode_spaced_path) { throw "Unicode + spaced per-user launch path was not proven" }
+            if (-not $result.process_started) { throw "Packaged process did not start under standard-user token" }
+            Write-Output "NO_ADMIN_ACCEPTANCE_PASS user=$user sha256=$($result.source_sha256)"
+          }
+          finally {
+            if (Get-LocalUser -Name $user -ErrorAction SilentlyContinue) {
+              Remove-LocalUser -Name $user
+            }
+          }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: R06-no-admin-packaged-acceptance
+          path: |
+            C:\Users\Public\ScriptureArchive-NoAdmin\no_admin_acceptance.json
+            C:\Users\Public\ScriptureArchive-NoAdmin\child-output.log
+            C:\Users\Public\ScriptureArchive-NoAdmin\child-error.log
+          if-no-files-found: warn

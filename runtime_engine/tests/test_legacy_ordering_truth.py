@@ -52,14 +52,15 @@ class LegacyOrderingTruthTests(unittest.TestCase):
         normalized = normalize_legacy_ordering_truth(node)
         self.assertEqual(normalized["accepted_answer"], ["First", "Second"])
 
-    def test_other_ordering_like_mode_is_not_inferred(self) -> None:
+    def test_arrow_chronology_is_losslessly_ordered_by_node_context(self) -> None:
         node = {
             "node_id": "X-N03",
             "response_mode": "chronology",
+            "task_family": "local chronology",
             "accepted_answer": "First → Second",
         }
         normalized = normalize_legacy_ordering_truth(node)
-        self.assertEqual(normalized["accepted_answer"], "First → Second")
+        self.assertEqual(normalized["accepted_answer"], ["First", "Second"])
 
     def test_runtime_adapter_feeds_exact_order_to_strict_dto(self) -> None:
         node = {

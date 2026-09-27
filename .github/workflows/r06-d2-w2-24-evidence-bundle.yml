@@ -58,6 +58,11 @@ jobs:
         run: |
           set -euo pipefail
           root='docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05'
+          if find "$root" -type l -print -quit | grep -q .; then
+            echo 'D2_W2_24_UNSAFE_SYMLINK_PRESENT'
+            find "$root" -type l -print
+            exit 1
+          fi
           mapfile -t actual < <(find "$root" -type f -printf '%P\n' | LC_ALL=C sort)
           expected=(
             'evidence/part_001.jsonl'

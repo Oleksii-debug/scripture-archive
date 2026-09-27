@@ -9,6 +9,26 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Get-Sha256Hex {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $resolved = (Resolve-Path -LiteralPath $Path -ErrorAction Stop).Path
+    $stream = [IO.File]::Open($resolved, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    try {
+        $sha = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            $digest = $sha.ComputeHash($stream)
+        }
+        finally {
+            $sha.Dispose()
+        }
+    }
+    finally {
+        $stream.Dispose()
+    }
+    return ([BitConverter]::ToString($digest)).Replace("-", "").ToLowerInvariant()
+}
+
 function Test-IsAdministrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = New-Object Security.Principal.WindowsPrincipal($identity)
@@ -171,7 +191,7 @@ try {
         throw "Packaged executable is not a regular file."
     }
     $result.source_artifact = $source
-    $sourceHash = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash.ToLowerInvariant()
+    $sourceHash = Get-Sha256Hex -Path $source
     $result.source_sha256 = $sourceHash
 
     if ($ExpectedSha256) {
@@ -212,7 +232,7 @@ try {
         throw "Acceptance copy did not land in the required Unicode + spaced per-user path."
     }
 
-    $copyHash = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash.ToLowerInvariant()
+    $copyHash = Get-Sha256Hex -Path $target
     $result.copied_sha256 = $copyHash
     if ($copyHash -ne $sourceHash) {
         throw "Copied artifact SHA-256 differs from the source artifact."

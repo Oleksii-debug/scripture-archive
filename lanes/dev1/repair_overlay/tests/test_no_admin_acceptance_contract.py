@@ -44,8 +44,11 @@ class NoAdminAcceptanceContractTests(unittest.TestCase):
         self.assertIn('status = "NO_ADMIN_ACCEPTANCE_FAIL"', self.harness)
 
     def test_harness_binds_exact_artifact_and_unicode_spaced_per_user_copy(self):
-        self.assertIn("Get-FileHash -LiteralPath $source -Algorithm SHA256", self.harness)
-        self.assertIn("Get-FileHash -LiteralPath $target -Algorithm SHA256", self.harness)
+        self.assertIn("Get-Sha256Hex", self.harness)
+        self.assertIn("[System.Security.Cryptography.SHA256]::Create()", self.harness)
+        self.assertIn("Get-Sha256Hex -Path $source", self.harness)
+        self.assertIn("Get-Sha256Hex -Path $target", self.harness)
+        self.assertNotIn("Get-FileHash", self.harness)
         self.assertIn("Source artifact SHA-256 does not match", self.harness)
         self.assertIn("Copied artifact SHA-256 differs", self.harness)
         self.assertIn("Архів Писання Standard User", self.harness)

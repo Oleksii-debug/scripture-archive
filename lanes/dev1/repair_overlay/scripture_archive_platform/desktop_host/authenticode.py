@@ -45,8 +45,12 @@ def verify_same_publisher_authenticode(
     if os.name != "nt":
         return False
 
-    current = Path(current_executable)
-    candidate = Path(candidate_artifact)
+    # Preserve concrete Path objects supplied by the native layer instead of
+    # re-dispatching pathlib's platform factory after the Windows guard. This is
+    # behaviorally identical on Windows and keeps cross-platform qualification
+    # from corrupting pathlib by mocking the process-wide os.name singleton.
+    current = current_executable if isinstance(current_executable, Path) else Path(current_executable)
+    candidate = candidate_artifact if isinstance(candidate_artifact, Path) else Path(candidate_artifact)
     if not _regular_non_symlink(current) or not _regular_non_symlink(candidate):
         return False
 

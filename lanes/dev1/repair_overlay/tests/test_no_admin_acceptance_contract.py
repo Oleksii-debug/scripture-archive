@@ -32,7 +32,12 @@ class NoAdminAcceptanceContractTests(unittest.TestCase):
         self.assertIn("$result.identity_name = $identity.Name", self.harness)
         self.assertIn("$result.user_sid = $identity.User.Value", self.harness)
         self.assertIn("Standard-user token required", self.harness)
-        self.assertIn("LocalApplicationData", self.harness)
+        self.assertIn("Resolve-CurrentUserLocalAppData", self.harness)
+        self.assertIn("ProfileList\\$sid", self.harness)
+        self.assertIn("ProfileImagePath", self.harness)
+        self.assertIn("Resolved LocalApplicationData escaped the current SID-bound profile", self.harness)
+        self.assertIn('$result.local_app_data_source = "HKLM_ProfileList_current_sid"', self.harness)
+        self.assertIn("$result.profile_sid_bound = [bool]$profile.profile_sid_bound", self.harness)
         self.assertIn("$result.local_app_data = $localAppData", self.harness)
         self.assertIn("per_user_state_writable", self.harness)
         self.assertIn('status = "NO_ADMIN_ACCEPTANCE_PASS"', self.harness)
@@ -73,6 +78,8 @@ class NoAdminAcceptanceContractTests(unittest.TestCase):
             "WaitForExit(120000)",
             "Standard-user acceptance process exceeded the 120-second bound",
             "Standard-user identity evidence is incomplete",
+            "Per-user state root was not bound to the child SID profile",
+            'HKLM_ProfileList_current_sid',
             "NO_ADMIN_ADMIN_NEGATIVE_CONTROL_PASS",
             "Admin negative control returned unexpected exit code",
             "NO_ADMIN_ACCEPTANCE_FAIL",
@@ -84,6 +91,15 @@ class NoAdminAcceptanceContractTests(unittest.TestCase):
         self.assertNotIn("net localgroup administrators", self.workflow.lower())
         self.assertIn('if ($result.is_admin -ne $true)', self.workflow)
         self.assertIn('if ($negative.ExitCode -ne 2)', self.workflow)
+
+    def test_workflow_stages_evidence_inside_workspace_before_upload(self):
+        self.assertIn("Collect no-admin evidence inside workspace", self.workflow)
+        self.assertIn('$destination = Join-Path $PWD "no_admin_evidence"', self.workflow)
+        self.assertIn("NO_ADMIN_EVIDENCE_STAGED", self.workflow)
+        self.assertIn("path: no_admin_evidence", self.workflow)
+        upload_block = self.workflow.split("- uses: actions/upload-artifact@v4", 1)[1]
+        self.assertNotIn("C:\\Users\\Public", upload_block)
+        self.assertNotIn("r06_platform\\dist\\no_admin_admin_negative.json", upload_block)
 
     def test_workflow_does_not_echo_or_persist_generated_password(self):
         self.assertIn("ConvertTo-SecureString", self.workflow)

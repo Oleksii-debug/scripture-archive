@@ -19,7 +19,7 @@ RUNTIME_ENGINE = ROOT / "runtime_engine"
 CANONICAL_DEV1_SOURCE_COMMIT = "90a13aca71d2a5f832846a84acbdf0f7c89f5da9"
 CANONICAL_SOURCE_PREFIX = "release_inputs/dev1_finalprep02"
 EXPECTED_BASE_SHA256 = "10fbd546ff4d985465b85b99f4f64bff95d9ec8b1f27132c6d21b4930c344c35"
-EXPECTED_REAL_TESTS = 11
+EXPECTED_REAL_TESTS = 12
 OVERLAY_FIDELITY_PATHS = (
     Path("scripture_archive_platform/content/library.py"),
     Path("scripture_archive_platform/application/service.py"),
@@ -37,9 +37,7 @@ def verify_exact_checkout() -> None:
     expected = os.environ.get("LIBRARY_SOURCE_SHA", "").strip()
     if not expected:
         raise AssertionError("LIBRARY_SOURCE_SHA is required")
-    actual = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
-    ).strip()
+    actual = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     if actual != expected:
         raise AssertionError(f"Expected exact source checkout {expected}, got {actual}")
 
@@ -55,66 +53,33 @@ def _safe_extract(archive: zipfile.ZipFile, destination: Path) -> None:
 
 def _read_canonical_archive() -> bytes:
     fetch = subprocess.run(
-        [
-            "git",
-            "fetch",
-            "--no-tags",
-            "--no-recurse-submodules",
-            "--depth=1",
-            "origin",
-            CANONICAL_DEV1_SOURCE_COMMIT,
-        ],
+        ["git", "fetch", "--no-tags", "--no-recurse-submodules", "--depth=1", "origin", CANONICAL_DEV1_SOURCE_COMMIT],
         cwd=ROOT,
         text=True,
         capture_output=True,
     )
     if fetch.returncode != 0:
         detail = (fetch.stderr or fetch.stdout).strip()
-        raise AssertionError(
-            "Unable to fetch pinned canonical DEV1 source donor "
-            f"{CANONICAL_DEV1_SOURCE_COMMIT}: {detail}"
-        )
-    fetched = subprocess.check_output(
-        ["git", "rev-parse", "FETCH_HEAD"], cwd=ROOT, text=True
-    ).strip()
+        raise AssertionError(f"Unable to fetch pinned canonical DEV1 source donor {CANONICAL_DEV1_SOURCE_COMMIT}: {detail}")
+    fetched = subprocess.check_output(["git", "rev-parse", "FETCH_HEAD"], cwd=ROOT, text=True).strip()
     if fetched != CANONICAL_DEV1_SOURCE_COMMIT:
-        raise AssertionError(
-            f"Expected pinned DEV1 donor {CANONICAL_DEV1_SOURCE_COMMIT}, got {fetched}"
-        )
+        raise AssertionError(f"Expected pinned DEV1 donor {CANONICAL_DEV1_SOURCE_COMMIT}, got {fetched}")
 
     listing = subprocess.check_output(
-        [
-            "git",
-            "ls-tree",
-            "-r",
-            "--name-only",
-            CANONICAL_DEV1_SOURCE_COMMIT,
-            "--",
-            CANONICAL_SOURCE_PREFIX,
-        ],
+        ["git", "ls-tree", "-r", "--name-only", CANONICAL_DEV1_SOURCE_COMMIT, "--", CANONICAL_SOURCE_PREFIX],
         cwd=ROOT,
         text=True,
     )
     parts = sorted(
-        path.strip()
-        for path in listing.splitlines()
-        if Path(path.strip()).name.startswith("part-")
-        and path.strip().endswith(".b64")
+        path.strip() for path in listing.splitlines()
+        if Path(path.strip()).name.startswith("part-") and path.strip().endswith(".b64")
     )
     if not parts:
-        raise AssertionError(
-            "Pinned canonical FINALPREP02 DEV1 source parts are missing"
-        )
-
-    encoded_chunks: list[str] = []
-    for path in parts:
-        text = subprocess.check_output(
-            ["git", "show", f"{CANONICAL_DEV1_SOURCE_COMMIT}:{path}"],
-            cwd=ROOT,
-            text=True,
-        )
-        encoded_chunks.append("".join(text.split()))
-
+        raise AssertionError("Pinned canonical FINALPREP02 DEV1 source parts are missing")
+    encoded_chunks = [
+        "".join(subprocess.check_output(["git", "show", f"{CANONICAL_DEV1_SOURCE_COMMIT}:{path}"], cwd=ROOT, text=True).split())
+        for path in parts
+    ]
     return base64.b64decode("".join(encoded_chunks), validate=True)
 
 
@@ -122,10 +87,7 @@ def compose_real_platform(temp_root: Path) -> Path:
     archive_bytes = _read_canonical_archive()
     digest = hashlib.sha256(archive_bytes).hexdigest()
     if digest != EXPECTED_BASE_SHA256:
-        raise AssertionError(
-            f"DEV1 base archive hash mismatch: expected {EXPECTED_BASE_SHA256}, got {digest}"
-        )
-
+        raise AssertionError(f"DEV1 base archive hash mismatch: expected {EXPECTED_BASE_SHA256}, got {digest}")
     archive_path = temp_root / "DEV1_R06_PLATFORM_SOURCE.zip"
     archive_path.write_bytes(archive_bytes)
     with zipfile.ZipFile(archive_path) as archive:
@@ -133,37 +95,26 @@ def compose_real_platform(temp_root: Path) -> Path:
         if bad_member is not None:
             raise AssertionError(f"DEV1 base archive CRC failure: {bad_member}")
         _safe_extract(archive, temp_root)
-
     platform_root = temp_root / "r06_platform"
     if not platform_root.is_dir():
         raise AssertionError("DEV1 base archive did not produce r06_platform")
     shutil.copytree(OVERLAY, platform_root, dirs_exist_ok=True)
-
     for relative in OVERLAY_FIDELITY_PATHS:
-        overlay_bytes = (OVERLAY / relative).read_bytes()
-        composed_bytes = (platform_root / relative).read_bytes()
-        if composed_bytes != overlay_bytes:
+        if (platform_root / relative).read_bytes() != (OVERLAY / relative).read_bytes():
             raise AssertionError(f"Overlay fidelity mismatch: {relative.as_posix()}")
     return platform_root
 
 
 def parse_real_paths(platform_root: Path) -> None:
     for relative in OVERLAY_FIDELITY_PATHS:
-        ast.parse(
-            (platform_root / relative).read_text(encoding="utf-8"),
-            filename=relative.as_posix(),
-        )
+        ast.parse((platform_root / relative).read_text(encoding="utf-8"), filename=relative.as_posix())
 
 
 def _reset_platform_imports(platform_root: Path) -> None:
     for name in tuple(sys.modules):
-        if name == "scripture_archive_platform" or name.startswith(
-            "scripture_archive_platform."
-        ):
+        if name == "scripture_archive_platform" or name.startswith("scripture_archive_platform."):
             del sys.modules[name]
-
-    ordered_paths = (platform_root, RUNTIME_ENGINE, ROOT)
-    for entry in reversed(ordered_paths):
+    for entry in reversed((platform_root, RUNTIME_ENGINE, ROOT)):
         value = str(entry)
         while value in sys.path:
             sys.path.remove(value)
@@ -184,12 +135,9 @@ def load_real_regression_module(platform_root: Path, name: str, relative: Path):
 def run_real_response_regressions(platform_root: Path) -> None:
     suite = unittest.TestSuite()
     for name, relative in REGRESSION_MODULES:
-        module = load_real_regression_module(platform_root, name, relative)
-        suite.addTests(unittest.defaultTestLoader.loadTestsFromModule(module))
+        suite.addTests(unittest.defaultTestLoader.loadTestsFromModule(load_real_regression_module(platform_root, name, relative)))
     if suite.countTestCases() != EXPECTED_REAL_TESTS:
-        raise AssertionError(
-            f"Expected {EXPECTED_REAL_TESTS} Library/Search + D4 read-only tests, got {suite.countTestCases()}"
-        )
+        raise AssertionError(f"Expected {EXPECTED_REAL_TESTS} Library/Search + D4 read-only tests, got {suite.countTestCases()}")
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     if not result.wasSuccessful():
         raise SystemExit(1)
@@ -203,9 +151,8 @@ def main() -> None:
         parse_real_paths(platform_root)
         run_real_response_regressions(platform_root)
     print(
-        "Library/Search qualification PASS: exact candidate checkout, pinned canonical "
-        "FINALPREP02 DEV1 base hash/CRC, overlay fidelity, six legacy Library/Search "
-        "regressions, and five real qualified-D4 read-only/runtime-eligibility regressions."
+        "Library/Search qualification PASS: exact candidate checkout, pinned canonical FINALPREP02 DEV1 base hash/CRC, "
+        "overlay fidelity, six legacy Library/Search regressions, and six real qualified-D4 read-only/runtime-eligibility regressions."
     )
 
 

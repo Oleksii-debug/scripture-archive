@@ -1,0 +1,149 @@
+name: R06 W2-20 D2 corrected player text
+
+on:
+  push:
+    branches:
+      - r06-wave2-w20-d2-parts16-20
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: r06-w2-20-d2-corrected-playertext
+  cancel-in-progress: false
+
+jobs:
+  correct-and-prove:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Recover exact immutable D2 baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_commit="0e913d3cb001ec3f5dff3e6aa0a61069d05ed101"
+          source_path="release_inputs/dev2_w2_24/DEV_B_STAGE05_RECORD_SPLIT_STAGING.zip"
+          expected_zip="b681ea26d985eb754bde02a77254d40ab0920061edb9226fae7921a6740a06c0"
+          transport="$RUNNER_TEMP/d2-stage05.zip"
+          git fetch --no-tags origin "$source_commit"
+          git show "$source_commit:$source_path" > "$transport"
+          actual="$(sha256sum "$transport" | awk '{print $1}')"
+          test "$actual" = "$expected_zip"
+          unzip -t "$transport" >/dev/null
+          rm -rf "$RUNNER_TEMP/d2-stage05"
+          mkdir -p "$RUNNER_TEMP/d2-stage05"
+          unzip -q "$transport" -d "$RUNNER_TEMP/d2-stage05"
+          test -d "$RUNNER_TEMP/d2-stage05/D2_MATERIALIZATION/nodes"
+          echo "D2_W2_20_BASELINE_ZIP_PASS=$actual"
+
+      - name: Produce bounded corrected derivatives and proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - "$RUNNER_TEMP/d2-stage05/D2_MATERIALIZATION" <<'PY'
+          import copy, hashlib, json, pathlib, sys
+          baseline_root = pathlib.Path(sys.argv[1])
+          output_root = pathlib.Path("docs/campaigns/PA/R06_W2_20_CORRECTED")
+          nodes_out = output_root / "nodes"; nodes_out.mkdir(parents=True, exist_ok=True)
+          parts = [f"part_{i:03d}.jsonl" for i in range(16, 21)]
+          mutable_top = {"player_prompt","success_feedback","partial_feedback","failure_feedback","rejection_reason","functional_nonvisual_equivalent"}
+          mutable_mapping = {"hints"}; mutable_list = {"rejected_answers"}
+          replacements = (
+              ("локальному твердження", "локальному твердженню"),
+              ("оцінювання обмежений", "оцінювання обмежене"),
+              ("джерельна атрибуція for ", "джерельна атрибуція для "),
+              ("identify мовця", "визначення мовця"),
+              ("audience quoted by наратор Дій", "слухачі, процитовані оповідачем Дій"),
+              ("an unnamed harmonized source voice", "невизначений гармонізований голос джерела"),
+              ("source voice", "голос джерела"),
+              ("свідчення/source", "свідчення/джерела"),
+          )
+          def canonical(v): return json.dumps(v,ensure_ascii=False,sort_keys=True,separators=(",", ":")).encode("utf-8")
+          def sha(b): return hashlib.sha256(b).hexdigest()
+          def protected(r): return {k:v for k,v in r.items() if k not in mutable_top and k not in mutable_mapping and k not in mutable_list}
+          counts={}
+          def fix(s):
+              out=s
+              for old,new in replacements:
+                  n=out.count(old)
+                  if n: counts[old]=counts.get(old,0)+n; out=out.replace(old,new)
+              return out
+          index=json.loads((baseline_root/"node_hash_index.json").read_text(encoding="utf-8")); indexed={x["id"]:x for x in index.get("records",[]) if isinstance(x,dict) and isinstance(x.get("id"),str)}
+          if len(indexed)!=386: raise SystemExit(f"W2_20_BASELINE_INDEX_COUNT_FAIL {len(indexed)}")
+          rows=[]; old_hashes={}; new_hashes={}
+          for part in parts:
+              src=baseline_root/"nodes"/part
+              if not src.is_file(): raise SystemExit(f"W2_20_BASELINE_PART_MISSING {part}")
+              out=[]
+              for line_no,line in enumerate(src.read_text(encoding="utf-8").splitlines(),1):
+                  if not line.strip(): continue
+                  base=json.loads(line); node_id=base.get("node_id")
+                  if not isinstance(node_id,str) or not node_id or node_id in old_hashes: raise SystemExit(f"W2_20_NODE_ID_FAIL {part}:{line_no}:{node_id}")
+                  old_sha=sha(canonical(base)); item=indexed.get(node_id)
+                  if not item or item.get("sha256")!=old_sha: raise SystemExit(f"W2_20_BASELINE_HASH_FAIL {node_id}")
+                  candidate=copy.deepcopy(base); changed=[]
+                  for field in sorted(mutable_top):
+                      if field in candidate:
+                          if not isinstance(candidate[field],str): raise SystemExit(f"W2_20_MUTABLE_TYPE_FAIL {node_id}:{field}")
+                          new=fix(candidate[field])
+                          if new!=candidate[field]: candidate[field]=new; changed.append(field)
+                  for field in sorted(mutable_mapping):
+                      value=candidate.get(field)
+                      if not isinstance(value,dict) or not all(isinstance(v,str) for v in value.values()): raise SystemExit(f"W2_20_MUTABLE_MAPPING_FAIL {node_id}:{field}")
+                      for key in sorted(value):
+                          new=fix(value[key])
+                          if new!=value[key]: value[key]=new; changed.append(f"{field}.{key}")
+                  for field in sorted(mutable_list):
+                      value=candidate.get(field)
+                      if not isinstance(value,list) or not all(isinstance(v,str) for v in value): raise SystemExit(f"W2_20_MUTABLE_LIST_FAIL {node_id}:{field}")
+                      for i,old in enumerate(list(value)):
+                          new=fix(old)
+                          if new!=old: value[i]=new; changed.append(f"{field}[{i}]")
+                  if protected(base)!=protected(candidate): raise SystemExit(f"W2_20_PROTECTED_PROJECTION_FAIL {node_id}")
+                  text="\n".join([candidate.get(f,"") for f in sorted(mutable_top) if isinstance(candidate.get(f),str)]+[v for f in mutable_mapping for v in candidate.get(f,{}).values()]+[v for f in mutable_list for v in candidate.get(f,[])])
+                  leaked=[old for old,_ in replacements if old in text]
+                  if leaked: raise SystemExit(f"W2_20_ARTIFACT_REMAINS {node_id}:{leaked}")
+                  if not changed: raise SystemExit(f"W2_20_EXPECTED_PLAYER_TEXT_CHANGE_MISSING {node_id}")
+                  new_sha=sha(canonical(candidate)); out.append(canonical(candidate).decode("utf-8")); old_hashes[node_id]=old_sha; new_hashes[node_id]=new_sha
+                  rows.append({"node_id":node_id,"source_part":f"nodes/{part}","changed_player_paths":changed,"baseline_record_sha256":old_sha,"corrected_record_sha256":new_sha,"protected_projection_sha256":sha(canonical(protected(base)))})
+              if not out: raise SystemExit(f"W2_20_EMPTY_PART {part}")
+              (nodes_out/part).write_text("\n".join(out)+"\n",encoding="utf-8")
+          count=len(rows)
+          if counts.get("локальному твердження",0)<count: raise SystemExit("W2_20_SYSTEMIC_LOCAL_CLAIM_BASELINE_COUNT_FAIL")
+          if counts.get("оцінювання обмежений",0)<count: raise SystemExit("W2_20_SYSTEMIC_GRADING_BASELINE_COUNT_FAIL")
+          def aggregate(m): return sha("".join(f"{k}\t{m[k]}\n" for k in sorted(m)).encode())
+          report={"schema":"R06_D2_W2_20_PLAYER_TEXT_CORRECTION_v1","status":"PASS","source":{"staging_zip_sha256":"b681ea26d985eb754bde02a77254d40ab0920061edb9226fae7921a6740a06c0","parts":[f"nodes/{p}" for p in parts]},"scope":{"node_count":count,"mutable_top_level_text_fields":sorted(mutable_top),"mutable_mapping_text_fields":sorted(mutable_mapping),"mutable_list_text_fields":sorted(mutable_list),"all_other_fields":"IMMUTABLE_FAIL_CLOSED"},"artifact_replacements":[{"from":o,"to":n,"occurrences":counts.get(o,0)} for o,n in replacements],"selected_baseline_aggregate_sha256":aggregate(old_hashes),"selected_corrected_aggregate_sha256":aggregate(new_hashes),"changes":sorted(rows,key=lambda x:x["node_id"]),"independent_audit":"PENDING","source_truth_changed":False}
+          (output_root/"W2_20_CORRECTION_REPORT.json").write_text(json.dumps(report,ensure_ascii=False,sort_keys=True,indent=2)+"\n",encoding="utf-8")
+          print("W2_20_CORRECTION_PASS",f"nodes={count}",f"baseline={report['selected_baseline_aggregate_sha256']}",f"corrected={report['selected_corrected_aggregate_sha256']}")
+          PY
+
+      - name: Guard mutation scope and commit corrected derivatives
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="docs/campaigns/PA/R06_W2_20_CORRECTED"
+          python - <<'PY'
+          import subprocess
+          allowed="docs/campaigns/PA/R06_W2_20_CORRECTED/"; changed=[]
+          for line in subprocess.check_output(["git","status","--porcelain=v1","--untracked-files=all"],text=True).splitlines():
+              p=line[3:]; p=p.split(" -> ",1)[1] if " -> " in p else p; changed.append(p)
+          unexpected=[p for p in changed if not p.startswith(allowed)]
+          if unexpected: raise SystemExit(f"W2_20_UNEXPECTED_MUTATION {unexpected}")
+          expected={allowed+f"nodes/part_{i:03d}.jsonl" for i in range(16,21)}|{allowed+"W2_20_CORRECTION_REPORT.json"}
+          missing=sorted(expected-set(changed))
+          if missing and changed: raise SystemExit(f"W2_20_EXPECTED_OUTPUT_MISSING {missing}")
+          print("W2_20_MUTATION_SCOPE_PASS",len(changed))
+          PY
+          if git status --porcelain -- "$root" | grep -q .; then
+            git config user.name "scripture-archive-w2-20"
+            git config user.email "actions@users.noreply.github.com"
+            git add -A "$root"
+            git diff --cached --check
+            git commit -m "R06 W2-20: correct D2 player text for parts 016-020"
+            git push origin "HEAD:$GITHUB_REF_NAME"
+          fi

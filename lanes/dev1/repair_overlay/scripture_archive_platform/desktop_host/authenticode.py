@@ -17,7 +17,7 @@ $ErrorActionPreference = 'Stop'
 $paths = @($env:SCRIPTURE_AUTH_CURRENT, $env:SCRIPTURE_AUTH_CANDIDATE)
 $result = @()
 foreach ($path in $paths) {
-    $signature = Microsoft.PowerShell.Security\\Get-AuthenticodeSignature -LiteralPath $path
+    $signature = Microsoft.PowerShell.Security\Get-AuthenticodeSignature -LiteralPath $path
     $thumbprint = $null
     if ($null -ne $signature.SignerCertificate) {
         $thumbprint = [string]$signature.SignerCertificate.Thumbprint

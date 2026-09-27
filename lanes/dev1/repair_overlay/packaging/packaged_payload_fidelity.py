@@ -24,6 +24,23 @@ def git_blob_sha(data: bytes) -> str:
     return hashlib.sha1(header + data).hexdigest()
 
 
+def git_blob_matches_checkout(data: bytes, expected_blob: str) -> bool:
+    """Match canonical Git identity across ordinary text checkout EOL forms.
+
+    The manifest keeps the repository Git blob as authority while SHA-256/size
+    keep the exact staged bytes as the artifact-fidelity authority. On Windows,
+    Git may materialize tracked text with CRLF although the canonical blob is LF.
+    Accept only that one CRLF->LF representation transform; arbitrary content,
+    whitespace, Unicode or lone-CR changes still fail closed.
+    """
+
+    if git_blob_sha(data) == expected_blob:
+        return True
+    if b"\r\n" not in data:
+        return False
+    return git_blob_sha(data.replace(b"\r\n", b"\n")) == expected_blob
+
+
 def normalize_archive_path(value: str) -> str:
     raw = str(value).replace("\\", "/")
     if not raw:
@@ -80,7 +97,7 @@ def _entry(
         entry["repo_path"] = repo_path
     if git_blob is not None:
         actual_blob = git_blob_sha(data)
-        if actual_blob != git_blob:
+        if not git_blob_matches_checkout(data, git_blob):
             raise RuntimeError(
                 f"Staged Git blob mismatch for {repo_path}: expected={git_blob} actual={actual_blob}"
             )
@@ -170,7 +187,7 @@ def build_manifest(
         "proof_scope": [
             "all PyInstaller --add-data frontend files are pinned to exact staged bytes",
             "all PyInstaller --add-data docs/campaigns files are pinned to exact staged bytes and Git blobs",
-            "Git-tracked frontend overlay files are pinned to exact Git blobs",
+            "Git-tracked frontend overlay files are pinned to exact Git blobs across only ordinary CRLF checkout representation",
             "generated build identity is pinned to exact staged bytes",
         ],
         "not_proven": [
@@ -458,7 +475,7 @@ def verify_reader(
         if expected_blob:
             actual_blob = git_blob_sha(actual)
             row["git_blob_sha1"] = actual_blob
-            if actual_blob != expected_blob:
+            if not git_blob_matches_checkout(actual, expected_blob):
                 errors.append(f"GIT_BLOB_MISMATCH {package_path}: expected={expected_blob} actual={actual_blob}")
                 mismatch = True
         row["ok"] = not mismatch

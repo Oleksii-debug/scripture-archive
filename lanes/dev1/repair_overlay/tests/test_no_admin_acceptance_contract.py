@@ -2,9 +2,20 @@ from pathlib import Path
 import unittest
 
 
-ROOT = Path(__file__).resolve().parents[1]
+FILE = Path(__file__).resolve()
+ROOT = FILE.parents[1]
 PACKAGING = ROOT / "packaging"
-WORKFLOW = ROOT.parents[2] / ".github" / "workflows" / "r06-no-admin-acceptance.yml"
+
+
+def repository_root() -> Path:
+    for parent in FILE.parents:
+        workflow = parent / ".github" / "workflows" / "r06-no-admin-acceptance.yml"
+        if workflow.is_file():
+            return parent
+    raise RuntimeError("repository root with no-admin workflow not found")
+
+
+WORKFLOW = repository_root() / ".github" / "workflows" / "r06-no-admin-acceptance.yml"
 
 
 class NoAdminAcceptanceContractTests(unittest.TestCase):
@@ -57,6 +68,8 @@ class NoAdminAcceptanceContractTests(unittest.TestCase):
             "NO_ADMIN_ACCEPTANCE_PASS",
             "is_admin",
             "Remove-LocalUser",
+            "S-1-5-32-544",
+            "Standard-user account unexpectedly belongs to the Administrators group",
         ):
             self.assertIn(token, self.workflow)
         self.assertNotIn("Add-LocalGroupMember", self.workflow)

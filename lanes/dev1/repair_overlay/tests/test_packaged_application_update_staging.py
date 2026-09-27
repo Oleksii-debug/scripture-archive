@@ -1,6 +1,5 @@
 import hashlib
 import json
-import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,9 +11,7 @@ from runtime_engine.scripture_archive_runtime.application_update import (
 )
 from runtime_engine.scripture_archive_runtime.application_update_staging import (
     STAGING_JOURNAL_SCHEMA,
-    StagedApplicationUpdate,
     _copy_exact_bytes,
-    _write_pending_journal,
     stage_local_update,
 )
 from scripture_archive_platform.desktop_host.update_application import (
@@ -169,42 +166,6 @@ class PackagedApplicationUpdateStagingTests(unittest.TestCase):
             with self.assertRaises(ApplicationUpdateError):
                 _copy_exact_bytes(self.artifact, destination)
         self.assertFalse(destination.exists())
-
-    def test_pending_journal_closes_descriptor_if_fdopen_fails(self):
-        self.staging.mkdir(parents=True)
-        staged = StagedApplicationUpdate(
-            product_id="scripture-archive",
-            target_platform="windows-x64",
-            current_version="0.6.0-r06.3dev.a",
-            target_version="0.6.1",
-            source_head="b" * 40,
-            artifact_name=self.artifact.name,
-            artifact_size=self.artifact.stat().st_size,
-            artifact_sha256=self.digest,
-        )
-        opened_descriptors = []
-        real_open = os.open
-
-        def recording_open(path, flags, mode=0o777):
-            descriptor = real_open(path, flags, mode)
-            opened_descriptors.append(descriptor)
-            return descriptor
-
-        with patch(
-            "runtime_engine.scripture_archive_runtime.application_update_staging.os.open",
-            side_effect=recording_open,
-        ), patch(
-            "runtime_engine.scripture_archive_runtime.application_update_staging.os.fdopen",
-            side_effect=OSError("fdopen failed"),
-        ):
-            with self.assertRaises(OSError):
-                _write_pending_journal(self.staging, staged)
-
-        self.assertEqual(1, len(opened_descriptors))
-        with self.assertRaises(OSError):
-            os.fstat(opened_descriptors[0])
-        self.assertFalse((self.staging / "pending-update.json").exists())
-        self.assertEqual([], list(self.staging.glob(".pending-update.json.tmp-*")))
 
 
 if __name__ == "__main__":

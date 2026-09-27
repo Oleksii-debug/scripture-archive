@@ -93,6 +93,9 @@ class BundledScriptureTextTests(unittest.TestCase):
         self.assertIn('textContent', frontend)
         self.assertNotIn('innerHTML', frontend)
         self.assertIn("role: 'status'", frontend)
+        self.assertIn('AUDITED_PINNED_SNAPSHOT', frontend)
+        self.assertIn('SOURCE_REAUDIT_REQUIRED', frontend)
+        self.assertIn('upstream source re-audit is pending', frontend)
 
 
 if __name__ == '__main__':

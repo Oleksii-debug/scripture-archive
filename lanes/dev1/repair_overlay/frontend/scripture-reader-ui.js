@@ -62,7 +62,7 @@ export async function installScriptureReaderSurface() {
 
   const section = element('section', '', {id: 'scripture-reader', 'aria-labelledby': 'scripture-reader-heading'});
   const heading = element('h3', 'Full Scripture text — WEBU', {id: 'scripture-reader-heading'});
-  const source = element('p', 'Bundled offline World English Bible Updated (engwebu), source tier TX1, public-domain source. Empty source rows are reported as empty and are never filled from another witness.', {role: 'note'});
+  const source = element('p', 'Bundled offline World English Bible Updated (engwebu), source tier TX1, public-domain source. Empty source rows are reported as empty and are never filled from another witness.', {id: 'scripture-reader-source', role: 'note'});
 
   const readForm = element('form', '', {id: 'scripture-reader-form', 'aria-labelledby': 'scripture-reader-read-heading'});
   readForm.append(element('h4', 'Read a chapter', {id: 'scripture-reader-read-heading'}));
@@ -93,7 +93,13 @@ export async function installScriptureReaderSurface() {
       option.value = item.code;
       book.append(option);
     }
-    status(`Offline WEBU ready: ${catalog.verse_rows} source rows across ${catalog.books?.length || 0} book codes.`);
+    const monitoring = catalog.upstream_monitoring || {};
+    const driftPending = catalog.source_snapshot_status === 'AUDITED_PINNED_SNAPSHOT'
+      && monitoring.status === 'SOURCE_REAUDIT_REQUIRED';
+    if (driftPending) {
+      source.textContent = `Bundled offline World English Bible Updated (engwebu), source tier TX1, public-domain source. This is an audited pinned snapshot. The official upstream has changed at ${monitoring.changed_reference_count || 0} known references and is pending source re-audit; this reader continues to use the audited bundled snapshot. Empty source rows are reported as empty and are never filled from another witness.`;
+    }
+    status(`Offline WEBU ready: ${catalog.verse_rows} source rows across ${catalog.books?.length || 0} book codes.${driftPending ? ' Audited pinned snapshot; upstream source re-audit is pending.' : ''}`);
   } catch (error) {
     status(`Full-text provider unavailable: ${error.message}`);
     readButton.disabled = true; searchButton.disabled = true;

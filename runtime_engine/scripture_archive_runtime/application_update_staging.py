@@ -147,8 +147,7 @@ def _copy_exact_bytes(source: Path, destination: Path) -> tuple[int, str]:
     total = 0
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
     try:
-        output_fd = os.open(destination, flags, 0o600)
-        with source.open("rb") as input_handle, os.fdopen(output_fd, "wb") as output_handle:
+        with source.open("rb") as input_handle:
             opened_before = os.fstat(input_handle.fileno())
             opened_identity = (
                 opened_before.st_dev,
@@ -158,15 +157,24 @@ def _copy_exact_bytes(source: Path, destination: Path) -> tuple[int, str]:
             )
             if opened_identity != before_identity or not stat.S_ISREG(opened_before.st_mode):
                 raise ApplicationUpdateError("update artifact changed before staging copy")
-            while True:
-                chunk = input_handle.read(_COPY_CHUNK_BYTES)
-                if not chunk:
-                    break
-                total += len(chunk)
-                digest.update(chunk)
-                output_handle.write(chunk)
-            output_handle.flush()
-            os.fsync(output_handle.fileno())
+
+            output_fd = os.open(destination, flags, 0o600)
+            try:
+                output_handle = os.fdopen(output_fd, "wb")
+            except Exception:
+                os.close(output_fd)
+                raise
+            with output_handle:
+                while True:
+                    chunk = input_handle.read(_COPY_CHUNK_BYTES)
+                    if not chunk:
+                        break
+                    total += len(chunk)
+                    digest.update(chunk)
+                    output_handle.write(chunk)
+                output_handle.flush()
+                os.fsync(output_handle.fileno())
+
             opened_after = os.fstat(input_handle.fileno())
             after_open_identity = (
                 opened_after.st_dev,

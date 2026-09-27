@@ -31,6 +31,11 @@ on:
       - 'lanes/dev1/repair_overlay/tests/test_packaged_review_training_player_ui.py'
       - 'lanes/dev1/repair_overlay/tests/test_packaged_review_training_static_syntax.py'
       - 'lanes/dev1/repair_overlay/tests/test_packaged_review_training_transport.py'
+      - 'lanes/dev1/repair_overlay/tests/test_packaged_structured_evidence_population.py'
+      - 'docs/evidence/R06_PA02_STRUCTURED_EVIDENCE_INDEX_v0.1.json'
+      - 'runtime_engine/scripture_archive_runtime/evidence_materialization.py'
+      - 'runtime_engine/scripture_archive_runtime/evidence_registry.py'
+      - 'runtime_engine/tests/test_pa02_structured_materialization.py'
       - '.github/workflows/r06-packaged-library-current-shell.yml'
   workflow_dispatch:
 
@@ -82,6 +87,12 @@ jobs:
         run: python lanes/dev1/repair_overlay/tests/test_packaged_review_training_transport.py
       - name: Run packaged Review Training syntax regression
         run: python lanes/dev1/repair_overlay/tests/test_packaged_review_training_static_syntax.py
+      - name: Run PA02 structured-evidence runtime regression
+        env:
+          PYTHONPATH: ${{ github.workspace }}/runtime_engine
+        run: python runtime_engine/tests/test_pa02_structured_materialization.py
+      - name: Run packaged structured-evidence population regression
+        run: python lanes/dev1/repair_overlay/tests/test_packaged_structured_evidence_population.py
       - name: Diff hygiene
         shell: bash
         run: git diff --check

@@ -186,9 +186,19 @@ def verify_artifact(artifact: Path, manifest: Path) -> dict[str, Any]:
     return {"artifact": str(artifact), "manifest": str(manifest), "actual_size_bytes": actual_size, "actual_sha256": actual_sha, "ok": not problems, "problems": problems}
 
 
+def write_console(text: str) -> None:
+    stream = sys.stdout
+    encoding = getattr(stream, "encoding", None) or "utf-8"
+    try:
+        rendered = text.encode(encoding, errors="backslashreplace").decode(encoding)
+    except LookupError:
+        rendered = text.encode("ascii", errors="backslashreplace").decode("ascii")
+    stream.write(rendered + "\n")
+
+
 def write_json(path: Path | None, payload: dict[str, Any]) -> None:
     text = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
-    print(text)
+    write_console(text)
     if path is not None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text + "\n", encoding="utf-8")

@@ -7,6 +7,7 @@ param(
 $ErrorActionPreference = "Stop"
 $PlatformRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $Repo = (Resolve-Path (Join-Path $PlatformRoot "..")).Path
+$OverlayTests = Join-Path $Repo "lanes\dev1\repair_overlay\tests"
 $Dist = Join-Path $PlatformRoot "dist"
 $Name = "ScriptureArchive-R06-DEV01"
 $Exe = Join-Path $Dist "$Name.exe"
@@ -69,18 +70,24 @@ try {
 
     python -m compileall -q `
         (Join-Path $PlatformRoot "scripture_archive_platform") `
-        (Join-Path $PlatformRoot "tests") `
-        (Join-Path $PlatformRoot "packaging")
+        (Join-Path $PlatformRoot "packaging") `
+        $OverlayTests `
+        (Join-Path $Repo "runtime_engine")
     if ($LASTEXITCODE -ne 0) { throw "Python compileall failed with code $LASTEXITCODE" }
     $result.source_compile = $true
 
+    $PriorPythonPath = $env:PYTHONPATH
+    $env:PYTHONPATH = "$OverlayTests;$Repo;$PlatformRoot" + $(if ($PriorPythonPath) { ";$PriorPythonPath" } else { "" })
     Push-Location $PlatformRoot
     try {
-        python -m unittest discover -s tests -v
-        if ($LASTEXITCODE -ne 0) { throw "Unit tests failed with code $LASTEXITCODE" }
+        python -m unittest discover -s $OverlayTests -v
+        if ($LASTEXITCODE -ne 0) { throw "Composed overlay unit tests failed with code $LASTEXITCODE" }
         $result.unit_tests = $true
     }
-    finally { Pop-Location }
+    finally {
+        Pop-Location
+        $env:PYTHONPATH = $PriorPythonPath
+    }
 
     node --check (Join-Path $PlatformRoot "frontend\renderers.js")
     if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax check failed with code $LASTEXITCODE" }

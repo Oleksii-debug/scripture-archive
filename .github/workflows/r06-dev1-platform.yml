@@ -6,22 +6,23 @@ on:
     branches:
       - r06-dev1-platform-windows-constructor
       - r06-swarm-dev01-windows-release
+      - r06-repair-packaged-dev1-finalprep02-gate-0912-sol
     paths:
       - 'lanes/dev1/**'
+      - 'release_inputs/dev1_finalprep02/**'
       - 'runtime_engine/**'
       - '.github/workflows/r06-dev1-platform.yml'
   pull_request:
     paths:
       - 'lanes/dev1/**'
+      - 'release_inputs/dev1_finalprep02/**'
       - 'runtime_engine/**'
       - '.github/workflows/r06-dev1-platform.yml'
 
 env:
   DEV01_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-
-concurrency:
-  group: r06-dev1-${{ github.ref }}
-  cancel-in-progress: true
+  DEV01_BASE_SOURCE_SHA256: 10fbd546ff4d985465b85b99f4f64bff95d9ec8b1f27132c6d21b4930c344c35
+  PYTHONUTF8: '1'
 
 jobs:
   linux-contract-test:
@@ -42,20 +43,28 @@ jobs:
         run: |
           actual="$(git rev-parse HEAD)"
           test "$actual" = "$DEV01_SOURCE_SHA" || { echo "Expected $DEV01_SOURCE_SHA, got $actual"; exit 1; }
-      - name: Reconstruct immutable DEV1 base source
+      - name: Reconstruct and verify canonical FINALPREP02 DEV1 source baseline
         shell: bash
         run: |
-          cat lanes/dev1/source_parts/part-*.b64 | base64 -d > DEV1_R06_PLATFORM_SOURCE.zip
-          echo "51a31a8840b57850c8d4d0fc714b124445f3b3155daea083817c3570e0b80e0e  DEV1_R06_PLATFORM_SOURCE.zip" | sha256sum -c -
+          cat release_inputs/dev1_finalprep02/part-*.b64 | base64 -d > DEV1_R06_PLATFORM_SOURCE.zip
+          python lanes/dev1/verify_source_archive.py DEV1_R06_PLATFORM_SOURCE.zip "$DEV01_BASE_SOURCE_SHA256"
           python -m zipfile -e DEV1_R06_PLATFORM_SOURCE.zip .
+          test -d r06_platform || { echo "Verified archive did not extract required r06_platform directory"; exit 1; }
+      - name: Qualify immutable FINALPREP02 baseline before overlay
+        shell: bash
+        run: |
+          export PYTHONPATH="$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/r06_platform${PYTHONPATH:+:$PYTHONPATH}"
+          python -m compileall -q r06_platform/scripture_archive_platform r06_platform/tests r06_platform/packaging
+          (cd r06_platform && python -m unittest discover -s tests -v)
       - name: Apply readable pre-integration repair overlay
         shell: bash
         run: cp -R lanes/dev1/repair_overlay/. r06_platform/
-      - name: Compile and test repaired source
+      - name: Compile and test composed repaired source
         shell: bash
         run: |
-          python -m compileall -q r06_platform/scripture_archive_platform r06_platform/tests r06_platform/packaging
-          (cd r06_platform && python -m unittest discover -s tests -v)
+          export PYTHONPATH="$GITHUB_WORKSPACE/lanes/dev1/repair_overlay/tests:$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/r06_platform${PYTHONPATH:+:$PYTHONPATH}"
+          python -m compileall -q r06_platform/scripture_archive_platform r06_platform/packaging lanes/dev1/repair_overlay/tests runtime_engine
+          python -m unittest discover -s lanes/dev1/repair_overlay/tests -v
           node --check r06_platform/frontend/renderers.js
           python r06_platform/tools_smoke.py
           python r06_platform/packaging/windows_release.py diagnose \
@@ -90,15 +99,27 @@ jobs:
         run: |
           $actual = (git rev-parse HEAD).Trim()
           if ($actual -ne $env:DEV01_SOURCE_SHA) { throw "Expected $env:DEV01_SOURCE_SHA, got $actual" }
-      - name: Reconstruct immutable DEV1 base source
+      - name: Reconstruct and verify canonical FINALPREP02 DEV1 source baseline
         shell: pwsh
         run: |
-          $parts = Get-ChildItem lanes/dev1/source_parts/part-*.b64 | Sort-Object Name
+          $parts = Get-ChildItem release_inputs/dev1_finalprep02/part-*.b64 | Sort-Object Name
           $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
           [IO.File]::WriteAllBytes('DEV1_R06_PLATFORM_SOURCE.zip', [Convert]::FromBase64String($b64))
-          $hash = (Get-FileHash DEV1_R06_PLATFORM_SOURCE.zip -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($hash -ne '51a31a8840b57850c8d4d0fc714b124445f3b3155daea083817c3570e0b80e0e') { throw "Base source archive hash mismatch: $hash" }
+          python lanes\dev1\verify_source_archive.py DEV1_R06_PLATFORM_SOURCE.zip $env:DEV01_BASE_SOURCE_SHA256
+          if ($LASTEXITCODE -ne 0) { throw "DEV1 source archive verification failed with exit code $LASTEXITCODE" }
           Expand-Archive DEV1_R06_PLATFORM_SOURCE.zip -DestinationPath . -Force
+          if (-not (Test-Path r06_platform -PathType Container)) { throw 'Verified archive did not extract required r06_platform directory' }
+      - name: Qualify immutable FINALPREP02 baseline before overlay
+        shell: pwsh
+        run: |
+          $env:PYTHONPATH = "$env:GITHUB_WORKSPACE;$env:GITHUB_WORKSPACE\r06_platform" + $(if ($env:PYTHONPATH) { ";$env:PYTHONPATH" } else { "" })
+          python -m compileall -q r06_platform\scripture_archive_platform r06_platform\tests r06_platform\packaging
+          Push-Location r06_platform
+          try {
+            python -m unittest discover -s tests -v
+            if ($LASTEXITCODE -ne 0) { throw "FINALPREP02 baseline unit tests failed with exit code $LASTEXITCODE" }
+          }
+          finally { Pop-Location }
       - name: Apply readable pre-integration repair overlay
         shell: pwsh
         run: Copy-Item -Path lanes\dev1\repair_overlay\* -Destination r06_platform -Recurse -Force
@@ -112,6 +133,8 @@ jobs:
           New-Item -ItemType Directory -Force -Path (Join-Path $smokeRoot 'docs') | Out-Null
           Copy-Item -Path docs\campaigns -Destination (Join-Path $smokeRoot 'docs\campaigns') -Recurse -Force
           python "$smokePlatform\packaging\windows_release.py" diagnose --platform-root $smokePlatform --output "$smokeRoot\unicode_path_diagnostics.json"
+          if ($LASTEXITCODE -ne 0) { throw "Unicode/spaced-path diagnostic smoke failed with exit code $LASTEXITCODE" }
+          if (-not (Test-Path "$smokeRoot\unicode_path_diagnostics.json" -PathType Leaf)) { throw 'Unicode diagnostic JSON was not written' }
       - name: Run exact Windows engineering release gate
         shell: pwsh
         run: |

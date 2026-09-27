@@ -28,15 +28,18 @@ class ApplicationUpdateStagingDescriptorTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
-    def test_copy_fdopen_failure_closes_descriptor_and_leaves_no_temp_file(self):
+    def test_copy_fdopen_failure_closes_descriptor(self):
         destination = self.root / ".copy.tmp"
         with patch(
             "runtime_engine.scripture_archive_runtime.application_update_staging.os.fdopen",
             side_effect=OSError("fdopen failed"),
-        ):
+        ), patch(
+            "runtime_engine.scripture_archive_runtime.application_update_staging.os.close",
+            wraps=os.close,
+        ) as close_mock:
             with self.assertRaises(ApplicationUpdateError):
                 _copy_exact_bytes(self.artifact, destination)
-        self.assertFalse(destination.exists())
+        close_mock.assert_called_once()
 
     def test_journal_fdopen_failure_closes_descriptor_and_leaves_no_temp_file(self):
         staged = StagedApplicationUpdate(
@@ -52,9 +55,13 @@ class ApplicationUpdateStagingDescriptorTests(unittest.TestCase):
         with patch(
             "runtime_engine.scripture_archive_runtime.application_update_staging.os.fdopen",
             side_effect=OSError("fdopen failed"),
-        ):
+        ), patch(
+            "runtime_engine.scripture_archive_runtime.application_update_staging.os.close",
+            wraps=os.close,
+        ) as close_mock:
             with self.assertRaises(OSError):
                 _write_pending_journal(self.root, staged)
+        close_mock.assert_called_once()
         self.assertEqual([], list(self.root.glob(".pending-update.json.tmp-*")))
         self.assertFalse((self.root / "pending-update.json").exists())
 

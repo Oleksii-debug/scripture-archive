@@ -123,18 +123,47 @@ class PackagedPayloadFidelityTests(unittest.TestCase):
         windows_checkout = b"line one\r\nline two\r\n"
         expected_blob = MODULE.git_blob_sha(canonical)
 
+        repo_path = "lanes/dev1/repair_overlay/frontend/app.js"
         self.assertTrue(MODULE.git_blob_matches_checkout(canonical, expected_blob))
         self.assertTrue(
-            MODULE.git_blob_matches_checkout(windows_checkout, expected_blob)
+            MODULE.git_blob_matches_checkout(
+                windows_checkout,
+                expected_blob,
+                repo_path=repo_path,
+            )
         )
         self.assertFalse(
             MODULE.git_blob_matches_checkout(
                 b"line one\r\nline TWO\r\n",
                 expected_blob,
+                repo_path=repo_path,
             )
         )
         self.assertFalse(
             MODULE.git_blob_matches_checkout(canonical + b" ", expected_blob)
+        )
+
+    def test_git_blob_match_rejects_crlf_equivalence_for_non_text_or_nul_payload(self):
+        canonical = b"header\npayload\n"
+        staged = canonical.replace(b"\n", b"\r\n")
+        expected_blob = MODULE.git_blob_sha(canonical)
+
+        self.assertFalse(
+            MODULE.git_blob_matches_checkout(
+                staged,
+                expected_blob,
+                repo_path="lanes/dev1/repair_overlay/frontend/icon.png",
+            )
+        )
+
+        nul_canonical = b"header\x00\npayload\n"
+        nul_staged = nul_canonical.replace(b"\n", b"\r\n")
+        self.assertFalse(
+            MODULE.git_blob_matches_checkout(
+                nul_staged,
+                MODULE.git_blob_sha(nul_canonical),
+                repo_path="lanes/dev1/repair_overlay/frontend/app.js",
+            )
         )
 
     def test_entry_preserves_exact_staged_bytes_while_accepting_crlf_git_identity(self):
@@ -169,6 +198,7 @@ class PackagedPayloadFidelityTests(unittest.TestCase):
                     "size_bytes": len(staged),
                     "sha256": MODULE.sha256_hex(staged),
                     "git_blob_sha1": MODULE.git_blob_sha(canonical),
+                    "repo_path": "lanes/dev1/repair_overlay/frontend/app.js",
                     "provenance": "git_overlay",
                 }
             ],

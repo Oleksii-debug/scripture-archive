@@ -122,5 +122,27 @@
   "translation_id": "engwebu",
   "translation_name": "World English Bible Updated",
   "vpl_rows": 38058,
-  "vpl_sha256": "71c2ea1ecba86b62871b0e818c4302ea0a559a5cb9643ff05197a6243836fc2f"
+  "vpl_sha256": "71c2ea1ecba86b62871b0e818c4302ea0a559a5cb9643ff05197a6243836fc2f",
+  "source_snapshot_status": "AUDITED_PINNED_SNAPSHOT",
+  "upstream_monitoring": {
+    "status": "SOURCE_REAUDIT_REQUIRED",
+    "observed_utc": "2026-09-27T12:17:36Z",
+    "observed_archive_sha256": "1007fb45782a4abd9444d4225fd768fb00a150466b9fb9fcf6f6ad175b73feb6",
+    "observed_vpl_sha256": "8cac735abda379045fa2c5f43217410ad47a45ac592f3801116ab0da41a810d8",
+    "changed_reference_count": 10,
+    "added_reference_count": 0,
+    "removed_reference_count": 0,
+    "changed_references": [
+      "DAN 4:26",
+      "DAN 9:11",
+      "DAN 11:20",
+      "DAN 11:21",
+      "DAN 11:24",
+      "DNG 4:26",
+      "DNG 9:11",
+      "DNG 11:20",
+      "DNG 11:21",
+      "DNG 11:24"
+    ]
+  }
 }

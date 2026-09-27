@@ -30,6 +30,14 @@ class BundledScriptureTextTests(unittest.TestCase):
         self.assertEqual(29, catalog['source_empty_rows'])
         self.assertEqual(81, len(catalog['books']))
         self.assertFalse(catalog['runtime_network_required'])
+        self.assertEqual('AUDITED_PINNED_SNAPSHOT', catalog['source_snapshot_status'])
+        upstream = catalog['upstream_monitoring']
+        self.assertEqual('SOURCE_REAUDIT_REQUIRED', upstream['status'])
+        self.assertEqual(10, upstream['changed_reference_count'])
+        self.assertEqual(0, upstream['added_reference_count'])
+        self.assertEqual(0, upstream['removed_reference_count'])
+        self.assertEqual(10, len(upstream['changed_references']))
+        self.assertNotEqual(EXPECTED_VPL_SHA256, upstream['observed_vpl_sha256'])
 
     def test_chapter_preserves_exact_text_and_source_empty_rows(self):
         provider = BundledScriptureText()

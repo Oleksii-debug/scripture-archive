@@ -41,6 +41,28 @@ class BundledScriptureText:
             raise ValueError("unexpected WEBU authority identity")
         if data.get("vpl_sha256") != EXPECTED_VPL_SHA256 or data.get("runtime_network_required") is not False:
             raise ValueError("WEBU authority is not the pinned offline corpus")
+        if data.get("source_snapshot_status") != "AUDITED_PINNED_SNAPSHOT":
+            raise ValueError("WEBU authority must identify the bundled source as an audited pinned snapshot")
+        upstream = data.get("upstream_monitoring")
+        if not isinstance(upstream, dict) or upstream.get("status") != "SOURCE_REAUDIT_REQUIRED":
+            raise ValueError("WEBU authority must expose unresolved upstream source drift")
+        changed = upstream.get("changed_references")
+        if (
+            not isinstance(changed, list)
+            or any(not isinstance(ref, str) or not ref for ref in changed)
+            or len(set(changed)) != len(changed)
+            or upstream.get("changed_reference_count") != len(changed)
+            or upstream.get("added_reference_count") != 0
+            or upstream.get("removed_reference_count") != 0
+        ):
+            raise ValueError("invalid WEBU upstream drift inventory")
+        observed_vpl = upstream.get("observed_vpl_sha256")
+        if (
+            not isinstance(observed_vpl, str)
+            or len(observed_vpl) != 64
+            or observed_vpl == EXPECTED_VPL_SHA256
+        ):
+            raise ValueError("invalid WEBU observed upstream VPL identity")
         return data
 
     def _verify_vpl(self) -> bool:
@@ -116,6 +138,8 @@ class BundledScriptureText:
                 "source_site": self._authority["source_site"],
                 "vpl_sha256": EXPECTED_VPL_SHA256,
                 "runtime_network_required": False,
+                "source_snapshot_status": self._authority["source_snapshot_status"],
+                "upstream_monitoring": dict(self._authority["upstream_monitoring"]),
             },
         }
 

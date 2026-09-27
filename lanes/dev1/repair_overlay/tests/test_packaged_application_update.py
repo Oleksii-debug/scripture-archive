@@ -258,6 +258,52 @@ class AuthenticodePayloadTests(unittest.TestCase):
             run.assert_not_called()
 
 
+    def test_windows_verifier_uses_native_system_directory_not_hostile_environment(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            current = root / "current.exe"
+            candidate = root / "candidate.exe"
+            current.write_bytes(b"current")
+            candidate.write_bytes(b"candidate")
+            system32 = root / "trusted-system32"
+            powershell_root = system32 / "WindowsPowerShell" / "v1.0"
+            modules = powershell_root / "Modules"
+            modules.mkdir(parents=True)
+            powershell = powershell_root / "powershell.exe"
+            powershell.write_bytes(b"fake-powershell")
+            payload = self.payload()
+
+            completed = mock.Mock(returncode=0, stdout=payload)
+            with mock.patch(
+                "scripture_archive_platform.desktop_host.authenticode.os.name",
+                "nt",
+            ), mock.patch(
+                "scripture_archive_platform.desktop_host.authenticode._windows_system_directory",
+                return_value=system32,
+            ), mock.patch.dict(
+                "scripture_archive_platform.desktop_host.authenticode.os.environ",
+                {
+                    "WINDIR": str(root / "attacker-windir"),
+                    "PSModulePath": str(root / "attacker-modules"),
+                },
+                clear=False,
+            ), mock.patch(
+                "scripture_archive_platform.desktop_host.authenticode.subprocess.run",
+                return_value=completed,
+            ) as run:
+                self.assertTrue(verify_same_publisher_authenticode(current, candidate))
+
+            args, kwargs = run.call_args
+            self.assertEqual(str(powershell), args[0][0])
+            self.assertNotIn("attacker-windir", args[0][0])
+            self.assertEqual(str(modules), kwargs["env"]["PSModulePath"])
+            self.assertNotIn("attacker-modules", kwargs["env"]["PSModulePath"])
+            self.assertIn(
+                "Microsoft.PowerShell.Security\\Get-AuthenticodeSignature",
+                args[0][-1],
+            )
+
+
 class NativeUpdateFileSelectorTests(unittest.TestCase):
     class FakeWebview:
         class FileDialog:

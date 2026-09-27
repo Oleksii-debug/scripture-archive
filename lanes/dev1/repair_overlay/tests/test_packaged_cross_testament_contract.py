@@ -162,6 +162,30 @@ class PackagedCrossTestamentContractTests(unittest.TestCase):
         for expected in ("REL-X", "ISA7:14", "MT1:23", "witness=Isaiah", "witness=Matthew"):
             self.assertIn(expected, linear)
 
+    def test_unrelated_mixed_provenance_evidence_does_not_block_explicit_relations(self):
+        runtime = self._runtime()
+        runtime.add_evidence(
+            EvidenceRecord(
+                "EV-UNRELATED-MIXED",
+                (
+                    PassageRef("ACT9:7", "Acts", 9, 7, witness="Acts 9 narrator"),
+                    PassageRef("ACT22:9", "Acts", 22, 9, witness="Acts 22 Paul speech"),
+                ),
+                "Mixed source-local provenance outside the relation scope",
+                Confidence.T1,
+                witness=None,
+            )
+        )
+        runtime.unlock("EV-UNRELATED-MIXED")
+
+        data = project_packaged_cross_testament(runtime)
+
+        self.assertEqual([link["relation_id"] for link in data["links"]], ["REL-X"])
+        serialized = repr(data)
+        self.assertNotIn("EV-UNRELATED-MIXED", serialized)
+        self.assertNotIn("ACT9:7", serialized)
+        self.assertNotIn("ACT22:9", serialized)
+
     def test_locked_endpoint_remains_honest_not_stated_empty_state(self):
         data = project_packaged_cross_testament(self._runtime(unlock_nt=False))
         self.assertEqual(data["status"], "NOT_STATED_IN_CITED_TEXT")

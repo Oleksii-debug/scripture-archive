@@ -276,10 +276,12 @@ def _index_passages(
         record = evidence[evidence_id]
         _validate_evidence(record, expected_id=evidence_id)
         resolved_witness = resolve_evidence_witness(record)
-        has_witness_signal = record.witness is not None or any(
-            passage.witness is not None for passage in record.passage_refs
-        )
-        if has_witness_signal and resolved_witness is None:
+        # A record-level witness is an assertion about every cited passage and
+        # therefore must resolve exactly. A witness-null record may intentionally
+        # aggregate multiple source-local passage witnesses; preserve each one at
+        # the passage provenance boundary instead of treating plurality as a
+        # contradiction (for example EV-PA-0016/0017).
+        if record.witness is not None and resolved_witness is None:
             raise ValueError(
                 f"Evidence {record.evidence_id} witness conflicts with passage or is malformed"
             )
@@ -296,7 +298,11 @@ def _index_passages(
                     evidence_id=record.evidence_id,
                     confidence=record.confidence.value,
                     tx1=record.tx1,
-                    witness=resolved_witness,
+                    witness=(
+                        resolved_witness
+                        if resolved_witness is not None
+                        else passage.witness
+                    ),
                 )
             )
     return passages, {

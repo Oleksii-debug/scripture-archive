@@ -64,7 +64,7 @@ class D4ReadableLibraryConsumptionTests(unittest.TestCase):
         gradeable_campaigns = {row["campaign_id"] for row in self.loader.list_campaigns()}
         self.assertNotIn(D4_CAMPAIGN, gradeable_campaigns)
 
-    def test_existing_gradeable_runtime_nodes_remain_loadable(self):
+    def test_existing_gradeable_runtime_nodes_remain_loadable_and_marked_eligible(self):
         self.loader._ensure()
         self.assertTrue(self.loader._nodes)
         node_id = sorted(self.loader._nodes)[0]
@@ -72,6 +72,12 @@ class D4ReadableLibraryConsumptionTests(unittest.TestCase):
         self.assertEqual(node_id, loaded["node_id"])
         mission = self.loader.mission_for_node(node_id)
         self.assertTrue(mission["mission_id"])
+
+        result = self.library.search(node_id, limit=100)
+        rows = [row for row in result["results"] if row["kind"] == "task" and row["id"] == node_id]
+        self.assertEqual(1, len(rows))
+        self.assertEqual("GRADEABLE_RUNTIME", rows[0]["content_access"])
+        self.assertTrue(rows[0]["gradeable_runtime_eligible"])
 
     def test_unqualified_readable_canary_cannot_enter_gradeable_loader(self):
         with tempfile.TemporaryDirectory() as tmp:

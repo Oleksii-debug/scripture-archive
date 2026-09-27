@@ -3,6 +3,7 @@ name: R06 DEV02 Accessibility Qualification
 on:
   pull_request:
     paths:
+      - 'lanes/dev1/repair_overlay/frontend/index.html'
       - 'lanes/dev1/repair_overlay/frontend/app.js'
       - 'lanes/dev1/repair_overlay/frontend/hotkeys.js'
       - 'lanes/dev1/repair_overlay/frontend/keymap-ui.js'

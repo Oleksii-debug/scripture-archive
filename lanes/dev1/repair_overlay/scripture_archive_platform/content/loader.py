@@ -5,11 +5,12 @@ from typing import Any
 from scripture_archive_platform.domain.models import CONTENT_SCHEMA_VERSION
 from scripture_archive_platform.transport.answer_contracts import canonical_task_type, answer_contract_descriptor
 from scripture_archive_platform.composite_accessibility import inspect_packaged_task
+from scripture_archive_platform.content.d2_materialization import LegacyD2MaterializationLoader, D2MaterializationLoadError
 
 class ContentLoadError(RuntimeError): pass
 
 class CanonicalContentLoader:
-    """Read-only loader over canonical mission indexes and JSON shards. No question text is hard-coded here."""
+    """Read-only loader over canonical mission indexes plus verified legacy materializations."""
     def __init__(self,repo_root: Path):
         self.repo_root=Path(repo_root).resolve(); self._missions=None; self._nodes=None; self._mission_for_node={}
     @property
@@ -22,6 +23,7 @@ class CanonicalContentLoader:
             except Exception as exc: raise ContentLoadError(f'invalid mission index {idx_path}: {exc}') from exc
             mission=idx.get('mission') or {}; mid=mission.get('mission_id'); cid=mission.get('campaign_id')
             if not mid or not cid: raise ContentLoadError(f'mission index missing ids: {idx_path}')
+            if any(existing['mission_id']==mid for existing in missions): raise ContentLoadError(f'duplicate mission_id {mid!r}')
             entry={
               'mission_id':mid,'campaign_id':cid,'title':mission.get('title',mid),'difficulty':mission.get('difficulty'),
               'entry_node':mission.get('entry_node'),'node_count':idx.get('node_count'),
@@ -37,6 +39,19 @@ class CanonicalContentLoader:
                     nid=node.get('node_id')
                     if not nid or nid in nodes: raise ContentLoadError(f'duplicate/empty node_id {nid!r}')
                     nodes[nid]=node; mission_for_node[nid]=entry
+        d2_root=self.campaigns_root/'PA'/'R06_DEV2_MATERIALIZATION_05'
+        if d2_root.is_dir():
+            try:
+                d2=LegacyD2MaterializationLoader(self.repo_root,d2_root); d2._ensure()
+            except D2MaterializationLoadError as exc:
+                raise ContentLoadError(f'invalid D2 materialization: {exc}') from exc
+            known_missions={m['mission_id'] for m in missions}
+            for entry in d2._missions or []:
+                if entry['mission_id'] in known_missions: raise ContentLoadError(f'duplicate mission_id {entry["mission_id"]!r}')
+                missions.append(dict(entry)); known_missions.add(entry['mission_id'])
+            for nid,node in (d2._nodes or {}).items():
+                if nid in nodes: raise ContentLoadError(f'duplicate node_id {nid!r}')
+                nodes[nid]=dict(node); mission_for_node[nid]=dict(d2._mission_for_node[nid])
         self._missions=missions; self._nodes=nodes; self._mission_for_node=mission_for_node
     def refresh(self): self._scan()
     def _ensure(self):
@@ -58,8 +73,10 @@ class CanonicalContentLoader:
     def next_node_id(self,node_id:str,outcome:str='correct')->str|None:
         node=self.load_node(node_id); raw=node.get({'correct':'on_correct','partial':'on_partial','incorrect':'on_incorrect'}.get(outcome,'on_correct'))
         if not isinstance(raw,str): return None
-        match=re.fullmatch(r'(?:RESOLVED_NODE\s+)?([A-Z]{2,4}\d{2}-[NO]\d{2})',raw.strip())
-        return match.group(1) if match else None
+        candidate=raw.strip()
+        if candidate in self._nodes:return candidate
+        match=re.fullmatch(r'(?:RESOLVED_NODE\s+)?([A-Z]{2,4}\d{2}-[NO]\d{2})',candidate)
+        return match.group(1) if match and match.group(1) in self._nodes else None
 
 class TaskPresentationMapper:
     """Backward-compatible view mapper. It uses response/task metadata, never node IDs."""

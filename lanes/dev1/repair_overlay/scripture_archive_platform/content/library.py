@@ -19,12 +19,11 @@ _D4_NODE_COUNT = 450
 
 
 class CanonicalLibraryIndex:
-    """Read-only search/catalog view over canonical and qualified readable content.
+    """Derived read-only catalog/search over gradeable plus qualified readable content.
 
-    Gradeable content remains owned exclusively by ``CanonicalContentLoader``.
-    A qualified D4 readable corpus may additionally be projected into this Library
-    view, but it is never inserted into the loader's gradeable mission/node maps.
-    The index is derived on demand and persists no second truth store.
+    ``CanonicalContentLoader`` remains the only gradeable mission/node authority.
+    Qualified D4 JSONL records are projected only into this Library view and never
+    inserted into the loader's gradeable maps or persisted as a second truth store.
     """
 
     def __init__(self, loader: CanonicalContentLoader):
@@ -59,6 +58,20 @@ class CanonicalLibraryIndex:
                 out.append(value)
         return out
 
+    @classmethod
+    def _mission_source_refs(cls, mission: dict[str, Any]) -> list[str]:
+        return cls._unique(
+            cls._text_values(mission.get("primary_scripture"))
+            + cls._text_values(mission.get("secondary_scripture"))
+        )
+
+    @classmethod
+    def _node_source_refs(cls, node: dict[str, Any], mission: dict[str, Any]) -> list[str]:
+        return cls._unique(
+            cls._text_values(node.get("source_scope_visible_to_player"))
+            + cls._mission_source_refs(mission)
+        )
+
     @staticmethod
     def _load_json(path: Path) -> Any:
         try:
@@ -66,13 +79,13 @@ class CanonicalLibraryIndex:
         except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise ContentLoadError(f"invalid qualified readable D4 JSON {path}: {exc}") from exc
 
-    @classmethod
-    def _load_jsonl(cls, path: Path) -> list[dict[str, Any]]:
-        rows: list[dict[str, Any]] = []
+    @staticmethod
+    def _load_jsonl(path: Path) -> list[dict[str, Any]]:
         try:
             lines = path.read_text(encoding="utf-8").splitlines()
         except (OSError, UnicodeDecodeError) as exc:
             raise ContentLoadError(f"cannot read qualified readable D4 JSONL {path}: {exc}") from exc
+        rows: list[dict[str, Any]] = []
         for line_number, line in enumerate(lines, 1):
             if not line.strip():
                 continue
@@ -85,21 +98,10 @@ class CanonicalLibraryIndex:
             rows.append(row)
         return rows
 
-    @classmethod
-    def _mission_source_refs(cls, mission: dict[str, Any]) -> list[str]:
-        return cls._unique(
-            cls._text_values(mission.get("primary_scripture"))
-            + cls._text_values(mission.get("secondary_scripture"))
-        )
-
-    @classmethod
-    def _node_source_refs(cls, node: dict[str, Any], mission: dict[str, Any]) -> list[str]:
-        # Only player-visible source scope plus mission-visible Scripture scope are
-        # searchable. Answer/grading/evidence-unlock truth remains deliberately out.
-        return cls._unique(
-            cls._text_values(node.get("source_scope_visible_to_player"))
-            + cls._mission_source_refs(mission)
-        )
+    @staticmethod
+    def _require_real_dir(path: Path, label: str) -> None:
+        if path.is_symlink() or not path.is_dir():
+            raise ContentLoadError(f"qualified readable D4 {label} must be a real directory")
 
     def _qualified_d4_records(
         self,
@@ -107,8 +109,10 @@ class CanonicalLibraryIndex:
         root = self.loader.repo_root / _D4_RELATIVE_ROOT
         if not root.exists():
             return [], {}, {}
-        if root.is_symlink() or not root.is_dir():
-            raise ContentLoadError("qualified readable D4 root must be a real directory")
+        self._require_real_dir(root, "root")
+        self._require_real_dir(root / "metadata", "metadata directory")
+        self._require_real_dir(root / "registries", "registries directory")
+        self._require_real_dir(root / "nodes", "nodes directory")
 
         metadata_path = root / "metadata" / "mission_index_metadata.json"
         if metadata_path.is_symlink() or not metadata_path.is_file():
@@ -133,24 +137,25 @@ class CanonicalLibraryIndex:
             raise ContentLoadError("qualified readable D4 mission sequence is invalid")
         campaign_title = self._clean(campaign.get("title_ua")) or _D4_CAMPAIGN_ID
 
-        mission_rows: list[dict[str, Any]] = []
+        raw_by_id: dict[str, dict[str, Any]] = {}
         for path in sorted((root / "registries").glob("missions_*.jsonl")):
             if path.is_symlink() or not path.is_file():
                 raise ContentLoadError("qualified readable D4 mission registry contains unsafe path")
-            mission_rows.extend(self._load_jsonl(path))
-        if len(mission_rows) != _D4_MISSION_COUNT:
-            raise ContentLoadError("qualified readable D4 mission registry count changed")
+            for raw in self._load_jsonl(path):
+                mid = raw.get("mission_id")
+                if not isinstance(mid, str) or mid not in sequence or mid in raw_by_id:
+                    raise ContentLoadError(f"unexpected or duplicate qualified readable D4 mission: {mid}")
+                raw_by_id[mid] = raw
+        if set(raw_by_id) != set(sequence):
+            raise ContentLoadError("qualified readable D4 mission registry set changed")
 
         missions: list[dict[str, Any]] = []
         missions_by_id: dict[str, dict[str, Any]] = {}
-        expected_nodes_by_mission: dict[str, set[str]] = {}
-        for raw in mission_rows:
-            mid = raw.get("mission_id")
-            cid = raw.get("campaign_id")
+        expected_nodes: dict[str, set[str]] = {}
+        for mid in sequence:
+            raw = raw_by_id[mid]
             task_nodes = raw.get("task_nodes")
-            if not isinstance(mid, str) or mid not in sequence or mid in missions_by_id:
-                raise ContentLoadError(f"unexpected or duplicate qualified readable D4 mission: {mid}")
-            if cid != _D4_CAMPAIGN_ID:
+            if raw.get("campaign_id") != _D4_CAMPAIGN_ID:
                 raise ContentLoadError(f"qualified readable D4 mission campaign changed: {mid}")
             if not isinstance(task_nodes, list) or not task_nodes or not all(isinstance(v, str) and v for v in task_nodes):
                 raise ContentLoadError(f"qualified readable D4 mission task_nodes invalid: {mid}")
@@ -158,7 +163,7 @@ class CanonicalLibraryIndex:
                 raise ContentLoadError(f"qualified readable D4 mission task_nodes duplicate: {mid}")
             entry = {
                 "mission_id": mid,
-                "campaign_id": cid,
+                "campaign_id": _D4_CAMPAIGN_ID,
                 "title": self._clean(raw.get("title")) or mid,
                 "difficulty": raw.get("difficulty"),
                 "entry_node": raw.get("entry_node"),
@@ -173,14 +178,11 @@ class CanonicalLibraryIndex:
             }
             missions.append(entry)
             missions_by_id[mid] = entry
-            expected_nodes_by_mission[mid] = set(task_nodes)
-        if [item["mission_id"] for item in missions] != sequence:
-            # Registry shard order is itself qualified and must match metadata order.
-            raise ContentLoadError("qualified readable D4 mission registry order changed")
+            expected_nodes[mid] = set(task_nodes)
 
         nodes: dict[str, dict[str, Any]] = {}
         mission_for_node: dict[str, dict[str, Any]] = {}
-        actual_nodes_by_mission: dict[str, set[str]] = {mid: set() for mid in missions_by_id}
+        actual_nodes: dict[str, set[str]] = {mid: set() for mid in missions_by_id}
         for path in sorted((root / "nodes").glob("nodes_*.jsonl")):
             if path.is_symlink() or not path.is_file():
                 raise ContentLoadError("qualified readable D4 node registry contains unsafe path")
@@ -189,37 +191,39 @@ class CanonicalLibraryIndex:
                 mid = node.get("mission_id")
                 if not isinstance(nid, str) or not nid or nid in nodes:
                     raise ContentLoadError(f"duplicate/empty qualified readable D4 node: {nid!r}")
-                if mid not in missions_by_id or nid not in expected_nodes_by_mission[mid]:
+                if mid not in missions_by_id or nid not in expected_nodes[mid]:
                     raise ContentLoadError(f"qualified readable D4 node/mission binding changed: {nid}")
                 nodes[nid] = node
                 mission_for_node[nid] = missions_by_id[mid]
-                actual_nodes_by_mission[mid].add(nid)
+                actual_nodes[mid].add(nid)
         if len(nodes) != _D4_NODE_COUNT:
             raise ContentLoadError("qualified readable D4 node count changed")
-        for mid, expected in expected_nodes_by_mission.items():
-            if actual_nodes_by_mission[mid] != expected:
+        for mid, expected in expected_nodes.items():
+            if actual_nodes[mid] != expected:
                 raise ContentLoadError(f"qualified readable D4 mission node set changed: {mid}")
         return missions, nodes, mission_for_node
 
     def _records(self) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
-        self.loader._ensure()  # Same-package read-only view; no independent persistent store.
+        self.loader._ensure()
         missions: list[dict[str, Any]] = []
-        for item in self.loader._missions or []:
-            mission = dict(item)
+        gradeable_by_id: dict[str, dict[str, Any]] = {}
+        for raw in self.loader._missions or []:
+            mission = dict(raw)
+            cid = str(mission.get("campaign_id") or "")
             mission["content_access"] = "GRADEABLE_RUNTIME"
             mission["gradeable_runtime_eligible"] = True
-            mission["_campaign_title"] = {"LN": "Остання ніч", "PA": "Дорога Павла"}.get(
-                str(mission.get("campaign_id") or ""), str(mission.get("campaign_id") or "")
-            )
+            mission["_campaign_title"] = {"LN": "Остання ніч", "PA": "Дорога Павла"}.get(cid, cid)
             missions.append(mission)
+            gradeable_by_id[str(mission.get("mission_id") or "")] = mission
+
         nodes = {str(key): dict(value) for key, value in (self.loader._nodes or {}).items()}
-        mission_for_node = {
-            str(key): dict(value) for key, value in (self.loader._mission_for_node or {}).items()
-        }
+        mission_for_node: dict[str, dict[str, Any]] = {}
+        for key, raw in (self.loader._mission_for_node or {}).items():
+            mid = str(raw.get("mission_id") or "")
+            mission_for_node[str(key)] = dict(gradeable_by_id.get(mid) or raw)
 
         d4_missions, d4_nodes, d4_mission_for_node = self._qualified_d4_records()
-        existing_missions = {str(item.get("mission_id") or "") for item in missions}
-        if existing_missions.intersection(str(item.get("mission_id") or "") for item in d4_missions):
+        if set(gradeable_by_id).intersection(str(item.get("mission_id") or "") for item in d4_missions):
             raise ContentLoadError("qualified readable D4 mission collides with gradeable runtime mission")
         if set(nodes).intersection(d4_nodes):
             raise ContentLoadError("qualified readable D4 node collides with gradeable runtime node")
@@ -260,8 +264,8 @@ class CanonicalLibraryIndex:
         return [self._public_mission(item) for item in missions if item.get("campaign_id") == campaign_id]
 
     def catalog(self) -> dict[str, Any]:
-        missions, nodes, _ = self._records()
-        mission_rows = []
+        missions, nodes, mission_for_node = self._records()
+        mission_rows: list[dict[str, Any]] = []
         passage_refs: list[str] = []
         for mission in sorted(missions, key=lambda item: (str(item.get("campaign_id")), str(item.get("mission_id")))):
             refs = self._mission_source_refs(mission)
@@ -282,10 +286,7 @@ class CanonicalLibraryIndex:
                 }
             )
         for node_id, node in sorted(nodes.items()):
-            mission = (dict((self.loader._mission_for_node or {}).get(node_id) or {}))
-            if not mission:
-                mission = next((item for item in missions if item.get("mission_id") == node.get("mission_id")), {})
-            passage_refs.extend(self._node_source_refs(node, mission))
+            passage_refs.extend(self._node_source_refs(node, mission_for_node.get(node_id) or {}))
         return {
             "schema": CATALOG_SCHEMA,
             "source_of_truth": "CanonicalContentLoader",
@@ -326,14 +327,7 @@ class CanonicalLibraryIndex:
             raise ValueError(f"invalid {name}")
         return value
 
-    def search(
-        self,
-        query: Any,
-        *,
-        campaign_id: Any = None,
-        mission_id: Any = None,
-        limit: Any = 25,
-    ) -> dict[str, Any]:
+    def search(self, query: Any, *, campaign_id: Any = None, mission_id: Any = None, limit: Any = 25) -> dict[str, Any]:
         if not isinstance(query, str):
             raise ValueError("query must be string")
         query = self._clean(query)
@@ -346,24 +340,17 @@ class CanonicalLibraryIndex:
 
         missions, nodes, mission_for_node = self._records()
         results: list[dict[str, Any]] = []
-
         for mission in missions:
             cid = str(mission.get("campaign_id") or "")
             mid = str(mission.get("mission_id") or "")
-            if campaign_filter and cid != campaign_filter:
-                continue
-            if mission_filter and mid != mission_filter:
+            if (campaign_filter and cid != campaign_filter) or (mission_filter and mid != mission_filter):
                 continue
             refs = self._mission_source_refs(mission)
-            fields = [cid, mid, self._clean(mission.get("title")), *refs]
-            score = self._score(query, fields)
+            score = self._score(query, [cid, mid, self._clean(mission.get("title")), *refs])
             if score:
                 results.append(
                     {
-                        "kind": "mission",
-                        "id": mid,
-                        "campaign_id": cid,
-                        "mission_id": mid,
+                        "kind": "mission", "id": mid, "campaign_id": cid, "mission_id": mid,
                         "title": self._clean(mission.get("title")) or mid,
                         "snippet": refs[0] if refs else self._clean(mission.get("title")),
                         "source_references": refs,
@@ -377,26 +364,18 @@ class CanonicalLibraryIndex:
             mission = mission_for_node.get(node_id) or {}
             cid = str(mission.get("campaign_id") or node.get("campaign_id") or "")
             mid = str(node.get("mission_id") or mission.get("mission_id") or "")
-            if campaign_filter and cid != campaign_filter:
-                continue
-            if mission_filter and mid != mission_filter:
+            if (campaign_filter and cid != campaign_filter) or (mission_filter and mid != mission_filter):
                 continue
             refs = self._node_source_refs(node, mission)
             prompt = self._clean(node.get("player_prompt"))
             task_family = self._clean(node.get("task_family"))
-            fields = [node_id, cid, mid, prompt, task_family, *refs]
-            score = self._score(query, fields)
+            score = self._score(query, [node_id, cid, mid, prompt, task_family, *refs])
             if score:
                 results.append(
                     {
-                        "kind": "task",
-                        "id": node_id,
-                        "campaign_id": cid,
-                        "mission_id": mid,
-                        "title": prompt or node_id,
-                        "snippet": prompt,
-                        "task_family": task_family or None,
-                        "difficulty": node.get("difficulty"),
+                        "kind": "task", "id": node_id, "campaign_id": cid, "mission_id": mid,
+                        "title": prompt or node_id, "snippet": prompt,
+                        "task_family": task_family or None, "difficulty": node.get("difficulty"),
                         "source_references": refs,
                         "content_access": mission.get("content_access"),
                         "gradeable_runtime_eligible": mission.get("gradeable_runtime_eligible") is True,
@@ -405,12 +384,11 @@ class CanonicalLibraryIndex:
                 )
 
         results.sort(key=lambda item: (-int(item["score"]), item["kind"], item["id"]))
-        total = len(results)
         return {
             "schema": SEARCH_SCHEMA,
             "query": query,
             "filters": {"campaign_id": campaign_filter, "mission_id": mission_filter},
-            "total": total,
+            "total": len(results),
             "results": results[:limit],
             "source_of_truth": "CanonicalContentLoader",
             "derived_index": True,

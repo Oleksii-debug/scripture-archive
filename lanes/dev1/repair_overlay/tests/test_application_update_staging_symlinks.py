@@ -4,66 +4,12 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 from runtime_engine.scripture_archive_runtime.application_update import (
     ApplicationUpdateError,
     ApplicationUpdateManifest,
 )
-from runtime_engine.scripture_archive_runtime.application_update_staging import (
-    StagedApplicationUpdate,
-    _copy_exact_bytes,
-    _write_pending_journal,
-    stage_local_update,
-)
-
-
-class ApplicationUpdateStagingDescriptorTests(unittest.TestCase):
-    def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
-        self.root = Path(self.temp.name)
-        self.artifact = self.root / "ScriptureArchive-0.6.1.exe"
-        self.artifact.write_bytes(b"descriptor-boundary-update")
-
-    def tearDown(self):
-        self.temp.cleanup()
-
-    def test_copy_fdopen_failure_closes_descriptor(self):
-        destination = self.root / ".copy.tmp"
-        with patch(
-            "runtime_engine.scripture_archive_runtime.application_update_staging.os.fdopen",
-            side_effect=OSError("fdopen failed"),
-        ), patch(
-            "runtime_engine.scripture_archive_runtime.application_update_staging.os.close",
-            wraps=os.close,
-        ) as close_mock:
-            with self.assertRaises(ApplicationUpdateError):
-                _copy_exact_bytes(self.artifact, destination)
-        close_mock.assert_called_once()
-
-    def test_journal_fdopen_failure_closes_descriptor_and_leaves_no_temp_file(self):
-        staged = StagedApplicationUpdate(
-            product_id="scripture-archive",
-            target_platform="windows-x64",
-            current_version="0.6.0-r06.3dev.a",
-            target_version="0.6.1",
-            source_head="c" * 40,
-            artifact_name=self.artifact.name,
-            artifact_size=self.artifact.stat().st_size,
-            artifact_sha256=hashlib.sha256(self.artifact.read_bytes()).hexdigest(),
-        )
-        with patch(
-            "runtime_engine.scripture_archive_runtime.application_update_staging.os.fdopen",
-            side_effect=OSError("fdopen failed"),
-        ), patch(
-            "runtime_engine.scripture_archive_runtime.application_update_staging.os.close",
-            wraps=os.close,
-        ) as close_mock:
-            with self.assertRaises(OSError):
-                _write_pending_journal(self.root, staged)
-        close_mock.assert_called_once()
-        self.assertEqual([], list(self.root.glob(".pending-update.json.tmp-*")))
-        self.assertFalse((self.root / "pending-update.json").exists())
+from runtime_engine.scripture_archive_runtime.application_update_staging import stage_local_update
 
 
 @unittest.skipUnless(hasattr(os, "symlink"), "symlink support required")

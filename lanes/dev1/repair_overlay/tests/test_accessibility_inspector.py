@@ -20,6 +20,12 @@ class AccessibilityInspectorTests(unittest.TestCase):
             "response_mode": "classification",
             "accepted_answer": "SUPPORTED",
             "rejected_answers": "UNSUPPORTED",
+            "ui_metadata": {
+                "options": [
+                    {"id": "SUPPORTED", "label": "Supported"},
+                    {"id": "UNSUPPORTED", "label": "Unsupported"},
+                ]
+            },
             "required_evidence": "Mark 14:13",
             "confidence_code": "T1",
             "textual_variant_flag": "none",
@@ -66,6 +72,7 @@ class AccessibilityInspectorTests(unittest.TestCase):
                 "task_type": "ORDERING",
                 "response_mode": "ordering",
                 "accepted_answer": ["first", "second"],
+                "ui_metadata": {},
             }
         )
         task = self.mapper.to_renderable(node, self.mission)

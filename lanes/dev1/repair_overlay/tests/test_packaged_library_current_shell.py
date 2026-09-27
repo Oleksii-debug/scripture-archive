@@ -22,7 +22,7 @@ class PackagedLibraryCurrentShellTest(unittest.TestCase):
         cls.index = (ROOT / "index.html").read_text(encoding="utf-8")
 
     def test_qualified_library_donor_blob_is_exact(self):
-        donor = (ROOT / "library-ui.js").read_bytes()
+        donor = (ROOT / "library-ui.js").read_text(encoding="utf-8").encode("utf-8")
         self.assertEqual(git_blob_sha(donor), EXPECTED_LIBRARY_UI_BLOB)
 
     def test_current_transport_preserves_package_loaders_and_composes_coordinator_surfaces(self):

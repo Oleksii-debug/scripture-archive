@@ -132,6 +132,13 @@ class PackagedPayloadFidelityTests(unittest.TestCase):
                 repo_path=repo_path,
             )
         )
+        self.assertTrue(
+            MODULE.git_blob_matches_checkout(
+                windows_checkout,
+                expected_blob,
+                repo_path="docs/campaigns/example.json",
+            )
+        )
         self.assertFalse(
             MODULE.git_blob_matches_checkout(
                 b"line one\r\nline TWO\r\n",
@@ -164,6 +171,34 @@ class PackagedPayloadFidelityTests(unittest.TestCase):
                 MODULE.git_blob_sha(nul_canonical),
                 repo_path="lanes/dev1/repair_overlay/frontend/app.js",
             )
+        )
+
+    def test_verify_reader_rejects_binary_crlf_lookalike_even_with_exact_staged_hash(self):
+        canonical = b"header\npayload\n"
+        staged = canonical.replace(b"\n", b"\r\n")
+        path = "r06_platform/frontend/icon.png"
+        manifest = {
+            "schema_version": 1,
+            "git_sha": "1" * 40,
+            "entries": [
+                {
+                    "package_path": path,
+                    "size_bytes": len(staged),
+                    "sha256": MODULE.sha256_hex(staged),
+                    "git_blob_sha1": MODULE.git_blob_sha(canonical),
+                    "repo_path": "lanes/dev1/repair_overlay/frontend/icon.png",
+                    "provenance": "git_overlay",
+                }
+            ],
+        }
+
+        result = MODULE.verify_reader(FakeArchive({path: staged}), manifest)
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(0, result["files_verified"])
+        self.assertTrue(
+            any(error.startswith("GIT_BLOB_MISMATCH") for error in result["errors"]),
+            result["errors"],
         )
 
     def test_entry_preserves_exact_staged_bytes_while_accepting_crlf_git_identity(self):

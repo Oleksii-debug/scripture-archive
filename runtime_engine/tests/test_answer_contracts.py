@@ -64,4 +64,38 @@ class AnswerContractTests(unittest.TestCase):
         self.assertEqual(adapted["grading"]["accepted_text_aliases"], [node["accepted_variants"]])
 
 
+    def test_structured_free_response_uses_existing_short_text_contract(self):
+        self.assertEqual(canonical_task_type("structured free response"), "SHORT_TEXT")
+        dto = validate_answer_dto(
+            "STRUCTURED_FREE_RESPONSE",
+            {
+                "task_type": "SHORT_TEXT",
+                "text": "A large upper room that was furnished, where the preparation was to be made.",
+            },
+        )
+        self.assertEqual(dto["task_type"], "SHORT_TEXT")
+
+        # Canonical LN01-N08 semantics: this historical response_mode is still
+        # a semantic free-text answer.  Preserve authored truth and project it
+        # through the existing text DTO/grader instead of inventing a new type.
+        node = {
+            "node_id": "LN01-N08",
+            "mission_id": "LN-01",
+            "response_mode": "structured free response",
+            "task_family": "evidence extraction",
+            "accepted_answer": "A large upper/upstairs room that was furnished, where the preparation was to be made.",
+            "accepted_variants": "Equivalent translation wording preserving large + upper/upstairs + furnished.",
+            "required_evidence": ["Mark 14:15", "Luke 22:12"],
+        }
+        projected = canonical_answer_dto(node)
+        self.assertEqual(projected["task_type"], "SHORT_TEXT")
+        self.assertEqual(projected["text"], node["accepted_answer"])
+
+        adapted = adapt_node_for_runtime(node, lane="LN-01")
+        self.assertEqual(adapted["task_type"], "SHORT_TEXT")
+        self.assertEqual(adapted["answer_dto"], projected)
+        self.assertEqual(adapted["grading"]["accepted_text"], node["accepted_answer"])
+        self.assertEqual(adapted["grading"]["accepted_text_aliases"], [node["accepted_variants"]])
+
+
 if __name__ == '__main__': unittest.main()

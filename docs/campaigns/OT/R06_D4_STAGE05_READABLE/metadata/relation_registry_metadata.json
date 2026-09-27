@@ -1,0 +1,14 @@
+{
+  "schema_version": "OTNT_RELATION_REGISTRY_v1.0",
+  "taxonomy": [
+    "DIRECT_QUOTATION",
+    "EXPLICIT_FULFILMENT_CLAIM",
+    "TYPOLOGICAL_USE",
+    "THEMATIC_ECHO",
+    "LEXICAL_PARALLEL",
+    "NARRATIVE_PARALLEL",
+    "PROMISE_APPLICATION",
+    "DISPUTED_CONNECTION"
+  ],
+  "rule": "Do not call every relation prophecy. I1 for interpretation; D1 for disputed. Relation classification cannot be upgraded by familiarity."
+}

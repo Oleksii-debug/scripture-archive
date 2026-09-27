@@ -26,9 +26,15 @@ _NT_BOOKS = (
     "Titus", "Philemon", "Hebrews", "James", "1 Peter", "2 Peter", "1 John", "2 John", "3 John", "Jude",
     "Revelation",
 )
+# The independently accepted D4 relation shards author Psalms references with
+# the singular book token "Psalm". Keep that exact canonical token explicit
+# here; do not normalize source records or admit arbitrary aliases.
+_CANONICAL_BOOK_ALIASES: Mapping[str, str] = {"Psalm": "OT"}
+
 BOOK_TESTAMENTS: Mapping[str, str] = {
     **{book: "OT" for book in _OT_BOOKS},
     **{book: "NT" for book in _NT_BOOKS},
+    **_CANONICAL_BOOK_ALIASES,
 }
 
 

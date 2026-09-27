@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from scripture_archive_platform.application.cross_testament_projection import project_packaged_cross_testament
+from scripture_archive_platform.application.cross_testament_projection import BOOK_TESTAMENTS, project_packaged_cross_testament
 from scripture_archive_platform.application.runtime_gateway import build_runtime_gateway
 from scripture_archive_platform.application.service import PlatformApplication
 from scripture_archive_platform.transport.contracts import validate_request_shape
@@ -127,6 +127,20 @@ class PackagedCrossTestamentContractTests(unittest.TestCase):
             [link["relation_id"] for link in data["links"]],
             expected_relation_ids,
         )
+
+    def test_materialized_canonical_book_tokens_are_explicitly_classified(self):
+        repo_root = Path(__file__).resolve().parents[4]
+        bundles = (
+            load_otnt_relation_pack(repo_root),
+            load_independently_audited_d4_otnt(repo_root),
+        )
+        seen = {}
+        for bundle in bundles:
+            for record in bundle.runtime.evidence.values():
+                for passage in record.passage_refs:
+                    self.assertIn(passage.book, BOOK_TESTAMENTS)
+                    seen[passage.book] = BOOK_TESTAMENTS[passage.book]
+        self.assertEqual(seen.get("Psalm"), "OT")
 
     def test_packaged_projection_preserves_explicit_relation_provenance(self):
         data = project_packaged_cross_testament(self._runtime())

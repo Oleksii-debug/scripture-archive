@@ -130,7 +130,12 @@ jobs:
               "-StartupProbeScript", ('"' + $startupProbe + '"')
             )
             $powershell = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
-            $child = Start-Process -FilePath $powershell -ArgumentList $arguments -Credential $credential -LoadUserProfile -WorkingDirectory $publicRoot -RedirectStandardOutput $childLog -RedirectStandardError $childError -Wait -PassThru
+            $child = Start-Process -FilePath $powershell -ArgumentList $arguments -Credential $credential -LoadUserProfile -WorkingDirectory $publicRoot -RedirectStandardOutput $childLog -RedirectStandardError $childError -PassThru
+            if (-not $child.WaitForExit(120000)) {
+              Stop-Process -Id $child.Id -Force -ErrorAction SilentlyContinue
+              throw "Standard-user acceptance process exceeded the 120-second bound"
+            }
+            $child.Refresh()
 
             if ($child.ExitCode -ne 0) {
               if (Test-Path $childLog) { Get-Content $childLog }
@@ -143,6 +148,7 @@ jobs:
             $result = Get-Content -Raw -Encoding utf8 -LiteralPath $resultPath | ConvertFrom-Json
             if ($result.status -ne "NO_ADMIN_ACCEPTANCE_PASS") { throw "No-admin result status was $($result.status)" }
             if ($result.is_admin -ne $false) { throw "Child acceptance token was not standard-user" }
+            if (-not $result.identity_name -or -not $result.user_sid) { throw "Standard-user identity evidence is incomplete" }
             if (-not $result.per_user_state_writable) { throw "Per-user state write/readback was not proven" }
             if (-not $result.webview2_detected) { throw "WebView2 was not detected in standard-user context" }
             if (-not $result.unicode_spaced_path) { throw "Unicode + spaced per-user launch path was not proven" }

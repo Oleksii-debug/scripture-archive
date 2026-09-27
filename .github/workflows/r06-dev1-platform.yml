@@ -62,7 +62,7 @@ jobs:
       - name: Compile and test composed repaired source
         shell: bash
         run: |
-          export PYTHONPATH="$GITHUB_WORKSPACE/lanes/dev1/repair_overlay/tests:$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/r06_platform${PYTHONPATH:+:$PYTHONPATH}"
+          export PYTHONPATH="$GITHUB_WORKSPACE/lanes/dev1/repair_overlay/tests:$GITHUB_WORKSPACE/r06_platform/tests:$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/r06_platform${PYTHONPATH:+:$PYTHONPATH}"
           python -m compileall -q r06_platform/scripture_archive_platform r06_platform/packaging lanes/dev1/repair_overlay/tests runtime_engine
           python -m unittest discover -s lanes/dev1/repair_overlay/tests -v
           node --check r06_platform/frontend/renderers.js
@@ -138,6 +138,7 @@ jobs:
       - name: Run exact Windows engineering release gate
         shell: pwsh
         run: |
+          $env:PYTHONPATH = "$env:GITHUB_WORKSPACE\r06_platform\tests" + $(if ($env:PYTHONPATH) { ";$env:PYTHONPATH" } else { "" })
           ./r06_platform/packaging/run_windows_release_gate.ps1 `
             -ExpectedGitSha $env:DEV01_SOURCE_SHA `
             -ProbeSeconds 8 `

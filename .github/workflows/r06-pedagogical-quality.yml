@@ -7,6 +7,10 @@ on:
       - 'tools/analyze_pedagogical_quality.py'
       - 'tools/test_analyze_pedagogical_quality.py'
       - 'tools/validate_canonical_answer_shapes.py'
+      - 'runtime_engine/scripture_archive_runtime/answer_contracts.py'
+      - 'runtime_engine/scripture_archive_runtime/package_adapters.py'
+      - 'runtime_engine/scripture_archive_runtime/provenance.py'
+      - 'runtime_engine/scripture_archive_runtime/security.py'
       - 'docs/spec/PEDAGOGICAL_QUALITY_GATE_v1.md'
       - '.github/workflows/r06-pedagogical-quality.yml'
   workflow_dispatch:
@@ -22,11 +26,18 @@ jobs:
   pedagogical-quality:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+      - name: Confirm exact source checkout
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
       - name: Compile analyzer and tests
         run: python -m compileall -q tools/analyze_pedagogical_quality.py tools/test_analyze_pedagogical_quality.py tools/validate_canonical_answer_shapes.py
       - name: Run analyzer regressions

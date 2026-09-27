@@ -177,6 +177,8 @@ jobs:
             if ($result.status -ne "NO_ADMIN_ACCEPTANCE_PASS") { throw "No-admin result status was $($result.status)" }
             if ($result.is_admin -ne $false) { throw "Child acceptance token was not standard-user" }
             if (-not $result.identity_name -or -not $result.user_sid) { throw "Standard-user identity evidence is incomplete" }
+            if (-not $result.profile_sid_bound) { throw "Per-user state root was not bound to the child SID profile" }
+            if ($result.local_app_data_source -ne "HKLM_ProfileList_current_sid") { throw "Unexpected per-user state authority: $($result.local_app_data_source)" }
             if (-not $result.per_user_state_writable) { throw "Per-user state write/readback was not proven" }
             if (-not $result.webview2_detected) { throw "WebView2 was not detected in standard-user context" }
             if (-not $result.unicode_spaced_path) { throw "Unicode + spaced per-user launch path was not proven" }
@@ -191,13 +193,30 @@ jobs:
             }
           }
 
+      - name: Collect no-admin evidence inside workspace
+        if: always()
+        shell: pwsh
+        run: |
+          $destination = Join-Path $PWD "no_admin_evidence"
+          New-Item -ItemType Directory -Force -Path $destination | Out-Null
+          $sources = @(
+            @{ Path = "C:\Users\Public\ScriptureArchive-NoAdmin\no_admin_acceptance.json"; Name = "no_admin_acceptance.json" },
+            @{ Path = "C:\Users\Public\ScriptureArchive-NoAdmin\child-output.log"; Name = "child-output.log" },
+            @{ Path = "C:\Users\Public\ScriptureArchive-NoAdmin\child-error.log"; Name = "child-error.log" },
+            @{ Path = (Join-Path $PWD "r06_platform\dist\no_admin_admin_negative.json"); Name = "no_admin_admin_negative.json" }
+          )
+          foreach ($source in $sources) {
+            if (Test-Path -LiteralPath $source.Path -PathType Leaf) {
+              Copy-Item -LiteralPath $source.Path -Destination (Join-Path $destination $source.Name) -Force
+            }
+          }
+          Get-ChildItem -LiteralPath $destination -File -ErrorAction SilentlyContinue | ForEach-Object {
+            Write-Output ("NO_ADMIN_EVIDENCE_STAGED " + $_.Name)
+          }
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: R06-no-admin-packaged-acceptance
-          path: |
-            C:\Users\Public\ScriptureArchive-NoAdmin\no_admin_acceptance.json
-            C:\Users\Public\ScriptureArchive-NoAdmin\child-output.log
-            C:\Users\Public\ScriptureArchive-NoAdmin\child-error.log
-            r06_platform\dist\no_admin_admin_negative.json
+          path: no_admin_evidence
           if-no-files-found: warn

@@ -5,6 +5,11 @@ from enum import Enum
 from typing import Any
 
 from .evidence import EvidenceRecord, EvidenceRuntime
+from .evidence_provenance import (
+    resolve_evidence_witness,
+    validated_claim_witness,
+    validated_relation_witness,
+)
 from .models import Confidence
 
 
@@ -147,8 +152,10 @@ class DossierAssembler:
     """Build read-only dossier views from explicit EvidenceRuntime truth.
 
     The assembler never creates canonical facts. Locked evidence and dependent
-    claims/relations are omitted from the default player-safe view. Explicit
-    witness contradictions fail closed rather than being harmonized.
+    claims/relations are omitted from the default player-safe view. Witness
+    attribution is delegated to the shared fail-closed provenance validator:
+    absent, malformed, contradictory, mixed or hidden support never acquires a
+    declared witness merely because a claim/relation metadata field says so.
     """
 
     def __init__(self, runtime: EvidenceRuntime):
@@ -156,19 +163,14 @@ class DossierAssembler:
 
     @staticmethod
     def _record_witness(record: EvidenceRecord) -> tuple[bool, str | None]:
-        passage_witnesses = {
-            passage.witness.strip()
-            for passage in record.passage_refs
-            if isinstance(passage.witness, str) and passage.witness.strip()
-        }
-        record_witness = record.witness.strip() if isinstance(record.witness, str) and record.witness.strip() else None
-        if record_witness is not None and any(witness != record_witness for witness in passage_witnesses):
+        """Distinguish safe witness-less evidence from unsafe witness metadata."""
+        has_declared_witness = record.witness is not None or any(
+            passage.witness is not None for passage in record.passage_refs
+        )
+        resolved = resolve_evidence_witness(record)
+        if has_declared_witness and resolved is None:
             return False, None
-        if record_witness is not None:
-            return True, record_witness
-        if len(passage_witnesses) == 1:
-            return True, next(iter(passage_witnesses))
-        return True, None
+        return True, resolved
 
     @staticmethod
     def _passage_ids(records: tuple[EvidenceRecord, ...]) -> tuple[str, ...]:
@@ -195,25 +197,6 @@ class DossierAssembler:
             for passage in record.passage_refs
         }
         return tuple(sorted(refs, key=lambda item: (item[0], item[1] or "")))
-
-    @staticmethod
-    def _declared_witness_matches_support(
-        declared_witness: str | None,
-        records: tuple[EvidenceRecord, ...],
-    ) -> bool:
-        if not isinstance(declared_witness, str) or not declared_witness.strip():
-            return True
-        declared = declared_witness.strip()
-        for record in records:
-            safe, effective = DossierAssembler._record_witness(record)
-            if not safe:
-                return False
-            if effective is not None and effective != declared:
-                return False
-            for passage in record.passage_refs:
-                if isinstance(passage.witness, str) and passage.witness.strip() and passage.witness.strip() != declared:
-                    return False
-        return True
 
     def build(
         self,
@@ -269,8 +252,15 @@ class DossierAssembler:
             if any(evidence_id not in visible_evidence_ids for evidence_id in required):
                 continue
             required_records = tuple(self.runtime.evidence[evidence_id] for evidence_id in required)
-            if not self._declared_witness_matches_support(claim.witness, required_records):
-                continue
+            claim_witness = None
+            if claim.witness is not None:
+                claim_witness = validated_claim_witness(
+                    self.runtime,
+                    claim,
+                    visible_evidence_ids=visible_evidence_ids,
+                )
+                if claim_witness is None:
+                    continue
             rows.append(
                 DossierRow(
                     row_type="CLAIM",
@@ -278,7 +268,7 @@ class DossierAssembler:
                     proposition=claim.proposition,
                     confidence=claim.confidence,
                     tx1=claim.tx1,
-                    witness=claim.witness,
+                    witness=claim_witness,
                     source_scope=claim.source_scope,
                     uncertainty=claim.uncertainty,
                     passage_ids=self._passage_ids(required_records),
@@ -297,8 +287,17 @@ class DossierAssembler:
             )
             if unlocked_only and not support:
                 continue
-            if support and not self._declared_witness_matches_support(relation.witness, support):
-                continue
+            support_ids = tuple(sorted(record.evidence_id for record in support))
+            relation_witness = None
+            if relation.witness is not None:
+                relation_witness = validated_relation_witness(
+                    self.runtime,
+                    relation,
+                    support_ids,
+                    visible_evidence_ids=visible_evidence_ids,
+                )
+                if relation_witness is None:
+                    continue
             related_id = relation.target_id if relation.source_id == subject.subject_id else relation.source_id
             if unlocked_only and related_id in self.runtime.evidence and related_id not in visible_evidence_ids:
                 continue
@@ -314,10 +313,10 @@ class DossierAssembler:
                     row_type="RELATION",
                     row_id=relation.relation_id,
                     proposition=f"{subject.subject_id} {relation.relation_type} {related_id}",
-                    witness=relation.witness,
+                    witness=relation_witness,
                     passage_ids=tuple(sorted(set(relation_passages).union(support_passages))),
                     passage_witnesses=self._passage_witnesses(support),
-                    evidence_ids=tuple(sorted(record.evidence_id for record in support)),
+                    evidence_ids=support_ids,
                     relation_type=relation.relation_type,
                     related_id=related_id,
                 )

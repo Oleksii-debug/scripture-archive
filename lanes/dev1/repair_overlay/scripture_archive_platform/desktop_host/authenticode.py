@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ctypes
 import json
 import os
 from pathlib import Path
@@ -16,7 +17,7 @@ $ErrorActionPreference = 'Stop'
 $paths = @($env:SCRIPTURE_AUTH_CURRENT, $env:SCRIPTURE_AUTH_CANDIDATE)
 $result = @()
 foreach ($path in $paths) {
-    $signature = Get-AuthenticodeSignature -LiteralPath $path
+    $signature = Microsoft.PowerShell.Security\\Get-AuthenticodeSignature -LiteralPath $path
     $thumbprint = $null
     if ($null -ne $signature.SignerCertificate) {
         $thumbprint = [string]$signature.SignerCertificate.Thumbprint
@@ -49,14 +50,19 @@ def verify_same_publisher_authenticode(
     if not _regular_non_symlink(current) or not _regular_non_symlink(candidate):
         return False
 
-    windir = os.environ.get("WINDIR")
-    if not windir:
+    system_directory = _windows_system_directory()
+    if system_directory is None:
         return False
-    powershell = Path(windir) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
-    if not _regular_non_symlink(powershell):
+    powershell_root = system_directory / "WindowsPowerShell" / "v1.0"
+    powershell = powershell_root / "powershell.exe"
+    modules = powershell_root / "Modules"
+    if not _regular_non_symlink(powershell) or not modules.is_dir():
         return False
 
     environment = os.environ.copy()
+    # Do not let inherited user/process module search paths redirect the
+    # module-qualified Authenticode command away from the system module tree.
+    environment["PSModulePath"] = str(modules)
     environment["SCRIPTURE_AUTH_CURRENT"] = str(current.resolve())
     environment["SCRIPTURE_AUTH_CANDIDATE"] = str(candidate.resolve())
     try:
@@ -87,6 +93,32 @@ def verify_same_publisher_authenticode(
     if not encoded or len(encoded) > _MAX_OUTPUT_BYTES:
         return False
     return _same_valid_signer_payload(completed.stdout)
+
+
+def _windows_system_directory() -> Path | None:
+    """Resolve System32 from Win32 itself, never from inherited environment."""
+
+    if os.name != "nt":
+        return None
+    try:
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        get_system_directory = kernel32.GetSystemDirectoryW
+        get_system_directory.argtypes = [
+            ctypes.POINTER(ctypes.c_wchar),
+            ctypes.c_uint,
+        ]
+        get_system_directory.restype = ctypes.c_uint
+        capacity = 32768
+        buffer = ctypes.create_unicode_buffer(capacity)
+        length = int(get_system_directory(buffer, capacity))
+    except (AttributeError, OSError, TypeError, ValueError):
+        return None
+    if length <= 0 or length >= capacity or not buffer.value:
+        return None
+    system_directory = Path(buffer.value)
+    if not system_directory.is_absolute():
+        return None
+    return system_directory
 
 
 def _regular_non_symlink(path: Path) -> bool:

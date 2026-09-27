@@ -1,11 +1,63 @@
 import unittest
 
 from scripture_archive_runtime.dossiers import DossierAssembler, DossierKind, DossierSubject
-from scripture_archive_runtime.evidence import Claim, EvidenceRecord, EvidenceRuntime, Relation
+from scripture_archive_runtime.evidence import Claim, EvidenceRecord, EvidenceRuntime, PassageRef, Relation
 from scripture_archive_runtime.models import Confidence
 
 
 class DossierWitnessRegressionTests(unittest.TestCase):
+    def test_clean_mixed_passage_provenance_remains_visible_without_aggregate_witness(self):
+        runtime = EvidenceRuntime()
+        runtime.add_evidence(
+            EvidenceRecord(
+                evidence_id="EV-MIXED",
+                passage_refs=(
+                    PassageRef("Acts.9.7", "Acts", 9, 7, witness="Acts 9 narrator"),
+                    PassageRef("Acts.22.9", "Acts", 22, 9, witness="Acts 22 Paul speech"),
+                ),
+                proposition="Canonical mixed-provenance proposition.",
+                confidence=Confidence.T1,
+                witness=None,
+                entity_ids=("EVENT-X",),
+            )
+        )
+        runtime.unlock("EV-MIXED")
+
+        view = DossierAssembler(runtime).build(
+            DossierSubject("EVENT-X", DossierKind.EVENT, "X")
+        )
+        row = next(row for row in view.rows if row.row_id == "EV-MIXED")
+        self.assertIsNone(row.witness)
+        self.assertEqual(
+            (
+                ("Acts.22.9", "Acts 22 Paul speech"),
+                ("Acts.9.7", "Acts 9 narrator"),
+            ),
+            row.passage_witnesses,
+        )
+
+    def test_malformed_mixed_passage_witness_remains_fail_closed(self):
+        runtime = EvidenceRuntime()
+        runtime.add_evidence(
+            EvidenceRecord(
+                evidence_id="EV-MALFORMED",
+                passage_refs=(
+                    PassageRef("Acts.9.7", "Acts", 9, 7, witness="Acts 9 narrator"),
+                    PassageRef("Acts.22.9", "Acts", 22, 9, witness=" Acts 22 Paul speech"),
+                ),
+                proposition="Malformed witness metadata must not become visible.",
+                confidence=Confidence.T1,
+                witness=None,
+                entity_ids=("EVENT-X",),
+            )
+        )
+        runtime.unlock("EV-MALFORMED")
+
+        view = DossierAssembler(runtime).build(
+            DossierSubject("EVENT-X", DossierKind.EVENT, "X")
+        )
+        self.assertNotIn("EV-MALFORMED", {row.row_id for row in view.rows})
+
     def test_declared_claim_and_relation_witness_require_positive_visible_support(self):
         runtime = EvidenceRuntime()
         runtime.add_evidence(

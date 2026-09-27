@@ -184,8 +184,11 @@ try {
     if (-not $result.process_started) {
         throw "Packaged process did not start under the standard-user token."
     }
-    if (-not $result.survived_probe_window -and $null -ne $result.process_exit_code -and [int]$result.process_exit_code -ne 0) {
-        throw "Packaged process exited non-zero during the no-admin probe."
+    if (-not $result.survived_probe_window) {
+        if ($null -ne $result.process_exit_code -and [int]$result.process_exit_code -ne 0) {
+            throw "Packaged process exited non-zero during the no-admin probe."
+        }
+        throw "Packaged process did not remain alive for the full no-admin probe window."
     }
 
     $result.status = "NO_ADMIN_ACCEPTANCE_PASS"

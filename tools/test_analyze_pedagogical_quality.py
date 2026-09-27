@@ -72,6 +72,23 @@ def _write_pack(root: Path, nodes: list[dict], *, status: str = "AUTHOR_COMPLETE
     return path
 
 
+def _write_gospel_pack(root: Path, nodes: list[dict]) -> Path:
+    path = root / "gospel-nodes.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema": "GW_CANONICAL_NODE_FILESET_v1.2",
+                "mission_id": "GW-T",
+                "node_count": len(nodes),
+                "nodes": nodes,
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
 class PedagogicalQualityAnalyzerTests(unittest.TestCase):
     def test_substantive_node_has_no_blocker(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -153,6 +170,16 @@ class PedagogicalQualityAnalyzerTests(unittest.TestCase):
             payload = result.to_dict()
         self.assertEqual(payload["canonical_status_counts"], {status: 1})
         self.assertIn("independent audit acceptance", payload["interpretation"]["not_claimed"])
+
+    def test_gospel_canonical_envelope_is_analyzed_without_status_promotion(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _write_gospel_pack(Path(tmp), [_node("GW-T-N01")])
+            result = analyze([tmp])
+        blockers = [f for f in result.findings if f.severity == BLOCKER]
+        self.assertEqual(blockers, [])
+        self.assertEqual(result.schema_files, 1)
+        self.assertEqual(result.nodes_analyzed, 1)
+        self.assertEqual(result.canonical_status_counts, {"<unspecified>": 1})
 
     def test_non_schema_json_is_ignored_not_reclassified(self):
         with tempfile.TemporaryDirectory() as tmp:

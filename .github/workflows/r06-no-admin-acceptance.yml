@@ -68,6 +68,34 @@ jobs:
             throw "Expected packaged executable was not produced"
           }
 
+      - name: Prove harness fails closed under the admin runner token
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $exe = (Resolve-Path r06_platform/dist/ScriptureArchive-R06-DEV01.exe).Path
+          $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          $resultPath = (Join-Path (Resolve-Path r06_platform/dist).Path "no_admin_admin_negative.json")
+          $harness = (Resolve-Path r06_platform/packaging/run_no_admin_acceptance.ps1).Path
+          $arguments = @(
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy", "Bypass",
+            "-File", ('"' + $harness + '"'),
+            "-Executable", ('"' + $exe + '"'),
+            "-ExpectedSha256", $hash,
+            "-ProbeSeconds", "1",
+            "-OutputJson", ('"' + $resultPath + '"')
+          )
+          $powershell = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
+          $negative = Start-Process -FilePath $powershell -ArgumentList $arguments -Wait -PassThru
+          if ($negative.ExitCode -ne 2) { throw "Admin negative control returned unexpected exit code $($negative.ExitCode)" }
+          $result = Get-Content -Raw -Encoding utf8 -LiteralPath $resultPath | ConvertFrom-Json
+          if ($result.status -ne "NO_ADMIN_ACCEPTANCE_FAIL") { throw "Admin negative control did not fail closed" }
+          if ($result.is_admin -ne $true) { throw "Admin negative control did not record is_admin=true" }
+          if ($result.failure -notlike "Standard-user token required*") { throw "Admin negative control failed for the wrong reason: $($result.failure)" }
+          Write-Output "NO_ADMIN_ADMIN_NEGATIVE_CONTROL_PASS"
+
       - name: Execute packaged acceptance as ephemeral standard user
         shell: pwsh
         run: |
@@ -171,4 +199,5 @@ jobs:
             C:\Users\Public\ScriptureArchive-NoAdmin\no_admin_acceptance.json
             C:\Users\Public\ScriptureArchive-NoAdmin\child-output.log
             C:\Users\Public\ScriptureArchive-NoAdmin\child-error.log
+            r06_platform\dist\no_admin_admin_negative.json
           if-no-files-found: warn

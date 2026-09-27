@@ -162,15 +162,43 @@ class DossierAssembler:
         self.runtime = runtime
 
     @staticmethod
-    def _record_witness(record: EvidenceRecord) -> tuple[bool, str | None]:
-        """Distinguish safe witness-less evidence from unsafe witness metadata."""
-        has_declared_witness = record.witness is not None or any(
-            passage.witness is not None for passage in record.passage_refs
-        )
+    def _clean_witness_token(value: object) -> str | None:
+        """Validate one authored witness token without normalizing it."""
+        if not isinstance(value, str) or not value or value != value.strip():
+            return None
+        if any(
+            ord(character) < 0x20
+            or 0x7F <= ord(character) <= 0x9F
+            or character in {"\\u2028", "\\u2029"}
+            for character in value
+        ):
+            return None
+        return value
+
+    @classmethod
+    def _record_witness(cls, record: EvidenceRecord) -> tuple[bool, str | None]:
+        """Distinguish safe mixed/witness-less evidence from unsafe metadata.
+
+        The shared resolver intentionally returns None both when no single witness
+        is attributable and when witness metadata is malformed or contradictory.
+        A Dossier evidence row may still expose canonical mixed provenance when
+        every per-passage token is clean; it must only avoid inventing one
+        aggregate witness. Malformed tokens and record/passages conflicts remain
+        fail-closed.
+        """
         resolved = resolve_evidence_witness(record)
-        if has_declared_witness and resolved is None:
+        if resolved is not None:
+            return True, resolved
+
+        if record.witness is not None:
             return False, None
-        return True, resolved
+        for passage in record.passage_refs:
+            if (
+                passage.witness is not None
+                and cls._clean_witness_token(passage.witness) is None
+            ):
+                return False, None
+        return True, None
 
     @staticmethod
     def _passage_ids(records: tuple[EvidenceRecord, ...]) -> tuple[str, ...]:

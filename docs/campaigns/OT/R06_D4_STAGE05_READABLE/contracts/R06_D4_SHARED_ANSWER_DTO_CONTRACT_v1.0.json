@@ -1,0 +1,134 @@
+{
+  "contract_version": "R06_SHARED_ANSWER_DTO_v1",
+  "lane": "DEV4",
+  "status": "FINALPREP_CONTENT_AUTHORED_TRUTH_READY",
+  "task_types": {
+    "SINGLE_CHOICE": {
+      "submission": "string",
+      "grading_fields": [
+        "options"
+      ],
+      "accepted_answer_shape": "string"
+    },
+    "COMBOBOX": {
+      "submission": "string",
+      "grading_fields": [
+        "options"
+      ],
+      "accepted_answer_shape": "string"
+    },
+    "MULTI_SELECT": {
+      "submission": "array<string>",
+      "grading_fields": [
+        "accepted_set",
+        "options"
+      ],
+      "accepted_answer_shape": "array<string>"
+    },
+    "SHORT_TEXT": {
+      "submission": "string",
+      "grading_fields": [
+        "accepted_propositions"
+      ],
+      "accepted_answer_shape": "string"
+    },
+    "LONG_TEXT": {
+      "submission": "string",
+      "grading_fields": [
+        "accepted_propositions"
+      ],
+      "accepted_answer_shape": "string"
+    },
+    "ARGUMENT": {
+      "submission": "string",
+      "grading_fields": [
+        "accepted_propositions"
+      ],
+      "accepted_answer_shape": "string"
+    },
+    "ORDERING": {
+      "submission": "array<string>",
+      "grading_fields": [
+        "accepted_order"
+      ],
+      "accepted_answer_shape": "array<string>"
+    },
+    "MATCHING": {
+      "submission": "object<string,string>",
+      "grading_fields": [
+        "accepted_pairs"
+      ],
+      "accepted_answer_shape": "object"
+    },
+    "EVIDENCE_SELECT": {
+      "submission": "array<string>",
+      "grading_fields": [
+        "required_evidence_ids",
+        "options"
+      ],
+      "accepted_answer_shape": "array<string>"
+    },
+    "CLAIM_EVIDENCE": {
+      "submission": {
+        "claim": "string",
+        "evidence": "array<string>"
+      },
+      "grading_fields": [
+        "accepted_propositions",
+        "required_evidence_ids"
+      ],
+      "accepted_answer_shape": "object"
+    },
+    "COMPOSITE": {
+      "submission": "object keyed by grading.steps[].id",
+      "grading_fields": [
+        "steps"
+      ],
+      "accepted_answer_shape": "object"
+    },
+    "OT_NT_LINK": {
+      "submission": {
+        "ot_passage": "string",
+        "nt_passage": "string",
+        "relation_category": "enum",
+        "confidence": "T1|T2|C1|I1|D1",
+        "evidence_id": "string"
+      },
+      "grading_fields": [
+        "ot_nt_link",
+        "required_fields"
+      ],
+      "required_fields": [
+        "ot_passage",
+        "nt_passage",
+        "relation_category",
+        "confidence",
+        "evidence_id"
+      ],
+      "accepted_answer_shape": "object",
+      "comparison_rules": {
+        "ot_passage": "citation-normalized equality",
+        "nt_passage": "citation-normalized equality",
+        "relation_category": "exact canonical enum",
+        "confidence": "exact canonical confidence code",
+        "evidence_id": "exact stable evidence ID"
+      },
+      "legacy_compatibility": {
+        "accepted_link": "may exist only under grading.legacy_compatibility.value in finalprep content",
+        "release_ground_truth": false,
+        "rule": "Adapters MUST NOT synthesize grading.ot_nt_link for final release conformance."
+      }
+    }
+  },
+  "translation_neutrality": {
+    "policy": "Do not grade free prose by one exact full sentence. Text tasks use explicit proposition groups; source/provenance tasks use citation and provenance aliases; structured tasks use canonical IDs/enums.",
+    "boundedness": "Aliases are explicit data. Runtime must not invent theological equivalence.",
+    "tx1": "TX1 remains separate from confidence and must remain visible before grading affected material."
+  },
+  "release_ground_truth_policy": {
+    "canonical_key": "grading.ot_nt_link for OT_NT_LINK",
+    "adapter_derived_truth_allowed": false,
+    "submission_dto": "ANSWER_DTO_v1",
+    "strict_gate": "450/450 canonical accepted answers must grade CORRECT without adapter-authored truth"
+  }
+}

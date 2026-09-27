@@ -1,0 +1,70 @@
+{
+  "schema_version": "CONTENT_NODE_SCHEMA_v1.2",
+  "campaign": {
+    "campaign_id": "OT-R06-D4",
+    "title_ua": "Старий Завіт і OT↔NT — DEV4 R06 corpus",
+    "localization_slots": [
+      "uk",
+      "en"
+    ],
+    "scope": "15 coherent source-audited mission families: Abraham, Joseph, Moses/Exodus, Sinai, David, Elijah/Elisha, and conservative OT↔NT relation cases.",
+    "player_promise": "Read, compare, cite, reject overclaims, preserve speaker provenance, and classify OT↔NT reuse without calling every link prophecy.",
+    "estimated_total_time": "modular; 450 nodes across 15 missions",
+    "entry_requirements": "none",
+    "mission_sequence": [
+      "OT-AB-01",
+      "OT-AB-02",
+      "OT-JO-01",
+      "OT-JO-02",
+      "OT-EX-01",
+      "OT-EX-02",
+      "OT-SI-01",
+      "OT-SI-02",
+      "OT-DV-01",
+      "OT-DV-02",
+      "OT-EK-01",
+      "OTNT-AB-01",
+      "OTNT-ROYAL-01",
+      "OTNT-ISA-01",
+      "OTNT-PROP-01"
+    ],
+    "mastery_domains": [
+      "OT recognition",
+      "source/provenance retrieval",
+      "cross-context boundary",
+      "evidence application",
+      "OT↔NT classification",
+      "synthesis"
+    ],
+    "source_corpus": "World English Bible public-domain control text via eBible.org chapter pages; grading proposition-level and translation-neutral.",
+    "theological_risk_notes": [
+      "No external consensus asserted.",
+      "Interpretation marked I1; disputed connection D1.",
+      "NT reuse never rewrites OT speaker/narrator provenance."
+    ],
+    "accessibility_risk_notes": [
+      "All ordering has Move up/Move down linear equivalent.",
+      "All OT↔NT links have linear records.",
+      "No color, pointer, map, or spatial-only correctness."
+    ],
+    "completion_reward_type": "content mastery / no spirituality scoring",
+    "editorial_status": "AUTHOR_COMPLETE / DEVELOPER_SOURCE_AUDITED / INDEPENDENT_AUDIT_PENDING",
+    "source_audit_status": "DEVELOPER_SOURCE_AUDITED / INDEPENDENT_AUDIT_PENDING"
+  },
+  "counts": {
+    "missions": 15,
+    "nodes": 450,
+    "evidence_records": 90,
+    "otnt_relations": 24
+  },
+  "base_head": "bbc681db9701fa39dbe757dda8f2e341ea4e3c5b",
+  "lane": "DEV4",
+  "repair_round": "R06_PREINTEGRATION_REPAIR_01",
+  "grading_contract_version": "R06_SHARED_ANSWER_DTO_v1",
+  "repair_defects_addressed": [
+    "R06-PRE-004",
+    "R06-PRE-005",
+    "R06-PRE-007",
+    "R06-PRE-009"
+  ]
+}

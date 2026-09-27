@@ -3,9 +3,7 @@ name: R06 D2 W2-24 Evidence Bundle Qualification
 on:
   pull_request:
     paths:
-      - 'docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05/evidence/**'
-      - 'docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05/evidence_hash_index.json'
-      - 'docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05/mission_metadata.json'
+      - 'docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05/**'
       - 'tools/validate_dev2_evidence_bundle.py'
       - 'tools/test_validate_dev2_evidence_bundle.py'
       - '.github/workflows/r06-d2-w2-24-evidence-bundle.yml'
@@ -13,9 +11,7 @@ on:
     branches:
       - r06-d2-w2-24-current-package-composition-0927-sol
     paths:
-      - 'docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05/evidence/**'
-      - 'docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05/evidence_hash_index.json'
-      - 'docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05/mission_metadata.json'
+      - 'docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05/**'
       - 'tools/validate_dev2_evidence_bundle.py'
       - 'tools/test_validate_dev2_evidence_bundle.py'
       - '.github/workflows/r06-d2-w2-24-evidence-bundle.yml'
@@ -56,6 +52,32 @@ jobs:
           actual="$(git rev-parse HEAD)"
           test "$actual" = "$EXPECTED_HEAD"
           echo "D2_W2_24_EXACT_HEAD=$actual"
+
+      - name: Require exact authority surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          root='docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05'
+          mapfile -t actual < <(find "$root" -type f -printf '%P\n' | LC_ALL=C sort)
+          expected=(
+            'evidence/part_001.jsonl'
+            'evidence/part_002.jsonl'
+            'evidence/part_003.jsonl'
+            'evidence_hash_index.json'
+            'mission_metadata.json'
+          )
+          if [[ "${#actual[@]}" -ne "${#expected[@]}" ]]; then
+            printf 'D2_W2_24_UNEXPECTED_AUTHORITY_SURFACE count=%s expected=%s\n' "${#actual[@]}" "${#expected[@]}"
+            printf 'actual: %s\n' "${actual[@]}"
+            exit 1
+          fi
+          for i in "${!expected[@]}"; do
+            if [[ "${actual[$i]}" != "${expected[$i]}" ]]; then
+              printf 'D2_W2_24_AUTHORITY_PATH_MISMATCH index=%s actual=%s expected=%s\n' "$i" "${actual[$i]}" "${expected[$i]}"
+              exit 1
+            fi
+          done
+          echo 'D2_W2_24_AUTHORITY_SURFACE_PASS files=5'
 
       - name: Run evidence bundle regression tests
         run: python -m unittest tools/test_validate_dev2_evidence_bundle.py -v

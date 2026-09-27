@@ -102,6 +102,30 @@ def normalize_legacy_multiselect_truth(node: Mapping[str, Any]) -> dict[str, Any
     return adapted
 
 
+def normalize_legacy_ordering_truth(node: Mapping[str, Any]) -> dict[str, Any]:
+    """Losslessly project explicit historical arrow-delimited ordering truth.
+
+    Canonical LN ordering nodes predate ANSWER_DTO_v1 and serialize an authored
+    sequence in one accepted_answer string using the visible right-arrow as the
+    item boundary.  Only exact response_mode="ordering" uses this compatibility
+    path; other ORDERING-like strings remain fail-closed.
+    """
+    adapted = deepcopy(dict(node))
+    if _task_type(adapted) != "ORDERING" or not isinstance(adapted.get("accepted_answer"), str):
+        return adapted
+    mode = " ".join(str(adapted.get("response_mode") or "").strip().casefold().split())
+    raw = str(adapted["accepted_answer"])
+    if mode != "ordering" or "→" not in raw:
+        raise ValidationError(
+            "Legacy ORDERING string truth is permitted only for explicit arrow-delimited ordering"
+        )
+    items = [part.strip() for part in raw.split("→")]
+    if len(items) < 2 or any(not item for item in items):
+        raise ValidationError("Legacy ORDERING arrow serialization contains an empty item")
+    adapted["accepted_answer"] = items
+    return adapted
+
+
 def derive_answer_dto(node: Mapping[str, Any]) -> dict[str, Any]:
     """Project canonical CONTENT_NODE_SCHEMA v1.2 ground truth into ANSWER_DTO_v1.
 
@@ -114,6 +138,7 @@ def derive_answer_dto(node: Mapping[str, Any]) -> dict[str, Any]:
 def adapt_node_for_runtime(node: Mapping[str, Any], *, lane: str = "unknown") -> dict[str, Any]:
     """Transitional adapter: preserves authored fields and adds explicit runtime contract metadata."""
     adapted = normalize_legacy_multiselect_truth(node)
+    adapted = normalize_legacy_ordering_truth(adapted)
     ctype = _task_type(adapted)
     adapted["task_type"] = ctype
     adapted["answer_contract_version"] = ANSWER_CONTRACT_VERSION
@@ -129,6 +154,10 @@ def adapt_node_for_runtime(node: Mapping[str, Any], *, lane: str = "unknown") ->
             "explicit_semicolon_citation_selection_v1"
             if isinstance(node.get("accepted_answer"), str)
             and _task_type(node) == "MULTI_SELECT"
+            else "explicit_arrow_ordering_v1"
+            if isinstance(node.get("accepted_answer"), str)
+            and _task_type(node) == "ORDERING"
+            and isinstance(adapted.get("accepted_answer"), list)
             else None
         ),
     }

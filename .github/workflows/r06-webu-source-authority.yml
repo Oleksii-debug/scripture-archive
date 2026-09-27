@@ -144,6 +144,8 @@ jobs:
           changed_detail = [
               {
                   'reference': ref,
+                  'pinned_line': pinned['by_ref'][ref],
+                  'current_line': current['by_ref'][ref],
                   'pinned_line_sha256': hashlib.sha256(pinned['by_ref'][ref].encode('utf-8')).hexdigest(),
                   'current_line_sha256': hashlib.sha256(current['by_ref'][ref].encode('utf-8')).hexdigest(),
               }

@@ -1,0 +1,145 @@
+{
+  "schema": "scripture.evidence.materialization-index.v1",
+  "status": "DERIVED_TECHNICAL_INDEX / SOURCE_TRUTH_UNCHANGED / DIFFERENT_WORKER_QA_REQUIRED",
+  "source_pack": "docs/evidence/PA02_DAMASCUS_ROAD_WITNESS_PACK_v0.1.md",
+  "source_pack_git_blob_sha1": "8ab52fd4c86d6cd4c766769d514ad26d5f599efd",
+  "source_pack_required_status": "SOURCE_AUDITED",
+  "witness_tokens": [
+    "Acts 9 narrator",
+    "Acts 22 Paul speech",
+    "Acts 26 Paul speech"
+  ],
+  "subjects": [
+    {
+      "subject_id": "event:damascus-road",
+      "kind": "EVENT",
+      "display_name": "Damascus-road encounter"
+    },
+    {
+      "subject_id": "person:saul-paul",
+      "kind": "PERSON",
+      "display_name": "Saul / Paul"
+    },
+    {
+      "subject_id": "person:ananias",
+      "kind": "PERSON",
+      "display_name": "Ananias"
+    },
+    {
+      "subject_id": "theme:companion-witness-boundary",
+      "kind": "THEME",
+      "display_name": "Companion witness boundary"
+    },
+    {
+      "subject_id": "theme:commission-provenance",
+      "kind": "THEME",
+      "display_name": "Commission provenance"
+    }
+  ],
+  "records": [
+    {
+      "evidence_id": "EV-PA-0008",
+      "witness": "Acts 9 narrator",
+      "passages": [
+        {"passage_id": "Acts.9.3-6", "book": "Acts", "chapter": 9, "verse_start": 3, "verse_end": 6, "witness": "Acts 9 narrator"}
+      ],
+      "entity_ids": ["event:damascus-road", "person:saul-paul"]
+    },
+    {
+      "evidence_id": "EV-PA-0009",
+      "witness": "Acts 9 narrator",
+      "passages": [
+        {"passage_id": "Acts.9.7", "book": "Acts", "chapter": 9, "verse_start": 7, "witness": "Acts 9 narrator"}
+      ],
+      "entity_ids": ["event:damascus-road", "theme:companion-witness-boundary"]
+    },
+    {
+      "evidence_id": "EV-PA-0010",
+      "witness": "Acts 9 narrator",
+      "passages": [
+        {"passage_id": "Acts.9.8-9", "book": "Acts", "chapter": 9, "verse_start": 8, "verse_end": 9, "witness": "Acts 9 narrator"}
+      ],
+      "entity_ids": ["event:damascus-road", "person:saul-paul"]
+    },
+    {
+      "evidence_id": "EV-PA-0011",
+      "witness": "Acts 22 Paul speech",
+      "passages": [
+        {"passage_id": "Acts.22.6-10", "book": "Acts", "chapter": 22, "verse_start": 6, "verse_end": 10, "witness": "Acts 22 Paul speech"}
+      ],
+      "entity_ids": ["event:damascus-road", "person:saul-paul"]
+    },
+    {
+      "evidence_id": "EV-PA-0012",
+      "witness": "Acts 22 Paul speech",
+      "passages": [
+        {"passage_id": "Acts.22.9", "book": "Acts", "chapter": 22, "verse_start": 9, "witness": "Acts 22 Paul speech"}
+      ],
+      "entity_ids": ["event:damascus-road", "theme:companion-witness-boundary"]
+    },
+    {
+      "evidence_id": "EV-PA-0013",
+      "witness": "Acts 22 Paul speech",
+      "passages": [
+        {"passage_id": "Acts.22.11-16", "book": "Acts", "chapter": 22, "verse_start": 11, "verse_end": 16, "witness": "Acts 22 Paul speech"}
+      ],
+      "entity_ids": ["event:damascus-road", "person:saul-paul", "person:ananias"]
+    },
+    {
+      "evidence_id": "EV-PA-0014",
+      "witness": "Acts 26 Paul speech",
+      "passages": [
+        {"passage_id": "Acts.26.12-15", "book": "Acts", "chapter": 26, "verse_start": 12, "verse_end": 15, "witness": "Acts 26 Paul speech"}
+      ],
+      "entity_ids": ["event:damascus-road", "person:saul-paul"]
+    },
+    {
+      "evidence_id": "EV-PA-0015",
+      "witness": "Acts 26 Paul speech",
+      "passages": [
+        {"passage_id": "Acts.26.16-18", "book": "Acts", "chapter": 26, "verse_start": 16, "verse_end": 18, "witness": "Acts 26 Paul speech"}
+      ],
+      "entity_ids": ["event:damascus-road", "person:saul-paul", "theme:commission-provenance"]
+    },
+    {
+      "evidence_id": "EV-PA-0016",
+      "witness": null,
+      "passages": [
+        {"passage_id": "Acts.9.7", "book": "Acts", "chapter": 9, "verse_start": 7, "witness": "Acts 9 narrator"},
+        {"passage_id": "Acts.22.9", "book": "Acts", "chapter": 22, "verse_start": 9, "witness": "Acts 22 Paul speech"},
+        {"passage_id": "Acts.26.14", "book": "Acts", "chapter": 26, "verse_start": 14, "witness": "Acts 26 Paul speech"}
+      ],
+      "entity_ids": ["event:damascus-road", "theme:companion-witness-boundary"]
+    },
+    {
+      "evidence_id": "EV-PA-0017",
+      "witness": null,
+      "passages": [
+        {"passage_id": "Acts.9.10-19", "book": "Acts", "chapter": 9, "verse_start": 10, "verse_end": 19, "witness": "Acts 9 narrator"},
+        {"passage_id": "Acts.22.12-16", "book": "Acts", "chapter": 22, "verse_start": 12, "verse_end": 16, "witness": "Acts 22 Paul speech"},
+        {"passage_id": "Acts.26.16-18", "book": "Acts", "chapter": 26, "verse_start": 16, "verse_end": 18, "witness": "Acts 26 Paul speech"}
+      ],
+      "entity_ids": ["event:damascus-road", "person:saul-paul", "person:ananias", "theme:commission-provenance"]
+    }
+  ],
+  "node_links": {
+    "PA02-N03": ["EV-PA-0008", "EV-PA-0011", "EV-PA-0014"],
+    "PA02-N06": ["EV-PA-0009", "EV-PA-0012", "EV-PA-0014"],
+    "PA02-N07": ["EV-PA-0009", "EV-PA-0012", "EV-PA-0016"],
+    "PA02-N09": ["EV-PA-0015"],
+    "PA02-N10": ["EV-PA-0010", "EV-PA-0013"],
+    "PA02-N11": ["EV-PA-0013", "EV-PA-0017"],
+    "PA02-N12": ["EV-PA-0013", "EV-PA-0015", "EV-PA-0017"],
+    "PA02-N13": ["EV-PA-0008", "EV-PA-0009", "EV-PA-0010", "EV-PA-0011", "EV-PA-0012", "EV-PA-0013", "EV-PA-0014", "EV-PA-0015", "EV-PA-0016", "EV-PA-0017"],
+    "PA02-N14": ["EV-PA-0008", "EV-PA-0009", "EV-PA-0010", "EV-PA-0011", "EV-PA-0012", "EV-PA-0013", "EV-PA-0014", "EV-PA-0015", "EV-PA-0016", "EV-PA-0017"]
+  },
+  "alignment_notes": [
+    "Only already SOURCE_AUDITED EV-PA records are materialized. Claims, confidence and TX status are read from the source pack at runtime and are not duplicated here.",
+    "Witness tokens identify source-local literary units for runtime comparison; mixed-provenance records intentionally have witness=null and retain per-passage witness tokens.",
+    "entity_ids are technical retrieval/index keys, not new historical or harmonizing claims.",
+    "cross_links from the source pack are not promoted to runtime Relation objects because the source pack does not define relation type or direction.",
+    "Node links are an explicit unlock alignment. No claim-similarity, NLP or other inferred linking is permitted.",
+    "Nodes whose audited EV-PA record does not directly state the node proposition are intentionally omitted from this pilot mapping.",
+    "PA02-N09 exposes only EV-PA-0015: EV-PA-0008 and EV-PA-0011 cite wider verse units but their audited claim fields do not encode the Acts 9/22 immediate-instruction propositions, so this technical index does not infer those missing claims."
+  ]
+}

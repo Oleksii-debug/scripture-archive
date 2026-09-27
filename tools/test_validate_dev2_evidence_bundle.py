@@ -80,6 +80,17 @@ class D2EvidenceBundleTests(unittest.TestCase):
         with self.assertRaises(BundleError):
             validate_bundle(root, enforce_raw_pins=False)
 
+    def test_unexpected_symlink_in_authority_root_fails_closed(self) -> None:
+        tmp, root = self._copy_bundle()
+        self.addCleanup(tmp.cleanup)
+        link = root / BUNDLE_REL / "historical-materializer-link"
+        try:
+            link.symlink_to("evidence_hash_index.json")
+        except (OSError, NotImplementedError) as exc:
+            self.skipTest(f"symlink creation unavailable: {exc}")
+        with self.assertRaisesRegex(BundleError, "symlink is forbidden"):
+            validate_bundle(root, enforce_raw_pins=False)
+
 
 if __name__ == "__main__":
     unittest.main()

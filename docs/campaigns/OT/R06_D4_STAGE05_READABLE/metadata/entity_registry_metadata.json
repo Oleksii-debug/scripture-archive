@@ -1,0 +1,5 @@
+{
+  "schema_version": "OT_CORPUS_REGISTRIES_v1.0",
+  "lane": "DEV4",
+  "nonvisual_contract": "Maps/timelines/evidence boards must render these registries as linear lists/tables with textual edge labels; no spatial-only essential information."
+}

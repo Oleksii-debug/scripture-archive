@@ -49,7 +49,8 @@ jobs:
             echo "The job will continue only to verify the pinned Scripture payload byte-for-byte; container drift is not treated as payload equivalence."
           fi
 
-      - name: Verify safe archive, pinned Scripture payload, and checked-in authority
+      - name: Audit safe archive and capture reference-level upstream diff
+        id: source_audit
         shell: python
         run: |
           import hashlib
@@ -75,7 +76,7 @@ jobs:
               entries = []
               total = 0
               for info in zf.infolist():
-                  name = info.filename.replace('\\', '/')
+                  name = info.filename.replace('\\\\', '/')
                   p = pathlib.PurePosixPath(name)
                   if p.is_absolute() or '..' in p.parts or name.startswith('/'):
                       raise SystemExit(f'unsafe WEBU archive member: {name!r}')
@@ -90,35 +91,64 @@ jobs:
               except KeyError as exc:
                   raise SystemExit('official WEBU archive is missing engwebu_vpl.txt') from exc
 
-          vpl_sha = hashlib.sha256(vpl).hexdigest()
-          if vpl_sha != expected_vpl_sha:
-              raise SystemExit(
-                  f'OFFICIAL WEBU SCRIPTURE PAYLOAD CHANGED: expected VPL SHA {expected_vpl_sha}, observed {vpl_sha}; source re-audit required'
-              )
-
-          text = vpl.decode('utf-8-sig')
-          lines = text.splitlines()
-          if len(lines) != 38058:
-              raise SystemExit(f'unexpected VPL row count: {len(lines)}')
-          if not lines[0].startswith('GEN 1:1 ') or not lines[-1].startswith('REV 22:21 '):
-              raise SystemExit('unexpected VPL boundaries')
-          empty = sum(1 for line in lines if line.endswith(' '))
-          if empty != 29:
-              raise SystemExit(f'unexpected source-empty row count: {empty}')
-          book_codes = []
-          for line in lines:
-              code = line.split(' ', 1)[0]
-              if code not in book_codes:
-                  book_codes.append(code)
-          if len(book_codes) != 81:
-              raise SystemExit(f'unexpected book count: {len(book_codes)}')
+          def inspect_vpl(payload: bytes, label: str) -> dict:
+              try:
+                  text = payload.decode('utf-8-sig')
+              except UnicodeDecodeError as exc:
+                  raise SystemExit(f'{label} VPL is not valid UTF-8: {exc}') from exc
+              lines = text.splitlines()
+              by_ref = {}
+              book_codes = []
+              for lineno, line in enumerate(lines, 1):
+                  parts = line.split(' ', 2)
+                  if len(parts) < 2 or ':' not in parts[1]:
+                      raise SystemExit(f'{label} malformed VPL row {lineno}')
+                  ref = parts[0] + ' ' + parts[1]
+                  if ref in by_ref:
+                      raise SystemExit(f'{label} duplicate VPL reference {ref}')
+                  by_ref[ref] = line
+                  if parts[0] not in book_codes:
+                      book_codes.append(parts[0])
+              return {
+                  'lines': lines,
+                  'by_ref': by_ref,
+                  'book_codes': book_codes,
+                  'empty_text_rows': sum(1 for line in lines if line.endswith(' ')),
+                  'first_reference': next(iter(by_ref), None),
+                  'last_reference': next(reversed(by_ref), None) if by_ref else None,
+              }
 
           dest = pathlib.Path(os.environ['DEST'])
           checked_vpl = dest / 'engwebu_vpl.txt'
           if not checked_vpl.is_file():
               raise SystemExit('checked-in pinned WEBU VPL is missing')
-          if checked_vpl.read_bytes() != vpl:
-              raise SystemExit('checked-in WEBU VPL bytes differ from the currently fetched official payload despite expected hash')
+          checked_bytes = checked_vpl.read_bytes()
+          checked_sha = hashlib.sha256(checked_bytes).hexdigest()
+          if checked_sha != expected_vpl_sha:
+              raise SystemExit(
+                  f'checked-in WEBU VPL authority drift: expected {expected_vpl_sha}, observed {checked_sha}'
+              )
+
+          current = inspect_vpl(vpl, 'current official')
+          pinned = inspect_vpl(checked_bytes, 'checked-in pinned')
+          vpl_sha = hashlib.sha256(vpl).hexdigest()
+
+          current_refs = set(current['by_ref'])
+          pinned_refs = set(pinned['by_ref'])
+          added_refs = sorted(current_refs - pinned_refs)
+          removed_refs = sorted(pinned_refs - current_refs)
+          changed_refs = sorted(
+              ref for ref in current_refs & pinned_refs
+              if current['by_ref'][ref] != pinned['by_ref'][ref]
+          )
+          changed_detail = [
+              {
+                  'reference': ref,
+                  'pinned_line_sha256': hashlib.sha256(pinned['by_ref'][ref].encode('utf-8')).hexdigest(),
+                  'current_line_sha256': hashlib.sha256(current['by_ref'][ref].encode('utf-8')).hexdigest(),
+              }
+              for ref in changed_refs
+          ]
 
           authority_path = dest / 'engwebu_authority.json'
           authority = json.loads(authority_path.read_text(encoding='utf-8'))
@@ -139,11 +169,12 @@ jobs:
           for key, expected in required.items():
               if authority.get(key) != expected:
                   raise SystemExit(f'checked-in authority mismatch for {key}: {authority.get(key)!r} != {expected!r}')
-          if authority.get('book_codes') != book_codes:
-              raise SystemExit('checked-in authority book-code order differs from current exact official payload')
+          if authority.get('book_codes') != pinned['book_codes']:
+              raise SystemExit('checked-in authority book-code order differs from pinned bundled payload')
 
+          payload_matches = vpl_sha == expected_vpl_sha and checked_bytes == vpl
           report = {
-              'schema': 'scripture.webu.current-source-verification.v1',
+              'schema': 'scripture.webu.current-source-reaudit.v2',
               'translation_id': 'engwebu',
               'source_url': os.environ['WEBU_URL'],
               'historical_capture_archive_sha256': historical_archive_sha,
@@ -152,24 +183,58 @@ jobs:
               'observed_archive_size': len(raw),
               'pinned_vpl_sha256': expected_vpl_sha,
               'observed_vpl_sha256': vpl_sha,
-              'scripture_payload_matches_pinned_source': True,
-              'vpl_rows': len(lines),
-              'empty_text_rows': empty,
-              'book_codes': book_codes,
+              'scripture_payload_matches_pinned_source': payload_matches,
+              'pinned': {
+                  'bytes': len(checked_bytes),
+                  'vpl_rows': len(pinned['lines']),
+                  'empty_text_rows': pinned['empty_text_rows'],
+                  'book_codes': pinned['book_codes'],
+                  'first_reference': pinned['first_reference'],
+                  'last_reference': pinned['last_reference'],
+              },
+              'current': {
+                  'bytes': len(vpl),
+                  'vpl_rows': len(current['lines']),
+                  'empty_text_rows': current['empty_text_rows'],
+                  'book_codes': current['book_codes'],
+                  'first_reference': current['first_reference'],
+                  'last_reference': current['last_reference'],
+              },
+              'reference_diff': {
+                  'added_count': len(added_refs),
+                  'removed_count': len(removed_refs),
+                  'changed_count': len(changed_refs),
+                  'added_refs': added_refs,
+                  'removed_refs': removed_refs,
+                  'changed': changed_detail,
+              },
               'entries': entries,
+              'decision': 'MATCH_PINNED_AUTHORITY' if payload_matches else 'SOURCE_REAUDIT_REQUIRED',
           }
           (root / 'current-source-verification.json').write_text(
               json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + '\n',
               encoding='utf-8',
           )
+          output = pathlib.Path(os.environ['GITHUB_OUTPUT'])
+          with output.open('a', encoding='utf-8') as fh:
+              fh.write(f"payload_changed={'false' if payload_matches else 'true'}\n")
+              fh.write(f"observed_vpl_sha256={vpl_sha}\n")
+              fh.write(f"changed_refs={len(changed_refs)}\n")
+              fh.write(f"added_refs={len(added_refs)}\n")
+              fh.write(f"removed_refs={len(removed_refs)}\n")
           print(json.dumps({
-              'archive_container_matches_historical_capture': report['archive_container_matches_historical_capture'],
               'observed_archive_sha256': observed_archive_sha,
-              'scripture_payload_matches_pinned_source': True,
               'observed_vpl_sha256': vpl_sha,
+              'payload_matches_pinned_source': payload_matches,
+              'pinned_rows': len(pinned['lines']),
+              'current_rows': len(current['lines']),
+              'added_refs': len(added_refs),
+              'removed_refs': len(removed_refs),
+              'changed_refs': len(changed_refs),
           }, sort_keys=True))
 
       - name: Upload current official-source verification evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: webu-current-source-verification-${{ env.EXPECTED_HEAD }}
@@ -179,6 +244,20 @@ jobs:
             .webu-source/http-headers.txt
           if-no-files-found: error
           retention-days: 7
+
+      - name: Enforce source identity after evidence capture
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="${{ steps.source_audit.outputs.payload_changed }}"
+          if [ "$changed" != "false" ]; then
+            echo "OFFICIAL WEBU SCRIPTURE PAYLOAD CHANGED; source re-audit/reconciliation required. Structured reference diff was uploaded."
+            echo "observed_vpl_sha256=${{ steps.source_audit.outputs.observed_vpl_sha256 }}"
+            echo "changed_refs=${{ steps.source_audit.outputs.changed_refs }} added_refs=${{ steps.source_audit.outputs.added_refs }} removed_refs=${{ steps.source_audit.outputs.removed_refs }}"
+            exit 1
+          fi
+          echo "WEBU_SOURCE_IDENTITY_PASS"
 
       - name: Prove qualification is read-only and checkout remains exact
         shell: bash

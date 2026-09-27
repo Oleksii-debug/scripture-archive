@@ -67,8 +67,9 @@ jobs:
         working-directory: lanes/dev1/repair_overlay
         run: python -m unittest discover -s tests -p "test_accessibility_settings_ui.py" -v
       - name: Run Composite accessibility regression
-        working-directory: lanes/dev1/repair_overlay
-        run: python -m unittest discover -s tests -p "test_composite_accessibility.py" -v
+        env:
+          PYTHONPATH: ${{ github.workspace }}/lanes/dev1/repair_overlay
+        run: python -m unittest discover -s lanes/dev1/repair_overlay/tests -p "test_composite_accessibility.py" -v
       - name: Run packaged Accessibility Inspector surface regression
         working-directory: lanes/dev1/repair_overlay
         run: python -m unittest discover -s tests -p "test_packaged_accessibility_inspector_surface.py" -v

@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -7,6 +8,7 @@ from unittest import mock
 
 from scripture_archive_platform.desktop_host.authenticode import (
     _same_valid_signer_payload,
+    _windows_system_directory,
     verify_same_publisher_authenticode,
 )
 from scripture_archive_platform.desktop_host.update_application import (
@@ -257,7 +259,6 @@ class AuthenticodePayloadTests(unittest.TestCase):
             )
             run.assert_not_called()
 
-
     def test_windows_verifier_uses_native_system_directory_not_hostile_environment(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -302,6 +303,14 @@ class AuthenticodePayloadTests(unittest.TestCase):
                 "Microsoft.PowerShell.Security\\Get-AuthenticodeSignature",
                 args[0][-1],
             )
+
+    @unittest.skipUnless(os.name == "nt", "Windows Authenticode integration only")
+    def test_windows_verifier_executes_real_system_authenticode_command(self):
+        system_directory = _windows_system_directory()
+        self.assertIsInstance(system_directory, Path)
+        powershell = system_directory / "WindowsPowerShell" / "v1.0" / "powershell.exe"
+        self.assertTrue(powershell.is_file())
+        self.assertTrue(verify_same_publisher_authenticode(powershell, powershell))
 
 
 class NativeUpdateFileSelectorTests(unittest.TestCase):

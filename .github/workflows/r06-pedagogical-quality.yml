@@ -7,6 +7,9 @@ on:
       - 'tools/analyze_pedagogical_quality.py'
       - 'tools/test_analyze_pedagogical_quality.py'
       - 'tools/validate_canonical_answer_shapes.py'
+      - 'runtime_engine/scripture_archive_runtime/answer_contracts.py'
+      - 'runtime_engine/scripture_archive_runtime/package_adapters.py'
+      - 'runtime_engine/scripture_archive_runtime/provenance.py'
       - 'docs/spec/PEDAGOGICAL_QUALITY_GATE_v1.md'
       - '.github/workflows/r06-pedagogical-quality.yml'
   workflow_dispatch:

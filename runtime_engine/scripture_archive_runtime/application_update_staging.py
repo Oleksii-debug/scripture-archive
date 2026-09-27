@@ -219,7 +219,12 @@ def _write_pending_journal(root: Path, staged: StagedApplicationUpdate) -> None:
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
     try:
         descriptor = os.open(temporary, flags, 0o600)
-        with os.fdopen(descriptor, "wb") as handle:
+        try:
+            handle = os.fdopen(descriptor, "wb")
+        except Exception:
+            os.close(descriptor)
+            raise
+        with handle:
             handle.write(encoded)
             handle.flush()
             os.fsync(handle.fileno())

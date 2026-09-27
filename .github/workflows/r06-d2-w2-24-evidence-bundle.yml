@@ -1,0 +1,91 @@
+name: R06 D2 W2-24 Evidence Bundle Qualification
+
+on:
+  pull_request:
+    paths:
+      - 'docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05/**'
+      - 'tools/validate_dev2_evidence_bundle.py'
+      - 'tools/test_validate_dev2_evidence_bundle.py'
+      - '.github/workflows/r06-d2-w2-24-evidence-bundle.yml'
+  push:
+    branches:
+      - r06-d2-w2-24-current-package-composition-0927-sol
+    paths:
+      - 'docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05/**'
+      - 'tools/validate_dev2_evidence_bundle.py'
+      - 'tools/test_validate_dev2_evidence_bundle.py'
+      - '.github/workflows/r06-d2-w2-24-evidence-bundle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qualify-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Resolve expected head
+        id: head
+        shell: bash
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EVENT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          expected="${PR_HEAD_SHA:-$EVENT_SHA}"
+          test -n "$expected"
+          echo "sha=$expected" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout exact event head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.head.outputs.sha }}
+          persist-credentials: false
+
+      - name: Fail closed on checkout drift
+        shell: bash
+        env:
+          EXPECTED_HEAD: ${{ steps.head.outputs.sha }}
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EXPECTED_HEAD"
+          echo "D2_W2_24_EXACT_HEAD=$actual"
+
+      - name: Require exact authority surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          root='docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05'
+          if find "$root" -type l -print -quit | grep -q .; then
+            echo 'D2_W2_24_UNSAFE_SYMLINK_PRESENT'
+            find "$root" -type l -print
+            exit 1
+          fi
+          mapfile -t actual < <(find "$root" -type f -printf '%P\n' | LC_ALL=C sort)
+          expected=(
+            'evidence/part_001.jsonl'
+            'evidence/part_002.jsonl'
+            'evidence/part_003.jsonl'
+            'evidence_hash_index.json'
+            'mission_metadata.json'
+          )
+          if [[ "${#actual[@]}" -ne "${#expected[@]}" ]]; then
+            printf 'D2_W2_24_UNEXPECTED_AUTHORITY_SURFACE count=%s expected=%s\n' "${#actual[@]}" "${#expected[@]}"
+            printf 'actual: %s\n' "${actual[@]}"
+            exit 1
+          fi
+          for i in "${!expected[@]}"; do
+            if [[ "${actual[$i]}" != "${expected[$i]}" ]]; then
+              printf 'D2_W2_24_AUTHORITY_PATH_MISMATCH index=%s actual=%s expected=%s\n' "$i" "${actual[$i]}" "${expected[$i]}"
+              exit 1
+            fi
+          done
+          echo 'D2_W2_24_AUTHORITY_SURFACE_PASS files=5'
+
+      - name: Run evidence bundle regression tests
+        run: python -m unittest tools/test_validate_dev2_evidence_bundle.py -v
+
+      - name: Qualify immutable composed evidence
+        run: python tools/validate_dev2_evidence_bundle.py

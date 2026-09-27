@@ -14,6 +14,11 @@ class PassageRef:
     verse_start: int
     verse_end: int | None = None
     witness: str | None = None
+    # Optional authored provenance retained verbatim when one contiguous numeric
+    # range cannot losslessly express the source citation. Trailing optional
+    # fields preserve compatibility for all existing positional callers.
+    reference: str | None = None
+    source_locator: str | None = None
 
 
 @dataclass(frozen=True)

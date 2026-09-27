@@ -24,12 +24,65 @@ def canonical_task_type(value: str) -> str:
         "CITATION_SELECTION": "MULTI_SELECT",
         "FREE_RESPONSE": "SHORT_TEXT",
         "SHORT_FREE_RESPONSE": "SHORT_TEXT",
-        "STRUCTURED_FREE_RESPONSE": "SHORT_TEXT",
         "FREE_RESPONSE_+_CITATION": "SHORT_TEXT",
         "FREE_RESPONSE_/_COMPARISON": "LONG_TEXT",
         "WITNESS_COMPARISON": "LONG_TEXT",
     }
     return aliases.get(key, key)
+
+
+ANSWER_TASK_TYPES = frozenset({
+    "SINGLE_CHOICE", "MULTI_SELECT", "SHORT_TEXT", "LONG_TEXT", "COMBOBOX_SELECT",
+    "ORDERING", "MATCHING", "EVIDENCE_SELECT", "CLAIM_EVIDENCE", "SPEAKER_RECIPIENT",
+    "PARALLEL_WITNESS_COMPARE", "OT_NT_LINK", "COMPOSITE_MULTI_STEP", "ARGUMENT",
+})
+
+_LEGACY_LONG_TEXT_MARKERS = (
+    "comparison", "synthesis", "witness", "explain", "argument", "defence", "defense",
+    "critique", "reconstruction", "editor",
+)
+
+
+def canonical_node_task_type(node: Mapping[str, Any]) -> str:
+    """Resolve one authored node without inventing structured ground truth.
+
+    Existing explicit task types and established response-mode aliases remain
+    authoritative. Historical response modes that never had an ANSWER_DTO_v1
+    name are projected conservatively from their authored truth shape:
+    explicit arrow-delimited chronology/ordering strings are ORDERING; other
+    strings stay text tasks, with LONG_TEXT used only for already-authored
+    long-form markers. Unknown non-string structures remain fail-closed.
+    """
+    explicit = node.get("task_type")
+    if explicit is not None and str(explicit).strip():
+        return canonical_task_type(str(explicit))
+
+    response_mode = str(node.get("response_mode") or "").strip()
+    task_family = str(node.get("task_family") or "").strip()
+    direct = canonical_task_type(response_mode or task_family or "SHORT_TEXT")
+    if direct in ANSWER_TASK_TYPES:
+        return direct
+
+    accepted = node.get("accepted_answer")
+    combined = f"{response_mode} {task_family}".casefold()
+
+    if isinstance(accepted, str):
+        arrow_items = [part.strip() for part in accepted.split("→")]
+        if (
+            len(arrow_items) >= 2
+            and all(arrow_items)
+            and ("order" in combined or "chronology" in combined)
+        ):
+            return "ORDERING"
+        if any(marker in combined for marker in _LEGACY_LONG_TEXT_MARKERS):
+            return "LONG_TEXT"
+        return "SHORT_TEXT"
+
+    if isinstance(accepted, Sequence) and not isinstance(accepted, (str, bytes)):
+        if "order" in combined or "chronology" in combined:
+            return "ORDERING"
+
+    return direct
 
 
 def _require_str(value: Any, name: str) -> str:

@@ -4,7 +4,11 @@ import unittest
 from pathlib import Path
 
 from scripture_archive_platform.application.service import PlatformApplication
-from scripture_archive_platform.content.scripture_text import BundledScriptureText, EXPECTED_VPL_SHA256
+from scripture_archive_platform.content.scripture_text import (
+    BundledScriptureText,
+    EXPECTED_REAUDIT_LINE_SHA256,
+    EXPECTED_VPL_SHA256,
+)
 from scripture_archive_platform.persistence.store import JsonFileStore
 from scripture_archive_platform.transport.contracts import ALLOWLISTED_COMMANDS
 
@@ -43,7 +47,8 @@ class BundledScriptureTextTests(unittest.TestCase):
         self.assertEqual(10, reaudit['changed_reference_count'])
         self.assertEqual(0, reaudit['added_reference_count'])
         self.assertEqual(0, reaudit['removed_reference_count'])
-        self.assertEqual(10, len(reaudit['changed_references']))
+        self.assertEqual(list(EXPECTED_REAUDIT_LINE_SHA256), reaudit['changed_references'])
+        self.assertEqual(EXPECTED_REAUDIT_LINE_SHA256, reaudit['current_line_sha256'])
 
     def test_chapter_preserves_current_official_text_and_source_empty_rows(self):
         provider = BundledScriptureText()

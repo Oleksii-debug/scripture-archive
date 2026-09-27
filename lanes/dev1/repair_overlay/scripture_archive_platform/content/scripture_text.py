@@ -9,7 +9,22 @@ from typing import Any
 AUTHORITY_FILE = "engwebu_authority.json"
 VPL_FILE = "engwebu_vpl.txt"
 EXPECTED_VPL_SHA256 = "8cac735abda379045fa2c5f43217410ad47a45ac592f3801116ab0da41a810d8"
+PREVIOUS_ARCHIVE_SHA256 = "6442f15ee3b4360786c9cd0996ea3af8f3124744a61b7a9bd69e77ac5deab397"
 PREVIOUS_VPL_SHA256 = "71c2ea1ecba86b62871b0e818c4302ea0a559a5cb9643ff05197a6243836fc2f"
+RECONCILIATION_EVIDENCE_RUN_ID = 36339116656
+RECONCILIATION_EVIDENCE_ARTIFACT_ID = 10938503238
+EXPECTED_REAUDIT_LINE_SHA256 = {
+    "DAN 11:20": "1cc07bb46873f69f5ac5fc4ccbd8a7421050b47a9190884469e1f2440f712505",
+    "DAN 11:21": "3abcf45188d972154b0487254761e97d7b5e4737205059466b08f1041f69611d",
+    "DAN 11:24": "f2528239a871d53e1bcdf8cb1599ba96c2ccc80b054cee85f20c4e28e9721b21",
+    "DAN 4:26": "4853da560105ac8a433a2f3a39edcb8a6b50834f529949ef92364be93a7ef965",
+    "DAN 9:11": "2f7e353340fa88c7f2991a183e966d788f5e70fb20807161de360f90980abd85",
+    "DNG 11:20": "f96c876d09dd389b5e97f0704cfb17ef934c079ff94e1adafabe0216d1904993",
+    "DNG 11:21": "dfc14f96b8317bd7677581923112fec5004550ced966d657ea4c62e827ff2211",
+    "DNG 11:24": "52a4e37b8e7ab4ad7c96dcf0d988c89c0a2238574b75388445985ba8812f8db8",
+    "DNG 4:26": "8d06e8040c311cdf3c966d5b72aac806035f687a954a8adc1d048a222f7d2e33",
+    "DNG 9:11": "df351b0d3cefd895869c3064551bf1cc3485aed368e0a74a1be08fbc6dec6c1f",
+}
 CATALOG_SCHEMA = "scripture.library.text-catalog.v1"
 CHAPTER_SCHEMA = "scripture.library.chapter.v1"
 SEARCH_SCHEMA = "scripture.library.text-search.v1"
@@ -63,17 +78,18 @@ class BundledScriptureText:
             raise ValueError("WEBU source re-audit evidence is missing")
         if reaudit.get("independent_audit_claimed") is not False:
             raise ValueError("WEBU source identity reconciliation cannot claim independent audit")
-        changed = reaudit.get("changed_references")
         if (
-            reaudit.get("previous_vpl_sha256") != PREVIOUS_VPL_SHA256
-            or reaudit.get("changed_reference_count") != 10
+            reaudit.get("evidence_run_id") != RECONCILIATION_EVIDENCE_RUN_ID
+            or reaudit.get("evidence_artifact_id") != RECONCILIATION_EVIDENCE_ARTIFACT_ID
+            or reaudit.get("previous_archive_sha256") != PREVIOUS_ARCHIVE_SHA256
+            or reaudit.get("previous_vpl_sha256") != PREVIOUS_VPL_SHA256
+            or reaudit.get("changed_reference_count") != len(EXPECTED_REAUDIT_LINE_SHA256)
             or reaudit.get("added_reference_count") != 0
             or reaudit.get("removed_reference_count") != 0
-            or not isinstance(changed, list)
-            or len(changed) != 10
-            or len(set(changed)) != 10
+            or reaudit.get("changed_references") != list(EXPECTED_REAUDIT_LINE_SHA256)
+            or reaudit.get("current_line_sha256") != EXPECTED_REAUDIT_LINE_SHA256
         ):
-            raise ValueError("invalid WEBU source re-audit boundary")
+            raise ValueError("invalid WEBU source re-audit evidence identity")
         return data
 
     def _verify_vpl(self) -> bool:

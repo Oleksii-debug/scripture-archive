@@ -14,6 +14,9 @@ _DRIVE_PATH = re.compile(r"^[A-Za-z]:")
 _PROTECTED_PREFIXES = ("r06_platform/frontend/", "docs/campaigns/")
 _PROTECTED_EXACT = {"r06_platform/build_identity.json"}
 _TEXT_EOL_SUFFIXES = frozenset({".css", ".html", ".htm", ".js", ".json", ".jsonl", ".md", ".svg", ".txt", ".xml"})
+_GIT_EOL_EXACT = "exact"
+_GIT_EOL_CRLF_TO_LF = "crlf_to_lf"
+_GIT_EOL_POLICIES = frozenset({_GIT_EOL_EXACT, _GIT_EOL_CRLF_TO_LF})
 
 
 def sha256_hex(data: bytes) -> str:
@@ -30,17 +33,20 @@ def git_blob_matches_checkout(
     expected_blob: str,
     *,
     repo_path: str | None = None,
+    eol_policy: str = _GIT_EOL_EXACT,
 ) -> bool:
-    """Match canonical Git identity across ordinary tracked-text EOL forms.
+    """Match canonical Git identity under an explicit, persisted EOL policy.
 
-    Exact Git bytes are always accepted. CRLF->LF fallback is deliberately
-    narrower: the repository path must be an explicitly supported text class
-    and the checkout bytes must be strict UTF-8 text without NUL. Binary or
-    unknown payload classes therefore require exact Git blob identity.
+    Exact Git bytes are always accepted. CRLF->LF fallback is fail-closed:
+    it must have been authorized from the exact commit's Git attributes,
+    the path must still belong to the protected text suffix class, and the
+    staged/archive bytes must be strict UTF-8 text without NUL.
     """
 
     if git_blob_sha(data) == expected_blob:
         return True
+    if eol_policy != _GIT_EOL_CRLF_TO_LF:
+        return False
     if not isinstance(repo_path, str) or Path(repo_path).suffix.lower() not in _TEXT_EOL_SUFFIXES:
         return False
     if b"\r\n" not in data or b"\x00" in data:
@@ -50,6 +56,60 @@ def git_blob_matches_checkout(
     except UnicodeDecodeError:
         return False
     return git_blob_sha(data.replace(b"\r\n", b"\n")) == expected_blob
+
+
+def _policy_from_git_attributes(repo_path: str, text_attr: str, eol_attr: str) -> str:
+    """Resolve whether Git may legitimately present CRLF for this exact path."""
+
+    if Path(repo_path).suffix.lower() not in _TEXT_EOL_SUFFIXES:
+        return _GIT_EOL_EXACT
+    text_attr = text_attr.strip().lower()
+    eol_attr = eol_attr.strip().lower()
+    if text_attr == "unset" or eol_attr == "lf":
+        return _GIT_EOL_EXACT
+    if eol_attr == "crlf":
+        return _GIT_EOL_CRLF_TO_LF
+    if text_attr in {"set", "auto", "unspecified"} and eol_attr in {"set", "unspecified"}:
+        return _GIT_EOL_CRLF_TO_LF
+    return _GIT_EOL_EXACT
+
+
+def _git_eol_policy(repo_root: Path, git_sha: str, repo_path: str) -> str:
+    """Resolve text/eol attributes from the same exact Git tree used for blob pins."""
+
+    proc = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo_root),
+            "check-attr",
+            f"--source={git_sha}",
+            "-z",
+            "text",
+            "eol",
+            "--",
+            repo_path,
+        ],
+        capture_output=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        stderr = proc.stderr.decode("utf-8", errors="replace").strip()
+        raise RuntimeError(f"Cannot resolve Git attributes for {repo_path}: {stderr or proc.returncode}")
+    fields = proc.stdout.decode("utf-8", errors="strict").split("\0")
+    if fields and fields[-1] == "":
+        fields.pop()
+    if len(fields) != 6:
+        raise RuntimeError(f"Unexpected git check-attr response for {repo_path}: {fields!r}")
+    attrs: dict[str, str] = {}
+    for offset in (0, 3):
+        path_value, attr_name, attr_value = fields[offset:offset + 3]
+        if path_value != repo_path or attr_name not in {"text", "eol"}:
+            raise RuntimeError(f"Unexpected git check-attr tuple for {repo_path}: {fields!r}")
+        attrs[attr_name] = attr_value
+    if set(attrs) != {"text", "eol"}:
+        raise RuntimeError(f"Incomplete git attribute response for {repo_path}: {attrs!r}")
+    return _policy_from_git_attributes(repo_path, attrs["text"], attrs["eol"])
 
 
 def normalize_archive_path(value: str) -> str:
@@ -95,6 +155,7 @@ def _entry(
     *,
     repo_path: str | None = None,
     git_blob: str | None = None,
+    git_eol_policy: str = _GIT_EOL_EXACT,
 ) -> dict[str, Any]:
     normalized_package_path = normalize_archive_path(package_path)
     data = source.read_bytes()
@@ -107,12 +168,20 @@ def _entry(
     if repo_path is not None:
         entry["repo_path"] = repo_path
     if git_blob is not None:
+        if git_eol_policy not in _GIT_EOL_POLICIES:
+            raise RuntimeError(f"Invalid Git EOL policy for {repo_path}: {git_eol_policy!r}")
         actual_blob = git_blob_sha(data)
-        if not git_blob_matches_checkout(data, git_blob, repo_path=repo_path):
+        if not git_blob_matches_checkout(
+            data,
+            git_blob,
+            repo_path=repo_path,
+            eol_policy=git_eol_policy,
+        ):
             raise RuntimeError(
                 f"Staged Git blob mismatch for {repo_path}: expected={git_blob} actual={actual_blob}"
             )
         entry["git_blob_sha1"] = git_blob
+        entry["git_eol_policy"] = git_eol_policy
     return entry
 
 
@@ -145,6 +214,7 @@ def build_manifest(
         repo_path = f"lanes/dev1/repair_overlay/frontend/{rel}"
         git_blob = _git_blob_at(repo_root, git_sha, repo_path)
         provenance = "git_overlay" if git_blob else "immutable_dev1_source"
+        git_eol_policy = _git_eol_policy(repo_root, git_sha, repo_path) if git_blob else _GIT_EOL_EXACT
         entries.append(
             _entry(
                 source,
@@ -152,6 +222,7 @@ def build_manifest(
                 provenance,
                 repo_path=repo_path if git_blob else None,
                 git_blob=git_blob,
+                git_eol_policy=git_eol_policy,
             )
         )
 
@@ -161,6 +232,7 @@ def build_manifest(
         git_blob = _git_blob_at(repo_root, git_sha, repo_path)
         if git_blob is None:
             raise RuntimeError(f"Campaign payload is not Git-tracked at {git_sha}: {repo_path}")
+        git_eol_policy = _git_eol_policy(repo_root, git_sha, repo_path)
         entries.append(
             _entry(
                 source,
@@ -168,6 +240,7 @@ def build_manifest(
                 "git_campaign",
                 repo_path=repo_path,
                 git_blob=git_blob,
+                git_eol_policy=git_eol_policy,
             )
         )
 
@@ -198,7 +271,7 @@ def build_manifest(
         "proof_scope": [
             "all PyInstaller --add-data frontend files are pinned to exact staged bytes",
             "all PyInstaller --add-data docs/campaigns files are pinned to exact staged bytes and Git blobs",
-            "Git-tracked frontend overlay files are pinned to exact Git blobs across only ordinary CRLF checkout representation",
+            "Git-pinned text files allow CRLF checkout equivalence only when the exact Git tree attributes permit it",
             "generated build identity is pinned to exact staged bytes",
         ],
         "not_proven": [
@@ -486,10 +559,17 @@ def verify_reader(
         if expected_blob:
             actual_blob = git_blob_sha(actual)
             row["git_blob_sha1"] = actual_blob
-            if not git_blob_matches_checkout(
+            eol_policy = expected.get("git_eol_policy", _GIT_EOL_EXACT)
+            if eol_policy not in _GIT_EOL_POLICIES:
+                errors.append(
+                    f"INVALID_GIT_EOL_POLICY {package_path}: {eol_policy!r}"
+                )
+                mismatch = True
+            elif not git_blob_matches_checkout(
                 actual,
                 expected_blob,
                 repo_path=expected.get("repo_path"),
+                eol_policy=eol_policy,
             ):
                 errors.append(f"GIT_BLOB_MISMATCH {package_path}: expected={expected_blob} actual={actual_blob}")
                 mismatch = True

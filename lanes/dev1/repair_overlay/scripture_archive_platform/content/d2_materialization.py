@@ -99,10 +99,10 @@ def _legacy_aggregate(record_hashes: Mapping[str, str]) -> str:
 
 
 class LegacyD2MaterializationLoader:
-    """Read exact legacy D2 Stage-05 JSONL without weakening the modern manifest verifier.
+    """Read exact legacy D2 Stage-05 JSONL without weakening the modern verifier.
 
     The historical manifest's shard filenames predate the final split layout, so
-    filenames are not treated as authority. The immutable semantic authority is the
+    filenames are not treated as authority. Immutable semantic authority is the
     declared record count plus the aggregate over stable IDs and canonical record
     hashes. Evidence additionally has an explicit per-record hash index. Mission
     metadata is checked against the complete node set before anything is exposed.
@@ -115,8 +115,8 @@ class LegacyD2MaterializationLoader:
             if materialization_root is not None
             else self.repo_root / "docs" / "campaigns" / "PA" / "R06_DEV2_MATERIALIZATION_05"
         )
-        expected_parent = self.repo_root / "docs" / "campaigns" / "PA"
-        if self.root.parent != expected_parent.resolve():
+        expected_parent = (self.repo_root / "docs" / "campaigns" / "PA").resolve()
+        if self.root.parent != expected_parent:
             raise D2MaterializationLoadError("D2 materialization root is outside the canonical PA campaign root")
         self._missions: list[dict[str, Any]] | None = None
         self._nodes: dict[str, dict[str, Any]] | None = None
@@ -137,9 +137,7 @@ class LegacyD2MaterializationLoader:
         nodes, node_hashes = _load_jsonl_records(self.root / "nodes", "node_id")
         expected_node_count = node_spec.get("count")
         if expected_node_count != len(nodes):
-            raise D2MaterializationLoadError(
-                f"D2 node count mismatch: {len(nodes)} != {expected_node_count}"
-            )
+            raise D2MaterializationLoadError(f"D2 node count mismatch: {len(nodes)} != {expected_node_count}")
         expected_node_aggregate = _hex_sha256(node_spec.get("aggregate_sha256"), "nodes.aggregate_sha256")
         actual_node_aggregate = _legacy_aggregate(node_hashes)
         if actual_node_aggregate != expected_node_aggregate:
@@ -166,9 +164,7 @@ class LegacyD2MaterializationLoader:
             indexed_hashes[record_id] = _hex_sha256(item.get("sha256"), f"evidence[{record_id}]")
         if indexed_hashes != evidence_hashes:
             raise D2MaterializationLoadError("D2 evidence per-record hash index does not match materialized evidence")
-        expected_evidence_aggregate = _hex_sha256(
-            evidence_spec.get("aggregate_sha256"), "evidence.aggregate_sha256"
-        )
+        expected_evidence_aggregate = _hex_sha256(evidence_spec.get("aggregate_sha256"), "evidence.aggregate_sha256")
         index_aggregate = _hex_sha256(evidence_index.get("aggregate_sha256"), "evidence_index.aggregate_sha256")
         actual_evidence_aggregate = _legacy_aggregate(evidence_hashes)
         if len(indexed_hashes) != evidence_index.get("record_count"):
@@ -180,6 +176,7 @@ class LegacyD2MaterializationLoader:
         if not isinstance(metadata, list) or not metadata:
             raise D2MaterializationLoadError("D2 mission_metadata must be a non-empty array")
         mission_entries: dict[str, dict[str, Any]] = {}
+        task_nodes_by_mission: dict[str, frozenset[str]] = {}
         declared_nodes: set[str] = set()
         for item in metadata:
             if not isinstance(item, dict):
@@ -199,16 +196,18 @@ class LegacyD2MaterializationLoader:
             task_nodes = mission.get("task_nodes")
             if not isinstance(task_nodes, list) or not task_nodes or not all(isinstance(v, str) and v for v in task_nodes):
                 raise D2MaterializationLoadError(f"D2 mission task_nodes are invalid: {mission_id}")
-            if len(task_nodes) != len(set(task_nodes)):
+            task_node_set = frozenset(task_nodes)
+            if len(task_nodes) != len(task_node_set):
                 raise D2MaterializationLoadError(f"D2 mission task_nodes contain duplicates: {mission_id}")
-            overlap = declared_nodes.intersection(task_nodes)
+            overlap = declared_nodes.intersection(task_node_set)
             if overlap:
                 raise D2MaterializationLoadError(f"D2 node declared by multiple missions: {sorted(overlap)[:3]}")
-            declared_nodes.update(task_nodes)
+            declared_nodes.update(task_node_set)
+            task_nodes_by_mission[mission_id] = task_node_set
             entry_node = mission.get("entry_node")
-            if entry_node not in task_nodes:
+            if entry_node not in task_node_set:
                 raise D2MaterializationLoadError(f"D2 entry node is not in task_nodes: {mission_id}")
-            entry = {
+            mission_entries[mission_id] = {
                 "mission_id": mission_id,
                 "campaign_id": "PA",
                 "campaign_title": "Дорога Павла",
@@ -222,27 +221,27 @@ class LegacyD2MaterializationLoader:
                 "index_path": str((self.root / "mission_metadata.json").relative_to(self.repo_root)).replace("\\", "/"),
                 "accessibility": dict(mission.get("accessibility") or {}),
             }
-            mission_entries[mission_id] = entry
 
         if declared_nodes != set(nodes):
-            missing = sorted(set(nodes) - declared_nodes)
-            extra = sorted(declared_nodes - set(nodes))
+            undeclared = sorted(set(nodes) - declared_nodes)
+            missing = sorted(declared_nodes - set(nodes))
             raise D2MaterializationLoadError(
-                f"D2 mission/node set mismatch; undeclared={missing[:5]} missing={extra[:5]}"
+                f"D2 mission/node set mismatch; undeclared={undeclared[:5]} missing={missing[:5]}"
             )
 
         mission_for_node: dict[str, dict[str, Any]] = {}
+        evidence_ids = set(evidence)
         for node_id, node in nodes.items():
             mission_id = node.get("mission_id")
             if mission_id not in mission_entries:
                 raise D2MaterializationLoadError(f"D2 node references unknown mission: {node_id}")
-            if node_id not in set(metadata_entry["metadata"]["mission"]["task_nodes"] for metadata_entry in []):
-                pass
+            if node_id not in task_nodes_by_mission[str(mission_id)]:
+                raise D2MaterializationLoadError(f"D2 node is not declared by its own mission: {node_id}")
             required = node.get("required_evidence", [])
             required_ids = [required] if isinstance(required, str) else list(required or [])
             if not all(isinstance(value, str) and value for value in required_ids):
                 raise D2MaterializationLoadError(f"D2 node has invalid required_evidence: {node_id}")
-            unknown_evidence = sorted(set(required_ids) - set(evidence))
+            unknown_evidence = sorted(set(required_ids) - evidence_ids)
             if unknown_evidence:
                 raise D2MaterializationLoadError(
                     f"D2 node references unknown evidence: {node_id}: {unknown_evidence[:3]}"
@@ -251,9 +250,7 @@ class LegacyD2MaterializationLoader:
 
         expected_missions = {"PA-03", "PA-04", "PA-05", "PA-06", "PA-07", "PA-08"}
         if set(mission_entries) != expected_missions:
-            raise D2MaterializationLoadError(
-                f"D2 mission set mismatch: {sorted(mission_entries)}"
-            )
+            raise D2MaterializationLoadError(f"D2 mission set mismatch: {sorted(mission_entries)}")
         self._missions = [mission_entries[key] for key in sorted(mission_entries)]
         self._nodes = nodes
         self._mission_for_node = mission_for_node
@@ -297,9 +294,7 @@ class LegacyD2MaterializationLoader:
 
     def next_node_id(self, node_id: str, outcome: str = "correct") -> str | None:
         node = self.load_node(node_id)
-        field = {"correct": "on_correct", "partial": "on_partial", "incorrect": "on_incorrect"}.get(
-            outcome, "on_correct"
-        )
+        field = {"correct": "on_correct", "partial": "on_partial", "incorrect": "on_incorrect"}.get(outcome, "on_correct")
         raw = node.get(field)
         if not isinstance(raw, str):
             return None

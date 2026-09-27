@@ -12,7 +12,12 @@ TOOLS = Path(__file__).resolve().parent
 if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
 
-from validate_dev2_evidence_bundle import BUNDLE_REL, BundleError, validate_bundle
+from validate_dev2_evidence_bundle import (
+    BUNDLE_REL,
+    EXPECTED_MISSION_COUNTS,
+    BundleError,
+    validate_bundle,
+)
 
 
 class D2EvidenceBundleTests(unittest.TestCase):
@@ -32,6 +37,18 @@ class D2EvidenceBundleTests(unittest.TestCase):
         report = validate_bundle(self.repo_root)
         self.assertEqual(report["status"], "PASS")
         self.assertEqual(report["record_count"], 184)
+        self.assertEqual(report["mission_evidence_counts"], EXPECTED_MISSION_COUNTS)
+        self.assertEqual(
+            report["mission_evidence_counts"],
+            {
+                "PA-03": 25,
+                "PA-04": 30,
+                "PA-05": 29,
+                "PA-06": 20,
+                "PA-07": 29,
+                "PA-08": 51,
+            },
+        )
         self.assertEqual(report["independent_audit"], "PENDING")
         self.assertFalse(report["player_content_promoted"])
 

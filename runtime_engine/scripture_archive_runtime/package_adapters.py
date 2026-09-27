@@ -5,7 +5,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Mapping, Sequence
 
-from .answer_contracts import ANSWER_CONTRACT_VERSION, canonical_task_type, validate_answer_dto
+from .answer_contracts import ANSWER_CONTRACT_VERSION, canonical_node_task_type, canonical_task_type, validate_answer_dto
 from .security import ValidationError, validate_content_import
 from .provenance import canonical_answer_dto
 
@@ -76,7 +76,7 @@ def _concrete_variants(value: Any) -> list[str]:
 
 
 def _task_type(node: Mapping[str, Any]) -> str:
-    return canonical_task_type(str(node.get("task_type") or node.get("response_mode") or node.get("task_family") or "SHORT_TEXT"))
+    return canonical_node_task_type(node)
 
 
 def normalize_legacy_multiselect_truth(node: Mapping[str, Any]) -> dict[str, Any]:

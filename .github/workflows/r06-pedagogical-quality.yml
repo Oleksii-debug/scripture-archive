@@ -6,6 +6,7 @@ on:
       - 'docs/campaigns/**'
       - 'tools/analyze_pedagogical_quality.py'
       - 'tools/test_analyze_pedagogical_quality.py'
+      - 'tools/validate_canonical_answer_shapes.py'
       - 'docs/spec/PEDAGOGICAL_QUALITY_GATE_v1.md'
       - '.github/workflows/r06-pedagogical-quality.yml'
   workflow_dispatch:
@@ -27,9 +28,13 @@ jobs:
         with:
           python-version: '3.13'
       - name: Compile analyzer and tests
-        run: python -m compileall -q tools/analyze_pedagogical_quality.py tools/test_analyze_pedagogical_quality.py
+        run: python -m compileall -q tools/analyze_pedagogical_quality.py tools/test_analyze_pedagogical_quality.py tools/validate_canonical_answer_shapes.py
       - name: Run analyzer regressions
         run: python -m unittest -v tools.test_analyze_pedagogical_quality
+      - name: Validate canonical answer shapes
+        env:
+          PYTHONPATH: .
+        run: python tools/validate_canonical_answer_shapes.py docs/campaigns
       - name: Inventory canonical pedagogical quality
         run: >-
           python tools/analyze_pedagogical_quality.py docs/campaigns

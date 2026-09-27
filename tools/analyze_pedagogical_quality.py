@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
 SCHEMA = "CONTENT_NODE_SCHEMA_v1.2"
+GOSPEL_SCHEMA = "GW_CANONICAL_NODE_FILESET_v1.2"
 HINT_KEYS = tuple(f"H{i}" for i in range(1, 8))
 BLOCKER = "BLOCKER"
 WARN = "WARN"
@@ -139,6 +140,21 @@ def _discover_json(roots: Sequence[str]) -> list[Path]:
     return sorted(found, key=lambda p: p.as_posix())
 
 
+def _recognized_node_schema(doc: Mapping[str, Any]) -> str | None:
+    """Return an explicitly supported canonical node-envelope schema.
+
+    LN/PA use CONTENT_NODE_SCHEMA_v1.2 in schema_version. The independently
+    qualified Gospel corpus uses GW_CANONICAL_NODE_FILESET_v1.2 in schema while
+    preserving the same pedagogical node fields consumed below. Explicit
+    recognition prevents unrelated JSON from being silently reclassified.
+    """
+    if doc.get("schema_version") == SCHEMA:
+        return SCHEMA
+    if doc.get("schema") == GOSPEL_SCHEMA:
+        return GOSPEL_SCHEMA
+    return None
+
+
 def _load_schema_nodes(paths: Iterable[Path]) -> tuple[list[NodeRecord], int, Counter[str]]:
     records: list[NodeRecord] = []
     schema_files = 0
@@ -148,7 +164,7 @@ def _load_schema_nodes(paths: Iterable[Path]) -> tuple[list[NodeRecord], int, Co
             doc = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeDecodeError, json.JSONDecodeError):
             continue
-        if not isinstance(doc, dict) or doc.get("schema_version") != SCHEMA:
+        if not isinstance(doc, dict) or _recognized_node_schema(doc) is None:
             continue
         nodes = doc.get("nodes")
         if not isinstance(nodes, list):

@@ -180,7 +180,8 @@ class PackagedEvidenceGraphTests(unittest.TestCase):
         self.assertIn("textContent", source)
         self.assertNotIn("innerHTML", source)
         self.assertNotIn("include_locked_evidence", source)
-        self.assertNotIn("evidence_ids", source)
+        self.assertIn("return validateEvidenceGraphResponse(await unwrap(await transportPromise, COMMAND, {}));", source)
+        self.assertIn("required_evidence_ids", source)
         self.assertIn("./evidence-graph-ui.js", transport)
 
 

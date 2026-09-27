@@ -1,0 +1,2 @@
+# Exact source-audit Git blob identity must be stable across hosted OS checkouts.
+docs/campaigns/OT/R06_D4_STAGE05_READABLE/relations/*.jsonl text eol=lf

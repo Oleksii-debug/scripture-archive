@@ -23,7 +23,7 @@ class RuntimeCompatTests(unittest.TestCase):
         adapter=RuntimeEngineContractAdapter(lambda r:r)
         with self.assertRaisesRegex(RuntimeContractError,'accepts no caller-selected target payload'):
             adapter.to_runtime_request(self.req('player.next',{'node_id':'LN01-N99'}))
-        with self.assertRaisesRegex(RuntimeContractError,'accepts no caller-selected target payload'):
+        with self.assertRaisesRegex(ValueError,'target selection is forbidden'):
             adapter.to_runtime_request(self.req('player.next',{'target_node_id':'LN01-N99'}))
     def test_platform_only_command_refuses_runtime_mapping(self):
         adapter=RuntimeEngineContractAdapter(lambda r:r)

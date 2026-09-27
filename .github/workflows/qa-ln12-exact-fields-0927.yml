@@ -1,0 +1,124 @@
+name: QA LN12 exact field invariant 0927
+
+on:
+  pull_request:
+    branches: [ r06-pedagogy-ln12-0912-sol ]
+    paths:
+      - '.github/workflows/qa-ln12-exact-fields-0927.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  exact-field-invariant:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Prove package-to-candidate parsed-object field invariant
+        shell: bash
+        env:
+          PACKAGE_SHA: 453025194fa87d7d2dbbb8cd09be368e0c18f7a1
+          CANDIDATE_SHA: 6b8c5f0b27ee4861601b2f1f50feefc2d5028646
+        run: |
+          set -euo pipefail
+          git cat-file -e "$PACKAGE_SHA^{commit}"
+          git cat-file -e "$CANDIDATE_SHA^{commit}"
+          python - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+
+          base = os.environ['PACKAGE_SHA']
+          head = os.environ['CANDIDATE_SHA']
+          files = [f'docs/campaigns/LN/LN-12_CANONICAL_v1.2/nodes_part_0{i}.json' for i in range(1, 6)]
+          allowed_targets = {
+              ('LN12-N04', ('knowledge_target',)),
+              ('LN12-N07', ('knowledge_target',)),
+              ('LN12-N09', ('knowledge_target',)),
+          }
+          hint_keys = {f'H{i}' for i in range(1, 8)}
+
+          def read(ref, path):
+              raw = subprocess.check_output(['git', 'show', f'{ref}:{path}'])
+              return json.loads(raw)
+
+          def diffs(a, b, prefix=()):
+              if type(a) is not type(b):
+                  yield prefix, a, b
+                  return
+              if isinstance(a, dict):
+                  if set(a) != set(b):
+                      yield prefix + ('<keys>',), sorted(a), sorted(b)
+                      return
+                  for key in a:
+                      yield from diffs(a[key], b[key], prefix + (key,))
+              elif isinstance(a, list):
+                  if len(a) != len(b):
+                      yield prefix + ('<len>',), len(a), len(b)
+                      return
+                  for i, (left, right) in enumerate(zip(a, b)):
+                      yield from diffs(left, right, prefix + (i,))
+              elif a != b:
+                  yield prefix, a, b
+
+          changes = []
+          forbidden = []
+          for path in files:
+              old = read(base, path)
+              new = read(head, path)
+              old_nodes = old.get('nodes')
+              new_nodes = new.get('nodes')
+              if not isinstance(old_nodes, list) or not isinstance(new_nodes, list):
+                  raise SystemExit(f'{path}: nodes must be arrays')
+              old_ids = [n.get('node_id') for n in old_nodes]
+              new_ids = [n.get('node_id') for n in new_nodes]
+              if old_ids != new_ids:
+                  raise SystemExit(f'{path}: node identity/order drift')
+              for prefix, before, after in diffs(old, new):
+                  # Every semantic change must lie inside nodes[i].<field>.
+                  if len(prefix) < 3 or prefix[0] != 'nodes' or not isinstance(prefix[1], int):
+                      forbidden.append((path, prefix, before, after, 'outside node field'))
+                      continue
+                  node_id = old_nodes[prefix[1]].get('node_id')
+                  field_path = tuple(prefix[2:])
+                  allowed = False
+                  if len(field_path) == 2 and field_path[0] == 'hints' and field_path[1] in hint_keys:
+                      allowed = True
+                      if not isinstance(before, str) or not isinstance(after, str) or not after.strip() or after.strip().lower() == 'not_used':
+                          forbidden.append((path, prefix, before, after, 'invalid hint repair value'))
+                          continue
+                  elif (node_id, field_path) in allowed_targets:
+                      allowed = True
+                      if not isinstance(before, str) or not isinstance(after, str) or not after.strip():
+                          forbidden.append((path, prefix, before, after, 'invalid target repair value'))
+                          continue
+                  if not allowed:
+                      forbidden.append((path, prefix, before, after, 'field not in QA allowlist'))
+                      continue
+                  changes.append((path, node_id, field_path, before, after))
+
+          print('LN12_EXACT_FIELD_CHANGE_COUNT', len(changes))
+          for path, node_id, field_path, before, after in changes:
+              print(json.dumps({
+                  'file': path,
+                  'node_id': node_id,
+                  'field': '.'.join(field_path),
+                  'before': before,
+                  'after': after,
+              }, ensure_ascii=False))
+          if forbidden:
+              print('LN12_FORBIDDEN_CHANGE_COUNT', len(forbidden))
+              for item in forbidden:
+                  print(repr(item))
+              raise SystemExit('LN12 parsed-object invariant failed')
+          if not changes:
+              raise SystemExit('LN12 candidate has no semantic changes')
+          changed_targets = {(node_id, field_path) for _, node_id, field_path, _, _ in changes if field_path == ('knowledge_target',)}
+          if changed_targets != allowed_targets:
+              raise SystemExit(f'knowledge_target repair set mismatch: {changed_targets!r}')
+          print('LN12_PARSED_OBJECT_FIELD_INVARIANT_PASS')
+          PY

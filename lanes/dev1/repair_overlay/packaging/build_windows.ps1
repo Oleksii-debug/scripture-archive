@@ -79,9 +79,13 @@ Assert-NativeSuccess "packaged payload manifest generation"
 
 $Sep = ";"
 $Name = "ScriptureArchive-R06-DEV01"
+$UpdaterName = "$Name-Updater"
 $Out = Join-Path $Dist "$Name.exe"
-if (Test-Path -LiteralPath $Out) {
-    Remove-Item -LiteralPath $Out -Force
+$UpdaterOut = Join-Path $Dist "$UpdaterName.exe"
+foreach ($artifact in @($Out, $UpdaterOut)) {
+    if (Test-Path -LiteralPath $artifact) {
+        Remove-Item -LiteralPath $artifact -Force
+    }
 }
 try {
     & (Join-Path $Venv "Scripts\pyinstaller.exe") --noconfirm --clean --onefile --windowed `
@@ -98,13 +102,23 @@ try {
       --paths $PlatformRoot --paths $Repo `
       --distpath $Dist --workpath $Work --specpath $Spec `
       (Join-Path $PlatformRoot "run_windows.py")
-    Assert-NativeSuccess "PyInstaller build"
+    Assert-NativeSuccess "PyInstaller application build"
+
+    & (Join-Path $Venv "Scripts\pyinstaller.exe") --noconfirm --clean --onefile --windowed `
+      --name $UpdaterName `
+      --paths $PlatformRoot --paths $Repo `
+      --distpath $Dist --workpath $Work --specpath $Spec `
+      (Join-Path $PlatformRoot "scripture_archive_platform\desktop_host\updater_main.py")
+    Assert-NativeSuccess "PyInstaller updater build"
 } finally {
     Remove-Item -LiteralPath $BuildIdentityDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 if (-not (Test-Path -LiteralPath $Out -PathType Leaf)) {
     throw "Expected executable not produced: $Out"
+}
+if (-not (Test-Path -LiteralPath $UpdaterOut -PathType Leaf)) {
+    throw "Expected updater executable not produced: $UpdaterOut"
 }
 
 $PayloadReadback = Join-Path $Dist "packaged_payload_fidelity.json"
@@ -116,6 +130,8 @@ Assert-NativeSuccess "embedded packaged payload fidelity verification"
 
 $hash = (Get-FileHash -Algorithm SHA256 $Out).Hash.ToLowerInvariant()
 $size = (Get-Item $Out).Length
+$updaterHash = (Get-FileHash -Algorithm SHA256 $UpdaterOut).Hash.ToLowerInvariant()
+$updaterSize = (Get-Item $UpdaterOut).Length
 $payloadEvidenceHash = (Get-FileHash -Algorithm SHA256 $PayloadReadback).Hash.ToLowerInvariant()
 $pythonVersion = (& $Python --version 2>&1 | Out-String).Trim()
 Assert-NativeSuccess "Python version query"
@@ -126,6 +142,10 @@ $manifest = [ordered]@{
     artifact_path = $Out
     size_bytes = $size
     sha256 = $hash
+    updater_artifact_name = (Split-Path -Leaf $UpdaterOut)
+    updater_artifact_path = $UpdaterOut
+    updater_size_bytes = $updaterSize
+    updater_sha256 = $updaterHash
     built_utc = (Get-Date).ToUniversalTime().ToString("o")
     git_sha = $actualGitSha
     github_event_sha = $env:GITHUB_SHA
@@ -137,19 +157,20 @@ $manifest = [ordered]@{
     packaged_payload_fidelity_file = (Split-Path -Leaf $PayloadReadback)
     packaged_payload_fidelity_sha256 = $payloadEvidenceHash
     proof_scope = @(
-        "PyInstaller build completed",
-        "artifact size/hash readback verified",
+        "PyInstaller application and standalone updater builds completed",
+        "application and updater artifact size/hash readback verified",
         "embedded frontend/campaign/build-identity bytes verified against exact staged manifest",
         "Git-tracked embedded frontend overlay/campaign bytes verified against exact checkout Git blob IDs",
         "WebView2 runtime presence probed before build",
         "packaged diagnostics build identity bound to exact checkout SHA"
     )
     not_proven = @(
+        "production Authenticode signing identity is configured",
         "Python module bytecode identity inside PYZ",
         "human NVDA acceptance",
         "full application functional acceptance",
         "visual correctness",
-        "recovery execution"
+        "post-restart health commit"
     )
 }
 $ManifestPath = Join-Path $Dist "build_manifest.json"
@@ -157,11 +178,32 @@ $manifest | ConvertTo-Json -Depth 6 | Set-Content -Encoding utf8 $ManifestPath
 
 "SHA256=$hash" | Set-Content -Encoding utf8 (Join-Path $Dist "$Name.sha256.txt")
 "SIZE=$size" | Add-Content -Encoding utf8 (Join-Path $Dist "$Name.sha256.txt")
+"SHA256=$updaterHash" | Set-Content -Encoding utf8 (Join-Path $Dist "$UpdaterName.sha256.txt")
+"SIZE=$updaterSize" | Add-Content -Encoding utf8 (Join-Path $Dist "$UpdaterName.sha256.txt")
 
 & $Python (Join-Path $PSScriptRoot "windows_release.py") verify-artifact `
   --artifact $Out `
   --manifest $ManifestPath `
   --output (Join-Path $Dist "artifact_readback.json")
-Assert-NativeSuccess "artifact verification"
+Assert-NativeSuccess "application artifact verification"
+
+$UpdaterManifestPath = Join-Path $Dist "updater_build_manifest.json"
+$updaterManifest = [ordered]@{
+    schema_version = 1
+    artifact_name = (Split-Path -Leaf $UpdaterOut)
+    artifact_path = $UpdaterOut
+    size_bytes = $updaterSize
+    sha256 = $updaterHash
+    git_sha = $actualGitSha
+    application_version_authority = "scripture_archive_platform.desktop_host.version.CURRENT_APPLICATION_VERSION"
+    authenticode_authority = "scripture_archive_platform.desktop_host.authenticode.verify_same_publisher_authenticode"
+}
+$updaterManifest | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 $UpdaterManifestPath
+& $Python (Join-Path $PSScriptRoot "windows_release.py") verify-artifact `
+  --artifact $UpdaterOut `
+  --manifest $UpdaterManifestPath `
+  --output (Join-Path $Dist "updater_artifact_readback.json")
+Assert-NativeSuccess "updater artifact verification"
 
 Write-Output "Built $Out ($size bytes) SHA256=$hash"
+Write-Output "Built $UpdaterOut ($updaterSize bytes) SHA256=$updaterHash"

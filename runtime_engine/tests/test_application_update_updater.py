@@ -127,6 +127,81 @@ class AtomicApplicationUpdaterTests(unittest.TestCase):
 
             self.assertEqual(target.read_bytes(), old)
 
+    def test_consume_handoff_rejects_target_mutation_during_signature_check(self):
+        old = b"old trusted executable"
+        new = b"new signed executable"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "ScriptureArchive.exe"
+            staged = root / "staged" / "ScriptureArchive.exe"
+            staged.parent.mkdir()
+            target.write_bytes(old)
+            staged.write_bytes(new)
+            pending = self._pending(new)
+
+            def mutate_target(current: Path, _candidate: Path) -> bool:
+                current.write_bytes(b"attacker replacement")
+                return True
+
+            with patch(
+                "scripture_archive_runtime.application_update_updater.inspect_apply_handoff",
+                return_value=pending,
+            ), patch(
+                "scripture_archive_runtime.application_update_updater.staged_artifact_path",
+                return_value=staged,
+            ):
+                with self.assertRaisesRegex(
+                    ApplicationUpdateError,
+                    "target changed during publisher verification",
+                ):
+                    consume_apply_handoff(
+                        root,
+                        current_version="1.0.0",
+                        install_target=target,
+                        verify_same_publisher=mutate_target,
+                    )
+
+            self.assertEqual(target.read_bytes(), b"attacker replacement")
+            self.assertFalse(
+                (root / "ScriptureArchive.exe.scripture-archive.rollback").exists()
+            )
+
+    def test_consume_handoff_rejects_cancelled_authority_after_signature_check(self):
+        old = b"old trusted executable"
+        new = b"new signed executable"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "ScriptureArchive.exe"
+            staged = root / "staged" / "ScriptureArchive.exe"
+            staged.parent.mkdir()
+            target.write_bytes(old)
+            staged.write_bytes(new)
+            pending = self._pending(new)
+            inspections = [pending, None]
+
+            with patch(
+                "scripture_archive_runtime.application_update_updater.inspect_apply_handoff",
+                side_effect=inspections,
+            ), patch(
+                "scripture_archive_runtime.application_update_updater.staged_artifact_path",
+                return_value=staged,
+            ):
+                with self.assertRaisesRegex(
+                    ApplicationUpdateError,
+                    "apply handoff changed during publisher verification",
+                ):
+                    consume_apply_handoff(
+                        root,
+                        current_version="1.0.0",
+                        install_target=target,
+                        verify_same_publisher=lambda _current, _candidate: True,
+                    )
+
+            self.assertEqual(target.read_bytes(), old)
+            self.assertFalse(
+                (root / "ScriptureArchive.exe.scripture-archive.rollback").exists()
+            )
+
     def test_consume_handoff_rolls_back_when_post_publish_verification_errors(self):
         old = b"old executable bytes"
         new = b"new signed executable bytes"

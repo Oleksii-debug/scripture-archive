@@ -334,7 +334,12 @@ def _json_bytes(value: Any) -> bytes:
     ).encode("utf-8")
 
 
-def write_preintegration_pack(\n    nodes: list[dict[str, Any]],\n    destination: Path,\n    *,\n    expected_node_count: int = EXPECTED_NODE_COUNT,\n) -> dict[str, Any]:
+def write_preintegration_pack(
+    nodes: list[dict[str, Any]],
+    destination: Path,
+    *,
+    expected_node_count: int = EXPECTED_NODE_COUNT,
+) -> dict[str, Any]:
     destination = destination.expanduser().resolve()
     destination.parent.mkdir(parents=True, exist_ok=True)
     payload = _json_bytes({"nodes": nodes})
@@ -361,16 +366,16 @@ def write_preintegration_pack(\n    nodes: list[dict[str, Any]],\n    destinatio
             archive.writestr(info, data)
 
     inspection = inspect_content_pack(destination)
-    if inspection.node_count != EXPECTED_NODE_COUNT:
-        raise CompatibilityError("content-pack inspector did not see all corrected nodes")
+    if inspection.node_count != expected_node_count:
+        raise CompatibilityError("content-pack inspector did not see expected nodes")
     if inspection.manifest.pack_id != PACK_ID or inspection.manifest.version != PACK_VERSION:
         raise CompatibilityError("content-pack identity drifted")
 
     with tempfile.TemporaryDirectory() as temp:
         store = ContentPackStore(Path(temp) / "store")
         installed = store.install(destination)
-        if installed.node_count != EXPECTED_NODE_COUNT:
-            raise CompatibilityError("content-pack store install lost corrected nodes")
+        if installed.node_count != expected_node_count:
+            raise CompatibilityError("content-pack store install lost expected nodes")
         store.activate(PACK_ID, PACK_VERSION)
         if store.active_versions().get(PACK_ID) != PACK_VERSION:
             raise CompatibilityError("content-pack activation did not select D2 preintegration pack")
@@ -387,8 +392,8 @@ def write_preintegration_pack(\n    nodes: list[dict[str, Any]],\n    destinatio
             adapt_legacy=True,
             lane="D2",
         )
-        if len(roundtrip.all()) != EXPECTED_NODE_COUNT:
-            raise CompatibilityError("installed content pack runtime reload lost corrected nodes")
+        if len(roundtrip.all()) != expected_node_count:
+            raise CompatibilityError("installed content pack runtime reload lost expected nodes")
 
     return {
         "pack_id": PACK_ID,

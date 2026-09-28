@@ -81,6 +81,21 @@ function requireContentAccess(value, name) {
   return value;
 }
 
+function requireAccessTruth(row, name, {requireReadOnlyAudit = false} = {}) {
+  const access = requireContentAccess(row.content_access, `${name}.content_access`);
+  const gradeable = requireBoolean(row.gradeable_runtime_eligible, `${name}.gradeable_runtime_eligible`);
+  if ((access === 'GRADEABLE_RUNTIME') !== gradeable) {
+    throw new Error(`${name} content_access/gradeable_runtime_eligible mismatch`);
+  }
+  const audit = row.source_audit_status;
+  if (!gradeable && requireReadOnlyAudit) {
+    requireText(audit, `${name}.source_audit_status`);
+  } else if (audit !== null && audit !== undefined) {
+    requireText(audit, `${name}.source_audit_status`);
+  }
+  return row;
+}
+
 function requireStringArray(value, name, {maxLength = MAX_TEXT_LENGTH} = {}) {
   if (!Array.isArray(value)) throw new Error(`${name} must be array`);
   for (let index = 0; index < value.length; index += 1) {
@@ -95,8 +110,7 @@ function validateCampaign(row, index) {
   requireText(row.title, `campaigns[${index}].title`);
   requireNonNegativeInteger(row.mission_count, `campaigns[${index}].mission_count`);
   requireNonNegativeInteger(row.machine_node_count, `campaigns[${index}].machine_node_count`);
-  requireContentAccess(row.content_access, `campaigns[${index}].content_access`);
-  requireBoolean(row.gradeable_runtime_eligible, `campaigns[${index}].gradeable_runtime_eligible`);
+  requireAccessTruth(row, `campaigns[${index}]`);
   return row;
 }
 
@@ -105,11 +119,7 @@ function validateMission(row, index) {
   requireText(row.campaign_id, `missions[${index}].campaign_id`, {maxLength: MAX_ID_LENGTH});
   requireText(row.mission_id, `missions[${index}].mission_id`, {maxLength: MAX_ID_LENGTH});
   requireText(row.title, `missions[${index}].title`);
-  if (row.source_audit_status !== null && row.source_audit_status !== undefined) {
-    requireText(row.source_audit_status, `missions[${index}].source_audit_status`);
-  }
-  requireContentAccess(row.content_access, `missions[${index}].content_access`);
-  requireBoolean(row.gradeable_runtime_eligible, `missions[${index}].gradeable_runtime_eligible`);
+  requireAccessTruth(row, `missions[${index}]`, {requireReadOnlyAudit: true});
   return row;
 }
 
@@ -122,11 +132,7 @@ function validateResult(row, index) {
   requireText(row.title, `results[${index}].title`);
   requireText(row.snippet, `results[${index}].snippet`, {allowEmpty: true});
   requireStringArray(row.source_references, `results[${index}].source_references`, {maxLength: MAX_SOURCE_REF_LENGTH});
-  if (row.source_audit_status !== null && row.source_audit_status !== undefined) {
-    requireText(row.source_audit_status, `results[${index}].source_audit_status`);
-  }
-  requireContentAccess(row.content_access, `results[${index}].content_access`);
-  requireBoolean(row.gradeable_runtime_eligible, `results[${index}].gradeable_runtime_eligible`);
+  requireAccessTruth(row, `results[${index}]`, {requireReadOnlyAudit: true});
   return row;
 }
 

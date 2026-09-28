@@ -374,8 +374,25 @@ jobs:
               "historical_staging_zip_sha256",
           ):
               assert committed_manifest[key] == generated_manifest[key], key
+          assert committed_manifest["status"] == (
+              "DEVELOPER_AGGREGATED / HOSTED_QUALIFICATION_PENDING / "
+              "INDEPENDENT_AUDIT_PENDING"
+          )
+          assert committed_manifest["correction_report_union"] == {
+              "records": 386,
+              "parts": 26,
+              "reports": [
+                  "correction_provenance/PRIMARY_001_015_CORRECTION_REPORT.json",
+                  "correction_provenance/W2_20_CORRECTION_REPORT.json",
+                  "correction_provenance/W2_19_CORRECTION_REPORT.json",
+              ],
+          }
+          assert committed_manifest["qualification_workflow"] == (
+              ".github/workflows/r06-d2-corrected-full-aggregation.yml"
+          )
           assert committed_manifest["hosted_qualification"] == "PENDING_ON_FINAL_HEAD"
           assert committed_manifest["independent_audit"] == "PENDING"
+          assert committed_manifest["current_package_composition"] == "NOT_STARTED"
           print(
               "D2_FULL_COMMITTED_AUTHORITY_MATCH_PASS",
               committed_index["aggregate_sha256"],

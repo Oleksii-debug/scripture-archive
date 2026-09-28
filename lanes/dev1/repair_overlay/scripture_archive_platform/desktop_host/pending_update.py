@@ -16,31 +16,29 @@ from scripture_archive_platform.transport.contracts import (
 
 
 PENDING_UPDATE_STATUS_COMMAND = "application_update.pending_status"
+PREPARE_APPLY_COMMAND = "application_update.prepare_apply"
 CANCEL_PENDING_UPDATE_COMMAND = "application_update.cancel_pending"
 _PENDING_COMMANDS = frozenset(
-    {PENDING_UPDATE_STATUS_COMMAND, CANCEL_PENDING_UPDATE_COMMAND}
+    {PENDING_UPDATE_STATUS_COMMAND, PREPARE_APPLY_COMMAND, CANCEL_PENDING_UPDATE_COMMAND}
 )
 _UPDATE_COMMAND_FAMILY = frozenset(
     {
         "application_update.select_verify",
         "application_update.select_verify_stage",
         PENDING_UPDATE_STATUS_COMMAND,
+        PREPARE_APPLY_COMMAND,
         CANCEL_PENDING_UPDATE_COMMAND,
     }
 )
 
 
 class NativePendingUpdateLayer:
-    """Expose fixed-path staged-update recovery without browser filesystem authority.
+    """Expose serialized fixed-path staged-update recovery and apply handoff.
 
-    Status re-opens the host-owned journal, re-verifies exact staged bytes, checks
-    same-publisher Authenticode again, then re-verifies exact bytes after that OS
-    signature inspection. Cancellation removes only the fixed journal authority;
-    staged executable bytes remain inert and are never recursively deleted here.
-
-    This outer packaged-host layer also serializes the complete application-update
-    command family. In particular, a staging request cannot publish a fresh pending
-    journal after a concurrent cancellation has already reported success.
+    The outer packaged-host lock serializes the complete application-update command
+    family so staging, status, prepare-apply and cancellation cannot publish
+    contradictory durable state. Prepare-apply only creates a host-owned intent; it
+    does not replace, execute, install or restart application bytes.
     """
 
     def __init__(
@@ -87,14 +85,17 @@ class NativePendingUpdateLayer:
             inspect_pending_update, staged_artifact_path, discard_pending_update = (
                 self._load_pending_core()
             )
+            prepare_apply_handoff, discard_apply_handoff = self._load_apply_core()
 
             if command == CANCEL_PENDING_UPDATE_COMMAND:
+                apply_removed = discard_apply_handoff(self._staging_root)
                 removed = discard_pending_update(self._staging_root)
                 return ok_response(
                     rid,
                     {
                         "pending": False,
-                        "status": "cancelled" if removed else "none",
+                        "status": "cancelled" if removed or apply_removed else "none",
+                        "apply_handoff_removed": apply_removed,
                         "staged_bytes_removed": False,
                         "installation_performed": False,
                     },
@@ -126,12 +127,41 @@ class NativePendingUpdateLayer:
                     "Pending update no longer has valid same-publisher Authenticode.",
                 )
 
-            # Bind the positive OS signature result back to bytes that still satisfy
-            # the fixed pending journal after OS signature inspection.
             pending = inspect_pending_update(
                 self._staging_root,
                 current_version=self._current_version,
             )
+
+            if command == PREPARE_APPLY_COMMAND:
+                rebound = prepare_apply_handoff(
+                    self._staging_root,
+                    current_version=self._current_version,
+                )
+                if rebound != pending:
+                    return error_response(
+                        rid,
+                        "UPDATE_APPLY_HANDOFF_INVALID",
+                        "Apply handoff did not remain bound to the verified pending update.",
+                    )
+                return ok_response(
+                    rid,
+                    {
+                        "pending": True,
+                        "status": "apply_ready",
+                        "product_id": rebound.product_id,
+                        "target_platform": rebound.target_platform,
+                        "current_version": rebound.current_version,
+                        "target_version": rebound.target_version,
+                        "source_head": rebound.source_head,
+                        "artifact_name": rebound.artifact_name,
+                        "artifact_size": rebound.artifact_size,
+                        "artifact_sha256": rebound.artifact_sha256,
+                        "authenticity": rebound.authenticity,
+                        "installation_performed": False,
+                        "restart_performed": False,
+                    },
+                )
+
             return ok_response(
                 rid,
                 {
@@ -182,3 +212,14 @@ class NativePendingUpdateLayer:
         )
 
         return inspect_pending_update, staged_artifact_path, discard_pending_update
+
+    def _load_apply_core(self) -> tuple[Any, Any]:
+        root_text = str(self._repo_root)
+        if root_text not in sys.path:
+            sys.path.insert(0, root_text)
+        from runtime_engine.scripture_archive_runtime.application_update_apply import (
+            discard_apply_handoff,
+            prepare_apply_handoff,
+        )
+
+        return prepare_apply_handoff, discard_apply_handoff

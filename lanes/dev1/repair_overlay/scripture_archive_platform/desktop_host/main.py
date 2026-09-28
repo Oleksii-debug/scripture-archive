@@ -7,6 +7,7 @@ from pathlib import Path
 from scripture_archive_platform.application.speech_application import build_default_application
 from scripture_archive_platform.desktop_host.bridge import DesktopBridge
 from scripture_archive_platform.desktop_host.diagnostics import NativeDiagnosticsLayer
+from scripture_archive_platform.desktop_host.pending_update import NativePendingUpdateLayer
 from scripture_archive_platform.desktop_host.update_application import (
     NativeApplicationUpdateLayer,
     NativeUpdateFileSelector,
@@ -52,12 +53,19 @@ def main() -> int:
 
     selector = NativeUpdateFileSelector(webview)
     platform_app = build_default_application(root)
+    staging_root = Path(platform_app.store.root) / "application-updates"
     app = NativeApplicationUpdateLayer(
         platform_app,
         root,
         selector,
         current_version=CURRENT_APPLICATION_VERSION,
-        staging_root=Path(platform_app.store.root) / "application-updates",
+        staging_root=staging_root,
+    )
+    app = NativePendingUpdateLayer(
+        app,
+        root,
+        staging_root,
+        current_version=CURRENT_APPLICATION_VERSION,
     )
     app = NativeDiagnosticsLayer(
         app,

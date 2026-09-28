@@ -6,6 +6,13 @@ const MAX_CHAPTERS = 200;
 const MAX_VERSES = 200;
 const MAX_SEARCH_RESULTS = 50;
 const MAX_VERSE_TEXT = 10000;
+const EXPECTED_TRANSLATION_NAME = 'World English Bible Updated';
+const EXPECTED_LICENSE = 'Public Domain';
+const EXPECTED_SOURCE_URL = 'https://ebible.org/Scriptures/engwebu_vpl.zip';
+const EXPECTED_SOURCE_SITE = 'https://ebible.org/engwebu/';
+const EXPECTED_ARCHIVE_SHA256 = '1007fb45782a4abd9444d4225fd768fb00a150466b9fb9fcf6f6ad175b73feb6';
+const EXPECTED_VPL_SHA256 = '8cac735abda379045fa2c5f43217410ad47a45ac592f3801116ab0da41a810d8';
+const SHA256_HEX = /^[0-9a-f]{64}$/u;
 const byId = id => document.getElementById(id);
 
 function element(tag, text = '', attrs = {}) {
@@ -69,10 +76,27 @@ function validateVerse(row, field, {expectedBook = null, expectedChapter = null,
 
 export function validateTextCatalog(data) {
   if (!record(data) || data.schema !== 'scripture.library.text-catalog.v1') throw new Error('Invalid WEBU catalog schema');
-  if (data.translation_id !== 'engwebu' || data.source_tier !== 'TX1' || data.runtime_network_required !== false) {
+  if (
+    data.translation_id !== 'engwebu'
+    || data.translation_name !== EXPECTED_TRANSLATION_NAME
+    || data.source_tier !== 'TX1'
+    || data.license !== EXPECTED_LICENSE
+    || data.source_url !== EXPECTED_SOURCE_URL
+    || data.source_site !== EXPECTED_SOURCE_SITE
+    || data.archive_sha256 !== EXPECTED_ARCHIVE_SHA256
+    || data.vpl_sha256 !== EXPECTED_VPL_SHA256
+    || data.runtime_network_required !== false
+  ) {
     throw new Error('Invalid WEBU catalog source identity');
   }
   if (data.source_snapshot_status !== 'AUDITED_PINNED_SNAPSHOT') throw new Error('Invalid WEBU source snapshot status');
+  const reaudit = data.source_reaudit;
+  if (!record(reaudit) || reaudit.status !== 'SOURCE_IDENTITY_RECONCILED' || reaudit.independent_audit_claimed !== false) {
+    throw new Error('Invalid WEBU source re-audit status');
+  }
+  for (const key of ['changed_reference_count', 'added_reference_count', 'removed_reference_count']) {
+    boundedInteger(reaudit[key], `source_reaudit.${key}`, 0, 100000);
+  }
   boundedInteger(data.verse_rows, 'verse_rows', 1, 100000);
   boundedInteger(data.source_empty_rows, 'source_empty_rows', 0, data.verse_rows);
   if (!Array.isArray(data.books) || data.books.length === 0 || data.books.length > MAX_BOOKS) throw new Error('Invalid WEBU book catalog');
@@ -94,6 +118,14 @@ export function validateTextCatalog(data) {
     throw new Error('Invalid WEBU upstream monitoring status');
   }
   const monitoring = data.upstream_monitoring;
+  if (
+    typeof monitoring.observed_archive_sha256 !== 'string'
+    || !SHA256_HEX.test(monitoring.observed_archive_sha256)
+    || typeof monitoring.observed_vpl_sha256 !== 'string'
+    || !SHA256_HEX.test(monitoring.observed_vpl_sha256)
+  ) {
+    throw new Error('Invalid WEBU upstream monitoring hashes');
+  }
   for (const key of ['changed_reference_count', 'added_reference_count', 'removed_reference_count']) {
     boundedInteger(monitoring[key], `upstream_monitoring.${key}`, 0, 100000);
   }
@@ -103,7 +135,9 @@ export function validateTextCatalog(data) {
   if (
     monitoring.status === 'MATCH_PINNED_AUTHORITY'
     && (
-      monitoring.changed_reference_count !== 0
+      monitoring.observed_archive_sha256 !== EXPECTED_ARCHIVE_SHA256
+      || monitoring.observed_vpl_sha256 !== EXPECTED_VPL_SHA256
+      || monitoring.changed_reference_count !== 0
       || monitoring.added_reference_count !== 0
       || monitoring.removed_reference_count !== 0
       || monitoring.changed_references.length !== 0

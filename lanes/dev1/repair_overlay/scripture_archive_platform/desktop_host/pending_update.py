@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import threading
 from pathlib import Path
 from typing import Any, Callable
 
@@ -16,6 +17,17 @@ from scripture_archive_platform.transport.contracts import (
 
 PENDING_UPDATE_STATUS_COMMAND = "application_update.pending_status"
 CANCEL_PENDING_UPDATE_COMMAND = "application_update.cancel_pending"
+_PENDING_COMMANDS = frozenset(
+    {PENDING_UPDATE_STATUS_COMMAND, CANCEL_PENDING_UPDATE_COMMAND}
+)
+_UPDATE_COMMAND_FAMILY = frozenset(
+    {
+        "application_update.select_verify",
+        "application_update.select_verify_stage",
+        PENDING_UPDATE_STATUS_COMMAND,
+        CANCEL_PENDING_UPDATE_COMMAND,
+    }
+)
 
 
 class NativePendingUpdateLayer:
@@ -25,6 +37,10 @@ class NativePendingUpdateLayer:
     same-publisher Authenticode again, then re-verifies exact bytes after that OS
     signature inspection. Cancellation removes only the fixed journal authority;
     staged executable bytes remain inert and are never recursively deleted here.
+
+    This outer packaged-host layer also serializes the complete application-update
+    command family. In particular, a staging request cannot publish a fresh pending
+    journal after a concurrent cancellation has already reported success.
     """
 
     def __init__(
@@ -45,20 +61,24 @@ class NativePendingUpdateLayer:
             if authenticity_verifier is not None
             else self._default_authenticity_verifier
         )
+        self._operation_lock = threading.RLock()
 
     def handle(self, request: Any) -> dict[str, Any]:
-        if not isinstance(request, dict) or request.get("command") not in {
-            PENDING_UPDATE_STATUS_COMMAND,
-            CANCEL_PENDING_UPDATE_COMMAND,
-        }:
+        if not isinstance(request, dict):
             return self._app.handle(request)
+        command_name = request.get("command")
+        if command_name not in _UPDATE_COMMAND_FAMILY:
+            return self._app.handle(request)
+        with self._operation_lock:
+            if command_name not in _PENDING_COMMANDS:
+                return self._app.handle(request)
+            return self._handle_pending(request)
+
+    def _handle_pending(self, request: dict[str, Any]) -> dict[str, Any]:
         rid = str(request.get("request_id", "invalid"))
         try:
             rid, command, payload = validate_request_shape(request)
-            if command not in {
-                PENDING_UPDATE_STATUS_COMMAND,
-                CANCEL_PENDING_UPDATE_COMMAND,
-            } or payload:
+            if command not in _PENDING_COMMANDS or payload:
                 raise ValueError("pending update recovery requires an empty payload")
         except ValueError as exc:
             return error_response(rid, "VALIDATION_ERROR", str(exc))

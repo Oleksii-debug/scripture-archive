@@ -60,6 +60,10 @@ class NativePendingUpdateLayer:
                 CANCEL_PENDING_UPDATE_COMMAND,
             } or payload:
                 raise ValueError("pending update recovery requires an empty payload")
+        except ValueError as exc:
+            return error_response(rid, "VALIDATION_ERROR", str(exc))
+
+        try:
             inspect_pending_update, staged_artifact_path, discard_pending_update = (
                 self._load_pending_core()
             )
@@ -102,7 +106,8 @@ class NativePendingUpdateLayer:
                     "Pending update no longer has valid same-publisher Authenticode.",
                 )
 
-            # Bind the positive OS signature result back to exact staged bytes.
+            # Bind the positive OS signature result back to bytes that still satisfy
+            # the fixed pending journal after OS signature inspection.
             pending = inspect_pending_update(
                 self._staging_root,
                 current_version=self._current_version,

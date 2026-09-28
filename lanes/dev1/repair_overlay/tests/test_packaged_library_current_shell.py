@@ -5,7 +5,7 @@ import subprocess
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1] / "frontend"
-EXPECTED_LIBRARY_UI_BLOB = "4417effcbfc08f674b3ecb200187ad830f9a4257"
+EXPECTED_LIBRARY_UI_BLOB = "942227f0540812f067cf5e2b205ac7ad828cae37"
 
 
 def git_blob_sha(data: bytes) -> str:
@@ -88,9 +88,12 @@ class PackagedLibraryCurrentShellTest(unittest.TestCase):
             "content_access",
             "gradeable_runtime_eligible",
             "Gradeable authority",
-            "Qualified read-only sources",
+            "Library-qualified read-only sources",
             "лише Library, без player/grading",
-            "Library також може показувати явно позначені qualified read-only джерела",
+            "Library також може показувати явно позначені Library-qualified read-only джерела",
+            "source_audit_status",
+            "Library eligibility не означає завершений independent source audit",
+            "source audit: ${row.source_audit_status || 'статус не надано'}",
             "цей запис не є доступним для player або grading",
         ):
             self.assertIn(token, self.library)

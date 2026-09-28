@@ -1,6 +1,11 @@
 import {chooseTransport, unwrap} from './transport.js';
 
 let transportPromise = null;
+const MAX_BOOKS = 128;
+const MAX_CHAPTERS = 200;
+const MAX_VERSES = 200;
+const MAX_SEARCH_RESULTS = 50;
+const MAX_VERSE_TEXT = 10000;
 const byId = id => document.getElementById(id);
 
 function element(tag, text = '', attrs = {}) {
@@ -24,6 +29,92 @@ async function api(command, payload = {}) {
 function status(message) {
   const node = byId('scripture-reader-status');
   if (node) node.textContent = String(message || '');
+}
+
+function record(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function boundedText(value, name, maxLength, {allowEmpty = false} = {}) {
+  if (typeof value !== 'string' || value.length > maxLength || /[\u0000-\u001F\u007F]/u.test(value)) {
+    throw new Error(`${name} is invalid`);
+  }
+  if (!allowEmpty && !value) throw new Error(`${name} must be non-empty`);
+  return value;
+}
+
+function boundedInteger(value, name, minimum, maximum) {
+  if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
+    throw new Error(`${name} is invalid`);
+  }
+  return value;
+}
+
+function validateVerse(row, field, {expectedBook = null, expectedChapter = null, requireText = false} = {}) {
+  if (!record(row)) throw new Error(`${field} must be an object`);
+  const book = boundedText(row.book, `${field}.book`, 4);
+  if (!/^[A-Z0-9]{3,4}$/u.test(book)) throw new Error(`${field}.book is invalid`);
+  const chapter = boundedInteger(row.chapter, `${field}.chapter`, 1, MAX_CHAPTERS);
+  const verse = boundedInteger(row.verse, `${field}.verse`, 1, MAX_VERSES);
+  if (expectedBook !== null && book !== expectedBook) throw new Error(`${field}.book does not match chapter`);
+  if (expectedChapter !== null && chapter !== expectedChapter) throw new Error(`${field}.chapter does not match chapter`);
+  if (row.translation_id !== 'engwebu' || row.source_tier !== 'TX1') throw new Error(`${field} has invalid source identity`);
+  if (row.reference !== `${book} ${chapter}:${verse}`) throw new Error(`${field}.reference is inconsistent`);
+  const text = boundedText(row.text, `${field}.text`, MAX_VERSE_TEXT, {allowEmpty: true});
+  if (row.text_state !== 'present' && row.text_state !== 'source_empty') throw new Error(`${field}.text_state is invalid`);
+  if (row.text_state === 'source_empty' && text !== '') throw new Error(`${field} source-empty row contains text`);
+  if ((row.text_state === 'present' || requireText) && text === '') throw new Error(`${field} expected source text`);
+  return row;
+}
+
+export function validateTextCatalog(data) {
+  if (!record(data) || data.schema !== 'scripture.library.text-catalog.v1') throw new Error('Invalid WEBU catalog schema');
+  if (data.translation_id !== 'engwebu' || data.source_tier !== 'TX1' || data.runtime_network_required !== false) {
+    throw new Error('Invalid WEBU catalog source identity');
+  }
+  if (data.source_snapshot_status !== 'AUDITED_PINNED_SNAPSHOT') throw new Error('Invalid WEBU source snapshot status');
+  boundedInteger(data.verse_rows, 'verse_rows', 1, 100000);
+  boundedInteger(data.source_empty_rows, 'source_empty_rows', 0, data.verse_rows);
+  if (!Array.isArray(data.books) || data.books.length === 0 || data.books.length > MAX_BOOKS) throw new Error('Invalid WEBU book catalog');
+  const seen = new Set();
+  for (let index = 0; index < data.books.length; index += 1) {
+    const item = data.books[index];
+    if (!record(item)) throw new Error(`books[${index}] must be an object`);
+    const code = boundedText(item.code, `books[${index}].code`, 4);
+    if (!/^[A-Z0-9]{3,4}$/u.test(code) || seen.has(code)) throw new Error(`books[${index}].code is invalid`);
+    seen.add(code);
+    if (!Array.isArray(item.chapters) || item.chapters.length > MAX_CHAPTERS) throw new Error(`books[${index}].chapters is invalid`);
+    item.chapters.forEach((chapter, chapterIndex) => boundedInteger(chapter, `books[${index}].chapters[${chapterIndex}]`, 1, MAX_CHAPTERS));
+    if (item.chapter_count !== item.chapters.length) throw new Error(`books[${index}].chapter_count is inconsistent`);
+  }
+  if (!record(data.upstream_monitoring) || !['MATCH_PINNED_AUTHORITY', 'SOURCE_REAUDIT_REQUIRED'].includes(data.upstream_monitoring.status)) {
+    throw new Error('Invalid WEBU upstream monitoring status');
+  }
+  return data;
+}
+
+export function validateChapter(data) {
+  if (!record(data) || data.schema !== 'scripture.library.chapter.v1') throw new Error('Invalid WEBU chapter schema');
+  if (data.translation_id !== 'engwebu' || data.source_tier !== 'TX1') throw new Error('Invalid WEBU chapter source identity');
+  const book = boundedText(data.book, 'book', 4);
+  const chapter = boundedInteger(data.chapter, 'chapter', 1, MAX_CHAPTERS);
+  if (!Array.isArray(data.verses) || data.verses.length === 0 || data.verses.length > MAX_VERSES) throw new Error('Invalid WEBU chapter verses');
+  data.verses.forEach((row, index) => validateVerse(row, `verses[${index}]`, {expectedBook: book, expectedChapter: chapter}));
+  const sourceEmpty = data.verses.filter(row => row.text_state === 'source_empty').length;
+  if (data.source_empty_rows !== sourceEmpty) throw new Error('WEBU chapter source-empty count is inconsistent');
+  return data;
+}
+
+export function validateTextSearch(data) {
+  if (!record(data) || data.schema !== 'scripture.library.text-search.v1') throw new Error('Invalid WEBU search schema');
+  if (data.translation_id !== 'engwebu' || data.source_tier !== 'TX1') throw new Error('Invalid WEBU search source identity');
+  boundedText(data.query, 'query', 128);
+  boundedInteger(data.total, 'total', 0, 100000);
+  if (!Array.isArray(data.results) || data.results.length > MAX_SEARCH_RESULTS || data.total < data.results.length) {
+    throw new Error('Invalid WEBU search results');
+  }
+  data.results.forEach((row, index) => validateVerse(row, `results[${index}]`, {requireText: true}));
+  return data;
 }
 
 function renderVerses(data) {
@@ -87,8 +178,8 @@ export async function installScriptureReaderSurface() {
   library.append(section);
 
   try {
-    const catalog = await api('library.text_catalog');
-    for (const item of catalog.books || []) {
+    const catalog = validateTextCatalog(await api('library.text_catalog'));
+    for (const item of catalog.books) {
       const option = element('option', item.code);
       option.value = item.code;
       book.append(option);
@@ -109,7 +200,7 @@ export async function installScriptureReaderSurface() {
   readForm.addEventListener('submit', async event => {
     event.preventDefault(); readButton.disabled = true; status('Loading chapter…');
     try {
-      const data = await api('library.read_chapter', {book: book.value, chapter: Number(chapter.value)});
+      const data = validateChapter(await api('library.read_chapter', {book: book.value, chapter: Number(chapter.value)}));
       renderVerses(data); status(`${data.book} ${data.chapter}: ${data.verses.length} source rows.`);
     } catch (error) { status(`Cannot read chapter: ${error.message}`); }
     finally { readButton.disabled = false; }
@@ -120,7 +211,7 @@ export async function installScriptureReaderSurface() {
     if (!value) { status('Enter words to search in the bundled WEBU text.'); query.focus(); return; }
     searchButton.disabled = true; status('Searching bundled WEBU text…');
     try {
-      const data = await api('library.text_search', {query: value, limit: 50});
+      const data = validateTextSearch(await api('library.text_search', {query: value, limit: MAX_SEARCH_RESULTS}));
       renderSearch(data); status(`${data.total} matching source rows; showing up to 50.`);
     } catch (error) { status(`Cannot search Scripture text: ${error.message}`); }
     finally { searchButton.disabled = false; }

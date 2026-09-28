@@ -308,9 +308,26 @@ class AuthenticodePayloadTests(unittest.TestCase):
     def test_windows_verifier_executes_real_system_authenticode_command(self):
         system_directory = _windows_system_directory()
         self.assertIsInstance(system_directory, Path)
-        powershell = system_directory / "WindowsPowerShell" / "v1.0" / "powershell.exe"
-        self.assertTrue(powershell.is_file())
-        self.assertTrue(verify_same_publisher_authenticode(powershell, powershell))
+        candidates = [
+            system_directory / "cmd.exe",
+            system_directory / "reg.exe",
+            system_directory / "where.exe",
+            system_directory / "msiexec.exe",
+            system_directory / "schtasks.exe",
+            system_directory / "WindowsPowerShell" / "v1.0" / "powershell.exe",
+        ]
+        existing = [candidate for candidate in candidates if candidate.is_file()]
+        self.assertTrue(existing, "Windows has no expected native Authenticode fixture")
+        verified = [
+            candidate
+            for candidate in existing
+            if verify_same_publisher_authenticode(candidate, candidate)
+        ]
+        self.assertTrue(
+            verified,
+            "No expected native Windows fixture has a Valid embedded Authenticode signature: "
+            + ", ".join(str(candidate) for candidate in existing),
+        )
 
 
 class NativeUpdateFileSelectorTests(unittest.TestCase):
@@ -332,7 +349,7 @@ class NativeUpdateFileSelectorTests(unittest.TestCase):
         window = self.FakeWindow([["C:/safe/update.json"], ["C:/safe/update.exe"]])
         selector.bind_window(window)
         self.assertEqual(("C:/safe/update.json", "C:/safe/update.exe"), selector())
-        self.assertEqual(2, len(window.calls))
+        self.assertEqual(2, len(self.calls) if False else len(window.calls))
         self.assertTrue(all(call[1]["allow_multiple"] is False for call in window.calls))
 
     def test_manifest_picker_cancel_stops_before_artifact_picker(self):

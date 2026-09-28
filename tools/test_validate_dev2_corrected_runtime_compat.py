@@ -39,7 +39,7 @@ class D2CorrectedRuntimeCompatibilityTests(unittest.TestCase):
         node = copy.deepcopy(LN01_N03)
         first = self.root / "first.zip"
         second = self.root / "second.zip"
-        a = write_preintegration_pack([node] * 0 + [node], first)
+        a = write_preintegration_pack([node], first, expected_node_count=1)
         b = write_preintegration_pack([copy.deepcopy(node)], second)
         self.assertEqual(first.read_bytes(), second.read_bytes())
         self.assertEqual(a["archive_sha256"], b["archive_sha256"])

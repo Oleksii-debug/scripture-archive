@@ -7,11 +7,21 @@ on:
     paths:
       - 'tools/validate_dev2_corrected_runtime_compat.py'
       - 'tools/test_validate_dev2_corrected_runtime_compat.py'
+      - 'tools/validate_dev2_evidence_bundle.py'
+      - 'runtime_engine/scripture_archive_runtime/**'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/**'
+      - 'lanes/dev1/repair_overlay/frontend/**'
+      - 'docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05/**'
       - '.github/workflows/r06-d2-corrected-runtime-preintegration.yml'
   pull_request:
     paths:
       - 'tools/validate_dev2_corrected_runtime_compat.py'
       - 'tools/test_validate_dev2_corrected_runtime_compat.py'
+      - 'tools/validate_dev2_evidence_bundle.py'
+      - 'runtime_engine/scripture_archive_runtime/**'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/**'
+      - 'lanes/dev1/repair_overlay/frontend/**'
+      - 'docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05/**'
       - '.github/workflows/r06-d2-corrected-runtime-preintegration.yml'
   workflow_dispatch:
 

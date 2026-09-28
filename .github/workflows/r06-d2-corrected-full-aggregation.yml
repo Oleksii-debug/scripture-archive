@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: r06-d2-corrected-full-aggregation-qualification
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   qualify:

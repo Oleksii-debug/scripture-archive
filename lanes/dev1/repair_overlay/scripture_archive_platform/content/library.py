@@ -19,6 +19,16 @@ _D4_MISSION_COUNT = 15
 _D4_NODE_COUNT = 450
 _D4_NODE_RECORD_AGGREGATE_SHA256 = "9fd8f668868e267e97b718a1de3025ad47577748e1054e146b6279da585e2ef7"
 
+_D4_PUBLIC_AUTHORITY_SHA256 = {
+    "metadata/mission_index_metadata.json": "cfc13e369006522f6ad450863888f3603f395d4d0168f7f498e5ebf7ed6e0192",
+    "registries/missions_001_005.jsonl": "756b265b32b011b7a875872e140d54095f979391de4bd0c22029141d7a75aaa8",
+    "registries/missions_006_008.jsonl": "ed7e3078ddeff1cbbdbbc46014fdf25cb9b73657f8d87246917507be1add8f95",
+    "registries/missions_009_010.jsonl": "dfba7785e7c55d79692f30ff8e7ec165c5b9717b22fb472f4111dcc701ada76c",
+    "registries/missions_011_012.jsonl": "0a701f11b1ca0c1420443caf46b6424855300a73e8b6355ef9749b905cc39256",
+    "registries/missions_013_013.jsonl": "e20ceca46f0242d2670bacbf305ab35fb01c11918664b5d040ce158bcc1e8c54",
+    "registries/missions_014_015.jsonl": "9fe7b601e514ee384e23548d19990c9d7efb7a0586efb02e4d4bc161995356f3",
+}
+
 
 class CanonicalLibraryIndex:
     """Derived read-only catalog/search over gradeable plus qualified readable content.
@@ -75,16 +85,26 @@ class CanonicalLibraryIndex:
         )
 
     @staticmethod
-    def _load_json(path: Path) -> Any:
+    def _load_json(path: Path, *, expected_sha256: str | None = None) -> Any:
         try:
-            return json.loads(path.read_text(encoding="utf-8"))
+            raw = path.read_bytes()
+            if expected_sha256 is not None and hashlib.sha256(raw).hexdigest() != expected_sha256:
+                raise ContentLoadError(f"qualified readable D4 authority bytes changed: {path}")
+            return json.loads(raw.decode("utf-8"))
+        except ContentLoadError:
+            raise
         except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise ContentLoadError(f"invalid qualified readable D4 JSON {path}: {exc}") from exc
 
     @staticmethod
-    def _load_jsonl(path: Path) -> list[dict[str, Any]]:
+    def _load_jsonl(path: Path, *, expected_sha256: str | None = None) -> list[dict[str, Any]]:
         try:
-            lines = path.read_text(encoding="utf-8").splitlines()
+            raw = path.read_bytes()
+            if expected_sha256 is not None and hashlib.sha256(raw).hexdigest() != expected_sha256:
+                raise ContentLoadError(f"qualified readable D4 authority bytes changed: {path}")
+            lines = raw.decode("utf-8").splitlines()
+        except ContentLoadError:
+            raise
         except (OSError, UnicodeDecodeError) as exc:
             raise ContentLoadError(f"cannot read qualified readable D4 JSONL {path}: {exc}") from exc
         rows: list[dict[str, Any]] = []
@@ -159,7 +179,10 @@ class CanonicalLibraryIndex:
         metadata_path = root / "metadata" / "mission_index_metadata.json"
         if metadata_path.is_symlink() or not metadata_path.is_file():
             raise ContentLoadError("qualified readable D4 mission metadata is missing or unsafe")
-        metadata = self._load_json(metadata_path)
+        metadata = self._load_json(
+            metadata_path,
+            expected_sha256=_D4_PUBLIC_AUTHORITY_SHA256["metadata/mission_index_metadata.json"],
+        )
         if not isinstance(metadata, dict):
             raise ContentLoadError("qualified readable D4 mission metadata must be object")
         campaign = metadata.get("campaign")
@@ -180,10 +203,22 @@ class CanonicalLibraryIndex:
         campaign_title = self._clean(campaign.get("title_ua")) or _D4_CAMPAIGN_ID
 
         raw_by_id: dict[str, dict[str, Any]] = {}
-        for path in sorted((root / "registries").glob("missions_*.jsonl")):
+        registry_root = root / "registries"
+        registry_paths = sorted(registry_root.glob("missions_*.jsonl"))
+        expected_registry_names = sorted(
+            Path(relative).name
+            for relative in _D4_PUBLIC_AUTHORITY_SHA256
+            if relative.startswith("registries/")
+        )
+        if [path.name for path in registry_paths] != expected_registry_names:
+            raise ContentLoadError("qualified readable D4 mission registry file set changed")
+        for path in registry_paths:
             if path.is_symlink() or not path.is_file():
                 raise ContentLoadError("qualified readable D4 mission registry contains unsafe path")
-            for raw in self._load_jsonl(path):
+            for raw in self._load_jsonl(
+                path,
+                expected_sha256=_D4_PUBLIC_AUTHORITY_SHA256[f"registries/{path.name}"],
+            ):
                 mid = raw.get("mission_id")
                 if not isinstance(mid, str) or mid not in sequence or mid in raw_by_id:
                     raise ContentLoadError(f"unexpected or duplicate qualified readable D4 mission: {mid}")

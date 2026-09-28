@@ -115,6 +115,47 @@ class D4ReadableLibraryConsumptionTests(unittest.TestCase):
             with self.assertRaises(ContentLoadError):
                 library.catalog()
 
+    def test_d4_mission_registry_tampering_fails_closed_against_qualified_bytes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            d4_root = self._copied_d4_root(root)
+            mission_path = d4_root / "registries" / "missions_001_005.jsonl"
+            lines = mission_path.read_text(encoding="utf-8").splitlines()
+            first = json.loads(lines[0])
+            first["title"] = str(first.get("title") or "") + " TAMPERED"
+            lines[0] = json.dumps(first, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+            mission_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+            library = CanonicalLibraryIndex(CanonicalContentLoader(root))
+            with self.assertRaises(ContentLoadError):
+                library.catalog()
+
+    def test_d4_mission_metadata_tampering_fails_closed_against_qualified_bytes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            d4_root = self._copied_d4_root(root)
+            metadata_path = d4_root / "metadata" / "mission_index_metadata.json"
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            metadata["campaign"]["title_ua"] = str(metadata["campaign"].get("title_ua") or "") + " TAMPERED"
+            metadata_path.write_text(
+                json.dumps(metadata, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+
+            library = CanonicalLibraryIndex(CanonicalContentLoader(root))
+            with self.assertRaises(ContentLoadError):
+                library.catalog()
+
+    def test_d4_unexpected_mission_registry_file_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            d4_root = self._copied_d4_root(root)
+            (d4_root / "registries" / "missions_999_999.jsonl").write_text("", encoding="utf-8")
+
+            library = CanonicalLibraryIndex(CanonicalContentLoader(root))
+            with self.assertRaises(ContentLoadError):
+                library.catalog()
+
     def test_d4_filesystem_presence_does_not_make_node_gradeable(self):
         with self.assertRaises(ContentLoadError):
             self.loader.load_node(D4_FIRST_NODE)

@@ -210,13 +210,29 @@ class BundledScriptureTextTests(unittest.TestCase):
             };
             const catalog = {
               schema:'scripture.library.text-catalog.v1',
-              translation_id:'engwebu', source_tier:'TX1',
+              translation_id:'engwebu',
+              translation_name:'World English Bible Updated',
+              source_tier:'TX1',
+              license:'Public Domain',
+              source_url:'https://ebible.org/Scriptures/engwebu_vpl.zip',
+              source_site:'https://ebible.org/engwebu/',
+              archive_sha256:'1007fb45782a4abd9444d4225fd768fb00a150466b9fb9fcf6f6ad175b73feb6',
+              vpl_sha256:'8cac735abda379045fa2c5f43217410ad47a45ac592f3801116ab0da41a810d8',
               runtime_network_required:false,
               source_snapshot_status:'AUDITED_PINNED_SNAPSHOT',
+              source_reaudit:{
+                status:'SOURCE_IDENTITY_RECONCILED',
+                independent_audit_claimed:false,
+                changed_reference_count:10,
+                added_reference_count:0,
+                removed_reference_count:0
+              },
               verse_rows:38058, source_empty_rows:29,
               books:[{code:'GEN', chapter_count:1, chapters:[1]}],
               upstream_monitoring:{
                 status:'MATCH_PINNED_AUTHORITY',
+                observed_archive_sha256:'1007fb45782a4abd9444d4225fd768fb00a150466b9fb9fcf6f6ad175b73feb6',
+                observed_vpl_sha256:'8cac735abda379045fa2c5f43217410ad47a45ac592f3801116ab0da41a810d8',
                 changed_reference_count:0,
                 added_reference_count:0,
                 removed_reference_count:0,
@@ -226,6 +242,22 @@ class BundledScriptureTextTests(unittest.TestCase):
             mod.validateTextCatalog(catalog);
             reject(()=>mod.validateTextCatalog({...catalog, runtime_network_required:true}), 'network-required catalog');
             reject(()=>mod.validateTextCatalog({...catalog, translation_id:'other'}), 'wrong translation');
+            reject(()=>mod.validateTextCatalog({...catalog, license:'Unverified'}), 'wrong license');
+            reject(()=>mod.validateTextCatalog({...catalog, vpl_sha256:'0'.repeat(64)}), 'wrong VPL identity');
+            reject(
+              ()=>mod.validateTextCatalog({
+                ...catalog,
+                source_reaudit:{...catalog.source_reaudit, independent_audit_claimed:true}
+              }),
+              'independent-audit promotion'
+            );
+            reject(
+              ()=>mod.validateTextCatalog({
+                ...catalog,
+                upstream_monitoring:{...catalog.upstream_monitoring, observed_vpl_sha256:'0'.repeat(64)}
+              }),
+              'MATCH status with wrong VPL hash'
+            );
             reject(
               ()=>mod.validateTextCatalog({
                 ...catalog,

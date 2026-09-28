@@ -95,7 +95,7 @@ class PackagedLibraryCurrentShellTest(unittest.TestCase):
             "source_audit_status",
             "Library eligibility не означає завершений independent source audit",
             "source audit: ${row.source_audit_status || 'статус не надано'}",
-            "results[${index}].source_audit_status",
+            "${name}.source_audit_status",
             "Source audit: ${row.source_audit_status || 'статус не надано'}",
             "цей запис не є доступним для player або grading",
         ):

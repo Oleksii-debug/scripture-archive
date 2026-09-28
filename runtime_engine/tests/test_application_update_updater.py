@@ -221,7 +221,7 @@ class AtomicApplicationUpdaterTests(unittest.TestCase):
                 nonlocal target_hash_reads
                 if path == target:
                     target_hash_reads += 1
-                    if target_hash_reads == 2:
+                    if target_hash_reads == 3:
                         raise ApplicationUpdateError("forced post-publish hash failure")
                 digest = real_hash()
                 digest.update(path.read_bytes())

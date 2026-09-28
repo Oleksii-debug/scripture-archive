@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -16,6 +17,7 @@ _D4_EDITORIAL_STATUS = "AUTHOR_COMPLETE / DEVELOPER_SOURCE_AUDITED / INDEPENDENT
 _D4_SOURCE_AUDIT_STATUS = "DEVELOPER_SOURCE_AUDITED / INDEPENDENT_AUDIT_PENDING"
 _D4_MISSION_COUNT = 15
 _D4_NODE_COUNT = 450
+_D4_NODE_RECORD_AGGREGATE_SHA256 = "9fd8f668868e267e97b718a1de3025ad47577748e1054e146b6279da585e2ef7"
 
 
 class CanonicalLibraryIndex:
@@ -103,6 +105,45 @@ class CanonicalLibraryIndex:
         if path.is_symlink() or not path.is_dir():
             raise ContentLoadError(f"qualified readable D4 {label} must be a real directory")
 
+    @staticmethod
+    def _canonical_record_sha256(record: dict[str, Any]) -> str:
+        encoded = json.dumps(
+            record,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
+
+    def _qualified_d4_node_hashes(self, root: Path) -> dict[str, str]:
+        hash_root = root / "record_hashes"
+        self._require_real_dir(hash_root, "record-hash directory")
+        expected: dict[str, str] = {}
+        for path in sorted(hash_root.glob("nodes_*.sha256.json")):
+            if path.is_symlink() or not path.is_file():
+                raise ContentLoadError("qualified readable D4 node-hash registry contains unsafe path")
+            payload = self._load_json(path)
+            if not isinstance(payload, dict):
+                raise ContentLoadError(f"qualified readable D4 node-hash registry must be object: {path}")
+            for node_id, digest in payload.items():
+                if (
+                    not isinstance(node_id, str)
+                    or not node_id
+                    or node_id in expected
+                    or not isinstance(digest, str)
+                    or not re.fullmatch(r"[0-9a-f]{64}", digest)
+                ):
+                    raise ContentLoadError(f"invalid/duplicate qualified readable D4 node hash: {node_id!r}")
+                expected[node_id] = digest
+        if len(expected) != _D4_NODE_COUNT:
+            raise ContentLoadError("qualified readable D4 node-hash count changed")
+        aggregate = hashlib.sha256(
+            "".join(expected[node_id] for node_id in sorted(expected)).encode("ascii")
+        ).hexdigest()
+        if aggregate != _D4_NODE_RECORD_AGGREGATE_SHA256:
+            raise ContentLoadError("qualified readable D4 node-hash aggregate changed")
+        return expected
+
     def _qualified_d4_records(
         self,
     ) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
@@ -113,6 +154,7 @@ class CanonicalLibraryIndex:
         self._require_real_dir(root / "metadata", "metadata directory")
         self._require_real_dir(root / "registries", "registries directory")
         self._require_real_dir(root / "nodes", "nodes directory")
+        expected_node_hashes = self._qualified_d4_node_hashes(root)
 
         metadata_path = root / "metadata" / "mission_index_metadata.json"
         if metadata_path.is_symlink() or not metadata_path.is_file():
@@ -193,11 +235,13 @@ class CanonicalLibraryIndex:
                     raise ContentLoadError(f"duplicate/empty qualified readable D4 node: {nid!r}")
                 if mid not in missions_by_id or nid not in expected_nodes[mid]:
                     raise ContentLoadError(f"qualified readable D4 node/mission binding changed: {nid}")
+                if self._canonical_record_sha256(node) != expected_node_hashes.get(nid):
+                    raise ContentLoadError(f"qualified readable D4 node hash changed: {nid}")
                 nodes[nid] = node
                 mission_for_node[nid] = missions_by_id[mid]
                 actual_nodes[mid].add(nid)
-        if len(nodes) != _D4_NODE_COUNT:
-            raise ContentLoadError("qualified readable D4 node count changed")
+        if len(nodes) != _D4_NODE_COUNT or set(nodes) != set(expected_node_hashes):
+            raise ContentLoadError("qualified readable D4 node/hash identity set changed")
         for mid, expected in expected_nodes.items():
             if actual_nodes[mid] != expected:
                 raise ContentLoadError(f"qualified readable D4 mission node set changed: {mid}")

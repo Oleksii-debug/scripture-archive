@@ -172,24 +172,7 @@ class NativePendingUpdateLayer:
                         "UPDATE_APPLY_HANDOFF_INVALID",
                         "Apply handoff did not remain bound to the verified pending update.",
                     )
-                return ok_response(
-                    rid,
-                    {
-                        "pending": True,
-                        "status": "apply_ready",
-                        "product_id": rebound.product_id,
-                        "target_platform": rebound.target_platform,
-                        "current_version": rebound.current_version,
-                        "target_version": rebound.target_version,
-                        "source_head": rebound.source_head,
-                        "artifact_name": rebound.artifact_name,
-                        "artifact_size": rebound.artifact_size,
-                        "artifact_sha256": rebound.artifact_sha256,
-                        "authenticity": rebound.authenticity,
-                        "installation_performed": False,
-                        "restart_performed": False,
-                    },
-                )
+                return self._pending_response(rebound, status="apply_ready", restart_requested=False)
 
             if command == APPLY_AND_RESTART_COMMAND:
                 if not callable(self._apply_executor) or not callable(self._shutdown_request):
@@ -212,42 +195,28 @@ class NativePendingUpdateLayer:
                 if not isinstance(updater_pid, int) or isinstance(updater_pid, bool) or updater_pid <= 0:
                     raise ValueError("packaged updater launch did not return a valid process id")
                 self._shutdown_request()
-                return ok_response(
-                    rid,
-                    {
-                        "pending": True,
-                        "status": "updater_started",
-                        "product_id": handoff.product_id,
-                        "target_platform": handoff.target_platform,
-                        "current_version": handoff.current_version,
-                        "target_version": handoff.target_version,
-                        "source_head": handoff.source_head,
-                        "artifact_name": handoff.artifact_name,
-                        "artifact_size": handoff.artifact_size,
-                        "artifact_sha256": handoff.artifact_sha256,
-                        "authenticity": handoff.authenticity,
-                        "installation_performed": False,
-                        "updater_process_started": True,
-                        "restart_requested": True,
-                    },
+                response = self._pending_response(
+                    handoff,
+                    status="updater_started",
+                    restart_requested=True,
                 )
+                response["data"]["updater_process_started"] = True
+                return response
 
-            return ok_response(
-                rid,
-                {
-                    "pending": True,
-                    "status": pending.status,
-                    "product_id": pending.product_id,
-                    "target_platform": pending.target_platform,
-                    "current_version": pending.current_version,
-                    "target_version": pending.target_version,
-                    "source_head": pending.source_head,
-                    "artifact_name": pending.artifact_name,
-                    "artifact_size": pending.artifact_size,
-                    "artifact_sha256": pending.artifact_sha256,
-                    "authenticity": pending.authenticity,
-                    "installation_performed": False,
-                },
+            handoff = inspect_apply_handoff(
+                self._staging_root,
+                current_version=self._current_version,
+            )
+            if handoff is not None and handoff != pending:
+                return error_response(
+                    rid,
+                    "UPDATE_APPLY_HANDOFF_INVALID",
+                    "Apply handoff is detached from the current verified pending update.",
+                )
+            return self._pending_response(
+                pending,
+                status="apply_ready" if handoff == pending else pending.status,
+                restart_requested=False,
             )
         except ValueError:
             return error_response(
@@ -267,6 +236,28 @@ class NativePendingUpdateLayer:
                 "UPDATE_PENDING_FAILED",
                 "Pending application update recovery failed closed.",
             )
+
+    @staticmethod
+    def _pending_response(pending: Any, *, status: str, restart_requested: bool) -> dict[str, Any]:
+        return ok_response(
+            "pending-native",
+            {
+                "pending": True,
+                "status": status,
+                "product_id": pending.product_id,
+                "target_platform": pending.target_platform,
+                "current_version": pending.current_version,
+                "target_version": pending.target_version,
+                "source_head": pending.source_head,
+                "artifact_name": pending.artifact_name,
+                "artifact_size": pending.artifact_size,
+                "artifact_sha256": pending.artifact_sha256,
+                "authenticity": pending.authenticity,
+                "installation_performed": False,
+                "restart_performed": False,
+                "restart_requested": restart_requested,
+            },
+        )
 
     def _default_authenticity_verifier(self, candidate: Path) -> bool:
         return verify_same_publisher_authenticode(Path(sys.executable), candidate)

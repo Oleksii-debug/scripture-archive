@@ -12,6 +12,9 @@ const EXPECTED_SOURCE_URL = 'https://ebible.org/Scriptures/engwebu_vpl.zip';
 const EXPECTED_SOURCE_SITE = 'https://ebible.org/engwebu/';
 const EXPECTED_ARCHIVE_SHA256 = '1007fb45782a4abd9444d4225fd768fb00a150466b9fb9fcf6f6ad175b73feb6';
 const EXPECTED_VPL_SHA256 = '8cac735abda379045fa2c5f43217410ad47a45ac592f3801116ab0da41a810d8';
+const EXPECTED_VERSE_ROWS = 38058;
+const EXPECTED_SOURCE_EMPTY_ROWS = 29;
+const EXPECTED_BOOK_COUNT = 81;
 const SHA256_HEX = /^[0-9a-f]{64}$/u;
 const byId = id => document.getElementById(id);
 
@@ -99,7 +102,10 @@ export function validateTextCatalog(data) {
   }
   boundedInteger(data.verse_rows, 'verse_rows', 1, 100000);
   boundedInteger(data.source_empty_rows, 'source_empty_rows', 0, data.verse_rows);
-  if (!Array.isArray(data.books) || data.books.length === 0 || data.books.length > MAX_BOOKS) throw new Error('Invalid WEBU book catalog');
+  if (data.verse_rows !== EXPECTED_VERSE_ROWS || data.source_empty_rows !== EXPECTED_SOURCE_EMPTY_ROWS) {
+    throw new Error('WEBU catalog corpus counts do not match pinned authority');
+  }
+  if (!Array.isArray(data.books) || data.books.length !== EXPECTED_BOOK_COUNT) throw new Error('Invalid WEBU book catalog');
   const seen = new Set();
   for (let index = 0; index < data.books.length; index += 1) {
     const item = data.books[index];

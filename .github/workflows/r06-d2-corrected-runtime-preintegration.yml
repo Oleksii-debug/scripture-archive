@@ -28,7 +28,7 @@ jobs:
     timeout-minutes: 20
     env:
       PACKAGE_BASE_SHA: 84933e28992ee5284b0cab20b0be61ac2e8f7a50
-      D2_AUTHORITY_SHA: 5d4b11c5cc45e06cb7d99d69621c74ccab8203b2
+      D2_AUTHORITY_SHA: 5dc6ad7e853c1f4be97f4179c43e90c4454edf8e
       D2_AUTHORITY_REL: docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05
     steps:
       - name: Resolve expected head

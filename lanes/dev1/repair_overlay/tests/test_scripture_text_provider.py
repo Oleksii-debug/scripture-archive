@@ -1,4 +1,5 @@
 import hashlib
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -148,6 +149,13 @@ class BundledScriptureTextTests(unittest.TestCase):
         self.assertIn("validateTextCatalog(await api('library.text_catalog'))", frontend)
         self.assertIn("validateChapter(await api('library.read_chapter'", frontend)
         self.assertIn("validateTextSearch(await api('library.text_search'", frontend)
+        completed = subprocess.run(
+            ['node', '--check', str(overlay / 'frontend' / 'scripture-reader-ui.js')],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(0, completed.returncode, completed.stderr or completed.stdout)
 
 
 if __name__ == '__main__':

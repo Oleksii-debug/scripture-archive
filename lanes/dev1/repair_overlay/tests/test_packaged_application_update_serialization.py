@@ -4,6 +4,7 @@ import unittest
 from scripture_archive_platform.desktop_host.pending_update import (
     CANCEL_PENDING_UPDATE_COMMAND,
     PENDING_UPDATE_STATUS_COMMAND,
+    PREPARE_APPLY_COMMAND,
 )
 from scripture_archive_platform.desktop_host.update_application import (
     STAGE_UPDATE_COMMAND,
@@ -76,8 +77,6 @@ class SerializedApplicationUpdateLayerTests(unittest.TestCase):
         second.start()
         self.assertTrue(app.second_attempted.wait(timeout=2))
 
-        # The first operation deliberately stays inside the wrapped application.
-        # A broken/no outer lock would allow the second call to enter immediately.
         self.assertFalse(app.second_entered.wait(timeout=0.1))
         self.assertEqual(1, app.max_active)
 
@@ -99,7 +98,7 @@ class SerializedApplicationUpdateLayerTests(unittest.TestCase):
         )
         self.assertEqual(2, len(results))
 
-    def test_all_four_update_commands_share_the_serialized_boundary(self):
+    def test_all_five_update_commands_share_the_serialized_boundary(self):
         class RecordingApplication:
             def __init__(self):
                 self.commands = []
@@ -114,11 +113,41 @@ class SerializedApplicationUpdateLayerTests(unittest.TestCase):
             UPDATE_COMMAND,
             STAGE_UPDATE_COMMAND,
             PENDING_UPDATE_STATUS_COMMAND,
+            PREPARE_APPLY_COMMAND,
             CANCEL_PENDING_UPDATE_COMMAND,
         )
         for index, command in enumerate(commands):
             self.assertTrue(layer.handle(self.request(command, f"serial-{index}"))["ok"])
         self.assertEqual(list(commands), app.commands)
+
+    def test_prepare_apply_cannot_overlap_staging_same_host_process(self):
+        app = BlockingUpdateApplication()
+        layer = SerializedApplicationUpdateLayer(app)
+        results = []
+        first = threading.Thread(
+            target=lambda: results.append(
+                layer.handle(self.request(STAGE_UPDATE_COMMAND, "first"))
+            )
+        )
+
+        def run_second():
+            app.second_attempted.set()
+            results.append(layer.handle(self.request(PREPARE_APPLY_COMMAND, "second")))
+
+        second = threading.Thread(target=run_second)
+        first.start()
+        self.assertTrue(app.first_entered.wait(timeout=2))
+        second.start()
+        self.assertTrue(app.second_attempted.wait(timeout=2))
+        self.assertFalse(app.second_entered.wait(timeout=0.1))
+        app.release_first.set()
+        first.join(timeout=2)
+        second.join(timeout=2)
+        self.assertFalse(first.is_alive())
+        self.assertFalse(second.is_alive())
+        self.assertTrue(app.second_entered.is_set())
+        self.assertEqual(1, app.max_active)
+        self.assertEqual(2, len(results))
 
     def test_unrelated_command_delegates_without_rewriting_request(self):
         seen = []

@@ -400,6 +400,7 @@ class CanonicalLibraryIndex:
                         "source_references": refs,
                         "content_access": mission.get("content_access"),
                         "gradeable_runtime_eligible": mission.get("gradeable_runtime_eligible") is True,
+                        "source_audit_status": mission.get("source_audit_status"),
                         "score": score,
                     }
                 )
@@ -423,6 +424,7 @@ class CanonicalLibraryIndex:
                         "source_references": refs,
                         "content_access": mission.get("content_access"),
                         "gradeable_runtime_eligible": mission.get("gradeable_runtime_eligible") is True,
+                        "source_audit_status": mission.get("source_audit_status"),
                         "score": score,
                     }
                 )

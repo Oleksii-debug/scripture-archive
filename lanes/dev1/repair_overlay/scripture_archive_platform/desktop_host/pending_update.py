@@ -172,7 +172,12 @@ class NativePendingUpdateLayer:
                         "UPDATE_APPLY_HANDOFF_INVALID",
                         "Apply handoff did not remain bound to the verified pending update.",
                     )
-                return self._pending_response(rebound, status="apply_ready", restart_requested=False)
+                return self._pending_response(
+                    rid,
+                    rebound,
+                    status="apply_ready",
+                    restart_requested=False,
+                )
 
             if command == APPLY_AND_RESTART_COMMAND:
                 if not callable(self._apply_executor) or not callable(self._shutdown_request):
@@ -196,6 +201,7 @@ class NativePendingUpdateLayer:
                     raise ValueError("packaged updater launch did not return a valid process id")
                 self._shutdown_request()
                 response = self._pending_response(
+                    rid,
                     handoff,
                     status="updater_started",
                     restart_requested=True,
@@ -214,6 +220,7 @@ class NativePendingUpdateLayer:
                     "Apply handoff is detached from the current verified pending update.",
                 )
             return self._pending_response(
+                rid,
                 pending,
                 status="apply_ready" if handoff == pending else pending.status,
                 restart_requested=False,
@@ -238,9 +245,15 @@ class NativePendingUpdateLayer:
             )
 
     @staticmethod
-    def _pending_response(pending: Any, *, status: str, restart_requested: bool) -> dict[str, Any]:
+    def _pending_response(
+        request_id: str,
+        pending: Any,
+        *,
+        status: str,
+        restart_requested: bool,
+    ) -> dict[str, Any]:
         return ok_response(
-            "pending-native",
+            request_id,
             {
                 "pending": True,
                 "status": status,

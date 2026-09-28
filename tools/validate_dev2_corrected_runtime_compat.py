@@ -153,6 +153,10 @@ def load_corrected_nodes(authority_root: Path) -> tuple[list[dict[str, Any]], di
         raise CompatibilityError("corrected authority claims source-truth mutation")
     if "INDEPENDENT_AUDIT_PENDING" not in str(index.get("status", "")):
         raise CompatibilityError("corrected authority improperly promotes audit status")
+    if index.get("mission_counts") != EXPECTED_MISSION_COUNTS:
+        raise CompatibilityError(
+            f"corrected authority mission_counts changed: {index.get('mission_counts')}"
+        )
 
     rows = index.get("records")
     if not isinstance(rows, list):

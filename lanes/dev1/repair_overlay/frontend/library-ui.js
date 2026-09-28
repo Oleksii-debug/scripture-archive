@@ -122,6 +122,9 @@ function validateResult(row, index) {
   requireText(row.title, `results[${index}].title`);
   requireText(row.snippet, `results[${index}].snippet`, {allowEmpty: true});
   requireStringArray(row.source_references, `results[${index}].source_references`, {maxLength: MAX_SOURCE_REF_LENGTH});
+  if (row.source_audit_status !== null && row.source_audit_status !== undefined) {
+    requireText(row.source_audit_status, `results[${index}].source_audit_status`);
+  }
   requireContentAccess(row.content_access, `results[${index}].content_access`);
   requireBoolean(row.gradeable_runtime_eligible, `results[${index}].gradeable_runtime_eligible`);
   return row;
@@ -245,7 +248,12 @@ function renderResults(data) {
     const access = row.gradeable_runtime_eligible
       ? element('p', 'Доступ: gradeable runtime — запис належить player/grading authority.')
       : element('p', 'Доступ: лише Library — цей запис не є доступним для player або grading.');
-    article.append(heading, identity, access, snippet, source);
+    const audit = row.gradeable_runtime_eligible
+      ? null
+      : element('p', `Source audit: ${row.source_audit_status || 'статус не надано'}.`);
+    article.append(heading, identity, access);
+    if (audit) article.append(audit);
+    article.append(snippet, source);
     host.append(article);
   }
 }

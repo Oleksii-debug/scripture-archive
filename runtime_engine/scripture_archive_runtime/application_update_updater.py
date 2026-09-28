@@ -80,11 +80,7 @@ def consume_apply_handoff(
         raise ApplicationUpdateError("apply handoff changed during publisher verification")
 
     rollback = target.with_name(target.name + _ROLLBACK_SUFFIX)
-    _prepare_rollback_slot(rollback)
-    _copy_exact(target, rollback)
-    if _sha256_file(rollback) != previous_sha:
-        _discard_file(rollback)
-        raise ApplicationUpdateError("rollback copy failed exact-byte verification")
+    _publish_rollback_copy(target, rollback, previous_sha)
 
     candidate = target.with_name(f".{target.name}.update-{os.getpid()}.tmp")
     _prepare_temp_slot(candidate)
@@ -169,16 +165,33 @@ def _rollback_replace(target: Path, rollback: Path, expected_sha: str) -> None:
         raise ApplicationUpdateError("rollback restoration failed exact-byte verification")
 
 
-def _prepare_rollback_slot(path: Path) -> None:
+def _publish_rollback_copy(source: Path, rollback: Path, expected_sha: str) -> None:
     try:
-        metadata = path.lstat()
+        metadata = rollback.lstat()
     except FileNotFoundError:
-        return
+        pass
     except OSError as exc:
         raise ApplicationUpdateError("rollback path is unavailable") from exc
-    if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
-        raise ApplicationUpdateError("rollback path must not redirect update writes")
-    _discard_file(path)
+    else:
+        if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
+            raise ApplicationUpdateError("rollback path must not redirect update writes")
+
+    temp = rollback.with_name(f".{rollback.name}.build-{os.getpid()}.tmp")
+    _prepare_temp_slot(temp)
+    try:
+        _copy_exact(source, temp)
+        if _sha256_file(temp) != expected_sha:
+            raise ApplicationUpdateError("rollback copy failed exact-byte verification")
+        os.replace(temp, rollback)
+        _fsync_directory(rollback.parent)
+    finally:
+        try:
+            temp.unlink()
+        except OSError:
+            pass
+    _require_regular_file(rollback, "rollback artifact")
+    if _sha256_file(rollback) != expected_sha:
+        raise ApplicationUpdateError("published rollback copy failed exact-byte verification")
 
 
 def _prepare_temp_slot(path: Path) -> None:

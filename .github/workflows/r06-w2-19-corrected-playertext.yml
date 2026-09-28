@@ -3,11 +3,15 @@ name: R06 W2-19 D2 corrected player text
 on:
   push:
     branches:
-      - r06-wave2-w19-d2-playertext-corrected
+      - r06-w2-19-d2-hint-localization-0928-sol
+  pull_request:
+    paths:
+      - '.github/workflows/r06-w2-19-corrected-playertext.yml'
+      - 'docs/campaigns/PA/R06_W2_19_CORRECTED/**'
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: r06-w2-19-d2-corrected-playertext
@@ -238,38 +242,19 @@ jobs:
           )
           PY
 
-      - name: Guard mutation scope and commit corrected derivatives
+      - name: Verify corrected derivatives match committed authority
         shell: bash
         run: |
           set -euo pipefail
           root="docs/campaigns/PA/R06_W2_19_CORRECTED"
-          python - <<'PY'
-          import pathlib
-          import subprocess
-          allowed = "docs/campaigns/PA/R06_W2_19_CORRECTED/"
-          changed = []
-          for line in subprocess.check_output(["git", "status", "--porcelain=v1", "--untracked-files=all"], text=True).splitlines():
-              path = line[3:]
-              if " -> " in path:
-                  path = path.split(" -> ", 1)[1]
-              changed.append(path)
-          unexpected = [p for p in changed if not p.startswith(allowed)]
-          if unexpected:
-              raise SystemExit(f"W2_19_UNEXPECTED_MUTATION {unexpected}")
-          expected = {allowed + f"nodes/part_{i:03d}.jsonl" for i in range(21, 27)} | {allowed + "W2_19_CORRECTION_REPORT.json"}
-          missing = sorted(expected - set(changed))
-          if missing:
-              if changed:
-                  raise SystemExit(f"W2_19_EXPECTED_OUTPUT_MISSING {missing}")
-              print("W2_19_ALREADY_MATERIALIZED")
-          else:
-              print("W2_19_MUTATION_SCOPE_PASS", len(changed))
-          PY
-          if git status --porcelain -- "$root" | grep -q .; then
-            git config user.name "scripture-archive-w2-19"
-            git config user.email "actions@users.noreply.github.com"
-            git add -A "$root"
-            git diff --cached --check
-            git commit -m "R06 W2-19: correct D2 player text for parts 021-026"
-            git push origin "HEAD:$GITHUB_REF_NAME"
-          fi
+          test -f "$root/W2_19_CORRECTION_REPORT.json"
+          test -f "$root/nodes/part_021.jsonl"
+          test -f "$root/nodes/part_022.jsonl"
+          test -f "$root/nodes/part_023.jsonl"
+          test -f "$root/nodes/part_024.jsonl"
+          test -f "$root/nodes/part_025.jsonl"
+          test -f "$root/nodes/part_026.jsonl"
+          git diff --check
+          git diff --exit-code -- "$root"
+          test -z "$(git status --porcelain=v1 --untracked-files=all -- "$root")"
+          echo "W2_19_COMMITTED_AUTHORITY_MATCH_PASS"

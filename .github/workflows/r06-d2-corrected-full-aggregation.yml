@@ -237,7 +237,8 @@ jobs:
               "audience quoted by наратор Дій",
               "an unnamed harmonized source voice",
               "source voice",
-              "свідчення/source",\n              "link a твердження to reusable verse доказ",
+              "свідчення/source",
+              "link a твердження to reusable verse доказ",
           )
           mutable_top = {
               "player_prompt", "success_feedback", "partial_feedback",

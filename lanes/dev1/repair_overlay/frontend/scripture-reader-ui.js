@@ -85,10 +85,31 @@ export function validateTextCatalog(data) {
     seen.add(code);
     if (!Array.isArray(item.chapters) || item.chapters.length > MAX_CHAPTERS) throw new Error(`books[${index}].chapters is invalid`);
     item.chapters.forEach((chapter, chapterIndex) => boundedInteger(chapter, `books[${index}].chapters[${chapterIndex}]`, 1, MAX_CHAPTERS));
+    if (new Set(item.chapters).size !== item.chapters.length || item.chapters.some((chapter, chapterIndex) => chapterIndex > 0 && chapter <= item.chapters[chapterIndex - 1])) {
+      throw new Error(`books[${index}].chapters must be unique and ascending`);
+    }
     if (item.chapter_count !== item.chapters.length) throw new Error(`books[${index}].chapter_count is inconsistent`);
   }
   if (!record(data.upstream_monitoring) || !['MATCH_PINNED_AUTHORITY', 'SOURCE_REAUDIT_REQUIRED'].includes(data.upstream_monitoring.status)) {
     throw new Error('Invalid WEBU upstream monitoring status');
+  }
+  const monitoring = data.upstream_monitoring;
+  for (const key of ['changed_reference_count', 'added_reference_count', 'removed_reference_count']) {
+    boundedInteger(monitoring[key], `upstream_monitoring.${key}`, 0, 100000);
+  }
+  if (!Array.isArray(monitoring.changed_references) || monitoring.changed_references.length > 100000) {
+    throw new Error('Invalid WEBU changed-reference inventory');
+  }
+  if (
+    monitoring.status === 'MATCH_PINNED_AUTHORITY'
+    && (
+      monitoring.changed_reference_count !== 0
+      || monitoring.added_reference_count !== 0
+      || monitoring.removed_reference_count !== 0
+      || monitoring.changed_references.length !== 0
+    )
+  ) {
+    throw new Error('WEBU MATCH_PINNED_AUTHORITY conflicts with drift evidence');
   }
   return data;
 }
@@ -99,7 +120,14 @@ export function validateChapter(data) {
   const book = boundedText(data.book, 'book', 4);
   const chapter = boundedInteger(data.chapter, 'chapter', 1, MAX_CHAPTERS);
   if (!Array.isArray(data.verses) || data.verses.length === 0 || data.verses.length > MAX_VERSES) throw new Error('Invalid WEBU chapter verses');
-  data.verses.forEach((row, index) => validateVerse(row, `verses[${index}]`, {expectedBook: book, expectedChapter: chapter}));
+  let previousVerse = 0;
+  const seenVerses = new Set();
+  data.verses.forEach((row, index) => {
+    validateVerse(row, `verses[${index}]`, {expectedBook: book, expectedChapter: chapter});
+    if (seenVerses.has(row.verse) || row.verse <= previousVerse) throw new Error('WEBU chapter verses must be unique and ascending');
+    seenVerses.add(row.verse);
+    previousVerse = row.verse;
+  });
   const sourceEmpty = data.verses.filter(row => row.text_state === 'source_empty').length;
   if (data.source_empty_rows !== sourceEmpty) throw new Error('WEBU chapter source-empty count is inconsistent');
   return data;
@@ -113,7 +141,12 @@ export function validateTextSearch(data) {
   if (!Array.isArray(data.results) || data.results.length > MAX_SEARCH_RESULTS || data.total < data.results.length) {
     throw new Error('Invalid WEBU search results');
   }
-  data.results.forEach((row, index) => validateVerse(row, `results[${index}]`, {requireText: true}));
+  const references = new Set();
+  data.results.forEach((row, index) => {
+    validateVerse(row, `results[${index}]`, {requireText: true});
+    if (references.has(row.reference)) throw new Error('WEBU search returned a duplicate source reference');
+    references.add(row.reference);
+  });
   return data;
 }
 

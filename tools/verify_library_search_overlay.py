@@ -19,7 +19,7 @@ RUNTIME_ENGINE = ROOT / "runtime_engine"
 CANONICAL_DEV1_SOURCE_COMMIT = "90a13aca71d2a5f832846a84acbdf0f7c89f5da9"
 CANONICAL_SOURCE_PREFIX = "release_inputs/dev1_finalprep02"
 EXPECTED_BASE_SHA256 = "10fbd546ff4d985465b85b99f4f64bff95d9ec8b1f27132c6d21b4930c344c35"
-EXPECTED_REAL_TESTS = 17
+EXPECTED_REAL_TESTS = 19
 OVERLAY_FIDELITY_PATHS = (
     Path("scripture_archive_platform/content/library.py"),
     Path("scripture_archive_platform/application/service.py"),

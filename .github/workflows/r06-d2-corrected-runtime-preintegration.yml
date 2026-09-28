@@ -20,7 +20,7 @@ permissions:
 
 concurrency:
   group: r06-d2-corrected-runtime-preintegration
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   compatibility:
@@ -28,7 +28,7 @@ jobs:
     timeout-minutes: 20
     env:
       PACKAGE_BASE_SHA: a8f032c401803827300e0b7f2f1588bdfaec3f05
-      D2_AUTHORITY_SHA: 5b367fb567eec6312a149ef23075a0e3d48c054f
+      D2_AUTHORITY_SHA: 9fc42ffb65f5168801680132127b97ae398212ac
       D2_AUTHORITY_REL: docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05
     steps:
       - name: Resolve expected head

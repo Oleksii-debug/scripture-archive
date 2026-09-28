@@ -9,6 +9,7 @@ when installed-byte verification fails.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 import hashlib
 import os
@@ -36,6 +37,25 @@ class UpdateApplyResult:
 
 
 def consume_apply_handoff(
+    staging_root: str | os.PathLike[str],
+    *,
+    current_version: str,
+    install_target: str | os.PathLike[str],
+    verify_same_publisher: Callable[[Path, Path], bool],
+) -> UpdateApplyResult:
+    """Serialize and consume one verified apply handoff across updater processes."""
+
+    root = Path(staging_root)
+    with _exclusive_update_lock(root):
+        return _consume_apply_handoff_locked(
+            root,
+            current_version=current_version,
+            install_target=install_target,
+            verify_same_publisher=verify_same_publisher,
+        )
+
+
+def _consume_apply_handoff_locked(
     staging_root: str | os.PathLike[str],
     *,
     current_version: str,
@@ -163,6 +183,66 @@ def _rollback_replace(target: Path, rollback: Path, expected_sha: str) -> None:
     _require_regular_file(target, "restored application target")
     if _sha256_file(target) != expected_sha:
         raise ApplicationUpdateError("rollback restoration failed exact-byte verification")
+
+
+@contextmanager
+def _exclusive_update_lock(root: Path):
+    """Hold one non-blocking OS lock for the complete standalone apply transaction."""
+
+    _require_safe_parent(root)
+    lock_path = root / ".apply-update.lock"
+    flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(lock_path, flags, 0o600)
+    except OSError as exc:
+        raise ApplicationUpdateError("updater lock could not be opened safely") from exc
+
+    locked = False
+    try:
+        opened = os.fstat(descriptor)
+        linked = lock_path.lstat()
+        if (
+            stat.S_ISLNK(linked.st_mode)
+            or not stat.S_ISREG(linked.st_mode)
+            or not stat.S_ISREG(opened.st_mode)
+            or (opened.st_dev, opened.st_ino) != (linked.st_dev, linked.st_ino)
+        ):
+            raise ApplicationUpdateError("updater lock path is unsafe")
+        if opened.st_size == 0:
+            os.write(descriptor, b"\0")
+            os.fsync(descriptor)
+        elif opened.st_size != 1:
+            raise ApplicationUpdateError("updater lock file has invalid size")
+
+        try:
+            if os.name == "nt":
+                import msvcrt
+
+                os.lseek(descriptor, 0, os.SEEK_SET)
+                msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except (OSError, BlockingIOError) as exc:
+            raise ApplicationUpdateError("another updater process already owns the apply lock") from exc
+        locked = True
+        yield
+    finally:
+        if locked:
+            try:
+                if os.name == "nt":
+                    import msvcrt
+
+                    os.lseek(descriptor, 0, os.SEEK_SET)
+                    msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
+                else:
+                    import fcntl
+
+                    fcntl.flock(descriptor, fcntl.LOCK_UN)
+            except OSError:
+                pass
+        os.close(descriptor)
 
 
 def _publish_rollback_copy(source: Path, rollback: Path, expected_sha: str) -> None:

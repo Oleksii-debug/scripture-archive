@@ -63,6 +63,85 @@ class AtomicApplicationUpdaterTests(unittest.TestCase):
             self.assertEqual(result.target_version, "1.1.0")
             self.assertEqual(result.rollback_path.read_bytes(), old)
 
+    def test_consume_handoff_atomically_replaces_prior_rollback_generation(self):
+        old = b"current pre-update executable"
+        older = b"older rollback generation"
+        new = b"new signed executable bytes"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "ScriptureArchive.exe"
+            rollback = root / "ScriptureArchive.exe.scripture-archive.rollback"
+            staged = root / "staged" / "ScriptureArchive.exe"
+            staged.parent.mkdir()
+            target.write_bytes(old)
+            rollback.write_bytes(older)
+            staged.write_bytes(new)
+            pending = self._pending(new)
+
+            with patch(
+                "scripture_archive_runtime.application_update_updater.inspect_apply_handoff",
+                return_value=pending,
+            ), patch(
+                "scripture_archive_runtime.application_update_updater.staged_artifact_path",
+                return_value=staged,
+            ), patch(
+                "scripture_archive_runtime.application_update_updater.discard_apply_handoff",
+                return_value=True,
+            ):
+                consume_apply_handoff(
+                    root,
+                    current_version="1.0.0",
+                    install_target=target,
+                    verify_same_publisher=lambda _current, _candidate: True,
+                )
+
+            self.assertEqual(target.read_bytes(), new)
+            self.assertEqual(rollback.read_bytes(), old)
+
+    def test_failed_new_rollback_copy_preserves_prior_generation(self):
+        old = b"current pre-update executable"
+        older = b"older rollback generation"
+        new = b"new signed executable bytes"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "ScriptureArchive.exe"
+            rollback = root / "ScriptureArchive.exe.scripture-archive.rollback"
+            staged = root / "staged" / "ScriptureArchive.exe"
+            staged.parent.mkdir()
+            target.write_bytes(old)
+            rollback.write_bytes(older)
+            staged.write_bytes(new)
+            pending = self._pending(new)
+
+            from scripture_archive_runtime import application_update_updater as updater_module
+            real_copy = updater_module._copy_exact
+
+            def fail_backup_copy(source: Path, destination: Path) -> None:
+                if ".scripture-archive.rollback.build-" in destination.name:
+                    raise ApplicationUpdateError("forced rollback copy failure")
+                real_copy(source, destination)
+
+            with patch(
+                "scripture_archive_runtime.application_update_updater.inspect_apply_handoff",
+                return_value=pending,
+            ), patch(
+                "scripture_archive_runtime.application_update_updater.staged_artifact_path",
+                return_value=staged,
+            ), patch(
+                "scripture_archive_runtime.application_update_updater._copy_exact",
+                side_effect=fail_backup_copy,
+            ):
+                with self.assertRaisesRegex(ApplicationUpdateError, "forced rollback copy failure"):
+                    consume_apply_handoff(
+                        root,
+                        current_version="1.0.0",
+                        install_target=target,
+                        verify_same_publisher=lambda _current, _candidate: True,
+                    )
+
+            self.assertEqual(target.read_bytes(), old)
+            self.assertEqual(rollback.read_bytes(), older)
+
     def test_consume_handoff_fails_closed_when_publisher_check_rejects(self):
         old = b"old"
         new = b"new"

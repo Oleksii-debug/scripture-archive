@@ -1,4 +1,6 @@
 import hashlib
+import json
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -7,7 +9,12 @@ from pathlib import Path
 from scripture_archive_platform.application.service import PlatformApplication
 from scripture_archive_platform.content.scripture_text import (
     BundledScriptureText,
+    EXPECTED_ARCHIVE_SHA256,
+    EXPECTED_LICENSE,
     EXPECTED_REAUDIT_LINE_SHA256,
+    EXPECTED_SOURCE_SITE,
+    EXPECTED_SOURCE_URL,
+    EXPECTED_TRANSLATION_NAME,
     EXPECTED_VPL_SHA256,
 )
 from scripture_archive_platform.persistence.store import JsonFileStore
@@ -30,6 +37,11 @@ class BundledScriptureTextTests(unittest.TestCase):
         self.assertEqual('scripture.library.text-catalog.v1', catalog['schema'])
         self.assertEqual('engwebu', catalog['translation_id'])
         self.assertEqual('TX1', catalog['source_tier'])
+        self.assertEqual(EXPECTED_TRANSLATION_NAME, catalog['translation_name'])
+        self.assertEqual(EXPECTED_LICENSE, catalog['license'])
+        self.assertEqual(EXPECTED_SOURCE_URL, catalog['source_url'])
+        self.assertEqual(EXPECTED_SOURCE_SITE, catalog['source_site'])
+        self.assertEqual(EXPECTED_ARCHIVE_SHA256, catalog['archive_sha256'])
         self.assertEqual(38058, catalog['verse_rows'])
         self.assertEqual(29, catalog['source_empty_rows'])
         self.assertEqual(81, len(catalog['books']))
@@ -50,6 +62,35 @@ class BundledScriptureTextTests(unittest.TestCase):
         self.assertEqual(0, reaudit['removed_reference_count'])
         self.assertEqual(list(EXPECTED_REAUDIT_LINE_SHA256), reaudit['changed_references'])
         self.assertEqual(EXPECTED_REAUDIT_LINE_SHA256, reaudit['current_line_sha256'])
+
+    def test_runtime_rejects_tampered_source_provenance_manifest(self):
+        source_data = (
+            Path(__file__).resolve().parents[1]
+            / 'scripture_archive_platform'
+            / 'content'
+            / 'data'
+        )
+        authority = json.loads((source_data / 'engwebu_authority.json').read_text(encoding='utf-8'))
+        mutations = {
+            'translation_name': 'Unverified translation name',
+            'license': 'Unverified license',
+            'source_url': 'https://example.invalid/source.zip',
+            'source_site': 'https://example.invalid/',
+            'archive_sha256': '0' * 64,
+        }
+        with tempfile.TemporaryDirectory() as td:
+            target = Path(td)
+            shutil.copy2(source_data / 'engwebu_vpl.txt', target / 'engwebu_vpl.txt')
+            for field, bad_value in mutations.items():
+                with self.subTest(field=field):
+                    payload = dict(authority)
+                    payload[field] = bad_value
+                    (target / 'engwebu_authority.json').write_text(
+                        json.dumps(payload, ensure_ascii=False, indent=2) + '\n',
+                        encoding='utf-8',
+                    )
+                    with self.assertRaisesRegex(ValueError, 'provenance identity changed'):
+                        BundledScriptureText(target)
 
     def test_chapter_preserves_current_official_text_and_source_empty_rows(self):
         provider = BundledScriptureText()
@@ -126,6 +167,12 @@ class BundledScriptureTextTests(unittest.TestCase):
         overlay = Path(__file__).resolve().parents[1]
         build = (overlay / 'packaging' / 'build_windows.ps1').read_text(encoding='utf-8')
         self.assertIn('scripture_archive_platform\\content\\data', build)
+        repo_root = overlay.parents[2]
+        attributes = (repo_root / '.gitattributes').read_text(encoding='utf-8')
+        self.assertIn(
+            'lanes/dev1/repair_overlay/scripture_archive_platform/content/data/engwebu_vpl.txt -text',
+            attributes,
+        )
         frontend = (overlay / 'frontend' / 'scripture-reader-ui.js').read_text(encoding='utf-8')
         self.assertIn('library.read_chapter', frontend)
         self.assertIn('library.text_search', frontend)

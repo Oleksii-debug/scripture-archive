@@ -348,6 +348,40 @@ jobs:
           print(f"D2_FULL_CORRECTED_HASH_AUTHORITY_PASS aggregate={aggregate}")
           PY
 
+      - name: Match committed corrected authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05"
+          python - "$RUNNER_TEMP/D2_CORRECTED_NODE_HASH_INDEX.json" "$RUNNER_TEMP/D2_FULL_AGGREGATION_MANIFEST.json" "$root/D2_CORRECTED_NODE_HASH_INDEX.json" "$root/D2_FULL_CORRECTED_AGGREGATION_MANIFEST.json" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          generated_index = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          generated_manifest = json.loads(pathlib.Path(sys.argv[2]).read_text(encoding="utf-8"))
+          committed_index = json.loads(pathlib.Path(sys.argv[3]).read_text(encoding="utf-8"))
+          committed_manifest = json.loads(pathlib.Path(sys.argv[4]).read_text(encoding="utf-8"))
+
+          assert committed_index == generated_index
+          for key in (
+              "schema",
+              "source_truth_changed",
+              "node_count",
+              "evidence_count",
+              "corrected_node_aggregate_sha256",
+              "donors",
+              "historical_staging_zip_sha256",
+          ):
+              assert committed_manifest[key] == generated_manifest[key], key
+          assert committed_manifest["hosted_qualification"] == "PENDING_ON_FINAL_HEAD"
+          assert committed_manifest["independent_audit"] == "PENDING"
+          print(
+              "D2_FULL_COMMITTED_AUTHORITY_MATCH_PASS",
+              committed_index["aggregate_sha256"],
+          )
+          PY
+
       - name: Upload qualification evidence
         uses: actions/upload-artifact@v4
         with:

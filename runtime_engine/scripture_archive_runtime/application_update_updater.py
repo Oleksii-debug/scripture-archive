@@ -83,24 +83,34 @@ def consume_apply_handoff(
 
     candidate = target.with_name(f".{target.name}.update-{os.getpid()}.tmp")
     _prepare_temp_slot(candidate)
+    published = False
     try:
         _copy_exact(staged, candidate)
         if _sha256_file(candidate) != pending.artifact_sha256:
             raise ApplicationUpdateError("temporary install candidate failed exact-byte verification")
         os.replace(candidate, target)
+        published = True
         _fsync_directory(target.parent)
         _require_regular_file(target, "installed application target")
         installed_sha = _sha256_file(target)
         if installed_sha != pending.artifact_sha256:
-            _rollback_replace(target, rollback, previous_sha)
-            raise ApplicationUpdateError("installed artifact failed exact-byte verification; rollback restored")
-    except Exception:
+            raise ApplicationUpdateError("installed artifact failed exact-byte verification")
+    except Exception as apply_error:
         try:
             candidate.unlink()
         except OSError:
             pass
-        if not target.exists() and rollback.exists():
-            _rollback_replace(target, rollback, previous_sha)
+        if published or (not target.exists() and rollback.exists()):
+            try:
+                _rollback_replace(target, rollback, previous_sha)
+            except Exception as rollback_error:
+                raise ApplicationUpdateError(
+                    "update apply failed and automatic rollback also failed"
+                ) from rollback_error
+            if published:
+                raise ApplicationUpdateError(
+                    "update apply failed after publication; rollback restored"
+                ) from apply_error
         raise
 
     return UpdateApplyResult(

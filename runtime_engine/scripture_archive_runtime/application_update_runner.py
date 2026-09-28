@@ -13,6 +13,10 @@ from pathlib import Path
 from typing import TypeAlias
 
 from .application_update import ApplicationUpdateError, SemVer
+from .application_update_health import (
+    discard_update_health_receipt,
+    publish_update_health_receipt,
+)
 from .application_update_parent_wait import wait_for_parent_exit
 from .application_update_process import parse_trusted_updater_argv
 from .application_update_relaunch import launch_installed_application
@@ -24,10 +28,10 @@ from .application_update_updater import (
 
 
 PublisherVerifier: TypeAlias = Callable[[Path, Path], bool]
-ParentWaiter: TypeAlias = Callable[[int], None]
-ApplyConsumer: TypeAlias = Callable[..., UpdateApplyResult]
 ApplicationLauncher: TypeAlias = Callable[[Path], None]
 RollbackConsumer: TypeAlias = Callable[..., str]
+HealthPublisher: TypeAlias = Callable[..., object]
+HealthDiscarder: TypeAlias = Callable[[Path], bool]
 
 
 def execute_trusted_updater(
@@ -35,44 +39,39 @@ def execute_trusted_updater(
     *,
     current_version: str,
     verify_same_publisher: PublisherVerifier,
-    wait_for_exit: Callable[..., None] = wait_for_parent_exit,
+    wait_for_exit: Callable[[int], None] = wait_for_parent_exit,
     consume: Callable[..., UpdateApplyResult] = consume_apply_handoff,
     launch: ApplicationLauncher = launch_installed_application,
     rollback: RollbackConsumer = rollback_installed_update,
+    publish_health: HealthPublisher = publish_update_health_receipt,
+    discard_health: HealthDiscarder = discard_update_health_receipt,
 ) -> UpdateApplyResult:
     """Execute one trusted updater invocation in fail-closed order.
 
-    ``argv`` must be the exact fixed payload emitted by ``UpdaterProcessPlan`` with
-    the executable path already removed (``sys.argv[1:]``). ``current_version`` is
-    trusted updater/package identity, not browser input.  The old application must
-    be proven exited before the atomic consumer can replace its executable.
-
-    The existing consumer remains the sole authority for apply-intent readback,
-    exact staged-byte verification, same-publisher verification, rollback
-    preservation/publication and apply-authority disarm.  After a successful apply,
-    only the exact installed target returned by that consumer is relaunched.  Any
-    detected target substitution or process-creation failure restores the already-
-    preserved prior bytes before the failure is surfaced.
+    The old application is proven exited before replacement.  After canonical atomic
+    apply, a durable exact-byte health receipt is published before relaunch while the
+    prior rollback bytes still exist.  The new application later commits that receipt
+    only after its packaged native/frontend bridge is healthy.  If receipt publication
+    or process creation fails, the already-preserved prior bytes are restored and any
+    published receipt is disarmed before failure is surfaced.
     """
 
     if not isinstance(current_version, str):
         raise ApplicationUpdateError("trusted updater current version must be a string")
     SemVer.parse(current_version)
-    if not callable(verify_same_publisher):
-        raise ApplicationUpdateError("same-publisher verifier is required")
-    if not callable(wait_for_exit):
-        raise ApplicationUpdateError("parent-exit waiter is required")
-    if not callable(consume):
-        raise ApplicationUpdateError("apply consumer is required")
-    if not callable(launch):
-        raise ApplicationUpdateError("application launcher is required")
-    if not callable(rollback):
-        raise ApplicationUpdateError("rollback consumer is required")
+    for dependency, label in (
+        (verify_same_publisher, "same-publisher verifier"),
+        (wait_for_exit, "parent-exit waiter"),
+        (consume, "apply consumer"),
+        (launch, "application launcher"),
+        (rollback, "rollback consumer"),
+        (publish_health, "health receipt publisher"),
+        (discard_health, "health receipt discarder"),
+    ):
+        if not callable(dependency):
+            raise ApplicationUpdateError(f"{label} is required")
 
     parent_pid, installed_executable, staging_root = parse_trusted_updater_argv(argv)
-
-    # Ordering is security- and correctness-significant: never attempt replacement
-    # while the application process that owns the installed executable is alive.
     wait_for_exit(parent_pid)
 
     result = consume(
@@ -83,10 +82,7 @@ def execute_trusted_updater(
     )
     if result.target_path != installed_executable:
         try:
-            rollback(
-                installed_executable,
-                expected_previous_sha256=result.previous_sha256,
-            )
+            rollback(installed_executable, expected_previous_sha256=result.previous_sha256)
         except Exception as rollback_error:
             raise ApplicationUpdateError(
                 "apply consumer returned an unexpected install target and rollback failed"
@@ -96,17 +92,58 @@ def execute_trusted_updater(
         )
 
     try:
+        publish_health(
+            staging_root,
+            previous_version=current_version,
+            target_version=result.target_version,
+            install_target=installed_executable,
+            previous_sha256=result.previous_sha256,
+            installed_sha256=result.installed_sha256,
+        )
+    except Exception as health_error:
+        rollback_error: Exception | None = None
+        discard_error: Exception | None = None
+        try:
+            rollback(installed_executable, expected_previous_sha256=result.previous_sha256)
+        except Exception as exc:
+            rollback_error = exc
+        try:
+            discard_health(staging_root)
+        except Exception as exc:
+            discard_error = exc
+        if rollback_error is not None:
+            raise ApplicationUpdateError(
+                "health receipt publication failed and rollback also failed"
+            ) from rollback_error
+        if discard_error is not None:
+            raise ApplicationUpdateError(
+                "health receipt publication failed; rollback restored prior bytes but receipt disarm failed"
+            ) from discard_error
+        raise ApplicationUpdateError(
+            "health receipt publication failed; rollback restored prior bytes"
+        ) from health_error
+
+    try:
         launch(installed_executable)
     except Exception as launch_error:
+        rollback_error: Exception | None = None
+        discard_error: Exception | None = None
         try:
-            rollback(
-                installed_executable,
-                expected_previous_sha256=result.previous_sha256,
-            )
-        except Exception as rollback_error:
+            rollback(installed_executable, expected_previous_sha256=result.previous_sha256)
+        except Exception as exc:
+            rollback_error = exc
+        try:
+            discard_health(staging_root)
+        except Exception as exc:
+            discard_error = exc
+        if rollback_error is not None:
             raise ApplicationUpdateError(
                 "updated application relaunch failed and rollback also failed"
             ) from rollback_error
+        if discard_error is not None:
+            raise ApplicationUpdateError(
+                "updated application relaunch failed; rollback restored prior bytes but receipt disarm failed"
+            ) from discard_error
         raise ApplicationUpdateError(
             "updated application relaunch failed; rollback restored prior bytes"
         ) from launch_error

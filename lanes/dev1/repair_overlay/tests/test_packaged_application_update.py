@@ -1,7 +1,6 @@
 import hashlib
 import json
 import os
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -306,51 +305,12 @@ class AuthenticodePayloadTests(unittest.TestCase):
             )
 
     @unittest.skipUnless(os.name == "nt", "Windows Authenticode integration only")
-    def test_windows_verifier_matches_real_system_authenticode_state(self):
+    def test_windows_verifier_executes_real_system_authenticode_command(self):
         system_directory = _windows_system_directory()
         self.assertIsInstance(system_directory, Path)
         powershell = system_directory / "WindowsPowerShell" / "v1.0" / "powershell.exe"
         self.assertTrue(powershell.is_file())
-
-        probe_script = r"""
-$s = Microsoft.PowerShell.Security\Get-AuthenticodeSignature -LiteralPath $env:SCRIPTURE_AUTH_PROBE
-[pscustomobject]@{
-    status = [string]$s.Status
-    thumbprint = if ($null -eq $s.SignerCertificate) { $null } else { [string]$s.SignerCertificate.Thumbprint }
-} | ConvertTo-Json -Compress
-""".strip()
-        environment = os.environ.copy()
-        environment["SCRIPTURE_AUTH_PROBE"] = str(powershell)
-        completed = subprocess.run(
-            [
-                str(powershell),
-                "-NoLogo",
-                "-NoProfile",
-                "-NonInteractive",
-                "-Command",
-                probe_script,
-            ],
-            env=environment,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="strict",
-            timeout=10,
-            check=False,
-        )
-        self.assertEqual(0, completed.returncode, completed.stderr)
-        payload = json.loads(completed.stdout)
-        thumbprint = payload.get("thumbprint")
-        expected = (
-            payload.get("status") == "Valid"
-            and isinstance(thumbprint, str)
-            and len(thumbprint.strip()) == 40
-            and all(char in "0123456789ABCDEF" for char in thumbprint.strip().upper())
-        )
-        self.assertEqual(
-            expected,
-            verify_same_publisher_authenticode(powershell, powershell),
-        )
+        self.assertTrue(verify_same_publisher_authenticode(powershell, powershell))
 
 
 class NativeUpdateFileSelectorTests(unittest.TestCase):

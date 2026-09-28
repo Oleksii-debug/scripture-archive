@@ -8,6 +8,7 @@ import pytest
 from scripture_archive_runtime.application_update import ApplicationUpdateError
 from scripture_archive_runtime.application_update_parent_wait import ParentProcessWaitError
 from scripture_archive_runtime.application_update_process import (
+    UpdateProcessError,
     build_updater_process_plan,
 )
 from scripture_archive_runtime.application_update_runner import execute_trusted_updater
@@ -105,7 +106,7 @@ def test_runner_rejects_malformed_command_before_wait_or_consume() -> None:
         consumed = True
         raise AssertionError("must not consume")
 
-    with pytest.raises(Exception):
+    with pytest.raises(UpdateProcessError, match="invalid updater command shape"):
         execute_trusted_updater(
             ("--scripture-archive-apply", "--wait-pid", "1"),
             current_version="1.0.0",

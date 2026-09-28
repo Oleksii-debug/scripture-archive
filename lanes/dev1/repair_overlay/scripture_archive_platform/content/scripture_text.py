@@ -9,6 +9,11 @@ from typing import Any
 AUTHORITY_FILE = "engwebu_authority.json"
 VPL_FILE = "engwebu_vpl.txt"
 EXPECTED_VPL_SHA256 = "8cac735abda379045fa2c5f43217410ad47a45ac592f3801116ab0da41a810d8"
+EXPECTED_ARCHIVE_SHA256 = "1007fb45782a4abd9444d4225fd768fb00a150466b9fb9fcf6f6ad175b73feb6"
+EXPECTED_TRANSLATION_NAME = "World English Bible Updated"
+EXPECTED_LICENSE = "Public Domain"
+EXPECTED_SOURCE_URL = "https://ebible.org/Scriptures/engwebu_vpl.zip"
+EXPECTED_SOURCE_SITE = "https://ebible.org/engwebu/"
 PREVIOUS_ARCHIVE_SHA256 = "6442f15ee3b4360786c9cd0996ea3af8f3124744a61b7a9bd69e77ac5deab397"
 PREVIOUS_VPL_SHA256 = "71c2ea1ecba86b62871b0e818c4302ea0a559a5cb9643ff05197a6243836fc2f"
 RECONCILIATION_EVIDENCE_RUN_ID = 36339116656
@@ -55,7 +60,17 @@ class BundledScriptureText:
             raise ValueError("unexpected WEBU authority schema")
         if data.get("translation_id") != "engwebu" or data.get("source_tier") != "TX1":
             raise ValueError("unexpected WEBU authority identity")
-        if data.get("vpl_sha256") != EXPECTED_VPL_SHA256 or data.get("runtime_network_required") is not False:
+        expected_provenance = {
+            "translation_name": EXPECTED_TRANSLATION_NAME,
+            "license": EXPECTED_LICENSE,
+            "source_url": EXPECTED_SOURCE_URL,
+            "source_site": EXPECTED_SOURCE_SITE,
+            "archive_sha256": EXPECTED_ARCHIVE_SHA256,
+            "vpl_sha256": EXPECTED_VPL_SHA256,
+        }
+        if any(data.get(key) != expected for key, expected in expected_provenance.items()):
+            raise ValueError("WEBU authority provenance identity changed")
+        if data.get("runtime_network_required") is not False:
             raise ValueError("WEBU authority is not the pinned offline corpus")
         if data.get("source_snapshot_status") != "AUDITED_PINNED_SNAPSHOT":
             raise ValueError("WEBU authority must identify the bundled source as an audited pinned snapshot")
@@ -159,10 +174,12 @@ class BundledScriptureText:
             "text_provider_available": self.available,
             "scripture_text": {
                 "translation_id": "engwebu",
-                "translation_name": self._authority["translation_name"],
+                "translation_name": EXPECTED_TRANSLATION_NAME,
                 "source_tier": "TX1",
-                "license": self._authority["license"],
-                "source_site": self._authority["source_site"],
+                "license": EXPECTED_LICENSE,
+                "source_url": EXPECTED_SOURCE_URL,
+                "source_site": EXPECTED_SOURCE_SITE,
+                "archive_sha256": EXPECTED_ARCHIVE_SHA256,
                 "vpl_sha256": EXPECTED_VPL_SHA256,
                 "runtime_network_required": False,
                 "source_snapshot_status": self._authority["source_snapshot_status"],

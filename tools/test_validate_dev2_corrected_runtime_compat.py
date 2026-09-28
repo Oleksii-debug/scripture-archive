@@ -53,7 +53,7 @@ class D2CorrectedRuntimeCompatibilityTests(unittest.TestCase):
         # The production helper is cardinality-pinned to D2, so exercise the same
         # runtime primitives here through a one-record content pack round trip.
         archive = self.root / "fixture.zip"
-        write_preintegration_pack([node], archive)
+        write_preintegration_pack([node], archive, expected_node_count=1)
         store = ContentPackStore(self.root / "store")
         inspected = store.install(archive)
         self.assertEqual(1, inspected.node_count)

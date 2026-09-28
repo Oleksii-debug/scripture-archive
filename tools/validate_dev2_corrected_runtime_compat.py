@@ -334,7 +334,7 @@ def _json_bytes(value: Any) -> bytes:
     ).encode("utf-8")
 
 
-def write_preintegration_pack(nodes: list[dict[str, Any]], destination: Path) -> dict[str, Any]:
+def write_preintegration_pack(\n    nodes: list[dict[str, Any]],\n    destination: Path,\n    *,\n    expected_node_count: int = EXPECTED_NODE_COUNT,\n) -> dict[str, Any]:
     destination = destination.expanduser().resolve()
     destination.parent.mkdir(parents=True, exist_ok=True)
     payload = _json_bytes({"nodes": nodes})

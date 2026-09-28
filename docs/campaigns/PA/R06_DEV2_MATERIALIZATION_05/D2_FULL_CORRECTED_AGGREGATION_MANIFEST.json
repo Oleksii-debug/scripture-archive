@@ -4,7 +4,7 @@
   "source_truth_changed": false,
   "node_count": 386,
   "evidence_count": 184,
-  "corrected_node_aggregate_sha256": "b096d316e07b2b64ac79dfb2c4a3a328e390520fba8ab021c13f7c6f9dbb38d2",
+  "corrected_node_aggregate_sha256": "ef77ae5d822e105050dedfa9a460325259fe079701ca69f385693aabcad0e661",
   "correction_report_union": {
     "records": 386,
     "parts": 26,
@@ -16,9 +16,9 @@
   },
   "donors": {
     "evidence_authority": "e1f2e98a2c074663218de4954efa19458f8714f9",
-    "parts_001_015": "259709ca2ee48b2f7c795d5213c3b098e958f77c",
-    "parts_016_020": "b3c5bf6ba6b7d5597fae62f60780c15c6e4fc2bf",
-    "parts_021_026": "a490ddf29c184d8026c9ef0e703e0bf6b2263cf4"
+    "parts_001_015": "def294b1fed8ffc77b4adc42388cdbd48af19f55",
+    "parts_016_020": "5fb482179284608008dc0895d7309db4194cee05",
+    "parts_021_026": "c5fedc6beeec9609ee87a48bf2575b243c28e796"
   },
   "historical_staging_zip_sha256": "b681ea26d985eb754bde02a77254d40ab0920061edb9226fae7921a6740a06c0",
   "qualification_workflow": ".github/workflows/r06-d2-corrected-full-aggregation.yml",

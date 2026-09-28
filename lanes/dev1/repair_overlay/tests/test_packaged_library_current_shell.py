@@ -77,7 +77,7 @@ class PackagedLibraryCurrentShellTest(unittest.TestCase):
             "bundled_full_bible_text",
             "text_provider_available",
             "Результати не додають нових source claims",
-            "відсутній текст не вигадується",
+            "Відсутній текст не вигадується",
         ):
             self.assertIn(token, self.library)
 

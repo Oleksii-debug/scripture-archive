@@ -74,6 +74,28 @@ function requireBoolean(value, name) {
   return value;
 }
 
+function requireContentAccess(value, name) {
+  if (value !== 'GRADEABLE_RUNTIME' && value !== 'READ_ONLY_LIBRARY') {
+    throw new Error(`${name} is invalid`);
+  }
+  return value;
+}
+
+function requireAccessTruth(row, name, {requireReadOnlyAudit = false} = {}) {
+  const access = requireContentAccess(row.content_access, `${name}.content_access`);
+  const gradeable = requireBoolean(row.gradeable_runtime_eligible, `${name}.gradeable_runtime_eligible`);
+  if ((access === 'GRADEABLE_RUNTIME') !== gradeable) {
+    throw new Error(`${name} content_access/gradeable_runtime_eligible mismatch`);
+  }
+  const audit = row.source_audit_status;
+  if (!gradeable && requireReadOnlyAudit) {
+    requireText(audit, `${name}.source_audit_status`);
+  } else if (audit !== null && audit !== undefined) {
+    requireText(audit, `${name}.source_audit_status`);
+  }
+  return row;
+}
+
 function requireStringArray(value, name, {maxLength = MAX_TEXT_LENGTH} = {}) {
   if (!Array.isArray(value)) throw new Error(`${name} must be array`);
   for (let index = 0; index < value.length; index += 1) {
@@ -88,6 +110,7 @@ function validateCampaign(row, index) {
   requireText(row.title, `campaigns[${index}].title`);
   requireNonNegativeInteger(row.mission_count, `campaigns[${index}].mission_count`);
   requireNonNegativeInteger(row.machine_node_count, `campaigns[${index}].machine_node_count`);
+  requireAccessTruth(row, `campaigns[${index}]`);
   return row;
 }
 
@@ -96,6 +119,7 @@ function validateMission(row, index) {
   requireText(row.campaign_id, `missions[${index}].campaign_id`, {maxLength: MAX_ID_LENGTH});
   requireText(row.mission_id, `missions[${index}].mission_id`, {maxLength: MAX_ID_LENGTH});
   requireText(row.title, `missions[${index}].title`);
+  requireAccessTruth(row, `missions[${index}]`, {requireReadOnlyAudit: true});
   return row;
 }
 
@@ -108,6 +132,7 @@ function validateResult(row, index) {
   requireText(row.title, `results[${index}].title`);
   requireText(row.snippet, `results[${index}].snippet`, {allowEmpty: true});
   requireStringArray(row.source_references, `results[${index}].source_references`, {maxLength: MAX_SOURCE_REF_LENGTH});
+  requireAccessTruth(row, `results[${index}]`, {requireReadOnlyAudit: true});
   return row;
 }
 
@@ -119,6 +144,7 @@ export function validateCatalogResponse(data) {
   requireBoolean(data.bundled_full_bible_text, 'bundled_full_bible_text');
   requireBoolean(data.text_provider_available, 'text_provider_available');
   requireNonNegativeInteger(data.machine_node_count, 'machine_node_count');
+  requireStringArray(data.read_only_qualified_sources, 'read_only_qualified_sources', {maxLength: MAX_ID_LENGTH});
   if (!Array.isArray(data.campaigns)) throw new Error('campaigns must be array');
   if (!Array.isArray(data.missions)) throw new Error('missions must be array');
   requireStringArray(data.source_references, 'source_references', {maxLength: MAX_SOURCE_REF_LENGTH});
@@ -165,7 +191,7 @@ function updateMissionFilter() {
     'Усі місії',
     missions,
     'mission_id',
-    row => `${row.mission_id} — ${row.title || row.mission_id}`
+    row => `${row.mission_id} — ${row.title || row.mission_id}${row.gradeable_runtime_eligible ? '' : ` — лише Library, без player/grading — source audit: ${row.source_audit_status || 'статус не надано'}`}`
   );
 }
 
@@ -180,7 +206,8 @@ function renderCatalog(data) {
     ['Місій', missions.length],
     ['Machine-readable вузлів', data.machine_node_count],
     ['Видимих source references', sourceReferences.length],
-    ['Джерело індексу', data.source_of_truth]
+    ['Gradeable authority', data.source_of_truth],
+    ['Library-qualified read-only sources', data.read_only_qualified_sources.length ? data.read_only_qualified_sources.join(', ') : 'немає']
   ];
   for (const [name, value] of rows) {
     const wrapper = element('div');
@@ -190,7 +217,10 @@ function renderCatalog(data) {
 
   const notice = byId('library-corpus-notice');
   if (data.bundled_full_bible_text === false || data.text_provider_available === false) {
-    notice.textContent = 'Повний біблійний текст не входить до цього пакета і активний text provider не підтверджений. Пошук охоплює лише player-visible canonical metadata та source references, які вже надає CanonicalContentLoader; відсутній текст не вигадується.';
+    const readOnly = data.read_only_qualified_sources.length
+      ? ` Окремо доступні Library-qualified read-only джерела: ${data.read_only_qualified_sources.join(', ')}. Library eligibility не означає завершений independent source audit; точний source audit status показується для місії, коли backend його надає. Вони не є player/grading authority.`
+      : '';
+    notice.textContent = `Повний біблійний текст не входить до цього пакета і активний text provider не підтверджений. Gradeable runtime authority залишається CanonicalContentLoader; Library також може показувати явно позначені Library-qualified read-only джерела. Відсутній текст не вигадується.${readOnly}`;
   } else {
     notice.textContent = 'Статус повного біблійного тексту або text provider не підтверджено цим catalog response.';
   }
@@ -200,7 +230,7 @@ function renderCatalog(data) {
     'Усі кампанії',
     campaigns,
     'campaign_id',
-    row => `${row.campaign_id} — ${row.title || row.campaign_id}`
+    row => `${row.campaign_id} — ${row.title || row.campaign_id}${row.gradeable_runtime_eligible ? '' : ' — лише Library, без player/grading'}`
   );
   updateMissionFilter();
 }
@@ -221,7 +251,15 @@ function renderResults(data) {
     const snippet = element('p', row.snippet || 'Без додаткового player-visible фрагмента.');
     const refs = row.source_references.slice(0, MAX_RESULT_REFS);
     const source = element('p', refs.length ? `Джерела: ${refs.join('; ')}` : 'Джерела: не вказано у видимому індексі.');
-    article.append(heading, identity, snippet, source);
+    const access = row.gradeable_runtime_eligible
+      ? element('p', 'Доступ: gradeable runtime — запис належить player/grading authority.')
+      : element('p', 'Доступ: лише Library — цей запис не є доступним для player або grading.');
+    const audit = row.gradeable_runtime_eligible
+      ? null
+      : element('p', `Source audit: ${row.source_audit_status || 'статус не надано'}.`);
+    article.append(heading, identity, access);
+    if (audit) article.append(audit);
+    article.append(snippet, source);
     host.append(article);
   }
 }

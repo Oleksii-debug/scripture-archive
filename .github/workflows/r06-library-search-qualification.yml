@@ -7,11 +7,13 @@ on:
       - r06-converge-library-search-current-coord-0912-sol
     paths:
       - 'lanes/dev1/**'
+      - 'docs/campaigns/OT/R06_D4_STAGE05_READABLE/**'
       - 'tools/verify_library_search_overlay.py'
       - '.github/workflows/r06-library-search-qualification.yml'
   pull_request:
     paths:
       - 'lanes/dev1/**'
+      - 'docs/campaigns/OT/R06_D4_STAGE05_READABLE/**'
       - 'tools/verify_library_search_overlay.py'
       - '.github/workflows/r06-library-search-qualification.yml'
 

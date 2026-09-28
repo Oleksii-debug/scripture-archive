@@ -12,6 +12,9 @@ from scripture_archive_platform.desktop_host.update_application import (
     NativeApplicationUpdateLayer,
     NativeUpdateFileSelector,
 )
+from scripture_archive_platform.desktop_host.update_serialization import (
+    SerializedApplicationUpdateLayer,
+)
 
 # Semantic compatibility version for the current R06-3DEV-A packaged lineage.
 # It is deliberately host-owned rather than supplied by an update manifest/web payload.
@@ -67,6 +70,11 @@ def main() -> int:
         staging_root,
         current_version=CURRENT_APPLICATION_VERSION,
     )
+    # All update/stage/status/cancel commands share one outer process lock so the
+    # fixed pending journal cannot be concurrently overwritten while another update
+    # operation reports status or cancellation. Ordinary application commands remain
+    # unaffected and continue directly through the wrapped application.
+    app = SerializedApplicationUpdateLayer(app)
     app = NativeDiagnosticsLayer(
         app,
         root,

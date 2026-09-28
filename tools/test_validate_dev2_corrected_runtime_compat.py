@@ -22,6 +22,7 @@ from scripture_archive_runtime.content_packs import ContentPackStore, inspect_co
 from validate_dev2_corrected_runtime_compat import (
     PACK_ID,
     PACK_VERSION,
+    CompatibilityError,
     _runtime_compatibility,
     write_preintegration_pack,
 )
@@ -62,6 +63,24 @@ class D2CorrectedRuntimeCompatibilityTests(unittest.TestCase):
         self.assertEqual(1, inspected.node_count)
         store.activate(PACK_ID, PACK_VERSION)
         self.assertEqual({PACK_ID: PACK_VERSION}, store.active_versions())
+
+    def test_conflicting_explicit_grading_truth_fails_closed(self) -> None:
+        node = copy.deepcopy(LN01_N03)
+        node["grading"] = {"accepted_choice": "CONTRADICTS CANONICAL ANSWER"}
+        with self.assertRaisesRegex(
+            CompatibilityError,
+            "provenance rejects corrected node",
+        ):
+            _runtime_compatibility([node], expected_node_count=1)
+
+    def test_missing_nonvisual_equivalent_fails_before_runtime_promotion(self) -> None:
+        node = copy.deepcopy(LN01_N03)
+        node["functional_nonvisual_equivalent"] = ""
+        with self.assertRaisesRegex(
+            CompatibilityError,
+            "current runtime rejected corrected D2 corpus",
+        ):
+            _runtime_compatibility([node], expected_node_count=1)
 
 
 if __name__ == "__main__":

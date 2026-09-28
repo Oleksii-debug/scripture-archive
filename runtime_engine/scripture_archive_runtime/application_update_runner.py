@@ -50,9 +50,9 @@ def execute_trusted_updater(
     The existing consumer remains the sole authority for apply-intent readback,
     exact staged-byte verification, same-publisher verification, rollback
     preservation/publication and apply-authority disarm.  After a successful apply,
-    only the exact installed target returned by that consumer is relaunched.  If
-    process creation itself fails, the already-preserved prior bytes are restored
-    before the failure is surfaced.
+    only the exact installed target returned by that consumer is relaunched.  Any
+    detected target substitution or process-creation failure restores the already-
+    preserved prior bytes before the failure is surfaced.
     """
 
     if not isinstance(current_version, str):
@@ -82,14 +82,25 @@ def execute_trusted_updater(
         verify_same_publisher=verify_same_publisher,
     )
     if result.target_path != installed_executable:
-        raise ApplicationUpdateError("apply consumer returned an unexpected install target")
+        try:
+            rollback(
+                installed_executable,
+                expected_previous_sha256=result.previous_sha256,
+            )
+        except Exception as rollback_error:
+            raise ApplicationUpdateError(
+                "apply consumer returned an unexpected install target and rollback failed"
+            ) from rollback_error
+        raise ApplicationUpdateError(
+            "apply consumer returned an unexpected install target; rollback restored prior bytes"
+        )
 
     try:
-        launch(result.target_path)
+        launch(installed_executable)
     except Exception as launch_error:
         try:
             rollback(
-                result.target_path,
+                installed_executable,
                 expected_previous_sha256=result.previous_sha256,
             )
         except Exception as rollback_error:

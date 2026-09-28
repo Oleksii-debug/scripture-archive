@@ -125,7 +125,7 @@ def test_runner_surfaces_combined_relaunch_and_rollback_failure(tmp_path: Path) 
         )
 
 
-def test_runner_rejects_consumer_target_substitution_before_launch(tmp_path: Path) -> None:
+def test_runner_rolls_back_consumer_target_substitution_before_launch(tmp_path: Path) -> None:
     plan = _plan(tmp_path)
     sentinel = UpdateApplyResult(
         previous_sha256="1" * 64,
@@ -134,13 +134,16 @@ def test_runner_rejects_consumer_target_substitution_before_launch(tmp_path: Pat
         target_path=tmp_path / "other.exe",
         target_version="1.1.0",
     )
-    launched = False
+    events: list[object] = []
 
     def launch(target: Path) -> None:
-        nonlocal launched
-        launched = True
+        events.append(("launch", target))
 
-    with pytest.raises(ApplicationUpdateError, match="unexpected install target"):
+    def rollback(target: Path, *, expected_previous_sha256: str) -> str:
+        events.append(("rollback", target, expected_previous_sha256))
+        return expected_previous_sha256
+
+    with pytest.raises(ApplicationUpdateError, match="unexpected install target; rollback restored"):
         execute_trusted_updater(
             plan.argv()[1:],
             current_version="1.0.0",
@@ -148,8 +151,9 @@ def test_runner_rejects_consumer_target_substitution_before_launch(tmp_path: Pat
             wait_for_exit=lambda parent_pid: None,
             consume=lambda *args, **kwargs: sentinel,
             launch=launch,
+            rollback=rollback,
         )
-    assert launched is False
+    assert events == [("rollback", plan.installed_executable, sentinel.previous_sha256)]
 
 
 def test_runner_never_consumes_when_parent_exit_cannot_be_proven(tmp_path: Path) -> None:

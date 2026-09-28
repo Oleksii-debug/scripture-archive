@@ -5,7 +5,7 @@ import subprocess
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1] / "frontend"
-EXPECTED_LIBRARY_UI_BLOB = "b68ce072597749a81fdafcfb8591c6e24c6d21b7"
+EXPECTED_LIBRARY_UI_BLOB = "471991931544e3c83baaed34cdbfa6806d85bb69"
 
 
 def git_blob_sha(data: bytes) -> str:
@@ -101,6 +101,10 @@ class PackagedLibraryCurrentShellTest(unittest.TestCase):
             self.assertIn(token, self.library)
         self.assertIn("row.gradeable_runtime_eligible", self.library)
         self.assertIn("data.read_only_qualified_sources.length", self.library)
+        self.assertIn("function requireAccessTruth", self.library)
+        self.assertIn("content_access/gradeable_runtime_eligible mismatch", self.library)
+        self.assertIn("requireReadOnlyAudit: true", self.library)
+        self.assertEqual(self.library.count("requireAccessTruth(row,"), 3)
 
     def test_dynamic_content_remains_inert_and_bounded(self):
         self.assertNotIn("innerHTML", self.library)

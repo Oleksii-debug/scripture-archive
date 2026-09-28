@@ -5,7 +5,7 @@ import subprocess
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1] / "frontend"
-EXPECTED_LIBRARY_UI_BLOB = "942227f0540812f067cf5e2b205ac7ad828cae37"
+EXPECTED_LIBRARY_UI_BLOB = "b68ce072597749a81fdafcfb8591c6e24c6d21b7"
 
 
 def git_blob_sha(data: bytes) -> str:
@@ -94,6 +94,8 @@ class PackagedLibraryCurrentShellTest(unittest.TestCase):
             "source_audit_status",
             "Library eligibility не означає завершений independent source audit",
             "source audit: ${row.source_audit_status || 'статус не надано'}",
+            "results[${index}].source_audit_status",
+            "Source audit: ${row.source_audit_status || 'статус не надано'}",
             "цей запис не є доступним для player або grading",
         ):
             self.assertIn(token, self.library)

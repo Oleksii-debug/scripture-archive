@@ -18,7 +18,7 @@ import stat
 from typing import Callable
 
 from .application_update import ApplicationUpdateError
-from .application_update_apply import inspect_apply_handoff
+from .application_update_apply import discard_apply_handoff, inspect_apply_handoff
 from .application_update_pending import PendingApplicationUpdate, staged_artifact_path
 
 
@@ -93,6 +93,9 @@ def consume_apply_handoff(
         _copy_exact(staged, candidate)
         if _sha256_file(candidate) != pending.artifact_sha256:
             raise ApplicationUpdateError("temporary install candidate failed exact-byte verification")
+        final_handoff = inspect_apply_handoff(root, current_version=current_version)
+        if final_handoff != pending:
+            raise ApplicationUpdateError("apply handoff changed before atomic publication")
         os.replace(candidate, target)
         published = True
         _fsync_directory(target.parent)
@@ -100,6 +103,7 @@ def consume_apply_handoff(
         installed_sha = _sha256_file(target)
         if installed_sha != pending.artifact_sha256:
             raise ApplicationUpdateError("installed artifact failed exact-byte verification")
+        discard_apply_handoff(root)
     except Exception as apply_error:
         try:
             candidate.unlink()

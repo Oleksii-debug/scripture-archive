@@ -152,7 +152,7 @@ def main() -> None:
         run_real_response_regressions(platform_root)
     print(
         "Library/Search qualification PASS: exact candidate checkout, pinned canonical FINALPREP02 DEV1 base hash/CRC, "
-        "overlay fidelity, six legacy Library/Search regressions, and eleven real qualified-D4 read-only/runtime-eligibility/hash/mission-authority regressions."
+        "overlay fidelity, six legacy Library/Search regressions, and thirteen real qualified-D4 read-only/runtime-eligibility/hash/mission-authority regressions."
     )
 
 

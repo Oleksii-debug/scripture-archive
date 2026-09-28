@@ -137,9 +137,30 @@ def compose_real_platform(temp_root: Path) -> Path:
             raise AssertionError(f"DEV1 base archive CRC failure: {bad_member}")
         _safe_extract(archive, temp_root)
 
-    platform_root = temp_root / "r06_platform"
-    if not platform_root.is_dir():
+    extracted_platform_root = temp_root / "r06_platform"
+    if not extracted_platform_root.is_dir():
         raise AssertionError("DEV1 base archive did not produce r06_platform")
+
+    # Preserve the repository geometry used by overlay regressions. In the live
+    # checkout the overlay is <repo>/lanes/dev1/repair_overlay and repository-level
+    # byte-fidelity policy such as .gitattributes lives three parents above it.
+    # A flat temp/r06_platform composition made those tests accidentally resolve
+    # repo_root to '/' and therefore tested the harness layout instead of the
+    # exact candidate. Re-home the immutable base under the same relative geometry
+    # and copy only the exact candidate root policy file needed by the regression.
+    composed_repo_root = temp_root / "repo"
+    platform_root = composed_repo_root / "lanes" / "dev1" / "repair_overlay"
+    platform_root.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(extracted_platform_root), str(platform_root))
+
+    attributes_source = ROOT / ".gitattributes"
+    if attributes_source.is_symlink() or not attributes_source.is_file():
+        raise AssertionError("Candidate .gitattributes is missing or unsafe")
+    attributes_target = composed_repo_root / ".gitattributes"
+    shutil.copy2(attributes_source, attributes_target)
+    if attributes_target.read_bytes() != attributes_source.read_bytes():
+        raise AssertionError("Candidate .gitattributes fidelity mismatch")
+
     shutil.copytree(OVERLAY, platform_root, dirs_exist_ok=True)
 
     for relative in OVERLAY_FIDELITY_PATHS:
@@ -231,8 +252,9 @@ def main() -> None:
         run_real_response_regressions(platform_root)
     print(
         "Library/Search qualification PASS: exact candidate checkout, pinned canonical "
-        "FINALPREP02 DEV1 base hash/CRC, overlay fidelity, six real Library/Search "
-        "regressions, and eight real WEBU provider regressions."
+        "FINALPREP02 DEV1 base hash/CRC, exact candidate repository-level .gitattributes "
+        "fidelity, overlay fidelity, six real Library/Search regressions, and eight real "
+        "WEBU provider regressions."
     )
 
 

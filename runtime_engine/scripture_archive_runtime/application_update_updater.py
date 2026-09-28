@@ -68,14 +68,19 @@ def consume_apply_handoff(
         raise ApplicationUpdateError("staged artifact name does not match apply handoff")
     if _sha256_file(staged) != pending.artifact_sha256:
         raise ApplicationUpdateError("staged artifact bytes changed before apply")
+    previous_sha = _sha256_file(target)
     if not verify_same_publisher(target, staged):
         raise ApplicationUpdateError("staged artifact failed same-publisher verification")
     if _sha256_file(staged) != pending.artifact_sha256:
         raise ApplicationUpdateError("staged artifact bytes changed during publisher verification")
+    if _sha256_file(target) != previous_sha:
+        raise ApplicationUpdateError("installed application target changed during publisher verification")
+    rebound = inspect_apply_handoff(root, current_version=current_version)
+    if rebound != pending:
+        raise ApplicationUpdateError("apply handoff changed during publisher verification")
 
     rollback = target.with_name(target.name + _ROLLBACK_SUFFIX)
     _prepare_rollback_slot(rollback)
-    previous_sha = _sha256_file(target)
     _copy_exact(target, rollback)
     if _sha256_file(rollback) != previous_sha:
         _discard_file(rollback)

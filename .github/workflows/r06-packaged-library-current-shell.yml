@@ -15,6 +15,7 @@ on:
       - 'lanes/dev1/repair_overlay/frontend/witness-matrix-ui.js'
       - 'lanes/dev1/repair_overlay/frontend/review-queue-ui.js'
       - 'lanes/dev1/repair_overlay/frontend/research-export.js'
+      - 'lanes/dev1/repair_overlay/frontend/dossier-ui.js'
       - 'lanes/dev1/repair_overlay/scripture_archive_platform/application/runtime_gateway.py'
       - 'lanes/dev1/repair_overlay/scripture_archive_platform/application/service.py'
       - 'lanes/dev1/repair_overlay/scripture_archive_platform/transport/contracts.py'
@@ -32,6 +33,11 @@ on:
       - 'lanes/dev1/repair_overlay/tests/test_packaged_review_training_static_syntax.py'
       - 'lanes/dev1/repair_overlay/tests/test_packaged_review_training_transport.py'
       - 'lanes/dev1/repair_overlay/tests/test_packaged_structured_evidence_population.py'
+      - 'lanes/dev1/repair_overlay/tests/test_dossier_composition.py'
+      - 'lanes/dev1/repair_overlay/tests/test_dossier_ui.py'
+      - 'runtime_engine/scripture_archive_runtime/dossiers.py'
+      - 'runtime_engine/tests/test_dossier_witness_regressions.py'
+      - 'runtime_engine/tests/test_packaged_dossier_integration.py'
       - 'docs/evidence/R06_PA02_STRUCTURED_EVIDENCE_INDEX_v0.1.json'
       - 'runtime_engine/scripture_archive_runtime/evidence_materialization.py'
       - 'runtime_engine/scripture_archive_runtime/evidence_registry.py'
@@ -93,6 +99,14 @@ jobs:
         run: python runtime_engine/tests/test_pa02_structured_materialization.py
       - name: Run packaged structured-evidence population regression
         run: python lanes/dev1/repair_overlay/tests/test_packaged_structured_evidence_population.py
+      - name: Run packaged Dossier runtime/UI integration regression
+        run: python runtime_engine/tests/test_packaged_dossier_integration.py
+      - name: Run Dossier provenance regression
+        env:
+          PYTHONPATH: runtime_engine
+        run: python runtime_engine/tests/test_dossier_witness_regressions.py
+      - name: Run Dossier UI contract regression
+        run: python lanes/dev1/repair_overlay/tests/test_dossier_ui.py
       - name: Diff hygiene
         shell: bash
         run: git diff --check

@@ -272,6 +272,10 @@ jobs:
               )
 
           count = len(report_rows)
+          if count != 230:
+              raise SystemExit(
+                  f"D2_PRIMARY_001_015_EXPECTED_NODE_COUNT_FAIL {count} != 230"
+              )
           if occurrence_counts.get("локальному твердження", 0) < count:
               raise SystemExit(
                   "D2_PRIMARY_001_015_SYSTEMIC_LOCAL_CLAIM_BASELINE_COUNT_FAIL"

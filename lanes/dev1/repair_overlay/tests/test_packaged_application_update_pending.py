@@ -51,6 +51,18 @@ class FakeBaseApplication:
         return {"ok": True, "data": {"passthrough": True}}
 
 
+class CountingContextLock:
+    def __init__(self):
+        self.entries = 0
+
+    def __enter__(self):
+        self.entries += 1
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+
 class PendingUpdateRuntimeTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -237,6 +249,23 @@ class PendingUpdateHostTests(unittest.TestCase):
         self.assertFalse(response["data"]["staged_bytes_removed"])
         self.assertEqual([], calls)
         self.assertFalse((self.staging / "pending-update.json").exists())
+
+    def test_update_command_family_shares_outer_operation_lock(self):
+        layer = self.layer(lambda candidate: True)
+        lock = CountingContextLock()
+        layer._operation_lock = lock
+
+        stage_request = request("application_update.select_verify_stage")
+        stage_response = layer.handle(stage_request)
+        self.assertTrue(stage_response["ok"])
+        self.assertTrue(stage_response["data"]["passthrough"])
+        self.assertEqual([stage_request], self.base.calls)
+        self.assertEqual(1, lock.entries)
+
+        cancel_response = layer.handle(request(CANCEL_PENDING_UPDATE_COMMAND))
+        self.assertTrue(cancel_response["ok"])
+        self.assertEqual("none", cancel_response["data"]["status"])
+        self.assertEqual(2, lock.entries)
 
     def test_browser_payload_cannot_supply_pending_state_or_path(self):
         response = self.layer(lambda candidate: True).handle(

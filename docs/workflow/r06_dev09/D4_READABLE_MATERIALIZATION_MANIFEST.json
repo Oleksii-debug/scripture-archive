@@ -1,0 +1,166 @@
+{
+  "schema": "DEV09_D4_READABLE_MATERIALIZATION_v2",
+  "legacy_parent_head": "998087dfa52408d2c1a9ab067373a75e8d493764",
+  "closure_package": "DEV_LANE_SCRIPTURE_R06_D4_CLOSURE_03.zip",
+  "closure_drive_id": "1LSrCc1M8DcqRBwpO2NAVmcB9EzazgMDq",
+  "closure_sha256": "c4e8dfe4ea62df2c3d52b810fb2413b31d6dcfd4cc711320beae3258ac6a981a",
+  "transport_payload_sha256": "e8b008c31462d7ed9388a7a84f73bb8666c8449181000751e9da45c2468779c9",
+  "canonical_serialization": "UTF-8 JSON ensure_ascii=false sort_keys=true separators=(comma,colon)",
+  "counts": {
+    "nodes": 450,
+    "evidence": 90,
+    "relations": 24,
+    "dossiers": 15,
+    "missions": 15
+  },
+  "node_record_aggregate_sha256": "9fd8f668868e267e97b718a1de3025ad47577748e1054e146b6279da585e2ef7",
+  "controlled_player_text_repair": {
+    "field": "hints.H1",
+    "count": 63,
+    "ground_truth_fields_changed": 0
+  },
+  "provenance_scope_repair": {
+    "issue": 60,
+    "overlay": "docs/workflow/r06_dev09/D4_PROVENANCE_SCOPE_REPAIR_04.json",
+    "evidence_records": 5,
+    "dependent_nodes": 29,
+    "stable_semantic_ids_changed": 0,
+    "claim_propositions_changed": 0,
+    "independent_audit_status": "PENDING"
+  },
+  "node_files": [
+    {
+      "path": "docs/campaigns/OT/R06_D4_STAGE05_READABLE/nodes/nodes_001_002.jsonl",
+      "bytes": 10706,
+      "sha256": "4cdc596a4174044aedb0c7cb1f88f695b2e0934be55e0996048ef4fbb64e3c4d"
+    },
+    {
+      "path": "docs/campaigns/OT/R06_D4_STAGE05_READABLE/nodes/nodes_003_004.jsonl",
+      "bytes": 10948,
+      "sha256": "5d8b42a1a9b9f6bfae19ec1fb4112392cd7f2c0a4701301b6e76d060fd4079db"
+    },
+    {
+      "path": "docs/campaigns/OT/R06_D4_STAGE05_READABLE/nodes/nodes_005_007.jsonl",
+      "bytes": 16105,
+      "sha256": "825b609fcf2e0e37eae3b1a07666c11dc2b322ea1f2b5a14db49207f7712941b"
+    },
+    {
+      "path": "docs/campaigns/OT/R06_D4_STAGE05_READABLE/nodes/nodes_008_009.jsonl",
+      "bytes": 8798,
+      "sha256": "b05c9c631f5a22c529229b896138ab63199a6fc9bc7f3a909c84447d819c5b05"
+    },
+    {
+      "path": "docs/campaigns/OT/R06_D4_STAGE05_READABLE/nodes/nodes_010_039.jsonl",
+      "bytes": 170156,
+      "sha256": "e3e2192e7c412b8adc62223b804d560bc3dee2602674484a89731405866410af"
+    },
+    {
+      "path": "docs/campaigns/OT/R06_D4_STAGE05_READABLE/nodes/nodes_040_069.jsonl",
+      "bytes": 171687,
+      "sha256": "9c5c46c6be2f034cfaa94e536a7710c9f12e638a86b23f86f4c4d74fd85b275d"
+    },
+    {
+      "path": "docs/campaigns/OT/R06_D4_STAGE05_READABLE/nodes/nodes_070_099.jsonl",
+      "bytes": 171333,
+      "sha256": "4867a65c9053c54b8371e6fe04bc144d01c58f721e6300485596510d073329ef"
+    },
+    {
+      "path": "docs/campaigns/OT/R06_D4_STAGE05_READABLE/nodes/nodes_100_129.jsonl",
+      "bytes": 172737,
+      "sha256": "b8469f8970e81464147e9134beae532381bfd687108023a8bc50ee3d9672570c"
+    },
+    {
+      "path": "docs/campaigns/OT/R06_D4_STAGE05_READABLE/nodes/nodes_130_159.jsonl",
+      "bytes": 168023,
+      "sha256": "b9051b4dd6138e0d2abb2219b01f82d0d5171aa8de7166cdb207cb35cb6ab08e"
+    },
+    {
+      "path": "docs/campaigns/OT/R06_D4_STAGE05_READABLE/nodes/nodes_160_189.jsonl",
+      "bytes": 172329,
+      "sha256": "70e02333e353d4a0c5d07f460a9b7acab084f0fad7f9736ae2925dfa2a9f4218"
+    },
+    {
+      "path": "docs/campaigns/OT/R06_D4_STAGE05_READABLE/nodes/nodes_190_219.jsonl",
+      "bytes": 175283,
+      "sha256": "6680a5e576e9538b54cb0efc854ef630ea0b80235d063a470b5f9ed56f4be76c"
+    },
+    {
+      "path": "docs/campaigns/OT/R06_D4_STAGE05_READABLE/nodes/nodes_220_249.jsonl",
+      "bytes": 174993,
+      "sha256": "0842f3bc57c3af9e5e6f9fe634ee5f9911fcf420cc3212752fe5551874c58d36"
+    },
+    {
+      "path": "docs/campaigns/OT/R06_D4_STAGE05_READABLE/nodes/nodes_250_279.jsonl",
+      "bytes": 171236,
+      "sha256": "a85b9ced1a86f77fe64eb2fc8862f8f8231afe948b0aa7ac8c4a6aaaac129001"
+    },
+    {
+      "path": "docs/campaigns/OT/R06_D4_STAGE05_READABLE/nodes/nodes_280_309.jsonl",
+      "bytes": 175451,
+      "sha256": "05e9e46208dc8e9194d98997c8d2856c32ba080482983879f3f9d209a0a33e41"
+    },
+    {
+      "path": "docs/campaigns/OT/R06_D4_STAGE05_READABLE/nodes/nodes_310_339.jsonl",
+      "bytes": 174232,
+      "sha256": "82ac822b965542d4428bcf4b8b43846bee57b087d93259022b1da550f2998ac5"
+    },
+    {
+      "path": "docs/campaigns/OT/R06_D4_STAGE05_READABLE/nodes/nodes_340_369.jsonl",
+      "bytes": 185584,
+      "sha256": "d6edcb51b1badeaf5ab2afbd15734c59ba387d564a6bd715bb2a4bb469d805db"
+    },
+    {
+      "path": "docs/campaigns/OT/R06_D4_STAGE05_READABLE/nodes/nodes_370_399.jsonl",
+      "bytes": 182829,
+      "sha256": "c03ffc8723666fb6a117fb192a9f2acbc95a5f321cc0800d4bec9710dd028274"
+    },
+    {
+      "path": "docs/campaigns/OT/R06_D4_STAGE05_READABLE/nodes/nodes_400_429.jsonl",
+      "bytes": 186618,
+      "sha256": "93704e9b00314900d86958c6e72fec6dc1565fc6a85b18275b44a1229e9f12f6"
+    },
+    {
+      "path": "docs/campaigns/OT/R06_D4_STAGE05_READABLE/nodes/nodes_430_450.jsonl",
+      "bytes": 138994,
+      "sha256": "cb99514063517c2df3af83f720795f576043cc35e93929c80ea3bf8de176c9ee"
+    }
+  ],
+  "evidence_files": [
+    {
+      "path": "docs/campaigns/OT/R06_D4_STAGE05_READABLE/evidence/evidence_01.jsonl",
+      "bytes": 17069,
+      "sha256": "3d387c59cff4901ce891b23b4dc0865825614c8faab156ae5e80573f8ed2059f"
+    },
+    {
+      "path": "docs/campaigns/OT/R06_D4_STAGE05_READABLE/evidence/evidence_02.jsonl",
+      "bytes": 16853,
+      "sha256": "46e7a4575d2aaa6e032fa838e75f0ca0aa06297a0d7d770393b13fbd43383eca"
+    },
+    {
+      "path": "docs/campaigns/OT/R06_D4_STAGE05_READABLE/evidence/evidence_03.jsonl",
+      "bytes": 17316,
+      "sha256": "2d19bbc63ffcca1b8fdcc40555ee640fc672fa09d69df545954420f1d0c5f5cb"
+    },
+    {
+      "path": "docs/campaigns/OT/R06_D4_STAGE05_READABLE/evidence/evidence_04.jsonl",
+      "bytes": 17410,
+      "sha256": "c17f872fa6840c2d9ee60eac8dd03cbc912a3e3da6c1827b9f96966ff14ea4dc"
+    },
+    {
+      "path": "docs/campaigns/OT/R06_D4_STAGE05_READABLE/evidence/evidence_05.jsonl",
+      "bytes": 19302,
+      "sha256": "c77ff7bb23823c19782621961895c63cb3d2bf98a543efc71d57616b6f8d8c94"
+    },
+    {
+      "path": "docs/campaigns/OT/R06_D4_STAGE05_READABLE/evidence/evidence_06a.jsonl",
+      "bytes": 9533,
+      "sha256": "deda086a27f2a75997e0f978df15b31cfd1cf90620d52d45a00b8803e08f4916"
+    },
+    {
+      "path": "docs/campaigns/OT/R06_D4_STAGE05_READABLE/evidence/evidence_06b.jsonl",
+      "bytes": 10982,
+      "sha256": "51c42e8a86be436e7a3fc580b908784dbb79f76160679179b5acdc10cdfeb7ca"
+    }
+  ],
+  "evidence_record_aggregate_sha256": "fe448c443ad1acc55bf06ac860d61dcd99b7678d5a4acbf39fc9f6addad1be46"
+}

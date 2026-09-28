@@ -38,9 +38,15 @@ class PlatformApplication:
             data=self.library.catalog();data.update(self.scripture_text.catalog_projection());return data
         if cmd=='library.search':
             data=self.library.search(p.get('query'),campaign_id=p.get('campaign_id'),mission_id=p.get('mission_id'),limit=p.get('limit',25));data['bundled_full_bible_text']=self.scripture_text.available;return data
-        if cmd=='library.text_catalog':return self.scripture_text.catalog()
-        if cmd=='library.read_chapter':return self.scripture_text.chapter(p.get('book'),p.get('chapter'))
-        if cmd=='library.text_search':return self.scripture_text.search(p.get('query'),limit=p.get('limit',50))
+        if cmd=='library.text_catalog':
+            if p:raise ValueError('library.text_catalog accepts an empty payload')
+            return self.scripture_text.catalog()
+        if cmd=='library.read_chapter':
+            if set(p)!={'book','chapter'}:raise ValueError('library.read_chapter requires exactly book and chapter')
+            return self.scripture_text.chapter(p.get('book'),p.get('chapter'))
+        if cmd=='library.text_search':
+            if 'query' not in p or set(p)-{'query','limit'}:raise ValueError('library.text_search requires query and optional limit only')
+            return self.scripture_text.search(p.get('query'),limit=p.get('limit',50))
         if cmd=='research.list_bookmarks':return {'bookmarks':self.research.list_bookmarks(p.get('query'))}
         if cmd=='research.upsert_bookmark':return {'bookmark':self.research.upsert_bookmark(p.get('bookmark'))}
         if cmd=='research.delete_bookmark':return {'deleted':self.research.delete_bookmark(p.get('bookmark_id'))}

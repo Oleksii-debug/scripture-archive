@@ -215,11 +215,28 @@ class BundledScriptureTextTests(unittest.TestCase):
               source_snapshot_status:'AUDITED_PINNED_SNAPSHOT',
               verse_rows:38058, source_empty_rows:29,
               books:[{code:'GEN', chapter_count:1, chapters:[1]}],
-              upstream_monitoring:{status:'MATCH_PINNED_AUTHORITY'}
+              upstream_monitoring:{
+                status:'MATCH_PINNED_AUTHORITY',
+                changed_reference_count:0,
+                added_reference_count:0,
+                removed_reference_count:0,
+                changed_references:[]
+              }
             };
             mod.validateTextCatalog(catalog);
             reject(()=>mod.validateTextCatalog({...catalog, runtime_network_required:true}), 'network-required catalog');
             reject(()=>mod.validateTextCatalog({...catalog, translation_id:'other'}), 'wrong translation');
+            reject(
+              ()=>mod.validateTextCatalog({
+                ...catalog,
+                upstream_monitoring:{...catalog.upstream_monitoring, changed_reference_count:1}
+              }),
+              'MATCH status with drift count'
+            );
+            reject(
+              ()=>mod.validateTextCatalog({...catalog, books:[{code:'GEN', chapter_count:2, chapters:[1,1]}]}),
+              'duplicate catalog chapters'
+            );
 
             const chapter = {
               schema:'scripture.library.chapter.v1',
@@ -235,6 +252,10 @@ class BundledScriptureTextTests(unittest.TestCase):
               ()=>mod.validateChapter({...chapter, verses:[{...verse, text_state:'source_empty'}], source_empty_rows:1}),
               'source-empty row with text'
             );
+            reject(
+              ()=>mod.validateChapter({...chapter, verses:[verse, {...verse}]}),
+              'duplicate chapter verse'
+            );
 
             const search = {
               schema:'scripture.library.text-search.v1',
@@ -249,6 +270,10 @@ class BundledScriptureTextTests(unittest.TestCase):
             reject(
               ()=>mod.validateTextSearch({...search, total:0}),
               'total smaller than results'
+            );
+            reject(
+              ()=>mod.validateTextSearch({...search, total:2, results:[verse, {...verse}]}),
+              'duplicate search reference'
             );
             """
         )
@@ -288,6 +313,9 @@ class BundledScriptureTextTests(unittest.TestCase):
             'source-empty row contains text',
             'expected source text',
             'source-empty count is inconsistent',
+            'MATCH_PINNED_AUTHORITY conflicts with drift evidence',
+            'chapter verses must be unique and ascending',
+            'duplicate source reference',
         ):
             self.assertIn(token, frontend)
         self.assertIn("validateTextCatalog(await api('library.text_catalog'))", frontend)

@@ -12,6 +12,7 @@ from scripture_archive_platform.desktop_host.update_application import (
     NativeApplicationUpdateLayer,
     NativeUpdateFileSelector,
 )
+from scripture_archive_platform.desktop_host.updater_launch import launch_packaged_updater
 from scripture_archive_platform.desktop_host.version import CURRENT_APPLICATION_VERSION
 
 
@@ -59,15 +60,15 @@ def main() -> int:
         staging_root=staging_root,
     )
     # This outer layer owns one process-local RLock for the complete update command
-    # family, so verify/stage/status/cancel cannot race the shared pending journal.
-    app = NativePendingUpdateLayer(
+    # family, so verify/stage/status/cancel/execute cannot race shared durable state.
+    pending_layer = NativePendingUpdateLayer(
         app,
         root,
         staging_root,
         current_version=CURRENT_APPLICATION_VERSION,
     )
     app = NativeDiagnosticsLayer(
-        app,
+        pending_layer,
         root,
         Path(platform_app.store.root) / "runtime-v2",
         current_version=CURRENT_APPLICATION_VERSION,
@@ -87,6 +88,10 @@ def main() -> int:
         text_select=True,
     )
     selector.bind_window(window)
+    pending_layer.bind_apply_execution(
+        lambda: launch_packaged_updater(staging_root),
+        window.destroy,
+    )
     logging.info("Starting EdgeChromium WebView; frontend=%s log=%s", front, log_path)
     webview.start(gui="edgechromium", debug=False, private_mode=True)
     return 0

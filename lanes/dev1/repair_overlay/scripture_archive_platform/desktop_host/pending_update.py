@@ -17,9 +17,15 @@ from scripture_archive_platform.transport.contracts import (
 
 PENDING_UPDATE_STATUS_COMMAND = "application_update.pending_status"
 PREPARE_APPLY_COMMAND = "application_update.prepare_apply"
+APPLY_AND_RESTART_COMMAND = "application_update.apply_and_restart"
 CANCEL_PENDING_UPDATE_COMMAND = "application_update.cancel_pending"
 _PENDING_COMMANDS = frozenset(
-    {PENDING_UPDATE_STATUS_COMMAND, PREPARE_APPLY_COMMAND, CANCEL_PENDING_UPDATE_COMMAND}
+    {
+        PENDING_UPDATE_STATUS_COMMAND,
+        PREPARE_APPLY_COMMAND,
+        APPLY_AND_RESTART_COMMAND,
+        CANCEL_PENDING_UPDATE_COMMAND,
+    }
 )
 _UPDATE_COMMAND_FAMILY = frozenset(
     {
@@ -27,18 +33,20 @@ _UPDATE_COMMAND_FAMILY = frozenset(
         "application_update.select_verify_stage",
         PENDING_UPDATE_STATUS_COMMAND,
         PREPARE_APPLY_COMMAND,
+        APPLY_AND_RESTART_COMMAND,
         CANCEL_PENDING_UPDATE_COMMAND,
     }
 )
 
 
 class NativePendingUpdateLayer:
-    """Expose serialized fixed-path staged-update recovery and apply handoff.
+    """Expose serialized fixed-path staged-update recovery and apply execution.
 
     The outer packaged-host lock serializes the complete application-update command
-    family so staging, status, prepare-apply and cancellation cannot publish
-    contradictory durable state. Prepare-apply only creates a host-owned intent; it
-    does not replace, execute, install or restart application bytes.
+    family so staging, status, prepare-apply, execution and cancellation cannot
+    publish contradictory durable state. Execution remains two-step: the browser may
+    request only an empty-payload action after a matching durable apply handoff exists;
+    all paths, process identity, updater identity and shutdown behavior stay native.
     """
 
     def __init__(
@@ -49,6 +57,8 @@ class NativePendingUpdateLayer:
         *,
         current_version: str,
         authenticity_verifier: Callable[[Path], bool] | None = None,
+        apply_executor: Callable[[], int] | None = None,
+        shutdown_request: Callable[[], None] | None = None,
     ) -> None:
         self._app = app
         self._repo_root = Path(repo_root).resolve()
@@ -59,7 +69,24 @@ class NativePendingUpdateLayer:
             if authenticity_verifier is not None
             else self._default_authenticity_verifier
         )
+        self._apply_executor = apply_executor
+        self._shutdown_request = shutdown_request
         self._operation_lock = threading.RLock()
+
+    def bind_apply_execution(
+        self,
+        apply_executor: Callable[[], int],
+        shutdown_request: Callable[[], None],
+    ) -> None:
+        """Bind host-owned launch/shutdown callbacks after the native window exists."""
+
+        if not callable(apply_executor):
+            raise ValueError("apply executor must be callable")
+        if not callable(shutdown_request):
+            raise ValueError("shutdown request must be callable")
+        with self._operation_lock:
+            self._apply_executor = apply_executor
+            self._shutdown_request = shutdown_request
 
     def handle(self, request: Any) -> dict[str, Any]:
         if not isinstance(request, dict):
@@ -85,7 +112,9 @@ class NativePendingUpdateLayer:
             inspect_pending_update, staged_artifact_path, discard_pending_update = (
                 self._load_pending_core()
             )
-            prepare_apply_handoff, discard_apply_handoff = self._load_apply_core()
+            prepare_apply_handoff, inspect_apply_handoff, discard_apply_handoff = (
+                self._load_apply_core()
+            )
 
             if command == CANCEL_PENDING_UPDATE_COMMAND:
                 apply_removed = discard_apply_handoff(self._staging_root)
@@ -143,41 +172,58 @@ class NativePendingUpdateLayer:
                         "UPDATE_APPLY_HANDOFF_INVALID",
                         "Apply handoff did not remain bound to the verified pending update.",
                     )
-                return ok_response(
+                return self._pending_response(
                     rid,
-                    {
-                        "pending": True,
-                        "status": "apply_ready",
-                        "product_id": rebound.product_id,
-                        "target_platform": rebound.target_platform,
-                        "current_version": rebound.current_version,
-                        "target_version": rebound.target_version,
-                        "source_head": rebound.source_head,
-                        "artifact_name": rebound.artifact_name,
-                        "artifact_size": rebound.artifact_size,
-                        "artifact_sha256": rebound.artifact_sha256,
-                        "authenticity": rebound.authenticity,
-                        "installation_performed": False,
-                        "restart_performed": False,
-                    },
+                    rebound,
+                    status="apply_ready",
+                    restart_requested=False,
                 )
 
-            return ok_response(
+            if command == APPLY_AND_RESTART_COMMAND:
+                if not callable(self._apply_executor) or not callable(self._shutdown_request):
+                    return error_response(
+                        rid,
+                        "UPDATE_EXECUTION_UNAVAILABLE",
+                        "Packaged updater execution is unavailable in this host.",
+                    )
+                handoff = inspect_apply_handoff(
+                    self._staging_root,
+                    current_version=self._current_version,
+                )
+                if handoff is None or handoff != pending:
+                    return error_response(
+                        rid,
+                        "UPDATE_APPLY_HANDOFF_REQUIRED",
+                        "A current verified apply handoff is required before restart.",
+                    )
+                updater_pid = self._apply_executor()
+                if not isinstance(updater_pid, int) or isinstance(updater_pid, bool) or updater_pid <= 0:
+                    raise ValueError("packaged updater launch did not return a valid process id")
+                self._shutdown_request()
+                response = self._pending_response(
+                    rid,
+                    handoff,
+                    status="updater_started",
+                    restart_requested=True,
+                )
+                response["data"]["updater_process_started"] = True
+                return response
+
+            handoff = inspect_apply_handoff(
+                self._staging_root,
+                current_version=self._current_version,
+            )
+            if handoff is not None and handoff != pending:
+                return error_response(
+                    rid,
+                    "UPDATE_APPLY_HANDOFF_INVALID",
+                    "Apply handoff is detached from the current verified pending update.",
+                )
+            return self._pending_response(
                 rid,
-                {
-                    "pending": True,
-                    "status": pending.status,
-                    "product_id": pending.product_id,
-                    "target_platform": pending.target_platform,
-                    "current_version": pending.current_version,
-                    "target_version": pending.target_version,
-                    "source_head": pending.source_head,
-                    "artifact_name": pending.artifact_name,
-                    "artifact_size": pending.artifact_size,
-                    "artifact_sha256": pending.artifact_sha256,
-                    "authenticity": pending.authenticity,
-                    "installation_performed": False,
-                },
+                pending,
+                status="apply_ready" if handoff == pending else pending.status,
+                restart_requested=False,
             )
         except ValueError:
             return error_response(
@@ -198,6 +244,34 @@ class NativePendingUpdateLayer:
                 "Pending application update recovery failed closed.",
             )
 
+    @staticmethod
+    def _pending_response(
+        request_id: str,
+        pending: Any,
+        *,
+        status: str,
+        restart_requested: bool,
+    ) -> dict[str, Any]:
+        return ok_response(
+            request_id,
+            {
+                "pending": True,
+                "status": status,
+                "product_id": pending.product_id,
+                "target_platform": pending.target_platform,
+                "current_version": pending.current_version,
+                "target_version": pending.target_version,
+                "source_head": pending.source_head,
+                "artifact_name": pending.artifact_name,
+                "artifact_size": pending.artifact_size,
+                "artifact_sha256": pending.artifact_sha256,
+                "authenticity": pending.authenticity,
+                "installation_performed": False,
+                "restart_performed": False,
+                "restart_requested": restart_requested,
+            },
+        )
+
     def _default_authenticity_verifier(self, candidate: Path) -> bool:
         return verify_same_publisher_authenticode(Path(sys.executable), candidate)
 
@@ -213,13 +287,14 @@ class NativePendingUpdateLayer:
 
         return inspect_pending_update, staged_artifact_path, discard_pending_update
 
-    def _load_apply_core(self) -> tuple[Any, Any]:
+    def _load_apply_core(self) -> tuple[Any, Any, Any]:
         root_text = str(self._repo_root)
         if root_text not in sys.path:
             sys.path.insert(0, root_text)
         from runtime_engine.scripture_archive_runtime.application_update_apply import (
             discard_apply_handoff,
+            inspect_apply_handoff,
             prepare_apply_handoff,
         )
 
-        return prepare_apply_handoff, discard_apply_handoff
+        return prepare_apply_handoff, inspect_apply_handoff, discard_apply_handoff

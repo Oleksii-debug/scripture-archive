@@ -104,7 +104,7 @@ class PackagedLibraryCurrentShellTest(unittest.TestCase):
         self.assertIn("function requireAccessTruth", self.library)
         self.assertIn("content_access/gradeable_runtime_eligible mismatch", self.library)
         self.assertIn("requireReadOnlyAudit: true", self.library)
-        self.assertEqual(self.library.count("requireAccessTruth(row,"), 3)
+        self.assertEqual(self.library.count("  requireAccessTruth(row,"), 3)
 
     def test_dynamic_content_remains_inert_and_bounded(self):
         self.assertNotIn("innerHTML", self.library)

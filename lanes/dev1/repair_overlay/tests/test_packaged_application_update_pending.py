@@ -243,7 +243,7 @@ class PendingUpdateHostTests(unittest.TestCase):
             request(PENDING_UPDATE_STATUS_COMMAND, {"path": "C:\\Users\\attacker\\state.json"})
         )
         self.assertFalse(response["ok"])
-        self.assertEqual("UPDATE_PENDING_INVALID", response["error"]["code"])
+        self.assertEqual("VALIDATION_ERROR", response["error"]["code"])
         self.assertEqual([], self.base.calls)
 
     def test_unrelated_commands_are_delegated(self):

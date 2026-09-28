@@ -105,6 +105,9 @@ function validateMission(row, index) {
   requireText(row.campaign_id, `missions[${index}].campaign_id`, {maxLength: MAX_ID_LENGTH});
   requireText(row.mission_id, `missions[${index}].mission_id`, {maxLength: MAX_ID_LENGTH});
   requireText(row.title, `missions[${index}].title`);
+  if (row.source_audit_status !== null && row.source_audit_status !== undefined) {
+    requireText(row.source_audit_status, `missions[${index}].source_audit_status`);
+  }
   requireContentAccess(row.content_access, `missions[${index}].content_access`);
   requireBoolean(row.gradeable_runtime_eligible, `missions[${index}].gradeable_runtime_eligible`);
   return row;
@@ -179,7 +182,7 @@ function updateMissionFilter() {
     'Усі місії',
     missions,
     'mission_id',
-    row => `${row.mission_id} — ${row.title || row.mission_id}${row.gradeable_runtime_eligible ? '' : ' — лише Library, без player/grading'}`
+    row => `${row.mission_id} — ${row.title || row.mission_id}${row.gradeable_runtime_eligible ? '' : ` — лише Library, без player/grading — source audit: ${row.source_audit_status || 'статус не надано'}`}`
   );
 }
 
@@ -195,7 +198,7 @@ function renderCatalog(data) {
     ['Machine-readable вузлів', data.machine_node_count],
     ['Видимих source references', sourceReferences.length],
     ['Gradeable authority', data.source_of_truth],
-    ['Qualified read-only sources', data.read_only_qualified_sources.length ? data.read_only_qualified_sources.join(', ') : 'немає']
+    ['Library-qualified read-only sources', data.read_only_qualified_sources.length ? data.read_only_qualified_sources.join(', ') : 'немає']
   ];
   for (const [name, value] of rows) {
     const wrapper = element('div');
@@ -206,9 +209,9 @@ function renderCatalog(data) {
   const notice = byId('library-corpus-notice');
   if (data.bundled_full_bible_text === false || data.text_provider_available === false) {
     const readOnly = data.read_only_qualified_sources.length
-      ? ` Окремо доступні qualified read-only джерела: ${data.read_only_qualified_sources.join(', ')}. Вони не є player/grading authority.`
+      ? ` Окремо доступні Library-qualified read-only джерела: ${data.read_only_qualified_sources.join(', ')}. Library eligibility не означає завершений independent source audit; точний source audit status показується для місії, коли backend його надає. Вони не є player/grading authority.`
       : '';
-    notice.textContent = `Повний біблійний текст не входить до цього пакета і активний text provider не підтверджений. Gradeable runtime authority залишається CanonicalContentLoader; Library також може показувати явно позначені qualified read-only джерела. Відсутній текст не вигадується.${readOnly}`;
+    notice.textContent = `Повний біблійний текст не входить до цього пакета і активний text provider не підтверджений. Gradeable runtime authority залишається CanonicalContentLoader; Library також може показувати явно позначені Library-qualified read-only джерела. Відсутній текст не вигадується.${readOnly}`;
   } else {
     notice.textContent = 'Статус повного біблійного тексту або text provider не підтверджено цим catalog response.';
   }

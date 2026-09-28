@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+import textwrap
 import unittest
 from pathlib import Path
 
@@ -272,6 +273,44 @@ class CorrectedAggregationPreflightTests(unittest.TestCase):
             immutable_pairs=[(original, candidate)],
         )
         self.assertEqual(len(result["immutable_pairs"]), 1)
+
+    def test_qualification_workflow_embedded_python_is_syntactically_valid(self) -> None:
+        workflow = (
+            Path(__file__).resolve().parents[1]
+            / ".github"
+            / "workflows"
+            / "r06-d2-corrected-full-aggregation.yml"
+        )
+        lines = workflow.read_text(encoding="utf-8").splitlines()
+        blocks: list[tuple[int, list[str]]] = []
+        index = 0
+        while index < len(lines):
+            if "<<'PY'" not in lines[index]:
+                index += 1
+                continue
+            command_line = index + 1
+            index += 1
+            body: list[str] = []
+            while index < len(lines) and lines[index].strip() != "PY":
+                body.append(lines[index])
+                index += 1
+            self.assertLess(
+                index,
+                len(lines),
+                f"unterminated embedded Python heredoc after workflow line {command_line}",
+            )
+            blocks.append((command_line, body))
+            index += 1
+
+        self.assertGreaterEqual(len(blocks), 4)
+        for command_line, body in blocks:
+            source = textwrap.dedent("\n".join(body))
+            with self.subTest(workflow_line=command_line):
+                compile(
+                    source,
+                    f"{workflow}:embedded-python-after-line-{command_line}",
+                    "exec",
+                )
 
 
 if __name__ == "__main__":

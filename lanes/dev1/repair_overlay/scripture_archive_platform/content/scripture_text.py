@@ -43,7 +43,8 @@ class BundledScriptureText:
         self.vpl_path = self.data_dir / VPL_FILE
         self.authority_path = self.data_dir / AUTHORITY_FILE
         self._authority = self._load_authority()
-        self._available = self._verify_vpl()
+        self._vpl_bytes = self._read_verified_vpl()
+        self._available = True
         self._records: list[dict[str, Any]] | None = None
         self._chapters: dict[tuple[str, int], list[dict[str, Any]]] | None = None
 
@@ -107,7 +108,7 @@ class BundledScriptureText:
             raise ValueError("invalid WEBU source re-audit evidence identity")
         return data
 
-    def _verify_vpl(self) -> bool:
+    def _read_verified_vpl(self) -> bytes:
         try:
             raw = self.vpl_path.read_bytes()
         except OSError as exc:
@@ -115,7 +116,7 @@ class BundledScriptureText:
         actual = hashlib.sha256(raw).hexdigest()
         if actual != EXPECTED_VPL_SHA256:
             raise ValueError("bundled WEBU VPL SHA-256 mismatch")
-        return True
+        return raw
 
     @staticmethod
     def _bounded_text(value: Any, name: str, max_length: int) -> str:
@@ -132,7 +133,10 @@ class BundledScriptureText:
         records: list[dict[str, Any]] = []
         chapters: dict[tuple[str, int], list[dict[str, Any]]] = {}
         book_order: list[str] = []
-        text = self.vpl_path.read_text(encoding="utf-8-sig")
+        try:
+            text = self._vpl_bytes.decode("utf-8-sig")
+        except UnicodeDecodeError as exc:
+            raise ValueError("bundled WEBU VPL is not valid UTF-8") from exc
         for line_number, line in enumerate(text.splitlines(), 1):
             parts = line.split(" ", 2)
             if len(parts) != 3 or ":" not in parts[1]:

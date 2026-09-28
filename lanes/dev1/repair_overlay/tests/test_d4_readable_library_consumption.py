@@ -84,6 +84,36 @@ class D4ReadableLibraryConsumptionTests(unittest.TestCase):
         shutil.copytree(source, destination)
         return destination
 
+    def test_d4_public_authority_accepts_crlf_equivalent_checkout_bytes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            d4_root = self._copied_d4_root(root)
+            paths = [
+                d4_root / "metadata" / "mission_index_metadata.json",
+                d4_root / "registries" / "missions_001_005.jsonl",
+            ]
+            for path in paths:
+                raw = path.read_bytes().replace(b"\r\n", b"\n")
+                path.write_bytes(raw.replace(b"\n", b"\r\n"))
+
+            library = CanonicalLibraryIndex(CanonicalContentLoader(root))
+            campaigns = {row["campaign_id"]: row for row in library.list_campaigns()}
+            self.assertIn(D4_CAMPAIGN, campaigns)
+            self.assertEqual(15, campaigns[D4_CAMPAIGN]["mission_count"])
+
+    def test_d4_public_authority_rejects_lone_cr_line_endings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            d4_root = self._copied_d4_root(root)
+            metadata_path = d4_root / "metadata" / "mission_index_metadata.json"
+            raw = metadata_path.read_bytes().replace(b"\r\n", b"\n")
+            self.assertIn(b"\n", raw)
+            metadata_path.write_bytes(raw.replace(b"\n", b"\r", 1))
+
+            library = CanonicalLibraryIndex(CanonicalContentLoader(root))
+            with self.assertRaises(ContentLoadError):
+                library.catalog()
+
     def test_d4_node_tampering_fails_closed_against_qualified_hash_authority(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

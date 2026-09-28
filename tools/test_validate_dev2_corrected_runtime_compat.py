@@ -50,8 +50,11 @@ class D2CorrectedRuntimeCompatibilityTests(unittest.TestCase):
 
     def test_generic_runtime_self_grade_and_load_path_accepts_canonical_fixture(self) -> None:
         node = copy.deepcopy(LN01_N03)
-        # The production helper is cardinality-pinned to D2, so exercise the same
-        # runtime primitives here through a one-record content pack round trip.
+        runtime = _runtime_compatibility([node], expected_node_count=1)
+        self.assertEqual(1, runtime["repository_nodes"])
+        self.assertEqual(1, runtime["self_grade_correct"])
+        self.assertEqual(1, runtime["runtime_load_pass"])
+
         archive = self.root / "fixture.zip"
         write_preintegration_pack([node], archive, expected_node_count=1)
         store = ContentPackStore(self.root / "store")

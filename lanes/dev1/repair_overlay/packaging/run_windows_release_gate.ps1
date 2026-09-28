@@ -11,10 +11,14 @@ $OverlayTests = Join-Path $Repo "lanes\dev1\repair_overlay\tests"
 $Dist = Join-Path $PlatformRoot "dist"
 $Name = "ScriptureArchive-R06-DEV01"
 $Exe = Join-Path $Dist "$Name.exe"
+$UpdaterExe = Join-Path $Dist "$Name-Updater.exe"
 $BuildManifest = Join-Path $Dist "build_manifest.json"
+$UpdaterBuildManifest = Join-Path $Dist "updater_build_manifest.json"
 $Diagnostics = Join-Path $Dist "windows_release_diagnostics.json"
 $WebView2Probe = Join-Path $Dist "webview2_host_probe.json"
 $StartupProbe = Join-Path $Dist "packaged_startup_probe.json"
+$ArtifactReadback = Join-Path $Dist "artifact_readback.json"
+$UpdaterArtifactReadback = Join-Path $Dist "updater_artifact_readback.json"
 if (-not $OutputJson) { $OutputJson = Join-Path $Dist "release_gate.json" }
 
 $result = [ordered]@{
@@ -31,6 +35,7 @@ $result = [ordered]@{
     tools_smoke = $false
     build = $false
     artifact_readback = $false
+    updater_artifact_readback = $false
     webview2_detected = $false
     webview2_host_probe = $false
     process_liveness = $false
@@ -38,8 +43,13 @@ $result = [ordered]@{
     running_without_admin = $false
     artifact_sha256 = $null
     artifact_size_bytes = $null
+    updater_artifact_sha256 = $null
+    updater_artifact_size_bytes = $null
     status = "RUNNING"
     not_proven = @(
+        "production Authenticode signing identity/private key",
+        "host launch/shutdown handoff to standalone updater",
+        "post-restart health commit/rollback cleanup",
         "human NVDA acceptance",
         "complete functional WebView UI acceptance",
         "packaged application's own WebView2 content-ready signal",
@@ -105,19 +115,54 @@ try {
     }
 
     & (Join-Path $PSScriptRoot "build_windows.ps1")
-    if (-not (Test-Path $Exe) -or -not (Test-Path $BuildManifest) -or -not (Test-Path $Diagnostics)) {
-        throw "Build did not produce the complete expected evidence set"
+    if (
+        -not (Test-Path -LiteralPath $Exe -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $UpdaterExe -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $BuildManifest -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $UpdaterBuildManifest -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $ArtifactReadback -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $UpdaterArtifactReadback -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $Diagnostics -PathType Leaf)
+    ) {
+        throw "Build did not produce the complete application + updater evidence set"
     }
     $result.build = $true
 
     $build = Get-Content -Raw -Encoding utf8 $BuildManifest | ConvertFrom-Json
+    $updaterBuild = Get-Content -Raw -Encoding utf8 $UpdaterBuildManifest | ConvertFrom-Json
     $diag = Get-Content -Raw -Encoding utf8 $Diagnostics | ConvertFrom-Json
-    $readbackPath = Join-Path $Dist "artifact_readback.json"
-    $readback = Get-Content -Raw -Encoding utf8 $readbackPath | ConvertFrom-Json
-    if (-not $readback.ok) { throw "Artifact hash/size readback did not pass" }
+    $readback = Get-Content -Raw -Encoding utf8 $ArtifactReadback | ConvertFrom-Json
+    $updaterReadback = Get-Content -Raw -Encoding utf8 $UpdaterArtifactReadback | ConvertFrom-Json
+    if (-not $readback.ok) { throw "Application artifact hash/size readback did not pass" }
+    if (-not $updaterReadback.ok) { throw "Updater artifact hash/size readback did not pass" }
+
+    $actualUpdaterHash = (Get-FileHash -LiteralPath $UpdaterExe -Algorithm SHA256).Hash.ToLowerInvariant()
+    $actualUpdaterSize = (Get-Item -LiteralPath $UpdaterExe).Length
+    if ($build.updater_artifact_name -ne (Split-Path -Leaf $UpdaterExe)) {
+        throw "Main build manifest updater artifact name does not match packaged updater"
+    }
+    if ([string]$build.updater_sha256 -ne [string]$updaterBuild.sha256) {
+        throw "Updater SHA differs between build manifests"
+    }
+    if ([long]$build.updater_size_bytes -ne [long]$updaterBuild.size_bytes) {
+        throw "Updater size differs between build manifests"
+    }
+    if ([string]$updaterBuild.sha256 -ne $actualUpdaterHash) {
+        throw "Updater SHA manifest does not match exact packaged updater bytes"
+    }
+    if ([long]$updaterBuild.size_bytes -ne [long]$actualUpdaterSize) {
+        throw "Updater size manifest does not match exact packaged updater bytes"
+    }
+    if ([string]$updaterReadback.actual_sha256 -ne $actualUpdaterHash -or [long]$updaterReadback.actual_size_bytes -ne [long]$actualUpdaterSize) {
+        throw "Updater artifact readback evidence is detached from exact packaged updater bytes"
+    }
+
     $result.artifact_readback = $true
+    $result.updater_artifact_readback = $true
     $result.artifact_sha256 = $build.sha256
     $result.artifact_size_bytes = $build.size_bytes
+    $result.updater_artifact_sha256 = $actualUpdaterHash
+    $result.updater_artifact_size_bytes = $actualUpdaterSize
     $result.webview2_detected = @($diag.webview2_candidates).Count -gt 0
     $result.per_user_state_writable = [bool]$diag.state_write_probe.writable
     $result.running_without_admin = ($diag.is_admin -eq $false)

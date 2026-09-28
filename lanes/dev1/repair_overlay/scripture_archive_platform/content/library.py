@@ -85,24 +85,35 @@ class CanonicalLibraryIndex:
         )
 
     @staticmethod
-    def _load_json(path: Path, *, expected_sha256: str | None = None) -> Any:
+    def _qualified_text_bytes(raw: bytes, path: Path) -> bytes:
+        if b"\r" not in raw:
+            return raw
+        normalized = raw.replace(b"\r\n", b"\n")
+        if b"\r" in normalized:
+            raise ContentLoadError(f"qualified readable D4 authority has unsupported line endings: {path}")
+        return normalized
+
+    @classmethod
+    def _load_json(cls, path: Path, *, expected_sha256: str | None = None) -> Any:
         try:
             raw = path.read_bytes()
-            if expected_sha256 is not None and hashlib.sha256(raw).hexdigest() != expected_sha256:
+            verified = cls._qualified_text_bytes(raw, path) if expected_sha256 is not None else raw
+            if expected_sha256 is not None and hashlib.sha256(verified).hexdigest() != expected_sha256:
                 raise ContentLoadError(f"qualified readable D4 authority bytes changed: {path}")
-            return json.loads(raw.decode("utf-8"))
+            return json.loads(verified.decode("utf-8"))
         except ContentLoadError:
             raise
         except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise ContentLoadError(f"invalid qualified readable D4 JSON {path}: {exc}") from exc
 
-    @staticmethod
-    def _load_jsonl(path: Path, *, expected_sha256: str | None = None) -> list[dict[str, Any]]:
+    @classmethod
+    def _load_jsonl(cls, path: Path, *, expected_sha256: str | None = None) -> list[dict[str, Any]]:
         try:
             raw = path.read_bytes()
-            if expected_sha256 is not None and hashlib.sha256(raw).hexdigest() != expected_sha256:
+            verified = cls._qualified_text_bytes(raw, path) if expected_sha256 is not None else raw
+            if expected_sha256 is not None and hashlib.sha256(verified).hexdigest() != expected_sha256:
                 raise ContentLoadError(f"qualified readable D4 authority bytes changed: {path}")
-            lines = raw.decode("utf-8").splitlines()
+            lines = verified.decode("utf-8").splitlines()
         except ContentLoadError:
             raise
         except (OSError, UnicodeDecodeError) as exc:

@@ -92,6 +92,28 @@ class BundledScriptureTextTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, 'provenance identity changed'):
                         BundledScriptureText(target)
 
+    def test_parsing_remains_bound_to_the_exact_bytes_verified_at_initialization(self):
+        source_data = (
+            Path(__file__).resolve().parents[1]
+            / 'scripture_archive_platform'
+            / 'content'
+            / 'data'
+        )
+        with tempfile.TemporaryDirectory() as td:
+            target = Path(td)
+            shutil.copy2(source_data / 'engwebu_authority.json', target / 'engwebu_authority.json')
+            shutil.copy2(source_data / 'engwebu_vpl.txt', target / 'engwebu_vpl.txt')
+            provider = BundledScriptureText(target)
+            (target / 'engwebu_vpl.txt').write_bytes(b'TAMPERED AFTER VERIFICATION\n')
+
+            genesis = provider.chapter('GEN', 1)
+            self.assertEqual(
+                'In the beginning, God created the heavens and the earth.',
+                genesis['verses'][0]['text'],
+            )
+            with self.assertRaisesRegex(ValueError, 'SHA-256 mismatch'):
+                BundledScriptureText(target)
+
     def test_chapter_preserves_current_official_text_and_source_empty_rows(self):
         provider = BundledScriptureText()
         gen = provider.chapter('GEN', 1)

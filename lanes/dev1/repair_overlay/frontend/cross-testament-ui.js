@@ -48,10 +48,30 @@ function validateEndpoint(endpoint, testament, field) {
   boundedText(endpoint.book, `${field}.book`);
   positiveInt(endpoint.chapter, `${field}.chapter`);
   positiveInt(endpoint.verse_start, `${field}.verse_start`);
-  if (endpoint.verse_end !== null) positiveInt(endpoint.verse_end, `${field}.verse_end`);
+  if (endpoint.verse_end !== null) {
+    positiveInt(endpoint.verse_end, `${field}.verse_end`);
+    if (endpoint.verse_end < endpoint.verse_start) throw new Error(`${field}.verse_end precedes verse_start`);
+  }
   boundedText(endpoint.witness, `${field}.witness`, {nullable: true});
   if (!Array.isArray(endpoint.evidence) || endpoint.evidence.length > MAX_EVIDENCE) throw new Error(`${field}.evidence is invalid`);
   endpoint.evidence.forEach((item, index) => validateEvidence(item, `${field}.evidence[${index}]`));
+}
+
+function canonicalLinearFromLinks(links) {
+  if (!links.length) return ['Not stated in cited text'];
+  const lines = [];
+  for (const link of links) {
+    lines.push(`Relation ${link.relation_id} [${link.relation_type}]: OT ${passage(link.ot)} ↔ NT ${passage(link.nt)}`);
+    if (link.relation_witness) lines.push(`Relation witness: ${link.relation_witness}`);
+    for (const [label, endpoint] of [['OT', link.ot], ['NT', link.nt]]) {
+      lines.push(`${label} passage: ${passage(endpoint)}; witness=${endpoint.witness || 'not stated'}`);
+      for (const item of endpoint.evidence) {
+        const tx = item.tx1 ? '; TX1' : '';
+        lines.push(`${label} evidence ${item.evidence_id}: confidence=${item.confidence}${tx}; witness=${item.witness || 'not stated'}`);
+      }
+    }
+  }
+  return lines;
 }
 
 export function validateCrossTestamentResponse(data) {
@@ -76,6 +96,13 @@ export function validateCrossTestamentResponse(data) {
   data.linear.forEach((line, index) => boundedText(line, `linear[${index}]`));
   if (data.status === 'NOT_STATED_IN_CITED_TEXT' && data.links.length !== 0) throw new Error('Empty-state status conflicts with links');
   if (data.status === 'LINKS' && data.links.length === 0) throw new Error('Link status requires links');
+  const expectedLinear = canonicalLinearFromLinks(data.links);
+  if (
+    data.linear.length !== expectedLinear.length
+    || data.linear.some((line, index) => line !== expectedLinear[index])
+  ) {
+    throw new Error('OT↔NT linear equivalent conflicts with structured links');
+  }
   return data;
 }
 

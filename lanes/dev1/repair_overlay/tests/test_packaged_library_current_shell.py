@@ -5,7 +5,7 @@ import subprocess
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1] / "frontend"
-EXPECTED_LIBRARY_UI_BLOB = "83469f5c54df4a78d6a45331c17e9bfe07bc0e9c"
+EXPECTED_LIBRARY_UI_BLOB = "b68ce072597749a81fdafcfb8591c6e24c6d21b7"
 
 
 def git_blob_sha(data: bytes) -> str:
@@ -77,9 +77,30 @@ class PackagedLibraryCurrentShellTest(unittest.TestCase):
             "bundled_full_bible_text",
             "text_provider_available",
             "Результати не додають нових source claims",
-            "відсутній текст не вигадується",
+            "Відсутній текст не вигадується",
         ):
             self.assertIn(token, self.library)
+
+    def test_read_only_library_eligibility_is_fail_closed_and_user_visible(self):
+        for token in (
+            "requireContentAccess",
+            "read_only_qualified_sources",
+            "content_access",
+            "gradeable_runtime_eligible",
+            "Gradeable authority",
+            "Library-qualified read-only sources",
+            "лише Library, без player/grading",
+            "Library також може показувати явно позначені Library-qualified read-only джерела",
+            "source_audit_status",
+            "Library eligibility не означає завершений independent source audit",
+            "source audit: ${row.source_audit_status || 'статус не надано'}",
+            "results[${index}].source_audit_status",
+            "Source audit: ${row.source_audit_status || 'статус не надано'}",
+            "цей запис не є доступним для player або grading",
+        ):
+            self.assertIn(token, self.library)
+        self.assertIn("row.gradeable_runtime_eligible", self.library)
+        self.assertIn("data.read_only_qualified_sources.length", self.library)
 
     def test_dynamic_content_remains_inert_and_bounded(self):
         self.assertNotIn("innerHTML", self.library)

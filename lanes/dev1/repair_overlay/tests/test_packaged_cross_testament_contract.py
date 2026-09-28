@@ -1,4 +1,6 @@
 import ast
+import subprocess
+import textwrap
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -220,6 +222,84 @@ class PackagedCrossTestamentContractTests(unittest.TestCase):
         self.assertIn("project_packaged_cross_testament(self._runtime_application.evidence)", locked_source)
         self.assertNotIn("include_locked", locked_source)
 
+    def test_frontend_linear_equivalent_executes_fail_closed(self):
+        frontend = Path(__file__).resolve().parents[1] / "frontend"
+        ui_path = frontend / "cross-testament-ui.js"
+        script = textwrap.dedent(
+            r"""
+            import {readFileSync} from 'node:fs';
+            let source = readFileSync(process.argv[1], 'utf8');
+            source = source.replace(
+              "import {chooseTransport, unwrap} from './transport.js';",
+              "const chooseTransport=()=>null; const unwrap=async()=>({});"
+            );
+            const mod = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
+            const reject = (fn, label) => {
+              let failed = false;
+              try { fn(); } catch (_) { failed = true; }
+              if (!failed) throw new Error('expected rejection: ' + label);
+            };
+            const endpoint = (testament, passage_id, book, chapter, verse, evidence_id, confidence, tx1, witness) => ({
+              passage_id, testament, book, chapter, verse_start:verse, verse_end:null, witness,
+              evidence:[{evidence_id, confidence, tx1, witness}]
+            });
+            const ot = endpoint('OT', 'ISA7:14', 'Isaiah', 7, 14, 'EV-OT', 'T1', false, 'Isaiah');
+            const nt = endpoint('NT', 'MT1:23', 'Matthew', 1, 23, 'EV-NT', 'T2', true, 'Matthew');
+            const link = {
+              relation_id:'REL-X',
+              relation_type:'explicit_cross_reference',
+              relation_witness:null,
+              ot, nt
+            };
+            const valid = {
+              schema:'scripture.research.cross-testament.v1',
+              projection_schema:'CROSS_TESTAMENT_v1',
+              status:'LINKS',
+              links:[link],
+              linear:[
+                'Relation REL-X [explicit_cross_reference]: OT Isaiah 7:14 (ISA7:14) ↔ NT Matthew 1:23 (MT1:23)',
+                'OT passage: Isaiah 7:14 (ISA7:14); witness=Isaiah',
+                'OT evidence EV-OT: confidence=T1; witness=Isaiah',
+                'NT passage: Matthew 1:23 (MT1:23); witness=Matthew',
+                'NT evidence EV-NT: confidence=T2; TX1; witness=Matthew'
+              ],
+              read_only:true,
+              evidence_scope:'unlocked_only',
+              truth_owner:'D5/runtime'
+            };
+            mod.validateCrossTestamentResponse(valid);
+            reject(
+              () => mod.validateCrossTestamentResponse({...valid, linear:[...valid.linear.slice(0, -1), 'Contradictory accessible text']}),
+              'linear mismatch'
+            );
+            reject(
+              () => mod.validateCrossTestamentResponse({
+                ...valid,
+                links:[{...link, ot:{...ot, verse_end:13}}]
+              }),
+              'reversed verse range'
+            );
+            const empty = {
+              ...valid,
+              status:'NOT_STATED_IN_CITED_TEXT',
+              links:[],
+              linear:['Not stated in cited text']
+            };
+            mod.validateCrossTestamentResponse(empty);
+            reject(
+              () => mod.validateCrossTestamentResponse({...empty, linear:['No relations exist anywhere']}),
+              'dishonest empty-state linear text'
+            );
+            """
+        )
+        result = subprocess.run(
+            ["node", "--input-type=module", "-e", script, str(ui_path)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stderr or result.stdout)
+
     def test_frontend_is_semantic_text_first_and_linear_equivalent(self):
         frontend = Path(__file__).resolve().parents[1] / "frontend"
         ui = (frontend / "cross-testament-ui.js").read_text(encoding="utf-8")
@@ -228,6 +308,8 @@ class PackagedCrossTestamentContractTests(unittest.TestCase):
         self.assertIn("document.createElement('table')", ui)
         self.assertIn("Повний лінійний еквівалент", ui)
         self.assertIn("Not stated in cited text", ui)
+        self.assertIn("canonicalLinearFromLinks", ui)
+        self.assertIn("linear equivalent conflicts with structured links", ui)
         self.assertIn("aria-live", ui)
         self.assertNotIn("innerHTML", ui)
         self.assertIn("cross-testament-ui.js", transport)

@@ -3,6 +3,7 @@ import json
 import shutil
 import subprocess
 import tempfile
+import textwrap
 import unittest
 from pathlib import Path
 
@@ -184,6 +185,80 @@ class BundledScriptureTextTests(unittest.TestCase):
             self.assertFalse(call('library.read_chapter', {'book': 'GEN', 'chapter': True})['ok'])
             self.assertFalse(call('library.text_search', {'query': 'God', 'limit': 50, 'scope': 'all'})['ok'])
             self.assertFalse(call('library.text_search', {'limit': 50})['ok'])
+
+    def test_frontend_response_validation_is_executable_and_fail_closed(self):
+        overlay = Path(__file__).resolve().parents[1]
+        ui_path = overlay / 'frontend' / 'scripture-reader-ui.js'
+        script = textwrap.dedent(
+            r"""
+            import {readFileSync} from 'node:fs';
+            let source = readFileSync(process.argv[1], 'utf8');
+            source = source.replace(
+              "import {chooseTransport, unwrap} from './transport.js';",
+              "const chooseTransport=()=>null; const unwrap=async()=>({});"
+            );
+            const mod = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
+            const reject = (fn, label) => {
+              let failed = false;
+              try { fn(); } catch (_) { failed = true; }
+              if (!failed) throw new Error('expected rejection: ' + label);
+            };
+            const verse = {
+              book:'GEN', chapter:1, verse:1, reference:'GEN 1:1',
+              text:'In the beginning', text_state:'present',
+              translation_id:'engwebu', source_tier:'TX1'
+            };
+            const catalog = {
+              schema:'scripture.library.text-catalog.v1',
+              translation_id:'engwebu', source_tier:'TX1',
+              runtime_network_required:false,
+              source_snapshot_status:'AUDITED_PINNED_SNAPSHOT',
+              verse_rows:38058, source_empty_rows:29,
+              books:[{code:'GEN', chapter_count:1, chapters:[1]}],
+              upstream_monitoring:{status:'MATCH_PINNED_AUTHORITY'}
+            };
+            mod.validateTextCatalog(catalog);
+            reject(()=>mod.validateTextCatalog({...catalog, runtime_network_required:true}), 'network-required catalog');
+            reject(()=>mod.validateTextCatalog({...catalog, translation_id:'other'}), 'wrong translation');
+
+            const chapter = {
+              schema:'scripture.library.chapter.v1',
+              translation_id:'engwebu', source_tier:'TX1',
+              book:'GEN', chapter:1, verses:[verse], source_empty_rows:0
+            };
+            mod.validateChapter(chapter);
+            reject(
+              ()=>mod.validateChapter({...chapter, verses:[{...verse, reference:'GEN 1:2'}]}),
+              'inconsistent reference'
+            );
+            reject(
+              ()=>mod.validateChapter({...chapter, verses:[{...verse, text_state:'source_empty'}], source_empty_rows:1}),
+              'source-empty row with text'
+            );
+
+            const search = {
+              schema:'scripture.library.text-search.v1',
+              translation_id:'engwebu', source_tier:'TX1',
+              query:'beginning', total:1, results:[verse]
+            };
+            mod.validateTextSearch(search);
+            reject(
+              ()=>mod.validateTextSearch({...search, results:[{...verse, text:''}]}),
+              'empty search source text'
+            );
+            reject(
+              ()=>mod.validateTextSearch({...search, total:0}),
+              'total smaller than results'
+            );
+            """
+        )
+        result = subprocess.run(
+            ['node', '--input-type=module', '-e', script, str(ui_path)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stderr or result.stdout)
 
     def test_packaging_and_frontend_bindings_are_explicit(self):
         overlay = Path(__file__).resolve().parents[1]

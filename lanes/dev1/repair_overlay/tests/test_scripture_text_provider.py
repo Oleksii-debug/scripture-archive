@@ -114,6 +114,12 @@ class BundledScriptureTextTests(unittest.TestCase):
             self.assertEqual('GEN 1:1', chapter['data']['verses'][0]['reference'])
             self.assertFalse(call('library.read_chapter', {'book': '../../etc/passwd', 'chapter': 1})['ok'])
             self.assertFalse(call('library.text_search', {'query': 'God', 'limit': 1000})['ok'])
+            self.assertFalse(call('library.text_catalog', {'unexpected': True})['ok'])
+            self.assertFalse(call('library.read_chapter', {'book': 'GEN', 'chapter': 1, 'path': 'ignored'})['ok'])
+            self.assertFalse(call('library.read_chapter', {'book': 'GEN'})['ok'])
+            self.assertFalse(call('library.read_chapter', {'book': 'GEN', 'chapter': True})['ok'])
+            self.assertFalse(call('library.text_search', {'query': 'God', 'limit': 50, 'scope': 'all'})['ok'])
+            self.assertFalse(call('library.text_search', {'limit': 50})['ok'])
 
     def test_packaging_and_frontend_bindings_are_explicit(self):
         overlay = Path(__file__).resolve().parents[1]
@@ -128,6 +134,20 @@ class BundledScriptureTextTests(unittest.TestCase):
         self.assertIn('AUDITED_PINNED_SNAPSHOT', frontend)
         self.assertIn('SOURCE_REAUDIT_REQUIRED', frontend)
         self.assertIn('upstream source re-audit is pending', frontend)
+        for token in (
+            'validateTextCatalog',
+            'validateChapter',
+            'validateTextSearch',
+            'Invalid WEBU catalog source identity',
+            'reference is inconsistent',
+            'source-empty row contains text',
+            'expected source text',
+            'source-empty count is inconsistent',
+        ):
+            self.assertIn(token, frontend)
+        self.assertIn("validateTextCatalog(await api('library.text_catalog'))", frontend)
+        self.assertIn("validateChapter(await api('library.read_chapter'", frontend)
+        self.assertIn("validateTextSearch(await api('library.text_search'", frontend)
 
 
 if __name__ == '__main__':

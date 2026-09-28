@@ -196,6 +196,24 @@ jobs:
               data = json.loads(path.read_text(encoding="utf-8"))
               assert data["status"] == "PASS", path
               assert data.get("source_truth_changed") is False, path
+              assert data.get("scope", {}).get("immutable_list_text_indices") == {
+                  "rejected_answers": [0]
+              }, path
+              expected_cleanup_counts = {
+                  "PRIMARY_001_015_CORRECTION_REPORT.json": 198,
+                  "W2_20_CORRECTION_REPORT.json": 60,
+                  "W2_19_CORRECTION_REPORT.json": 75,
+              }
+              cleanup = [
+                  item
+                  for item in data.get("artifact_replacements", [])
+                  if item.get("from") == "link a твердження to reusable verse доказ"
+              ]
+              assert cleanup == [{
+                  "from": "link a твердження to reusable verse доказ",
+                  "occurrences": expected_cleanup_counts[path.name],
+                  "to": "пов’язати твердження з доказом з уривка, придатним для повторного використання",
+              }], path
               for row in data["changes"]:
                   node_id = row["node_id"]
                   if node_id in seen_nodes:

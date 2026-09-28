@@ -20,7 +20,7 @@ CANONICAL_DEV1_SOURCE_COMMIT = "90a13aca71d2a5f832846a84acbdf0f7c89f5da9"
 CANONICAL_SOURCE_PREFIX = "release_inputs/dev1_finalprep02"
 EXPECTED_BASE_SHA256 = "10fbd546ff4d985465b85b99f4f64bff95d9ec8b1f27132c6d21b4930c344c35"
 EXPECTED_LIBRARY_SEARCH_TESTS = 6
-EXPECTED_WEBU_PROVIDER_TESTS = 5
+EXPECTED_WEBU_PROVIDER_TESTS = 8
 OVERLAY_FIDELITY_PATHS = (
     Path("frontend/scripture-reader-ui.js"),
     Path("frontend/transport.js"),
@@ -232,7 +232,7 @@ def main() -> None:
     print(
         "Library/Search qualification PASS: exact candidate checkout, pinned canonical "
         "FINALPREP02 DEV1 base hash/CRC, overlay fidelity, six real Library/Search "
-        "regressions, and five real WEBU provider regressions."
+        "regressions, and eight real WEBU provider regressions."
     )
 
 

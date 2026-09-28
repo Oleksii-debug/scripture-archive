@@ -228,7 +228,14 @@ class BundledScriptureTextTests(unittest.TestCase):
                 removed_reference_count:0
               },
               verse_rows:38058, source_empty_rows:29,
-              books:[{code:'GEN', chapter_count:1, chapters:[1]}],
+              books:[
+                {code:'GEN', chapter_count:1, chapters:[1]},
+                ...Array.from({length:80}, (_, index) => ({
+                  code:`X${String(index).padStart(2, '0')}`,
+                  chapter_count:1,
+                  chapters:[1]
+                }))
+              ],
               upstream_monitoring:{
                 status:'MATCH_PINNED_AUTHORITY',
                 observed_archive_sha256:'1007fb45782a4abd9444d4225fd768fb00a150466b9fb9fcf6f6ad175b73feb6',
@@ -265,8 +272,16 @@ class BundledScriptureTextTests(unittest.TestCase):
               }),
               'MATCH status with drift count'
             );
+            reject(()=>mod.validateTextCatalog({...catalog, verse_rows:38057}), 'wrong corpus row count');
+            reject(()=>mod.validateTextCatalog({...catalog, source_empty_rows:28}), 'wrong source-empty count');
+            reject(()=>mod.validateTextCatalog({...catalog, books:catalog.books.slice(0,80)}), 'incomplete book catalog');
             reject(
-              ()=>mod.validateTextCatalog({...catalog, books:[{code:'GEN', chapter_count:2, chapters:[1,1]}]}),
+              ()=>mod.validateTextCatalog({
+                ...catalog,
+                books:catalog.books.map((item, index) => index === 0
+                  ? {...item, chapter_count:2, chapters:[1,1]}
+                  : item)
+              }),
               'duplicate catalog chapters'
             );
 

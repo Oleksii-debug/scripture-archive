@@ -3,11 +3,15 @@ name: R06 W2-20 D2 corrected player text
 on:
   push:
     branches:
-      - r06-wave2-w20-d2-parts16-20
+      - r06-w2-20-d2-hint-localization-0928-sol
+  pull_request:
+    paths:
+      - '.github/workflows/r06-w2-20-corrected-playertext.yml'
+      - 'docs/campaigns/PA/R06_W2_20_CORRECTED/**'
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: r06-w2-20-d2-corrected-playertext
@@ -122,28 +126,18 @@ jobs:
           print("W2_20_CORRECTION_PASS",f"nodes={count}",f"baseline={report['selected_baseline_aggregate_sha256']}",f"corrected={report['selected_corrected_aggregate_sha256']}")
           PY
 
-      - name: Guard mutation scope and commit corrected derivatives
+      - name: Verify corrected derivatives match committed authority
         shell: bash
         run: |
           set -euo pipefail
           root="docs/campaigns/PA/R06_W2_20_CORRECTED"
-          python - <<'PY'
-          import subprocess
-          allowed="docs/campaigns/PA/R06_W2_20_CORRECTED/"; changed=[]
-          for line in subprocess.check_output(["git","status","--porcelain=v1","--untracked-files=all"],text=True).splitlines():
-              p=line[3:]; p=p.split(" -> ",1)[1] if " -> " in p else p; changed.append(p)
-          unexpected=[p for p in changed if not p.startswith(allowed)]
-          if unexpected: raise SystemExit(f"W2_20_UNEXPECTED_MUTATION {unexpected}")
-          expected={allowed+f"nodes/part_{i:03d}.jsonl" for i in range(16,21)}|{allowed+"W2_20_CORRECTION_REPORT.json"}
-          missing=sorted(expected-set(changed))
-          if missing and changed: raise SystemExit(f"W2_20_EXPECTED_OUTPUT_MISSING {missing}")
-          print("W2_20_MUTATION_SCOPE_PASS",len(changed))
-          PY
-          if git status --porcelain -- "$root" | grep -q .; then
-            git config user.name "scripture-archive-w2-20"
-            git config user.email "actions@users.noreply.github.com"
-            git add -A "$root"
-            git diff --cached --check
-            git commit -m "R06 W2-20: correct D2 player text for parts 016-020"
-            git push origin "HEAD:$GITHUB_REF_NAME"
-          fi
+          test -f "$root/W2_20_CORRECTION_REPORT.json"
+          test -f "$root/nodes/part_016.jsonl"
+          test -f "$root/nodes/part_017.jsonl"
+          test -f "$root/nodes/part_018.jsonl"
+          test -f "$root/nodes/part_019.jsonl"
+          test -f "$root/nodes/part_020.jsonl"
+          git diff --check
+          git diff --exit-code -- "$root"
+          test -z "$(git status --porcelain=v1 --untracked-files=all -- "$root")"
+          echo "W2_20_COMMITTED_AUTHORITY_MATCH_PASS"

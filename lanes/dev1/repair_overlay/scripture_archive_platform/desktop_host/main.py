@@ -12,10 +12,7 @@ from scripture_archive_platform.desktop_host.update_application import (
     NativeApplicationUpdateLayer,
     NativeUpdateFileSelector,
 )
-
-# Semantic compatibility version for the current R06-3DEV-A packaged lineage.
-# It is deliberately host-owned rather than supplied by an update manifest/web payload.
-CURRENT_APPLICATION_VERSION = "0.6.0-r06.3dev.a"
+from scripture_archive_platform.desktop_host.version import CURRENT_APPLICATION_VERSION
 
 
 def _runtime_root() -> Path:

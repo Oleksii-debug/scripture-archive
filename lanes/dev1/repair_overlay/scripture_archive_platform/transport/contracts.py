@@ -21,7 +21,8 @@ ALLOWLISTED_COMMANDS = frozenset({
   "authoring.undo","authoring.redo","authoring.publish_version","authoring.list_versions","authoring.rollback_version",
   "keymap.list","keymap.rebind","keymap.clear","keymap.reset_context","keymap.reset_all",
   "keymap.export","keymap.import","settings.get","settings.set",
-  "speech.status","speech.synthesize_prompt","application_update.select_verify","application_update.select_verify_stage","diagnostics.get_report"
+  "speech.status","speech.synthesize_prompt","application_update.select_verify","application_update.select_verify_stage","diagnostics.get_report",
+  "library.text_catalog","library.read_chapter","library.text_search"
 })
 
 _PLAYER_TRUTH_OWNERS = frozenset({"D5/runtime", "REFERENCE_TEST_ONLY"})
@@ -67,6 +68,22 @@ def validate_request_shape(request:Any)->tuple[str,str,dict[str,Any]]:
     if not isinstance(rid,str) or not rid or len(rid)>128: raise ValueError('invalid request_id')
     if cmd not in ALLOWLISTED_COMMANDS: raise ValueError('command not allowlisted')
     if not isinstance(payload,dict): raise ValueError('payload must be an object')
+    if cmd=='library.text_catalog' and payload:
+        raise ValueError('library.text_catalog accepts an empty payload')
+    if cmd=='library.read_chapter':
+        if set(payload)!={'book','chapter'}:
+            raise ValueError('library.read_chapter requires exactly book and chapter')
+        _validate_short_string(payload,'book',max_length=4)
+        chapter=payload.get('chapter')
+        if isinstance(chapter,bool) or not isinstance(chapter,int) or not 1<=chapter<=200:
+            raise ValueError('chapter must be integer 1..200')
+    if cmd=='library.text_search':
+        if set(payload)-{'query','limit'} or 'query' not in payload:
+            raise ValueError('library.text_search requires query and optional limit only')
+        _validate_short_string(payload,'query',max_length=128)
+        limit=payload.get('limit',50)
+        if isinstance(limit,bool) or not isinstance(limit,int) or not 1<=limit<=100:
+            raise ValueError('limit must be integer 1..100')
     if cmd=='player.next':
         unknown=set(payload)-{'node_id'}
         if unknown: raise ValueError('player.next accepts only current node_id context; target selection is forbidden')

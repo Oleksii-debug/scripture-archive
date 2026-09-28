@@ -19,12 +19,20 @@ RUNTIME_ENGINE = ROOT / "runtime_engine"
 CANONICAL_DEV1_SOURCE_COMMIT = "90a13aca71d2a5f832846a84acbdf0f7c89f5da9"
 CANONICAL_SOURCE_PREFIX = "release_inputs/dev1_finalprep02"
 EXPECTED_BASE_SHA256 = "10fbd546ff4d985465b85b99f4f64bff95d9ec8b1f27132c6d21b4930c344c35"
-EXPECTED_REAL_TESTS = 6
+EXPECTED_LIBRARY_SEARCH_TESTS = 6
+EXPECTED_WEBU_PROVIDER_TESTS = 8
 OVERLAY_FIDELITY_PATHS = (
+    Path("frontend/scripture-reader-ui.js"),
+    Path("frontend/transport.js"),
+    Path("packaging/build_windows.ps1"),
     Path("scripture_archive_platform/content/library.py"),
+    Path("scripture_archive_platform/content/data/engwebu_authority.json"),
+    Path("scripture_archive_platform/content/data/engwebu_vpl.txt"),
+    Path("scripture_archive_platform/content/scripture_text.py"),
     Path("scripture_archive_platform/application/service.py"),
     Path("scripture_archive_platform/transport/contracts.py"),
     Path("tests/test_library_search.py"),
+    Path("tests/test_scripture_text_provider.py"),
 )
 
 
@@ -144,19 +152,26 @@ def compose_real_platform(temp_root: Path) -> Path:
 
 def parse_real_paths(platform_root: Path) -> None:
     for relative in OVERLAY_FIDELITY_PATHS:
+        if relative.suffix != ".py":
+            continue
         ast.parse(
             (platform_root / relative).read_text(encoding="utf-8"),
             filename=relative.as_posix(),
         )
 
 
-def load_real_regression_module(platform_root: Path):
+def _clear_platform_modules() -> None:
     for name in tuple(sys.modules):
         if name == "scripture_archive_platform" or name.startswith(
             "scripture_archive_platform."
         ):
             del sys.modules[name]
 
+
+def load_real_regression_module(
+    platform_root: Path, relative: Path, module_name: str
+):
+    _clear_platform_modules()
     ordered_paths = (platform_root, RUNTIME_ENGINE, ROOT)
     for entry in reversed(ordered_paths):
         value = str(entry)
@@ -164,27 +179,47 @@ def load_real_regression_module(platform_root: Path):
             sys.path.remove(value)
         sys.path.insert(0, value)
 
-    module_path = platform_root / "tests" / "test_library_search.py"
-    spec = importlib.util.spec_from_file_location(
-        "library_search_real_regression", module_path
-    )
+    module_path = platform_root / relative
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
     if spec is None or spec.loader is None:
-        raise AssertionError("Unable to load real Library/Search regression module")
+        raise AssertionError(f"Unable to load real regression module: {relative.as_posix()}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-def run_real_response_regressions(platform_root: Path) -> None:
-    module = load_real_regression_module(platform_root)
+def run_real_regression_module(
+    platform_root: Path,
+    relative: Path,
+    module_name: str,
+    expected_tests: int,
+    label: str,
+) -> None:
+    module = load_real_regression_module(platform_root, relative, module_name)
     suite = unittest.defaultTestLoader.loadTestsFromModule(module)
-    if suite.countTestCases() != EXPECTED_REAL_TESTS:
-        raise AssertionError(
-            f"Expected {EXPECTED_REAL_TESTS} Library/Search tests, got {suite.countTestCases()}"
-        )
+    actual = suite.countTestCases()
+    if actual != expected_tests:
+        raise AssertionError(f"Expected {expected_tests} {label} tests, got {actual}")
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     if not result.wasSuccessful():
         raise SystemExit(1)
+
+
+def run_real_response_regressions(platform_root: Path) -> None:
+    run_real_regression_module(
+        platform_root,
+        Path("tests/test_library_search.py"),
+        "library_search_real_regression",
+        EXPECTED_LIBRARY_SEARCH_TESTS,
+        "Library/Search",
+    )
+    run_real_regression_module(
+        platform_root,
+        Path("tests/test_scripture_text_provider.py"),
+        "webu_provider_real_regression",
+        EXPECTED_WEBU_PROVIDER_TESTS,
+        "WEBU provider",
+    )
 
 
 def main() -> None:
@@ -196,8 +231,8 @@ def main() -> None:
         run_real_response_regressions(platform_root)
     print(
         "Library/Search qualification PASS: exact candidate checkout, pinned canonical "
-        "FINALPREP02 DEV1 base hash/CRC, overlay fidelity, and six real response-level "
-        "regressions."
+        "FINALPREP02 DEV1 base hash/CRC, overlay fidelity, six real Library/Search "
+        "regressions, and eight real WEBU provider regressions."
     )
 
 

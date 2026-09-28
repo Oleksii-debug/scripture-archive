@@ -63,6 +63,13 @@ class D4ReadableLibraryConsumptionTests(unittest.TestCase):
         self.assertTrue(d4_rows)
         self.assertTrue(all(row["content_access"] == "READ_ONLY_LIBRARY" for row in d4_rows))
         self.assertTrue(all(row["gradeable_runtime_eligible"] is False for row in d4_rows))
+        self.assertTrue(
+            all(
+                isinstance(row.get("source_audit_status"), str)
+                and "INDEPENDENT_AUDIT_PENDING" in row["source_audit_status"]
+                for row in d4_rows
+            )
+        )
 
         private = self.library.search(D4_PRIVATE_ANSWER, campaign_id=D4_CAMPAIGN, limit=100)
         self.assertEqual(0, private["total"])
@@ -141,6 +148,13 @@ class D4ReadableLibraryConsumptionTests(unittest.TestCase):
             search = app.handle(request("library.search", {"query": "Genesis 12:1", "campaign_id": D4_CAMPAIGN, "limit": 100}))
             self.assertTrue(search["ok"])
             self.assertIn(D4_FIRST_NODE, {row["id"] for row in search["data"]["results"]})
+            self.assertTrue(
+                all(
+                    isinstance(row.get("source_audit_status"), str)
+                    and "INDEPENDENT_AUDIT_PENDING" in row["source_audit_status"]
+                    for row in search["data"]["results"]
+                )
+            )
 
             player = app.handle(request("player.load_node", {"node_id": D4_FIRST_NODE}))
             self.assertFalse(player["ok"])

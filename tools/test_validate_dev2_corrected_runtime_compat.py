@@ -82,6 +82,29 @@ class D2CorrectedRuntimeCompatibilityTests(unittest.TestCase):
         ):
             _runtime_compatibility([node], expected_node_count=1)
 
+    def test_workflow_requalifies_when_runtime_or_bound_package_changes(self) -> None:
+        workflow = (
+            REPO_ROOT
+            / ".github"
+            / "workflows"
+            / "r06-d2-corrected-runtime-preintegration.yml"
+        ).read_text(encoding="utf-8")
+        required_trigger_surfaces = (
+            "tools/validate_dev2_corrected_runtime_compat.py",
+            "tools/test_validate_dev2_corrected_runtime_compat.py",
+            "tools/validate_dev2_evidence_bundle.py",
+            "runtime_engine/scripture_archive_runtime/**",
+            "lanes/dev1/repair_overlay/scripture_archive_platform/**",
+            "lanes/dev1/repair_overlay/frontend/**",
+            "docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05/**",
+        )
+        for trigger in required_trigger_surfaces:
+            self.assertGreaterEqual(
+                workflow.count(f"      - '{trigger}'"),
+                2,
+                f"push and pull_request must both requalify on {trigger}",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

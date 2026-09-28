@@ -150,6 +150,39 @@ class CorrectedAggregationPreflightTests(unittest.TestCase):
                 with self.assertRaises(PreflightError):
                     run_preflight(baseline_inputs=[base_dir], candidate_inputs=[cand_dir])
 
+    def test_rejected_answer_semantic_anchor_is_immutable_but_later_copy_may_change(self) -> None:
+        baseline = node()
+        corrected = json.loads(json.dumps(baseline))
+        corrected["rejected_answers"][1] = "Localized explanatory negative example"
+        self.write_jsonl(self.baseline, "base.jsonl", [baseline])
+        self.write_jsonl(self.candidate, "candidate.jsonl", [corrected])
+        result = run_preflight(
+            baseline_inputs=[self.baseline],
+            candidate_inputs=[self.candidate],
+        )
+        self.assertEqual(
+            ["rejected_answers[1]"],
+            result["comparison"]["changes"][0]["changed_player_paths"],
+        )
+        self.assertEqual(
+            {"rejected_answers": [0]},
+            result["policy"]["immutable_list_text_indices"],
+        )
+
+        protected = json.loads(json.dumps(baseline))
+        protected["rejected_answers"][0] = "Changed semantic error class"
+        protected_dir = self.root / "protected-rejected"
+        protected_dir.mkdir()
+        self.write_jsonl(protected_dir, "candidate.jsonl", [protected])
+        with self.assertRaisesRegex(
+            PreflightError,
+            r"protected semantic list element changed at rejected_answers\[0\]",
+        ):
+            run_preflight(
+                baseline_inputs=[self.baseline],
+                candidate_inputs=[protected_dir],
+            )
+
     def test_mutable_shape_change_fails(self) -> None:
         baseline = node()
         corrected = json.loads(json.dumps(baseline))

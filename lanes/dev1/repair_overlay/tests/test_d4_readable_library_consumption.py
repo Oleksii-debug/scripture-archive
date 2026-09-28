@@ -1,4 +1,5 @@
 import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -68,6 +69,44 @@ class D4ReadableLibraryConsumptionTests(unittest.TestCase):
         serialized = json.dumps(found, ensure_ascii=False)
         for forbidden in ("accepted_answer", "accepted_variants", "grading", "hints", "required_evidence"):
             self.assertNotIn(forbidden, serialized)
+
+    def _copied_d4_root(self, temp_root: Path) -> Path:
+        source = self.repo / "docs" / "campaigns" / "OT" / "R06_D4_STAGE05_READABLE"
+        destination = temp_root / "docs" / "campaigns" / "OT" / "R06_D4_STAGE05_READABLE"
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(source, destination)
+        return destination
+
+    def test_d4_node_tampering_fails_closed_against_qualified_hash_authority(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            d4_root = self._copied_d4_root(root)
+            node_path = d4_root / "nodes" / "nodes_001_002.jsonl"
+            lines = node_path.read_text(encoding="utf-8").splitlines()
+            first = json.loads(lines[0])
+            first["player_prompt"] = str(first.get("player_prompt") or "") + " TAMPERED"
+            lines[0] = json.dumps(first, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+            node_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+            library = CanonicalLibraryIndex(CanonicalContentLoader(root))
+            with self.assertRaises(ContentLoadError):
+                library.catalog()
+
+    def test_d4_hash_registry_tampering_fails_closed_against_pinned_aggregate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            d4_root = self._copied_d4_root(root)
+            hash_path = d4_root / "record_hashes" / "nodes_001_090.sha256.json"
+            hashes = json.loads(hash_path.read_text(encoding="utf-8"))
+            hashes[D4_FIRST_NODE] = "0" * 64
+            hash_path.write_text(
+                json.dumps(hashes, ensure_ascii=False, separators=(",", ":")) + "\n",
+                encoding="utf-8",
+            )
+
+            library = CanonicalLibraryIndex(CanonicalContentLoader(root))
+            with self.assertRaises(ContentLoadError):
+                library.catalog()
 
     def test_d4_filesystem_presence_does_not_make_node_gradeable(self):
         with self.assertRaises(ContentLoadError):

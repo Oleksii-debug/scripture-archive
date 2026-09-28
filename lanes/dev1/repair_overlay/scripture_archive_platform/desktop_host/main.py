@@ -57,6 +57,7 @@ def main() -> int:
         root,
         selector,
         current_version=CURRENT_APPLICATION_VERSION,
+        staging_root=Path(platform_app.store.root) / "application-updates",
     )
     app = NativeDiagnosticsLayer(
         app,

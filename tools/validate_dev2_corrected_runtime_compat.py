@@ -275,14 +275,18 @@ def _verify_evidence_binding(
     return len(evidence_ids), evidence_report
 
 
-def _runtime_compatibility(nodes: list[dict[str, Any]]) -> dict[str, Any]:
+def _runtime_compatibility(
+    nodes: list[dict[str, Any]],
+    *,
+    expected_node_count: int = EXPECTED_NODE_COUNT,
+) -> dict[str, Any]:
     try:
         repository = ContentRepository(nodes, adapt_legacy=True, lane="D2")
     except (ValidationError, ValueError, TypeError) as exc:
         raise CompatibilityError(f"current runtime rejected corrected D2 corpus: {exc}") from exc
     tasks = repository.all()
-    if len(tasks) != EXPECTED_NODE_COUNT:
-        raise CompatibilityError("runtime repository did not retain all corrected nodes")
+    if len(tasks) != expected_node_count:
+        raise CompatibilityError("runtime repository did not retain expected nodes")
 
     grader = GraderRegistry()
     app = RuntimeApplication(repository)
@@ -322,8 +326,8 @@ def _runtime_compatibility(nodes: list[dict[str, Any]]) -> dict[str, Any]:
 
     return {
         "repository_nodes": len(tasks),
-        "self_grade_correct": EXPECTED_NODE_COUNT,
-        "runtime_load_pass": EXPECTED_NODE_COUNT,
+        "self_grade_correct": expected_node_count,
+        "runtime_load_pass": expected_node_count,
         "provenance_classes": dict(sorted(provenance_counts.items())),
     }
 

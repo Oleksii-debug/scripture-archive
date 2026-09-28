@@ -1,5 +1,6 @@
 const API_VERSION='scripture.transport.v1';
 const STATUS_COMMAND='application_update.pending_status';
+const PREPARE_APPLY_COMMAND='application_update.prepare_apply';
 const CANCEL_COMMAND='application_update.cancel_pending';
 const $=id=>document.getElementById(id);
 let sequence=0;
@@ -26,7 +27,7 @@ async function invoke(command){
 }
 
 function setBusy(busy){
-  for(const id of ['pending-update-check','pending-update-cancel']){
+  for(const id of ['pending-update-check','pending-update-prepare-apply','pending-update-cancel']){
     const button=$(id);if(button)button.disabled=busy;
   }
 }
@@ -38,7 +39,7 @@ function renderPending(data){
   if(!host||data.pending!==true)return;
   host.replaceChildren();
   const rows=[
-    ['Статус','Підготовлено, але не встановлено'],
+    ['Статус',data.status==='apply_ready'?'Намір встановлення підготовлено; заміна ще не виконана':'Підготовлено, але не встановлено'],
     ['Продукт',data.product_id],['Платформа',data.target_platform],
     ['Поточна версія',data.current_version],['Цільова версія',data.target_version],
     ['Source head',data.source_head],['Файл пакета',data.artifact_name],
@@ -61,12 +62,24 @@ async function checkPending(){
   finally{setBusy(false)}
 }
 
+async function prepareApply(){
+  setBusy(true);announce('Повторно перевіряю пакет і готую захищений намір встановлення.');
+  try{
+    const data=await invoke(PREPARE_APPLY_COMMAND);
+    if(data.pending===true&&data.status==='apply_ready'&&data.installation_performed===false){
+      renderPending(data);
+      announce(`Намір встановлення ${data.artifact_name??'пакета'} → ${data.target_version??'цільова версія'} підготовлено. Файли програми ще не замінювались і перезапуск не виконувався.`);
+    }else throw new Error('Підготовку apply handoff не підтверджено.');
+  }catch(error){announce(`Не вдалося безпечно підготувати встановлення: ${error?.message||'невідома помилка'}`)}
+  finally{setBusy(false)}
+}
+
 async function cancelPending(){
   setBusy(true);clearDetails();announce('Скасовую підготовлений стан оновлення.');
   try{
     const data=await invoke(CANCEL_COMMAND);
     if(data.pending===false&&(data.status==='cancelled'||data.status==='none')){
-      announce(data.status==='cancelled'?'Підготовлене оновлення скасовано. Інсталяція не виконувалась.':'Підготовленого оновлення вже немає.');
+      announce(data.status==='cancelled'?'Підготовлене оновлення та його apply-наміри скасовано. Інсталяція не виконувалась.':'Підготовленого оновлення вже немає.');
     }else throw new Error('Скасування не підтверджено.');
   }catch(error){announce(`Не вдалося безпечно скасувати pending update: ${error?.message||'невідома помилка'}`)}
   finally{setBusy(false)}
@@ -76,15 +89,16 @@ function mount(){
   const view=$('application-update-view');if(!view||$('pending-update-recovery'))return;
   const section=element('section');section.id='pending-update-recovery';section.className='surface';section.setAttribute('aria-labelledby','pending-update-heading');
   const heading=element('h3','Підготовлене оновлення після перезапуску');heading.id='pending-update-heading';
-  const help=element('p','Перевірка повторно звіряє приватний pending state програми. Скасування прибирає лише статус підготовленого оновлення; встановлення тут не виконується.');
+  const help=element('p','Перевірка повторно звіряє приватний pending state програми. «Підготувати встановлення» створює лише захищений host-owned apply handoff для наступного окремого updater-кроку: воно не замінює файли і не перезапускає програму. Скасування прибирає pending/apply authority, але не виконує інсталяцію.');
   const actions=element('div');actions.className='action-row';
   const check=element('button','Перевірити підготовлене оновлення');check.type='button';check.id='pending-update-check';
+  const apply=element('button','Підготувати встановлення');apply.type='button';apply.id='pending-update-prepare-apply';
   const cancel=element('button','Скасувати підготовлене оновлення');cancel.type='button';cancel.id='pending-update-cancel';
-  actions.append(check,cancel);
+  actions.append(check,apply,cancel);
   const status=element('p','Стан pending update ще не перевірявся.');status.id='pending-update-status';status.className='notice info';status.setAttribute('role','status');status.setAttribute('aria-live','polite');status.setAttribute('aria-atomic','true');
   const details=element('dl');details.id='pending-update-details';details.className='details-list';details.setAttribute('aria-label','Повторно перевірені метадані підготовленого оновлення');
   section.append(heading,help,actions,status,details);view.append(section);
-  check.addEventListener('click',checkPending);cancel.addEventListener('click',cancelPending);
+  check.addEventListener('click',checkPending);apply.addEventListener('click',prepareApply);cancel.addEventListener('click',cancelPending);
 }
 
 mount();

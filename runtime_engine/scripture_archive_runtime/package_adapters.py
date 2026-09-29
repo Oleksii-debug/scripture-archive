@@ -166,10 +166,10 @@ def adapt_node_for_runtime(node: Mapping[str, Any], *, lane: str = "unknown") ->
     payload = adapted.get("task_payload") if isinstance(adapted.get("task_payload"), Mapping) else {}
     accepted = adapted.get("accepted_answer")
 
-    if ctype in {"SINGLE_CHOICE", "COMBOBOX_SELECT"}:
+    if ctype in {"SINGLE_CHOICE", "COMBOBOX_SELECT", "PARALLEL_WITNESS_COMPARE"}:
         grading.setdefault("accepted_choice", adapted["answer_dto"]["choice"])
         grading.setdefault("options", contract.get("options") or payload.get("options") or [])
-    elif ctype == "PARALLEL_WITNESS_COMPARE":
+    elif ctype == "PARALLEL_WITNESS_SYNTHESIS":
         # Preserve authored synthesis/proposition truth. Only mirror the canonical
         # witness list when no explicit grading witness set exists.
         grading.setdefault("required_witnesses", list(adapted["answer_dto"]["witnesses"]))

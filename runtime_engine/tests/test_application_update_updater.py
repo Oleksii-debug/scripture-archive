@@ -51,6 +51,9 @@ class AtomicApplicationUpdaterTests(unittest.TestCase):
             ), patch(
                 "scripture_archive_runtime.application_update_updater.staged_artifact_path",
                 return_value=staged,
+            ), patch(
+                "scripture_archive_runtime.application_update_updater.discard_apply_handoff",
+                return_value=True,
             ):
                 result = consume_apply_handoff(
                     root,

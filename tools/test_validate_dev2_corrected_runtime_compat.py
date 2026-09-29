@@ -22,7 +22,9 @@ from scripture_archive_runtime.content_packs import ContentPackStore, inspect_co
 from validate_dev2_corrected_runtime_compat import (
     PACK_ID,
     PACK_VERSION,
+    PARALLEL_WITNESS_FALLBACK_REASON,
     CompatibilityError,
+    _project_nodes_for_current_runtime,
     _runtime_compatibility,
     write_preintegration_pack,
 )
@@ -63,6 +65,65 @@ class D2CorrectedRuntimeCompatibilityTests(unittest.TestCase):
         self.assertEqual(1, inspected.node_count)
         store.activate(PACK_ID, PACK_VERSION)
         self.assertEqual({PACK_ID: PACK_VERSION}, store.active_versions())
+
+    def _parallel_witness_fixture(self):
+        node = copy.deepcopy(LN01_N03)
+        synthesis = "Witness-safe synthesis for current-runtime compatibility."
+        witnesses = ["Luke 22:8"]
+        node["task_type"] = "PARALLEL_WITNESS_COMPARE"
+        node["response_mode"] = "PARALLEL_WITNESS_COMPARE"
+        node["task_family"] = "parallel_witness_compare"
+        node["accepted_answer"] = {"synthesis": synthesis, "witnesses": witnesses}
+        node["accepted_variants"] = {
+            "synthesis_aliases": [synthesis],
+            "witnesses": witnesses,
+        }
+        node["grading"] = {
+            "accepted_propositions": [
+                {"id": "P1", "required": True, "aliases": [synthesis]}
+            ],
+            "provenance_required": True,
+            "required_witnesses": witnesses,
+        }
+        node["response_contract"] = {
+            "kind": "witness_compare",
+            "answer_dto": {
+                "shape": "object",
+                "fields": {"synthesis": "string", "witnesses": "array[passage]"},
+            },
+        }
+        node["runtime_fallback"] = {
+            "task_type": "LONG_TEXT",
+            "accepted_answer": synthesis,
+            "reason": PARALLEL_WITNESS_FALLBACK_REASON,
+        }
+        return node
+
+    def test_parallel_witness_runtime_fallback_is_lossless_and_source_immutable(self) -> None:
+        node = self._parallel_witness_fixture()
+        original = copy.deepcopy(node)
+        projected, fallback_ids = _project_nodes_for_current_runtime([node])
+        self.assertEqual(original, node)
+        self.assertEqual([node["node_id"]], fallback_ids)
+        self.assertEqual("LONG_TEXT", projected[0]["task_type"])
+        self.assertEqual(node["accepted_answer"]["synthesis"], projected[0]["accepted_answer"])
+        self.assertEqual(node["accepted_answer"], original["accepted_answer"])
+
+        runtime = _runtime_compatibility([node], expected_node_count=1)
+        self.assertEqual(1, runtime["runtime_fallback_count"])
+        self.assertEqual([node["node_id"]], runtime["runtime_fallback_node_ids"])
+
+    def test_parallel_witness_runtime_fallback_mismatch_fails_closed(self) -> None:
+        node = self._parallel_witness_fixture()
+        node["runtime_fallback"]["accepted_answer"] = "Different synthesis"
+        with self.assertRaisesRegex(CompatibilityError, "runtime_fallback is missing or not lossless"):
+            _project_nodes_for_current_runtime([node])
+
+    def test_parallel_witness_truth_binding_mismatch_fails_closed(self) -> None:
+        node = self._parallel_witness_fixture()
+        node["grading"]["required_witnesses"] = ["Acts 1:1"]
+        with self.assertRaisesRegex(CompatibilityError, "structured witness truth bindings changed"):
+            _project_nodes_for_current_runtime([node])
 
     def test_conflicting_explicit_grading_truth_fails_closed(self) -> None:
         node = copy.deepcopy(LN01_N03)

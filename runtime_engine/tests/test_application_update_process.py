@@ -13,6 +13,18 @@ from scripture_archive_runtime.application_update_process import (
 )
 
 
+def _files(tmp_path: Path) -> tuple[Path, Path, Path]:
+    install = tmp_path / "Program Files" / "Архів Писання"
+    install.mkdir(parents=True)
+    app = install / "Scripture Archive.exe"
+    updater = install / "Scripture Archive Updater.exe"
+    app.write_bytes(b"installed")
+    updater.write_bytes(b"updater")
+    staging = tmp_path / "state" / "updates"
+    staging.mkdir(parents=True)
+    return updater, app, staging
+
+
 class ApplicationUpdateProcessTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
@@ -21,19 +33,8 @@ class ApplicationUpdateProcessTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp.cleanup()
 
-    def _files(self) -> tuple[Path, Path, Path]:
-        install = self.tmp_path / "Program Files" / "Архів Писання"
-        install.mkdir(parents=True)
-        app = install / "Scripture Archive.exe"
-        updater = install / "Scripture Archive Updater.exe"
-        app.write_bytes(b"installed")
-        updater.write_bytes(b"updater")
-        staging = self.tmp_path / "state" / "updates"
-        staging.mkdir(parents=True)
-        return updater, app, staging
-
     def test_build_plan_binds_sibling_packaged_updater_current_pid_and_fixed_argv(self) -> None:
-        updater, app, staging = self._files()
+        updater, app, staging = _files(self.tmp_path)
         plan = build_updater_process_plan(
             updater_executable=updater,
             installed_executable=app,
@@ -58,7 +59,7 @@ class ApplicationUpdateProcessTests(unittest.TestCase):
         )
 
     def test_build_plan_rejects_external_updater(self) -> None:
-        updater, app, staging = self._files()
+        updater, app, staging = _files(self.tmp_path)
         external = self.tmp_path / "outside-updater.exe"
         external.write_bytes(updater.read_bytes())
         with self.assertRaisesRegex(UpdateProcessError, "packaged beside"):
@@ -69,7 +70,7 @@ class ApplicationUpdateProcessTests(unittest.TestCase):
             )
 
     def test_build_plan_rejects_current_app_as_updater(self) -> None:
-        _, app, staging = self._files()
+        _, app, staging = _files(self.tmp_path)
         with self.assertRaisesRegex(UpdateProcessError, "distinct"):
             build_updater_process_plan(
                 updater_executable=app,
@@ -78,7 +79,7 @@ class ApplicationUpdateProcessTests(unittest.TestCase):
             )
 
     def test_build_plan_rejects_symlinked_updater_target_and_staging(self) -> None:
-        updater, app, staging = self._files()
+        updater, app, staging = _files(self.tmp_path)
         updater_link = updater.parent / "link-updater.exe"
         staging_link = self.tmp_path / "state-link"
         try:
@@ -100,7 +101,7 @@ class ApplicationUpdateProcessTests(unittest.TestCase):
             )
 
     def test_build_plan_rejects_foreign_parent_pid(self) -> None:
-        updater, app, staging = self._files()
+        updater, app, staging = _files(self.tmp_path)
         with self.assertRaisesRegex(UpdateProcessError, "current host process"):
             build_updater_process_plan(
                 updater_executable=updater,
@@ -110,7 +111,7 @@ class ApplicationUpdateProcessTests(unittest.TestCase):
             )
 
     def test_launch_is_shell_free_fixed_cwd_and_returns_child_pid(self) -> None:
-        updater, app, staging = self._files()
+        updater, app, staging = _files(self.tmp_path)
         plan = build_updater_process_plan(
             updater_executable=updater,
             installed_executable=app,
@@ -135,7 +136,7 @@ class ApplicationUpdateProcessTests(unittest.TestCase):
         self.assertEqual(seen["creationflags"], 0)
 
     def test_launch_wraps_process_failure(self) -> None:
-        updater, app, staging = self._files()
+        updater, app, staging = _files(self.tmp_path)
         plan = build_updater_process_plan(
             updater_executable=updater,
             installed_executable=app,
@@ -149,7 +150,7 @@ class ApplicationUpdateProcessTests(unittest.TestCase):
             launch_updater_process(plan, popen=broken_popen)
 
     def test_parser_accepts_only_fixed_host_contract(self) -> None:
-        updater, app, staging = self._files()
+        updater, app, staging = _files(self.tmp_path)
         plan = build_updater_process_plan(
             updater_executable=updater,
             installed_executable=app,
@@ -161,16 +162,26 @@ class ApplicationUpdateProcessTests(unittest.TestCase):
         self.assertEqual(parsed_staging, staging.resolve())
 
     def test_parser_rejects_noncanonical_or_extended_commands(self) -> None:
-        cases = [
+        invalid_commands = [
             (),
             ("--scripture-archive-apply",),
             ("--wrong", "--wait-pid", "1", "--installed-executable", "a", "--staging-root", "b"),
             ("--scripture-archive-apply", "--wait-pid", "01", "--installed-executable", "a", "--staging-root", "b"),
-            ("--scripture-archive-apply", "--wait-pid", "1", "--installed-executable", "a", "--staging-root", "b", "--extra"),
+            (
+                "--scripture-archive-apply",
+                "--wait-pid",
+                "1",
+                "--installed-executable",
+                "a",
+                "--staging-root",
+                "b",
+                "--extra",
+            ),
         ]
-        for argv in cases:
-            with self.subTest(argv=argv), self.assertRaises(UpdateProcessError):
-                parse_trusted_updater_argv(argv)
+        for argv in invalid_commands:
+            with self.subTest(argv=argv):
+                with self.assertRaises(UpdateProcessError):
+                    parse_trusted_updater_argv(argv)
 
 
 if __name__ == "__main__":

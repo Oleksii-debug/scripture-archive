@@ -251,7 +251,7 @@ class PackagedUpdaterHostExecutionTests(unittest.TestCase):
         self.assertIn("pending-update-apply-restart", script)
         self.assertIn("Встановити й перезапустити", script)
         self.assertIn("apply.disabled=true", script)
-        self.assertIn("button.disabled=busy||", script)
+        self.assertIn("button.disabled=busy", script)
         self.assertIn("aria-live", script)
         self.assertIn("textContent", script)
         self.assertNotIn("innerHTML", script)

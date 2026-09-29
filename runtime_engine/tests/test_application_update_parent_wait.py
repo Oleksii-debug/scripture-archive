@@ -32,13 +32,19 @@ class ParentProcessWaitTests(unittest.TestCase):
 
     def test_wait_rejects_invalid_pid(self) -> None:
         for pid in [0, -1, True, 1.5, "1"]:
-            with self.subTest(pid=pid), self.assertRaises(ParentProcessWaitError):
-                wait_for_parent_exit(pid, wait_backend=lambda *_: None)
+            with self.subTest(pid=pid):
+                with self.assertRaises(ParentProcessWaitError):
+                    wait_for_parent_exit(pid, wait_backend=lambda *_: None)  # type: ignore[arg-type]
 
     def test_wait_rejects_invalid_or_unbounded_timeout(self) -> None:
         for timeout_ms in [0, -1, 120_001, True, 1.5]:
-            with self.subTest(timeout_ms=timeout_ms), self.assertRaises(ParentProcessWaitError):
-                wait_for_parent_exit(4242, timeout_ms=timeout_ms, wait_backend=lambda *_: None)
+            with self.subTest(timeout_ms=timeout_ms):
+                with self.assertRaises(ParentProcessWaitError):
+                    wait_for_parent_exit(  # type: ignore[arg-type]
+                        4242,
+                        timeout_ms=timeout_ms,
+                        wait_backend=lambda *_: None,
+                    )
 
     def test_wait_is_windows_only_without_injected_backend(self) -> None:
         with self.assertRaisesRegex(ParentProcessWaitError, "Windows-only"):

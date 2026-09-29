@@ -15,6 +15,22 @@ from scripture_archive_runtime.application_update_runner import execute_trusted_
 from scripture_archive_runtime.application_update_updater import UpdateApplyResult
 
 
+def _plan(tmp_path: Path):
+    install = tmp_path / "Program Files" / "Архів Писання"
+    install.mkdir(parents=True)
+    app = install / "Scripture Archive.exe"
+    updater = install / "Scripture Archive Updater.exe"
+    app.write_bytes(b"installed")
+    updater.write_bytes(b"updater")
+    staging = tmp_path / "state" / "updates"
+    staging.mkdir(parents=True)
+    return build_updater_process_plan(
+        updater_executable=updater,
+        installed_executable=app,
+        staging_root=staging,
+    )
+
+
 def _result(plan) -> UpdateApplyResult:
     return UpdateApplyResult(
         previous_sha256="1" * 64,
@@ -43,23 +59,8 @@ class ApplicationUpdateRunnerTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp.cleanup()
 
-    def _plan(self):
-        install = self.tmp_path / "Program Files" / "Архів Писання"
-        install.mkdir(parents=True)
-        app = install / "Scripture Archive.exe"
-        updater = install / "Scripture Archive Updater.exe"
-        app.write_bytes(b"installed")
-        updater.write_bytes(b"updater")
-        staging = self.tmp_path / "state" / "updates"
-        staging.mkdir(parents=True)
-        return build_updater_process_plan(
-            updater_executable=updater,
-            installed_executable=app,
-            staging_root=staging,
-        )
-
     def test_runner_waits_applies_publishes_health_then_relaunches_exact_target(self) -> None:
-        plan = self._plan()
+        plan = _plan(self.tmp_path)
         events: list[object] = []
         sentinel = _result(plan)
 
@@ -118,7 +119,7 @@ class ApplicationUpdateRunnerTests(unittest.TestCase):
         self.assertEqual(events[3], ("launch", plan.installed_executable))
 
     def test_runner_health_publish_failure_rolls_back_and_disarms_before_no_launch(self) -> None:
-        plan = self._plan()
+        plan = _plan(self.tmp_path)
         sentinel = _result(plan)
         events: list[object] = []
 
@@ -159,7 +160,7 @@ class ApplicationUpdateRunnerTests(unittest.TestCase):
         )
 
     def test_runner_rolls_back_and_disarms_health_when_updated_process_cannot_start(self) -> None:
-        plan = self._plan()
+        plan = _plan(self.tmp_path)
         sentinel = _result(plan)
         events: list[object] = []
 
@@ -203,7 +204,7 @@ class ApplicationUpdateRunnerTests(unittest.TestCase):
         )
 
     def test_runner_surfaces_combined_relaunch_and_rollback_failure(self) -> None:
-        plan = self._plan()
+        plan = _plan(self.tmp_path)
         sentinel = _result(plan)
 
         with self.assertRaisesRegex(
@@ -225,7 +226,7 @@ class ApplicationUpdateRunnerTests(unittest.TestCase):
             )
 
     def test_runner_rolls_back_consumer_target_substitution_before_health_or_launch(self) -> None:
-        plan = self._plan()
+        plan = _plan(self.tmp_path)
         sentinel = UpdateApplyResult(
             previous_sha256="1" * 64,
             installed_sha256="2" * 64,
@@ -266,7 +267,7 @@ class ApplicationUpdateRunnerTests(unittest.TestCase):
         )
 
     def test_runner_never_consumes_when_parent_exit_cannot_be_proven(self) -> None:
-        plan = self._plan()
+        plan = _plan(self.tmp_path)
         consumed = False
 
         def blocked_wait(parent_pid: int) -> None:
@@ -312,9 +313,10 @@ class ApplicationUpdateRunnerTests(unittest.TestCase):
         self.assertFalse(consumed)
 
     def test_runner_rejects_invalid_trusted_current_version_before_wait(self) -> None:
-        for current_version in ["", "1", "01.0.0", "1.0", "1.0.0 "]:
+        invalid_versions = ["", "1", "01.0.0", "1.0", "1.0.0 "]
+        for current_version in invalid_versions:
             with self.subTest(current_version=current_version):
-                plan = self._plan()
+                plan = _plan(self.tmp_path / current_version.replace(".", "_").replace(" ", "_"))
                 waited = False
 
                 def wait_for_exit(parent_pid: int) -> None:
@@ -329,14 +331,9 @@ class ApplicationUpdateRunnerTests(unittest.TestCase):
                         wait_for_exit=wait_for_exit,
                     )
                 self.assertFalse(waited)
-                # Recreate the temporary fixture for the next subtest.
-                if current_version != "1.0.0 ":
-                    self.temp.cleanup()
-                    self.temp = tempfile.TemporaryDirectory()
-                    self.tmp_path = Path(self.temp.name)
 
     def test_runner_requires_callable_security_dependencies_before_wait(self) -> None:
-        cases = [
+        overrides = [
             ({"verify_same_publisher": None}, "same-publisher verifier"),
             ({"wait_for_exit": None}, "parent-exit waiter"),
             ({"consume": None}, "apply consumer"),
@@ -345,9 +342,9 @@ class ApplicationUpdateRunnerTests(unittest.TestCase):
             ({"publish_health": None}, "health receipt publisher"),
             ({"discard_health": None}, "health receipt discarder"),
         ]
-        for override, message in cases:
-            with self.subTest(override=override, message=message):
-                plan = self._plan()
+        for index, (override, message) in enumerate(overrides):
+            with self.subTest(message=message):
+                plan = _plan(self.tmp_path / f"dependency-{index}")
                 kwargs = {
                     "current_version": "1.0.0",
                     "verify_same_publisher": lambda installed, staged: True,
@@ -355,9 +352,6 @@ class ApplicationUpdateRunnerTests(unittest.TestCase):
                 kwargs.update(override)
                 with self.assertRaisesRegex(ApplicationUpdateError, message):
                     execute_trusted_updater(plan.argv()[1:], **kwargs)  # type: ignore[arg-type]
-                self.temp.cleanup()
-                self.temp = tempfile.TemporaryDirectory()
-                self.tmp_path = Path(self.temp.name)
 
 
 if __name__ == "__main__":

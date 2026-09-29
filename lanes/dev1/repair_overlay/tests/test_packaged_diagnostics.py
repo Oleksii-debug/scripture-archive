@@ -173,19 +173,25 @@ class PackagedDiagnosticsTests(unittest.TestCase):
             'Assert-NativeSuccess "updater artifact verification"',
         ):
             self.assertIn(step, build)
-        stale_cleanup_loop = "foreach ($artifact in @($Out, $UpdaterOut))"
         stale_cleanup = "Remove-Item -LiteralPath $artifact -Force"
-        self.assertIn(stale_cleanup_loop, build)
+        self.assertIn("foreach ($artifact in @($Out, $UpdaterOut))", build)
         self.assertIn(stale_cleanup, build)
-        self.assertLess(build.index(stale_cleanup_loop), build.index("pyinstaller.exe"))
         self.assertLess(build.index(stale_cleanup), build.index("pyinstaller.exe"))
         self.assertLess(
-            build.index('Assert-NativeSuccess "PyInstaller updater build"'),
+            build.index('Assert-NativeSuccess "PyInstaller application build"'),
             build.index('if (-not (Test-Path -LiteralPath $Out -PathType Leaf))'),
         )
         self.assertLess(
-            build.index('Assert-NativeSuccess "updater artifact verification"'),
+            build.index('Assert-NativeSuccess "PyInstaller updater build"'),
+            build.index('if (-not (Test-Path -LiteralPath $UpdaterOut -PathType Leaf))'),
+        )
+        self.assertLess(
+            build.index('Assert-NativeSuccess "application artifact verification"'),
             build.index('Write-Output "Built $Out'),
+        )
+        self.assertLess(
+            build.index('Assert-NativeSuccess "updater artifact verification"'),
+            build.index('Write-Output "Built $UpdaterOut'),
         )
 
     def test_desktop_host_wraps_update_layer_with_read_only_diagnostics(self):

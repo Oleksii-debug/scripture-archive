@@ -441,6 +441,98 @@ class BundledScriptureTextTests(unittest.TestCase):
         )
         self.assertEqual(0, result.returncode, result.stderr or result.stdout)
 
+    def test_frontend_result_focus_is_executable_without_bulk_live_regions(self):
+        overlay = Path(__file__).resolve().parents[1]
+        ui_path = overlay / 'frontend' / 'scripture-reader-ui.js'
+        script = textwrap.dedent(
+            r"""
+            import {readFileSync} from 'node:fs';
+            let source = readFileSync(process.argv[1], 'utf8');
+            source = source.replace(
+              "import {chooseTransport, unwrap} from './transport.js';",
+              "const chooseTransport=()=>null; const unwrap=async()=>({});"
+            );
+            source = source.replace('function renderVerses(data) {', 'export function renderVerses(data) {');
+            source = source.replace('function renderSearch(data) {', 'export function renderSearch(data) {');
+
+            let focused = null;
+            class FakeNode {
+              constructor(tag) {
+                this.tagName = String(tag).toUpperCase();
+                this.textContent = '';
+                this.children = [];
+                this.attributes = {};
+                this.tabIndex = 0;
+              }
+              setAttribute(name, value) { this.attributes[name] = String(value); }
+              append(...nodes) { this.children.push(...nodes); }
+              replaceChildren(...nodes) { this.children = [...nodes]; }
+              focus() { focused = this; }
+            }
+            const nodes = new Map([
+              ['scripture-reader-verses', new FakeNode('div')],
+              ['scripture-reader-search-results', new FakeNode('div')],
+            ]);
+            globalThis.document = {
+              createElement: tag => new FakeNode(tag),
+              getElementById: id => nodes.get(id) || null,
+            };
+
+            const mod = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
+            const verse = {
+              book:'GEN', chapter:1, verse:1, reference:'GEN 1:1',
+              text:'In the beginning', text_state:'present',
+              translation_id:'engwebu', source_tier:'TX1'
+            };
+            mod.renderVerses({
+              schema:'scripture.library.chapter.v1',
+              translation_id:'engwebu', source_tier:'TX1',
+              book:'GEN', chapter:1, verses:[verse], source_empty_rows:0
+            });
+            if (!focused || focused.tagName !== 'H4' || focused.textContent !== 'GEN 1') {
+              throw new Error('chapter result heading did not receive focus');
+            }
+
+            focused = null;
+            mod.renderSearch({
+              schema:'scripture.library.text-search.v1',
+              translation_id:'engwebu', source_tier:'TX1',
+              query:'beginning', total:1, results:[verse]
+            });
+            const resultsHost = nodes.get('scripture-reader-search-results');
+            if (!focused || focused.tagName !== 'H4' || focused.textContent !== 'Search results') {
+              throw new Error('search result heading did not receive focus');
+            }
+            if (focused.attributes.id !== 'scripture-reader-search-results-heading') {
+              throw new Error('search result heading identity is missing');
+            }
+            const list = resultsHost.children[1];
+            if (!list || list.attributes['aria-labelledby'] !== 'scripture-reader-search-results-heading') {
+              throw new Error('search result list is not labelled by its focused heading');
+            }
+
+            focused = null;
+            mod.renderSearch({
+              schema:'scripture.library.text-search.v1',
+              translation_id:'engwebu', source_tier:'TX1',
+              query:'absent', total:0, results:[]
+            });
+            if (!focused || focused.textContent !== 'Search results') {
+              throw new Error('empty search result heading did not receive focus');
+            }
+            if (!resultsHost.children[1] || !resultsHost.children[1].textContent.includes('No matching text')) {
+              throw new Error('empty search result message is missing');
+            }
+            """
+        )
+        result = subprocess.run(
+            ['node', '--input-type=module', '-e', script, str(ui_path)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stderr or result.stdout)
+
     def test_packaging_and_frontend_bindings_are_explicit(self):
         overlay = Path(__file__).resolve().parents[1]
         build = (overlay / 'packaging' / 'build_windows.ps1').read_text(encoding='utf-8')
@@ -458,6 +550,7 @@ class BundledScriptureTextTests(unittest.TestCase):
         self.assertNotIn('innerHTML', frontend)
         self.assertIn("role: 'status'", frontend)
         self.assertEqual(1, frontend.count("'aria-live': 'polite'"))
+        self.assertIn("'aria-atomic': 'true'", frontend)
         self.assertNotIn("id: 'scripture-reader-verses', 'aria-live'", frontend)
         self.assertNotIn("id: 'scripture-reader-search-results', 'aria-live'", frontend)
         self.assertIn("id: 'scripture-reader-search-results-heading'", frontend)

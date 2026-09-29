@@ -163,6 +163,15 @@ def compose_real_platform(temp_root: Path) -> Path:
     if attributes_target.read_bytes() != attributes_source.read_bytes():
         raise AssertionError("Candidate .gitattributes fidelity mismatch")
 
+    source_authority_workflow = ROOT / ".github" / "workflows" / "r06-webu-source-authority.yml"
+    if source_authority_workflow.is_symlink() or not source_authority_workflow.is_file():
+        raise AssertionError("Candidate WEBU source-authority workflow is missing or unsafe")
+    workflow_target = composed_repo_root / ".github" / "workflows" / "r06-webu-source-authority.yml"
+    workflow_target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source_authority_workflow, workflow_target)
+    if workflow_target.read_bytes() != source_authority_workflow.read_bytes():
+        raise AssertionError("Candidate WEBU source-authority workflow fidelity mismatch")
+
     shutil.copytree(OVERLAY, platform_root, dirs_exist_ok=True)
 
     for relative in OVERLAY_FIDELITY_PATHS:
@@ -262,8 +271,9 @@ def main() -> None:
     print(
         "Library/Search qualification PASS: exact candidate checkout, pinned canonical "
         "FINALPREP02 DEV1 base hash/CRC, exact candidate repository-level .gitattributes "
-        "fidelity, overlay fidelity, six real Library/Search regressions, eight real "
-        "WEBU provider regressions, and thirteen real qualified-D4 read-only/runtime-eligibility/hash/mission-authority regressions."
+        "and WEBU source-authority workflow fidelity, overlay fidelity, six real "
+        "Library/Search regressions, nine real WEBU provider regressions, and thirteen "
+        "real qualified-D4 read-only/runtime-eligibility/hash/mission-authority regressions."
     )
 
 

@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from scripture_archive_runtime.application_update import ApplicationUpdateError
 from scripture_archive_runtime.application_update_health import (
     HEALTH_RECEIPT_SCHEMA,
+    _read_receipt,
     commit_update_health_receipt,
     discard_update_health_receipt,
     inspect_update_health_receipt,
@@ -140,6 +143,46 @@ class ApplicationUpdateHealthTests(unittest.TestCase):
             self.skipTest("symlinks unavailable")
         with self.assertRaisesRegex(ApplicationUpdateError, "regular non-symlink"):
             inspect_update_health_receipt(root, current_version=TARGET_VERSION, install_target=target)
+
+    def test_receipt_path_swap_before_open_fails_closed(self) -> None:
+        root, target, rollback, previous, installed, receipt = _publish(self.tmp_path)
+        path = root / "update-health.json"
+        replacement = root / "replacement-health.json"
+        parked = root / "parked-health.json"
+        replacement.write_bytes(path.read_bytes())
+        original_open = Path.open
+        swapped = False
+
+        def swapping_open(path_obj: Path, *args, **kwargs):
+            nonlocal swapped
+            if path_obj == path and not swapped:
+                swapped = True
+                os.replace(path, parked)
+                os.replace(replacement, path)
+            return original_open(path_obj, *args, **kwargs)
+
+        with patch.object(Path, "open", new=swapping_open):
+            with self.assertRaisesRegex(ApplicationUpdateError, "changed before readback"):
+                inspect_update_health_receipt(
+                    root,
+                    current_version=TARGET_VERSION,
+                    install_target=target,
+                )
+
+        self.assertTrue(swapped)
+        self.assertTrue(parked.exists())
+        self.assertTrue(path.exists())
+
+    def test_oversized_receipt_is_rejected_before_open(self) -> None:
+        root = self.tmp_path / "state" / "updates"
+        root.mkdir(parents=True)
+        path = root / "update-health.json"
+        path.write_bytes(b"x" * 4097)
+
+        with patch.object(Path, "open", side_effect=AssertionError("receipt must not be opened")) as opened:
+            with self.assertRaisesRegex(ApplicationUpdateError, "unexpectedly large"):
+                _read_receipt(path)
+        opened.assert_not_called()
 
     def test_commit_disarms_old_pending_then_receipt_and_rollback_after_exact_proof(self) -> None:
         root, target, rollback, previous, installed, receipt = _publish(self.tmp_path)

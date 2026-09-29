@@ -16,7 +16,7 @@ class FakeGateway:
         if command=='player.reveal_evidence': return {'api_version':'runtime.v1','request_id':request_id,'unlocked':['EV-1'],'linear':['EV-1 — Luke 22:8']}
         if command in {'player.next','player.navigate_branch'}: return {'api_version':'runtime.v1','request_id':request_id,'task':{'node_id':'LN01-N02'}}
         if command=='player.get_mastery': return {'api_version':'runtime.v1','request_id':request_id,'mastery':[{'concept_id':'GOSPEL_PARALLELS','state':'STABLE'}]}
-        if command=='player.save_checkpoint': return {'api_version':'runtime.v1','request_id':request_id,'saved':True}
+        if command=='player.save_checkpoint': return {'api_version':'runtime.v1','request_id':request_id,'saved':True,'current_node_id':'LN01-N01'}
         if command=='player.restore_checkpoint': return {'api_version':'runtime.v1','request_id':request_id,'restored':True,'current_node_id':'LN01-N01','schema_version':2}
         raise AssertionError(command)
 
@@ -34,7 +34,21 @@ class DevARuntimeApplicationTests(unittest.TestCase):
         rejected=self.call('player.navigate_branch',{'node_id':'LN01-N01','target_node_id':'LN01-N02'}); self.assertFalse(rejected['ok']); self.assertEqual('VALIDATION_ERROR',rejected['error']['code'])
         nxt=self.call('player.next',{'node_id':'LN01-N01'})['data']; self.assertEqual('LN01-N02',nxt['task']['node_id']); self.assertEqual('D5/runtime',nxt['truth_owner'])
         self.assertEqual(('player.next',{},'next-LN01-N01'),self.gateway.calls[-1])
-        self.assertEqual('D5/runtime',self.call('player.save_checkpoint',{'campaign_id':'LN','mission_id':'LN-01','node_id':'LN01-N01'})['data']['truth_owner']); restored=self.call('player.restore_checkpoint')['data']; self.assertEqual('LN01-N01',restored['checkpoint']['node_id']); self.assertEqual(2,restored['runtime_schema_version'])
+        saved=self.call('player.save_checkpoint',{'campaign_id':'LN','mission_id':'LN-01','node_id':'LN01-N01'})['data']; self.assertEqual('D5/runtime',saved['truth_owner']); self.assertEqual('LN01-N01',saved['checkpoint']['node_id']); self.assertEqual(('player.save_checkpoint',{},'save-player'),self.gateway.calls[-1])
+        restored=self.call('player.restore_checkpoint')['data']; self.assertEqual('LN01-N01',restored['checkpoint']['node_id']); self.assertEqual(2,restored['runtime_schema_version'])
+    def test_runtime_checkpoint_projection_ignores_forged_browser_metadata(self):
+        saved=self.call('player.save_checkpoint',{'campaign_id':'FORGED-CAMPAIGN','mission_id':'FORGED-MISSION','node_id':'FORGED-NODE'})
+        self.assertTrue(saved['ok'],saved);data=saved['data'];self.assertEqual('D5/runtime',data['truth_owner'])
+        self.assertEqual({'campaign_id':'LN','mission_id':'LN-01','node_id':'LN01-N01','checkpoint_schema':'scripture.player.checkpoint.v1'},data['checkpoint'])
+        self.assertEqual(('player.save_checkpoint',{},'save-player'),self.gateway.calls[-1])
+        self.assertIsNone(self.app.store.get_json('player','checkpoint'))
+    def test_reference_only_checkpoint_fallback_keeps_payload_semantics(self):
+        app=PlatformApplication(self.repo,store=JsonFileStore(Path(self.t.name)/'reference-store'))
+        payload={'campaign_id':'LN','mission_id':'LN-01','node_id':'LN01-N01'}
+        saved=app.handle({'api_version':'scripture.transport.v1','request_id':'save-ref','command':'player.save_checkpoint','payload':payload})
+        self.assertTrue(saved['ok'],saved);self.assertEqual('REFERENCE_TEST_ONLY',saved['data']['truth_owner']);self.assertEqual('LN01-N01',saved['data']['checkpoint']['node_id'])
+        restored=app.handle({'api_version':'scripture.transport.v1','request_id':'restore-ref','command':'player.restore_checkpoint','payload':{}})
+        self.assertEqual(saved['data']['checkpoint'],restored['data']['checkpoint'])
     def test_platform_next_request_id_binds_current_context_and_replay_fails_closed(self):
         state={'current':'LN01-N01','calls':[]}
         def runtime(request):

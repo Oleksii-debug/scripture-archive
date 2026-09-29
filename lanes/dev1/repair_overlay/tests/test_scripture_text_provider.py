@@ -602,6 +602,20 @@ class BundledScriptureTextTests(unittest.TestCase):
         self.assertIn("'SOURCE_REAUDIT_REQUIRED'", workflow)
         self.assertNotIn('steps.source_audit.outputs.source_matches', workflow)
 
+        accessibility_workflow = (
+            overlay.parents[2]
+            / '.github'
+            / 'workflows'
+            / 'r06-dev02-accessibility-qualification.yml'
+        ).read_text(encoding='utf-8')
+        self.assertIn("'lanes/dev1/repair_overlay/frontend/scripture-reader-ui.js'", accessibility_workflow)
+        self.assertIn("'lanes/dev1/repair_overlay/tests/test_scripture_text_provider.py'", accessibility_workflow)
+        self.assertIn('node --check frontend/scripture-reader-ui.js', accessibility_workflow)
+        self.assertIn(
+            'python -m unittest discover -s tests -p "test_scripture_text_provider.py" -v',
+            accessibility_workflow,
+        )
+
         completed = subprocess.run(
             ['node', '--check', str(overlay / 'frontend' / 'scripture-reader-ui.js')],
             capture_output=True,

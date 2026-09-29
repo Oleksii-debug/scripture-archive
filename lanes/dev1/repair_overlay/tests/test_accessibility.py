@@ -77,6 +77,8 @@ class AccessibilityTests(unittest.TestCase):
             "witnessesLabel.htmlFor='parallel-witnesses'",
             "synthesis: synthesis.value",
             "witnesses:witnesses.value.split(/\\r?\\n/)",
+            "кілька посилань у джерелі записані через крапку з комою",
+            "обидва формати оцінюються однаково",
         ):
             self.assertIn(marker.replace("synthesis: synthesis.value", "synthesis:synthesis.value"), self.renderers)
         self.assertNotIn("dto(task,{choice:c.one()})});\nregister('OT_NT_LINK'", self.renderers)

@@ -35,27 +35,18 @@ class AnswerContractTests(unittest.TestCase):
     def test_descriptor_is_versioned(self):
         self.assertEqual(answer_contract_descriptor("OT_NT_LINK")["schema"], "ANSWER_DTO_v1")
 
-    def test_parallel_witness_compare_uses_structured_canonical_contract(self):
+    def test_parallel_witness_compare_preserves_legacy_choice_and_derives_structured_synthesis(self):
+        self.assertEqual(
+            {"choice": "string"},
+            answer_contract_descriptor("PARALLEL_WITNESS_COMPARE")["fields"],
+        )
+        legacy = validate_answer_dto("PARALLEL_WITNESS_COMPARE", {"choice": "Luke"})
+        self.assertEqual("Luke", legacy["choice"])
+
         accepted = {
             "synthesis": "Acts 9 narrates Ananias while Acts 22 retells the encounter in Paul's speech.",
             "witnesses": ["Acts 9:10–19; Acts 22:12–16"],
         }
-        dto = validate_answer_dto(
-            "PARALLEL_WITNESS_COMPARE",
-            {"synthesis": accepted["synthesis"], "witnesses": list(accepted["witnesses"])},
-        )
-        self.assertEqual("PARALLEL_WITNESS_COMPARE", dto["task_type"])
-        self.assertEqual(accepted["synthesis"], dto["synthesis"])
-        self.assertEqual(accepted["witnesses"], dto["witnesses"])
-        self.assertEqual(
-            {"synthesis": "string", "witnesses": "string[]"},
-            answer_contract_descriptor("PARALLEL_WITNESS_COMPARE")["fields"],
-        )
-        with self.assertRaises(ValidationError):
-            validate_answer_dto("PARALLEL_WITNESS_COMPARE", {"choice": "legacy-choice"})
-        with self.assertRaises(ValidationError):
-            validate_answer_dto("PARALLEL_WITNESS_COMPARE", {"synthesis": accepted["synthesis"], "witnesses": []})
-
         node = {
             "node_id": "PA03-N041",
             "mission_id": "PA-03",
@@ -70,14 +61,41 @@ class AnswerContractTests(unittest.TestCase):
                 "provenance_required": True,
             },
         }
+        self.assertEqual("PARALLEL_WITNESS_SYNTHESIS", canonical_node_task_type(node))
+        dto = validate_answer_dto(
+            "PARALLEL_WITNESS_SYNTHESIS",
+            {"synthesis": accepted["synthesis"], "witnesses": list(accepted["witnesses"])},
+        )
+        self.assertEqual(
+            {"synthesis": "string", "witnesses": "string[]"},
+            answer_contract_descriptor("PARALLEL_WITNESS_SYNTHESIS")["fields"],
+        )
+        with self.assertRaises(ValidationError):
+            validate_answer_dto("PARALLEL_WITNESS_SYNTHESIS", {"choice": "legacy-choice"})
+        with self.assertRaises(ValidationError):
+            validate_answer_dto("PARALLEL_WITNESS_SYNTHESIS", {"synthesis": accepted["synthesis"], "witnesses": []})
+
         projected = canonical_answer_dto(node)
         self.assertEqual(dto, projected)
         decision = classify_provenance(node)
         self.assertTrue(decision.release_pass, decision)
         adapted = adapt_node_for_runtime(node, lane="D2")
+        self.assertEqual("PARALLEL_WITNESS_SYNTHESIS", adapted["task_type"])
         self.assertEqual(projected, adapted["answer_dto"])
         self.assertNotIn("accepted_choice", adapted["grading"])
         self.assertEqual(accepted["witnesses"], adapted["grading"]["required_witnesses"])
+
+        legacy_node = {
+            "node_id": "GW01-N19",
+            "mission_id": "GW-01",
+            "task_type": "PARALLEL_WITNESS_COMPARE",
+            "accepted_answer": "Luke",
+            "accepted_variants": [],
+            "required_evidence": ["GW-EV-19"],
+            "task_contract": {"options": ["Matthew", "Mark", "Luke", "John"]},
+        }
+        self.assertEqual("PARALLEL_WITNESS_COMPARE", canonical_node_task_type(legacy_node))
+        self.assertEqual("Luke", canonical_answer_dto(legacy_node)["choice"])
 
         conflicting = dict(node)
         conflicting["grading"] = dict(node["grading"], required_witnesses=["Acts 26:12–18"])

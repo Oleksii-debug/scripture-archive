@@ -136,7 +136,7 @@ class LibrarySearchTests(unittest.TestCase):
         bootstrap = self.call(app, "system.bootstrap")
         self.assertTrue(bootstrap["ok"])
         self.assertTrue(bootstrap["data"]["capabilities"]["library_catalog_search"])
-        self.assertFalse(bootstrap["data"]["capabilities"]["bundled_full_bible_text"])
+        self.assertTrue(bootstrap["data"]["capabilities"]["bundled_full_bible_text"])
         search = self.call(app, "library.search", {"query": "Luke 22:8", "limit": 10})
         self.assertTrue(search["ok"])
         self.assertGreater(search["data"]["total"], 0)

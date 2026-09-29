@@ -32,7 +32,7 @@ export async function unwrap(adapterOrResponse,command,payload={}){
 // Supplemental packaged read-only canonical review surface.
 void import('./review-queue-ui.js');
 // Supplemental packaged read-only canonical Library/Search surface.
-void import('./library-ui.js');
+void import('./library-ui.js').then(()=>import('./scripture-reader-ui.js')).then(({installScriptureReaderSurface})=>installScriptureReaderSurface());
 // Current-shell compatibility: keep Library mutually exclusive with every direct packaged view.
 void import('./library-shell-compat.js');
 // Canonical read-only Daily Case surface from the current coordinator.

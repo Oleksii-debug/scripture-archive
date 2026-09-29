@@ -206,10 +206,12 @@ class TaskPresentationMapper:
           'source_references':self._source_refs(node,mission),'options':options,'items':items,'pairs':pairs,
           'evidence_options':evidence_options,'steps':normalized_steps,'fields':list(ui.get('fields') or []),
           'witnesses':list(ui.get('witnesses') or []),'relation_types':relation_types,
-          'answer_contract':answer_contract,'legacy_answer_contract':legacy_answer_contract,
+          'answer_contract':answer_contract,
           'accessibility':{'nonvisual_equivalent':node.get('functional_nonvisual_equivalent',''),'announcements':'Result, evidence, confidence/TX1 and next action are textual.'},
           'visual':dict(node.get('visual_metadata') or {'state_badge':node.get('confidence_code'),'media_slot':None}),
         }
+        if legacy_answer_contract:
+            surface['legacy_answer_contract']=legacy_answer_contract
         inspection=inspect_packaged_task(surface)
         surface['accessibility']['inspection']=inspection.to_dict()
         surface['accessibility']['inspection_linear']=list(inspection.linear())

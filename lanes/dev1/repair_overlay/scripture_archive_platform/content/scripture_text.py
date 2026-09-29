@@ -18,6 +18,13 @@ PREVIOUS_ARCHIVE_SHA256 = "6442f15ee3b4360786c9cd0996ea3af8f3124744a61b7a9bd69e7
 PREVIOUS_VPL_SHA256 = "71c2ea1ecba86b62871b0e818c4302ea0a559a5cb9643ff05197a6243836fc2f"
 RECONCILIATION_EVIDENCE_RUN_ID = 36339116656
 RECONCILIATION_EVIDENCE_ARTIFACT_ID = 10938503238
+LATEST_UPSTREAM_EVIDENCE_RUN_ID = 36570411388
+LATEST_UPSTREAM_EVIDENCE_ARTIFACT_ID = 11036833286
+LATEST_UPSTREAM_ARCHIVE_SHA256 = "cbed8914abff11ff715242ae06351ef7cc77931b89968c6c57142bb8616ddb82"
+LATEST_UPSTREAM_VPL_SHA256 = "5507aa8b7dc4cde0cc385e4b61c76a33223769aba7b8a9c708de81a40403d4ae"
+LATEST_UPSTREAM_CHANGED_REFERENCE = "WIS 18:1"
+LATEST_UPSTREAM_PINNED_LINE_SHA256 = "48259c1b7540ba6589c9a24a2ba54289503d747cadfaab333273076c180f5759"
+LATEST_UPSTREAM_CURRENT_LINE_SHA256 = "92b8897d7e1a3fb2d34fcbeed5e17bdb72eeb2feffcb7eb698c9a40922b05850"
 EXPECTED_REAUDIT_LINE_SHA256 = {
     "DAN 11:20": "1cc07bb46873f69f5ac5fc4ccbd8a7421050b47a9190884469e1f2440f712505",
     "DAN 11:21": "3abcf45188d972154b0487254761e97d7b5e4737205059466b08f1041f69611d",
@@ -77,17 +84,27 @@ class BundledScriptureText:
             raise ValueError("WEBU authority must identify the bundled source as an audited pinned snapshot")
 
         upstream = data.get("upstream_monitoring")
-        if not isinstance(upstream, dict) or upstream.get("status") != "MATCH_PINNED_AUTHORITY":
-            raise ValueError("WEBU authority must bind the last verified upstream source to the bundled snapshot")
+        if not isinstance(upstream, dict) or upstream.get("status") != "SOURCE_REAUDIT_REQUIRED":
+            raise ValueError("WEBU authority must preserve current upstream drift as source re-audit required")
+        details = upstream.get("changed_reference_details")
         if (
-            upstream.get("observed_vpl_sha256") != EXPECTED_VPL_SHA256
-            or upstream.get("observed_archive_sha256") != data.get("archive_sha256")
-            or upstream.get("changed_reference_count") != 0
+            upstream.get("evidence_run_id") != LATEST_UPSTREAM_EVIDENCE_RUN_ID
+            or upstream.get("evidence_artifact_id") != LATEST_UPSTREAM_EVIDENCE_ARTIFACT_ID
+            or upstream.get("observed_archive_sha256") != LATEST_UPSTREAM_ARCHIVE_SHA256
+            or upstream.get("observed_vpl_sha256") != LATEST_UPSTREAM_VPL_SHA256
+            or upstream.get("observed_archive_size") != 5_347_560
+            or upstream.get("archive_inventory_matches") is not False
+            or upstream.get("changed_reference_count") != 1
             or upstream.get("added_reference_count") != 0
             or upstream.get("removed_reference_count") != 0
-            or upstream.get("changed_references") != []
+            or upstream.get("changed_references") != [LATEST_UPSTREAM_CHANGED_REFERENCE]
+            or not isinstance(details, list)
+            or len(details) != 1
+            or details[0].get("reference") != LATEST_UPSTREAM_CHANGED_REFERENCE
+            or details[0].get("pinned_line_sha256") != LATEST_UPSTREAM_PINNED_LINE_SHA256
+            or details[0].get("current_line_sha256") != LATEST_UPSTREAM_CURRENT_LINE_SHA256
         ):
-            raise ValueError("invalid WEBU upstream source-identity state")
+            raise ValueError("invalid WEBU upstream source-drift evidence")
 
         reaudit = data.get("source_reaudit")
         if not isinstance(reaudit, dict) or reaudit.get("status") != "SOURCE_IDENTITY_RECONCILED":

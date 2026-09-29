@@ -17,6 +17,8 @@ const LATEST_UPSTREAM_VPL_SHA256 = '5507aa8b7dc4cde0cc385e4b61c76a33223769aba7b8
 const LATEST_UPSTREAM_CHANGED_REFERENCE = 'WIS 18:1';
 const LATEST_UPSTREAM_PINNED_LINE_SHA256 = '48259c1b7540ba6589c9a24a2ba54289503d747cadfaab333273076c180f5759';
 const LATEST_UPSTREAM_CURRENT_LINE_SHA256 = '92b8897d7e1a3fb2d34fcbeed5e17bdb72eeb2feffcb7eb698c9a40922b05850';
+const LATEST_UPSTREAM_PINNED_LINE = 'WIS 18:1 But for your holy ones there was great light. Their enemies, hearing their voice but not seeing their form, counted it a happy thing that they too had suffered,';
+const LATEST_UPSTREAM_CURRENT_LINE = 'WIS 18:1 But for your holy ones there was great light. Their enemies, hearing their voice but not seeing their form, counted it a happy thing that they had not suffered,';
 const EXPECTED_VERSE_ROWS = 38058;
 const EXPECTED_SOURCE_EMPTY_ROWS = 29;
 const EXPECTED_BOOK_COUNT = 81;
@@ -143,6 +145,9 @@ export function validateTextCatalog(data) {
   if (!Array.isArray(monitoring.changed_references) || monitoring.changed_references.length > 100000) {
     throw new Error('Invalid WEBU changed-reference inventory');
   }
+  monitoring.changed_references.forEach((reference, index) => {
+    boundedText(reference, `upstream_monitoring.changed_references[${index}]`, 32);
+  });
   if (
     monitoring.status === 'MATCH_PINNED_AUTHORITY'
     && (
@@ -179,6 +184,8 @@ export function validateTextCatalog(data) {
       || detail.reference !== LATEST_UPSTREAM_CHANGED_REFERENCE
       || detail.pinned_line_sha256 !== LATEST_UPSTREAM_PINNED_LINE_SHA256
       || detail.current_line_sha256 !== LATEST_UPSTREAM_CURRENT_LINE_SHA256
+      || detail.pinned_line !== LATEST_UPSTREAM_PINNED_LINE
+      || detail.current_line !== LATEST_UPSTREAM_CURRENT_LINE
     ) {
       throw new Error('WEBU source drift detail identity is invalid');
     }
@@ -295,7 +302,8 @@ export async function installScriptureReaderSurface() {
     const driftPending = catalog.source_snapshot_status === 'AUDITED_PINNED_SNAPSHOT'
       && monitoring.status === 'SOURCE_REAUDIT_REQUIRED';
     if (driftPending) {
-      source.textContent = `Bundled offline World English Bible Updated (engwebu), source tier TX1, public-domain source. This is an audited pinned snapshot. The official upstream has changed at ${monitoring.changed_reference_count || 0} known references and is pending source re-audit; this reader continues to use the audited bundled snapshot. Empty source rows are reported as empty and are never filled from another witness.`;
+      const changedRefs = monitoring.changed_references.join(', ');
+      source.textContent = `Bundled offline World English Bible Updated (engwebu), source tier TX1, public-domain source. This is an audited pinned snapshot. The official upstream has changed at ${monitoring.changed_reference_count || 0} known references and is pending source re-audit; known changed references: ${changedRefs}. This reader continues to use the audited bundled snapshot. Empty source rows are reported as empty and are never filled from another witness.`;
     }
     status(`Offline WEBU ready: ${catalog.verse_rows} source rows across ${catalog.books?.length || 0} book codes.${driftPending ? ' Audited pinned snapshot; upstream source re-audit is pending.' : ''}`);
   } catch (error) {

@@ -34,6 +34,33 @@ HealthPublisher: TypeAlias = Callable[..., object]
 HealthDiscarder: TypeAlias = Callable[[Path], bool]
 
 
+def _rollback_then_disarm_health(
+    installed_executable: Path,
+    staging_root: Path,
+    *,
+    previous_sha256: str,
+    rollback: RollbackConsumer,
+    discard_health: HealthDiscarder,
+    rollback_failure_message: str,
+    disarm_failure_message: str,
+) -> None:
+    """Restore prior bytes before disarming health authority.
+
+    If rollback itself fails, the receipt is intentionally preserved: that durable
+    exact-byte identity is most valuable in the worst recovery state.  Only a proven
+    successful rollback permits receipt disarm.
+    """
+
+    try:
+        rollback(installed_executable, expected_previous_sha256=previous_sha256)
+    except Exception as rollback_error:
+        raise ApplicationUpdateError(rollback_failure_message) from rollback_error
+    try:
+        discard_health(staging_root)
+    except Exception as discard_error:
+        raise ApplicationUpdateError(disarm_failure_message) from discard_error
+
+
 def execute_trusted_updater(
     argv: Sequence[str],
     *,
@@ -48,12 +75,12 @@ def execute_trusted_updater(
 ) -> UpdateApplyResult:
     """Execute one trusted updater invocation in fail-closed order.
 
-    The old application is proven exited before replacement.  After canonical atomic
+    The old application is proven exited before replacement. After canonical atomic
     apply, a durable exact-byte health receipt is published before relaunch while the
-    prior rollback bytes still exist.  The new application later commits that receipt
-    only after its packaged native/frontend bridge is healthy.  If receipt publication
-    or process creation fails, the already-preserved prior bytes are restored and any
-    published receipt is disarmed before failure is surfaced.
+    prior rollback bytes still exist. The new application later commits that receipt
+    only after its packaged native/frontend bridge is healthy. If receipt publication
+    or process creation fails, prior bytes are restored before receipt disarm. A failed
+    rollback deliberately preserves the receipt for recovery evidence.
     """
 
     if not isinstance(current_version, str):
@@ -101,24 +128,20 @@ def execute_trusted_updater(
             installed_sha256=result.installed_sha256,
         )
     except Exception as health_error:
-        rollback_error: Exception | None = None
-        discard_error: Exception | None = None
         try:
-            rollback(installed_executable, expected_previous_sha256=result.previous_sha256)
-        except Exception as exc:
-            rollback_error = exc
-        try:
-            discard_health(staging_root)
-        except Exception as exc:
-            discard_error = exc
-        if rollback_error is not None:
-            raise ApplicationUpdateError(
-                "health receipt publication failed and rollback also failed"
-            ) from rollback_error
-        if discard_error is not None:
-            raise ApplicationUpdateError(
-                "health receipt publication failed; rollback restored prior bytes but receipt disarm failed"
-            ) from discard_error
+            _rollback_then_disarm_health(
+                installed_executable,
+                staging_root,
+                previous_sha256=result.previous_sha256,
+                rollback=rollback,
+                discard_health=discard_health,
+                rollback_failure_message="health receipt publication failed and rollback also failed",
+                disarm_failure_message=(
+                    "health receipt publication failed; rollback restored prior bytes but receipt disarm failed"
+                ),
+            )
+        except ApplicationUpdateError as recovery_error:
+            raise recovery_error from health_error
         raise ApplicationUpdateError(
             "health receipt publication failed; rollback restored prior bytes"
         ) from health_error
@@ -126,24 +149,20 @@ def execute_trusted_updater(
     try:
         launch(installed_executable)
     except Exception as launch_error:
-        rollback_error: Exception | None = None
-        discard_error: Exception | None = None
         try:
-            rollback(installed_executable, expected_previous_sha256=result.previous_sha256)
-        except Exception as exc:
-            rollback_error = exc
-        try:
-            discard_health(staging_root)
-        except Exception as exc:
-            discard_error = exc
-        if rollback_error is not None:
-            raise ApplicationUpdateError(
-                "updated application relaunch failed and rollback also failed"
-            ) from rollback_error
-        if discard_error is not None:
-            raise ApplicationUpdateError(
-                "updated application relaunch failed; rollback restored prior bytes but receipt disarm failed"
-            ) from discard_error
+            _rollback_then_disarm_health(
+                installed_executable,
+                staging_root,
+                previous_sha256=result.previous_sha256,
+                rollback=rollback,
+                discard_health=discard_health,
+                rollback_failure_message="updated application relaunch failed and rollback also failed",
+                disarm_failure_message=(
+                    "updated application relaunch failed; rollback restored prior bytes but receipt disarm failed"
+                ),
+            )
+        except ApplicationUpdateError as recovery_error:
+            raise recovery_error from launch_error
         raise ApplicationUpdateError(
             "updated application relaunch failed; rollback restored prior bytes"
         ) from launch_error

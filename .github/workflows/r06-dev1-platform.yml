@@ -24,6 +24,10 @@ env:
   DEV01_BASE_SOURCE_SHA256: 10fbd546ff4d985465b85b99f4f64bff95d9ec8b1f27132c6d21b4930c344c35
   PYTHONUTF8: '1'
 
+concurrency:
+  group: r06-dev1-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   linux-contract-test:
     runs-on: ubuntu-latest

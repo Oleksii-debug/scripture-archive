@@ -1,28 +1,34 @@
 {
-  "schema": "R06_D2_FULL_CORRECTED_AGGREGATION_v1",
-  "status": "DEVELOPER_AGGREGATED / HOSTED_QUALIFICATION_PENDING / INDEPENDENT_AUDIT_PENDING",
-  "source_truth_changed": false,
-  "node_count": 386,
-  "evidence_count": 184,
-  "corrected_node_aggregate_sha256": "ef77ae5d822e105050dedfa9a460325259fe079701ca69f385693aabcad0e661",
+  "corrected_node_aggregate_sha256": "d38ccba3374efa078070b2be252657d1250fef5a7529e14e574395b2d9f55404",
   "correction_report_union": {
-    "records": 386,
     "parts": 26,
+    "records": 386,
     "reports": [
       "correction_provenance/PRIMARY_001_015_CORRECTION_REPORT.json",
       "correction_provenance/W2_20_CORRECTION_REPORT.json",
       "correction_provenance/W2_19_CORRECTION_REPORT.json"
     ]
   },
+  "current_package_composition": "NOT_STARTED",
   "donors": {
     "evidence_authority": "e1f2e98a2c074663218de4954efa19458f8714f9",
     "parts_001_015": "def294b1fed8ffc77b4adc42388cdbd48af19f55",
     "parts_016_020": "5fb482179284608008dc0895d7309db4194cee05",
     "parts_021_026": "c5fedc6beeec9609ee87a48bf2575b243c28e796"
   },
+  "evidence_count": 184,
   "historical_staging_zip_sha256": "b681ea26d985eb754bde02a77254d40ab0920061edb9226fae7921a6740a06c0",
-  "qualification_workflow": ".github/workflows/r06-d2-corrected-full-aggregation.yml",
   "hosted_qualification": "PENDING_ON_FINAL_HEAD",
   "independent_audit": "PENDING",
-  "current_package_composition": "NOT_STARTED"
+  "node_count": 386,
+  "qualification_workflow": ".github/workflows/r06-d2-corrected-full-aggregation.yml",
+  "residual_player_text_repair": {
+    "baseline_aggregate_sha256": "ef77ae5d822e105050dedfa9a460325259fe079701ca69f385693aabcad0e661",
+    "baseline_authority_sha": "6ed0a9e8f390dea7c12c05fb9e991ed6328d1458",
+    "independent_source_theological_audit": "PENDING",
+    "report": "correction_provenance/RESIDUAL_PLAYER_TEXT_20260929_REPORT.json"
+  },
+  "schema": "R06_D2_FULL_CORRECTED_AGGREGATION_v1",
+  "source_truth_changed": false,
+  "status": "DEVELOPER_AGGREGATED / RESIDUAL_PLAYER_TEXT_REPAIRED / HOSTED_QUALIFICATION_PENDING / INDEPENDENT_AUDIT_PENDING"
 }

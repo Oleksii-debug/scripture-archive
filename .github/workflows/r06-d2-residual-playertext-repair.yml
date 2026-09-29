@@ -1,0 +1,105 @@
+name: R06 D2 residual player-text repair
+
+on:
+  push:
+    branches:
+      - r06-d2-residual-playertext-repair-0929-sol
+    paths:
+      - 'tools/repair_dev2_residual_player_text.py'
+      - 'tools/test_repair_dev2_residual_player_text.py'
+      - 'docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05/**'
+      - '.github/workflows/r06-d2-residual-playertext-repair.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: r06-d2-residual-playertext-repair
+  cancel-in-progress: false
+
+jobs:
+  repair-and-qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      AUTHORITY_ROOT: docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05
+      QUALIFIED_BASE: 78b901f1b74c15f1781a31babdd7ca2a95667f88
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Bind exact successor lineage
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$QUALIFIED_BASE" HEAD
+          test -z "$(git status --porcelain)"
+          echo "D2_RESIDUAL_REPAIR_INPUT_HEAD=$(git rev-parse HEAD)"
+
+      - name: Materialize bounded player-text-only repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("tools/repair_dev2_residual_player_text.py")
+          compile(path.read_text(encoding="utf-8"), str(path), "exec")
+          path = Path("tools/test_repair_dev2_residual_player_text.py")
+          compile(path.read_text(encoding="utf-8"), str(path), "exec")
+          PY
+          python tools/repair_dev2_residual_player_text.py --root "$AUTHORITY_ROOT" --write
+          python tools/repair_dev2_residual_player_text.py --root "$AUTHORITY_ROOT" --check
+          python -m unittest tools/test_repair_dev2_residual_player_text.py -v
+
+      - name: Prove mutation scope
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import subprocess
+          allowed_prefix = "docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05/"
+          changed = []
+          for line in subprocess.check_output(
+              ["git", "status", "--porcelain=v1", "--untracked-files=all"], text=True
+          ).splitlines():
+              path = line[3:]
+              if " -> " in path:
+                  path = path.split(" -> ", 1)[1]
+              changed.append(path)
+          unexpected = [path for path in changed if not path.startswith(allowed_prefix)]
+          if unexpected:
+              raise SystemExit(f"D2_RESIDUAL_REPAIR_SCOPE_FAIL {unexpected}")
+          print(f"D2_RESIDUAL_REPAIR_SCOPE_PASS changed_paths={len(changed)}")
+          PY
+          if git status --porcelain -- "$AUTHORITY_ROOT" | grep -q .; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+          git diff --check
+
+      - name: Commit materialized successor authority
+        if: steps.scope.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "scripture-archive-d2-playertext-repair"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A "$AUTHORITY_ROOT"
+          git diff --cached --check
+          git commit -m "R06 D2: repair residual player-text localization"
+          git push origin "HEAD:$GITHUB_REF_NAME"
+          echo "D2_RESIDUAL_REPAIR_MATERIALIZED_HEAD=$(git rev-parse HEAD)"
+
+      - name: Final read-only qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/repair_dev2_residual_player_text.py --root "$AUTHORITY_ROOT" --check
+          python -m unittest tools/test_repair_dev2_residual_player_text.py -v
+          test -z "$(git status --porcelain)"
+          echo "D2_RESIDUAL_PLAYER_TEXT_QUALIFICATION=PASS"

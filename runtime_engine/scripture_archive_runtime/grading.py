@@ -141,6 +141,65 @@ def grade_text(task: TaskDefinition, answer: Any) -> GradeResult:
     return _result(task, correctness, score, details=details)
 
 
+def grade_parallel_witness_compare(task: TaskDefinition, answer: Any) -> GradeResult:
+    if not isinstance(answer, Mapping):
+        return _result(task, Correctness.INCORRECT, 0.0, details={"validation": "parallel witness answer must be object"})
+    synthesis = answer.get("synthesis")
+    witnesses = answer.get("witnesses")
+    if not isinstance(synthesis, str) or not synthesis.strip():
+        return _result(task, Correctness.INCORRECT, 0.0, details={"validation": "parallel witness synthesis must be non-empty"})
+    if not isinstance(witnesses, Sequence) or isinstance(witnesses, (str, bytes)) or not witnesses:
+        return _result(task, Correctness.INCORRECT, 0.0, details={"validation": "parallel witness list must be non-empty"})
+    submitted_witnesses = {normalize_text(value) for value in witnesses if normalize_text(value)}
+    accepted = task.accepted_answer if isinstance(task.accepted_answer, Mapping) else {}
+    canonical_witnesses = task.grading.get("required_witnesses")
+    if canonical_witnesses is None:
+        canonical_witnesses = accepted.get("witnesses")
+    if not isinstance(canonical_witnesses, Sequence) or isinstance(canonical_witnesses, (str, bytes)) or not canonical_witnesses:
+        return _result(task, Correctness.INCORRECT, 0.0, details={"validation": "missing canonical parallel witnesses"})
+    expected_witnesses = {normalize_text(value) for value in canonical_witnesses if normalize_text(value)}
+    if not expected_witnesses:
+        return _result(task, Correctness.INCORRECT, 0.0, details={"validation": "empty canonical parallel witnesses"})
+
+    variants = task.accepted_variants if isinstance(task.accepted_variants, Mapping) else {}
+    synthesis_task = replace(
+        task,
+        accepted_answer=accepted.get("synthesis", ""),
+        accepted_variants=variants.get("synthesis_aliases", []),
+    )
+    synthesis_correctness, synthesis_score, synthesis_details = _proposition_score(
+        synthesis_task,
+        {"text": synthesis},
+    )
+
+    witness_hits = submitted_witnesses & expected_witnesses
+    witness_missing = expected_witnesses - submitted_witnesses
+    witness_extras = submitted_witnesses - expected_witnesses
+    witness_score = len(witness_hits) / max(len(expected_witnesses), len(submitted_witnesses), 1)
+    score = min(synthesis_score, witness_score)
+    witnesses_exact = submitted_witnesses == expected_witnesses
+    if synthesis_correctness is Correctness.CORRECT and witnesses_exact:
+        correctness = Correctness.CORRECT
+    elif score > 0:
+        correctness = Correctness.PARTIAL
+    else:
+        correctness = Correctness.INCORRECT
+    return _result(
+        task,
+        correctness,
+        score,
+        accepted={"synthesis": accepted.get("synthesis"), "witnesses": sorted(expected_witnesses)},
+        details={
+            "synthesis": synthesis_details,
+            "witnesses": {
+                "matched": sorted(witness_hits),
+                "missing": sorted(witness_missing),
+                "extras": sorted(witness_extras),
+            },
+        },
+    )
+
+
 def grade_ordering(task: TaskDefinition, answer: Any) -> GradeResult:
     raw = answer.get("items") if isinstance(answer, Mapping) and "items" in answer else answer
     submitted = [normalize_text(x) for x in _listify(raw)]
@@ -305,8 +364,9 @@ class GraderRegistry:
 
     def __init__(self) -> None:
         self._graders = {}
-        for name in ("SINGLE_CHOICE", "COMBOBOX_SELECT", "PARALLEL_WITNESS_COMPARE", "radio", "select", "classification"):
+        for name in ("SINGLE_CHOICE", "COMBOBOX_SELECT", "radio", "select", "classification"):
             self.register(name, grade_single_choice)
+        self.register("PARALLEL_WITNESS_COMPARE", grade_parallel_witness_compare)
         for name in ("MULTI_SELECT", "checkboxes", "citation selection"):
             self.register(name, grade_multi_select)
         for name in ("SHORT_TEXT", "LONG_TEXT", "ARGUMENT", "free response", "free response + citation", "free response / comparison", "witness comparison"):

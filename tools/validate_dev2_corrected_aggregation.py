@@ -37,6 +37,11 @@ MUTABLE_TOP_LEVEL_TEXT_FIELDS = frozenset(
 )
 MUTABLE_MAPPING_TEXT_FIELDS = frozenset({"hints"})
 MUTABLE_LIST_TEXT_FIELDS = frozenset({"rejected_answers"})
+# rejected_answers is answer-adjacent private metadata. Current runtime grading does
+# not consume it, but index 0 is a stable semantic error-class anchor in the D2
+# authority and must not be rewritten by localization/copy repair. Only subsequent
+# explanatory negative-example slots may change, with list length held constant.
+IMMUTABLE_LIST_TEXT_INDICES = {"rejected_answers": frozenset({0})}
 
 
 class PreflightError(ValueError):
@@ -253,6 +258,11 @@ def _validate_mutable_shape(baseline: Mapping[str, Any], candidate: Mapping[str,
             isinstance(value, str) for value in candidate_value
         ):
             raise PreflightError(f"{node_id}: {field} values must remain strings")
+        for index in IMMUTABLE_LIST_TEXT_INDICES.get(field, ()):
+            if index >= len(baseline_value) or baseline_value[index] != candidate_value[index]:
+                raise PreflightError(
+                    f"{node_id}: protected semantic list element changed at {field}[{index}]"
+                )
 
 
 def protected_projection(record: Mapping[str, Any]) -> dict[str, Any]:
@@ -417,6 +427,10 @@ def run_preflight(
             "mutable_top_level_text_fields": sorted(MUTABLE_TOP_LEVEL_TEXT_FIELDS),
             "mutable_mapping_text_fields": sorted(MUTABLE_MAPPING_TEXT_FIELDS),
             "mutable_list_text_fields": sorted(MUTABLE_LIST_TEXT_FIELDS),
+            "immutable_list_text_indices": {
+                field: sorted(indices)
+                for field, indices in sorted(IMMUTABLE_LIST_TEXT_INDICES.items())
+            },
             "all_other_fields": "IMMUTABLE_FAIL_CLOSED",
         },
         "baseline_nodes": len(baseline),

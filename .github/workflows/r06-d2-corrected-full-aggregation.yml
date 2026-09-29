@@ -1,0 +1,430 @@
+name: R06 D2 corrected full aggregation qualification
+
+on:
+  push:
+    branches:
+      - r06-d2-corrected-full-aggregation-0928-sol
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: r06-d2-corrected-full-aggregation-qualification
+  cancel-in-progress: true
+
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Prove exact checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+          echo "D2_FULL_EXACT_CHECKOUT_PASS=$GITHUB_SHA"
+
+      - name: Recover pinned immutable Stage05 authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_commit="0e913d3cb001ec3f5dff3e6aa0a61069d05ed101"
+          source_path="release_inputs/dev2_w2_24/DEV_B_STAGE05_RECORD_SPLIT_STAGING.zip"
+          expected_zip="b681ea26d985eb754bde02a77254d40ab0920061edb9226fae7921a6740a06c0"
+          transport="$RUNNER_TEMP/d2-stage05.zip"
+          unpack="$RUNNER_TEMP/d2-stage05"
+          git fetch --no-tags origin "$source_commit"
+          git show "$source_commit:$source_path" > "$transport"
+          actual="$(sha256sum "$transport" | awk '{print $1}')"
+          test "$actual" = "$expected_zip"
+          unzip -t "$transport" >/dev/null
+          rm -rf "$unpack"
+          mkdir -p "$unpack"
+          unzip -q "$transport" -d "$unpack"
+          root="$unpack/D2_MATERIALIZATION"
+          test -d "$root/nodes"
+          test -f "$root/node_hash_index.json"
+          test -f "$root/evidence_hash_index.json"
+          test -f "$root/mission_metadata.json"
+          test -f "$root/support_objects.json"
+          echo "D2_FULL_BASELINE_ZIP_PASS=$actual"
+
+      - name: Prove exact corrected donor blobs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import subprocess
+          root = "docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05"
+          expected = {
+              "nodes/part_001.jsonl": "39ba8e17e8c28e6dae072b3c3a3463853779503e",
+              "nodes/part_002.jsonl": "e7005dc3f1ccebecef54ecfa23f855287d5f1723",
+              "nodes/part_003.jsonl": "889a14c2cd7b68ba343f184765f5507f5afe602f",
+              "nodes/part_004.jsonl": "387fc2cb854aedd0bb79ee4a6c9a18ad9352bbce",
+              "nodes/part_005.jsonl": "870477cac5cb03354c30e366e8f9b8de4a08b080",
+              "nodes/part_006.jsonl": "1211024f1a37b51259250d8666240562cdd3f750",
+              "nodes/part_007.jsonl": "f5627252ba2c51a2d82ea2f5b3fc253f2e26cd60",
+              "nodes/part_008.jsonl": "e983ff23282d6438f1d7d08dce8c09e2a248ee85",
+              "nodes/part_009.jsonl": "58bea3ab52654a2abdeeeacee0c8318153b7d168",
+              "nodes/part_010.jsonl": "bede19253b4dbdda8b5700f095ee99e7ca647dcd",
+              "nodes/part_011.jsonl": "a0bae4cf63d49df9602550f6c20a9d527c17e331",
+              "nodes/part_012.jsonl": "ebaed1eb3fb092b002b3e508c6f5cd0934eb238c",
+              "nodes/part_013.jsonl": "1d186eb346401a4ec48def6872629e6bf36ced65",
+              "nodes/part_014.jsonl": "ade1b8979f7c9895a3e2f6ca2b4bc59645077777",
+              "nodes/part_015.jsonl": "33867c5c46ced7cbcca354ae9d6327b41e56f886",
+              "nodes/part_016.jsonl": "dabbfa0753945970bca5f13cd818a242b7742053",
+              "nodes/part_017.jsonl": "f18980afa9383ca0824f0d83e1ac8c5d1a1a10ee",
+              "nodes/part_018.jsonl": "67665cd05ec61b558a5898924802ab867d253435",
+              "nodes/part_019.jsonl": "b3199e6ff73b903e474026ee6e7ad6e2c8e52150",
+              "nodes/part_020.jsonl": "e49dd4fb3bef7560ce34ee20ce13ad775635b64e",
+              "nodes/part_021.jsonl": "e233f787aa223be0047c85377ad4c9fc71682b89",
+              "nodes/part_022.jsonl": "0194dc066ec461e29b2b9f3b47beac5fb30c5db3",
+              "nodes/part_023.jsonl": "8b5131ebf2fb8f504d21e3e041336604100571dc",
+              "nodes/part_024.jsonl": "abe9b58a64cf6b083f2535fda45b8d2f3e74009c",
+              "nodes/part_025.jsonl": "361d050a3c12a41ebb1a017709f957dd6110ba6f",
+              "nodes/part_026.jsonl": "5612b9e3d2d2bb0e33f405cdc5c89b1a715f9c67",
+              "correction_provenance/PRIMARY_001_015_CORRECTION_REPORT.json": "fda4fbfd79ecb597270a661d8ff663034fe8c4a9",
+              "correction_provenance/W2_20_CORRECTION_REPORT.json": "3fc6fa516ec86f84661a3d13e33e7bdd714fa747",
+              "correction_provenance/W2_19_CORRECTION_REPORT.json": "a1af7cd3610943b23a4d95e7d6665d9aa0f95c15",
+          }
+          for relative, wanted in expected.items():
+              got = subprocess.check_output(
+                  ["git", "rev-parse", f"HEAD:{root}/{relative}"], text=True
+              ).strip()
+              if got != wanted:
+                  raise SystemExit(
+                      f"D2_FULL_DONOR_BLOB_FAIL {relative} {got} != {wanted}"
+                  )
+          print("D2_FULL_DONOR_BLOB_PASS", len(expected))
+          PY
+
+      - name: Prove immutable evidence and metadata bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          baseline="$RUNNER_TEMP/d2-stage05/D2_MATERIALIZATION"
+          root="docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05"
+          for file in             evidence/part_001.jsonl             evidence/part_002.jsonl             evidence/part_003.jsonl             evidence_hash_index.json             mission_metadata.json             support_objects.json
+          do
+            cmp "$baseline/$file" "$root/$file"
+          done
+          echo "D2_FULL_IMMUTABLE_EVIDENCE_METADATA_PASS=6"
+
+      - name: Build exact corrected candidate set
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05"
+          candidate="$RUNNER_TEMP/d2-corrected-candidate"
+          rm -rf "$candidate"
+          mkdir -p "$candidate"
+          for i in $(seq 1 26); do
+            part="$(printf 'part_%03d.jsonl' "$i")"
+            test -f "$root/nodes/$part"
+            cp "$root/nodes/$part" "$candidate/$part"
+          done
+          test "$(find "$candidate" -maxdepth 1 -type f -name 'part_*.jsonl' | wc -l)" -eq 26
+          echo "D2_FULL_EXACT_CORRECTED_PARTS_PASS=26"
+
+      - name: Run validator regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile tools/validate_dev2_corrected_aggregation.py
+          python tools/test_validate_dev2_corrected_aggregation.py
+
+      - name: Run complete fail-closed aggregation preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          baseline="$RUNNER_TEMP/d2-stage05/D2_MATERIALIZATION"
+          candidate="$RUNNER_TEMP/d2-corrected-candidate"
+          root="docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05"
+          report="$RUNNER_TEMP/D2_FULL_AGGREGATION_QUALIFICATION.json"
+
+          python tools/validate_dev2_corrected_aggregation.py             --baseline "$baseline/nodes"             --candidate "$candidate"             --node-hash-index "$baseline/node_hash_index.json"             --evidence-hash-index "$baseline/evidence_hash_index.json"             --immutable "$baseline/mission_metadata.json" "$root/mission_metadata.json"             --immutable "$baseline/support_objects.json" "$root/support_objects.json"             --require-complete             --report "$report"
+
+          python - "$report" <<'PY'
+          import json
+          import pathlib
+          import sys
+          report = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          assert report["status"] == "PASS", report
+          assert report["baseline_nodes"] == 386, report
+          comparison = report["comparison"]
+          assert comparison["candidate_nodes"] == 386, comparison
+          assert comparison["baseline_nodes_not_in_candidate"] == 0, comparison
+          assert comparison["changed_nodes"] == 386, comparison
+          assert comparison["unchanged_nodes"] == 0, comparison
+          index = report["baseline_hash_index"]
+          assert index["indexed_nodes"] == 386, index
+          assert index["baseline_nodes_verified"] == 386, index
+          assert index["baseline_nodes_not_materialized"] == 0, index
+          assert index["aggregate_verified"] is True, index
+          evidence = report["evidence_hash_index"]
+          assert evidence["count"] == 184, evidence
+          assert len(report["immutable_pairs"]) == 2, report["immutable_pairs"]
+          print("D2_FULL_REQUIRE_COMPLETE_PASS nodes=386 changed=386 evidence=184")
+          PY
+
+      - name: Verify report union and localization residue
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import pathlib
+
+          root = pathlib.Path("docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05")
+          reports = [
+              root / "correction_provenance/PRIMARY_001_015_CORRECTION_REPORT.json",
+              root / "correction_provenance/W2_20_CORRECTION_REPORT.json",
+              root / "correction_provenance/W2_19_CORRECTION_REPORT.json",
+          ]
+          expected_parts = {f"nodes/part_{i:03d}.jsonl" for i in range(1, 27)}
+          seen_nodes = set()
+          seen_parts = set()
+          for path in reports:
+              data = json.loads(path.read_text(encoding="utf-8"))
+              assert data["status"] == "PASS", path
+              assert data.get("source_truth_changed") is False, path
+              assert data.get("scope", {}).get("immutable_list_text_indices") == {
+                  "rejected_answers": [0]
+              }, path
+              expected_cleanup_counts = {
+                  "PRIMARY_001_015_CORRECTION_REPORT.json": 198,
+                  "W2_20_CORRECTION_REPORT.json": 60,
+                  "W2_19_CORRECTION_REPORT.json": 75,
+              }
+              cleanup = [
+                  item
+                  for item in data.get("artifact_replacements", [])
+                  if item.get("from") == "link a твердження to reusable verse доказ"
+              ]
+              assert cleanup == [{
+                  "from": "link a твердження to reusable verse доказ",
+                  "occurrences": expected_cleanup_counts[path.name],
+                  "to": "пов’язати твердження з доказом з уривка, придатним для повторного використання",
+              }], path
+              for row in data["changes"]:
+                  node_id = row["node_id"]
+                  if node_id in seen_nodes:
+                      raise SystemExit(f"D2_FULL_REPORT_DUPLICATE_NODE {node_id}")
+                  seen_nodes.add(node_id)
+                  seen_parts.add(row["source_part"])
+          if len(seen_nodes) != 386:
+              raise SystemExit(f"D2_FULL_REPORT_NODE_COUNT_FAIL {len(seen_nodes)}")
+          if seen_parts != expected_parts:
+              raise SystemExit(
+                  "D2_FULL_REPORT_PART_COVERAGE_FAIL "
+                  f"missing={sorted(expected_parts-seen_parts)} "
+                  f"extra={sorted(seen_parts-expected_parts)}"
+              )
+
+          forbidden = (
+              "локальному твердження",
+              "оцінювання обмежений",
+              "джерельна атрибуція for ",
+              "identify мовця",
+              "audience quoted by наратор Дій",
+              "an unnamed harmonized source voice",
+              "source voice",
+              "свідчення/source",
+              "link a твердження to reusable verse доказ",
+          )
+          mutable_top = {
+              "player_prompt", "success_feedback", "partial_feedback",
+              "failure_feedback", "rejection_reason",
+              "functional_nonvisual_equivalent",
+          }
+          checked = 0
+          for i in range(1, 27):
+              path = root / "nodes" / f"part_{i:03d}.jsonl"
+              for line in path.read_text(encoding="utf-8").splitlines():
+                  if not line.strip():
+                      continue
+                  record = json.loads(line)
+                  texts = [
+                      record.get(key, "")
+                      for key in mutable_top
+                      if isinstance(record.get(key), str)
+                  ]
+                  hints = record.get("hints", {})
+                  if isinstance(hints, dict):
+                      texts.extend(v for v in hints.values() if isinstance(v, str))
+                  rejected = record.get("rejected_answers", [])
+                  if isinstance(rejected, list):
+                      texts.extend(v for v in rejected if isinstance(v, str))
+                  joined = "\n".join(texts)
+                  residue = [item for item in forbidden if item in joined]
+                  if residue:
+                      raise SystemExit(
+                          f"D2_FULL_LOCALIZATION_RESIDUE "
+                          f"{record.get('node_id')} {residue}"
+                      )
+                  checked += 1
+          if checked != 386:
+              raise SystemExit(f"D2_FULL_NODE_READBACK_COUNT_FAIL {checked}")
+          print("D2_FULL_REPORT_AND_RESIDUE_PASS nodes=386 parts=26")
+          PY
+
+      - name: Generate deterministic corrected hash authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - "$RUNNER_TEMP/d2-corrected-candidate" "$RUNNER_TEMP" <<'PY'
+          import hashlib
+          import json
+          import os
+          import pathlib
+          import sys
+
+          candidate = pathlib.Path(sys.argv[1])
+          out = pathlib.Path(sys.argv[2])
+          rows = []
+          mission_counts = {}
+          for path in sorted(candidate.glob("part_*.jsonl")):
+              for line in path.read_text(encoding="utf-8").splitlines():
+                  if not line.strip():
+                      continue
+                  record = json.loads(line)
+                  node_id = record["node_id"]
+                  mission_id = record["mission_id"]
+                  payload = json.dumps(
+                      record,
+                      ensure_ascii=False,
+                      sort_keys=True,
+                      separators=(",", ":"),
+                  ).encode("utf-8")
+                  rows.append(
+                      {
+                          "id": node_id,
+                          "part": f"nodes/{path.name}",
+                          "sha256": hashlib.sha256(payload).hexdigest(),
+                      }
+                  )
+                  mission_counts[mission_id] = mission_counts.get(mission_id, 0) + 1
+
+          rows.sort(key=lambda row: row["id"])
+          if len(rows) != 386 or len({row["id"] for row in rows}) != 386:
+              raise SystemExit("D2_FULL_CORRECTED_INDEX_COUNT_FAIL")
+          aggregate_payload = "".join(
+              f"{row['id']}\t{row['sha256']}\n" for row in rows
+          ).encode("utf-8")
+          aggregate = hashlib.sha256(aggregate_payload).hexdigest()
+
+          index = {
+              "schema": "R06_D2_CORRECTED_NODE_HASH_INDEX_v1",
+              "status":
+                  "DEVELOPER_CORRECTED_AGGREGATED / INDEPENDENT_AUDIT_PENDING",
+              "source_truth_changed": False,
+              "historical_staging_zip_sha256":
+                  "b681ea26d985eb754bde02a77254d40ab0920061edb9226fae7921a6740a06c0",
+              "record_count": 386,
+              "aggregate_sha256": aggregate,
+              "mission_counts": dict(sorted(mission_counts.items())),
+              "records": rows,
+          }
+          (out / "D2_CORRECTED_NODE_HASH_INDEX.json").write_text(
+              json.dumps(index, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+              encoding="utf-8",
+          )
+
+          manifest = {
+              "schema": "R06_D2_FULL_CORRECTED_AGGREGATION_v1",
+              "qualification_commit": os.environ["GITHUB_SHA"],
+              "status": "DEVELOPER_QUALIFIED / INDEPENDENT_AUDIT_PENDING",
+              "source_truth_changed": False,
+              "node_count": 386,
+              "evidence_count": 184,
+              "corrected_node_aggregate_sha256": aggregate,
+              "donors": {
+                  "evidence_authority":
+                      "e1f2e98a2c074663218de4954efa19458f8714f9",
+                  "parts_001_015":
+                      "def294b1fed8ffc77b4adc42388cdbd48af19f55",
+                  "parts_016_020":
+                      "5fb482179284608008dc0895d7309db4194cee05",
+                  "parts_021_026":
+                      "c5fedc6beeec9609ee87a48bf2575b243c28e796",
+              },
+              "historical_staging_zip_sha256":
+                  "b681ea26d985eb754bde02a77254d40ab0920061edb9226fae7921a6740a06c0",
+              "independent_audit": "PENDING",
+          }
+          (out / "D2_FULL_AGGREGATION_MANIFEST.json").write_text(
+              json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          print(f"D2_FULL_CORRECTED_HASH_AUTHORITY_PASS aggregate={aggregate}")
+          PY
+
+      - name: Match committed corrected authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05"
+          python - "$RUNNER_TEMP/D2_CORRECTED_NODE_HASH_INDEX.json" "$RUNNER_TEMP/D2_FULL_AGGREGATION_MANIFEST.json" "$root/D2_CORRECTED_NODE_HASH_INDEX.json" "$root/D2_FULL_CORRECTED_AGGREGATION_MANIFEST.json" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          generated_index = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          generated_manifest = json.loads(pathlib.Path(sys.argv[2]).read_text(encoding="utf-8"))
+          committed_index = json.loads(pathlib.Path(sys.argv[3]).read_text(encoding="utf-8"))
+          committed_manifest = json.loads(pathlib.Path(sys.argv[4]).read_text(encoding="utf-8"))
+
+          assert committed_index == generated_index
+          for key in (
+              "schema",
+              "source_truth_changed",
+              "node_count",
+              "evidence_count",
+              "corrected_node_aggregate_sha256",
+              "donors",
+              "historical_staging_zip_sha256",
+          ):
+              assert committed_manifest[key] == generated_manifest[key], key
+          assert committed_manifest["status"] == (
+              "DEVELOPER_AGGREGATED / HOSTED_QUALIFICATION_PENDING / "
+              "INDEPENDENT_AUDIT_PENDING"
+          )
+          assert committed_manifest["correction_report_union"] == {
+              "records": 386,
+              "parts": 26,
+              "reports": [
+                  "correction_provenance/PRIMARY_001_015_CORRECTION_REPORT.json",
+                  "correction_provenance/W2_20_CORRECTION_REPORT.json",
+                  "correction_provenance/W2_19_CORRECTION_REPORT.json",
+              ],
+          }
+          assert committed_manifest["qualification_workflow"] == (
+              ".github/workflows/r06-d2-corrected-full-aggregation.yml"
+          )
+          assert committed_manifest["hosted_qualification"] == "PENDING_ON_FINAL_HEAD"
+          assert committed_manifest["independent_audit"] == "PENDING"
+          assert committed_manifest["current_package_composition"] == "NOT_STARTED"
+          print(
+              "D2_FULL_COMMITTED_AUTHORITY_MATCH_PASS",
+              committed_index["aggregate_sha256"],
+          )
+          PY
+
+      - name: Upload qualification evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: r06-d2-full-aggregation-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/D2_FULL_AGGREGATION_QUALIFICATION.json
+            ${{ runner.temp }}/D2_CORRECTED_NODE_HASH_INDEX.json
+            ${{ runner.temp }}/D2_FULL_AGGREGATION_MANIFEST.json
+          if-no-files-found: error
+          retention-days: 30

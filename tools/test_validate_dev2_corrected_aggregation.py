@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+import textwrap
 import unittest
 from pathlib import Path
 
@@ -150,6 +151,39 @@ class CorrectedAggregationPreflightTests(unittest.TestCase):
                 with self.assertRaises(PreflightError):
                     run_preflight(baseline_inputs=[base_dir], candidate_inputs=[cand_dir])
 
+    def test_rejected_answer_semantic_anchor_is_immutable_but_later_copy_may_change(self) -> None:
+        baseline = node()
+        corrected = json.loads(json.dumps(baseline))
+        corrected["rejected_answers"][1] = "Localized explanatory negative example"
+        self.write_jsonl(self.baseline, "base.jsonl", [baseline])
+        self.write_jsonl(self.candidate, "candidate.jsonl", [corrected])
+        result = run_preflight(
+            baseline_inputs=[self.baseline],
+            candidate_inputs=[self.candidate],
+        )
+        self.assertEqual(
+            ["rejected_answers[1]"],
+            result["comparison"]["changes"][0]["changed_player_paths"],
+        )
+        self.assertEqual(
+            {"rejected_answers": [0]},
+            result["policy"]["immutable_list_text_indices"],
+        )
+
+        protected = json.loads(json.dumps(baseline))
+        protected["rejected_answers"][0] = "Changed semantic error class"
+        protected_dir = self.root / "protected-rejected"
+        protected_dir.mkdir()
+        self.write_jsonl(protected_dir, "candidate.jsonl", [protected])
+        with self.assertRaisesRegex(
+            PreflightError,
+            r"protected semantic list element changed at rejected_answers\[0\]",
+        ):
+            run_preflight(
+                baseline_inputs=[self.baseline],
+                candidate_inputs=[protected_dir],
+            )
+
     def test_mutable_shape_change_fails(self) -> None:
         baseline = node()
         corrected = json.loads(json.dumps(baseline))
@@ -239,6 +273,44 @@ class CorrectedAggregationPreflightTests(unittest.TestCase):
             immutable_pairs=[(original, candidate)],
         )
         self.assertEqual(len(result["immutable_pairs"]), 1)
+
+    def test_qualification_workflow_embedded_python_is_syntactically_valid(self) -> None:
+        workflow = (
+            Path(__file__).resolve().parents[1]
+            / ".github"
+            / "workflows"
+            / "r06-d2-corrected-full-aggregation.yml"
+        )
+        lines = workflow.read_text(encoding="utf-8").splitlines()
+        blocks: list[tuple[int, list[str]]] = []
+        index = 0
+        while index < len(lines):
+            if "<<'PY'" not in lines[index]:
+                index += 1
+                continue
+            command_line = index + 1
+            index += 1
+            body: list[str] = []
+            while index < len(lines) and lines[index].strip() != "PY":
+                body.append(lines[index])
+                index += 1
+            self.assertLess(
+                index,
+                len(lines),
+                f"unterminated embedded Python heredoc after workflow line {command_line}",
+            )
+            blocks.append((command_line, body))
+            index += 1
+
+        self.assertGreaterEqual(len(blocks), 4)
+        for command_line, body in blocks:
+            source = textwrap.dedent("\n".join(body))
+            with self.subTest(workflow_line=command_line):
+                compile(
+                    source,
+                    f"{workflow}:embedded-python-after-line-{command_line}",
+                    "exec",
+                )
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
+from runtime_engine.tests._functional_unittest import make_load_tests, pytest
 
 from scripture_archive_runtime.application_update import ApplicationUpdateError
 from scripture_archive_runtime.application_update_relaunch import launch_installed_application
@@ -62,3 +62,5 @@ def test_relaunch_requires_callable_spawner(tmp_path: Path) -> None:
 
     with pytest.raises(ApplicationUpdateError, match="process spawner"):
         launch_installed_application(target, spawn=None)  # type: ignore[arg-type]
+
+load_tests = make_load_tests(globals())

@@ -38,6 +38,31 @@ class CrossLaneContractTests(unittest.TestCase):
         n=node("GW01-N19","GW-01","PARALLEL_WITNESS_COMPARE","Luke",["GW-EV-19"],task_contract={"answer_shape":"witness_name","options":["Matthew","Mark","Luke","John"]})
         a=adapt_node_for_runtime(n,lane="D3"); self.assertEqual(GraderRegistry().grade(TaskDefinition.from_canonical(a),derive_answer_dto(a)).correctness, Correctness.CORRECT)
 
+    def test_d2_parallel_witness_structured_shape_derives_synthesis_contract(self):
+        synthesis="Acts 9 narrates Ananias while Acts 22 preserves Paul's later retelling."
+        witnesses=["Acts 9:10–19; Acts 22:12–16"]
+        n=node(
+            "PA03-N041",
+            "PA-03",
+            "PARALLEL_WITNESS_COMPARE",
+            {"synthesis":synthesis,"witnesses":witnesses},
+            ["EVR-R06-D2-0001"],
+            accepted_variants={"synthesis_aliases":[synthesis],"witnesses":witnesses},
+            grading={
+                "accepted_propositions":[{"id":"P1","required":True,"aliases":[synthesis]}],
+                "required_witnesses":witnesses,
+                "provenance_required":True,
+            },
+        )
+        a=adapt_node_for_runtime(n,lane="D2")
+        self.assertEqual("PARALLEL_WITNESS_SYNTHESIS",a["task_type"])
+        dto=derive_answer_dto(a)
+        self.assertEqual(synthesis,dto["synthesis"])
+        self.assertEqual(witnesses,dto["witnesses"])
+        result=GraderRegistry().grade(TaskDefinition.from_canonical(a),dto)
+        self.assertEqual(result.correctness,Correctness.CORRECT)
+        self.assertEqual(result.score,1.0)
+
     def test_ot_nt_link_requires_canonical_structured_truth(self):
         payload={"ot_passage":"2 Samuel 7:14","nt_passage":"Hebrews 1:5","relation_category":"DIRECT_QUOTATION","confidence":"T2","evidence_id":"EV-OT-1","correct":"presentation-only"}
         n=node("OTNTROYAL01-N019","OTNT-ROYAL-01","OT_NT_LINK","2 Samuel 7:14 ↔ Hebrews 1:5 | DIRECT_QUOTATION | T2 | EV-OT-1.","EV-OT-1",task_payload=payload)

@@ -26,6 +26,7 @@ on:
       - 'lanes/dev1/repair_overlay/tests/test_composite_accessibility.py'
       - 'lanes/dev1/repair_overlay/tests/test_packaged_accessibility_inspector_surface.py'
       - 'lanes/dev1/repair_overlay/tests/test_scripture_text_provider.py'
+      - 'lanes/dev1/repair_overlay/tests/test_scripture_reader_request_state.py'
       - '.github/workflows/r06-dev02-accessibility-qualification.yml'
   workflow_dispatch:
 
@@ -60,7 +61,7 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
       - name: Compile accessibility Python contracts
         working-directory: lanes/dev1/repair_overlay
-        run: python -m py_compile scripture_archive_platform/accessibility/semantics.py scripture_archive_platform/composite_accessibility.py tests/test_accessibility.py tests/test_accessibility_settings_ui.py tests/test_composite_accessibility.py tests/test_packaged_accessibility_inspector_surface.py
+        run: python -m py_compile scripture_archive_platform/accessibility/semantics.py scripture_archive_platform/composite_accessibility.py tests/test_accessibility.py tests/test_accessibility_settings_ui.py tests/test_composite_accessibility.py tests/test_packaged_accessibility_inspector_surface.py tests/test_scripture_reader_request_state.py
       - name: Check changed accessibility ES modules
         working-directory: lanes/dev1/repair_overlay
         shell: bash
@@ -89,6 +90,9 @@ jobs:
       - name: Run Scripture reader accessibility regression
         working-directory: lanes/dev1/repair_overlay
         run: python -m unittest discover -s tests -p "test_scripture_text_provider.py" -v
+      - name: Run Scripture reader request-state regression
+        working-directory: lanes/dev1/repair_overlay
+        run: python -m unittest discover -s tests -p "test_scripture_reader_request_state.py" -v
       - name: Diff hygiene
         shell: bash
         run: git diff --check

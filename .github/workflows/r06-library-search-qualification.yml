@@ -11,6 +11,7 @@ on:
       - 'tools/verify_library_search_overlay.py'
       - '.github/workflows/r06-library-search-qualification.yml'
       - '.github/workflows/r06-webu-source-authority.yml'
+      - '.gitattributes'
   pull_request:
     paths:
       - 'lanes/dev1/**'
@@ -18,6 +19,7 @@ on:
       - 'tools/verify_library_search_overlay.py'
       - '.github/workflows/r06-library-search-qualification.yml'
       - '.github/workflows/r06-webu-source-authority.yml'
+      - '.gitattributes'
 
 env:
   LIBRARY_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}

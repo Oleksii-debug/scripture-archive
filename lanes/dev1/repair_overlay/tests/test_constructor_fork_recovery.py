@@ -42,14 +42,43 @@ class ConstructorForkRecoveryTests(unittest.TestCase):
     def setUp(self):
         self.registry = build_task_registries()[0]
 
-    def _service(self, store, ids):
+    def _service(self, store, ids, *, clock=None):
+        if clock is None:
+            clock = lambda: 1700000000
         return RecoverableAuthoringService(
             store,
             self.registry,
             TaskPresentationMapper(),
-            clock=lambda: 1700000000,
+            clock=clock,
             id_factory=lambda: f"{next(ids):012d}",
         )
+
+    def test_fork_preserves_existing_revision_history_and_timestamp_semantics(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ticks = iter((1700000000, 1700000001))
+            service = self._service(
+                JsonFileStore(root),
+                itertools.count(1),
+                clock=lambda: next(ticks),
+            )
+            record = {
+                "campaign_id": "ZZ-CAMPAIGN",
+                "title_ua": "Canonical fixture",
+            }
+
+            forked = service.fork_record("campaign", record, "Edit canonical fixture")
+
+            self.assertEqual(1_700_000_000, forked["created_at"])
+            self.assertEqual(1_700_000_001, forked["updated_at"])
+            self.assertEqual(2, forked["revision"])
+            self.assertEqual(
+                {"timestamp": 1_700_000_001, "action": "save_draft", "revision": 2},
+                forked["change_record"][-1],
+            )
+            history = service.history(forked["draft_id"])
+            self.assertTrue(history["can_undo"])
+            self.assertFalse(history["can_redo"])
 
     def test_fork_is_recovered_from_every_durable_write_boundary_without_blank_prewrite(self):
         record = {

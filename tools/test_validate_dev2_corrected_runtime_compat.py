@@ -167,6 +167,12 @@ class D2CorrectedRuntimeCompatibilityTests(unittest.TestCase):
                 f"push and pull_request must both requalify on {trigger}",
             )
         self.assertIn('PYTHONDONTWRITEBYTECODE: "1"', workflow)
+        self.assertIn(
+            "STRUCTURED_RUNTIME_BASE_SHA: 1d5638f574b697a984fef008e0e16a093f34220e",
+            workflow,
+        )
+        self.assertNotIn("PACKAGE_BASE_SHA:", workflow)
+        self.assertNotIn("76176fc3dcd246284366ba88619947ba2626c7d7", workflow)
         self.assertNotIn("python -m py_compile tools/validate_dev2_corrected_runtime_compat.py", workflow)
         self.assertIn('dirty="$(git status --porcelain)"', workflow)
         self.assertIn("D2_RUNTIME_PREINTEGRATION_WORKTREE_DIRTY", workflow)

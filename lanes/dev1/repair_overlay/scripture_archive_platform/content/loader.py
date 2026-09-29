@@ -3,7 +3,7 @@ import json, re
 from pathlib import Path
 from typing import Any
 from scripture_archive_platform.domain.models import CONTENT_SCHEMA_VERSION
-from scripture_archive_platform.transport.answer_contracts import canonical_task_type, answer_contract_descriptor
+from scripture_archive_platform.transport.answer_contracts import canonical_node_task_type, canonical_task_type, answer_contract_descriptor
 from scripture_archive_platform.composite_accessibility import inspect_packaged_task
 
 class ContentLoadError(RuntimeError): pass
@@ -72,12 +72,7 @@ class TaskPresentationMapper:
     )
     def infer_task_type(self,node:dict[str,Any])->str:
         explicit=node.get('task_type')
-        if explicit:
-            ctype=canonical_task_type(str(explicit))
-            accepted=node.get('accepted_answer')
-            if ctype=='PARALLEL_WITNESS_COMPARE' and isinstance(accepted,dict) and 'synthesis' in accepted and 'witnesses' in accepted:
-                return 'PARALLEL_WITNESS_SYNTHESIS'
-            return ctype
+        if explicit:return canonical_node_task_type(node)
         mode=(str(node.get('response_mode',''))+' '+str(node.get('task_family',''))).lower()
         if 'speaker' in mode and 'recipient' in mode:return 'SPEAKER_RECIPIENT'
         if 'parallel' in mode and 'witness' in mode:return 'PARALLEL_WITNESS_COMPARE'

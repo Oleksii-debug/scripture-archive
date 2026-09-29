@@ -173,8 +173,11 @@ class PackagedDiagnosticsTests(unittest.TestCase):
             'Assert-NativeSuccess "updater artifact verification"',
         ):
             self.assertIn(step, build)
-        stale_cleanup = "Remove-Item -LiteralPath $Out -Force"
+        stale_cleanup_loop = "foreach ($artifact in @($Out, $UpdaterOut))"
+        stale_cleanup = "Remove-Item -LiteralPath $artifact -Force"
+        self.assertIn(stale_cleanup_loop, build)
         self.assertIn(stale_cleanup, build)
+        self.assertLess(build.index(stale_cleanup_loop), build.index("pyinstaller.exe"))
         self.assertLess(build.index(stale_cleanup), build.index("pyinstaller.exe"))
         self.assertLess(
             build.index('Assert-NativeSuccess "PyInstaller updater build"'),

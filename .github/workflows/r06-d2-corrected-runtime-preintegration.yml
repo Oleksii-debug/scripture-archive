@@ -1,0 +1,148 @@
+name: R06 D2 structured runtime compatibility
+
+on:
+  push:
+    branches:
+      - r06-d2-structured-runtime-compat-0929-sol
+    paths:
+      - 'tools/validate_dev2_corrected_runtime_compat.py'
+      - 'tools/test_validate_dev2_corrected_runtime_compat.py'
+      - 'tools/validate_dev2_evidence_bundle.py'
+      - 'runtime_engine/scripture_archive_runtime/**'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/**'
+      - 'lanes/dev1/repair_overlay/frontend/**'
+      - 'docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05/**'
+      - '.github/workflows/r06-d2-corrected-runtime-preintegration.yml'
+  pull_request:
+    paths:
+      - 'tools/validate_dev2_corrected_runtime_compat.py'
+      - 'tools/test_validate_dev2_corrected_runtime_compat.py'
+      - 'tools/validate_dev2_evidence_bundle.py'
+      - 'runtime_engine/scripture_archive_runtime/**'
+      - 'lanes/dev1/repair_overlay/scripture_archive_platform/**'
+      - 'lanes/dev1/repair_overlay/frontend/**'
+      - 'docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05/**'
+      - '.github/workflows/r06-d2-corrected-runtime-preintegration.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: r06-d2-structured-runtime-compat
+  cancel-in-progress: true
+
+jobs:
+  compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PACKAGE_BASE_SHA: 76176fc3dcd246284366ba88619947ba2626c7d7
+      D2_AUTHORITY_SHA: 6ed0a9e8f390dea7c12c05fb9e991ed6328d1458
+      D2_AUTHORITY_REL: docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05
+    steps:
+      - name: Resolve expected head
+        id: head
+        shell: bash
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EVENT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          expected="${PR_HEAD_SHA:-$EVENT_SHA}"
+          test -n "$expected"
+          echo "sha=$expected" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout exact current-package candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.head.outputs.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prove package lineage and exact checkout
+        shell: bash
+        env:
+          EXPECTED_HEAD: ${{ steps.head.outputs.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git merge-base --is-ancestor "$PACKAGE_BASE_SHA" HEAD
+          test "$(git merge-base "$PACKAGE_BASE_SHA" HEAD)" = "$PACKAGE_BASE_SHA"
+          test -z "$(git status --porcelain)"
+          echo "D2_RUNTIME_PREINTEGRATION_PACKAGE_HEAD=$EXPECTED_HEAD"
+
+      - name: Extract exact D2 authority read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          authority="$RUNNER_TEMP/d2-authority"
+          rm -rf "$authority"
+          mkdir -p "$authority"
+          git fetch --no-tags origin "$D2_AUTHORITY_SHA"
+          test "$(git cat-file -t "$D2_AUTHORITY_SHA")" = "commit"
+          git archive "$D2_AUTHORITY_SHA" "$D2_AUTHORITY_REL" | tar -x -C "$authority"
+          root="$authority/$D2_AUTHORITY_REL"
+          test -f "$root/D2_CORRECTED_NODE_HASH_INDEX.json"
+          test -f "$root/D2_FULL_CORRECTED_AGGREGATION_MANIFEST.json"
+          test -f "$root/evidence_hash_index.json"
+          echo "D2_RUNTIME_PREINTEGRATION_AUTHORITY=$D2_AUTHORITY_SHA"
+
+      - name: Run compatibility-tool regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile tools/validate_dev2_corrected_runtime_compat.py
+          python -m unittest tools/test_validate_dev2_corrected_runtime_compat.py -v
+
+      - name: Run exact D2 through current-package runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          authority="$RUNNER_TEMP/d2-authority/$D2_AUTHORITY_REL"
+          pack="$RUNNER_TEMP/R06_D2_PREINTEGRATION_ONLY.zip"
+          report="$RUNNER_TEMP/R06_D2_RUNTIME_PREINTEGRATION_REPORT.json"
+          python tools/validate_dev2_corrected_runtime_compat.py             --authority-root "$authority"             --pack-out "$pack"             --report "$report"
+          python - "$report" <<'PY'
+          import json
+          import pathlib
+          import sys
+          report = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          assert report["status"] == "COMPATIBILITY_PASS / PROMOTION_BLOCKED", report
+          assert report["authority"]["node_count"] == 386, report
+          assert report["authority"]["evidence_count"] == 184, report
+          assert report["authority"]["independent_audit"] == "PENDING", report
+          runtime = report["current_package_runtime"]
+          assert runtime["repository_nodes"] == 386, runtime
+          assert runtime["self_grade_correct"] == 386, runtime
+          assert runtime["runtime_load_pass"] == 386, runtime
+          assert runtime["structured_witness_count"] == 11, runtime
+          assert len(runtime["structured_witness_node_ids"]) == 11, runtime
+          assert runtime["runtime_fallback_count"] == 0, runtime
+          assert runtime["runtime_fallback_node_ids"] == [], runtime
+          pack = report["preintegration_content_pack"]
+          assert pack["node_count"] == 386, pack
+          assert pack["structured_witness_count"] == 11, pack
+          assert pack["structured_witness_node_ids"] == runtime["structured_witness_node_ids"], (pack, runtime)
+          assert pack["runtime_fallback_count"] == 0, pack
+          assert pack["runtime_fallback_node_ids"] == [], pack
+          assert report["promotion_allowed"] is False, report
+          print("D2_STRUCTURED_RUNTIME_COMPAT_PASS nodes=386 self_grade=386 runtime_load=386 structured=11 fallbacks=0")
+          PY
+
+      - name: Prove worktree stayed immutable
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain)"
+          echo "D2_RUNTIME_PREINTEGRATION_READ_ONLY_PASS"
+
+      - name: Upload read-only compatibility evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: r06-d2-structured-runtime-compat-${{ steps.head.outputs.sha }}
+          path: |
+            ${{ runner.temp }}/R06_D2_PREINTEGRATION_ONLY.zip
+            ${{ runner.temp }}/R06_D2_RUNTIME_PREINTEGRATION_REPORT.json
+          if-no-files-found: error
+          retention-days: 30

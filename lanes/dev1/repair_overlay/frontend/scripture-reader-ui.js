@@ -235,12 +235,16 @@ function renderVerses(data) {
   const host = byId('scripture-reader-verses');
   host.replaceChildren();
   const heading = element('h4', `${data.book} ${data.chapter}`);
-  const list = element('ol', '', {'aria-label': `${data.book} ${data.chapter}, World English Bible Updated`});
+  const list = element('ol', '', {'aria-label': `WEBU, ${data.book} ${data.chapter}`});
   for (const row of data.verses || []) {
-    const text = row.text_state === 'source_empty'
-      ? `Verse ${row.verse}. Not stated in the cited WEBU source row.`
-      : `Verse ${row.verse}. ${row.text}`;
-    list.append(element('li', text, {'data-reference': row.reference}));
+    const item = element('li', '', {'data-reference': row.reference});
+    item.append(element('span', `Вірш ${row.verse}. `));
+    if (row.text_state === 'source_empty') {
+      item.append(element('span', 'Текст відсутній у цьому рядку джерела WEBU.'));
+    } else {
+      item.append(element('span', row.text, {lang: 'en'}));
+    }
+    list.append(item);
   }
   host.append(heading, list);
   heading.tabIndex = -1;
@@ -250,16 +254,19 @@ function renderVerses(data) {
 function renderSearch(data) {
   const host = byId('scripture-reader-search-results');
   host.replaceChildren();
-  const heading = element('h4', 'Search results', {id: 'scripture-reader-search-results-heading'});
+  const heading = element('h4', 'Результати пошуку', {id: 'scripture-reader-search-results-heading'});
   heading.tabIndex = -1;
   if (!data.results?.length) {
-    host.append(heading, element('p', 'No matching text found in the bundled WEBU source.'));
+    host.append(heading, element('p', 'У вбудованому тексті WEBU збігів не знайдено.'));
     heading.focus();
     return;
   }
   const list = element('ol', '', {'aria-labelledby': 'scripture-reader-search-results-heading'});
   for (const row of data.results) {
-    list.append(element('li', `${row.reference} — ${row.text}`));
+    const item = element('li');
+    item.append(element('span', `${row.reference} — `));
+    item.append(element('span', row.text, {lang: 'en'}));
+    list.append(item);
   }
   host.append(heading, list);
   heading.focus();
@@ -270,23 +277,23 @@ export async function installScriptureReaderSurface() {
   if (!library || byId('scripture-reader')) return;
 
   const section = element('section', '', {id: 'scripture-reader', 'aria-labelledby': 'scripture-reader-heading'});
-  const heading = element('h3', 'Full Scripture text — WEBU', {id: 'scripture-reader-heading'});
-  const source = element('p', 'Bundled offline World English Bible Updated (engwebu), source tier TX1, public-domain source. Empty source rows are reported as empty and are never filled from another witness.', {id: 'scripture-reader-source', role: 'note'});
+  const heading = element('h3', 'Повний текст Писання — WEBU', {id: 'scripture-reader-heading'});
+  const source = element('p', 'Вбудований офлайн-текст World English Bible Updated (engwebu), рівень джерела TX1, суспільне надбання. Порожні рядки джерела показуються порожніми й ніколи не заповнюються з іншого свідчення.', {id: 'scripture-reader-source', role: 'note'});
 
   const readForm = element('form', '', {id: 'scripture-reader-form', 'aria-labelledby': 'scripture-reader-read-heading'});
-  readForm.append(element('h4', 'Read a chapter', {id: 'scripture-reader-read-heading'}));
-  const bookLabel = element('label', 'Book code'); bookLabel.htmlFor = 'scripture-reader-book';
+  readForm.append(element('h4', 'Читати розділ', {id: 'scripture-reader-read-heading'}));
+  const bookLabel = element('label', 'Код книги'); bookLabel.htmlFor = 'scripture-reader-book';
   const book = element('select', '', {id: 'scripture-reader-book'});
-  const chapterLabel = element('label', 'Chapter'); chapterLabel.htmlFor = 'scripture-reader-chapter';
+  const chapterLabel = element('label', 'Розділ'); chapterLabel.htmlFor = 'scripture-reader-chapter';
   const chapter = element('input', '', {id: 'scripture-reader-chapter', type: 'number', min: '1', max: '200', value: '1', inputmode: 'numeric'});
-  const readButton = element('button', 'Read chapter', {type: 'submit'});
+  const readButton = element('button', 'Читати розділ', {type: 'submit'});
   readForm.append(bookLabel, book, chapterLabel, chapter, readButton);
 
   const searchForm = element('form', '', {id: 'scripture-reader-text-search', role: 'search', 'aria-labelledby': 'scripture-reader-search-heading'});
-  searchForm.append(element('h4', 'Search full text', {id: 'scripture-reader-search-heading'}));
-  const queryLabel = element('label', 'Words in Scripture text'); queryLabel.htmlFor = 'scripture-reader-query';
-  const query = element('input', '', {id: 'scripture-reader-query', type: 'search', maxlength: '128', autocomplete: 'off'});
-  const searchButton = element('button', 'Search WEBU', {type: 'submit'});
+  searchForm.append(element('h4', 'Пошук у повному тексті', {id: 'scripture-reader-search-heading'}));
+  const queryLabel = element('label', 'Слова в тексті Писання'); queryLabel.htmlFor = 'scripture-reader-query';
+  const query = element('input', '', {id: 'scripture-reader-query', type: 'search', maxlength: '128', autocomplete: 'off', lang: 'en'});
+  const searchButton = element('button', 'Шукати в WEBU', {type: 'submit'});
   searchForm.append(queryLabel, query, searchButton);
 
   const live = element('p', '', {id: 'scripture-reader-status', role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true'});
@@ -310,32 +317,32 @@ export async function installScriptureReaderSurface() {
       && monitoring.status === 'SOURCE_REAUDIT_REQUIRED';
     if (driftPending) {
       const changedRefs = monitoring.changed_references.join(', ');
-      source.textContent = `Bundled offline World English Bible Updated (engwebu), source tier TX1, public-domain source. This is an audited pinned snapshot. The official upstream has changed at ${monitoring.changed_reference_count || 0} known references and is pending source re-audit; known changed references: ${changedRefs}. This reader continues to use the audited bundled snapshot. Empty source rows are reported as empty and are never filled from another witness.`;
+      source.textContent = `Вбудований офлайн-текст World English Bible Updated (engwebu), рівень джерела TX1, суспільне надбання. Це перевірений закріплений знімок. В офіційному upstream змінено ${monitoring.changed_reference_count || 0} відомих посилань; потрібен повторний аудит джерела. Відомі змінені посилання: ${changedRefs}. Читач продовжує використовувати перевірений вбудований знімок. Порожні рядки джерела показуються порожніми й ніколи не заповнюються з іншого свідчення.`;
     }
-    status(`Offline WEBU ready: ${catalog.verse_rows} source rows across ${catalog.books?.length || 0} book codes.${driftPending ? ' Audited pinned snapshot; upstream source re-audit is pending.' : ''}`);
+    status(`Офлайн WEBU готовий: ${catalog.verse_rows} рядків джерела, ${catalog.books?.length || 0} кодів книг.${driftPending ? ' Використовується перевірений закріплений знімок; потрібен повторний аудит upstream-джерела.' : ''}`);
   } catch (error) {
-    status(`Full-text provider unavailable: ${error.message}`);
+    status(`Постачальник повного тексту недоступний: ${error.message}`);
     readButton.disabled = true; searchButton.disabled = true;
     return;
   }
 
   readForm.addEventListener('submit', async event => {
-    event.preventDefault(); readButton.disabled = true; status('Loading chapter…');
+    event.preventDefault(); readButton.disabled = true; status('Завантаження розділу…');
     try {
       const data = validateChapter(await api('library.read_chapter', {book: book.value, chapter: Number(chapter.value)}));
-      renderVerses(data); status(`${data.book} ${data.chapter}: ${data.verses.length} source rows.`);
-    } catch (error) { status(`Cannot read chapter: ${error.message}`); }
+      renderVerses(data); status(`${data.book} ${data.chapter}: ${data.verses.length} рядків джерела.`);
+    } catch (error) { status(`Не вдалося прочитати розділ: ${error.message}`); }
     finally { readButton.disabled = false; }
   });
 
   searchForm.addEventListener('submit', async event => {
     event.preventDefault(); const value = query.value.trim();
-    if (!value) { status('Enter words to search in the bundled WEBU text.'); query.focus(); return; }
-    searchButton.disabled = true; status('Searching bundled WEBU text…');
+    if (!value) { status('Введіть слова для пошуку у вбудованому тексті WEBU.'); query.focus(); return; }
+    searchButton.disabled = true; status('Пошук у вбудованому тексті WEBU…');
     try {
       const data = validateTextSearch(await api('library.text_search', {query: value, limit: MAX_SEARCH_RESULTS}));
-      renderSearch(data); status(`${data.total} matching source rows; showing up to 50.`);
-    } catch (error) { status(`Cannot search Scripture text: ${error.message}`); }
+      renderSearch(data); status(`Знайдено ${data.total} рядків джерела; показано до 50.`);
+    } catch (error) { status(`Не вдалося виконати пошук у тексті Писання: ${error.message}`); }
     finally { searchButton.disabled = false; }
   });
 }

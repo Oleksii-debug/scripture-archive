@@ -12,6 +12,11 @@ const EXPECTED_SOURCE_URL = 'https://ebible.org/Scriptures/engwebu_vpl.zip';
 const EXPECTED_SOURCE_SITE = 'https://ebible.org/engwebu/';
 const EXPECTED_ARCHIVE_SHA256 = '1007fb45782a4abd9444d4225fd768fb00a150466b9fb9fcf6f6ad175b73feb6';
 const EXPECTED_VPL_SHA256 = '8cac735abda379045fa2c5f43217410ad47a45ac592f3801116ab0da41a810d8';
+const LATEST_UPSTREAM_ARCHIVE_SHA256 = 'cbed8914abff11ff715242ae06351ef7cc77931b89968c6c57142bb8616ddb82';
+const LATEST_UPSTREAM_VPL_SHA256 = '5507aa8b7dc4cde0cc385e4b61c76a33223769aba7b8a9c708de81a40403d4ae';
+const LATEST_UPSTREAM_CHANGED_REFERENCE = 'WIS 18:1';
+const LATEST_UPSTREAM_PINNED_LINE_SHA256 = '48259c1b7540ba6589c9a24a2ba54289503d747cadfaab333273076c180f5759';
+const LATEST_UPSTREAM_CURRENT_LINE_SHA256 = '92b8897d7e1a3fb2d34fcbeed5e17bdb72eeb2feffcb7eb698c9a40922b05850';
 const EXPECTED_VERSE_ROWS = 38058;
 const EXPECTED_SOURCE_EMPTY_ROWS = 29;
 const EXPECTED_BOOK_COUNT = 81;
@@ -150,6 +155,35 @@ export function validateTextCatalog(data) {
     )
   ) {
     throw new Error('WEBU MATCH_PINNED_AUTHORITY conflicts with drift evidence');
+  }
+  if (monitoring.status === 'SOURCE_REAUDIT_REQUIRED') {
+    if (
+      monitoring.observed_archive_sha256 !== LATEST_UPSTREAM_ARCHIVE_SHA256
+      || monitoring.observed_vpl_sha256 !== LATEST_UPSTREAM_VPL_SHA256
+      || monitoring.changed_reference_count !== 1
+      || monitoring.added_reference_count !== 0
+      || monitoring.removed_reference_count !== 0
+      || monitoring.changed_references.length !== 1
+      || monitoring.changed_references[0] !== LATEST_UPSTREAM_CHANGED_REFERENCE
+      || monitoring.observed_archive_sha256 === EXPECTED_ARCHIVE_SHA256
+      || monitoring.observed_vpl_sha256 === EXPECTED_VPL_SHA256
+    ) {
+      throw new Error('WEBU SOURCE_REAUDIT_REQUIRED does not match current drift evidence');
+    }
+    if (!Array.isArray(monitoring.changed_reference_details) || monitoring.changed_reference_details.length !== 1) {
+      throw new Error('WEBU source drift detail is missing');
+    }
+    const detail = monitoring.changed_reference_details[0];
+    if (
+      !record(detail)
+      || detail.reference !== LATEST_UPSTREAM_CHANGED_REFERENCE
+      || detail.pinned_line_sha256 !== LATEST_UPSTREAM_PINNED_LINE_SHA256
+      || detail.current_line_sha256 !== LATEST_UPSTREAM_CURRENT_LINE_SHA256
+    ) {
+      throw new Error('WEBU source drift detail identity is invalid');
+    }
+    boundedText(detail.pinned_line, 'upstream_monitoring.changed_reference_details[0].pinned_line', MAX_VERSE_TEXT);
+    boundedText(detail.current_line, 'upstream_monitoring.changed_reference_details[0].current_line', MAX_VERSE_TEXT);
   }
   return data;
 }

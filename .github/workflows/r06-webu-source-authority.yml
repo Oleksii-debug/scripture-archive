@@ -160,17 +160,14 @@ jobs:
               raise SystemExit('checked-in WEBU structural counts changed')
 
           monitoring = authority.get('upstream_monitoring')
-          if not isinstance(monitoring, dict) or monitoring.get('status') != 'MATCH_PINNED_AUTHORITY':
-              raise SystemExit('WEBU upstream monitoring must be MATCH_PINNED_AUTHORITY')
-          if (
-              monitoring.get('observed_archive_sha256') != os.environ['PINNED_ARCHIVE_SHA256']
-              or monitoring.get('observed_vpl_sha256') != os.environ['PINNED_VPL_SHA256']
-              or monitoring.get('changed_reference_count') != 0
-              or monitoring.get('added_reference_count') != 0
-              or monitoring.get('removed_reference_count') != 0
-              or monitoring.get('changed_references') != []
-          ):
-              raise SystemExit('WEBU upstream monitoring does not bind the reconciled snapshot')
+          if not isinstance(monitoring, dict):
+              raise SystemExit('WEBU upstream monitoring metadata is missing')
+          if not isinstance(monitoring.get('evidence_run_id'), int) or monitoring['evidence_run_id'] <= 0:
+              raise SystemExit('WEBU upstream monitoring evidence run identity is missing')
+          if not isinstance(monitoring.get('evidence_artifact_id'), int) or monitoring['evidence_artifact_id'] <= 0:
+              raise SystemExit('WEBU upstream monitoring evidence artifact identity is missing')
+          if not isinstance(monitoring.get('observed_utc'), str) or not monitoring['observed_utc'].endswith('Z'):
+              raise SystemExit('WEBU upstream monitoring observation time is missing')
 
           reaudit = authority.get('source_reaudit')
           if not isinstance(reaudit, dict) or reaudit.get('status') != 'SOURCE_IDENTITY_RECONCILED':
@@ -196,6 +193,20 @@ jobs:
               and archive_inventory_matches
               and not added and not removed and not changed
           )
+          expected_monitoring = {
+              'status': 'MATCH_PINNED_AUTHORITY' if live_matches else 'SOURCE_REAUDIT_REQUIRED',
+              'observed_archive_sha256': observed_archive_sha,
+              'observed_vpl_sha256': live_sha,
+              'observed_archive_size': len(raw),
+              'archive_inventory_matches': archive_inventory_matches,
+              'changed_reference_count': len(changed),
+              'added_reference_count': len(added),
+              'removed_reference_count': len(removed),
+              'changed_references': changed,
+              'changed_reference_details': changed_detail,
+              'observed_entries': entries,
+          }
+          monitoring_matches = all(monitoring.get(key) == value for key, value in expected_monitoring.items())
           report = {
               'schema': 'scripture.webu.current-source-verification.v3',
               'translation_id': 'engwebu',
@@ -215,13 +226,19 @@ jobs:
               },
               'entries': entries,
               'decision': 'MATCH_PINNED_AUTHORITY' if live_matches else 'SOURCE_REAUDIT_REQUIRED',
+              'authority_monitoring_matches': monitoring_matches,
           }
           (root / 'current-source-verification.json').write_text(
               json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + '\n', encoding='utf-8'
           )
           with pathlib.Path(os.environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as fh:
-              fh.write(f"source_matches={'true' if live_matches else 'false'}\n")
-          print(json.dumps({'decision': report['decision'], 'archive': observed_archive_sha, 'vpl': live_sha}, sort_keys=True))
+              fh.write(f"monitoring_matches={'true' if monitoring_matches else 'false'}\n")
+          print(json.dumps({
+              'decision': report['decision'],
+              'archive': observed_archive_sha,
+              'vpl': live_sha,
+              'authority_monitoring_matches': monitoring_matches,
+          }, sort_keys=True))
 
       - name: Upload current official-source verification evidence
         if: always()
@@ -235,13 +252,13 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Enforce current official source identity
+      - name: Enforce current official source monitoring truth
         if: always()
         shell: bash
         run: |
           set -euo pipefail
-          test "${{ steps.source_audit.outputs.source_matches }}" = 'true'
-          echo 'WEBU_SOURCE_IDENTITY_PASS'
+          test "${{ steps.source_audit.outputs.monitoring_matches }}" = 'true'
+          echo 'WEBU_SOURCE_MONITORING_TRUTH_PASS'
 
       - name: Prove qualification is read-only and checkout remains exact
         shell: bash

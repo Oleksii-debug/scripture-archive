@@ -8,6 +8,7 @@ from scripture_archive_platform.application.speech_application import build_defa
 from scripture_archive_platform.desktop_host.bridge import DesktopBridge
 from scripture_archive_platform.desktop_host.diagnostics import NativeDiagnosticsLayer
 from scripture_archive_platform.desktop_host.pending_update import NativePendingUpdateLayer
+from scripture_archive_platform.desktop_host.post_update_health import NativePostUpdateHealthLayer
 from scripture_archive_platform.desktop_host.update_application import (
     NativeApplicationUpdateLayer,
     NativeUpdateFileSelector,
@@ -59,16 +60,24 @@ def main() -> int:
         current_version=CURRENT_APPLICATION_VERSION,
         staging_root=staging_root,
     )
-    # This outer layer owns one process-local RLock for the complete update command
-    # family, so verify/stage/status/cancel/execute cannot race shared durable state.
+    # This layer owns one process-local RLock for the complete update command family,
+    # so verify/stage/status/cancel/execute cannot race shared durable state.
     pending_layer = NativePendingUpdateLayer(
         app,
         root,
         staging_root,
         current_version=CURRENT_APPLICATION_VERSION,
     )
-    app = NativeDiagnosticsLayer(
+    # Health commit is intentionally outside pending recovery: after a successful
+    # updater relaunch the pending journal still carries the previous version and must
+    # be disarmed only after the new packaged native/frontend bridge is alive.
+    app = NativePostUpdateHealthLayer(
         pending_layer,
+        staging_root,
+        current_version=CURRENT_APPLICATION_VERSION,
+    )
+    app = NativeDiagnosticsLayer(
+        app,
         root,
         Path(platform_app.store.root) / "runtime-v2",
         current_version=CURRENT_APPLICATION_VERSION,

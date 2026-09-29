@@ -41,7 +41,15 @@ def _result(plan) -> UpdateApplyResult:
     )
 
 
-def test_runner_waits_applies_then_relaunches_exact_installed_target(tmp_path: Path) -> None:
+def _publish_noop(*args, **kwargs):
+    return object()
+
+
+def _discard_noop(*args, **kwargs):
+    return False
+
+
+def test_runner_waits_applies_publishes_health_then_relaunches_exact_target(tmp_path: Path) -> None:
     plan = _plan(tmp_path)
     events: list[object] = []
     sentinel = _result(plan)
@@ -53,6 +61,10 @@ def test_runner_waits_applies_then_relaunches_exact_installed_target(tmp_path: P
         events.append(("consume", Path(staging_root), kwargs))
         return sentinel
 
+    def publish_health(staging_root, **kwargs):
+        events.append(("health", Path(staging_root), kwargs))
+        return object()
+
     def launch(target: Path) -> None:
         events.append(("launch", target))
 
@@ -63,6 +75,8 @@ def test_runner_waits_applies_then_relaunches_exact_installed_target(tmp_path: P
         verify_same_publisher=verifier,
         wait_for_exit=wait_for_exit,
         consume=consume,
+        publish_health=publish_health,
+        discard_health=_discard_noop,
         launch=launch,
     )
 
@@ -76,13 +90,61 @@ def test_runner_waits_applies_then_relaunches_exact_installed_target(tmp_path: P
         "install_target": plan.installed_executable,
         "verify_same_publisher": verifier,
     }
-    assert events[2] == ("launch", plan.installed_executable)
+    kind, staging, kwargs = events[2]
+    assert kind == "health"
+    assert staging == plan.staging_root
+    assert kwargs == {
+        "previous_version": "1.0.0",
+        "target_version": "1.1.0",
+        "install_target": plan.installed_executable,
+        "previous_sha256": sentinel.previous_sha256,
+        "installed_sha256": sentinel.installed_sha256,
+    }
+    assert events[3] == ("launch", plan.installed_executable)
 
 
-def test_runner_rolls_back_when_updated_process_cannot_be_started(tmp_path: Path) -> None:
+def test_runner_health_publish_failure_rolls_back_and_disarms_before_no_launch(tmp_path: Path) -> None:
     plan = _plan(tmp_path)
     sentinel = _result(plan)
     events: list[object] = []
+
+    def rollback(target: Path, *, expected_previous_sha256: str) -> str:
+        events.append(("rollback", target, expected_previous_sha256))
+        return expected_previous_sha256
+
+    def discard(staging_root: Path) -> bool:
+        events.append(("discard", Path(staging_root)))
+        return True
+
+    def launch(target: Path) -> None:
+        events.append(("launch", target))
+
+    with pytest.raises(ApplicationUpdateError, match="health receipt publication failed; rollback restored"):
+        execute_trusted_updater(
+            plan.argv()[1:],
+            current_version="1.0.0",
+            verify_same_publisher=lambda installed, staged: True,
+            wait_for_exit=lambda parent_pid: None,
+            consume=lambda *args, **kwargs: sentinel,
+            publish_health=lambda *args, **kwargs: (_ for _ in ()).throw(OSError("receipt failed")),
+            discard_health=discard,
+            rollback=rollback,
+            launch=launch,
+        )
+    assert events == [
+        ("rollback", plan.installed_executable, sentinel.previous_sha256),
+        ("discard", plan.staging_root),
+    ]
+
+
+def test_runner_rolls_back_and_disarms_health_when_updated_process_cannot_start(tmp_path: Path) -> None:
+    plan = _plan(tmp_path)
+    sentinel = _result(plan)
+    events: list[object] = []
+
+    def publish(staging_root, **kwargs):
+        events.append(("publish", Path(staging_root)))
+        return object()
 
     def launch(target: Path) -> None:
         events.append(("launch", target))
@@ -92,6 +154,10 @@ def test_runner_rolls_back_when_updated_process_cannot_be_started(tmp_path: Path
         events.append(("rollback", target, expected_previous_sha256))
         return expected_previous_sha256
 
+    def discard(staging_root: Path) -> bool:
+        events.append(("discard", Path(staging_root)))
+        return True
+
     with pytest.raises(ApplicationUpdateError, match="rollback restored prior bytes"):
         execute_trusted_updater(
             plan.argv()[1:],
@@ -99,13 +165,17 @@ def test_runner_rolls_back_when_updated_process_cannot_be_started(tmp_path: Path
             verify_same_publisher=lambda installed, staged: True,
             wait_for_exit=lambda parent_pid: None,
             consume=lambda *args, **kwargs: sentinel,
+            publish_health=publish,
+            discard_health=discard,
             launch=launch,
             rollback=rollback,
         )
 
     assert events == [
+        ("publish", plan.staging_root),
         ("launch", plan.installed_executable),
         ("rollback", plan.installed_executable, sentinel.previous_sha256),
+        ("discard", plan.staging_root),
     ]
 
 
@@ -120,12 +190,14 @@ def test_runner_surfaces_combined_relaunch_and_rollback_failure(tmp_path: Path) 
             verify_same_publisher=lambda installed, staged: True,
             wait_for_exit=lambda parent_pid: None,
             consume=lambda *args, **kwargs: sentinel,
+            publish_health=_publish_noop,
+            discard_health=_discard_noop,
             launch=lambda target: (_ for _ in ()).throw(OSError("spawn failed")),
             rollback=lambda *args, **kwargs: (_ for _ in ()).throw(OSError("rollback failed")),
         )
 
 
-def test_runner_rolls_back_consumer_target_substitution_before_launch(tmp_path: Path) -> None:
+def test_runner_rolls_back_consumer_target_substitution_before_health_or_launch(tmp_path: Path) -> None:
     plan = _plan(tmp_path)
     sentinel = UpdateApplyResult(
         previous_sha256="1" * 64,
@@ -135,6 +207,9 @@ def test_runner_rolls_back_consumer_target_substitution_before_launch(tmp_path: 
         target_version="1.1.0",
     )
     events: list[object] = []
+
+    def publish(*args, **kwargs):
+        events.append(("health",))
 
     def launch(target: Path) -> None:
         events.append(("launch", target))
@@ -150,6 +225,8 @@ def test_runner_rolls_back_consumer_target_substitution_before_launch(tmp_path: 
             verify_same_publisher=lambda installed, staged: True,
             wait_for_exit=lambda parent_pid: None,
             consume=lambda *args, **kwargs: sentinel,
+            publish_health=publish,
+            discard_health=_discard_noop,
             launch=launch,
             rollback=rollback,
         )
@@ -225,44 +302,26 @@ def test_runner_rejects_invalid_trusted_current_version_before_wait(
     assert waited is False
 
 
-def test_runner_requires_callable_security_dependencies_before_wait(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("override", "message"),
+    [
+        ({"verify_same_publisher": None}, "same-publisher verifier"),
+        ({"wait_for_exit": None}, "parent-exit waiter"),
+        ({"consume": None}, "apply consumer"),
+        ({"launch": None}, "application launcher"),
+        ({"rollback": None}, "rollback consumer"),
+        ({"publish_health": None}, "health receipt publisher"),
+        ({"discard_health": None}, "health receipt discarder"),
+    ],
+)
+def test_runner_requires_callable_security_dependencies_before_wait(
+    tmp_path: Path, override: dict[str, object], message: str
+) -> None:
     plan = _plan(tmp_path)
-
-    with pytest.raises(ApplicationUpdateError, match="same-publisher verifier"):
-        execute_trusted_updater(
-            plan.argv()[1:],
-            current_version="1.0.0",
-            verify_same_publisher=None,  # type: ignore[arg-type]
-        )
-
-    with pytest.raises(ApplicationUpdateError, match="parent-exit waiter"):
-        execute_trusted_updater(
-            plan.argv()[1:],
-            current_version="1.0.0",
-            verify_same_publisher=lambda installed, staged: True,
-            wait_for_exit=None,  # type: ignore[arg-type]
-        )
-
-    with pytest.raises(ApplicationUpdateError, match="apply consumer"):
-        execute_trusted_updater(
-            plan.argv()[1:],
-            current_version="1.0.0",
-            verify_same_publisher=lambda installed, staged: True,
-            consume=None,  # type: ignore[arg-type]
-        )
-
-    with pytest.raises(ApplicationUpdateError, match="application launcher"):
-        execute_trusted_updater(
-            plan.argv()[1:],
-            current_version="1.0.0",
-            verify_same_publisher=lambda installed, staged: True,
-            launch=None,  # type: ignore[arg-type]
-        )
-
-    with pytest.raises(ApplicationUpdateError, match="rollback consumer"):
-        execute_trusted_updater(
-            plan.argv()[1:],
-            current_version="1.0.0",
-            verify_same_publisher=lambda installed, staged: True,
-            rollback=None,  # type: ignore[arg-type]
-        )
+    kwargs = {
+        "current_version": "1.0.0",
+        "verify_same_publisher": lambda installed, staged: True,
+    }
+    kwargs.update(override)
+    with pytest.raises(ApplicationUpdateError, match=message):
+        execute_trusted_updater(plan.argv()[1:], **kwargs)  # type: ignore[arg-type]

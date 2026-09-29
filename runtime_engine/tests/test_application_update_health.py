@@ -125,6 +125,68 @@ class ApplicationUpdateHealthTests(unittest.TestCase):
         with self.assertRaisesRegex(ApplicationUpdateError, "rollback bytes changed"):
             inspect_update_health_receipt(root, current_version=TARGET_VERSION, install_target=target)
 
+    def test_installed_path_swap_before_hash_fails_closed_even_for_identical_bytes(self) -> None:
+        root, target, rollback, previous, installed, receipt = _publish(self.tmp_path)
+        replacement = target.with_name("replacement-installed.exe")
+        parked = target.with_name("parked-installed.exe")
+        replacement.write_bytes(installed)
+        original_open = Path.open
+        swapped = False
+
+        def swapping_open(path_obj: Path, *args, **kwargs):
+            nonlocal swapped
+            if path_obj == target and not swapped:
+                swapped = True
+                os.replace(target, parked)
+                os.replace(replacement, target)
+            return original_open(path_obj, *args, **kwargs)
+
+        with patch.object(Path, "open", new=swapping_open):
+            with self.assertRaisesRegex(
+                ApplicationUpdateError,
+                "installed application target changed before hashing",
+            ):
+                inspect_update_health_receipt(
+                    root,
+                    current_version=TARGET_VERSION,
+                    install_target=target,
+                )
+
+        self.assertTrue(swapped)
+        self.assertTrue(parked.exists())
+        self.assertTrue(target.exists())
+
+    def test_rollback_path_swap_before_hash_fails_closed_even_for_identical_bytes(self) -> None:
+        root, target, rollback, previous, installed, receipt = _publish(self.tmp_path)
+        replacement = rollback.with_name("replacement-rollback.bin")
+        parked = rollback.with_name("parked-rollback.bin")
+        replacement.write_bytes(previous)
+        original_open = Path.open
+        swapped = False
+
+        def swapping_open(path_obj: Path, *args, **kwargs):
+            nonlocal swapped
+            if path_obj == rollback and not swapped:
+                swapped = True
+                os.replace(rollback, parked)
+                os.replace(replacement, rollback)
+            return original_open(path_obj, *args, **kwargs)
+
+        with patch.object(Path, "open", new=swapping_open):
+            with self.assertRaisesRegex(
+                ApplicationUpdateError,
+                "rollback artifact changed before hashing",
+            ):
+                inspect_update_health_receipt(
+                    root,
+                    current_version=TARGET_VERSION,
+                    install_target=target,
+                )
+
+        self.assertTrue(swapped)
+        self.assertTrue(parked.exists())
+        self.assertTrue(rollback.exists())
+
     def test_receipt_shape_extra_field_and_symlink_fail_closed(self) -> None:
         root, target, rollback, previous, installed, receipt = _publish(self.tmp_path)
         path = root / "update-health.json"

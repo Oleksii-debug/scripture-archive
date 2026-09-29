@@ -221,16 +221,35 @@ class PlatformApplication:
     def _chronology_lab(self):
         if not self.player_gateway:raise ValueError('Chronology Lab requires canonical runtime')
         return self.player_gateway.get_chronology_lab()
+    def _checkpoint_from_runtime_node(self,nid):
+        if nid is None:return None
+        if not isinstance(nid,str) or not nid:raise ValueError('runtime checkpoint exposed invalid current_node_id')
+        try: mission=self.loader.mission_for_node(nid)
+        except (KeyError,ContentLoadError) as exc: raise ValueError('runtime checkpoint references unknown canonical node') from exc
+        campaign_id=mission.get('campaign_id'); mission_id=mission.get('mission_id')
+        if not isinstance(campaign_id,str) or not campaign_id or not isinstance(mission_id,str) or not mission_id:
+            raise ValueError('runtime checkpoint canonical mission metadata is invalid')
+        return {'campaign_id':campaign_id,'mission_id':mission_id,'node_id':nid,'checkpoint_schema':'scripture.player.checkpoint.v1'}
+    @staticmethod
+    def _require_runtime_checkpoint_ack(response,operation):
+        expected='saved' if operation=='save' else 'restored'
+        if response.get(expected) is not True:
+            raise ValueError(f'runtime checkpoint {operation} was not acknowledged')
+        if operation=='restore':
+            schema_version=response.get('schema_version')
+            if isinstance(schema_version,bool) or not isinstance(schema_version,int) or schema_version < 1:
+                raise ValueError('runtime checkpoint restore exposed invalid schema_version')
     def _save_checkpoint(self,p):
+        if self.player_gateway:
+            rr=self.player_gateway.invoke('player.save_checkpoint',{},request_id='save-player')
+            self._require_runtime_checkpoint_ack(rr,'save')
+            return {'checkpoint':self._checkpoint_from_runtime_node(rr.get('current_node_id')),'truth_owner':'D5/runtime'}
         checkpoint={'campaign_id':p.get('campaign_id'),'mission_id':p.get('mission_id'),'node_id':p.get('node_id'),'saved_at':int(time.time()),'checkpoint_schema':'scripture.player.checkpoint.v1'}
-        if self.player_gateway:self.player_gateway.invoke('player.save_checkpoint',{},request_id='save-'+str(p.get('node_id') or 'current'))
-        self.store.put_json('player','checkpoint',checkpoint);return {'checkpoint':checkpoint,'truth_owner':'D5/runtime' if self.player_gateway else 'REFERENCE_TEST_ONLY'}
+        self.store.put_json('player','checkpoint',checkpoint);return {'checkpoint':checkpoint,'truth_owner':'REFERENCE_TEST_ONLY'}
     def _restore_checkpoint(self):
         if self.player_gateway:
-            rr=self.player_gateway.invoke('player.restore_checkpoint',{},request_id='restore-player'); nid=rr.get('current_node_id'); checkpoint=None
-            if nid:
-                try: mission=self.loader.mission_for_node(str(nid));checkpoint={'campaign_id':mission.get('campaign_id'),'mission_id':mission.get('mission_id'),'node_id':str(nid),'checkpoint_schema':'scripture.player.checkpoint.v1'}
-                except Exception:checkpoint={'node_id':str(nid),'checkpoint_schema':'scripture.player.checkpoint.v1'}
+            rr=self.player_gateway.invoke('player.restore_checkpoint',{},request_id='restore-player')
+            self._require_runtime_checkpoint_ack(rr,'restore'); checkpoint=self._checkpoint_from_runtime_node(rr.get('current_node_id'))
             return {'checkpoint':checkpoint,'runtime_schema_version':rr.get('schema_version'),'truth_owner':'D5/runtime'}
         return {'checkpoint':self.store.get_json('player','checkpoint'),'truth_owner':'REFERENCE_TEST_ONLY'}
     def _progress(self,nid):

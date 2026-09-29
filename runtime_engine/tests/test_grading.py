@@ -20,7 +20,7 @@ class GradingTests(unittest.TestCase):
         synthesis = "Acts 9 narrates Ananias while Acts 22 preserves Paul's later retelling."
         witnesses = ["Acts 9:10–19; Acts 22:12–16"]
         task = self.task(
-            task_type="PARALLEL_WITNESS_COMPARE",
+            task_type="PARALLEL_WITNESS_SYNTHESIS",
             response_mode="PARALLEL_WITNESS_COMPARE",
             accepted_answer={"synthesis": synthesis, "witnesses": witnesses},
             accepted_variants={"synthesis_aliases": [synthesis], "witnesses": witnesses},

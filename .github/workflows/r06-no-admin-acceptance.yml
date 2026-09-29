@@ -4,12 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - r06-gospel-no-admin-acceptance-0927-sol
-    paths:
-      - 'lanes/dev1/repair_overlay/packaging/run_no_admin_acceptance.ps1'
-      - 'lanes/dev1/repair_overlay/packaging/probe_packaged_startup.ps1'
-      - 'lanes/dev1/repair_overlay/tests/test_no_admin_acceptance_contract.py'
-      - '.github/workflows/r06-no-admin-acceptance.yml'
+      - r06-compose-packaged-app-update-verify-0911
   pull_request:
     paths:
       - 'lanes/dev1/repair_overlay/packaging/run_no_admin_acceptance.ps1'

@@ -37,7 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      PACKAGE_BASE_SHA: 76176fc3dcd246284366ba88619947ba2626c7d7
+      STRUCTURED_RUNTIME_BASE_SHA: 1d5638f574b697a984fef008e0e16a093f34220e
       D2_AUTHORITY_SHA: 6ed0a9e8f390dea7c12c05fb9e991ed6328d1458
       D2_AUTHORITY_REL: docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05
       PYTHONDONTWRITEBYTECODE: "1"
@@ -68,10 +68,11 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
-          git merge-base --is-ancestor "$PACKAGE_BASE_SHA" HEAD
-          test "$(git merge-base "$PACKAGE_BASE_SHA" HEAD)" = "$PACKAGE_BASE_SHA"
+          git merge-base --is-ancestor "$STRUCTURED_RUNTIME_BASE_SHA" HEAD
+          test "$(git merge-base "$STRUCTURED_RUNTIME_BASE_SHA" HEAD)" = "$STRUCTURED_RUNTIME_BASE_SHA"
           test -z "$(git status --porcelain)"
-          echo "D2_RUNTIME_PREINTEGRATION_PACKAGE_HEAD=$EXPECTED_HEAD"
+          echo "D2_STRUCTURED_RUNTIME_BASE=$STRUCTURED_RUNTIME_BASE_SHA"
+          echo "D2_RUNTIME_PREINTEGRATION_HEAD=$EXPECTED_HEAD"
 
       - name: Extract exact D2 authority read-only
         shell: bash

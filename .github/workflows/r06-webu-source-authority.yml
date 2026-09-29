@@ -13,6 +13,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: r06-webu-source-authority-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   source-authority:
     runs-on: ubuntu-latest

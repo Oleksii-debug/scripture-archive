@@ -42,6 +42,17 @@ class DevARuntimeApplicationTests(unittest.TestCase):
         self.assertEqual({'campaign_id':'LN','mission_id':'LN-01','node_id':'LN01-N01','checkpoint_schema':'scripture.player.checkpoint.v1'},data['checkpoint'])
         self.assertEqual(('player.save_checkpoint',{},'save-player'),self.gateway.calls[-1])
         self.assertIsNone(self.app.store.get_json('player','checkpoint'))
+    def test_runtime_save_before_task_load_returns_null_checkpoint_without_spoofing(self):
+        calls=[]
+        def runtime(request):
+            calls.append(request)
+            self.assertEqual('save',request['command']);self.assertEqual({},request['payload'])
+            return {'api_version':'runtime.v1','request_id':request['request_id'],'saved':True}
+        gateway=RuntimeBackedPlayerGateway(runtime,current_node_getter=lambda:None)
+        app=PlatformApplication(self.repo,store=JsonFileStore(Path(self.t.name)/'empty-runtime-store'),player_gateway=gateway)
+        saved=app.handle({'api_version':'scripture.transport.v1','request_id':'save-empty','command':'player.save_checkpoint','payload':{'campaign_id':'FORGED','mission_id':'FORGED','node_id':'FORGED'}})
+        self.assertTrue(saved['ok'],saved);self.assertEqual('D5/runtime',saved['data']['truth_owner']);self.assertIsNone(saved['data']['checkpoint']);self.assertEqual(1,len(calls))
+        self.assertIsNone(app.store.get_json('player','checkpoint'))
     def test_reference_only_checkpoint_fallback_keeps_payload_semantics(self):
         app=PlatformApplication(self.repo,store=JsonFileStore(Path(self.t.name)/'reference-store'))
         payload={'campaign_id':'LN','mission_id':'LN-01','node_id':'LN01-N01'}

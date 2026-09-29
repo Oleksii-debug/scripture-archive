@@ -67,6 +67,19 @@ class AccessibilityTests(unittest.TestCase):
         self.assertIn("button:not(:disabled)", self.renderers)
         self.assertIn("(preferred||fallback)?.focus()", self.renderers)
 
+    def test_parallel_witness_renderer_is_keyboard_linear_and_structured(self):
+        for marker in (
+            "register('PARALLEL_WITNESS_COMPARE'",
+            "document.createElement('fieldset')",
+            "document.createElement('legend')",
+            "synthesisLabel.htmlFor='parallel-synthesis'",
+            "witnessesLabel.htmlFor='parallel-witnesses'",
+            "synthesis: synthesis.value",
+            "witnesses:witnesses.value.split(/\\r?\\n/)",
+        ):
+            self.assertIn(marker.replace("synthesis: synthesis.value", "synthesis:synthesis.value"), self.renderers)
+        self.assertNotIn("dto(task,{choice:c.one()})});\nregister('OT_NT_LINK'", self.renderers)
+
     def test_composite_renderer_dispatches_child_registry_and_scopes_ids(self):
         self.assertIn('RendererRegistry.get(child.task_type).render(child,childHost)', self.renderers)
         self.assertIn('scopeIds(childHost,', self.renderers)

@@ -183,6 +183,7 @@ class PlayerTaskTruthConvergenceTests(unittest.TestCase):
             self.loader.mission,
         )
 
+        self.assertEqual("PARALLEL_WITNESS_SYNTHESIS", task["task_type"])
         self.assertEqual(
             {"synthesis": "string", "witnesses": "string[]"},
             task["answer_contract"]["fields"],

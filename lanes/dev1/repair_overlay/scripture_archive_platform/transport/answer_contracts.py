@@ -6,6 +6,7 @@ runtime package is the sole source for task aliases, descriptors and validation.
 from runtime_engine.scripture_archive_runtime.answer_contracts import (
     ANSWER_CONTRACT_VERSION,
     answer_contract_descriptor,
+    canonical_node_task_type,
     canonical_task_type,
     validate_answer_dto,
 )

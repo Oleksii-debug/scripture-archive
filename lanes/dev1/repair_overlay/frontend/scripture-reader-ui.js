@@ -321,7 +321,8 @@ export async function installScriptureReaderSurface() {
     }
     status(`Офлайн WEBU готовий: ${catalog.verse_rows} рядків джерела, ${catalog.books?.length || 0} кодів книг.${driftPending ? ' Використовується перевірений закріплений знімок; потрібен повторний аудит upstream-джерела.' : ''}`);
   } catch (error) {
-    status(`Постачальник повного тексту недоступний: ${error.message}`);
+    console.error('Scripture reader catalog initialization failed', error);
+    status('Постачальник повного тексту недоступний.');
     readButton.disabled = true; searchButton.disabled = true;
     return;
   }
@@ -331,7 +332,10 @@ export async function installScriptureReaderSurface() {
     try {
       const data = validateChapter(await api('library.read_chapter', {book: book.value, chapter: Number(chapter.value)}));
       renderVerses(data); status(`${data.book} ${data.chapter}: ${data.verses.length} рядків джерела.`);
-    } catch (error) { status(`Не вдалося прочитати розділ: ${error.message}`); }
+    } catch (error) {
+      console.error('Scripture reader chapter load failed', error);
+      status('Не вдалося прочитати цей розділ. Перевірте код книги й номер розділу.');
+    }
     finally { readButton.disabled = false; }
   });
 
@@ -342,7 +346,10 @@ export async function installScriptureReaderSurface() {
     try {
       const data = validateTextSearch(await api('library.text_search', {query: value, limit: MAX_SEARCH_RESULTS}));
       renderSearch(data); status(`Знайдено ${data.total} рядків джерела; показано до 50.`);
-    } catch (error) { status(`Не вдалося виконати пошук у тексті Писання: ${error.message}`); }
+    } catch (error) {
+      console.error('Scripture reader text search failed', error);
+      status('Не вдалося виконати пошук у тексті Писання.');
+    }
     finally { searchButton.disabled = false; }
   });
 }

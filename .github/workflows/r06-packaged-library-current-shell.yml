@@ -48,6 +48,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: r06-packaged-library-current-shell-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   packaged-library-current-shell:
     strategy:

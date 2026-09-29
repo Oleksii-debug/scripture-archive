@@ -143,6 +143,15 @@ class BundledScriptureTextTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'source-drift evidence'):
                 BundledScriptureText(target)
 
+            payload = json.loads(json.dumps(authority))
+            payload['upstream_monitoring']['changed_reference_details'][0]['current_line'] += ' tampered'
+            (target / 'engwebu_authority.json').write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2) + '\n',
+                encoding='utf-8',
+            )
+            with self.assertRaisesRegex(ValueError, 'source-drift evidence'):
+                BundledScriptureText(target)
+
     def test_parsing_remains_bound_to_the_exact_bytes_verified_at_initialization(self):
         source_data = (
             Path(__file__).resolve().parents[1]
@@ -339,6 +348,19 @@ class BundledScriptureTextTests(unittest.TestCase):
             reject(
               ()=>mod.validateTextCatalog({
                 ...catalog,
+                upstream_monitoring:{
+                  ...catalog.upstream_monitoring,
+                  changed_reference_details:[{
+                    ...catalog.upstream_monitoring.changed_reference_details[0],
+                    current_line:catalog.upstream_monitoring.changed_reference_details[0].current_line + ' tampered'
+                  }]
+                }
+              }),
+              're-audit status with tampered current line'
+            );
+            reject(
+              ()=>mod.validateTextCatalog({
+                ...catalog,
                 upstream_monitoring:{...catalog.upstream_monitoring, status:'MATCH_PINNED_AUTHORITY'}
               }),
               'MATCH status with known drift evidence'
@@ -422,6 +444,7 @@ class BundledScriptureTextTests(unittest.TestCase):
         self.assertIn('AUDITED_PINNED_SNAPSHOT', frontend)
         self.assertIn('SOURCE_REAUDIT_REQUIRED', frontend)
         self.assertIn('upstream source re-audit is pending', frontend)
+        self.assertIn('known changed references:', frontend)
         for token in (
             'validateTextCatalog',
             'validateChapter',

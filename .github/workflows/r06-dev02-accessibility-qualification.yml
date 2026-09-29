@@ -9,6 +9,7 @@ on:
       - 'lanes/dev1/repair_overlay/frontend/keymap-ui.js'
       - 'lanes/dev1/repair_overlay/frontend/renderers-base.js'
       - 'lanes/dev1/repair_overlay/frontend/renderers.js'
+      - 'lanes/dev1/repair_overlay/frontend/scripture-reader-ui.js'
       - 'lanes/dev1/repair_overlay/frontend/accessibility-inspector-ui.js'
       - 'lanes/dev1/repair_overlay/frontend/settings-ui.js'
       - 'lanes/dev1/repair_overlay/frontend/settings.css'
@@ -24,6 +25,7 @@ on:
       - 'lanes/dev1/repair_overlay/tests/test_accessibility_settings_ui.py'
       - 'lanes/dev1/repair_overlay/tests/test_composite_accessibility.py'
       - 'lanes/dev1/repair_overlay/tests/test_packaged_accessibility_inspector_surface.py'
+      - 'lanes/dev1/repair_overlay/tests/test_scripture_text_provider.py'
       - '.github/workflows/r06-dev02-accessibility-qualification.yml'
   workflow_dispatch:
 
@@ -68,6 +70,7 @@ jobs:
           node --check frontend/keymap-ui.js
           node --check frontend/renderers-base.js
           node --check frontend/renderers.js
+          node --check frontend/scripture-reader-ui.js
           node --check frontend/accessibility-inspector-ui.js
           node --check frontend/settings-ui.js
       - name: Run exact accessibility regression
@@ -83,6 +86,9 @@ jobs:
       - name: Run packaged Accessibility Inspector surface regression
         working-directory: lanes/dev1/repair_overlay
         run: python -m unittest discover -s tests -p "test_packaged_accessibility_inspector_surface.py" -v
+      - name: Run Scripture reader accessibility regression
+        working-directory: lanes/dev1/repair_overlay
+        run: python -m unittest discover -s tests -p "test_scripture_text_provider.py" -v
       - name: Diff hygiene
         shell: bash
         run: git diff --check

@@ -492,6 +492,11 @@ class BundledScriptureTextTests(unittest.TestCase):
             if (!focused || focused.tagName !== 'H4' || focused.textContent !== 'GEN 1') {
               throw new Error('chapter result heading did not receive focus');
             }
+            const chapterList = nodes.get('scripture-reader-verses').children[1];
+            const chapterItem = chapterList?.children?.[0];
+            if (!chapterItem || chapterItem.children?.[1]?.attributes?.lang !== 'en') {
+              throw new Error('chapter source text is not marked as English');
+            }
 
             focused = null;
             mod.renderSearch({
@@ -500,7 +505,7 @@ class BundledScriptureTextTests(unittest.TestCase):
               query:'beginning', total:1, results:[verse]
             });
             const resultsHost = nodes.get('scripture-reader-search-results');
-            if (!focused || focused.tagName !== 'H4' || focused.textContent !== 'Search results') {
+            if (!focused || focused.tagName !== 'H4' || focused.textContent !== 'Результати пошуку') {
               throw new Error('search result heading did not receive focus');
             }
             if (focused.attributes.id !== 'scripture-reader-search-results-heading') {
@@ -510,6 +515,9 @@ class BundledScriptureTextTests(unittest.TestCase):
             if (!list || list.attributes['aria-labelledby'] !== 'scripture-reader-search-results-heading') {
               throw new Error('search result list is not labelled by its focused heading');
             }
+            if (list.children?.[0]?.children?.[1]?.attributes?.lang !== 'en') {
+              throw new Error('search source text is not marked as English');
+            }
 
             focused = null;
             mod.renderSearch({
@@ -517,10 +525,10 @@ class BundledScriptureTextTests(unittest.TestCase):
               translation_id:'engwebu', source_tier:'TX1',
               query:'absent', total:0, results:[]
             });
-            if (!focused || focused.textContent !== 'Search results') {
+            if (!focused || focused.textContent !== 'Результати пошуку') {
               throw new Error('empty search result heading did not receive focus');
             }
-            if (!resultsHost.children[1] || !resultsHost.children[1].textContent.includes('No matching text')) {
+            if (!resultsHost.children[1] || !resultsHost.children[1].textContent.includes('збігів не знайдено')) {
               throw new Error('empty search result message is missing');
             }
             """
@@ -551,6 +559,10 @@ class BundledScriptureTextTests(unittest.TestCase):
         self.assertIn("role: 'status'", frontend)
         self.assertEqual(1, frontend.count("'aria-live': 'polite'"))
         self.assertIn("'aria-atomic': 'true'", frontend)
+        self.assertIn("lang: 'en'", frontend)
+        self.assertIn('Повний текст Писання — WEBU', frontend)
+        self.assertIn('Результати пошуку', frontend)
+        self.assertNotIn('Full Scripture text — WEBU', frontend)
         self.assertNotIn("id: 'scripture-reader-verses', 'aria-live'", frontend)
         self.assertNotIn("id: 'scripture-reader-search-results', 'aria-live'", frontend)
         self.assertIn("id: 'scripture-reader-search-results-heading'", frontend)
@@ -558,8 +570,8 @@ class BundledScriptureTextTests(unittest.TestCase):
         self.assertGreaterEqual(frontend.count('heading.focus()'), 2)
         self.assertIn('AUDITED_PINNED_SNAPSHOT', frontend)
         self.assertIn('SOURCE_REAUDIT_REQUIRED', frontend)
-        self.assertIn('upstream source re-audit is pending', frontend)
-        self.assertIn('known changed references:', frontend)
+        self.assertIn('потрібен повторний аудит upstream-джерела', frontend)
+        self.assertIn('Відомі змінені посилання:', frontend)
         for token in (
             'validateTextCatalog',
             'validateChapter',

@@ -119,7 +119,11 @@ def _consume_apply_handoff_locked(
         installed_sha = _sha256_file(target)
         if installed_sha != pending.artifact_sha256:
             raise ApplicationUpdateError("installed artifact failed exact-byte verification")
-        discard_apply_handoff(root)
+        post_publish_handoff = inspect_apply_handoff(root, current_version=current_version)
+        if post_publish_handoff != pending:
+            raise ApplicationUpdateError("apply handoff changed after atomic publication")
+        if discard_apply_handoff(root) is not True:
+            raise ApplicationUpdateError("apply handoff disappeared during disarm")
     except Exception as apply_error:
         try:
             candidate.unlink()
@@ -297,20 +301,38 @@ def _discard_file(path: Path) -> None:
 
 def _copy_exact(source: Path, destination: Path) -> None:
     try:
-        descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o700)
+        source_handle = source.open("rb")
     except OSError as exc:
-        raise ApplicationUpdateError("could not create update copy safely") from exc
-    try:
-        with source.open("rb") as src, os.fdopen(descriptor, "wb", closefd=True) as dst:
-            shutil.copyfileobj(src, dst, length=_COPY_CHUNK)
-            dst.flush()
-            os.fsync(dst.fileno())
-    except Exception:
+        raise ApplicationUpdateError("update source could not be opened") from exc
+
+    with source_handle as src:
         try:
-            destination.unlink()
-        except OSError:
-            pass
-        raise
+            descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o700)
+        except OSError as exc:
+            raise ApplicationUpdateError("could not create update copy safely") from exc
+        try:
+            destination_handle = os.fdopen(descriptor, "wb", closefd=True)
+        except Exception:
+            try:
+                os.close(descriptor)
+            finally:
+                try:
+                    destination.unlink()
+                except OSError:
+                    pass
+            raise
+
+        try:
+            with destination_handle as dst:
+                shutil.copyfileobj(src, dst, length=_COPY_CHUNK)
+                dst.flush()
+                os.fsync(dst.fileno())
+        except Exception:
+            try:
+                destination.unlink()
+            except OSError:
+                pass
+            raise
 
 
 def _sha256_file(path: Path) -> str:

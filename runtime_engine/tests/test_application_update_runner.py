@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import os
 
-import pytest
+from runtime_engine.tests._functional_unittest import make_load_tests, pytest
 
 from scripture_archive_runtime.application_update import ApplicationUpdateError
 from scripture_archive_runtime.application_update_parent_wait import ParentProcessWaitError
@@ -325,3 +325,5 @@ def test_runner_requires_callable_security_dependencies_before_wait(
     kwargs.update(override)
     with pytest.raises(ApplicationUpdateError, match=message):
         execute_trusted_updater(plan.argv()[1:], **kwargs)  # type: ignore[arg-type]
+
+load_tests = make_load_tests(globals())

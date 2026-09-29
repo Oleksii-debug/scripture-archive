@@ -147,12 +147,13 @@ class AtomicApplicationUpdaterTests(unittest.TestCase):
         new = b"new"
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            target = root / "ScriptureArchive.exe"
-            staged = root / "ScriptureArchive.new.exe"
+            target = root / "install" / "ScriptureArchive.exe"
+            target.parent.mkdir()
+            staging = root / "staged"
+            staging.mkdir()
             target.write_bytes(old)
-            staged.write_bytes(new)
             pending = self._pending(new)
-            staged_named = root / pending.artifact_name
+            staged_named = staging / pending.artifact_name
             staged_named.write_bytes(new)
 
             with patch(

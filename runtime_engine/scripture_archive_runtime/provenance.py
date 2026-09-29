@@ -30,8 +30,10 @@ RELEASE_PASS_CLASSES = frozenset({
 CANONICAL_TASK_TYPES = (
     "SINGLE_CHOICE", "MULTI_SELECT", "SHORT_TEXT", "LONG_TEXT", "COMBOBOX_SELECT",
     "ORDERING", "MATCHING", "EVIDENCE_SELECT", "CLAIM_EVIDENCE", "SPEAKER_RECIPIENT",
-    "PARALLEL_WITNESS_COMPARE", "PARALLEL_WITNESS_SYNTHESIS", "OT_NT_LINK", "COMPOSITE_MULTI_STEP", "ARGUMENT",
+    "PARALLEL_WITNESS_COMPARE", "OT_NT_LINK", "COMPOSITE_MULTI_STEP", "ARGUMENT",
 )
+DERIVED_RUNTIME_TASK_TYPES = ("PARALLEL_WITNESS_SYNTHESIS",)
+SUPPORTED_RUNTIME_TASK_TYPES = CANONICAL_TASK_TYPES + DERIVED_RUNTIME_TASK_TYPES
 _PAYLOAD_TRUTH_KEYS = {
     "correct", "correct_evidence", "ordered_items", "pairs", "answer", "answer_index",
     "correct_index", "correct_option", "expected", "expected_answer", "speaker", "recipient",
@@ -214,7 +216,7 @@ def _explicit(n: Mapping[str, Any], dto: Mapping[str, Any]) -> tuple[str | None,
             if not isinstance(required_witnesses, Sequence) or isinstance(required_witnesses, (str, bytes)):
                 return mismatch("grading.required_witnesses", "parallel required_witnesses must be a canonical list")
             if {_norm(x) for x in required_witnesses} != {_norm(x) for x in dto["witnesses"]}:
-                return mismatch("grading.required_witnesses", "parallel witness set conflicts with canonical witnesses")
+                return mismatch("grading.required_witnesses", "grading.required_witnesses conflicts with canonical witnesses")
         if has_propositions and has_witnesses:
             return direct("grading.accepted_propositions+required_witnesses")
         if has_propositions:
@@ -270,7 +272,7 @@ def _explicit(n: Mapping[str, Any], dto: Mapping[str, Any]) -> tuple[str | None,
 
 def classify_provenance(n: Mapping[str, Any]) -> ProvenanceDecision:
     t = _type(n)
-    if t not in CANONICAL_TASK_TYPES: return ProvenanceDecision(ProvenanceClass.AMBIGUOUS_FAIL.value, False, f"unsupported task type {t}", None)
+    if t not in SUPPORTED_RUNTIME_TASK_TYPES: return ProvenanceDecision(ProvenanceClass.AMBIGUOUS_FAIL.value, False, f"unsupported task type {t}", None)
     try: dto = canonical_answer_dto(n)
     except Exception as exc:
         c = ProvenanceClass.ADAPTER_INFERENCE_FAIL if _payload_truth(n) else ProvenanceClass.AMBIGUOUS_FAIL
@@ -288,6 +290,7 @@ def provenance_contract_descriptor() -> dict[str, Any]:
         "failure_classes": [ProvenanceClass.ADAPTER_INFERENCE_FAIL.value, ProvenanceClass.MISMATCH_FAIL.value, ProvenanceClass.AMBIGUOUS_FAIL.value],
         "presentation_fields_never_truth": ["task_payload.correct", "task_payload.correct_evidence", "task_payload.ordered_items", "task_payload.pairs", "option position/order", "UI labels"],
         "task_types": {t: "canonical accepted_answer/required_evidence -> ANSWER_DTO_v1; explicit grading must be equivalent" for t in CANONICAL_TASK_TYPES},
+        "derived_runtime_task_types": {t: "deterministic node-context projection of authored canonical truth -> ANSWER_DTO_v1" for t in DERIVED_RUNTIME_TASK_TYPES},
         "invariant": "canonical and explicit task-specific truth must be equivalent or MISMATCH_FAIL",
         "fail_closed": "ambiguous projection or presentation-field inference never passes release",
     }

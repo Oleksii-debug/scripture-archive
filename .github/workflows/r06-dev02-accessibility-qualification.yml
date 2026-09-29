@@ -87,11 +87,10 @@ jobs:
       - name: Run packaged Accessibility Inspector surface regression
         working-directory: lanes/dev1/repair_overlay
         run: python -m unittest discover -s tests -p "test_packaged_accessibility_inspector_surface.py" -v
-      - name: Run Scripture reader accessibility regression
-        working-directory: lanes/dev1/repair_overlay
+      - name: Run Scripture reader accessibility regression on composed platform
         env:
-          PYTHONPATH: ${{ github.workspace }}
-        run: python -m unittest discover -s tests -p "test_scripture_text_provider.py" -v
+          LIBRARY_SOURCE_SHA: ${{ env.EXPECTED_HEAD }}
+        run: python tools/verify_library_search_overlay.py
       - name: Run Scripture reader request-state regression
         working-directory: lanes/dev1/repair_overlay
         run: python -m unittest discover -s tests -p "test_scripture_reader_request_state.py" -v

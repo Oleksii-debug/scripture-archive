@@ -19,6 +19,26 @@ class ConstructorV2FrontendTests(unittest.TestCase):
         self.assertNotIn("eval(", self.source)
         self.assertNotIn("new Function", self.source)
 
+    def test_failure_surface_is_sanitized_focusable_and_single_flight(self):
+        self.assertNotIn("error.message", self.source)
+        self.assertIn("console.error(context,error)", self.source)
+        self.assertIn("input?.focus()", self.source)
+        self.assertIn("button.dataset.constructorV2Action='true'", self.source)
+        self.assertIn("if(busy)return", self.source)
+        self.assertIn("setAttribute('aria-busy'", self.source)
+        self.assertIn("button.disabled=value", self.source)
+        self.assertIn("Спочатку відкрийте збережену чернетку.", self.source)
+        for message in (
+            "Не вдалося прочитати Constructor history.",
+            "Не вдалося порівняти snapshot із поточною чернеткою.",
+            "Не вдалося відновити snapshot.",
+            "Не вдалося відновити version artifact у draft.",
+            "Не вдалося виконати Constructor operation.",
+            "Не вдалося створити snapshot.",
+            "Не вдалося створити version artifact.",
+        ):
+            self.assertIn(message, self.source)
+
     def test_module_is_mounted_by_existing_transport_additive_pattern(self):
         transport = (self.frontend / "transport.js").read_text(encoding="utf-8")
         self.assertIn("./constructor-v2-ui.js", transport)

@@ -34,9 +34,27 @@ class GradingTests(unittest.TestCase):
         self.assertEqual(Correctness.CORRECT, exact.correctness)
         self.assertEqual(1.0, exact.score)
 
+        split_lines = self.registry.grade(
+            task,
+            {"synthesis": synthesis, "witnesses": ["Acts 9:10–19", "Acts 22:12–16"]},
+        )
+        self.assertEqual(Correctness.CORRECT, split_lines.correctness)
+        self.assertEqual(1.0, split_lines.score)
+
         missing_witness = self.registry.grade(task, {"synthesis": synthesis, "witnesses": ["Acts 9:10–19"]})
-        self.assertEqual(Correctness.INCORRECT, missing_witness.correctness)
-        self.assertEqual(0.0, missing_witness.score)
+        self.assertEqual(Correctness.PARTIAL, missing_witness.correctness)
+        self.assertEqual(0.5, missing_witness.score)
+
+        extra_witness = self.registry.grade(
+            task,
+            {
+                "synthesis": synthesis,
+                "witnesses": ["Acts 9:10–19", "Acts 22:12–16", "Acts 26:12–18"],
+            },
+        )
+        self.assertEqual(Correctness.PARTIAL, extra_witness.correctness)
+        self.assertAlmostEqual(2 / 3, extra_witness.score)
+        self.assertIn("acts 26 12 18", extra_witness.details["witnesses"]["extras"])
 
         weak_synthesis = self.registry.grade(
             task,

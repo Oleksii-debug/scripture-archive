@@ -52,17 +52,20 @@ class AuthoringService:
             })
         return sorted(out, key=lambda x: (-(int(x.get("updated_at") or 0)), x["draft_id"]))
 
-    def new_draft(self, title: str = "Нова чернетка", kind: str = "node") -> dict[str, Any]:
+    def _new_draft_record(self, title: str, kind: str) -> dict[str, Any]:
         kind = self._kind(kind)
         title = self._title(title)
         now = int(self.clock())
-        draft = {
+        return {
             "draft_schema": DRAFT_SCHEMA, "draft_id": "draft-" + self.id_factory(),
             "kind": kind, "title": title, "status": "DRAFT", "revision": 1,
             "created_at": now, "updated_at": now, "base_identity": None,
             "campaign": blank_campaign(), "mission": blank_mission(), "node": blank_node(),
             "change_record": [],
         }
+
+    def new_draft(self, title: str = "Нова чернетка", kind: str = "node") -> dict[str, Any]:
+        draft = self._new_draft_record(title, kind)
         self.store.put_json("drafts", draft["draft_id"], draft)
         return copy.deepcopy(draft)
 
@@ -70,10 +73,11 @@ class AuthoringService:
         task_type = str(task_type).upper()
         if task_type not in self.task_registry:
             raise ValueError("Unknown task_type")
-        draft = self.new_draft(title, "node")
+        draft = self._new_draft_record(title, "node")
         draft["node"]["task_type"] = task_type
         draft["node"]["response_mode"] = task_type.lower()
-        return draft
+        self.store.put_json("drafts", draft["draft_id"], draft)
+        return copy.deepcopy(draft)
 
     def load_draft(self, draft_id: str) -> dict[str, Any]:
         self._validate_id(draft_id, "draft id")

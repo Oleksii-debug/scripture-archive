@@ -28,6 +28,23 @@ class RuntimeCompatTests(unittest.TestCase):
     def test_platform_only_command_refuses_runtime_mapping(self):
         adapter=RuntimeEngineContractAdapter(lambda r:r)
         with self.assertRaises(RuntimeContractError):adapter.to_runtime_request(self.req('authoring.list_drafts'))
+    def test_runtime_save_restore_responses_fail_closed_without_persistence_ack(self):
+        missing_save=RuntimeEngineContractAdapter(lambda r:{'api_version':'runtime.v1','request_id':r['request_id']})
+        with self.assertRaisesRegex(RuntimeContractError,'saved=true'):
+            missing_save.invoke_runtime(self.req('player.save_checkpoint'))
+        false_restore=RuntimeEngineContractAdapter(lambda r:{'api_version':'runtime.v1','request_id':r['request_id'],'restored':False,'schema_version':3,'current_node_id':'LN01-N01'})
+        with self.assertRaisesRegex(RuntimeContractError,'restored=true'):
+            false_restore.invoke_runtime(self.req('player.restore_checkpoint'))
+        invalid_schema=RuntimeEngineContractAdapter(lambda r:{'api_version':'runtime.v1','request_id':r['request_id'],'restored':True,'schema_version':True,'current_node_id':'LN01-N01'})
+        with self.assertRaisesRegex(RuntimeContractError,'invalid schema_version'):
+            invalid_schema.invoke_runtime(self.req('player.restore_checkpoint'))
+        invalid_node=RuntimeEngineContractAdapter(lambda r:{'api_version':'runtime.v1','request_id':r['request_id'],'restored':True,'schema_version':3,'current_node_id':''})
+        with self.assertRaisesRegex(RuntimeContractError,'invalid current_node_id'):
+            invalid_node.invoke_runtime(self.req('player.restore_checkpoint'))
+        ok_save=RuntimeEngineContractAdapter(lambda r:{'api_version':'runtime.v1','request_id':r['request_id'],'saved':True})
+        self.assertTrue(ok_save.invoke_runtime(self.req('player.save_checkpoint'))['saved'])
+        ok_restore=RuntimeEngineContractAdapter(lambda r:{'api_version':'runtime.v1','request_id':r['request_id'],'restored':True,'schema_version':3,'current_node_id':None})
+        self.assertTrue(ok_restore.invoke_runtime(self.req('player.restore_checkpoint'))['restored'])
     def test_runtime_response_must_be_json_safe_and_runtime_v1(self):
         adapter=RuntimeEngineContractAdapter(lambda r:{'api_version':'runtime.v1','request_id':'r-1','task':{'node_id':'LN01-N01'}})
         response=adapter.invoke_runtime(self.req('player.load_node',{'node_id':'LN01-N01'}));self.assertEqual('LN01-N01',response['task']['node_id'])

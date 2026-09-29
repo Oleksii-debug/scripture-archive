@@ -9,6 +9,7 @@ from .service import (
     SNAPSHOT_SCHEMA,
     AuthoringService,
 )
+from .validation import identity
 
 
 TRANSACTION_SCHEMA = "scripture.authoring-transaction.v1"
@@ -65,6 +66,43 @@ class RecoverableAuthoringService(AuthoringService):
         history = None
         if stored is not None:
             history = self._history_with_prior(out["draft_id"], stored)
+        self._commit_mutation(out["draft_id"], out, history=history)
+        return copy.deepcopy(out)
+
+    def fork_record(self, kind: str, record: dict[str, Any], title: str | None = None) -> dict[str, Any]:
+        """Create a canonical fork without first exposing a durable blank draft.
+
+        Preserve the historical observable fork shape (revision 2 plus an undo
+        entry for the initial blank draft), but publish draft + history through
+        the recoverable write-ahead transaction as one restart-safe mutation.
+        """
+        kind = self._kind(kind)
+        if not isinstance(record, dict):
+            raise ValueError("record must be an object")
+        stable_id = identity(kind, record)
+        blank = self._new_draft_record(title or stable_id or f"Edit {kind}", kind)
+        now = int(self.clock())
+        out = copy.deepcopy(blank)
+        out[kind] = self._json_copy(record)
+        out.update({
+            "status": "DRAFT",
+            "created_at": int(blank.get("created_at", now)),
+            "updated_at": now,
+            "revision": 2,
+            "base_identity": {kind: stable_id},
+        })
+        out.setdefault("change_record", []).append({
+            "timestamp": now,
+            "action": "save_draft",
+            "revision": 2,
+        })
+        self._protect_identity(out)
+        history = {
+            "schema": HISTORY_SCHEMA,
+            "draft_id": out["draft_id"],
+            "undo": [self._json_copy(blank)],
+            "redo": [],
+        }
         self._commit_mutation(out["draft_id"], out, history=history)
         return copy.deepcopy(out)
 

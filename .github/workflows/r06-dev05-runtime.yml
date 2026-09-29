@@ -34,5 +34,7 @@ jobs:
           python-version: "3.11"
       - name: Compile runtime and tests
         run: python -m compileall -q scripture_archive_runtime tests
+      - name: Install runtime test runner
+        run: python -m pip install --disable-pip-version-check pytest==8.4.2
       - name: Runtime regression suite
-        run: python -m unittest discover -s tests -v
+        run: python -m pytest -v tests

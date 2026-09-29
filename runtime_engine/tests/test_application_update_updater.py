@@ -152,7 +152,8 @@ class AtomicApplicationUpdaterTests(unittest.TestCase):
             target.write_bytes(old)
             staged.write_bytes(new)
             pending = self._pending(new)
-            staged_named = root / pending.artifact_name
+            staged_named = root / "staged" / pending.artifact_name
+            staged_named.parent.mkdir()
             staged_named.write_bytes(new)
 
             with patch(

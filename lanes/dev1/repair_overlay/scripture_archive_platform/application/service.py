@@ -224,11 +224,12 @@ class PlatformApplication:
     def _checkpoint_from_runtime_node(self,nid):
         if nid is None:return None
         if not isinstance(nid,str) or not nid:raise ValueError('runtime checkpoint exposed invalid current_node_id')
-        try:
-            mission=self.loader.mission_for_node(nid)
-            return {'campaign_id':mission.get('campaign_id'),'mission_id':mission.get('mission_id'),'node_id':nid,'checkpoint_schema':'scripture.player.checkpoint.v1'}
-        except Exception:
-            return {'node_id':nid,'checkpoint_schema':'scripture.player.checkpoint.v1'}
+        try: mission=self.loader.mission_for_node(nid)
+        except (KeyError,ContentLoadError) as exc: raise ValueError('runtime checkpoint references unknown canonical node') from exc
+        campaign_id=mission.get('campaign_id'); mission_id=mission.get('mission_id')
+        if not isinstance(campaign_id,str) or not campaign_id or not isinstance(mission_id,str) or not mission_id:
+            raise ValueError('runtime checkpoint canonical mission metadata is invalid')
+        return {'campaign_id':campaign_id,'mission_id':mission_id,'node_id':nid,'checkpoint_schema':'scripture.player.checkpoint.v1'}
     def _save_checkpoint(self,p):
         if self.player_gateway:
             rr=self.player_gateway.invoke('player.save_checkpoint',{},request_id='save-player')

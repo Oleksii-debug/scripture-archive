@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 
-import pytest
+from runtime_engine.tests._functional_unittest import make_load_tests, pytest
 
 from scripture_archive_runtime.application_update_parent_wait import (
     ParentProcessWaitError,
@@ -63,3 +63,5 @@ def test_wait_preserves_fail_closed_backend_verdict() -> None:
 
     with pytest.raises(ParentProcessWaitError, match="did not exit"):
         wait_for_parent_exit(4242, wait_backend=backend)
+
+load_tests = make_load_tests(globals())

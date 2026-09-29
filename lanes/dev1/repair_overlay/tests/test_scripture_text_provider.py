@@ -441,6 +441,106 @@ class BundledScriptureTextTests(unittest.TestCase):
         )
         self.assertEqual(0, result.returncode, result.stderr or result.stdout)
 
+    def test_frontend_result_focus_is_executable_without_bulk_live_regions(self):
+        overlay = Path(__file__).resolve().parents[1]
+        ui_path = overlay / 'frontend' / 'scripture-reader-ui.js'
+        script = textwrap.dedent(
+            r"""
+            import {readFileSync} from 'node:fs';
+            let source = readFileSync(process.argv[1], 'utf8');
+            source = source.replace(
+              "import {chooseTransport, unwrap} from './transport.js';",
+              "const chooseTransport=()=>null; const unwrap=async()=>({});"
+            );
+            source = source.replace('function renderVerses(data) {', 'export function renderVerses(data) {');
+            source = source.replace('function renderSearch(data) {', 'export function renderSearch(data) {');
+
+            let focused = null;
+            class FakeNode {
+              constructor(tag) {
+                this.tagName = String(tag).toUpperCase();
+                this.textContent = '';
+                this.children = [];
+                this.attributes = {};
+                this.tabIndex = 0;
+              }
+              setAttribute(name, value) { this.attributes[name] = String(value); }
+              append(...nodes) { this.children.push(...nodes); }
+              replaceChildren(...nodes) { this.children = [...nodes]; }
+              focus() { focused = this; }
+            }
+            const nodes = new Map([
+              ['scripture-reader-verses', new FakeNode('div')],
+              ['scripture-reader-search-results', new FakeNode('div')],
+            ]);
+            globalThis.document = {
+              createElement: tag => new FakeNode(tag),
+              getElementById: id => nodes.get(id) || null,
+            };
+
+            const mod = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
+            const verse = {
+              book:'GEN', chapter:1, verse:1, reference:'GEN 1:1',
+              text:'In the beginning', text_state:'present',
+              translation_id:'engwebu', source_tier:'TX1'
+            };
+            mod.renderVerses({
+              schema:'scripture.library.chapter.v1',
+              translation_id:'engwebu', source_tier:'TX1',
+              book:'GEN', chapter:1, verses:[verse], source_empty_rows:0
+            });
+            if (!focused || focused.tagName !== 'H4' || focused.textContent !== 'GEN 1') {
+              throw new Error('chapter result heading did not receive focus');
+            }
+            const chapterList = nodes.get('scripture-reader-verses').children[1];
+            const chapterItem = chapterList?.children?.[0];
+            if (!chapterItem || chapterItem.children?.[1]?.attributes?.lang !== 'en') {
+              throw new Error('chapter source text is not marked as English');
+            }
+
+            focused = null;
+            mod.renderSearch({
+              schema:'scripture.library.text-search.v1',
+              translation_id:'engwebu', source_tier:'TX1',
+              query:'beginning', total:1, results:[verse]
+            });
+            const resultsHost = nodes.get('scripture-reader-search-results');
+            if (!focused || focused.tagName !== 'H4' || focused.textContent !== 'Результати пошуку') {
+              throw new Error('search result heading did not receive focus');
+            }
+            if (focused.attributes.id !== 'scripture-reader-search-results-heading') {
+              throw new Error('search result heading identity is missing');
+            }
+            const list = resultsHost.children[1];
+            if (!list || list.attributes['aria-labelledby'] !== 'scripture-reader-search-results-heading') {
+              throw new Error('search result list is not labelled by its focused heading');
+            }
+            if (list.children?.[0]?.children?.[1]?.attributes?.lang !== 'en') {
+              throw new Error('search source text is not marked as English');
+            }
+
+            focused = null;
+            mod.renderSearch({
+              schema:'scripture.library.text-search.v1',
+              translation_id:'engwebu', source_tier:'TX1',
+              query:'absent', total:0, results:[]
+            });
+            if (!focused || focused.textContent !== 'Результати пошуку') {
+              throw new Error('empty search result heading did not receive focus');
+            }
+            if (!resultsHost.children[1] || !resultsHost.children[1].textContent.includes('збігів не знайдено')) {
+              throw new Error('empty search result message is missing');
+            }
+            """
+        )
+        result = subprocess.run(
+            ['node', '--input-type=module', '-e', script, str(ui_path)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stderr or result.stdout)
+
     def test_packaging_and_frontend_bindings_are_explicit(self):
         overlay = Path(__file__).resolve().parents[1]
         build = (overlay / 'packaging' / 'build_windows.ps1').read_text(encoding='utf-8')
@@ -457,10 +557,27 @@ class BundledScriptureTextTests(unittest.TestCase):
         self.assertIn('textContent', frontend)
         self.assertNotIn('innerHTML', frontend)
         self.assertIn("role: 'status'", frontend)
+        self.assertEqual(1, frontend.count("'aria-live': 'polite'"))
+        self.assertIn("'aria-atomic': 'true'", frontend)
+        self.assertIn("lang: 'en'", frontend)
+        self.assertIn('Повний текст Писання — WEBU', frontend)
+        self.assertIn('Результати пошуку', frontend)
+        self.assertNotIn('Full Scripture text — WEBU', frontend)
+        self.assertNotIn('status(`Постачальник повного тексту недоступний: ${error.message}`)', frontend)
+        self.assertNotIn('status(`Не вдалося прочитати розділ: ${error.message}`)', frontend)
+        self.assertNotIn('status(`Не вдалося виконати пошук у тексті Писання: ${error.message}`)', frontend)
+        self.assertIn("console.error('Scripture reader catalog initialization failed', error)", frontend)
+        self.assertIn("console.error('Scripture reader chapter load failed', error)", frontend)
+        self.assertIn("console.error('Scripture reader text search failed', error)", frontend)
+        self.assertNotIn("id: 'scripture-reader-verses', 'aria-live'", frontend)
+        self.assertNotIn("id: 'scripture-reader-search-results', 'aria-live'", frontend)
+        self.assertIn("id: 'scripture-reader-search-results-heading'", frontend)
+        self.assertIn("'aria-labelledby': 'scripture-reader-search-results-heading'", frontend)
+        self.assertGreaterEqual(frontend.count('heading.focus()'), 2)
         self.assertIn('AUDITED_PINNED_SNAPSHOT', frontend)
         self.assertIn('SOURCE_REAUDIT_REQUIRED', frontend)
-        self.assertIn('upstream source re-audit is pending', frontend)
-        self.assertIn('known changed references:', frontend)
+        self.assertIn('потрібен повторний аудит upstream-джерела', frontend)
+        self.assertIn('Відомі змінені посилання:', frontend)
         for token in (
             'validateTextCatalog',
             'validateChapter',
@@ -490,6 +607,20 @@ class BundledScriptureTextTests(unittest.TestCase):
         self.assertIn('WEBU_SOURCE_MONITORING_TRUTH_PASS', workflow)
         self.assertIn("'SOURCE_REAUDIT_REQUIRED'", workflow)
         self.assertNotIn('steps.source_audit.outputs.source_matches', workflow)
+
+        accessibility_workflow = (
+            overlay.parents[2]
+            / '.github'
+            / 'workflows'
+            / 'r06-dev02-accessibility-qualification.yml'
+        ).read_text(encoding='utf-8')
+        self.assertIn("'lanes/dev1/repair_overlay/frontend/scripture-reader-ui.js'", accessibility_workflow)
+        self.assertIn("'lanes/dev1/repair_overlay/tests/test_scripture_text_provider.py'", accessibility_workflow)
+        self.assertIn('node --check frontend/scripture-reader-ui.js', accessibility_workflow)
+        self.assertIn(
+            'python -m unittest discover -s tests -p "test_scripture_text_provider.py" -v',
+            accessibility_workflow,
+        )
 
         completed = subprocess.run(
             ['node', '--check', str(overlay / 'frontend' / 'scripture-reader-ui.js')],

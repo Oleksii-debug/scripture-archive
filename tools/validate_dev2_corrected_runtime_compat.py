@@ -9,6 +9,7 @@ runtime and a deterministic preintegration content-pack round trip.
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import stat
@@ -66,6 +67,11 @@ PACKAGE_EVIDENCE_REL = (
 )
 PACK_ID = "r06-d2-paul-acts-preintegration"
 PACK_VERSION = "0.6.0-d2pre.1"
+EXPECTED_PARALLEL_WITNESS_FALLBACK_COUNT = 11
+PARALLEL_WITNESS_FALLBACK_REASON = (
+    "DEV5 pre-integration runtime lacks PARALLEL_WITNESS_COMPARE grader; "
+    "preserve structured canonical comparison and use text fallback only for compatibility testing."
+)
 
 
 class CompatibilityError(ValueError):
@@ -279,13 +285,98 @@ def _verify_evidence_binding(
     return len(evidence_ids), evidence_report
 
 
+def _project_nodes_for_current_runtime(
+    nodes: Iterable[Mapping[str, Any]],
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Build a compatibility-only runtime projection without mutating source authority.
+
+    The corrected D2 authority intentionally keeps PARALLEL_WITNESS_COMPARE as a
+    structured synthesis+witness object. The current DEV5 runtime has no grader
+    for that task type, so those exact authority records carry an explicit
+    runtime_fallback. Apply it only after authority hash/evidence verification,
+    and only when it is a lossless projection of accepted_answer.synthesis.
+    """
+    projected: list[dict[str, Any]] = []
+    fallback_node_ids: list[str] = []
+    expected_fields = {"synthesis": "string", "witnesses": "array[passage]"}
+    allowed_contract_kinds = {"witness_compare", "parallel_witness_compare"}
+
+    for source in nodes:
+        node = copy.deepcopy(dict(source))
+        if str(node.get("task_type") or "") != "PARALLEL_WITNESS_COMPARE":
+            projected.append(node)
+            continue
+
+        node_id = str(node.get("node_id") or "<missing>")
+        accepted = node.get("accepted_answer")
+        if not isinstance(accepted, Mapping) or set(accepted) != {"synthesis", "witnesses"}:
+            raise CompatibilityError(
+                f"{node_id}: PARALLEL_WITNESS_COMPARE requires structured synthesis+witnesses authority"
+            )
+        synthesis = accepted.get("synthesis")
+        witnesses = accepted.get("witnesses")
+        if not isinstance(synthesis, str) or not synthesis.strip():
+            raise CompatibilityError(f"{node_id}: structured synthesis must be non-empty string")
+        if (
+            not isinstance(witnesses, list)
+            or not witnesses
+            or not all(isinstance(value, str) and value.strip() for value in witnesses)
+        ):
+            raise CompatibilityError(f"{node_id}: structured witnesses must be a non-empty string list")
+
+        contract = node.get("response_contract")
+        dto = contract.get("answer_dto") if isinstance(contract, Mapping) else None
+        if (
+            not isinstance(contract, Mapping)
+            or contract.get("kind") not in allowed_contract_kinds
+            or not isinstance(dto, Mapping)
+            or dto.get("shape") != "object"
+            or dto.get("fields") != expected_fields
+        ):
+            raise CompatibilityError(f"{node_id}: structured witness response_contract changed")
+
+        variants = node.get("accepted_variants")
+        grading = node.get("grading")
+        if (
+            not isinstance(variants, Mapping)
+            or variants.get("witnesses") != witnesses
+            or not isinstance(variants.get("synthesis_aliases"), list)
+            or synthesis not in variants.get("synthesis_aliases", [])
+            or not isinstance(grading, Mapping)
+            or grading.get("required_witnesses") != witnesses
+        ):
+            raise CompatibilityError(f"{node_id}: structured witness truth bindings changed")
+
+        fallback = node.get("runtime_fallback")
+        if (
+            not isinstance(fallback, Mapping)
+            or set(fallback) != {"accepted_answer", "reason", "task_type"}
+            or fallback.get("task_type") != "LONG_TEXT"
+            or fallback.get("accepted_answer") != synthesis
+            or fallback.get("reason") != PARALLEL_WITNESS_FALLBACK_REASON
+        ):
+            raise CompatibilityError(f"{node_id}: runtime_fallback is missing or not lossless")
+
+        node["task_type"] = "LONG_TEXT"
+        node["accepted_answer"] = synthesis
+        projected.append(node)
+        fallback_node_ids.append(node_id)
+
+    return projected, sorted(fallback_node_ids)
+
+
 def _runtime_compatibility(
     nodes: list[dict[str, Any]],
     *,
     expected_node_count: int = EXPECTED_NODE_COUNT,
 ) -> dict[str, Any]:
+    runtime_nodes, fallback_node_ids = _project_nodes_for_current_runtime(nodes)
+    if expected_node_count == EXPECTED_NODE_COUNT and len(fallback_node_ids) != EXPECTED_PARALLEL_WITNESS_FALLBACK_COUNT:
+        raise CompatibilityError(
+            f"expected {EXPECTED_PARALLEL_WITNESS_FALLBACK_COUNT} explicit parallel-witness fallbacks, got {len(fallback_node_ids)}"
+        )
     try:
-        repository = ContentRepository(nodes, adapt_legacy=True, lane="D2")
+        repository = ContentRepository(runtime_nodes, adapt_legacy=True, lane="D2")
     except (ValidationError, ValueError, TypeError) as exc:
         raise CompatibilityError(f"current runtime rejected corrected D2 corpus: {exc}") from exc
     tasks = repository.all()
@@ -333,6 +424,8 @@ def _runtime_compatibility(
         "self_grade_correct": expected_node_count,
         "runtime_load_pass": expected_node_count,
         "provenance_classes": dict(sorted(provenance_counts.items())),
+        "runtime_fallback_node_ids": fallback_node_ids,
+        "runtime_fallback_count": len(fallback_node_ids),
     }
 
 
@@ -350,7 +443,12 @@ def write_preintegration_pack(
 ) -> dict[str, Any]:
     destination = destination.expanduser().resolve()
     destination.parent.mkdir(parents=True, exist_ok=True)
-    payload = _json_bytes({"nodes": nodes})
+    runtime_nodes, fallback_node_ids = _project_nodes_for_current_runtime(nodes)
+    if expected_node_count == EXPECTED_NODE_COUNT and len(fallback_node_ids) != EXPECTED_PARALLEL_WITNESS_FALLBACK_COUNT:
+        raise CompatibilityError(
+            f"expected {EXPECTED_PARALLEL_WITNESS_FALLBACK_COUNT} explicit parallel-witness fallbacks, got {len(fallback_node_ids)}"
+        )
+    payload = _json_bytes({"nodes": runtime_nodes})
     payload_name = "content/nodes.json"
     manifest = {
         "schema": CONTENT_PACK_SCHEMA,
@@ -410,6 +508,8 @@ def write_preintegration_pack(
         "payload_sha256": manifest["files"][payload_name],
         "node_count": inspection.node_count,
         "file_count": inspection.file_count,
+        "runtime_fallback_node_ids": fallback_node_ids,
+        "runtime_fallback_count": len(fallback_node_ids),
     }
 
 

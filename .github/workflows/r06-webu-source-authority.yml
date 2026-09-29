@@ -148,8 +148,12 @@ jobs:
           for key, expected in required.items():
               if authority.get(key) != expected:
                   raise SystemExit(f'checked-in authority mismatch for {key}: {authority.get(key)!r} != {expected!r}')
-          if authority.get('archive_size') != 5_347_563 or authority.get('entries') != entries:
-              raise SystemExit('checked-in WEBU archive inventory differs from pinned official archive')
+          if authority.get('archive_size') != 5_347_563:
+              raise SystemExit('checked-in WEBU pinned archive size metadata changed')
+          authority_entries = authority.get('entries')
+          if not isinstance(authority_entries, list):
+              raise SystemExit('checked-in WEBU archive inventory is malformed')
+          archive_inventory_matches = authority_entries == entries
           if authority.get('book_codes') != pinned_books:
               raise SystemExit('checked-in WEBU book order differs from bundled payload')
           if len(pinned_lines) != 38058 or sum(line.endswith(' ') for line in pinned_lines) != 29:
@@ -189,6 +193,7 @@ jobs:
               and live_sha == os.environ['PINNED_VPL_SHA256']
               and live_vpl == pinned
               and live_books == pinned_books
+              and archive_inventory_matches
               and not added and not removed and not changed
           )
           report = {
@@ -201,6 +206,9 @@ jobs:
               'observed_vpl_sha256': live_sha,
               'pinned_rows': len(pinned_lines),
               'current_rows': len(live_lines),
+              'authority_archive_size': authority.get('archive_size'),
+              'observed_archive_size': len(raw),
+              'archive_inventory_matches': archive_inventory_matches,
               'reference_diff': {
                   'added_count': len(added), 'removed_count': len(removed), 'changed_count': len(changed),
                   'added_refs': added, 'removed_refs': removed, 'changed': changed_detail,

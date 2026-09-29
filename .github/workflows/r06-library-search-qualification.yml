@@ -10,12 +10,14 @@ on:
       - 'docs/campaigns/OT/R06_D4_STAGE05_READABLE/**'
       - 'tools/verify_library_search_overlay.py'
       - '.github/workflows/r06-library-search-qualification.yml'
+      - '.github/workflows/r06-webu-source-authority.yml'
   pull_request:
     paths:
       - 'lanes/dev1/**'
       - 'docs/campaigns/OT/R06_D4_STAGE05_READABLE/**'
       - 'tools/verify_library_search_overlay.py'
       - '.github/workflows/r06-library-search-qualification.yml'
+      - '.github/workflows/r06-webu-source-authority.yml'
 
 env:
   LIBRARY_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}

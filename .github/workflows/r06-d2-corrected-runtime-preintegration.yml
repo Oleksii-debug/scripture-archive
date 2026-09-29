@@ -40,6 +40,7 @@ jobs:
       PACKAGE_BASE_SHA: 76176fc3dcd246284366ba88619947ba2626c7d7
       D2_AUTHORITY_SHA: 6ed0a9e8f390dea7c12c05fb9e991ed6328d1458
       D2_AUTHORITY_REL: docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05
+      PYTHONDONTWRITEBYTECODE: "1"
     steps:
       - name: Resolve expected head
         id: head
@@ -92,7 +93,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m py_compile tools/validate_dev2_corrected_runtime_compat.py
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("tools/validate_dev2_corrected_runtime_compat.py")
+          compile(path.read_text(encoding="utf-8"), str(path), "exec")
+          PY
           python -m unittest tools/test_validate_dev2_corrected_runtime_compat.py -v
 
       - name: Run exact D2 through current-package runtime
@@ -134,7 +139,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -z "$(git status --porcelain)"
+          dirty="$(git status --porcelain)"
+          if [[ -n "$dirty" ]]; then
+            echo "D2_RUNTIME_PREINTEGRATION_WORKTREE_DIRTY" >&2
+            printf '%s\n' "$dirty" >&2
+            exit 1
+          fi
           echo "D2_RUNTIME_PREINTEGRATION_READ_ONLY_PASS"
 
       - name: Upload read-only compatibility evidence

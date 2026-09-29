@@ -464,6 +464,17 @@ class BundledScriptureTextTests(unittest.TestCase):
         self.assertIn("validateTextCatalog(await api('library.text_catalog'))", frontend)
         self.assertIn("validateChapter(await api('library.read_chapter'", frontend)
         self.assertIn("validateTextSearch(await api('library.text_search'", frontend)
+        workflow = (
+            overlay.parents[2]
+            / '.github'
+            / 'workflows'
+            / 'r06-webu-source-authority.yml'
+        ).read_text(encoding='utf-8')
+        self.assertIn("monitoring_matches={'true' if monitoring_matches else 'false'}", workflow)
+        self.assertIn('WEBU_SOURCE_MONITORING_TRUTH_PASS', workflow)
+        self.assertIn("'SOURCE_REAUDIT_REQUIRED'", workflow)
+        self.assertNotIn('steps.source_audit.outputs.source_matches', workflow)
+
         completed = subprocess.run(
             ['node', '--check', str(overlay / 'frontend' / 'scripture-reader-ui.js')],
             capture_output=True,

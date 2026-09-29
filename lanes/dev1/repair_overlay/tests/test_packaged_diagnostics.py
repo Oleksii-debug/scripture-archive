@@ -166,20 +166,22 @@ class PackagedDiagnosticsTests(unittest.TestCase):
             'Assert-NativeSuccess "pip upgrade"',
             'Assert-NativeSuccess "build dependency install"',
             'Assert-NativeSuccess "Windows release diagnostics"',
-            'Assert-NativeSuccess "PyInstaller build"',
+            'Assert-NativeSuccess "PyInstaller application build"',
+            'Assert-NativeSuccess "PyInstaller updater build"',
             'Assert-NativeSuccess "Python version query"',
-            'Assert-NativeSuccess "artifact verification"',
+            'Assert-NativeSuccess "application artifact verification"',
+            'Assert-NativeSuccess "updater artifact verification"',
         ):
             self.assertIn(step, build)
         stale_cleanup = "Remove-Item -LiteralPath $Out -Force"
         self.assertIn(stale_cleanup, build)
         self.assertLess(build.index(stale_cleanup), build.index("pyinstaller.exe"))
         self.assertLess(
-            build.index('Assert-NativeSuccess "PyInstaller build"'),
+            build.index('Assert-NativeSuccess "PyInstaller application build"'),
             build.index('if (-not (Test-Path -LiteralPath $Out -PathType Leaf))'),
         )
         self.assertLess(
-            build.index('Assert-NativeSuccess "artifact verification"'),
+            build.index('Assert-NativeSuccess "application artifact verification"'),
             build.index('Write-Output "Built $Out'),
         )
 

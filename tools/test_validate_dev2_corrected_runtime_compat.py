@@ -166,6 +166,10 @@ class D2CorrectedRuntimeCompatibilityTests(unittest.TestCase):
                 2,
                 f"push and pull_request must both requalify on {trigger}",
             )
+        self.assertIn('PYTHONDONTWRITEBYTECODE: "1"', workflow)
+        self.assertNotIn("python -m py_compile tools/validate_dev2_corrected_runtime_compat.py", workflow)
+        self.assertIn('dirty="$(git status --porcelain)"', workflow)
+        self.assertIn("D2_RUNTIME_PREINTEGRATION_WORKTREE_DIRTY", workflow)
 
 
 if __name__ == "__main__":

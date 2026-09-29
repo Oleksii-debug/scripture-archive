@@ -364,9 +364,9 @@ class GraderRegistry:
 
     def __init__(self) -> None:
         self._graders = {}
-        for name in ("SINGLE_CHOICE", "COMBOBOX_SELECT", "radio", "select", "classification"):
+        for name in ("SINGLE_CHOICE", "COMBOBOX_SELECT", "PARALLEL_WITNESS_COMPARE", "radio", "select", "classification"):
             self.register(name, grade_single_choice)
-        self.register("PARALLEL_WITNESS_COMPARE", grade_parallel_witness_compare)
+        self.register("PARALLEL_WITNESS_SYNTHESIS", grade_parallel_witness_compare)
         for name in ("MULTI_SELECT", "checkboxes", "citation selection"):
             self.register(name, grade_multi_select)
         for name in ("SHORT_TEXT", "LONG_TEXT", "ARGUMENT", "free response", "free response + citation", "free response / comparison", "witness comparison"):

@@ -174,7 +174,7 @@ class BundledScriptureTextTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'SHA-256 mismatch'):
                 BundledScriptureText(target)
 
-    def test_chapter_preserves_current_official_text_and_source_empty_rows(self):
+    def test_chapter_preserves_pinned_audited_text_and_source_empty_rows(self):
         provider = BundledScriptureText()
         gen = provider.chapter('GEN', 1)
         self.assertEqual('In the beginning, God created the heavens and the earth.', gen['verses'][0]['text'])
@@ -187,6 +187,12 @@ class BundledScriptureTextTests(unittest.TestCase):
         dan9 = provider.chapter('DAN', 9)
         dan911 = next(row for row in dan9['verses'] if row['verse'] == 11)
         self.assertIn('turning aside, and not obeying your voice.', dan911['text'])
+
+        wisdom = provider.chapter('WIS', 18)
+        wis181 = next(row for row in wisdom['verses'] if row['verse'] == 1)
+        self.assertIn('counted it a happy thing that they too had suffered,', wis181['text'])
+        self.assertNotIn('counted it a happy thing that they had not suffered,', wis181['text'])
+
         acts = provider.chapter('ACT', 8)
         v37 = next(row for row in acts['verses'] if row['verse'] == 37)
         self.assertEqual('', v37['text'])

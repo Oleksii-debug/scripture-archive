@@ -9,6 +9,9 @@ on:
       - 'lanes/dev1/repair_overlay/scripture_archive_platform/authoring/**'
       - 'lanes/dev1/repair_overlay/scripture_archive_platform/transport/contracts.py'
       - 'lanes/dev1/repair_overlay/tests/test_authoring_transport.py'
+      - 'lanes/dev1/repair_overlay/tests/test_constructor_fork_recovery.py'
+      - 'lanes/dev1/repair_overlay/tests/test_constructor_template_persistence.py'
+      - 'lanes/dev1/repair_overlay/tests/test_constructor_template_transport_restart.py'
       - 'lanes/dev1/repair_overlay/tests/test_constructor_v2_frontend.py'
       - 'lanes/dev1/repair_overlay/tests/test_constructor_v2_lifecycle.py'
       - 'lanes/dev1/repair_overlay/tests/test_constructor_v2_recovery_atomicity.py'
@@ -111,9 +114,18 @@ jobs:
           r06_platform/scripture_archive_platform/authoring
           r06_platform/scripture_archive_platform/application/service.py
           r06_platform/scripture_archive_platform/transport/contracts.py
+          r06_platform/tests/test_constructor_fork_recovery.py
+          r06_platform/tests/test_constructor_template_persistence.py
+          r06_platform/tests/test_constructor_template_transport_restart.py
           r06_platform/tests/test_constructor_v2_lifecycle.py
           r06_platform/tests/test_constructor_v2_recovery_atomicity.py
           r06_platform/tests/test_authoring_transport.py
+      - name: Run Constructor fork crash-recovery regression
+        run: python r06_platform/tests/test_constructor_fork_recovery.py
+      - name: Run Constructor template persistence regression
+        run: python r06_platform/tests/test_constructor_template_persistence.py
+      - name: Run Constructor transport restart regression
+        run: python r06_platform/tests/test_constructor_template_transport_restart.py
       - name: Run Constructor V2 lifecycle regression
         run: python r06_platform/tests/test_constructor_v2_lifecycle.py
       - name: Run Constructor V2 crash-recovery regression

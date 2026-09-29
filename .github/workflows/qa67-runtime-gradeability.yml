@@ -13,12 +13,27 @@ on:
       - 'lanes/dev1/repair_overlay/tests/test_constructor_runtime_gradeability.py'
       - '.github/workflows/qa67-runtime-gradeability.yml'
 
+permissions:
+  contents: read
+
+env:
+  EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
+concurrency:
+  group: qa67-constructor-runtime-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   constructor-runtime-contract:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+      - name: Confirm exact source checkout
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'

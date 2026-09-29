@@ -29,7 +29,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: r06-d2-structured-runtime-compat
+  group: r06-d2-structured-runtime-compat-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

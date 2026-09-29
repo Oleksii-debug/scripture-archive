@@ -34,7 +34,7 @@ def canonical_task_type(value: str) -> str:
 ANSWER_TASK_TYPES = frozenset({
     "SINGLE_CHOICE", "MULTI_SELECT", "SHORT_TEXT", "LONG_TEXT", "COMBOBOX_SELECT",
     "ORDERING", "MATCHING", "EVIDENCE_SELECT", "CLAIM_EVIDENCE", "SPEAKER_RECIPIENT",
-    "PARALLEL_WITNESS_COMPARE", "OT_NT_LINK", "COMPOSITE_MULTI_STEP", "ARGUMENT",
+    "PARALLEL_WITNESS_COMPARE", "PARALLEL_WITNESS_SYNTHESIS", "OT_NT_LINK", "COMPOSITE_MULTI_STEP", "ARGUMENT",
 })
 
 _LEGACY_LONG_TEXT_MARKERS = (
@@ -55,7 +55,16 @@ def canonical_node_task_type(node: Mapping[str, Any]) -> str:
     """
     explicit = node.get("task_type")
     if explicit is not None and str(explicit).strip():
-        return canonical_task_type(str(explicit))
+        explicit_type = canonical_task_type(str(explicit))
+        accepted = node.get("accepted_answer")
+        if (
+            explicit_type == "PARALLEL_WITNESS_COMPARE"
+            and isinstance(accepted, Mapping)
+            and "synthesis" in accepted
+            and "witnesses" in accepted
+        ):
+            return "PARALLEL_WITNESS_SYNTHESIS"
+        return explicit_type
 
     response_mode = str(node.get("response_mode") or "").strip()
     task_family = str(node.get("task_family") or "").strip()
@@ -129,10 +138,10 @@ def validate_answer_dto(task_type: str, value: Any) -> dict[str, Any]:
     if declared is not None and canonical_task_type(str(declared)) != ctype:
         raise ValidationError("answer DTO task_type mismatch")
 
-    if ctype in {"SINGLE_CHOICE", "COMBOBOX_SELECT"}:
+    if ctype in {"SINGLE_CHOICE", "COMBOBOX_SELECT", "PARALLEL_WITNESS_COMPARE"}:
         allowed = {"choice"}
         result = {"choice": _require_str(dto.get("choice"), "choice")}
-    elif ctype == "PARALLEL_WITNESS_COMPARE":
+    elif ctype == "PARALLEL_WITNESS_SYNTHESIS":
         allowed = {"synthesis", "witnesses"}
         result = {
             "synthesis": _require_str(dto.get("synthesis"), "synthesis"),
@@ -201,7 +210,8 @@ def answer_contract_descriptor(task_type: str) -> dict[str, Any]:
     fields = {
         "SINGLE_CHOICE": {"choice": "string"},
         "COMBOBOX_SELECT": {"choice": "string"},
-        "PARALLEL_WITNESS_COMPARE": {"synthesis": "string", "witnesses": "string[]"},
+        "PARALLEL_WITNESS_COMPARE": {"choice": "string"},
+        "PARALLEL_WITNESS_SYNTHESIS": {"synthesis": "string", "witnesses": "string[]"},
         "MULTI_SELECT": {"choices": "string[]"},
         "SHORT_TEXT": {"text": "string"},
         "LONG_TEXT": {"text": "string"},

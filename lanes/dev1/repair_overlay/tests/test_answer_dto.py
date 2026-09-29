@@ -11,6 +11,18 @@ class AnswerDtoTests(unittest.TestCase):
             'COMPOSITE_MULTI_STEP':{'steps':'{step_id:string,answer:object}[]'},
         }
         for task_type,fields in expected.items(): self.assertEqual(fields,answer_contract_descriptor(task_type)['fields'])
+    def test_parallel_witness_contract_preserves_choice_and_adds_structured_synthesis(self):
+        legacy=validate_answer_dto('PARALLEL_WITNESS_COMPARE',{'choice':'Luke'})
+        self.assertEqual('Luke',legacy['choice'])
+        dto=validate_answer_dto('PARALLEL_WITNESS_SYNTHESIS',{'synthesis':'Порівняння без гармонізації','witnesses':['Acts 9; Acts 22']})
+        self.assertEqual('Порівняння без гармонізації',dto['synthesis'])
+        self.assertEqual(['Acts 9; Acts 22'],dto['witnesses'])
+        self.assertEqual(
+            {'synthesis':'string','witnesses':'string[]'},
+            answer_contract_descriptor('PARALLEL_WITNESS_SYNTHESIS')['fields'],
+        )
+        with self.assertRaises(AnswerContractError): validate_answer_dto('PARALLEL_WITNESS_SYNTHESIS',{'choice':'legacy'})
+
     def test_normalizes_matching_and_composite(self):
         m=validate_answer_dto('MATCHING',{'schema':'ANSWER_DTO_v1','task_type':'MATCHING','pairs':{'a':'b'}})
         self.assertEqual([{'left':'a','right':'b'}],m['pairs'])

@@ -7,7 +7,7 @@ from scripture_archive_runtime.answer_contracts import (
     validate_answer_dto,
 )
 from scripture_archive_runtime.package_adapters import adapt_node_for_runtime
-from scripture_archive_runtime.provenance import canonical_answer_dto
+from scripture_archive_runtime.provenance import canonical_answer_dto, classify_provenance
 from scripture_archive_runtime.security import ValidationError
 
 
@@ -34,6 +34,74 @@ class AnswerContractTests(unittest.TestCase):
 
     def test_descriptor_is_versioned(self):
         self.assertEqual(answer_contract_descriptor("OT_NT_LINK")["schema"], "ANSWER_DTO_v1")
+
+    def test_parallel_witness_compare_preserves_legacy_choice_and_derives_structured_synthesis(self):
+        self.assertEqual(
+            {"choice": "string"},
+            answer_contract_descriptor("PARALLEL_WITNESS_COMPARE")["fields"],
+        )
+        legacy = validate_answer_dto("PARALLEL_WITNESS_COMPARE", {"choice": "Luke"})
+        self.assertEqual("Luke", legacy["choice"])
+
+        accepted = {
+            "synthesis": "Acts 9 narrates Ananias while Acts 22 retells the encounter in Paul's speech.",
+            "witnesses": ["Acts 9:10–19; Acts 22:12–16"],
+        }
+        node = {
+            "node_id": "PA03-N041",
+            "mission_id": "PA-03",
+            "task_type": "PARALLEL_WITNESS_COMPARE",
+            "response_mode": "PARALLEL_WITNESS_COMPARE",
+            "accepted_answer": accepted,
+            "accepted_variants": {"synthesis_aliases": [accepted["synthesis"]], "witnesses": list(accepted["witnesses"])},
+            "required_evidence": ["EVR-R06-D2-0001"],
+            "grading": {
+                "accepted_propositions": [{"id": "P1", "required": True, "aliases": [accepted["synthesis"]]}],
+                "required_witnesses": list(accepted["witnesses"]),
+                "provenance_required": True,
+            },
+        }
+        self.assertEqual("PARALLEL_WITNESS_SYNTHESIS", canonical_node_task_type(node))
+        dto = validate_answer_dto(
+            "PARALLEL_WITNESS_SYNTHESIS",
+            {"synthesis": accepted["synthesis"], "witnesses": list(accepted["witnesses"])},
+        )
+        self.assertEqual(
+            {"synthesis": "string", "witnesses": "string[]"},
+            answer_contract_descriptor("PARALLEL_WITNESS_SYNTHESIS")["fields"],
+        )
+        with self.assertRaises(ValidationError):
+            validate_answer_dto("PARALLEL_WITNESS_SYNTHESIS", {"choice": "legacy-choice"})
+        with self.assertRaises(ValidationError):
+            validate_answer_dto("PARALLEL_WITNESS_SYNTHESIS", {"synthesis": accepted["synthesis"], "witnesses": []})
+
+        projected = canonical_answer_dto(node)
+        self.assertEqual(dto, projected)
+        decision = classify_provenance(node)
+        self.assertTrue(decision.release_pass, decision)
+        adapted = adapt_node_for_runtime(node, lane="D2")
+        self.assertEqual("PARALLEL_WITNESS_SYNTHESIS", adapted["task_type"])
+        self.assertEqual(projected, adapted["answer_dto"])
+        self.assertNotIn("accepted_choice", adapted["grading"])
+        self.assertEqual(accepted["witnesses"], adapted["grading"]["required_witnesses"])
+
+        legacy_node = {
+            "node_id": "GW01-N19",
+            "mission_id": "GW-01",
+            "task_type": "PARALLEL_WITNESS_COMPARE",
+            "accepted_answer": "Luke",
+            "accepted_variants": [],
+            "required_evidence": ["GW-EV-19"],
+            "task_contract": {"options": ["Matthew", "Mark", "Luke", "John"]},
+        }
+        self.assertEqual("PARALLEL_WITNESS_COMPARE", canonical_node_task_type(legacy_node))
+        self.assertEqual("Luke", canonical_answer_dto(legacy_node)["choice"])
+
+        conflicting = dict(node)
+        conflicting["grading"] = dict(node["grading"], required_witnesses=["Acts 26:12–18"])
+        conflict = classify_provenance(conflicting)
+        self.assertFalse(conflict.release_pass)
+        self.assertIn("required_witnesses", conflict.reason)
 
     def test_short_free_response_uses_existing_short_text_contract_and_grader(self):
         self.assertEqual(canonical_task_type("short free response"), "SHORT_TEXT")

@@ -3,7 +3,7 @@ import json, re
 from pathlib import Path
 from typing import Any
 from scripture_archive_platform.domain.models import CONTENT_SCHEMA_VERSION
-from scripture_archive_platform.transport.answer_contracts import canonical_task_type, answer_contract_descriptor
+from scripture_archive_platform.transport.answer_contracts import canonical_node_task_type, canonical_task_type, answer_contract_descriptor
 from scripture_archive_platform.composite_accessibility import inspect_packaged_task
 
 class ContentLoadError(RuntimeError): pass
@@ -72,7 +72,7 @@ class TaskPresentationMapper:
     )
     def infer_task_type(self,node:dict[str,Any])->str:
         explicit=node.get('task_type')
-        if explicit:return canonical_task_type(str(explicit))
+        if explicit:return canonical_node_task_type(node)
         mode=(str(node.get('response_mode',''))+' '+str(node.get('task_family',''))).lower()
         if 'speaker' in mode and 'recipient' in mode:return 'SPEAKER_RECIPIENT'
         if 'parallel' in mode and 'witness' in mode:return 'PARALLEL_WITNESS_COMPARE'
@@ -201,10 +201,12 @@ class TaskPresentationMapper:
           'source_references':self._source_refs(node,mission),'options':options,'items':items,'pairs':pairs,
           'evidence_options':evidence_options,'steps':normalized_steps,'fields':list(ui.get('fields') or []),
           'witnesses':list(ui.get('witnesses') or []),'relation_types':relation_types,
-          'answer_contract':answer_contract,'legacy_answer_contract':legacy_answer_contract,
+          'answer_contract':answer_contract,
           'accessibility':{'nonvisual_equivalent':node.get('functional_nonvisual_equivalent',''),'announcements':'Result, evidence, confidence/TX1 and next action are textual.'},
           'visual':dict(node.get('visual_metadata') or {'state_badge':node.get('confidence_code'),'media_slot':None}),
         }
+        if legacy_answer_contract:
+            surface['legacy_answer_contract']=legacy_answer_contract
         inspection=inspect_packaged_task(surface)
         surface['accessibility']['inspection']=inspection.to_dict()
         surface['accessibility']['inspection_linear']=list(inspection.linear())

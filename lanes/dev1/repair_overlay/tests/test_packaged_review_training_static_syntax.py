@@ -10,7 +10,7 @@ REPO_ROOT = Path(__file__).resolve().parents[4]
 class PackagedReviewTrainingSyntaxTest(unittest.TestCase):
     def test_review_frontend_javascript_parses_when_node_is_available(self):
         node = "node"
-        for name in ("review-queue-ui.js", "app.js"):
+        for name in ("review-queue-ui.js", "app.js", "renderers-base.js"):
             path = ROOT / "frontend" / name
             try:
                 result = subprocess.run([node, "--check", str(path)], capture_output=True, text=True, check=False)

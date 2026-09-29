@@ -97,9 +97,17 @@ def _pairs(v: Any) -> dict[str, str]:
 
 def _value_dto(t: str, value: Any, required: Sequence[str] = ()) -> dict[str, Any]:
     t = canonical_task_type(t)
-    if t in {"SINGLE_CHOICE", "COMBOBOX_SELECT", "PARALLEL_WITNESS_COMPARE"}:
+    if t in {"SINGLE_CHOICE", "COMBOBOX_SELECT"}:
         if not isinstance(value, str) or not value.strip(): raise ValidationError(f"{t} requires canonical string accepted_answer")
         body = {"choice": value.strip()}
+    elif t == "PARALLEL_WITNESS_COMPARE":
+        if not isinstance(value, Mapping):
+            raise ValidationError("PARALLEL_WITNESS_COMPARE requires canonical synthesis+witnesses object")
+        synthesis = value.get("synthesis")
+        witnesses = value.get("witnesses")
+        if not _nonempty(synthesis):
+            raise ValidationError("PARALLEL_WITNESS_COMPARE lacks canonical synthesis")
+        body = {"synthesis": str(synthesis), "witnesses": _seq(witnesses, "accepted_answer.witnesses")}
     elif t == "MULTI_SELECT": body = {"choices": _seq(value, "accepted_answer")}
     elif t in {"SHORT_TEXT", "LONG_TEXT", "ARGUMENT"}:
         text = "; ".join(f"{k}: {value[k]}" for k in sorted(value) if str(value[k]).strip()) if isinstance(value, Mapping) else str(value).strip() if isinstance(value, str) else ""
@@ -185,7 +193,7 @@ def _explicit(n: Mapping[str, Any], dto: Mapping[str, Any]) -> tuple[str | None,
     mismatch = lambda rep, why: (ProvenanceClass.MISMATCH_FAIL.value, rep, why)
     direct = lambda rep: (ProvenanceClass.AUTHORED_DIRECT_PASS.value, rep, "explicit task truth equals canonical ground truth")
     legacy = lambda rep: (ProvenanceClass.LEGACY_EXPLICIT_NORMALIZATION_PASS.value, rep, "explicit documented legacy truth equals canonical ground truth")
-    if t in {"SINGLE_CHOICE", "COMBOBOX_SELECT", "PARALLEL_WITNESS_COMPARE"}:
+    if t in {"SINGLE_CHOICE", "COMBOBOX_SELECT"}:
         aliases = g.get("accepted_aliases")
         if aliases is not None:
             aliases = [aliases] if isinstance(aliases, str) else aliases
@@ -193,6 +201,24 @@ def _explicit(n: Mapping[str, Any], dto: Mapping[str, Any]) -> tuple[str | None,
             if not isinstance(aliases, Sequence) or any(_norm(x) not in canon for x in aliases if _nonempty(x)): return mismatch("grading.accepted_aliases", "aliases conflict with canonical accepted_answer/accepted_variants")
         if _nonempty(g.get("accepted_choice")): return direct("grading.accepted_choice") if _norm(g["accepted_choice"]) == _norm(dto["choice"]) else mismatch("grading.accepted_choice", "choice conflict")
         if _nonempty(g.get("accepted_value")): return legacy("grading.accepted_value") if _norm(g["accepted_value"]) == _norm(dto["choice"]) else mismatch("grading.accepted_value", "legacy choice conflict")
+    elif t == "PARALLEL_WITNESS_COMPARE":
+        propositions = g.get("accepted_propositions")
+        required_witnesses = g.get("required_witnesses")
+        has_propositions = _nonempty(propositions)
+        has_witnesses = _nonempty(required_witnesses)
+        if has_propositions and not _props_accept(g, dto["synthesis"]):
+            return mismatch("grading.accepted_propositions", "parallel synthesis propositions reject canonical synthesis")
+        if has_witnesses:
+            if not isinstance(required_witnesses, Sequence) or isinstance(required_witnesses, (str, bytes)):
+                return mismatch("grading.required_witnesses", "parallel required_witnesses must be a canonical list")
+            if {_norm(x) for x in required_witnesses} != {_norm(x) for x in dto["witnesses"]}:
+                return mismatch("grading.required_witnesses", "parallel witness set conflicts with canonical witnesses")
+        if has_propositions and has_witnesses:
+            return direct("grading.accepted_propositions+required_witnesses")
+        if has_propositions:
+            return direct("grading.accepted_propositions")
+        if has_witnesses:
+            return direct("grading.required_witnesses")
     elif t == "MULTI_SELECT" and _nonempty(g.get("accepted_set")):
         v = g["accepted_set"]; return direct("grading.accepted_set") if isinstance(v, Sequence) and not isinstance(v, (str, bytes)) and {_norm(x) for x in v} == {_norm(x) for x in dto["choices"]} else mismatch("grading.accepted_set", "set conflict")
     elif t in {"SHORT_TEXT", "LONG_TEXT", "ARGUMENT"}:

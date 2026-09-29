@@ -7,7 +7,7 @@ from scripture_archive_runtime.answer_contracts import (
     validate_answer_dto,
 )
 from scripture_archive_runtime.package_adapters import adapt_node_for_runtime
-from scripture_archive_runtime.provenance import canonical_answer_dto
+from scripture_archive_runtime.provenance import canonical_answer_dto, classify_provenance
 from scripture_archive_runtime.security import ValidationError
 
 
@@ -34,6 +34,56 @@ class AnswerContractTests(unittest.TestCase):
 
     def test_descriptor_is_versioned(self):
         self.assertEqual(answer_contract_descriptor("OT_NT_LINK")["schema"], "ANSWER_DTO_v1")
+
+    def test_parallel_witness_compare_uses_structured_canonical_contract(self):
+        accepted = {
+            "synthesis": "Acts 9 narrates Ananias while Acts 22 retells the encounter in Paul's speech.",
+            "witnesses": ["Acts 9:10–19; Acts 22:12–16"],
+        }
+        dto = validate_answer_dto(
+            "PARALLEL_WITNESS_COMPARE",
+            {"synthesis": accepted["synthesis"], "witnesses": list(accepted["witnesses"])},
+        )
+        self.assertEqual("PARALLEL_WITNESS_COMPARE", dto["task_type"])
+        self.assertEqual(accepted["synthesis"], dto["synthesis"])
+        self.assertEqual(accepted["witnesses"], dto["witnesses"])
+        self.assertEqual(
+            {"synthesis": "string", "witnesses": "string[]"},
+            answer_contract_descriptor("PARALLEL_WITNESS_COMPARE")["fields"],
+        )
+        with self.assertRaises(ValidationError):
+            validate_answer_dto("PARALLEL_WITNESS_COMPARE", {"choice": "legacy-choice"})
+        with self.assertRaises(ValidationError):
+            validate_answer_dto("PARALLEL_WITNESS_COMPARE", {"synthesis": accepted["synthesis"], "witnesses": []})
+
+        node = {
+            "node_id": "PA03-N041",
+            "mission_id": "PA-03",
+            "task_type": "PARALLEL_WITNESS_COMPARE",
+            "response_mode": "PARALLEL_WITNESS_COMPARE",
+            "accepted_answer": accepted,
+            "accepted_variants": {"synthesis_aliases": [accepted["synthesis"]], "witnesses": list(accepted["witnesses"])},
+            "required_evidence": ["EVR-R06-D2-0001"],
+            "grading": {
+                "accepted_propositions": [{"id": "P1", "required": True, "aliases": [accepted["synthesis"]]}],
+                "required_witnesses": list(accepted["witnesses"]),
+                "provenance_required": True,
+            },
+        }
+        projected = canonical_answer_dto(node)
+        self.assertEqual(dto, projected)
+        decision = classify_provenance(node)
+        self.assertTrue(decision.release_pass, decision)
+        adapted = adapt_node_for_runtime(node, lane="D2")
+        self.assertEqual(projected, adapted["answer_dto"])
+        self.assertNotIn("accepted_choice", adapted["grading"])
+        self.assertEqual(accepted["witnesses"], adapted["grading"]["required_witnesses"])
+
+        conflicting = dict(node)
+        conflicting["grading"] = dict(node["grading"], required_witnesses=["Acts 26:12–18"])
+        conflict = classify_provenance(conflicting)
+        self.assertFalse(conflict.release_pass)
+        self.assertIn("required_witnesses", conflict.reason)
 
     def test_short_free_response_uses_existing_short_text_contract_and_grader(self):
         self.assertEqual(canonical_task_type("short free response"), "SHORT_TEXT")

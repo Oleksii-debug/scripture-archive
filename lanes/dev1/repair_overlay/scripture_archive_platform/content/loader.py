@@ -188,7 +188,7 @@ class TaskPresentationMapper:
             relation_types=[{'id':str(payload['relation_category']),'label':str(payload['relation_category'])}]
         legacy_answer_contract=dict(node.get('answer_contract') or {})
         if not legacy_answer_contract:
-            if task_type in {'SINGLE_CHOICE','COMBOBOX_SELECT','PARALLEL_WITNESS_COMPARE'}:
+            if task_type in {'SINGLE_CHOICE','COMBOBOX_SELECT'}:
                 accepted=str(node.get('accepted_answer','')).strip()
                 if accepted: legacy_answer_contract={'accepted_choice_ids':[accepted]}
             elif task_type=='MULTI_SELECT': legacy_answer_contract={'accepted_choice_ids':ui.get('accepted_choice_ids',payload.get('accepted_options',[]))}

@@ -16,6 +16,35 @@ class GradingTests(unittest.TestCase):
     def test_translation_neutral_explicit_proposition_aliases(self):
         task=self.task(response_mode="short text",task_type="SHORT_TEXT",accepted_answer="Luke names Peter and John",grading={"accepted_propositions":[{"id":"witness","required":True,"aliases":["Luke","Лука"]},{"id":"names","required":True,"aliases":["Peter and John","Петро та Іван","Петра й Івана"]}]})
         ua=self.registry.grade(task,"Лука прямо називає Петра й Івана"); self.assertEqual(ua.correctness,Correctness.CORRECT); self.assertEqual(ua.details["mode"],"proposition-groups")
+    def test_parallel_witness_compare_requires_synthesis_and_exact_witness_set(self):
+        synthesis = "Acts 9 narrates Ananias while Acts 22 preserves Paul's later retelling."
+        witnesses = ["Acts 9:10–19; Acts 22:12–16"]
+        task = self.task(
+            task_type="PARALLEL_WITNESS_COMPARE",
+            response_mode="PARALLEL_WITNESS_COMPARE",
+            accepted_answer={"synthesis": synthesis, "witnesses": witnesses},
+            accepted_variants={"synthesis_aliases": [synthesis], "witnesses": witnesses},
+            grading={
+                "accepted_propositions": [{"id": "P1", "required": True, "aliases": [synthesis]}],
+                "required_witnesses": witnesses,
+                "provenance_required": True,
+            },
+        )
+        exact = self.registry.grade(task, {"synthesis": synthesis, "witnesses": witnesses})
+        self.assertEqual(Correctness.CORRECT, exact.correctness)
+        self.assertEqual(1.0, exact.score)
+
+        missing_witness = self.registry.grade(task, {"synthesis": synthesis, "witnesses": ["Acts 9:10–19"]})
+        self.assertEqual(Correctness.INCORRECT, missing_witness.correctness)
+        self.assertEqual(0.0, missing_witness.score)
+
+        weak_synthesis = self.registry.grade(
+            task,
+            {"synthesis": "Acts 9 narrates Ananias.", "witnesses": witnesses},
+        )
+        self.assertNotEqual(Correctness.CORRECT, weak_synthesis.correctness)
+        self.assertLess(weak_synthesis.score, 1.0)
+
     def test_multiselect_partial_and_exact(self):
         task=self.task(task_type="MULTI_SELECT",response_mode="multi-select",accepted_answer=["Acts 9","Acts 22","Acts 26"],grading={"accepted_set":["Acts 9","Acts 22","Acts 26"]})
         self.assertEqual(self.registry.grade(task,["Acts 9","Acts 22"]).correctness,Correctness.PARTIAL); self.assertEqual(self.registry.grade(task,["Acts 26","Acts 9","Acts 22"]).correctness,Correctness.CORRECT)

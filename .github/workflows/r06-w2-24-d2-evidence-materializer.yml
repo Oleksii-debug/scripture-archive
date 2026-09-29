@@ -1,0 +1,188 @@
+name: R06 W2-24 D2 immutable evidence materializer
+
+on:
+  push:
+    branches:
+      - r06-wave2-w24-d2-evidence-aggregation-preflight-0927-sol
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: r06-w2-24-d2-evidence-materializer
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect one-time transport
+        id: transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          transport="release_inputs/dev2_w2_24/DEV_B_STAGE05_RECORD_SPLIT_STAGING.zip"
+          if [[ -f "$transport" ]]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "Transport already consumed; no materialization mutation required."
+          fi
+
+      - name: Verify immutable authority and materialize evidence
+        if: steps.transport.outputs.present == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          transport="release_inputs/dev2_w2_24/DEV_B_STAGE05_RECORD_SPLIT_STAGING.zip"
+          expected_zip="b681ea26d985eb754bde02a77254d40ab0920061edb9226fae7921a6740a06c0"
+          actual_zip="$(sha256sum "$transport" | awk '{print $1}')"
+          test "$actual_zip" = "$expected_zip"
+          unzip -t "$transport" >/dev/null
+
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          unzip -q "$transport" -d "$tmp"
+
+          python - "$tmp" <<'PY'
+          import hashlib
+          import json
+          import pathlib
+          import sys
+
+          root = pathlib.Path(sys.argv[1]) / "D2_MATERIALIZATION"
+          expected_raw = {
+              "evidence/part_001.jsonl": "2348bec5eda878762293b3218dc30a6b458d6f61907fd541631072243329fb7e",
+              "evidence/part_002.jsonl": "bd6724fc4e0951ce7aa2150d658419c1013b4f802de72252aeab0f6fe67fff82",
+              "evidence/part_003.jsonl": "411985a7b3b76d81675cdc7538779b7fe68cf5c7064e83c4529af92a9898fa55",
+              "evidence_hash_index.json": "59319a4c05ccfb6c548ef4aaf583dc866ac758c01af5ec243ec3d6f541a62cbe",
+              "mission_metadata.json": "252c784687a083fd95a7de38ad89e1d4fcef3983d160e5b1aa3748d85f610fb3",
+          }
+          for rel, expected in expected_raw.items():
+              data = (root / rel).read_bytes()
+              actual = hashlib.sha256(data).hexdigest()
+              if actual != expected:
+                  raise SystemExit(f"RAW_SHA256_MISMATCH {rel} {actual} != {expected}")
+
+          index = json.loads((root / "evidence_hash_index.json").read_text(encoding="utf-8"))
+          if index.get("record_count") != 184:
+              raise SystemExit(f"EVIDENCE_COUNT_MISMATCH {index.get('record_count')}")
+          expected_aggregate = "88e197fd1c91b7787040e81bdd066d959d42b8ba64ac01acac667ffd8ad346ba"
+          if index.get("aggregate_sha256") != expected_aggregate:
+              raise SystemExit("EVIDENCE_INDEX_AGGREGATE_PIN_MISMATCH")
+
+          expected = {}
+          for item in index.get("records", []):
+              if not isinstance(item, dict) or not isinstance(item.get("id"), str):
+                  raise SystemExit("INVALID_EVIDENCE_INDEX_RECORD")
+              evidence_id = item["id"]
+              if evidence_id in expected:
+                  raise SystemExit(f"DUPLICATE_EVIDENCE_INDEX_ID {evidence_id}")
+              expected[evidence_id] = item.get("sha256")
+          if len(expected) != 184:
+              raise SystemExit(f"EVIDENCE_INDEX_UNIQUE_COUNT_MISMATCH {len(expected)}")
+
+          actual = {}
+          for path in sorted((root / "evidence").glob("part_*.jsonl")):
+              for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                  if not line.strip():
+                      continue
+                  record = json.loads(line)
+                  evidence_id = record.get("evidence_id")
+                  if not isinstance(evidence_id, str) or not evidence_id:
+                      raise SystemExit(f"INVALID_EVIDENCE_ID {path}:{line_number}")
+                  if evidence_id in actual:
+                      raise SystemExit(f"DUPLICATE_EVIDENCE_ID {evidence_id}")
+                  canonical = json.dumps(
+                      record, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+                  ).encode("utf-8")
+                  actual[evidence_id] = hashlib.sha256(canonical).hexdigest()
+
+          if set(actual) != set(expected):
+              missing = sorted(set(expected) - set(actual))
+              extra = sorted(set(actual) - set(expected))
+              raise SystemExit(f"EVIDENCE_ID_SET_MISMATCH missing={missing[:5]} extra={extra[:5]}")
+          mismatches = [key for key in sorted(expected) if expected[key] != actual[key]]
+          if mismatches:
+              raise SystemExit(f"EVIDENCE_RECORD_HASH_MISMATCH {mismatches[:5]}")
+
+          aggregate_input = "".join(f"{key}\t{actual[key]}\n" for key in sorted(actual)).encode("utf-8")
+          aggregate = hashlib.sha256(aggregate_input).hexdigest()
+          if aggregate != expected_aggregate:
+              raise SystemExit(f"EVIDENCE_AGGREGATE_MISMATCH {aggregate}")
+
+          missions = json.loads((root / "mission_metadata.json").read_text(encoding="utf-8"))
+          mission_ids = []
+          if isinstance(missions, list):
+              mission_ids = [m.get("mission_id") for m in missions if isinstance(m, dict)]
+          elif isinstance(missions, dict):
+              payload = missions.get("missions")
+              if isinstance(payload, list):
+                  mission_ids = [m.get("mission_id") for m in payload if isinstance(m, dict)]
+          expected_missions = ["PA-03", "PA-04", "PA-05", "PA-06", "PA-07", "PA-08"]
+          if sorted(mission_ids) != expected_missions:
+              raise SystemExit(f"MISSION_METADATA_SET_MISMATCH {mission_ids}")
+
+          print(
+              "D2_EVIDENCE_AUTHORITY_PASS",
+              f"records={len(actual)}",
+              f"aggregate={aggregate}",
+              f"missions={len(mission_ids)}",
+          )
+          PY
+
+          dest="docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05"
+          mkdir -p "$dest/evidence"
+          cp "$tmp/D2_MATERIALIZATION/evidence/part_001.jsonl" "$dest/evidence/part_001.jsonl"
+          cp "$tmp/D2_MATERIALIZATION/evidence/part_002.jsonl" "$dest/evidence/part_002.jsonl"
+          cp "$tmp/D2_MATERIALIZATION/evidence/part_003.jsonl" "$dest/evidence/part_003.jsonl"
+          cp "$tmp/D2_MATERIALIZATION/evidence_hash_index.json" "$dest/evidence_hash_index.json"
+          cp "$tmp/D2_MATERIALIZATION/mission_metadata.json" "$dest/mission_metadata.json"
+          rm "$transport"
+
+          python - <<'PY'
+          import pathlib
+          allowed = {
+              "docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05/evidence/part_001.jsonl",
+              "docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05/evidence/part_002.jsonl",
+              "docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05/evidence/part_003.jsonl",
+              "docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05/evidence_hash_index.json",
+              "docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05/mission_metadata.json",
+              "release_inputs/dev2_w2_24/DEV_B_STAGE05_RECORD_SPLIT_STAGING.zip",
+          }
+          import subprocess
+          lines = subprocess.check_output(
+              ["git", "status", "--porcelain=v1", "--untracked-files=all"], text=True
+          ).splitlines()
+          changed = set()
+          for line in lines:
+              path = line[3:]
+              if " -> " in path:
+                  path = path.split(" -> ", 1)[1]
+              changed.add(path)
+          unexpected = sorted(changed - allowed)
+          if unexpected:
+              raise SystemExit(f"UNEXPECTED_WORKTREE_MUTATION {unexpected}")
+          required = allowed - {"release_inputs/dev2_w2_24/DEV_B_STAGE05_RECORD_SPLIT_STAGING.zip"}
+          missing = sorted(path for path in required if path not in changed)
+          if missing:
+              raise SystemExit(f"EXPECTED_MATERIALIZATION_CHANGE_MISSING {missing}")
+          print("D2_EVIDENCE_MUTATION_SCOPE_PASS", len(changed))
+          PY
+
+      - name: Commit verified evidence materialization
+        if: steps.transport.outputs.present == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "scripture-archive-materializer"
+          git config user.email "actions@users.noreply.github.com"
+          git add             docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05/evidence             docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05/evidence_hash_index.json             docs/campaigns/PA/R06_DEV2_MATERIALIZATION_05/mission_metadata.json             release_inputs/dev2_w2_24/DEV_B_STAGE05_RECORD_SPLIT_STAGING.zip
+          git diff --cached --check
+          git commit -m "R06 W2-24: materialize immutable D2 evidence records"
+          git push origin "HEAD:$GITHUB_REF_NAME"

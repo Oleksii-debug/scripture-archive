@@ -1,0 +1,28 @@
+{
+  "schema": "R06_D2_FULL_CORRECTED_AGGREGATION_v1",
+  "status": "DEVELOPER_AGGREGATED / HOSTED_QUALIFICATION_PENDING / INDEPENDENT_AUDIT_PENDING",
+  "source_truth_changed": false,
+  "node_count": 386,
+  "evidence_count": 184,
+  "corrected_node_aggregate_sha256": "ef77ae5d822e105050dedfa9a460325259fe079701ca69f385693aabcad0e661",
+  "correction_report_union": {
+    "records": 386,
+    "parts": 26,
+    "reports": [
+      "correction_provenance/PRIMARY_001_015_CORRECTION_REPORT.json",
+      "correction_provenance/W2_20_CORRECTION_REPORT.json",
+      "correction_provenance/W2_19_CORRECTION_REPORT.json"
+    ]
+  },
+  "donors": {
+    "evidence_authority": "e1f2e98a2c074663218de4954efa19458f8714f9",
+    "parts_001_015": "def294b1fed8ffc77b4adc42388cdbd48af19f55",
+    "parts_016_020": "5fb482179284608008dc0895d7309db4194cee05",
+    "parts_021_026": "c5fedc6beeec9609ee87a48bf2575b243c28e796"
+  },
+  "historical_staging_zip_sha256": "b681ea26d985eb754bde02a77254d40ab0920061edb9226fae7921a6740a06c0",
+  "qualification_workflow": ".github/workflows/r06-d2-corrected-full-aggregation.yml",
+  "hosted_qualification": "PENDING_ON_FINAL_HEAD",
+  "independent_audit": "PENDING",
+  "current_package_composition": "NOT_STARTED"
+}

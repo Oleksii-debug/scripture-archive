@@ -43,3 +43,13 @@ class DevARuntimeGatewayTests(unittest.TestCase):
         g=RuntimeBackedPlayerGateway(runtime,current_node_getter=lambda:'LN01-N01')
         g.invoke('player.next',{},request_id='next-LN01-N01')
         self.assertEqual(1,len(seen));self.assertEqual({},seen[0]['payload']);self.assertNotIn('target_node_id',seen[0]['payload'])
+    def test_checkpoint_save_returns_locked_runtime_node_and_drops_caller_metadata(self):
+        seen=[];state={'current':'LN01-N07'}
+        def runtime(request):
+            seen.append(request)
+            self.assertEqual('save',request['command']);self.assertEqual({},request['payload'])
+            return {'api_version':'runtime.v1','request_id':request['request_id'],'saved':True}
+        g=RuntimeBackedPlayerGateway(runtime,current_node_getter=lambda:state['current'])
+        result=g.invoke('player.save_checkpoint',{'campaign_id':'FORGED','mission_id':'FORGED','node_id':'FORGED'},request_id='save-player')
+        self.assertEqual('LN01-N07',result['current_node_id']);self.assertTrue(result['saved']);self.assertEqual(1,len(seen))
+

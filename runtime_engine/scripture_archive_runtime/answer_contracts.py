@@ -129,9 +129,15 @@ def validate_answer_dto(task_type: str, value: Any) -> dict[str, Any]:
     if declared is not None and canonical_task_type(str(declared)) != ctype:
         raise ValidationError("answer DTO task_type mismatch")
 
-    if ctype in {"SINGLE_CHOICE", "COMBOBOX_SELECT", "PARALLEL_WITNESS_COMPARE"}:
+    if ctype in {"SINGLE_CHOICE", "COMBOBOX_SELECT"}:
         allowed = {"choice"}
         result = {"choice": _require_str(dto.get("choice"), "choice")}
+    elif ctype == "PARALLEL_WITNESS_COMPARE":
+        allowed = {"synthesis", "witnesses"}
+        result = {
+            "synthesis": _require_str(dto.get("synthesis"), "synthesis"),
+            "witnesses": _require_str_list(dto.get("witnesses"), "witnesses"),
+        }
     elif ctype == "MULTI_SELECT":
         allowed = {"choices"}
         result = {"choices": _require_str_list(dto.get("choices"), "choices")}
@@ -195,7 +201,7 @@ def answer_contract_descriptor(task_type: str) -> dict[str, Any]:
     fields = {
         "SINGLE_CHOICE": {"choice": "string"},
         "COMBOBOX_SELECT": {"choice": "string"},
-        "PARALLEL_WITNESS_COMPARE": {"choice": "string"},
+        "PARALLEL_WITNESS_COMPARE": {"synthesis": "string", "witnesses": "string[]"},
         "MULTI_SELECT": {"choices": "string[]"},
         "SHORT_TEXT": {"text": "string"},
         "LONG_TEXT": {"text": "string"},

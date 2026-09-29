@@ -103,6 +103,10 @@ class BundledScriptureText:
             or details[0].get("reference") != LATEST_UPSTREAM_CHANGED_REFERENCE
             or details[0].get("pinned_line_sha256") != LATEST_UPSTREAM_PINNED_LINE_SHA256
             or details[0].get("current_line_sha256") != LATEST_UPSTREAM_CURRENT_LINE_SHA256
+            or not isinstance(details[0].get("pinned_line"), str)
+            or not isinstance(details[0].get("current_line"), str)
+            or hashlib.sha256(details[0]["pinned_line"].encode("utf-8")).hexdigest() != LATEST_UPSTREAM_PINNED_LINE_SHA256
+            or hashlib.sha256(details[0]["current_line"].encode("utf-8")).hexdigest() != LATEST_UPSTREAM_CURRENT_LINE_SHA256
         ):
             raise ValueError("invalid WEBU upstream source-drift evidence")
 

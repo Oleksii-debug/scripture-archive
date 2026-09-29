@@ -250,15 +250,19 @@ function renderVerses(data) {
 function renderSearch(data) {
   const host = byId('scripture-reader-search-results');
   host.replaceChildren();
+  const heading = element('h4', 'Search results', {id: 'scripture-reader-search-results-heading'});
+  heading.tabIndex = -1;
   if (!data.results?.length) {
-    host.append(element('p', 'No matching text found in the bundled WEBU source.'));
+    host.append(heading, element('p', 'No matching text found in the bundled WEBU source.'));
+    heading.focus();
     return;
   }
-  const list = element('ol');
+  const list = element('ol', '', {'aria-labelledby': 'scripture-reader-search-results-heading'});
   for (const row of data.results) {
     list.append(element('li', `${row.reference} — ${row.text}`));
   }
-  host.append(list);
+  host.append(heading, list);
+  heading.focus();
 }
 
 export async function installScriptureReaderSurface() {
@@ -286,8 +290,11 @@ export async function installScriptureReaderSurface() {
   searchForm.append(queryLabel, query, searchButton);
 
   const live = element('p', '', {id: 'scripture-reader-status', role: 'status', 'aria-live': 'polite'});
-  const verses = element('div', '', {id: 'scripture-reader-verses', 'aria-live': 'polite'});
-  const results = element('div', '', {id: 'scripture-reader-search-results', 'aria-live': 'polite'});
+  // Keep only the compact status as a live region. Chapter/search results may contain
+  // dozens of source rows; announcing those containers live would duplicate or flood NVDA.
+  // User-triggered result changes use explicit heading focus instead.
+  const verses = element('div', '', {id: 'scripture-reader-verses'});
+  const results = element('div', '', {id: 'scripture-reader-search-results'});
   section.append(heading, source, readForm, searchForm, live, verses, results);
   library.append(section);
 

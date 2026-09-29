@@ -172,6 +172,14 @@ def compose_real_platform(temp_root: Path) -> Path:
     if workflow_target.read_bytes() != source_authority_workflow.read_bytes():
         raise AssertionError("Candidate WEBU source-authority workflow fidelity mismatch")
 
+    accessibility_workflow = ROOT / ".github" / "workflows" / "r06-dev02-accessibility-qualification.yml"
+    if accessibility_workflow.is_symlink() or not accessibility_workflow.is_file():
+        raise AssertionError("Candidate DEV02 accessibility workflow is missing or unsafe")
+    accessibility_target = composed_repo_root / ".github" / "workflows" / "r06-dev02-accessibility-qualification.yml"
+    shutil.copy2(accessibility_workflow, accessibility_target)
+    if accessibility_target.read_bytes() != accessibility_workflow.read_bytes():
+        raise AssertionError("Candidate DEV02 accessibility workflow fidelity mismatch")
+
     shutil.copytree(OVERLAY, platform_root, dirs_exist_ok=True)
 
     for relative in OVERLAY_FIDELITY_PATHS:
@@ -291,7 +299,7 @@ def main() -> None:
     print(
         "Library/Search qualification PASS: exact candidate checkout, pinned canonical "
         "FINALPREP02 DEV1 base hash/CRC, exact candidate repository-level .gitattributes "
-        "and WEBU source-authority workflow fidelity, overlay fidelity, six real "
+        "WEBU source-authority and DEV02 accessibility workflow fidelity, overlay fidelity, six real "
         "Library/Search regressions, ten real WEBU provider regressions, and thirteen "
         "real qualified-D4 read-only/runtime-eligibility/hash/mission-authority regressions."
     )

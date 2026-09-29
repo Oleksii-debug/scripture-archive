@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import os
 
-import pytest
+from runtime_engine.tests._functional_unittest import make_load_tests, pytest
 
 from scripture_archive_runtime.application_update_process import (
     UpdateProcessError,
@@ -171,3 +171,5 @@ def test_parser_accepts_only_fixed_host_contract(tmp_path: Path) -> None:
 def test_parser_rejects_noncanonical_or_extended_commands(argv: tuple[str, ...]) -> None:
     with pytest.raises(UpdateProcessError):
         parse_trusted_updater_argv(argv)
+
+load_tests = make_load_tests(globals())

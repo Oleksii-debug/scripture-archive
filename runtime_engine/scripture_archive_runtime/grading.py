@@ -33,6 +33,22 @@ def _structured_text(value: Any) -> str:
     return str(value or "")
 
 
+def _parallel_witness_set(values: Sequence[Any]) -> set[str]:
+    """Normalize authored witness blocks without changing canonical source bytes.
+
+    Historical D2 authority stores some array[passage] values as one semicolon-
+    delimited string while the keyboard UI accepts one passage per line. Treat
+    those two encodings as equivalent at grading time and nowhere else.
+    """
+    normalized: set[str] = set()
+    for value in values:
+        for part in str(value).split(";"):
+            item = normalize_text(part)
+            if item:
+                normalized.add(item)
+    return normalized
+
+
 def _feedback(task: TaskDefinition, correctness: Correctness) -> str:
     if correctness is Correctness.CORRECT:
         return task.success_feedback
@@ -150,14 +166,14 @@ def grade_parallel_witness_compare(task: TaskDefinition, answer: Any) -> GradeRe
         return _result(task, Correctness.INCORRECT, 0.0, details={"validation": "parallel witness synthesis must be non-empty"})
     if not isinstance(witnesses, Sequence) or isinstance(witnesses, (str, bytes)) or not witnesses:
         return _result(task, Correctness.INCORRECT, 0.0, details={"validation": "parallel witness list must be non-empty"})
-    submitted_witnesses = {normalize_text(value) for value in witnesses if normalize_text(value)}
+    submitted_witnesses = _parallel_witness_set(witnesses)
     accepted = task.accepted_answer if isinstance(task.accepted_answer, Mapping) else {}
     canonical_witnesses = task.grading.get("required_witnesses")
     if canonical_witnesses is None:
         canonical_witnesses = accepted.get("witnesses")
     if not isinstance(canonical_witnesses, Sequence) or isinstance(canonical_witnesses, (str, bytes)) or not canonical_witnesses:
         return _result(task, Correctness.INCORRECT, 0.0, details={"validation": "missing canonical parallel witnesses"})
-    expected_witnesses = {normalize_text(value) for value in canonical_witnesses if normalize_text(value)}
+    expected_witnesses = _parallel_witness_set(canonical_witnesses)
     if not expected_witnesses:
         return _result(task, Correctness.INCORRECT, 0.0, details={"validation": "empty canonical parallel witnesses"})
 

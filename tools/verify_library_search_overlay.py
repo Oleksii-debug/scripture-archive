@@ -182,6 +182,25 @@ def compose_real_platform(temp_root: Path) -> Path:
     return platform_root
 
 
+def verify_library_workflow_dependency_triggers() -> None:
+    workflow = (
+        ROOT / ".github" / "workflows" / "r06-library-search-qualification.yml"
+    )
+    if workflow.is_symlink() or not workflow.is_file():
+        raise AssertionError("Library/Search qualification workflow is missing or unsafe")
+    text = workflow.read_text(encoding="utf-8")
+    for required in (
+        "'.github/workflows/r06-webu-source-authority.yml'",
+        "'.gitattributes'",
+        "'tools/verify_library_search_overlay.py'",
+        "'lanes/dev1/**'",
+    ):
+        if text.count(required) < 2:
+            raise AssertionError(
+                f"Library/Search trigger dependency is missing for push/PR: {required}"
+            )
+
+
 def parse_real_paths(platform_root: Path) -> None:
     for relative in OVERLAY_FIDELITY_PATHS:
         if relative.suffix != ".py":
@@ -263,6 +282,7 @@ def run_real_response_regressions(platform_root: Path) -> None:
 
 def main() -> None:
     verify_exact_checkout()
+    verify_library_workflow_dependency_triggers()
     with tempfile.TemporaryDirectory(prefix="scripture-library-qualification-") as tmp:
         platform_root = compose_real_platform(Path(tmp))
         verify_exact_checkout()

@@ -84,6 +84,40 @@ class AccessibilityInspectorTests(unittest.TestCase):
             {item["code"] for item in inspection["findings"]},
         )
 
+    def test_parallel_witness_structured_text_surface_does_not_require_choice_options(self) -> None:
+        node = dict(self.node)
+        node.update(
+            {
+                "node_id": "PA03-N041",
+                "mission_id": "PA-03",
+                "task_type": "PARALLEL_WITNESS_COMPARE",
+                "response_mode": "PARALLEL_WITNESS_COMPARE",
+                "task_family": "parallel_witness_compare",
+                "player_prompt": "Порівняйте джерельні межі.",
+                "source_scope_visible_to_player": "Acts 9:10–19; Acts 22:12–16",
+                "accepted_answer": {
+                    "synthesis": "Canonical private synthesis.",
+                    "witnesses": ["Acts 9:10–19; Acts 22:12–16"],
+                },
+                "ui_metadata": {},
+                "functional_nonvisual_equivalent": (
+                    "Два підписані багаторядкові текстові поля: синтез і джерельні блоки."
+                ),
+            }
+        )
+        task = self.mapper.to_renderable(node, self.mission)
+
+        self.assertEqual([], task["options"])
+        self.assertEqual(
+            {"synthesis": "string", "witnesses": "string[]"},
+            task["answer_contract"]["fields"],
+        )
+        self.assertTrue(task["accessibility"]["inspection"]["passed"])
+        self.assertNotIn(
+            "A11Y_SEMANTIC_ITEMS_MISSING",
+            {item["code"] for item in task["accessibility"]["inspection"]["findings"]},
+        )
+
     def test_media_requires_explicit_text_equivalent(self) -> None:
         node = dict(self.node)
         node["visual_metadata"] = {"media_slot": "map://case-1"}

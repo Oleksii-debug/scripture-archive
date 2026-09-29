@@ -159,6 +159,41 @@ class PlayerTaskTruthConvergenceTests(unittest.TestCase):
         self.assertNotIn("GRADING-SECRET-LEFT", serialized)
         self.assertNotIn("GRADING-SECRET-RIGHT", serialized)
 
+    def test_parallel_witness_public_surface_uses_structured_contract_without_truth_leak(self) -> None:
+        task = self.mapper.to_renderable(
+            {
+                "node_id": "PA03-N041",
+                "mission_id": "PA-03",
+                "task_type": "PARALLEL_WITNESS_COMPARE",
+                "task_family": "parallel_witness_compare",
+                "player_prompt": "Порівняйте джерельні межі.",
+                "source_scope_visible_to_player": "Acts 9:10–19; Acts 22:12–16",
+                "functional_nonvisual_equivalent": "Два підписані текстові поля.",
+                "accepted_answer": {
+                    "synthesis": "GRADING-SECRET-SYNTHESIS",
+                    "witnesses": ["GRADING-SECRET-WITNESS"],
+                },
+                "grading": {
+                    "accepted_propositions": [
+                        {"id": "P1", "required": True, "aliases": ["GRADING-SECRET-SYNTHESIS"]}
+                    ],
+                    "required_witnesses": ["GRADING-SECRET-WITNESS"],
+                },
+            },
+            self.loader.mission,
+        )
+
+        self.assertEqual("PARALLEL_WITNESS_SYNTHESIS", task["task_type"])
+        self.assertEqual(
+            {"synthesis": "string", "witnesses": "string[]"},
+            task["answer_contract"]["fields"],
+        )
+        self.assertEqual([], task["witnesses"])
+        self.assertNotIn("legacy_answer_contract", task)
+        serialized = json.dumps(task, ensure_ascii=False, sort_keys=True)
+        self.assertNotIn("GRADING-SECRET-SYNTHESIS", serialized)
+        self.assertNotIn("GRADING-SECRET-WITNESS", serialized)
+
     def test_required_evidence_is_not_synthesized_into_answer_options_or_source_refs(self) -> None:
         task = self.mapper.to_renderable(
             {

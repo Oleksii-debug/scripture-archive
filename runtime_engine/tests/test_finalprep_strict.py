@@ -125,12 +125,18 @@ class StrictTruthTests(unittest.TestCase):
         c=provenance_contract_descriptor()
         self.assertIn('task_payload.correct', c['presentation_fields_never_truth'])
         self.assertEqual(c['schema'], 'GROUND_TRUTH_PROVENANCE_v1')
+        self.assertEqual(set(c['derived_runtime_task_types']), {'PARALLEL_WITNESS_SYNTHESIS'})
+        self.assertNotIn('PARALLEL_WITNESS_SYNTHESIS', c['task_types'])
 
 
 class TransportTests(unittest.TestCase):
     def test_all_14_task_types(self): self.assertEqual(len(CANONICAL_TASK_TYPES), 14)
     def test_contract_schema(self): self.assertEqual(transport_contract_descriptor()['answer_contract'], 'ANSWER_DTO_v1')
     def test_contract_has_all_types(self): self.assertEqual(set(transport_contract_descriptor()['task_types']), set(CANONICAL_TASK_TYPES))
+    def test_derived_runtime_contract_is_separate_from_authored_taxonomy(self):
+        c=transport_contract_descriptor()
+        self.assertEqual(set(c['derived_runtime_task_types']), {'PARALLEL_WITNESS_SYNTHESIS'})
+        self.assertNotIn('PARALLEL_WITNESS_SYNTHESIS', c['task_types'])
     def test_transport_exposes_provenance_contract(self): self.assertEqual(transport_contract_descriptor()['provenance']['schema'], 'GROUND_TRUTH_PROVENANCE_v1')
 
 

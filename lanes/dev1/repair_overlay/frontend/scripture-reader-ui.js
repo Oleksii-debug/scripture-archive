@@ -289,7 +289,7 @@ export async function installScriptureReaderSurface() {
   const searchButton = element('button', 'Search WEBU', {type: 'submit'});
   searchForm.append(queryLabel, query, searchButton);
 
-  const live = element('p', '', {id: 'scripture-reader-status', role: 'status', 'aria-live': 'polite'});
+  const live = element('p', '', {id: 'scripture-reader-status', role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true'});
   // Keep only the compact status as a live region. Chapter/search results may contain
   // dozens of source rows; announcing those containers live would duplicate or flood NVDA.
   // User-triggered result changes use explicit heading focus instead.

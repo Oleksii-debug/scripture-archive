@@ -153,3 +153,4 @@ function mount(){
 
 mount();
 void import('./diagnostics-ui.js');
+void import('./pending-update.js');

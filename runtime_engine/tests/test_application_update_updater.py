@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -9,6 +10,7 @@ from unittest.mock import patch
 from scripture_archive_runtime.application_update import ApplicationUpdateError
 from scripture_archive_runtime.application_update_pending import PendingApplicationUpdate
 from scripture_archive_runtime.application_update_updater import (
+    _copy_exact,
     consume_apply_handoff,
     rollback_installed_update,
 )
@@ -49,6 +51,9 @@ class AtomicApplicationUpdaterTests(unittest.TestCase):
             ), patch(
                 "scripture_archive_runtime.application_update_updater.staged_artifact_path",
                 return_value=staged,
+            ), patch(
+                "scripture_archive_runtime.application_update_updater.discard_apply_handoff",
+                return_value=True,
             ):
                 result = consume_apply_handoff(
                     root,
@@ -148,11 +153,10 @@ class AtomicApplicationUpdaterTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             target = root / "ScriptureArchive.exe"
-            staged = root / "ScriptureArchive.new.exe"
             target.write_bytes(old)
-            staged.write_bytes(new)
             pending = self._pending(new)
-            staged_named = root / pending.artifact_name
+            staged_named = root / "staged" / pending.artifact_name
+            staged_named.parent.mkdir()
             staged_named.write_bytes(new)
 
             with patch(
@@ -332,6 +336,126 @@ class AtomicApplicationUpdaterTests(unittest.TestCase):
                 (root / "ScriptureArchive.exe.scripture-archive.rollback").read_bytes(),
                 old,
             )
+
+    def test_consume_handoff_rolls_back_when_authority_changes_after_publication(self):
+        old = b"old executable bytes"
+        new = b"new signed executable bytes"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "ScriptureArchive.exe"
+            staged = root / "staged" / "ScriptureArchive.exe"
+            staged.parent.mkdir()
+            target.write_bytes(old)
+            staged.write_bytes(new)
+            pending = self._pending(new)
+            inspections = [pending, pending, pending, None]
+
+            with patch(
+                "scripture_archive_runtime.application_update_updater.inspect_apply_handoff",
+                side_effect=inspections,
+            ) as inspect, patch(
+                "scripture_archive_runtime.application_update_updater.staged_artifact_path",
+                return_value=staged,
+            ), patch(
+                "scripture_archive_runtime.application_update_updater.discard_apply_handoff",
+                return_value=True,
+            ) as discard:
+                with self.assertRaisesRegex(
+                    ApplicationUpdateError,
+                    "failed after publication; rollback restored",
+                ):
+                    consume_apply_handoff(
+                        root,
+                        current_version="1.0.0",
+                        install_target=target,
+                        verify_same_publisher=lambda _current, _candidate: True,
+                    )
+
+            self.assertEqual(inspect.call_count, 4)
+            discard.assert_not_called()
+            self.assertEqual(target.read_bytes(), old)
+            self.assertEqual(
+                (root / "ScriptureArchive.exe.scripture-archive.rollback").read_bytes(),
+                old,
+            )
+
+    def test_consume_handoff_rolls_back_if_disarm_reports_missing_authority(self):
+        old = b"old executable bytes"
+        new = b"new signed executable bytes"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "ScriptureArchive.exe"
+            staged = root / "staged" / "ScriptureArchive.exe"
+            staged.parent.mkdir()
+            target.write_bytes(old)
+            staged.write_bytes(new)
+            pending = self._pending(new)
+
+            with patch(
+                "scripture_archive_runtime.application_update_updater.inspect_apply_handoff",
+                return_value=pending,
+            ), patch(
+                "scripture_archive_runtime.application_update_updater.staged_artifact_path",
+                return_value=staged,
+            ), patch(
+                "scripture_archive_runtime.application_update_updater.discard_apply_handoff",
+                return_value=False,
+            ):
+                with self.assertRaisesRegex(
+                    ApplicationUpdateError,
+                    "failed after publication; rollback restored",
+                ):
+                    consume_apply_handoff(
+                        root,
+                        current_version="1.0.0",
+                        install_target=target,
+                        verify_same_publisher=lambda _current, _candidate: True,
+                    )
+
+            self.assertEqual(target.read_bytes(), old)
+
+    def test_copy_exact_source_open_failure_never_creates_destination(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source.exe"
+            destination = root / "destination.exe"
+
+            with patch.object(
+                Path,
+                "open",
+                side_effect=OSError("forced source-open failure"),
+            ), patch(
+                "scripture_archive_runtime.application_update_updater.os.open",
+            ) as destination_open:
+                with self.assertRaisesRegex(
+                    ApplicationUpdateError,
+                    "update source could not be opened",
+                ):
+                    _copy_exact(source, destination)
+
+            destination_open.assert_not_called()
+            self.assertFalse(destination.exists())
+
+    def test_copy_exact_fdopen_failure_closes_descriptor_and_removes_destination(self):
+        source_bytes = b"source bytes"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source.exe"
+            destination = root / "destination.exe"
+            source.write_bytes(source_bytes)
+
+            with patch(
+                "scripture_archive_runtime.application_update_updater.os.fdopen",
+                side_effect=OSError("forced fdopen failure"),
+            ), patch(
+                "scripture_archive_runtime.application_update_updater.os.close",
+                wraps=os.close,
+            ) as close_descriptor:
+                with self.assertRaisesRegex(OSError, "forced fdopen failure"):
+                    _copy_exact(source, destination)
+
+            close_descriptor.assert_called_once()
+            self.assertFalse(destination.exists())
 
     def test_consume_handoff_disarms_apply_authority_after_success(self):
         old = b"old executable bytes"

@@ -22,7 +22,7 @@ ALLOWLISTED_COMMANDS = frozenset({
   "authoring.undo","authoring.redo","authoring.publish_version","authoring.list_versions","authoring.rollback_version",
   "keymap.list","keymap.rebind","keymap.clear","keymap.reset_context","keymap.reset_all",
   "keymap.export","keymap.import","settings.get","settings.set",
-  "speech.status","speech.synthesize_prompt","application_update.select_verify","application_update.select_verify_stage","application_update.pending_status","application_update.prepare_apply","application_update.cancel_pending","dossier.get","diagnostics.get_report"
+  "speech.status","speech.synthesize_prompt","application_update.select_verify","application_update.select_verify_stage","application_update.pending_status","application_update.prepare_apply","application_update.apply_and_restart","application_update.cancel_pending","application_update.commit_post_restart_health","dossier.get","diagnostics.get_report"
 })
 
 _PLAYER_TRUTH_OWNERS = frozenset({"D5/runtime", "REFERENCE_TEST_ONLY"})
@@ -102,7 +102,7 @@ def validate_request_shape(request:Any)->tuple[str,str,dict[str,Any]]:
         raise ValueError('authoring.pack_compatibility accepts an empty payload')
     if cmd=='speech.status' and payload:
         raise ValueError('speech.status accepts an empty payload')
-    if cmd in {'application_update.pending_status','application_update.prepare_apply','application_update.cancel_pending'} and payload:
+    if cmd in {'application_update.pending_status','application_update.prepare_apply','application_update.apply_and_restart','application_update.cancel_pending','application_update.commit_post_restart_health'} and payload:
         raise ValueError(f'{cmd} accepts an empty payload')
     if cmd=='speech.synthesize_prompt':
         allowed={'provider_id','voice_id','speed','allow_network'}

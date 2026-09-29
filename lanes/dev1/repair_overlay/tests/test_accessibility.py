@@ -70,6 +70,7 @@ class AccessibilityTests(unittest.TestCase):
     def test_parallel_witness_renderer_is_keyboard_linear_and_structured(self):
         for marker in (
             "register('PARALLEL_WITNESS_COMPARE'",
+            "register('PARALLEL_WITNESS_SYNTHESIS'",
             "document.createElement('fieldset')",
             "document.createElement('legend')",
             "synthesisLabel.htmlFor='parallel-synthesis'",

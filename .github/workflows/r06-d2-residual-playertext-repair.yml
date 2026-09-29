@@ -1,4 +1,5 @@
 name: R06 D2 residual player-text repair
+# Durable trigger commit: branch creation does not emit a push workflow event.
 
 on:
   push:

@@ -11,8 +11,9 @@ CANONICAL_TASK_TYPES = (
     "SINGLE_CHOICE", "MULTI_SELECT", "SHORT_TEXT", "LONG_TEXT",
     "COMBOBOX_SELECT", "ORDERING", "MATCHING", "EVIDENCE_SELECT",
     "CLAIM_EVIDENCE", "SPEAKER_RECIPIENT", "PARALLEL_WITNESS_COMPARE",
-    "PARALLEL_WITNESS_SYNTHESIS", "OT_NT_LINK", "COMPOSITE_MULTI_STEP", "ARGUMENT",
+    "OT_NT_LINK", "COMPOSITE_MULTI_STEP", "ARGUMENT",
 )
+DERIVED_RUNTIME_TASK_TYPES = ("PARALLEL_WITNESS_SYNTHESIS",)
 
 
 def transport_contract_descriptor() -> dict[str, Any]:
@@ -21,6 +22,7 @@ def transport_contract_descriptor() -> dict[str, Any]:
         "answer_contract": ANSWER_CONTRACT_VERSION,
         "commands": sorted(ALLOWED_COMMANDS),
         "task_types": {name: answer_contract_descriptor(name) for name in CANONICAL_TASK_TYPES},
+        "derived_runtime_task_types": {name: answer_contract_descriptor(name) for name in DERIVED_RUNTIME_TASK_TYPES},
         "provenance": provenance_contract_descriptor(),
         "platform_rule": "domain/runtime contains no pywebview, win32 or desktop-only imports",
     }

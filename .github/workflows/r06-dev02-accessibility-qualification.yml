@@ -30,6 +30,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: r06-dev02-accessibility-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   accessibility-contracts:
     strategy:

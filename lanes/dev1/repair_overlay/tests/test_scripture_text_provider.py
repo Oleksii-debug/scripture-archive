@@ -618,9 +618,11 @@ class BundledScriptureTextTests(unittest.TestCase):
         self.assertIn("'lanes/dev1/repair_overlay/tests/test_scripture_text_provider.py'", accessibility_workflow)
         self.assertIn('node --check frontend/scripture-reader-ui.js', accessibility_workflow)
         self.assertIn(
-            'python -m unittest discover -s tests -p "test_scripture_text_provider.py" -v',
+            'python tools/verify_library_search_overlay.py',
             accessibility_workflow,
         )
+        self.assertIn('LIBRARY_SOURCE_SHA:', accessibility_workflow)
+        self.assertIn('${{ env.EXPECTED_HEAD }}', accessibility_workflow)
 
         completed = subprocess.run(
             ['node', '--check', str(overlay / 'frontend' / 'scripture-reader-ui.js')],

@@ -287,13 +287,20 @@ class BundledScriptureTextTests(unittest.TestCase):
                 }))
               ],
               upstream_monitoring:{
-                status:'MATCH_PINNED_AUTHORITY',
-                observed_archive_sha256:'1007fb45782a4abd9444d4225fd768fb00a150466b9fb9fcf6f6ad175b73feb6',
-                observed_vpl_sha256:'8cac735abda379045fa2c5f43217410ad47a45ac592f3801116ab0da41a810d8',
-                changed_reference_count:0,
+                status:'SOURCE_REAUDIT_REQUIRED',
+                observed_archive_sha256:'cbed8914abff11ff715242ae06351ef7cc77931b89968c6c57142bb8616ddb82',
+                observed_vpl_sha256:'5507aa8b7dc4cde0cc385e4b61c76a33223769aba7b8a9c708de81a40403d4ae',
+                changed_reference_count:1,
                 added_reference_count:0,
                 removed_reference_count:0,
-                changed_references:[]
+                changed_references:['WIS 18:1'],
+                changed_reference_details:[{
+                  reference:'WIS 18:1',
+                  pinned_line:'WIS 18:1 But for your holy ones there was great light. Their enemies, hearing their voice but not seeing their form, counted it a happy thing that they too had suffered,',
+                  current_line:'WIS 18:1 But for your holy ones there was great light. Their enemies, hearing their voice but not seeing their form, counted it a happy thing that they had not suffered,',
+                  pinned_line_sha256:'48259c1b7540ba6589c9a24a2ba54289503d747cadfaab333273076c180f5759',
+                  current_line_sha256:'92b8897d7e1a3fb2d34fcbeed5e17bdb72eeb2feffcb7eb698c9a40922b05850'
+                }]
               }
             };
             mod.validateTextCatalog(catalog);
@@ -313,14 +320,28 @@ class BundledScriptureTextTests(unittest.TestCase):
                 ...catalog,
                 upstream_monitoring:{...catalog.upstream_monitoring, observed_vpl_sha256:'0'.repeat(64)}
               }),
-              'MATCH status with wrong VPL hash'
+              're-audit status with wrong VPL hash'
             );
             reject(
               ()=>mod.validateTextCatalog({
                 ...catalog,
-                upstream_monitoring:{...catalog.upstream_monitoring, changed_reference_count:1}
+                upstream_monitoring:{...catalog.upstream_monitoring, changed_reference_count:0}
               }),
-              'MATCH status with drift count'
+              're-audit status with wrong drift count'
+            );
+            reject(
+              ()=>mod.validateTextCatalog({
+                ...catalog,
+                upstream_monitoring:{...catalog.upstream_monitoring, changed_reference_details:[]}
+              }),
+              're-audit status without drift detail'
+            );
+            reject(
+              ()=>mod.validateTextCatalog({
+                ...catalog,
+                upstream_monitoring:{...catalog.upstream_monitoring, status:'MATCH_PINNED_AUTHORITY'}
+              }),
+              'MATCH status with known drift evidence'
             );
             reject(()=>mod.validateTextCatalog({...catalog, verse_rows:38057}), 'wrong corpus row count');
             reject(()=>mod.validateTextCatalog({...catalog, source_empty_rows:28}), 'wrong source-empty count');
@@ -411,6 +432,8 @@ class BundledScriptureTextTests(unittest.TestCase):
             'expected source text',
             'source-empty count is inconsistent',
             'MATCH_PINNED_AUTHORITY conflicts with drift evidence',
+            'SOURCE_REAUDIT_REQUIRED does not match current drift evidence',
+            'source drift detail identity is invalid',
             'chapter verses must be unique and ascending',
             'duplicate source reference',
         ):

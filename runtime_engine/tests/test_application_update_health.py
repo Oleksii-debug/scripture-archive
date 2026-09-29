@@ -4,7 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 
-import pytest
+from runtime_engine.tests._functional_unittest import make_load_tests, pytest
 
 from scripture_archive_runtime.application_update import ApplicationUpdateError
 from scripture_archive_runtime.application_update_health import (
@@ -170,3 +170,5 @@ def test_discard_only_disarms_receipt_and_preserves_recovery_bytes(tmp_path: Pat
     assert discard_update_health_receipt(root) is False
     assert rollback.read_bytes() == previous
     assert target.read_bytes() == installed
+
+load_tests = make_load_tests(globals())

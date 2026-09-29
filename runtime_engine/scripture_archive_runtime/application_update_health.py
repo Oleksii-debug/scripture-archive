@@ -24,6 +24,7 @@ HEALTH_RECEIPT_SCHEMA = "scripture.application-update-health.v1"
 _HEALTH_RECEIPT_NAME = "update-health.json"
 _ROLLBACK_SUFFIX = ".scripture-archive.rollback"
 _COPY_CHUNK = 1024 * 1024
+_MAX_RECEIPT_BYTES = 4096
 _RECEIPT_KEYS = frozenset(
     {
         "schema",
@@ -67,9 +68,9 @@ def publish_update_health_receipt(
     _require_regular_file(target, "installed application target")
     rollback = target.with_name(target.name + _ROLLBACK_SUFFIX)
     _require_regular_file(rollback, "rollback artifact")
-    if _sha256_file(target) != installed_sha256:
+    if _sha256_file(target, "installed application target") != installed_sha256:
         raise ApplicationUpdateError("installed bytes do not match health receipt identity")
-    if _sha256_file(rollback) != previous_sha256:
+    if _sha256_file(rollback, "rollback artifact") != previous_sha256:
         raise ApplicationUpdateError("rollback bytes do not match health receipt identity")
 
     receipt = UpdateHealthReceipt(
@@ -115,9 +116,9 @@ def inspect_update_health_receipt(
     _require_regular_file(target, "installed application target")
     rollback = target.with_name(target.name + _ROLLBACK_SUFFIX)
     _require_regular_file(rollback, "rollback artifact")
-    if _sha256_file(target) != receipt.installed_sha256:
+    if _sha256_file(target, "installed application target") != receipt.installed_sha256:
         raise ApplicationUpdateError("installed application bytes changed before health commit")
-    if _sha256_file(rollback) != receipt.previous_sha256:
+    if _sha256_file(rollback, "rollback artifact") != receipt.previous_sha256:
         raise ApplicationUpdateError("rollback bytes changed before health commit")
     return receipt
 
@@ -198,13 +199,48 @@ def _read_receipt_if_present(path: Path) -> UpdateHealthReceipt | None:
 
 
 def _read_receipt(path: Path) -> UpdateHealthReceipt:
-    _require_regular_file(path, "update health receipt")
     try:
-        raw = path.read_bytes()
+        before = path.lstat()
     except OSError as exc:
-        raise ApplicationUpdateError("update health receipt could not be read") from exc
-    if len(raw) > 4096:
+        raise ApplicationUpdateError("update health receipt is unavailable") from exc
+    if stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode):
+        raise ApplicationUpdateError("update health receipt must be a regular non-symlink file")
+    if before.st_size > _MAX_RECEIPT_BYTES:
         raise ApplicationUpdateError("update health receipt is unexpectedly large")
+    before_identity = (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
+    try:
+        with path.open("rb") as handle:
+            opened = os.fstat(handle.fileno())
+            opened_identity = (
+                opened.st_dev,
+                opened.st_ino,
+                opened.st_size,
+                opened.st_mtime_ns,
+            )
+            if not stat.S_ISREG(opened.st_mode) or opened_identity != before_identity:
+                raise ApplicationUpdateError("update health receipt changed before readback")
+            raw = handle.read(_MAX_RECEIPT_BYTES + 1)
+            opened_after = os.fstat(handle.fileno())
+            opened_after_identity = (
+                opened_after.st_dev,
+                opened_after.st_ino,
+                opened_after.st_size,
+                opened_after.st_mtime_ns,
+            )
+            if opened_after_identity != opened_identity:
+                raise ApplicationUpdateError("update health receipt changed during readback")
+        after = path.lstat()
+    except ApplicationUpdateError:
+        raise
+    except OSError as exc:
+        raise ApplicationUpdateError("update health receipt could not be read safely") from exc
+    after_identity = (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
+    if (
+        after_identity != before_identity
+        or len(raw) != before.st_size
+        or len(raw) > _MAX_RECEIPT_BYTES
+    ):
+        raise ApplicationUpdateError("update health receipt changed during readback")
     try:
         payload: Any = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -303,17 +339,48 @@ def _require_real_directory(path: Path, label: str) -> None:
         raise ApplicationUpdateError(f"{label} must be a real directory")
 
 
-def _sha256_file(path: Path) -> str:
+def _sha256_file(path: Path, label: str) -> str:
+    try:
+        before = path.lstat()
+    except OSError as exc:
+        raise ApplicationUpdateError(f"{label} is unavailable") from exc
+    if stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode):
+        raise ApplicationUpdateError(f"{label} must be a regular non-symlink file")
+    before_identity = (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
     digest = hashlib.sha256()
     try:
         with path.open("rb") as handle:
+            opened = os.fstat(handle.fileno())
+            opened_identity = (
+                opened.st_dev,
+                opened.st_ino,
+                opened.st_size,
+                opened.st_mtime_ns,
+            )
+            if not stat.S_ISREG(opened.st_mode) or opened_identity != before_identity:
+                raise ApplicationUpdateError(f"{label} changed before hashing")
             while True:
                 chunk = handle.read(_COPY_CHUNK)
                 if not chunk:
                     break
                 digest.update(chunk)
+            opened_after = os.fstat(handle.fileno())
+            opened_after_identity = (
+                opened_after.st_dev,
+                opened_after.st_ino,
+                opened_after.st_size,
+                opened_after.st_mtime_ns,
+            )
+            if opened_after_identity != opened_identity:
+                raise ApplicationUpdateError(f"{label} changed during hashing")
+        after = path.lstat()
+    except ApplicationUpdateError:
+        raise
     except OSError as exc:
-        raise ApplicationUpdateError("update health artifact could not be hashed") from exc
+        raise ApplicationUpdateError(f"{label} could not be hashed safely") from exc
+    after_identity = (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
+    if after_identity != before_identity:
+        raise ApplicationUpdateError(f"{label} changed during hashing")
     return digest.hexdigest()
 
 

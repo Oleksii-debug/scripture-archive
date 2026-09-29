@@ -13,6 +13,11 @@ from scripture_archive_platform.content.scripture_text import (
     EXPECTED_ARCHIVE_SHA256,
     EXPECTED_LICENSE,
     EXPECTED_REAUDIT_LINE_SHA256,
+    LATEST_UPSTREAM_ARCHIVE_SHA256,
+    LATEST_UPSTREAM_CHANGED_REFERENCE,
+    LATEST_UPSTREAM_CURRENT_LINE_SHA256,
+    LATEST_UPSTREAM_PINNED_LINE_SHA256,
+    LATEST_UPSTREAM_VPL_SHA256,
     EXPECTED_SOURCE_SITE,
     EXPECTED_SOURCE_URL,
     EXPECTED_TRANSLATION_NAME,
@@ -49,12 +54,18 @@ class BundledScriptureTextTests(unittest.TestCase):
         self.assertFalse(catalog['runtime_network_required'])
         self.assertEqual('AUDITED_PINNED_SNAPSHOT', catalog['source_snapshot_status'])
         upstream = catalog['upstream_monitoring']
-        self.assertEqual('MATCH_PINNED_AUTHORITY', upstream['status'])
-        self.assertEqual(EXPECTED_VPL_SHA256, upstream['observed_vpl_sha256'])
-        self.assertEqual(0, upstream['changed_reference_count'])
+        self.assertEqual('SOURCE_REAUDIT_REQUIRED', upstream['status'])
+        self.assertEqual(LATEST_UPSTREAM_ARCHIVE_SHA256, upstream['observed_archive_sha256'])
+        self.assertEqual(LATEST_UPSTREAM_VPL_SHA256, upstream['observed_vpl_sha256'])
+        self.assertEqual(1, upstream['changed_reference_count'])
         self.assertEqual(0, upstream['added_reference_count'])
         self.assertEqual(0, upstream['removed_reference_count'])
-        self.assertEqual([], upstream['changed_references'])
+        self.assertEqual([LATEST_UPSTREAM_CHANGED_REFERENCE], upstream['changed_references'])
+        self.assertEqual(1, len(upstream['changed_reference_details']))
+        detail = upstream['changed_reference_details'][0]
+        self.assertEqual(LATEST_UPSTREAM_CHANGED_REFERENCE, detail['reference'])
+        self.assertEqual(LATEST_UPSTREAM_PINNED_LINE_SHA256, detail['pinned_line_sha256'])
+        self.assertEqual(LATEST_UPSTREAM_CURRENT_LINE_SHA256, detail['current_line_sha256'])
         reaudit = catalog['source_reaudit']
         self.assertEqual('SOURCE_IDENTITY_RECONCILED', reaudit['status'])
         self.assertFalse(reaudit['independent_audit_claimed'])
@@ -92,6 +103,45 @@ class BundledScriptureTextTests(unittest.TestCase):
                     )
                     with self.assertRaisesRegex(ValueError, 'provenance identity changed'):
                         BundledScriptureText(target)
+
+    def test_runtime_rejects_tampered_upstream_monitoring(self):
+        source_data = (
+            Path(__file__).resolve().parents[1]
+            / 'scripture_archive_platform'
+            / 'content'
+            / 'data'
+        )
+        authority = json.loads((source_data / 'engwebu_authority.json').read_text(encoding='utf-8'))
+        mutations = [
+            ('status', 'MATCH_PINNED_AUTHORITY'),
+            ('evidence_run_id', 0),
+            ('observed_archive_sha256', '0' * 64),
+            ('observed_vpl_sha256', '0' * 64),
+            ('changed_reference_count', 0),
+            ('changed_references', []),
+        ]
+        with tempfile.TemporaryDirectory() as td:
+            target = Path(td)
+            shutil.copy2(source_data / 'engwebu_vpl.txt', target / 'engwebu_vpl.txt')
+            for field, bad_value in mutations:
+                with self.subTest(field=field):
+                    payload = json.loads(json.dumps(authority))
+                    payload['upstream_monitoring'][field] = bad_value
+                    (target / 'engwebu_authority.json').write_text(
+                        json.dumps(payload, ensure_ascii=False, indent=2) + '\n',
+                        encoding='utf-8',
+                    )
+                    with self.assertRaises(ValueError):
+                        BundledScriptureText(target)
+
+            payload = json.loads(json.dumps(authority))
+            payload['upstream_monitoring']['changed_reference_details'][0]['current_line_sha256'] = '0' * 64
+            (target / 'engwebu_authority.json').write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2) + '\n',
+                encoding='utf-8',
+            )
+            with self.assertRaisesRegex(ValueError, 'source-drift evidence'):
+                BundledScriptureText(target)
 
     def test_parsing_remains_bound_to_the_exact_bytes_verified_at_initialization(self):
         source_data = (

@@ -42,6 +42,18 @@ class DevARuntimeApplicationTests(unittest.TestCase):
         self.assertEqual({'campaign_id':'LN','mission_id':'LN-01','node_id':'LN01-N01','checkpoint_schema':'scripture.player.checkpoint.v1'},data['checkpoint'])
         self.assertEqual(('player.save_checkpoint',{},'save-player'),self.gateway.calls[-1])
         self.assertIsNone(self.app.store.get_json('player','checkpoint'))
+    def test_runtime_checkpoint_unknown_canonical_node_fails_closed_on_save_and_restore(self):
+        class UnknownCheckpointGateway:
+            def invoke(self,command,payload=None,request_id='x'):
+                if command=='player.save_checkpoint': return {'api_version':'runtime.v1','request_id':request_id,'saved':True,'current_node_id':'UNKNOWN-NODE'}
+                if command=='player.restore_checkpoint': return {'api_version':'runtime.v1','request_id':request_id,'restored':True,'current_node_id':'UNKNOWN-NODE','schema_version':2}
+                raise AssertionError(command)
+        app=PlatformApplication(self.repo,store=JsonFileStore(Path(self.t.name)/'unknown-node-store'),player_gateway=UnknownCheckpointGateway())
+        saved=app.handle({'api_version':'scripture.transport.v1','request_id':'save-unknown','command':'player.save_checkpoint','payload':{}})
+        self.assertFalse(saved['ok'],saved);self.assertEqual('VALIDATION_ERROR',saved['error']['code']);self.assertIn('unknown canonical node',saved['error']['message'])
+        restored=app.handle({'api_version':'scripture.transport.v1','request_id':'restore-unknown','command':'player.restore_checkpoint','payload':{}})
+        self.assertFalse(restored['ok'],restored);self.assertEqual('VALIDATION_ERROR',restored['error']['code']);self.assertIn('unknown canonical node',restored['error']['message'])
+        self.assertIsNone(app.store.get_json('player','checkpoint'))
     def test_runtime_save_before_task_load_returns_null_checkpoint_without_spoofing(self):
         calls=[]
         def runtime(request):

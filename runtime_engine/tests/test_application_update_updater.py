@@ -51,6 +51,9 @@ class AtomicApplicationUpdaterTests(unittest.TestCase):
             ), patch(
                 "scripture_archive_runtime.application_update_updater.staged_artifact_path",
                 return_value=staged,
+            ), patch(
+                "scripture_archive_runtime.application_update_updater.discard_apply_handoff",
+                return_value=True,
             ):
                 result = consume_apply_handoff(
                     root,
@@ -150,11 +153,10 @@ class AtomicApplicationUpdaterTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             target = root / "ScriptureArchive.exe"
-            staged = root / "ScriptureArchive.new.exe"
             target.write_bytes(old)
-            staged.write_bytes(new)
             pending = self._pending(new)
-            staged_named = root / pending.artifact_name
+            staged_named = root / "staged" / pending.artifact_name
+            staged_named.parent.mkdir()
             staged_named.write_bytes(new)
 
             with patch(

@@ -54,6 +54,26 @@ class DevARuntimeApplicationTests(unittest.TestCase):
         restored=app.handle({'api_version':'scripture.transport.v1','request_id':'restore-unknown','command':'player.restore_checkpoint','payload':{}})
         self.assertFalse(restored['ok'],restored);self.assertEqual('VALIDATION_ERROR',restored['error']['code']);self.assertIn('unknown canonical node',restored['error']['message'])
         self.assertIsNone(app.store.get_json('player','checkpoint'))
+    def test_runtime_checkpoint_requires_positive_persistence_acknowledgement(self):
+        class UnacknowledgedGateway:
+            def invoke(self,command,payload=None,request_id='x'):
+                if command=='player.save_checkpoint': return {'api_version':'runtime.v1','request_id':request_id,'saved':False,'current_node_id':'LN01-N01'}
+                if command=='player.restore_checkpoint': return {'api_version':'runtime.v1','request_id':request_id,'restored':False,'current_node_id':'LN01-N01','schema_version':3}
+                raise AssertionError(command)
+        app=PlatformApplication(self.repo,store=JsonFileStore(Path(self.t.name)/'unacknowledged-store'),player_gateway=UnacknowledgedGateway())
+        saved=app.handle({'api_version':'scripture.transport.v1','request_id':'save-unacked','command':'player.save_checkpoint','payload':{}})
+        self.assertFalse(saved['ok'],saved);self.assertEqual('VALIDATION_ERROR',saved['error']['code']);self.assertIn('was not acknowledged',saved['error']['message'])
+        restored=app.handle({'api_version':'scripture.transport.v1','request_id':'restore-unacked','command':'player.restore_checkpoint','payload':{}})
+        self.assertFalse(restored['ok'],restored);self.assertEqual('VALIDATION_ERROR',restored['error']['code']);self.assertIn('was not acknowledged',restored['error']['message'])
+        self.assertIsNone(app.store.get_json('player','checkpoint'))
+    def test_runtime_checkpoint_restore_requires_valid_schema_version(self):
+        class InvalidSchemaGateway:
+            def invoke(self,command,payload=None,request_id='x'):
+                if command=='player.restore_checkpoint': return {'api_version':'runtime.v1','request_id':request_id,'restored':True,'current_node_id':'LN01-N01','schema_version':0}
+                raise AssertionError(command)
+        app=PlatformApplication(self.repo,store=JsonFileStore(Path(self.t.name)/'invalid-schema-store'),player_gateway=InvalidSchemaGateway())
+        restored=app.handle({'api_version':'scripture.transport.v1','request_id':'restore-invalid-schema','command':'player.restore_checkpoint','payload':{}})
+        self.assertFalse(restored['ok'],restored);self.assertEqual('VALIDATION_ERROR',restored['error']['code']);self.assertIn('invalid schema_version',restored['error']['message'])
     def test_runtime_save_before_task_load_returns_null_checkpoint_without_spoofing(self):
         calls=[]
         def runtime(request):

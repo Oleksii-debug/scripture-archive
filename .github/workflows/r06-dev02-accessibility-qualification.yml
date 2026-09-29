@@ -89,6 +89,8 @@ jobs:
         run: python -m unittest discover -s tests -p "test_packaged_accessibility_inspector_surface.py" -v
       - name: Run Scripture reader accessibility regression
         working-directory: lanes/dev1/repair_overlay
+        env:
+          PYTHONPATH: ${{ github.workspace }}
         run: python -m unittest discover -s tests -p "test_scripture_text_provider.py" -v
       - name: Run Scripture reader request-state regression
         working-directory: lanes/dev1/repair_overlay

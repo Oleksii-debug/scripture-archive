@@ -2,15 +2,115 @@
   "archive_sha256": "1007fb45782a4abd9444d4225fd768fb00a150466b9fb9fcf6f6ad175b73feb6",
   "archive_size": 5347563,
   "book_codes": [
-    "GEN", "EXO", "LEV", "NUM", "DEU", "JOS", "JDG", "RUT", "1SA", "2SA", "1KI", "2KI", "1CH", "2CH", "EZR", "NEH", "EST", "JOB", "PSA", "PRO", "ECC", "SOL", "ISA", "JER", "LAM", "EZE", "DAN", "HOS", "JOE", "AMO", "OBA", "JON", "MIC", "NAH", "HAB", "ZEP", "HAG", "ZEC", "MAL", "TOB", "JDT", "ESG", "WIS", "SIR", "BAR", "1MA", "2MA", "1ES", "PRM", "PSX", "3MA", "4ES", "4MA", "DNG", "MAT", "MAR", "LUK", "JOH", "ACT", "ROM", "1CO", "2CO", "GAL", "EPH", "PHI", "COL", "1TH", "2TH", "1TI", "2TI", "TIT", "PHM", "HEB", "JAM", "1PE", "2PE", "1JO", "2JO", "3JO", "JUD", "REV"
+    "GEN",
+    "EXO",
+    "LEV",
+    "NUM",
+    "DEU",
+    "JOS",
+    "JDG",
+    "RUT",
+    "1SA",
+    "2SA",
+    "1KI",
+    "2KI",
+    "1CH",
+    "2CH",
+    "EZR",
+    "NEH",
+    "EST",
+    "JOB",
+    "PSA",
+    "PRO",
+    "ECC",
+    "SOL",
+    "ISA",
+    "JER",
+    "LAM",
+    "EZE",
+    "DAN",
+    "HOS",
+    "JOE",
+    "AMO",
+    "OBA",
+    "JON",
+    "MIC",
+    "NAH",
+    "HAB",
+    "ZEP",
+    "HAG",
+    "ZEC",
+    "MAL",
+    "TOB",
+    "JDT",
+    "ESG",
+    "WIS",
+    "SIR",
+    "BAR",
+    "1MA",
+    "2MA",
+    "1ES",
+    "PRM",
+    "PSX",
+    "3MA",
+    "4ES",
+    "4MA",
+    "DNG",
+    "MAT",
+    "MAR",
+    "LUK",
+    "JOH",
+    "ACT",
+    "ROM",
+    "1CO",
+    "2CO",
+    "GAL",
+    "EPH",
+    "PHI",
+    "COL",
+    "1TH",
+    "2TH",
+    "1TI",
+    "2TI",
+    "TIT",
+    "PHM",
+    "HEB",
+    "JAM",
+    "1PE",
+    "2PE",
+    "1JO",
+    "2JO",
+    "3JO",
+    "JUD",
+    "REV"
   ],
   "empty_text_rows": 29,
   "entries": [
-    {"crc32": "340f36e0", "path": "engwebu_about.htm", "size": 2430},
-    {"crc32": "c86d9eb8", "path": "engwebu_vpl.sql", "size": 7917018},
-    {"crc32": "0253a6b8", "path": "engwebu_vpl.txt", "size": 5320533},
-    {"crc32": "bd0195b6", "path": "engwebu_vpl.xml", "size": 6081733},
-    {"crc32": "f8fc7977", "path": "haiola.css", "size": 8995}
+    {
+      "crc32": "340f36e0",
+      "path": "engwebu_about.htm",
+      "size": 2430
+    },
+    {
+      "crc32": "c86d9eb8",
+      "path": "engwebu_vpl.sql",
+      "size": 7917018
+    },
+    {
+      "crc32": "0253a6b8",
+      "path": "engwebu_vpl.txt",
+      "size": 5320533
+    },
+    {
+      "crc32": "bd0195b6",
+      "path": "engwebu_vpl.xml",
+      "size": 6081733
+    },
+    {
+      "crc32": "f8fc7977",
+      "path": "haiola.css",
+      "size": 8995
+    }
   ],
   "license": "Public Domain",
   "materialization_rule": "Exact engwebu_vpl.txt bytes from the pinned official eBible archive; no verse normalization or interpolation.",
@@ -25,14 +125,56 @@
   "vpl_sha256": "8cac735abda379045fa2c5f43217410ad47a45ac592f3801116ab0da41a810d8",
   "source_snapshot_status": "AUDITED_PINNED_SNAPSHOT",
   "upstream_monitoring": {
-    "status": "MATCH_PINNED_AUTHORITY",
-    "observed_utc": "2026-09-27T12:17:36Z",
-    "observed_archive_sha256": "1007fb45782a4abd9444d4225fd768fb00a150466b9fb9fcf6f6ad175b73feb6",
-    "observed_vpl_sha256": "8cac735abda379045fa2c5f43217410ad47a45ac592f3801116ab0da41a810d8",
-    "changed_reference_count": 0,
+    "status": "SOURCE_REAUDIT_REQUIRED",
+    "observed_utc": "2026-09-29T13:20:57Z",
+    "evidence_run_id": 36570411388,
+    "evidence_artifact_id": 11036833286,
+    "observed_archive_sha256": "cbed8914abff11ff715242ae06351ef7cc77931b89968c6c57142bb8616ddb82",
+    "observed_vpl_sha256": "5507aa8b7dc4cde0cc385e4b61c76a33223769aba7b8a9c708de81a40403d4ae",
+    "observed_archive_size": 5347560,
+    "archive_inventory_matches": false,
+    "changed_reference_count": 1,
     "added_reference_count": 0,
     "removed_reference_count": 0,
-    "changed_references": []
+    "changed_references": [
+      "WIS 18:1"
+    ],
+    "changed_reference_details": [
+      {
+        "reference": "WIS 18:1",
+        "pinned_line": "WIS 18:1 But for your holy ones there was great light. Their enemies, hearing their voice but not seeing their form, counted it a happy thing that they too had suffered,",
+        "current_line": "WIS 18:1 But for your holy ones there was great light. Their enemies, hearing their voice but not seeing their form, counted it a happy thing that they had not suffered,",
+        "pinned_line_sha256": "48259c1b7540ba6589c9a24a2ba54289503d747cadfaab333273076c180f5759",
+        "current_line_sha256": "92b8897d7e1a3fb2d34fcbeed5e17bdb72eeb2feffcb7eb698c9a40922b05850"
+      }
+    ],
+    "observed_entries": [
+      {
+        "crc32": "340f36e0",
+        "path": "engwebu_about.htm",
+        "size": 2430
+      },
+      {
+        "crc32": "e3ef57c8",
+        "path": "engwebu_vpl.sql",
+        "size": 7917018
+      },
+      {
+        "crc32": "559b519c",
+        "path": "engwebu_vpl.txt",
+        "size": 5320533
+      },
+      {
+        "crc32": "a811a06e",
+        "path": "engwebu_vpl.xml",
+        "size": 6081733
+      },
+      {
+        "crc32": "f8fc7977",
+        "path": "haiola.css",
+        "size": 8995
+      }
+    ]
   },
   "source_reaudit": {
     "status": "SOURCE_IDENTITY_RECONCILED",
@@ -45,8 +187,16 @@
     "added_reference_count": 0,
     "removed_reference_count": 0,
     "changed_references": [
-      "DAN 11:20", "DAN 11:21", "DAN 11:24", "DAN 4:26", "DAN 9:11",
-      "DNG 11:20", "DNG 11:21", "DNG 11:24", "DNG 4:26", "DNG 9:11"
+      "DAN 11:20",
+      "DAN 11:21",
+      "DAN 11:24",
+      "DAN 4:26",
+      "DAN 9:11",
+      "DNG 11:20",
+      "DNG 11:21",
+      "DNG 11:24",
+      "DNG 4:26",
+      "DNG 9:11"
     ],
     "current_line_sha256": {
       "DAN 11:20": "1cc07bb46873f69f5ac5fc4ccbd8a7421050b47a9190884469e1f2440f712505",

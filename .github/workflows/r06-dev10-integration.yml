@@ -34,12 +34,9 @@ jobs:
       - name: Compile runtime, tests and integration tools
         working-directory: runtime_engine
         run: python -m compileall -q scripture_archive_runtime tests tools
-      - name: Install runtime test runner
-        working-directory: runtime_engine
-        run: python -m pip install --disable-pip-version-check pytest==8.4.2
       - name: Run complete runtime regression suite
         working-directory: runtime_engine
-        run: python -m pytest -v tests
+        run: python -m unittest discover -s tests -v
 
   release-secret-scan:
     runs-on: ubuntu-latest

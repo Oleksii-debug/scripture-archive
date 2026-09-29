@@ -328,7 +328,10 @@ export async function installScriptureReaderSurface() {
   }
 
   readForm.addEventListener('submit', async event => {
-    event.preventDefault(); readButton.disabled = true; status('Завантаження розділу…');
+    event.preventDefault();
+    readButton.disabled = true;
+    verses.replaceChildren();
+    status('Завантаження розділу…');
     try {
       const data = validateChapter(await api('library.read_chapter', {book: book.value, chapter: Number(chapter.value)}));
       renderVerses(data); status(`${data.book} ${data.chapter}: ${data.verses.length} рядків джерела.`);
@@ -342,7 +345,9 @@ export async function installScriptureReaderSurface() {
   searchForm.addEventListener('submit', async event => {
     event.preventDefault(); const value = query.value.trim();
     if (!value) { status('Введіть слова для пошуку у вбудованому тексті WEBU.'); query.focus(); return; }
-    searchButton.disabled = true; status('Пошук у вбудованому тексті WEBU…');
+    searchButton.disabled = true;
+    results.replaceChildren();
+    status('Пошук у вбудованому тексті WEBU…');
     try {
       const data = validateTextSearch(await api('library.text_search', {query: value, limit: MAX_SEARCH_RESULTS}));
       renderSearch(data); status(`Знайдено ${data.total} рядків джерела; показано до 50.`);

@@ -14,6 +14,9 @@ on:
 permissions:
   contents: read
 
+env:
+  EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+
 concurrency:
   group: r06-dev10-${{ github.ref }}
   cancel-in-progress: true
@@ -28,6 +31,11 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+      - name: Confirm exact source checkout
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
@@ -43,6 +51,11 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+      - name: Confirm exact source checkout
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'

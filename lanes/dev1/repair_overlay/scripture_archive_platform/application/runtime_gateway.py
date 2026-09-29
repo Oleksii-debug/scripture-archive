@@ -66,8 +66,13 @@ class RuntimeBackedPlayerGateway:
         with self._runtime_lock:
             if command == "player.next":
                 self._validate_next_context(request_id)
-            response = self.adapter.invoke_runtime(self._request(command, payload or {}, request_id))
-            return dict(response)
+            response = dict(self.adapter.invoke_runtime(self._request(command, payload or {}, request_id)))
+            if command == "player.save_checkpoint" and self._current_node_getter is not None:
+                # Runtime save deliberately accepts no caller checkpoint payload.
+                # Capture the canonical node under the same lock as persistence so
+                # the platform cannot label caller-supplied metadata as D5 truth.
+                response["current_node_id"] = self._current_node_getter()
+            return response
 
     def get_daily_case(self) -> dict[str, Any]:
         """Project Daily Case from one atomic snapshot of canonical runtime state."""

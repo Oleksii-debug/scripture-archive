@@ -48,6 +48,18 @@ class RuntimeEngineContractAdapter:
         if not isinstance(normalized,dict):raise RuntimeContractError('runtime response must be an object')
         if normalized.get('api_version')!=RUNTIME_API_VERSION:raise RuntimeContractError('Unexpected runtime api_version')
         if normalized.get('request_id') not in {None,runtime_request['request_id']}:raise RuntimeContractError('runtime request_id mismatch')
+        if runtime_request['command']=='save':
+            if normalized.get('saved') is not True:
+                raise RuntimeContractError('runtime save response must acknowledge saved=true')
+        if runtime_request['command']=='restore':
+            if normalized.get('restored') is not True:
+                raise RuntimeContractError('runtime restore response must acknowledge restored=true')
+            schema_version=normalized.get('schema_version')
+            if isinstance(schema_version,bool) or not isinstance(schema_version,int) or schema_version < 1:
+                raise RuntimeContractError('runtime restore response has invalid schema_version')
+            current_node_id=normalized.get('current_node_id')
+            if current_node_id is not None and (not isinstance(current_node_id,str) or not current_node_id):
+                raise RuntimeContractError('runtime restore response has invalid current_node_id')
         if runtime_request['command']=='get_review_queue':
             try:validate_review_queue_projection(normalized.get('review_queue'))
             except ValueError as exc:raise RuntimeContractError(str(exc)) from exc

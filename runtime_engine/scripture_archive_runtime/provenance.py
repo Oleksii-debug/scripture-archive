@@ -30,7 +30,7 @@ RELEASE_PASS_CLASSES = frozenset({
 CANONICAL_TASK_TYPES = (
     "SINGLE_CHOICE", "MULTI_SELECT", "SHORT_TEXT", "LONG_TEXT", "COMBOBOX_SELECT",
     "ORDERING", "MATCHING", "EVIDENCE_SELECT", "CLAIM_EVIDENCE", "SPEAKER_RECIPIENT",
-    "PARALLEL_WITNESS_COMPARE", "OT_NT_LINK", "COMPOSITE_MULTI_STEP", "ARGUMENT",
+    "PARALLEL_WITNESS_COMPARE", "PARALLEL_WITNESS_SYNTHESIS", "OT_NT_LINK", "COMPOSITE_MULTI_STEP", "ARGUMENT",
 )
 _PAYLOAD_TRUTH_KEYS = {
     "correct", "correct_evidence", "ordered_items", "pairs", "answer", "answer_index",
@@ -97,16 +97,16 @@ def _pairs(v: Any) -> dict[str, str]:
 
 def _value_dto(t: str, value: Any, required: Sequence[str] = ()) -> dict[str, Any]:
     t = canonical_task_type(t)
-    if t in {"SINGLE_CHOICE", "COMBOBOX_SELECT"}:
+    if t in {"SINGLE_CHOICE", "COMBOBOX_SELECT", "PARALLEL_WITNESS_COMPARE"}:
         if not isinstance(value, str) or not value.strip(): raise ValidationError(f"{t} requires canonical string accepted_answer")
         body = {"choice": value.strip()}
-    elif t == "PARALLEL_WITNESS_COMPARE":
+    elif t == "PARALLEL_WITNESS_SYNTHESIS":
         if not isinstance(value, Mapping):
-            raise ValidationError("PARALLEL_WITNESS_COMPARE requires canonical synthesis+witnesses object")
+            raise ValidationError("PARALLEL_WITNESS_SYNTHESIS requires canonical synthesis+witnesses object")
         synthesis = value.get("synthesis")
         witnesses = value.get("witnesses")
         if not _nonempty(synthesis):
-            raise ValidationError("PARALLEL_WITNESS_COMPARE lacks canonical synthesis")
+            raise ValidationError("PARALLEL_WITNESS_SYNTHESIS lacks canonical synthesis")
         body = {"synthesis": str(synthesis), "witnesses": _seq(witnesses, "accepted_answer.witnesses")}
     elif t == "MULTI_SELECT": body = {"choices": _seq(value, "accepted_answer")}
     elif t in {"SHORT_TEXT", "LONG_TEXT", "ARGUMENT"}:
@@ -193,15 +193,17 @@ def _explicit(n: Mapping[str, Any], dto: Mapping[str, Any]) -> tuple[str | None,
     mismatch = lambda rep, why: (ProvenanceClass.MISMATCH_FAIL.value, rep, why)
     direct = lambda rep: (ProvenanceClass.AUTHORED_DIRECT_PASS.value, rep, "explicit task truth equals canonical ground truth")
     legacy = lambda rep: (ProvenanceClass.LEGACY_EXPLICIT_NORMALIZATION_PASS.value, rep, "explicit documented legacy truth equals canonical ground truth")
-    if t in {"SINGLE_CHOICE", "COMBOBOX_SELECT"}:
+    if t in {"SINGLE_CHOICE", "COMBOBOX_SELECT", "PARALLEL_WITNESS_COMPARE"}:
         aliases = g.get("accepted_aliases")
         if aliases is not None:
             aliases = [aliases] if isinstance(aliases, str) else aliases
-            canon = {_norm(n.get("accepted_answer"))} | {_norm(x) for x in (n.get("accepted_variants") or [])}
+            variants = n.get("accepted_variants") or []
+            variants = variants if isinstance(variants, Sequence) and not isinstance(variants, (str, bytes, Mapping)) else []
+            canon = {_norm(n.get("accepted_answer"))} | {_norm(x) for x in variants}
             if not isinstance(aliases, Sequence) or any(_norm(x) not in canon for x in aliases if _nonempty(x)): return mismatch("grading.accepted_aliases", "aliases conflict with canonical accepted_answer/accepted_variants")
         if _nonempty(g.get("accepted_choice")): return direct("grading.accepted_choice") if _norm(g["accepted_choice"]) == _norm(dto["choice"]) else mismatch("grading.accepted_choice", "choice conflict")
         if _nonempty(g.get("accepted_value")): return legacy("grading.accepted_value") if _norm(g["accepted_value"]) == _norm(dto["choice"]) else mismatch("grading.accepted_value", "legacy choice conflict")
-    elif t == "PARALLEL_WITNESS_COMPARE":
+    elif t == "PARALLEL_WITNESS_SYNTHESIS":
         propositions = g.get("accepted_propositions")
         required_witnesses = g.get("required_witnesses")
         has_propositions = _nonempty(propositions)

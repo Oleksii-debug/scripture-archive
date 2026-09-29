@@ -72,7 +72,12 @@ class TaskPresentationMapper:
     )
     def infer_task_type(self,node:dict[str,Any])->str:
         explicit=node.get('task_type')
-        if explicit:return canonical_task_type(str(explicit))
+        if explicit:
+            ctype=canonical_task_type(str(explicit))
+            accepted=node.get('accepted_answer')
+            if ctype=='PARALLEL_WITNESS_COMPARE' and isinstance(accepted,dict) and 'synthesis' in accepted and 'witnesses' in accepted:
+                return 'PARALLEL_WITNESS_SYNTHESIS'
+            return ctype
         mode=(str(node.get('response_mode',''))+' '+str(node.get('task_family',''))).lower()
         if 'speaker' in mode and 'recipient' in mode:return 'SPEAKER_RECIPIENT'
         if 'parallel' in mode and 'witness' in mode:return 'PARALLEL_WITNESS_COMPARE'
@@ -188,7 +193,7 @@ class TaskPresentationMapper:
             relation_types=[{'id':str(payload['relation_category']),'label':str(payload['relation_category'])}]
         legacy_answer_contract=dict(node.get('answer_contract') or {})
         if not legacy_answer_contract:
-            if task_type in {'SINGLE_CHOICE','COMBOBOX_SELECT'}:
+            if task_type in {'SINGLE_CHOICE','COMBOBOX_SELECT','PARALLEL_WITNESS_COMPARE'}:
                 accepted=str(node.get('accepted_answer','')).strip()
                 if accepted: legacy_answer_contract={'accepted_choice_ids':[accepted]}
             elif task_type=='MULTI_SELECT': legacy_answer_contract={'accepted_choice_ids':ui.get('accepted_choice_ids',payload.get('accepted_options',[]))}

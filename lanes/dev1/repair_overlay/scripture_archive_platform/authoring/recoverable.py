@@ -81,12 +81,18 @@ class RecoverableAuthoringService(AuthoringService):
             raise ValueError("record must be an object")
         stable_id = identity(kind, record)
         blank = self._new_draft_record(title or stable_id or f"Edit {kind}", kind)
+        now = int(self.clock())
         out = copy.deepcopy(blank)
         out[kind] = self._json_copy(record)
-        out["base_identity"] = {kind: stable_id}
-        out["revision"] = 2
+        out.update({
+            "status": "DRAFT",
+            "created_at": int(blank.get("created_at", now)),
+            "updated_at": now,
+            "revision": 2,
+            "base_identity": {kind: stable_id},
+        })
         out.setdefault("change_record", []).append({
-            "timestamp": int(self.clock()),
+            "timestamp": now,
             "action": "save_draft",
             "revision": 2,
         })

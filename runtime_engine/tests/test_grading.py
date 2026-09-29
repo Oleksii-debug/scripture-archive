@@ -34,6 +34,13 @@ class GradingTests(unittest.TestCase):
         self.assertEqual(Correctness.CORRECT, exact.correctness)
         self.assertEqual(1.0, exact.score)
 
+        split_lines = self.registry.grade(
+            task,
+            {"synthesis": synthesis, "witnesses": ["Acts 9:10–19", "Acts 22:12–16"]},
+        )
+        self.assertEqual(Correctness.CORRECT, split_lines.correctness)
+        self.assertEqual(1.0, split_lines.score)
+
         missing_witness = self.registry.grade(task, {"synthesis": synthesis, "witnesses": ["Acts 9:10–19"]})
         self.assertEqual(Correctness.INCORRECT, missing_witness.correctness)
         self.assertEqual(0.0, missing_witness.score)

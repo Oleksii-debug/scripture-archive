@@ -78,10 +78,17 @@ async function invokeNativeUpdate(command){
 }
 
 function setBusy(busy){
+  const view=$('application-update-view');
+  if(view)view.setAttribute('aria-busy',busy?'true':'false');
   for(const id of ['application-update-select','application-update-stage']){
     const button=$(id);
     if(button)button.disabled=busy;
   }
+}
+
+function reportFailure(error,message){
+  console.error('application update operation failed',error);
+  announce(message);
 }
 
 async function selectAndVerify(command=VERIFY_UPDATE_COMMAND){
@@ -109,7 +116,12 @@ async function selectAndVerify(command=VERIFY_UPDATE_COMMAND){
     }
   }catch(error){
     clearDetails();
-    announce(`${staging?'Оновлення не підготовлено':'Оновлення не перевірено'}: ${error?.message||'невідома помилка'}`);
+    reportFailure(
+      error,
+      staging
+        ?'Оновлення не підготовлено. Пакет не встановлено й файли програми не змінено.'
+        :'Оновлення не перевірено. Виберіть локальний manifest і пакет та повторіть перевірку.'
+    );
   }finally{
     setBusy(false);
   }

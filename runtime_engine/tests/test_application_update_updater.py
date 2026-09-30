@@ -240,7 +240,7 @@ class AtomicApplicationUpdaterTests(unittest.TestCase):
             ):
                 with self.assertRaisesRegex(
                     ApplicationUpdateError,
-                    "staged artifact identity changed during publisher verification",
+                    "staged artifact changed during publisher verification",
                 ):
                     consume_apply_handoff(
                         root,
@@ -283,7 +283,7 @@ class AtomicApplicationUpdaterTests(unittest.TestCase):
             ):
                 with self.assertRaisesRegex(
                     ApplicationUpdateError,
-                    "installed application target identity changed during publisher verification",
+                    "installed application target changed during publisher verification",
                 ):
                     consume_apply_handoff(
                         root,

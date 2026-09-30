@@ -372,6 +372,104 @@ class AtomicApplicationUpdaterTests(unittest.TestCase):
                 (root / "ScriptureArchive.exe.scripture-archive.rollback").exists()
             )
 
+    def test_consume_handoff_rejects_staged_replacement_before_install_copy(self):
+        old = b"old executable bytes"
+        new = b"new signed executable bytes"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "ScriptureArchive.exe"
+            rollback = root / "ScriptureArchive.exe.scripture-archive.rollback"
+            staged = root / "staged" / "ScriptureArchive.exe"
+            alternate = root / "staged" / "alternate.exe"
+            parked = root / "staged" / "parked.exe"
+            staged.parent.mkdir()
+            target.write_bytes(old)
+            staged.write_bytes(new)
+            alternate.write_bytes(new)
+            pending = self._pending(new)
+
+            from scripture_archive_runtime import application_update_updater as updater_module
+            real_publish = updater_module._publish_rollback_copy
+
+            def publish_then_replace(source: Path, destination: Path, expected_sha: str) -> None:
+                real_publish(source, destination, expected_sha)
+                os.replace(staged, parked)
+                os.replace(alternate, staged)
+
+            with patch(
+                "scripture_archive_runtime.application_update_updater.inspect_apply_handoff",
+                return_value=pending,
+            ), patch(
+                "scripture_archive_runtime.application_update_updater.staged_artifact_path",
+                return_value=staged,
+            ), patch(
+                "scripture_archive_runtime.application_update_updater._publish_rollback_copy",
+                side_effect=publish_then_replace,
+            ):
+                with self.assertRaisesRegex(
+                    ApplicationUpdateError,
+                    "staged artifact identity changed before install copy",
+                ):
+                    consume_apply_handoff(
+                        root,
+                        current_version="1.0.0",
+                        install_target=target,
+                        verify_same_publisher=lambda _current, _candidate: True,
+                    )
+
+            self.assertEqual(target.read_bytes(), old)
+            self.assertEqual(rollback.read_bytes(), old)
+
+    def test_consume_handoff_rejects_target_replacement_before_atomic_publication(self):
+        old = b"old executable bytes"
+        new = b"new signed executable bytes"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "ScriptureArchive.exe"
+            rollback = root / "ScriptureArchive.exe.scripture-archive.rollback"
+            alternate = root / "alternate-installed.exe"
+            parked = root / "parked-installed.exe"
+            staged = root / "staged" / "ScriptureArchive.exe"
+            staged.parent.mkdir()
+            target.write_bytes(old)
+            alternate.write_bytes(old)
+            staged.write_bytes(new)
+            pending = self._pending(new)
+
+            from scripture_archive_runtime import application_update_updater as updater_module
+            real_copy = updater_module._copy_exact
+
+            def copy_then_replace(source: Path, destination: Path) -> None:
+                real_copy(source, destination)
+                if ".update-" in destination.name:
+                    os.replace(target, parked)
+                    os.replace(alternate, target)
+
+            with patch(
+                "scripture_archive_runtime.application_update_updater.inspect_apply_handoff",
+                return_value=pending,
+            ), patch(
+                "scripture_archive_runtime.application_update_updater.staged_artifact_path",
+                return_value=staged,
+            ), patch(
+                "scripture_archive_runtime.application_update_updater._copy_exact",
+                side_effect=copy_then_replace,
+            ):
+                with self.assertRaisesRegex(
+                    ApplicationUpdateError,
+                    "installed application target identity changed before atomic publication",
+                ):
+                    consume_apply_handoff(
+                        root,
+                        current_version="1.0.0",
+                        install_target=target,
+                        verify_same_publisher=lambda _current, _candidate: True,
+                    )
+
+            self.assertEqual(target.read_bytes(), old)
+            self.assertEqual(rollback.read_bytes(), old)
+            self.assertEqual(parked.read_bytes(), old)
+
     def test_consume_handoff_rolls_back_when_post_publish_verification_errors(self):
         old = b"old executable bytes"
         new = b"new signed executable bytes"

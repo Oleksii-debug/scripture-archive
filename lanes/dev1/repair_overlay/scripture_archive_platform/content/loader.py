@@ -159,6 +159,40 @@ class TaskPresentationMapper:
                     normalized['source_scope']=step.get('source_scope').strip()
             normalized_steps.append(normalized)
         return normalized_steps
+    @staticmethod
+    def _comparison_provenance(node:dict[str,Any],mission:dict[str,Any]|None)->dict[str,Any]|None:
+        grading=node.get('grading')
+        if not isinstance(grading,dict) or grading.get('comparison_coverage')!='explicit_complete_for_effective_scope':
+            return None
+        raw_witnesses=grading.get('comparison_witnesses')
+        if not isinstance(raw_witnesses,list):
+            return None
+        witnesses=[]
+        for value in raw_witnesses:
+            witness=str(value).strip()
+            if witness and witness not in witnesses:witnesses.append(witness)
+        if len(witnesses)<2:
+            return None
+        if not isinstance(mission,dict):
+            raise ContentLoadError('explicit complete comparison requires mission source scope')
+        primary=mission.get('primary_scripture',[])
+        scopes=[primary] if isinstance(primary,str) else list(primary or [])
+        scopes=[str(value).strip() for value in scopes if str(value).strip()]
+        rows=[]
+        for witness in witnesses:
+            prefix=witness+' '
+            matching=[scope for scope in scopes if scope==witness or scope.startswith(prefix)]
+            if len(matching)!=1:
+                raise ContentLoadError(f'explicit complete comparison requires one visible source scope for {witness}')
+            rows.append({'witness':witness,'source_scope':matching[0]})
+        provenance_id=str(node.get('comparison_provenance_id') or grading.get('comparison_provenance_id') or '').strip()
+        return {
+            'schema':'scripture.player-comparison-provenance.v1',
+            'coverage':'explicit_complete_for_effective_scope',
+            'provenance_id':provenance_id or None,
+            'witnesses':rows,
+        }
+
     def to_renderable(self,node:dict[str,Any],mission:dict[str,Any]|None=None)->dict[str,Any]:
         task_type=self.infer_task_type(node)
         ui=dict(node.get('ui_metadata') or {})
@@ -205,6 +239,9 @@ class TaskPresentationMapper:
           'accessibility':{'nonvisual_equivalent':node.get('functional_nonvisual_equivalent',''),'announcements':'Result, evidence, confidence/TX1 and next action are textual.'},
           'visual':dict(node.get('visual_metadata') or {'state_badge':node.get('confidence_code'),'media_slot':None}),
         }
+        comparison_provenance=self._comparison_provenance(node,mission)
+        if comparison_provenance:
+            surface['comparison_provenance']=comparison_provenance
         if legacy_answer_contract:
             surface['legacy_answer_contract']=legacy_answer_contract
         inspection=inspect_packaged_task(surface)

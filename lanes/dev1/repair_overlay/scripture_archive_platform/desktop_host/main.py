@@ -7,14 +7,14 @@ from pathlib import Path
 from scripture_archive_platform.application.speech_application import build_default_application
 from scripture_archive_platform.desktop_host.bridge import DesktopBridge
 from scripture_archive_platform.desktop_host.diagnostics import NativeDiagnosticsLayer
+from scripture_archive_platform.desktop_host.pending_update import NativePendingUpdateLayer
+from scripture_archive_platform.desktop_host.post_update_health import NativePostUpdateHealthLayer
 from scripture_archive_platform.desktop_host.update_application import (
     NativeApplicationUpdateLayer,
     NativeUpdateFileSelector,
 )
-
-# Semantic compatibility version for the current R06-3DEV-A packaged lineage.
-# It is deliberately host-owned rather than supplied by an update manifest/web payload.
-CURRENT_APPLICATION_VERSION = "0.6.0-r06.3dev.a"
+from scripture_archive_platform.desktop_host.updater_launch import launch_packaged_updater
+from scripture_archive_platform.desktop_host.version import CURRENT_APPLICATION_VERSION
 
 
 def _runtime_root() -> Path:
@@ -52,12 +52,29 @@ def main() -> int:
 
     selector = NativeUpdateFileSelector(webview)
     platform_app = build_default_application(root)
+    staging_root = Path(platform_app.store.root) / "application-updates"
     app = NativeApplicationUpdateLayer(
         platform_app,
         root,
         selector,
         current_version=CURRENT_APPLICATION_VERSION,
-        staging_root=Path(platform_app.store.root) / "application-updates",
+        staging_root=staging_root,
+    )
+    # This layer owns one process-local RLock for the complete update command family,
+    # so verify/stage/status/cancel/execute cannot race shared durable state.
+    pending_layer = NativePendingUpdateLayer(
+        app,
+        root,
+        staging_root,
+        current_version=CURRENT_APPLICATION_VERSION,
+    )
+    # Health commit is intentionally outside pending recovery: after a successful
+    # updater relaunch the pending journal still carries the previous version and must
+    # be disarmed only after the new packaged native/frontend bridge is alive.
+    app = NativePostUpdateHealthLayer(
+        pending_layer,
+        staging_root,
+        current_version=CURRENT_APPLICATION_VERSION,
     )
     app = NativeDiagnosticsLayer(
         app,
@@ -80,6 +97,10 @@ def main() -> int:
         text_select=True,
     )
     selector.bind_window(window)
+    pending_layer.bind_apply_execution(
+        lambda: launch_packaged_updater(staging_root),
+        window.destroy,
+    )
     logging.info("Starting EdgeChromium WebView; frontend=%s log=%s", front, log_path)
     webview.start(gui="edgechromium", debug=False, private_mode=True)
     return 0

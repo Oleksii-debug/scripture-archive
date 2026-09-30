@@ -336,16 +336,49 @@ def _copy_exact(source: Path, destination: Path) -> None:
 
 
 def _sha256_file(path: Path) -> str:
+    try:
+        before = path.lstat()
+    except OSError as exc:
+        raise ApplicationUpdateError("update artifact is unavailable") from exc
+    if stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode):
+        raise ApplicationUpdateError("update artifact must be a regular non-symlink file")
+    before_identity = (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
+
     digest = hashlib.sha256()
     try:
         with path.open("rb") as handle:
+            opened = os.fstat(handle.fileno())
+            opened_identity = (
+                opened.st_dev,
+                opened.st_ino,
+                opened.st_size,
+                opened.st_mtime_ns,
+            )
+            if not stat.S_ISREG(opened.st_mode) or opened_identity != before_identity:
+                raise ApplicationUpdateError("update artifact changed before hashing")
             while True:
                 chunk = handle.read(_COPY_CHUNK)
                 if not chunk:
                     break
                 digest.update(chunk)
+            opened_after = os.fstat(handle.fileno())
+            opened_after_identity = (
+                opened_after.st_dev,
+                opened_after.st_ino,
+                opened_after.st_size,
+                opened_after.st_mtime_ns,
+            )
+            if opened_after_identity != opened_identity:
+                raise ApplicationUpdateError("update artifact changed during hashing")
+        after = path.lstat()
+    except ApplicationUpdateError:
+        raise
     except OSError as exc:
-        raise ApplicationUpdateError("update artifact could not be hashed") from exc
+        raise ApplicationUpdateError("update artifact could not be hashed safely") from exc
+
+    after_identity = (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
+    if after_identity != before_identity:
+        raise ApplicationUpdateError("update artifact changed during hashing")
     return digest.hexdigest()
 
 

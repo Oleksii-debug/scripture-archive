@@ -98,7 +98,10 @@ def main() -> int:
     )
     selector.bind_window(window)
     pending_layer.bind_apply_execution(
-        lambda: launch_packaged_updater(staging_root),
+        lambda: launch_packaged_updater(
+            staging_root,
+            current_version=CURRENT_APPLICATION_VERSION,
+        ),
         window.destroy,
     )
     logging.info("Starting EdgeChromium WebView; frontend=%s log=%s", front, log_path)

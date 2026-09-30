@@ -82,6 +82,7 @@ class PackagedUpdaterLaunchBoundaryTests(unittest.TestCase):
                 updater_executable=kwargs["updater_executable"].resolve(strict=True),
                 installed_executable=kwargs["installed_executable"].resolve(strict=True),
                 staging_root=kwargs["staging_root"].resolve(strict=True),
+                current_version=kwargs["current_version"],
                 parent_pid=41,
             )
 
@@ -91,6 +92,7 @@ class PackagedUpdaterLaunchBoundaryTests(unittest.TestCase):
 
         pid = launch_packaged_updater(
             self.staging,
+            current_version=CURRENT_VERSION,
             current_executable=self.current,
             verify_same_publisher=verify,
             build_plan=build_plan,
@@ -102,6 +104,7 @@ class PackagedUpdaterLaunchBoundaryTests(unittest.TestCase):
         self.assertEqual(self.updater, events[1][1]["updater_executable"])
         self.assertEqual(self.current, events[1][1]["installed_executable"])
         self.assertEqual(self.staging, events[1][1]["staging_root"])
+        self.assertEqual(CURRENT_VERSION, events[1][1]["current_version"])
         self.assertEqual(("verify", self.current.resolve(), self.updater.resolve()), events[2])
         self.assertEqual("launch", events[3][0])
 
@@ -115,12 +118,37 @@ class PackagedUpdaterLaunchBoundaryTests(unittest.TestCase):
                 updater_executable=external,
                 installed_executable=kwargs["installed_executable"].resolve(),
                 staging_root=kwargs["staging_root"].resolve(),
+                current_version=kwargs["current_version"],
                 parent_pid=41,
             )
 
         with self.assertRaisesRegex(UpdateProcessError, "changed host-owned launch authority"):
             launch_packaged_updater(
                 self.staging,
+                current_version=CURRENT_VERSION,
+                current_executable=self.current,
+                verify_same_publisher=lambda _current, _updater: True,
+                build_plan=substituted_plan,
+                launch_process=lambda plan: launched.append(plan) or 1,
+            )
+        self.assertEqual([], launched)
+
+    def test_process_plan_cannot_substitute_host_owned_current_version(self):
+        launched = []
+
+        def substituted_plan(**kwargs):
+            return UpdaterProcessPlan(
+                updater_executable=kwargs["updater_executable"].resolve(),
+                installed_executable=kwargs["installed_executable"].resolve(),
+                staging_root=kwargs["staging_root"].resolve(),
+                current_version="9.9.9",
+                parent_pid=41,
+            )
+
+        with self.assertRaisesRegex(UpdateProcessError, "changed host-owned launch authority"):
+            launch_packaged_updater(
+                self.staging,
+                current_version=CURRENT_VERSION,
                 current_executable=self.current,
                 verify_same_publisher=lambda _current, _updater: True,
                 build_plan=substituted_plan,
@@ -140,6 +168,7 @@ class PackagedUpdaterLaunchBoundaryTests(unittest.TestCase):
         with self.assertRaisesRegex(UpdateProcessError, "changed before launch"):
             launch_packaged_updater(
                 self.staging,
+                current_version=CURRENT_VERSION,
                 current_executable=self.current,
                 verify_same_publisher=verify,
                 launch_process=lambda plan: launched.append(plan) or 1,
@@ -156,6 +185,7 @@ class PackagedUpdaterLaunchBoundaryTests(unittest.TestCase):
             with self.subTest(verifier=verifier), self.assertRaises(UpdateProcessError):
                 launch_packaged_updater(
                     self.staging,
+                    current_version=CURRENT_VERSION,
                     current_executable=self.current,
                     verify_same_publisher=verifier,
                     build_plan=lambda **kwargs: built.append(kwargs),
@@ -251,7 +281,7 @@ class PackagedUpdaterHostExecutionTests(unittest.TestCase):
         response = layer.handle(
             request(
                 APPLY_AND_RESTART_COMMAND,
-                {"pid": 1, "updater": r"C:\attacker.exe"},
+                {"pid": 1, "updater": r"C:\attacker.exe", "current_version": "0.0.0"},
             )
         )
         self.assertFalse(response["ok"])

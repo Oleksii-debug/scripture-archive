@@ -196,7 +196,7 @@ $updaterManifest = [ordered]@{
     size_bytes = $updaterSize
     sha256 = $updaterHash
     git_sha = $actualGitSha
-    application_version_authority = "scripture_archive_platform.desktop_host.version.CURRENT_APPLICATION_VERSION"
+    application_version_authority = "host-owned UpdaterProcessPlan.current_version + runner exact-handoff equality"
     authenticode_authority = "scripture_archive_platform.desktop_host.authenticode.verify_same_publisher_authenticode"
 }
 $updaterManifest | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 $UpdaterManifestPath

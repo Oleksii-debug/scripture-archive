@@ -9,7 +9,6 @@ from typing import Any
 from scripture_archive_platform.desktop_host.authenticode import (
     verify_same_publisher_authenticode,
 )
-from scripture_archive_platform.desktop_host.version import CURRENT_APPLICATION_VERSION
 from runtime_engine.scripture_archive_runtime.application_update_process import (
     parse_trusted_updater_argv,
 )
@@ -27,10 +26,10 @@ def _resolve_packaged_installed_sibling(
     argv: Sequence[str],
     *,
     updater_executable: Path,
-) -> tuple[Path, Path]:
+) -> tuple[Path, Path, str]:
     """Bind direct invocation to the exact app sibling of this updater executable."""
 
-    _, installed_argument, _ = parse_trusted_updater_argv(tuple(argv))
+    _, installed_argument, _, current_version = parse_trusted_updater_argv(tuple(argv))
     updater = Path(updater_executable)
     updater_meta = updater.lstat()
     if stat.S_ISLNK(updater_meta.st_mode) or not stat.S_ISREG(updater_meta.st_mode):
@@ -47,7 +46,7 @@ def _resolve_packaged_installed_sibling(
     installed = installed_argument.resolve(strict=True)
     if installed != expected_installed:
         raise ValueError("installed application is not the canonical updater sibling")
-    return installed, updater
+    return installed, updater, current_version
 
 
 def run_updater(
@@ -62,13 +61,15 @@ def run_updater(
     Direct invocation is bound to the exact application sibling mechanically derived
     from this updater's own executable identity.  That installed app and this updater
     must also share a valid publisher before the runner can consume any apply handoff.
-    The runner independently verifies installed app versus staged candidate again.
+    The running host carries its current semantic version in the fixed process handoff,
+    so an older same-publisher sibling updater remains usable after the app executable updates.
+    The runner independently revalidates that handoff version and the staged candidate.
     """
 
     if not callable(execute) or not callable(verifier):
         return UPDATER_FAILED
     try:
-        installed, updater = _resolve_packaged_installed_sibling(
+        installed, updater, current_version = _resolve_packaged_installed_sibling(
             tuple(argv),
             updater_executable=Path(sys.executable if updater_executable is None else updater_executable),
         )
@@ -76,7 +77,7 @@ def run_updater(
             return UPDATER_FAILED
         execute(
             tuple(argv),
-            current_version=CURRENT_APPLICATION_VERSION,
+            current_version=current_version,
             verify_same_publisher=verifier,
         )
     except Exception:

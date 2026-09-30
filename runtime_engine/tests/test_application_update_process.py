@@ -5,6 +5,8 @@ import os
 import tempfile
 import unittest
 
+CURRENT_VERSION = "1.0.0"
+
 from scripture_archive_runtime.application_update_process import (
     UpdateProcessError,
     build_updater_process_plan,
@@ -39,6 +41,7 @@ class ApplicationUpdateProcessTests(unittest.TestCase):
             updater_executable=updater,
             installed_executable=app,
             staging_root=staging,
+            current_version=CURRENT_VERSION,
         )
         self.assertEqual(plan.parent_pid, os.getpid())
         self.assertEqual(plan.updater_executable, updater.resolve())
@@ -51,6 +54,8 @@ class ApplicationUpdateProcessTests(unittest.TestCase):
                 "--scripture-archive-apply",
                 "--wait-pid",
                 str(os.getpid()),
+                "--current-version",
+                CURRENT_VERSION,
                 "--installed-executable",
                 str(app.resolve()),
                 "--staging-root",
@@ -67,6 +72,7 @@ class ApplicationUpdateProcessTests(unittest.TestCase):
                 updater_executable=external,
                 installed_executable=app,
                 staging_root=staging,
+                current_version=CURRENT_VERSION,
             )
 
     def test_build_plan_rejects_current_app_as_updater(self) -> None:
@@ -76,6 +82,7 @@ class ApplicationUpdateProcessTests(unittest.TestCase):
                 updater_executable=app,
                 installed_executable=app,
                 staging_root=staging,
+                current_version=CURRENT_VERSION,
             )
 
     def test_build_plan_rejects_symlinked_updater_target_and_staging(self) -> None:
@@ -92,12 +99,14 @@ class ApplicationUpdateProcessTests(unittest.TestCase):
                 updater_executable=updater_link,
                 installed_executable=app,
                 staging_root=staging,
+                current_version=CURRENT_VERSION,
             )
         with self.assertRaisesRegex(UpdateProcessError, "real directory"):
             build_updater_process_plan(
                 updater_executable=updater,
                 installed_executable=app,
                 staging_root=staging_link,
+                current_version=CURRENT_VERSION,
             )
 
     def test_build_plan_rejects_foreign_parent_pid(self) -> None:
@@ -107,6 +116,7 @@ class ApplicationUpdateProcessTests(unittest.TestCase):
                 updater_executable=updater,
                 installed_executable=app,
                 staging_root=staging,
+            current_version=CURRENT_VERSION,
                 parent_pid=os.getpid() + 1,
             )
 
@@ -116,6 +126,7 @@ class ApplicationUpdateProcessTests(unittest.TestCase):
             updater_executable=updater,
             installed_executable=app,
             staging_root=staging,
+            current_version=CURRENT_VERSION,
         )
         seen: dict[str, object] = {}
 
@@ -141,6 +152,7 @@ class ApplicationUpdateProcessTests(unittest.TestCase):
             updater_executable=updater,
             installed_executable=app,
             staging_root=staging,
+            current_version=CURRENT_VERSION,
         )
 
         def broken_popen(*args, **kwargs):
@@ -155,22 +167,26 @@ class ApplicationUpdateProcessTests(unittest.TestCase):
             updater_executable=updater,
             installed_executable=app,
             staging_root=staging,
+            current_version=CURRENT_VERSION,
         )
-        pid, parsed_app, parsed_staging = parse_trusted_updater_argv(plan.argv()[1:])
+        pid, parsed_app, parsed_staging, parsed_version = parse_trusted_updater_argv(plan.argv()[1:])
         self.assertEqual(pid, os.getpid())
         self.assertEqual(parsed_app, app.resolve())
         self.assertEqual(parsed_staging, staging.resolve())
+        self.assertEqual(parsed_version, CURRENT_VERSION)
 
     def test_parser_rejects_noncanonical_or_extended_commands(self) -> None:
         invalid_commands = [
             (),
             ("--scripture-archive-apply",),
-            ("--wrong", "--wait-pid", "1", "--installed-executable", "a", "--staging-root", "b"),
-            ("--scripture-archive-apply", "--wait-pid", "01", "--installed-executable", "a", "--staging-root", "b"),
+            ("--wrong", "--wait-pid", "1", "--current-version", CURRENT_VERSION, "--installed-executable", "a", "--staging-root", "b"),
+            ("--scripture-archive-apply", "--wait-pid", "01", "--current-version", CURRENT_VERSION, "--installed-executable", "a", "--staging-root", "b"),
             (
                 "--scripture-archive-apply",
                 "--wait-pid",
                 "1",
+                "--current-version",
+                CURRENT_VERSION,
                 "--installed-executable",
                 "a",
                 "--staging-root",

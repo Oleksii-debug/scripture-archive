@@ -86,11 +86,17 @@ def _consume_apply_handoff_locked(
 
     if staged.name != pending.artifact_name:
         raise ApplicationUpdateError("staged artifact name does not match apply handoff")
+    staged_identity = _file_identity(staged, "staged update artifact")
+    target_identity = _file_identity(target, "installed application target")
     if _sha256_file(staged) != pending.artifact_sha256:
         raise ApplicationUpdateError("staged artifact bytes changed before apply")
     previous_sha = _sha256_file(target)
     if not verify_same_publisher(target, staged):
         raise ApplicationUpdateError("staged artifact failed same-publisher verification")
+    if _file_identity(staged, "staged update artifact") != staged_identity:
+        raise ApplicationUpdateError("staged artifact changed during publisher verification (identity)")
+    if _file_identity(target, "installed application target") != target_identity:
+        raise ApplicationUpdateError("installed application target changed during publisher verification (identity)")
     if _sha256_file(staged) != pending.artifact_sha256:
         raise ApplicationUpdateError("staged artifact bytes changed during publisher verification")
     if _sha256_file(target) != previous_sha:
@@ -100,18 +106,24 @@ def _consume_apply_handoff_locked(
         raise ApplicationUpdateError("apply handoff changed during publisher verification")
 
     rollback = target.with_name(target.name + _ROLLBACK_SUFFIX)
+    if _file_identity(target, "installed application target") != target_identity:
+        raise ApplicationUpdateError("installed application target identity changed before rollback capture")
     _publish_rollback_copy(target, rollback, previous_sha)
 
     candidate = target.with_name(f".{target.name}.update-{os.getpid()}.tmp")
     _prepare_temp_slot(candidate)
     published = False
     try:
+        if _file_identity(staged, "staged update artifact") != staged_identity:
+            raise ApplicationUpdateError("staged artifact identity changed before install copy")
         _copy_exact(staged, candidate)
         if _sha256_file(candidate) != pending.artifact_sha256:
             raise ApplicationUpdateError("temporary install candidate failed exact-byte verification")
         final_handoff = inspect_apply_handoff(root, current_version=current_version)
         if final_handoff != pending:
             raise ApplicationUpdateError("apply handoff changed before atomic publication")
+        if _file_identity(target, "installed application target") != target_identity:
+            raise ApplicationUpdateError("installed application target identity changed before atomic publication")
         os.replace(candidate, target)
         published = True
         _fsync_directory(target.parent)
@@ -301,11 +313,29 @@ def _discard_file(path: Path) -> None:
 
 def _copy_exact(source: Path, destination: Path) -> None:
     try:
+        before = source.lstat()
+    except OSError as exc:
+        raise ApplicationUpdateError("update source is unavailable") from exc
+    if stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode):
+        raise ApplicationUpdateError("update source must be a regular non-symlink file")
+    before_identity = (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
+
+    try:
         source_handle = source.open("rb")
     except OSError as exc:
         raise ApplicationUpdateError("update source could not be opened") from exc
 
     with source_handle as src:
+        opened = os.fstat(src.fileno())
+        opened_identity = (
+            opened.st_dev,
+            opened.st_ino,
+            opened.st_size,
+            opened.st_mtime_ns,
+        )
+        if not stat.S_ISREG(opened.st_mode) or opened_identity != before_identity:
+            raise ApplicationUpdateError("update source changed before copy")
+
         try:
             descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o700)
         except OSError as exc:
@@ -327,6 +357,24 @@ def _copy_exact(source: Path, destination: Path) -> None:
                 shutil.copyfileobj(src, dst, length=_COPY_CHUNK)
                 dst.flush()
                 os.fsync(dst.fileno())
+            opened_after = os.fstat(src.fileno())
+            opened_after_identity = (
+                opened_after.st_dev,
+                opened_after.st_ino,
+                opened_after.st_size,
+                opened_after.st_mtime_ns,
+            )
+            if opened_after_identity != opened_identity:
+                raise ApplicationUpdateError("update source changed during copy")
+            after = source.lstat()
+            after_identity = (
+                after.st_dev,
+                after.st_ino,
+                after.st_size,
+                after.st_mtime_ns,
+            )
+            if after_identity != before_identity:
+                raise ApplicationUpdateError("update source changed during copy")
         except Exception:
             try:
                 destination.unlink()
@@ -336,17 +384,60 @@ def _copy_exact(source: Path, destination: Path) -> None:
 
 
 def _sha256_file(path: Path) -> str:
+    try:
+        before = path.lstat()
+    except OSError as exc:
+        raise ApplicationUpdateError("update artifact is unavailable") from exc
+    if stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode):
+        raise ApplicationUpdateError("update artifact must be a regular non-symlink file")
+    before_identity = (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
+
     digest = hashlib.sha256()
     try:
         with path.open("rb") as handle:
+            opened = os.fstat(handle.fileno())
+            opened_identity = (
+                opened.st_dev,
+                opened.st_ino,
+                opened.st_size,
+                opened.st_mtime_ns,
+            )
+            if not stat.S_ISREG(opened.st_mode) or opened_identity != before_identity:
+                raise ApplicationUpdateError("update artifact changed before hashing")
             while True:
                 chunk = handle.read(_COPY_CHUNK)
                 if not chunk:
                     break
                 digest.update(chunk)
+            opened_after = os.fstat(handle.fileno())
+            opened_after_identity = (
+                opened_after.st_dev,
+                opened_after.st_ino,
+                opened_after.st_size,
+                opened_after.st_mtime_ns,
+            )
+            if opened_after_identity != opened_identity:
+                raise ApplicationUpdateError("update artifact changed during hashing")
+        after = path.lstat()
+    except ApplicationUpdateError:
+        raise
     except OSError as exc:
-        raise ApplicationUpdateError("update artifact could not be hashed") from exc
+        raise ApplicationUpdateError("update artifact could not be hashed safely") from exc
+
+    after_identity = (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
+    if after_identity != before_identity:
+        raise ApplicationUpdateError("update artifact changed during hashing")
     return digest.hexdigest()
+
+
+def _file_identity(path: Path, label: str) -> tuple[int, int, int, int]:
+    try:
+        metadata = path.lstat()
+    except OSError as exc:
+        raise ApplicationUpdateError(f"{label} is unavailable") from exc
+    if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
+        raise ApplicationUpdateError(f"{label} must be a regular non-symlink file")
+    return (metadata.st_dev, metadata.st_ino, metadata.st_size, metadata.st_mtime_ns)
 
 
 def _require_regular_file(path: Path, label: str) -> None:

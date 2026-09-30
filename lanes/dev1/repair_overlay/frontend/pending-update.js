@@ -32,9 +32,16 @@ async function invoke(command){
 }
 
 function setBusy(busy){
+  const section=$('pending-update-recovery');
+  if(section)section.setAttribute('aria-busy',busy?'true':'false');
   for(const id of ['pending-update-check','pending-update-prepare-apply','pending-update-apply-restart','pending-update-cancel']){
     const button=$(id);if(button)button.disabled=busy||(id==='pending-update-apply-restart'&&button.dataset.ready!=='true');
   }
+}
+
+function reportFailure(context,error,message){
+  console.error(context,error);
+  setStatus(message);
 }
 
 function setApplyReady(ready){
@@ -79,7 +86,7 @@ async function checkPending({startup=false}={}){
     }else throw new Error('Отримано неочікуваний стан.');
   }catch(error){
     clearDetails();setApplyReady(false);
-    setStatus(`Pending update не підтверджено: ${error?.message||'невідома помилка'}`);
+    reportFailure('pending update status failed',error,'Підготовлене оновлення не вдалося безпечно перевірити. Спробуйте перевірити його ще раз.');
   }finally{setBusy(false)}
 }
 
@@ -91,7 +98,10 @@ async function prepareApply(){
       renderPending(data);setApplyReady(true);
       setStatus(`Намір встановлення ${data.artifact_name??'пакета'} → ${data.target_version??'цільова версія'} підготовлено. Файли програми ще не замінювались. Окрема кнопка «Встановити й перезапустити» запускає підписаний native updater.`);
     }else throw new Error('Підготовку apply handoff не підтверджено.');
-  }catch(error){setApplyReady(false);setStatus(`Не вдалося безпечно підготувати встановлення: ${error?.message||'невідома помилка'}`)}
+  }catch(error){
+    setApplyReady(false);
+    reportFailure('prepare update apply failed',error,'Не вдалося безпечно підготувати встановлення. Файли програми не змінено.');
+  }
   finally{setBusy(false)}
 }
 
@@ -104,7 +114,7 @@ async function applyAndRestart(){
       setStatus('Native updater запущено. Завершую поточну програму для безпечного встановлення та перезапуску.');
     }else throw new Error('Запуск native updater не підтверджено.');
   }catch(error){
-    setStatus(`Не вдалося безпечно запустити встановлення: ${error?.message||'невідома помилка'}`);
+    reportFailure('start native updater failed',error,'Не вдалося безпечно запустити встановлення. Поточна версія програми залишається активною.');
     setBusy(false);
   }
 }
@@ -116,7 +126,9 @@ async function cancelPending(){
     if(data.pending===false&&(data.status==='cancelled'||data.status==='none')){
       setStatus(data.status==='cancelled'?'Підготовлене оновлення та його apply-наміри скасовано. Інсталяція не виконувалась.':'Підготовленого оновлення вже немає.');
     }else throw new Error('Скасування не підтверджено.');
-  }catch(error){setStatus(`Не вдалося безпечно скасувати pending update: ${error?.message||'невідома помилка'}`)}
+  }catch(error){
+    reportFailure('cancel pending update failed',error,'Не вдалося безпечно скасувати підготовлене оновлення. Повторіть перевірку стану перед наступною дією.');
+  }
   finally{setBusy(false)}
 }
 
@@ -133,7 +145,7 @@ async function commitPostRestartHealth(){
     await checkPending({startup:true});
   }catch(error){
     clearDetails();setApplyReady(false);setBusy(false);
-    setStatus(`Post-update health не підтверджено: ${error?.message||'невідома помилка'}. Rollback recovery збережено; автоматичне очищення не виконано.`);
+    reportFailure('post-update health check failed',error,'Перевірку стану після перезапуску не підтверджено. Rollback recovery збережено; автоматичне очищення не виконано.');
   }
 }
 

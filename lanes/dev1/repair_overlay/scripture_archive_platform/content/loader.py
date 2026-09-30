@@ -198,7 +198,8 @@ class TaskPresentationMapper:
           'task_family':node.get('task_family'),'difficulty':node.get('difficulty'),'required':bool(node.get('required')),
           'heading':ui.get('heading') or f"Завдання {node['node_id']}",
           'prompt':node.get('player_prompt',''),'source_scope':node.get('source_scope_visible_to_player',''),
-          'source_references':self._source_refs(node,mission),'options':options,'items':items,'pairs':pairs,
+          'source_references':self._source_refs(node,mission),'comparison_scope':self._comparison_scope(node),
+          'options':options,'items':items,'pairs':pairs,
           'evidence_options':evidence_options,'steps':normalized_steps,'fields':list(ui.get('fields') or []),
           'witnesses':list(ui.get('witnesses') or []),'relation_types':relation_types,
           'answer_contract':answer_contract,
@@ -211,6 +212,27 @@ class TaskPresentationMapper:
         surface['accessibility']['inspection']=inspection.to_dict()
         surface['accessibility']['inspection_linear']=list(inspection.linear())
         return surface
+    @staticmethod
+    def _comparison_scope(node):
+        raw=node.get('comparison_scope_visible_to_player')
+        if raw is None:return []
+        if not isinstance(raw,list):raise ContentLoadError('comparison_scope_visible_to_player must be a list')
+        out=[];seen=set()
+        for row in raw:
+            if not isinstance(row,dict) or set(row)!={'witness','passages'}:
+                raise ContentLoadError('comparison scope rows require exactly witness and passages')
+            witness=row.get('witness');passages=row.get('passages')
+            if not isinstance(witness,str) or not witness.strip() or witness!=witness.strip() or witness in seen:
+                raise ContentLoadError('invalid or duplicate comparison witness')
+            if not isinstance(passages,list) or not passages:
+                raise ContentLoadError(f'comparison witness {witness} requires passages')
+            clean=[]
+            for passage in passages:
+                if not isinstance(passage,str) or not passage.strip() or passage!=passage.strip():
+                    raise ContentLoadError(f'invalid comparison passage for {witness}')
+                if passage not in clean:clean.append(passage)
+            seen.add(witness);out.append({'witness':witness,'passages':clean})
+        return out
     @staticmethod
     def _source_refs(node,mission):
         vals=[]

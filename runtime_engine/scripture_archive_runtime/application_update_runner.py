@@ -98,7 +98,9 @@ def execute_trusted_updater(
         if not callable(dependency):
             raise ApplicationUpdateError(f"{label} is required")
 
-    parent_pid, installed_executable, staging_root = parse_trusted_updater_argv(argv)
+    parent_pid, installed_executable, staging_root, handoff_version = parse_trusted_updater_argv(argv)
+    if handoff_version != current_version:
+        raise ApplicationUpdateError("trusted updater current version does not match host handoff")
     wait_for_exit(parent_pid)
 
     result = consume(

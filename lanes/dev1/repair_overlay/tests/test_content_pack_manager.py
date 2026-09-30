@@ -88,6 +88,32 @@ class ContentPackManagerSurfaceTests(unittest.TestCase):
         result = subprocess.run([node, "--check", str(script_path)], capture_output=True, text=True, check=False)
         self.assertEqual(0, result.returncode, result.stderr)
 
+    def test_frontend_focus_errors_and_actions_are_accessibility_safe(self):
+        overlay = Path(__file__).resolve().parents[1]
+        script = (overlay / "frontend" / "content-pack-manager.js").read_text(encoding="utf-8")
+
+        self.assertNotIn("error.message", script)
+        self.assertIn("console.error(context,error)", script)
+        self.assertIn("candidateSelect?.focus()", script)
+        self.assertIn("dialog.addEventListener('close'", script)
+        self.assertIn("if(busy)return", script)
+        self.assertIn("setAttribute('aria-busy'", script)
+        self.assertIn("candidateSelect.disabled=value", script)
+
+        focus = "dialog.querySelector('h2')?.focus()"
+        refresh = "void runRefresh()"
+        self.assertIn(focus, script)
+        self.assertIn(refresh, script)
+        self.assertLess(script.index(focus), script.index(refresh))
+
+        for safe_message in (
+            "Не вдалося оновити Content Pack Manager.",
+            "Не вдалося перевірити вибраний content pack.",
+            "Не вдалося встановити вибраний content pack.",
+            "Не вдалося виконати дію з content pack.",
+        ):
+            self.assertIn(safe_message, script)
+
 
 if __name__ == "__main__":
     unittest.main()

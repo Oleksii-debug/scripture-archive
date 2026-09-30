@@ -290,8 +290,13 @@ class PendingUpdateHostTests(unittest.TestCase):
         self.assertIn("pending-update-check", script)
         self.assertIn("pending-update-cancel", script)
         self.assertIn("aria-live", script)
+        self.assertIn("aria-busy", script)
+        self.assertIn("console.error", script)
         self.assertIn("textContent", script)
         self.assertNotIn("innerHTML", script)
+        self.assertNotIn("${error?.message", script)
+        self.assertIn("Файли програми не змінено.", script)
+        self.assertIn("Rollback recovery збережено", script)
         self.assertIn("./pending-update.js", entry)
 
 

@@ -9,13 +9,18 @@ let statusNode=null;
 let inboxNode=null;
 let installedBody=null;
 let previewNode=null;
+let closeButton=null;
+let busy=false;
 
 const SCHEMA='scripture.content-pack-manager.v1';
 const text=(tag,value)=>{const node=document.createElement(tag);node.textContent=value;return node};
 const button=(label,handler)=>{const node=document.createElement('button');node.type='button';node.textContent=label;node.addEventListener('click',handler);return node};
 async function api(command,payload={}){return await unwrap(transport,command,payload)}
 function announce(message,isError=false){if(!statusNode)return;statusNode.textContent='';statusNode.dataset.state=isError?'error':'ok';requestAnimationFrame(()=>{statusNode.textContent=message})}
-function selectedCandidate(){const value=candidateSelect?.value||'';if(!value)throw new Error('Оберіть ZIP-пакет із приватної папки імпорту.');return value}
+function reportFailure(context,message,error){console.error(context,error);announce(message,true)}
+function selectedCandidate(){const value=candidateSelect?.value||'';if(value)return value;announce('Оберіть ZIP-пакет із приватної папки імпорту.',true);candidateSelect?.focus();return null}
+function setBusy(value){busy=value;if(!dialog)return;candidateSelect.disabled=value;dialog.setAttribute('aria-busy',value?'true':'false');dialog.querySelectorAll('button').forEach(node=>{if(node!==closeButton)node.disabled=value})}
+async function serialize(operation){if(busy)return;setBusy(true);try{await operation()}finally{setBusy(false)}}
 function checkedSnapshot(data){
   if(!data||data.schema!==SCHEMA||typeof data.inbox_path!=='string'||!Array.isArray(data.candidates)||!Array.isArray(data.installed))throw new Error('Некоректна відповідь Content Pack Manager.');
   for(const item of data.candidates){if(!item||typeof item.file_name!=='string'||!Number.isSafeInteger(item.size_bytes)||item.size_bytes<0)throw new Error('Некоректний список пакетів у папці імпорту.');}
@@ -59,12 +64,12 @@ function renderInspection(inspection){
   previewNode.append(dl);
 }
 async function refresh(){const data=checkedSnapshot(await api('content_packs.list'));renderSnapshot(data);return data}
-async function runAction(command,payload,success){try{const data=checkedSnapshot(await api(command,payload));renderSnapshot(data);renderInspection(data.inspection||null);announce(success)}catch(error){announce(`Помилка: ${error.message}`,true)}}
-async function inspect(){try{const data=checkedSnapshot(await api('content_packs.inspect',{file_name:selectedCandidate()}));renderSnapshot(data);renderInspection(data.inspection);announce('Пакет перевірено без встановлення.')}catch(error){announce(`Помилка: ${error.message}`,true)}}
-async function install(){try{const file_name=selectedCandidate();const data=checkedSnapshot(await api('content_packs.install',{file_name,activate:false}));renderSnapshot(data);const inspection=checkedInspection(data.inspection);renderInspection(inspection);announce(`Встановлено ${inspection.manifest.pack_id}; активація виконується окремо.`)}catch(error){announce(`Помилка: ${error.message}`,true)}}
+async function runAction(command,payload,success){return await serialize(async()=>{try{const data=checkedSnapshot(await api(command,payload));renderSnapshot(data);renderInspection(data.inspection||null);announce(success)}catch(error){reportFailure(`Content Pack Manager command failed: ${command}`,'Не вдалося виконати дію з content pack.',error)}})}
+async function inspect(){const file_name=selectedCandidate();if(!file_name)return;return await serialize(async()=>{try{const data=checkedSnapshot(await api('content_packs.inspect',{file_name}));renderSnapshot(data);renderInspection(data.inspection);announce('Пакет перевірено без встановлення.')}catch(error){reportFailure('Content Pack Manager inspection failed','Не вдалося перевірити вибраний content pack.',error)}})}
+async function install(){const file_name=selectedCandidate();if(!file_name)return;return await serialize(async()=>{try{const data=checkedSnapshot(await api('content_packs.install',{file_name,activate:false}));renderSnapshot(data);const inspection=checkedInspection(data.inspection);renderInspection(inspection);announce(`Встановлено ${inspection.manifest.pack_id}; активація виконується окремо.`)}catch(error){reportFailure('Content Pack Manager install failed','Не вдалося встановити вибраний content pack.',error)}})}
 
 function buildSurface(){
-  trigger=button('Content packs',async()=>{dialog.showModal();await runRefresh();dialog.querySelector('h2')?.focus()});trigger.id='nav-content-packs';
+  trigger=button('Content packs',()=>{dialog.showModal();dialog.querySelector('h2')?.focus();void runRefresh()});trigger.id='nav-content-packs';
   const anchor=document.getElementById('nav-authoring')||document.getElementById('nav-home');
   if(!anchor?.parentElement)return false;
   anchor.parentElement.append(trigger);
@@ -77,9 +82,10 @@ function buildSurface(){
   previewNode=document.createElement('section');previewNode.setAttribute('aria-label','Результат перевірки пакета');
   const table=document.createElement('table');const caption=text('caption','Встановлені версії content packs');const thead=document.createElement('thead');const hr=document.createElement('tr');['Pack','Version','State','Verify','Activate / rollback'].forEach(label=>hr.append(text('th',label)));thead.append(hr);installedBody=document.createElement('tbody');table.append(caption,thead,installedBody);
   statusNode=text('p','');statusNode.id='content-pack-manager-status';statusNode.setAttribute('role','status');statusNode.setAttribute('aria-live','polite');
-  const close=button('Закрити',()=>{dialog.close();trigger.focus()});
-  dialog.append(heading,intro,inboxLabel,candidateLabel,candidateSelect,controls,previewNode,table,statusNode,close);document.body.append(dialog);return true
+  closeButton=button('Закрити',()=>dialog.close());
+  dialog.addEventListener('close',()=>{if(trigger?.isConnected)trigger.focus()});
+  dialog.append(heading,intro,inboxLabel,candidateLabel,candidateSelect,controls,previewNode,table,statusNode,closeButton);document.body.append(dialog);return true
 }
-async function runRefresh(){try{await refresh();announce('Content Pack Manager оновлено.')}catch(error){announce(`Помилка: ${error.message}`,true)}}
-async function mount(){if(mounted)return;mounted=true;try{transport=await chooseTransport();const bootstrap=await api('system.bootstrap');if(bootstrap?.capabilities?.content_pack_manager!==true)return;if(!buildSurface())return;await runRefresh()}catch(error){mounted=false}}
+async function runRefresh(){return await serialize(async()=>{try{await refresh();announce('Content Pack Manager оновлено.')}catch(error){reportFailure('Content Pack Manager refresh failed','Не вдалося оновити Content Pack Manager.',error)}})}
+async function mount(){if(mounted)return;mounted=true;try{transport=await chooseTransport();const bootstrap=await api('system.bootstrap');if(bootstrap?.capabilities?.content_pack_manager!==true)return;if(!buildSurface())return;await runRefresh()}catch(error){console.error('Content Pack Manager mount failed',error);mounted=false}}
 export function installContentPackManagerSurface(){if(window.pywebview)window.addEventListener('pywebviewready',()=>mount(),{once:true});else setTimeout(()=>mount(),0)}

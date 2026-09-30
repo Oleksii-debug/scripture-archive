@@ -281,7 +281,7 @@ class PackagedUpdaterHostExecutionTests(unittest.TestCase):
         response = layer.handle(
             request(
                 APPLY_AND_RESTART_COMMAND,
-                {"pid": 1, "updater": r"C:\attacker.exe"},
+                {"pid": 1, "updater": r"C:\attacker.exe", "current_version": "0.0.0"},
             )
         )
         self.assertFalse(response["ok"])

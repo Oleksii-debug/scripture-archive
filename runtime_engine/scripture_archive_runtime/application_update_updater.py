@@ -94,9 +94,9 @@ def _consume_apply_handoff_locked(
     if not verify_same_publisher(target, staged):
         raise ApplicationUpdateError("staged artifact failed same-publisher verification")
     if _file_identity(staged, "staged update artifact") != staged_identity:
-        raise ApplicationUpdateError("staged artifact identity changed during publisher verification")
+        raise ApplicationUpdateError("staged artifact changed during publisher verification (identity)")
     if _file_identity(target, "installed application target") != target_identity:
-        raise ApplicationUpdateError("installed application target identity changed during publisher verification")
+        raise ApplicationUpdateError("installed application target changed during publisher verification (identity)")
     if _sha256_file(staged) != pending.artifact_sha256:
         raise ApplicationUpdateError("staged artifact bytes changed during publisher verification")
     if _sha256_file(target) != previous_sha:

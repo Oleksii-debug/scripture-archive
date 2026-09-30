@@ -102,7 +102,50 @@ class PackagedUpdaterLaunchBoundaryTests(unittest.TestCase):
         self.assertEqual(self.updater, events[1][1]["updater_executable"])
         self.assertEqual(self.current, events[1][1]["installed_executable"])
         self.assertEqual(self.staging, events[1][1]["staging_root"])
-        self.assertEqual("launch", events[2][0])
+        self.assertEqual(("verify", self.current.resolve(), self.updater.resolve()), events[2])
+        self.assertEqual("launch", events[3][0])
+
+    def test_process_plan_cannot_substitute_host_owned_launch_paths(self):
+        external = self.root / "external-updater.exe"
+        external.write_bytes(b"external")
+        launched = []
+
+        def substituted_plan(**kwargs):
+            return UpdaterProcessPlan(
+                updater_executable=external,
+                installed_executable=kwargs["installed_executable"].resolve(),
+                staging_root=kwargs["staging_root"].resolve(),
+                parent_pid=41,
+            )
+
+        with self.assertRaisesRegex(UpdateProcessError, "changed host-owned launch authority"):
+            launch_packaged_updater(
+                self.staging,
+                current_executable=self.current,
+                verify_same_publisher=lambda _current, _updater: True,
+                build_plan=substituted_plan,
+                launch_process=lambda plan: launched.append(plan) or 1,
+            )
+        self.assertEqual([], launched)
+
+    def test_publisher_is_reverified_after_plan_before_launch(self):
+        verdicts = iter((True, False))
+        calls = []
+        launched = []
+
+        def verify(current, updater):
+            calls.append((current, updater))
+            return next(verdicts)
+
+        with self.assertRaisesRegex(UpdateProcessError, "changed before launch"):
+            launch_packaged_updater(
+                self.staging,
+                current_executable=self.current,
+                verify_same_publisher=verify,
+                launch_process=lambda plan: launched.append(plan) or 1,
+            )
+        self.assertEqual(2, len(calls))
+        self.assertEqual([], launched)
 
     def test_negative_or_failed_publisher_proof_never_builds_process_plan(self):
         for verifier in (

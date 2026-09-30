@@ -33,6 +33,7 @@ def packaged_updater_path(installed_executable: Path) -> Path:
 def launch_packaged_updater(
     staging_root: str | os.PathLike[str],
     *,
+    current_version: str,
     current_executable: str | os.PathLike[str] | None = None,
     verify_same_publisher: PublisherVerifier = verify_same_publisher_authenticode,
     build_plan: PlanBuilder = build_updater_process_plan,
@@ -40,7 +41,7 @@ def launch_packaged_updater(
 ) -> int:
     """Verify and launch only the canonical same-publisher sibling updater.
 
-    The browser supplies none of these values. The installed executable defaults to
+    The browser supplies none of these values, including ``current_version``. The installed executable defaults to
     the currently running packaged process, the updater path is mechanically derived
     beside it, and the existing Authenticode authority must positively prove that
     current host and updater share a valid signer before #245's fixed process plan is
@@ -67,5 +68,6 @@ def launch_packaged_updater(
         updater_executable=updater,
         installed_executable=installed,
         staging_root=Path(staging_root),
+        current_version=current_version,
     )
     return launch_process(plan)

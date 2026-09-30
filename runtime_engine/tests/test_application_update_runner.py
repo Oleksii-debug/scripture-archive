@@ -28,6 +28,7 @@ def _plan(tmp_path: Path):
         updater_executable=updater,
         installed_executable=app,
         staging_root=staging,
+        current_version="1.0.0",
     )
 
 
@@ -287,6 +288,26 @@ class ApplicationUpdateRunnerTests(unittest.TestCase):
                 consume=consume,
             )
         self.assertFalse(consumed)
+
+    def test_runner_rejects_version_mismatch_between_api_and_fixed_handoff(self) -> None:
+        plan = _plan(self.tmp_path)
+        waited = False
+
+        def wait_for_exit(parent_pid: int) -> None:
+            nonlocal waited
+            waited = True
+
+        with self.assertRaisesRegex(
+            ApplicationUpdateError,
+            "does not match host handoff",
+        ):
+            execute_trusted_updater(
+                plan.argv()[1:],
+                current_version="1.0.1",
+                verify_same_publisher=lambda installed, staged: True,
+                wait_for_exit=wait_for_exit,
+            )
+        self.assertFalse(waited)
 
     def test_runner_rejects_malformed_command_before_wait_or_consume(self) -> None:
         waited = False

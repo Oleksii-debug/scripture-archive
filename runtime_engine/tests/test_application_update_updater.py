@@ -498,6 +498,7 @@ class AtomicApplicationUpdaterTests(unittest.TestCase):
             root = Path(tmp)
             source = root / "source.exe"
             destination = root / "destination.exe"
+            source.write_bytes(b"source exists before forced open failure")
 
             with patch.object(
                 Path,

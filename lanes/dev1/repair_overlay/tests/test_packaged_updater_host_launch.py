@@ -116,6 +116,7 @@ class PackagedUpdaterLaunchBoundaryTests(unittest.TestCase):
             with self.subTest(verifier=verifier), self.assertRaises(UpdateProcessError):
                 launch_packaged_updater(
                     self.staging,
+                    current_version=CURRENT_VERSION,
                     current_executable=self.current,
                     verify_same_publisher=verifier,
                     build_plan=lambda **kwargs: built.append(kwargs),

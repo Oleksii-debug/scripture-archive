@@ -72,7 +72,7 @@ class ApplicationUpdateProcessTests(unittest.TestCase):
                 updater_executable=external,
                 installed_executable=app,
                 staging_root=staging,
-            current_version=CURRENT_VERSION,
+                current_version=CURRENT_VERSION,
             )
 
     def test_build_plan_rejects_current_app_as_updater(self) -> None:
@@ -82,7 +82,7 @@ class ApplicationUpdateProcessTests(unittest.TestCase):
                 updater_executable=app,
                 installed_executable=app,
                 staging_root=staging,
-            current_version=CURRENT_VERSION,
+                current_version=CURRENT_VERSION,
             )
 
     def test_build_plan_rejects_symlinked_updater_target_and_staging(self) -> None:
@@ -99,13 +99,14 @@ class ApplicationUpdateProcessTests(unittest.TestCase):
                 updater_executable=updater_link,
                 installed_executable=app,
                 staging_root=staging,
-            current_version=CURRENT_VERSION,
+                current_version=CURRENT_VERSION,
             )
         with self.assertRaisesRegex(UpdateProcessError, "real directory"):
             build_updater_process_plan(
                 updater_executable=updater,
                 installed_executable=app,
                 staging_root=staging_link,
+                current_version=CURRENT_VERSION,
             )
 
     def test_build_plan_rejects_foreign_parent_pid(self) -> None:

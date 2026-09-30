@@ -79,9 +79,9 @@ class PackagedUpdaterLaunchBoundaryTests(unittest.TestCase):
         def build_plan(**kwargs):
             events.append(("plan", kwargs))
             return UpdaterProcessPlan(
-                updater_executable=kwargs["updater_executable"],
-                installed_executable=kwargs["installed_executable"],
-                staging_root=kwargs["staging_root"],
+                updater_executable=kwargs["updater_executable"].resolve(strict=True),
+                installed_executable=kwargs["installed_executable"].resolve(strict=True),
+                staging_root=kwargs["staging_root"].resolve(strict=True),
                 parent_pid=41,
             )
 

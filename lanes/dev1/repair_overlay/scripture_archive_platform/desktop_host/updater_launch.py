@@ -63,9 +63,36 @@ def launch_packaged_updater(
     if not trusted_updater:
         raise UpdateProcessError("packaged updater same-publisher authenticity is required")
 
+    requested_staging = Path(staging_root)
     plan = build_plan(
         updater_executable=updater,
         installed_executable=installed,
-        staging_root=Path(staging_root),
+        staging_root=requested_staging,
     )
+    if not isinstance(plan, UpdaterProcessPlan):
+        raise UpdateProcessError("updater process-plan builder returned an invalid plan")
+    try:
+        expected_updater = updater.resolve(strict=True)
+        expected_installed = installed.resolve(strict=True)
+        expected_staging = requested_staging.resolve(strict=True)
+    except OSError as exc:
+        raise UpdateProcessError("packaged updater launch authority could not be rebound") from exc
+    if (
+        plan.updater_executable != expected_updater
+        or plan.installed_executable != expected_installed
+        or plan.staging_root != expected_staging
+    ):
+        raise UpdateProcessError("updater process plan changed host-owned launch authority")
+    try:
+        launch_trusted = bool(
+            verify_same_publisher(plan.installed_executable, plan.updater_executable)
+        )
+    except Exception as exc:
+        raise UpdateProcessError(
+            "packaged updater authenticity could not be reverified before launch"
+        ) from exc
+    if not launch_trusted:
+        raise UpdateProcessError(
+            "packaged updater same-publisher authenticity changed before launch"
+        )
     return launch_process(plan)

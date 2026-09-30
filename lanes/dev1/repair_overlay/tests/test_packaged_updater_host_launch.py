@@ -79,9 +79,9 @@ class PackagedUpdaterLaunchBoundaryTests(unittest.TestCase):
         def build_plan(**kwargs):
             events.append(("plan", kwargs))
             return UpdaterProcessPlan(
-                updater_executable=kwargs["updater_executable"],
-                installed_executable=kwargs["installed_executable"],
-                staging_root=kwargs["staging_root"],
+                updater_executable=kwargs["updater_executable"].resolve(strict=True),
+                installed_executable=kwargs["installed_executable"].resolve(strict=True),
+                staging_root=kwargs["staging_root"].resolve(strict=True),
                 current_version=kwargs["current_version"],
                 parent_pid=41,
             )
@@ -105,7 +105,74 @@ class PackagedUpdaterLaunchBoundaryTests(unittest.TestCase):
         self.assertEqual(self.current, events[1][1]["installed_executable"])
         self.assertEqual(self.staging, events[1][1]["staging_root"])
         self.assertEqual(CURRENT_VERSION, events[1][1]["current_version"])
-        self.assertEqual("launch", events[2][0])
+        self.assertEqual(("verify", self.current.resolve(), self.updater.resolve()), events[2])
+        self.assertEqual("launch", events[3][0])
+
+    def test_process_plan_cannot_substitute_host_owned_launch_paths(self):
+        external = self.root / "external-updater.exe"
+        external.write_bytes(b"external")
+        launched = []
+
+        def substituted_plan(**kwargs):
+            return UpdaterProcessPlan(
+                updater_executable=external,
+                installed_executable=kwargs["installed_executable"].resolve(),
+                staging_root=kwargs["staging_root"].resolve(),
+                current_version=kwargs["current_version"],
+                parent_pid=41,
+            )
+
+        with self.assertRaisesRegex(UpdateProcessError, "changed host-owned launch authority"):
+            launch_packaged_updater(
+                self.staging,
+                current_executable=self.current,
+                verify_same_publisher=lambda _current, _updater: True,
+                build_plan=substituted_plan,
+                launch_process=lambda plan: launched.append(plan) or 1,
+            )
+        self.assertEqual([], launched)
+
+    def test_process_plan_cannot_substitute_host_owned_current_version(self):
+        launched = []
+
+        def substituted_plan(**kwargs):
+            return UpdaterProcessPlan(
+                updater_executable=kwargs["updater_executable"].resolve(),
+                installed_executable=kwargs["installed_executable"].resolve(),
+                staging_root=kwargs["staging_root"].resolve(),
+                current_version="9.9.9",
+                parent_pid=41,
+            )
+
+        with self.assertRaisesRegex(UpdateProcessError, "changed host-owned launch authority"):
+            launch_packaged_updater(
+                self.staging,
+                current_version=CURRENT_VERSION,
+                current_executable=self.current,
+                verify_same_publisher=lambda _current, _updater: True,
+                build_plan=substituted_plan,
+                launch_process=lambda plan: launched.append(plan) or 1,
+            )
+        self.assertEqual([], launched)
+
+    def test_publisher_is_reverified_after_plan_before_launch(self):
+        verdicts = iter((True, False))
+        calls = []
+        launched = []
+
+        def verify(current, updater):
+            calls.append((current, updater))
+            return next(verdicts)
+
+        with self.assertRaisesRegex(UpdateProcessError, "changed before launch"):
+            launch_packaged_updater(
+                self.staging,
+                current_executable=self.current,
+                verify_same_publisher=verify,
+                launch_process=lambda plan: launched.append(plan) or 1,
+            )
+        self.assertEqual(2, len(calls))
+        self.assertEqual([], launched)
 
     def test_negative_or_failed_publisher_proof_never_builds_process_plan(self):
         for verifier in (
@@ -116,7 +183,6 @@ class PackagedUpdaterLaunchBoundaryTests(unittest.TestCase):
             with self.subTest(verifier=verifier), self.assertRaises(UpdateProcessError):
                 launch_packaged_updater(
                     self.staging,
-                    current_version=CURRENT_VERSION,
                     current_executable=self.current,
                     verify_same_publisher=verifier,
                     build_plan=lambda **kwargs: built.append(kwargs),

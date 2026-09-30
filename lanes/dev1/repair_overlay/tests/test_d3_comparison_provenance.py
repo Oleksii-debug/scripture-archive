@@ -37,7 +37,17 @@ class D3PlayerComparisonProvenanceTests(unittest.TestCase):
             for forbidden in ("accepted_answer", "accepted_variants", "accepted_propositions", "runtime_submission_example", "grading"):
                 self.assertNotIn(forbidden, encoded)
             checked += 1
-        self.assertEqual(78, checked)
+        self.assertEqual(32, checked)
+
+    def test_comparison_provenance_inventory_keeps_local_and_complete_classes_distinct(self):
+        records = []
+        for node in self.nodes:
+            grading = node.get("grading") or {}
+            if grading.get("comparison_provenance_id") or node.get("comparison_provenance_id"):
+                records.append(grading.get("comparison_coverage"))
+        self.assertEqual(78, len(records))
+        self.assertEqual(76, records.count("explicit_complete_for_effective_scope"))
+        self.assertEqual(2, records.count("witness_local_provenance_only"))
 
     def test_reported_exclusivity_nodes_expose_four_witness_basis_without_answer_truth(self):
         affected = {"GW01-N02", "GW06-N04", "GW08-N12", "GW10-N10", "GW12-N04"}

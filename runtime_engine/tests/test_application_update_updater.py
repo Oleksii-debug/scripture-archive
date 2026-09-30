@@ -11,6 +11,7 @@ from scripture_archive_runtime.application_update import ApplicationUpdateError
 from scripture_archive_runtime.application_update_pending import PendingApplicationUpdate
 from scripture_archive_runtime.application_update_updater import (
     _copy_exact,
+    _sha256_file,
     consume_apply_handoff,
     rollback_installed_update,
 )
@@ -413,6 +414,56 @@ class AtomicApplicationUpdaterTests(unittest.TestCase):
                     )
 
             self.assertEqual(target.read_bytes(), old)
+
+    def test_hash_rejects_path_swap_before_open_even_for_identical_bytes(self):
+        data = b"same exact updater bytes"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "artifact.exe"
+            replacement = root / "replacement.exe"
+            parked = root / "parked.exe"
+            target.write_bytes(data)
+            replacement.write_bytes(data)
+            original_open = Path.open
+            swapped = False
+
+            def swapping_open(path_obj: Path, *args, **kwargs):
+                nonlocal swapped
+                if path_obj == target and not swapped:
+                    swapped = True
+                    os.replace(target, parked)
+                    os.replace(replacement, target)
+                return original_open(path_obj, *args, **kwargs)
+
+            with patch.object(Path, "open", new=swapping_open):
+                with self.assertRaisesRegex(
+                    ApplicationUpdateError,
+                    "changed before hashing",
+                ):
+                    _sha256_file(target)
+
+            self.assertTrue(swapped)
+            self.assertEqual(data, target.read_bytes())
+            self.assertEqual(data, parked.read_bytes())
+
+    def test_hash_rejects_symlink_without_following_target(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            real = root / "real.exe"
+            link = root / "artifact.exe"
+            real.write_bytes(b"trusted bytes")
+            try:
+                link.symlink_to(real)
+            except (OSError, NotImplementedError):
+                self.skipTest("symlinks unavailable")
+
+            with self.assertRaisesRegex(
+                ApplicationUpdateError,
+                "regular non-symlink",
+            ):
+                _sha256_file(link)
+
+            self.assertEqual(b"trusted bytes", real.read_bytes())
 
     def test_copy_exact_source_open_failure_never_creates_destination(self):
         with tempfile.TemporaryDirectory() as tmp:

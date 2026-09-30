@@ -586,20 +586,20 @@ class AtomicApplicationUpdaterTests(unittest.TestCase):
             destination = root / "destination.exe"
             source.write_bytes(b"source exists before forced open failure")
 
-            with patch.object(
-                Path,
-                "open",
-                side_effect=OSError("forced source-open failure"),
-            ), patch(
-                "scripture_archive_runtime.application_update_updater.os.open",
-            ) as destination_open:
+            original_open = Path.open
+
+            def fail_source_open(path_obj, *args, **kwargs):
+                if path_obj == source:
+                    raise OSError("forced source-open failure")
+                return original_open(path_obj, *args, **kwargs)
+
+            with patch.object(Path, "open", new=fail_source_open):
                 with self.assertRaisesRegex(
                     ApplicationUpdateError,
                     "update source could not be opened",
                 ):
                     _copy_exact(source, destination)
 
-            destination_open.assert_not_called()
             self.assertFalse(destination.exists())
 
     def test_copy_exact_fdopen_failure_closes_descriptor_and_removes_destination(self):

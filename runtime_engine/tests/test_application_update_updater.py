@@ -465,6 +465,34 @@ class AtomicApplicationUpdaterTests(unittest.TestCase):
 
             self.assertEqual(b"trusted bytes", real.read_bytes())
 
+    def test_copy_exact_rejects_replaced_source_before_open(self):
+        data = b"same exact source bytes"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source.exe"
+            alternate = root / "alternate.exe"
+            original = root / "original.exe"
+            destination = root / "destination.exe"
+            source.write_bytes(data)
+            alternate.write_bytes(data)
+            original_open = Path.open
+            replaced = False
+
+            def replacing_open(path_obj: Path, *args, **kwargs):
+                nonlocal replaced
+                if path_obj == source and not replaced:
+                    replaced = True
+                    os.replace(source, original)
+                    os.replace(alternate, source)
+                return original_open(path_obj, *args, **kwargs)
+
+            with patch.object(Path, "open", new=replacing_open):
+                with self.assertRaisesRegex(ApplicationUpdateError, "changed before copy"):
+                    _copy_exact(source, destination)
+
+            self.assertTrue(replaced)
+            self.assertFalse(destination.exists())
+
     def test_copy_exact_source_open_failure_never_creates_destination(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

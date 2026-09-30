@@ -56,9 +56,15 @@ class D3PlayerComparisonProvenanceTests(unittest.TestCase):
                 },
                 ensure_ascii=False,
             )
+            visible_scope = str(node.get("source_scope_visible_to_player") or "")
+            missing_public_witnesses = [
+                witness for witness in witnesses
+                if witness.casefold() not in visible_scope.casefold()
+            ]
             if (
                 grading.get("comparison_coverage") == "explicit_complete_for_effective_scope"
                 and len(witnesses) > 1
+                and missing_public_witnesses
                 and EXCLUSIVITY.search(accepted_text)
             ):
                 candidates.append(node["node_id"])

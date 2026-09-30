@@ -9,7 +9,7 @@ from scripture_archive_platform.desktop_host.updater_main import (
     UPDATER_OK,
     run_updater,
 )
-from scripture_archive_platform.desktop_host.version import CURRENT_APPLICATION_VERSION
+HOST_CURRENT_VERSION = "0.6.2"
 
 
 class PackagedUpdaterEntrypointTests(unittest.TestCase):
@@ -28,11 +28,13 @@ class PackagedUpdaterEntrypointTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp.cleanup()
 
-    def argv(self, installed: Path | None = None) -> tuple[str, ...]:
+    def argv(self, installed: Path | None = None, current_version: str = HOST_CURRENT_VERSION) -> tuple[str, ...]:
         return (
             "--scripture-archive-apply",
             "--wait-pid",
             "41",
+            "--current-version",
+            current_version,
             "--installed-executable",
             str(self.installed if installed is None else installed),
             "--staging-root",
@@ -64,8 +66,32 @@ class PackagedUpdaterEntrypointTests(unittest.TestCase):
         self.assertEqual(len(execute_calls), 1)
         forwarded, kwargs = execute_calls[0]
         self.assertEqual(forwarded, argv)
-        self.assertEqual(kwargs["current_version"], CURRENT_APPLICATION_VERSION)
+        self.assertEqual(kwargs["current_version"], HOST_CURRENT_VERSION)
         self.assertIs(kwargs["verify_same_publisher"], verifier)
+
+    def test_entrypoint_forwards_newer_running_host_version_without_embedded_version_authority(self) -> None:
+        calls = []
+        result = run_updater(
+            self.argv(current_version="0.7.0"),
+            execute=lambda argv, **kwargs: calls.append((tuple(argv), kwargs)),
+            verifier=lambda installed, updater: True,
+            updater_executable=self.updater,
+        )
+        self.assertEqual(result, UPDATER_OK)
+        self.assertEqual("0.7.0", calls[0][1]["current_version"])
+
+    def test_invalid_handoff_version_fails_before_verifier_or_executor(self) -> None:
+        verified = []
+        executed = []
+        result = run_updater(
+            self.argv(current_version="0.7"),
+            execute=lambda *args, **kwargs: executed.append((args, kwargs)),
+            verifier=lambda *args: verified.append(args) or True,
+            updater_executable=self.updater,
+        )
+        self.assertEqual(result, UPDATER_FAILED)
+        self.assertEqual([], verified)
+        self.assertEqual([], executed)
 
     def test_existing_noncanonical_installed_target_never_reaches_verifier_or_executor(self) -> None:
         other = self.install / "Other.exe"

@@ -125,6 +125,7 @@ class PackagedUpdaterLaunchBoundaryTests(unittest.TestCase):
         with self.assertRaisesRegex(UpdateProcessError, "changed host-owned launch authority"):
             launch_packaged_updater(
                 self.staging,
+                current_version=CURRENT_VERSION,
                 current_executable=self.current,
                 verify_same_publisher=lambda _current, _updater: True,
                 build_plan=substituted_plan,
@@ -167,6 +168,7 @@ class PackagedUpdaterLaunchBoundaryTests(unittest.TestCase):
         with self.assertRaisesRegex(UpdateProcessError, "changed before launch"):
             launch_packaged_updater(
                 self.staging,
+                current_version=CURRENT_VERSION,
                 current_executable=self.current,
                 verify_same_publisher=verify,
                 launch_process=lambda plan: launched.append(plan) or 1,
@@ -183,6 +185,7 @@ class PackagedUpdaterLaunchBoundaryTests(unittest.TestCase):
             with self.subTest(verifier=verifier), self.assertRaises(UpdateProcessError):
                 launch_packaged_updater(
                     self.staging,
+                    current_version=CURRENT_VERSION,
                     current_executable=self.current,
                     verify_same_publisher=verifier,
                     build_plan=lambda **kwargs: built.append(kwargs),

@@ -301,11 +301,29 @@ def _discard_file(path: Path) -> None:
 
 def _copy_exact(source: Path, destination: Path) -> None:
     try:
+        before = source.lstat()
+    except OSError as exc:
+        raise ApplicationUpdateError("update source is unavailable") from exc
+    if stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode):
+        raise ApplicationUpdateError("update source must be a regular non-symlink file")
+    before_identity = (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
+
+    try:
         source_handle = source.open("rb")
     except OSError as exc:
         raise ApplicationUpdateError("update source could not be opened") from exc
 
     with source_handle as src:
+        opened = os.fstat(src.fileno())
+        opened_identity = (
+            opened.st_dev,
+            opened.st_ino,
+            opened.st_size,
+            opened.st_mtime_ns,
+        )
+        if not stat.S_ISREG(opened.st_mode) or opened_identity != before_identity:
+            raise ApplicationUpdateError("update source changed before copy")
+
         try:
             descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o700)
         except OSError as exc:
@@ -327,6 +345,24 @@ def _copy_exact(source: Path, destination: Path) -> None:
                 shutil.copyfileobj(src, dst, length=_COPY_CHUNK)
                 dst.flush()
                 os.fsync(dst.fileno())
+            opened_after = os.fstat(src.fileno())
+            opened_after_identity = (
+                opened_after.st_dev,
+                opened_after.st_ino,
+                opened_after.st_size,
+                opened_after.st_mtime_ns,
+            )
+            if opened_after_identity != opened_identity:
+                raise ApplicationUpdateError("update source changed during copy")
+            after = source.lstat()
+            after_identity = (
+                after.st_dev,
+                after.st_ino,
+                after.st_size,
+                after.st_mtime_ns,
+            )
+            if after_identity != before_identity:
+                raise ApplicationUpdateError("update source changed during copy")
         except Exception:
             try:
                 destination.unlink()

@@ -82,6 +82,7 @@ class PackagedUpdaterLaunchBoundaryTests(unittest.TestCase):
                 updater_executable=kwargs["updater_executable"],
                 installed_executable=kwargs["installed_executable"],
                 staging_root=kwargs["staging_root"],
+                current_version=kwargs["current_version"],
                 parent_pid=41,
             )
 
@@ -91,6 +92,7 @@ class PackagedUpdaterLaunchBoundaryTests(unittest.TestCase):
 
         pid = launch_packaged_updater(
             self.staging,
+            current_version=CURRENT_VERSION,
             current_executable=self.current,
             verify_same_publisher=verify,
             build_plan=build_plan,
@@ -102,6 +104,7 @@ class PackagedUpdaterLaunchBoundaryTests(unittest.TestCase):
         self.assertEqual(self.updater, events[1][1]["updater_executable"])
         self.assertEqual(self.current, events[1][1]["installed_executable"])
         self.assertEqual(self.staging, events[1][1]["staging_root"])
+        self.assertEqual(CURRENT_VERSION, events[1][1]["current_version"])
         self.assertEqual("launch", events[2][0])
 
     def test_negative_or_failed_publisher_proof_never_builds_process_plan(self):

@@ -1,5 +1,10 @@
 # AGENTS.md
 
+## Local worker tests when GitHub Actions is queued (2026-10-10)
+
+Before waiting for hosted CI, a worker with a Python execution environment SHOULD run the existing repository validators through `python -m pytest -q tests` on the exact local checkout. The pytest adapter delegates to the original `tools/test_*.py` scripts; it must not be counted as an independent duplicate validation suite. In a permitted isolated environment, if pytest is unavailable, `python -m pip install -r requirements-test.txt` supplies only the optional test dependency; never silently install on user/production machines, incur paid services, or treat a missing dependency or a collection with 0 tests as PASS. Without pytest, run each existing standalone validator by its documented direct Python command and explicitly state their real outcomes. Do not represent a synthetic smoke/adapter test as whole-product qualification; final CI, artifacts, rights and deployment evidence remain distinct.
+
+
 ## Canonical autonomous worker policy
 
 Objective: move scripture-archive toward a complete, working, verified product as quickly as possible.

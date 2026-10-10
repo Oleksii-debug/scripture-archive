@@ -1,0 +1,2 @@
+# Optional isolated developer/test environment only; do not install on user PCs or production servers.
+pytest>=8,<10

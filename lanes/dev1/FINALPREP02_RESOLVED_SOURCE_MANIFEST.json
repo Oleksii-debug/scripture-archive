@@ -1,0 +1,22 @@
+{
+  "schema": "DEV1_FINALPREP02_GITHUB_RESOLVED_STATE_v1",
+  "starting_sha": "0d30126393894f6fb2a30cff15ca4ef17bf527e1",
+  "base_main_sha": "bbc681db9701fa39dbe757dda8f2e341ea4e3c5b",
+  "source_file_count": 63,
+  "resolved_source_aggregate_sha256": "64358455c191e990f31b0d391fa4d05952f476f2b34f9a5bf5781695db3c2497",
+  "critical_files": [
+    {"path":"docs/SHARED_CONTRACTS.md","size":3522,"sha256":"b2948d777c38f5893027e47d360ba7166c1b5fadb363d2a63a4cdb414b35791b","git_blob_sha1":"0f6b8048a28bb66363a4747082895954d9caff70"},
+    {"path":"frontend/renderers.js","size":8527,"sha256":"64714e8a64f934623db674f7e0ea4efc8968d0f739a475139e38bd4c881136d9","git_blob_sha1":"16d8660eece3f4992a9a2054335b95ce160063c5"},
+    {"path":"scripture_archive_platform/content/loader.py","size":11723,"sha256":"8291e17202b978d921e6f7d6ca1774be1121f5028115c84baab14b0d34073ab0","git_blob_sha1":"27b03f85bd538648a181645d033bb55a754c1c8c"},
+    {"path":"scripture_archive_platform/domain/models.py","size":1441,"sha256":"ce072297f0cc4b392a4f461e0338ba6e0253493ea32a71d531771a4ba17fa235","git_blob_sha1":"c68f7d64bb817ae3f8414bbcfb6735d65a397f3f"},
+    {"path":"scripture_archive_platform/domain/registries.py","size":2452,"sha256":"ec20e82f893b79a19219c5258e1dd752cfa964f3ecbe38612aede7d33e146ed2","git_blob_sha1":"592665691e73a1101bd72709e39f85751c44a0b4"},
+    {"path":"scripture_archive_platform/grading/reference.py","size":5443,"sha256":"3dad16eb4d2b97b3190536904a0a530bdc7bbb0b80545081b3124aee22234d35","git_blob_sha1":"9f0191bc0c4ade3a8f4b2ec6510ebed2685e75cc"},
+    {"path":"scripture_archive_platform/transport/__init__.py","size":265,"sha256":"613bc451e39988253953eaadafe871935e4248371a112068d2c91738046290e4","git_blob_sha1":"a9480aebbbd493a3b07e6014a59d764166874b16"},
+    {"path":"scripture_archive_platform/transport/answer_contracts.py","size":7197,"sha256":"8ac7607e4d800c8839d41f6dbd09a3ec83fd29eae4818d0051f3b3a10d35b804","git_blob_sha1":"d9c20be32387cc48af24ec226a2527b325b314a6"},
+    {"path":"scripture_archive_platform/transport/runtime_compat.py","size":3251,"sha256":"ef48eceb4878072239902be93dcdfce925362f115f40c17f3089bfca06db3dc6","git_blob_sha1":"b0bf74d3c5e1cf29955346df42913ea250837de6"},
+    {"path":"tests/test_answer_dto.py","size":1827,"sha256":"82df074efa69967552948509ed19dd07386c4d16b160925b50a3e3c427131e4b","git_blob_sha1":"e93582aba1f77d4b402e8de0b234c1d04c5f228a"},
+    {"path":"tests/test_cross_lane_contracts.py","size":1098,"sha256":"59eeaace00960908acba484b27e3fd5b2496548e0c59f2b6bfb66979a15e4f13","git_blob_sha1":"d5064fbf7ebf535bbdee046d4b8b21572a66c5ef"},
+    {"path":"tests/test_runtime_compat.py","size":2543,"sha256":"5d05ec0fdef73fd7120a278521fe22ef882e5421a00cd32600d388f153e9543f","git_blob_sha1":"6eff1a9b66348ff800482272f38542ef55f02622"}
+  ],
+  "note": "Full per-file SHA256 manifest is shipped inside DEV_LANE_SCRIPTURE_R06_D1_FINALPREP_02.zip. Readable FINALPREP modifications are versioned under lanes/dev1/repair_overlay; historical source_parts remain recovery-only."
+}

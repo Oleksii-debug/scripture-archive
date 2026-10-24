@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { EDITIONS } from '../public/editions.js';
@@ -76,4 +77,13 @@ test('actual UK/RU/EN Genesis text keeps edition, chapter, and verse identity', 
   assert.equal(modern.chapters.length, 4);
   assert.equal(historical.chapters.length, 3);
   assert.equal(modern.chapters.reduce((n, ch) => n + ch.length, 0), historical.chapters.reduce((n, ch) => n + ch.length, 0));
+});
+
+test('Bible corpus build manifest pins the current catalog bytes', async () => {
+  const bytes = await readFile(new URL('../public/data/catalog.json', import.meta.url));
+  const manifest = JSON.parse(await readFile(new URL('../public/data/bible-build-manifest.json', import.meta.url), 'utf8'));
+  assert.equal(createHash('sha256').update(bytes).digest('hex'), manifest.catalogSha256);
+  assert.equal(manifest.commonCanonBooks, 66);
+  assert.deepEqual([...manifest.locales].sort(), ['en', 'ru', 'uk']);
+  assert.equal(manifest.bookFiles, manifest.commonCanonBooks * manifest.locales.length);
 });

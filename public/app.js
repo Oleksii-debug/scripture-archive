@@ -123,7 +123,8 @@ const I18N = {
     accessTitle: "Доступність",
     accessBody:
       "Основні маршрути працюють із клавіатури, мають зрозумілі заголовки, помітний фокус і текстові повідомлення про результат дії.",
-    errorLoad: "Не вдалося завантажити дані. Спробуйте оновити сторінку.",
+    errorLoad: "Не вдалося завантажити дані. Перевірте з’єднання та спробуйте ще раз.",
+    retryLoad: "Повторити спробу",
   },
   ru: {
     brandSub: "Архив Писания",
@@ -244,7 +245,8 @@ const I18N = {
     accessTitle: "Доступность",
     accessBody:
       "Основные маршруты работают с клавиатуры, имеют понятные заголовки, заметный фокус и текстовые сообщения о результате действия.",
-    errorLoad: "Не удалось загрузить данные. Обновите страницу.",
+    errorLoad: "Не удалось загрузить данные. Проверьте соединение и попробуйте ещё раз.",
+    retryLoad: "Повторить попытку",
   },
   en: {
     brandSub: "Scripture Archive",
@@ -365,7 +367,8 @@ const I18N = {
     accessTitle: "Accessibility",
     accessBody:
       "Core routes work from the keyboard and provide clear headings, visible focus, and textual feedback for every important action.",
-    errorLoad: "The data could not be loaded. Please refresh the page.",
+    errorLoad: "The data could not be loaded. Check your connection and try again.",
+    retryLoad: "Try again",
   },
 };
 
@@ -3293,7 +3296,8 @@ async function route() {
     window.scrollTo({ top: 0, behavior: "instant" });
   } catch (error) {
     console.error(error);
-    shell(`<div class="notice error">${t("errorLoad")}</div>`);
+    shell(`<div class="notice error" role="alert"><p>${t("errorLoad")}</p><button class="button primary" type="button" id="retry-load">${t("retryLoad")}</button></div>`);
+    document.querySelector("#retry-load")?.addEventListener("click", () => route());
   }
 }
 

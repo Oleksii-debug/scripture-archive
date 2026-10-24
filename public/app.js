@@ -2553,7 +2553,7 @@ async function renderReader(parts) {
       (e) => navigateTo(`/reader/${meta.code}/${e.target.value}`),
     );
   document.querySelector("#verse-select").addEventListener("change", (e) => {
-    if (e.target.value) navigateTo(readerVerseUrl(meta.code, chapter, e.target.value));
+    navigateTo(e.target.value ? readerVerseUrl(meta.code, chapter, e.target.value) : `/reader/${meta.code}/${chapter}`);
   });
   document.querySelector("#book-search").addEventListener("submit", (e) => {
     e.preventDefault();

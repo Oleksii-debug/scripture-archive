@@ -71,6 +71,7 @@ export default function ScriptLoader() {
         retry.addEventListener("click", () => {
           if (!active) return;
           main.replaceChildren();
+          main.focus();
           if (announcer) announcer.textContent = LOADER_COPY[loaderLanguage()].loading;
           loadApp();
         });

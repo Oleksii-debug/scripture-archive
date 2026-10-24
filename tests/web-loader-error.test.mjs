@@ -62,6 +62,7 @@ for (const [lang, title, retryText] of [
     assert.equal(retry.focused, true);
     retry.click();
     assert.equal(page.main.childElementCount, 0);
+    assert.equal(page.main.focused, true);
     assert.equal(page.scripts[1].removed, true);
     assert.equal(page.scripts.at(-1).src, '/app.js');
     assert.equal(page.scripts.length, 3);

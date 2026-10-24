@@ -45,6 +45,7 @@ export default function ScriptLoader() {
 
     let active = true;
     let appScript: HTMLScriptElement | null = null;
+    let attempt = 0;
     const main = document.getElementById("main");
     const announcer = document.getElementById("announcer");
 
@@ -53,9 +54,12 @@ export default function ScriptLoader() {
       appScript?.remove();
       const script = document.createElement("script");
       script.type = "module";
-      script.src = "/app.js";
+      // Failed module fetches can be memoized by the browser module map.
+      // Each retry must request a fresh URL for the same canonical file.
+      script.src = attempt === 0 ? "/app.js" : `/app.js?sa-retry=${attempt}`;
+      attempt += 1;
       script.onerror = () => {
-        if (!active || !main || main.childElementCount > 0) return;
+        if (!active || appScript !== script || !main || main.childElementCount > 0) return;
         const copy = LOADER_COPY[loaderLanguage()];
         const notice = document.createElement("section");
         notice.className = "notice";
@@ -79,8 +83,8 @@ export default function ScriptLoader() {
         main.replaceChildren(notice);
         retry.focus();
       };
-      document.body.appendChild(script);
       appScript = script;
+      document.body.appendChild(script);
     };
     loadApp();
     return () => {

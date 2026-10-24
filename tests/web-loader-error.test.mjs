@@ -30,7 +30,8 @@ function boot(lang = 'uk', blockedStorage = false) {
     createElement: element,
     getElementById(id) { return ({main, announcer, language: {value: lang}})[id] || null; },
   };
-  const window = {localStorage: {getItem() { if (blockedStorage) throw Error('denied'); return lang; }}};
+  let reloads = 0;
+  const window = {localStorage: {getItem() { if (blockedStorage) throw Error('denied'); return lang; }}, location: {reload() {reloads += 1;}}};
   let cleanup;
   const code = ts.transpileModule(fs.readFileSync(new URL('../app/script-loader.tsx', import.meta.url), 'utf8'), {
     compilerOptions: {module: ts.ModuleKind.CommonJS, target:ts.ScriptTarget.ES2022},
@@ -41,13 +42,13 @@ function boot(lang = 'uk', blockedStorage = false) {
     return {useEffect(fn) {cleanup = fn();}};
   }}, {filename:'app/script-loader.tsx'});
   exports.default();
-  return {main, announcer, scripts, cleanup: () => cleanup()};
+  return {main, announcer, scripts, cleanup: () => cleanup(), reloadCalls: () => reloads};
 }
 
-for (const [lang, title, retryText] of [
-  ['uk', 'Не вдалося відкрити сторінку', 'Повторити завантаження'],
-  ['ru', 'Не удалось открыть страницу', 'Повторить загрузку'],
-  ['en', 'The page could not open', 'Retry loading'],
+for (const [lang, title, retryText, reloadText] of [
+  ['uk', 'Не вдалося відкрити сторінку', 'Повторити завантаження', 'Перезавантажити сторінку'],
+  ['ru', 'Не удалось открыть страницу', 'Повторить загрузку', 'Перезагрузить страницу'],
+  ['en', 'The page could not open', 'Retry loading', 'Reload the page'],
 ]) {
   test(`loading failure offers keyboard-focusable ${lang} retry and recreates the real module script`, () => {
     const page = boot(lang);
@@ -69,8 +70,12 @@ for (const [lang, title, retryText] of [
     assert.ok(page.announcer.textContent.length > 0);
     page.scripts.at(-1).onerror();
     assert.equal(page.main.childElementCount, 1);
-    page.main.childNodes[0].childNodes[2].click();
-    assert.equal(page.scripts.at(-1).src, '/app.js?sa-retry=2', 'each failed module request should get a fresh URL');
+    const recovery = page.main.childNodes[0].childNodes[2];
+    assert.equal(recovery.textContent, reloadText, 'a failed dependency can be cached by the ESM module map');
+    assert.equal(recovery.focused, true);
+    recovery.click();
+    assert.equal(page.reloadCalls(), 1, 'second failure must offer full-document recovery');
+    assert.equal(page.scripts.length, 3, 'no futile third same-document retry');
     page.cleanup();
     assert.equal(page.scripts.at(-1).removed, true);
     assert.equal(page.scripts[0].removed, true);

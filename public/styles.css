@@ -192,3 +192,6 @@ body{background:linear-gradient(180deg,#f8f6f0 0,#eef2f1 58%,#f8f6f0 100%)}
   .analytics-metrics{grid-template-columns:repeat(2,1fr)}.analytics-rankings{grid-template-columns:1fr}.analytics-dashboard{padding:1rem}.analytics-dashboard .section-head{width:auto;max-width:none}.editor-grid{gap:1rem}
   .cookie-banner{left:.65rem;right:.65rem;bottom:.65rem;max-height:calc(100svh - 1.3rem);overflow:auto;padding:1rem}.cookie-banner .action-row{display:grid;grid-template-columns:1fr 1fr}.cookie-banner .button{width:100%;min-height:48px}
 }
+
+/* SA-04: selected deep-linked verse remains visible and keyboard readable. */
+.verse[data-selected-verse]{border-inline-start:3px solid var(--gold);padding-inline-start:.75rem;background:rgba(200,154,75,.08);scroll-margin-block:6rem}

@@ -51,3 +51,19 @@ test('invalid or out-of-range coordinates never mark a verse selected', () => {
     assert.equal(helpers.readerVerseFromUrl(`https://scripture-archive.test/reader/JHN/3?verse=${value}`,36),null,value);
   }
 });
+
+test('verse selector can return from an exact verse to the chapter-only permalink', () => {
+  const match = source.match(/document\.querySelector\("#verse-select"\)\.addEventListener\("change", \(e\) => \{([\s\S]*?)\n  \}\);/);
+  assert.ok(match, 'canonical verse select change handler missing');
+  const opened = [];
+  const onChange = vm.runInNewContext(`(e) => {${match[1]}
+  }`, {
+    meta: {code: 'JHN'},
+    chapter: 3,
+    readerVerseUrl: helpers?.readerVerseUrl,
+    navigateTo: path => opened.push(path),
+  });
+  onChange({target:{value:'16'}});
+  onChange({target:{value:''}});
+  assert.deepEqual(opened, ['/reader/JHN/3?verse=16', '/reader/JHN/3']);
+});

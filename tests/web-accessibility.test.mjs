@@ -20,3 +20,11 @@ test("language selector takes its accessible name from the localized associated 
   assert.match(app, /document\.documentElement\.lang\s*=\s*state\.lang/);
   assert.match(app, /querySelectorAll\("\[data-i18n\]"\)/);
 });
+
+test("skip link localizes with the existing static I18N while targeting the one main landmark", async () => {
+  const [page, app] = await Promise.all([read("app/page.tsx"), read("public/app.js")]);
+  assert.match(page, /<a\\b[^>]*className="skip-link"[^>]*href="#main"[^>]*data-i18n="skipContent"/);
+  assert.match(page, /<main\\b[^>]*id="main"[^>]*tabIndex=\\{-1\\}/);
+  for (const text of ["Перейти до основного вмісту", "Перейти к основному содержимому", "Skip to main content"])
+    assert.ok(app.includes(`skipContent: "${text}"`), `missing localized skip link: ${text}`);
+});

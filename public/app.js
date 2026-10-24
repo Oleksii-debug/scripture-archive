@@ -124,6 +124,8 @@ const I18N = {
     accessBody:
       "Основні маршрути працюють із клавіатури, мають зрозумілі заголовки, помітний фокус і текстові повідомлення про результат дії.",
     errorLoad: "Не вдалося завантажити дані. Спробуйте оновити сторінку.",
+    readingSyncPending: "Прочитане збережено на цьому пристрої, але сервер не підтвердив збереження. Повторіть спробу.",
+    readingSyncRetry: "Повторити збереження",
   },
   ru: {
     brandSub: "Архив Писания",
@@ -245,6 +247,8 @@ const I18N = {
     accessBody:
       "Основные маршруты работают с клавиатуры, имеют понятные заголовки, заметный фокус и текстовые сообщения о результате действия.",
     errorLoad: "Не удалось загрузить данные. Обновите страницу.",
+    readingSyncPending: "Прочитанное сохранено на этом устройстве, но сервер не подтвердил сохранение. Повторите попытку.",
+    readingSyncRetry: "Повторить сохранение",
   },
   en: {
     brandSub: "Scripture Archive",
@@ -366,6 +370,8 @@ const I18N = {
     accessBody:
       "Core routes work from the keyboard and provide clear headings, visible focus, and textual feedback for every important action.",
     errorLoad: "The data could not be loaded. Please refresh the page.",
+    readingSyncPending: "Your reading is saved on this device, but the server did not confirm the save. Please retry.",
+    readingSyncRetry: "Retry saving",
   },
 };
 
@@ -2515,7 +2521,7 @@ async function renderReader(parts) {
   const alreadyRead=history.some(r=>r.book===meta.code&&r.chapter===chapter);
   const hasTasks=missionManifest.chapters?.some(item=>item.book===meta.code&&Number(item.chapter)===chapter);
   document.querySelector('.chapter-nav').insertAdjacentHTML('beforebegin',`<div class="read-completion"><button class="button primary" id="mark-read">${attemptCopy.finishReading}</button>${hasTasks?`<button class="button" id="start-questions" disabled>${attemptCopy.transition}</button>`:""}<a href="/progress">${w.progress}</a></div>${hasTasks?`<dialog id="attempt-dialog" class="attempt-dialog" aria-labelledby="attempt-dialog-title"><form method="dialog"><h2 id="attempt-dialog-title">${attemptCopy.prepareTitle}</h2><p>${attemptCopy.prepareText}</p><ul>${attemptCopy.prepareRules.map(rule=>`<li>${rule}</li>`).join("")}</ul><div class="action-row"><button class="button" value="cancel">${attemptCopy.cancel}</button><button class="button primary" id="confirm-attempt" value="default">${attemptCopy.begin}</button></div><p id="attempt-state" role="status"></p></form></dialog>`:""}`);
-  document.querySelector('#mark-read').onclick=async()=>{if(!alreadyRead)history.push({book:meta.code,chapter,title:bookTitle(meta)});localStorage.setItem('sa.readingHistory',JSON.stringify(history));if(state.user)try{await accountRequest('reading','PUT',{reading:history})}catch{}try{if(hasTasks)await attemptRequest('read','POST',{book:meta.code,chapter,groupId:groupId||undefined});document.querySelector('#start-questions')?.removeAttribute('disabled');document.querySelector('#mark-read').disabled=true;document.querySelector('#mark-read').textContent=w.readMarked;announce(w.readMarked)}catch{announce(t('errorLoad'))}};
+  document.querySelector('#mark-read').onclick=async()=>{if(!history.some(r=>r.book===meta.code&&r.chapter===chapter))history.push({book:meta.code,chapter,title:bookTitle(meta)});localStorage.setItem('sa.readingHistory',JSON.stringify(history));if(state.user)try{await accountRequest('reading','PUT',{reading:history})}catch{document.querySelector('#mark-read').textContent=t('readingSyncRetry');announce(t('readingSyncPending'));return}try{if(hasTasks)await attemptRequest('read','POST',{book:meta.code,chapter,groupId:groupId||undefined});document.querySelector('#start-questions')?.removeAttribute('disabled');document.querySelector('#mark-read').disabled=true;document.querySelector('#mark-read').textContent=w.readMarked;announce(w.readMarked)}catch{announce(t('errorLoad'))}};
   document.querySelector('#start-questions')?.addEventListener('click',()=>document.querySelector('#attempt-dialog').showModal());
   document.querySelector('#confirm-attempt')?.addEventListener('click',async event=>{event.preventDefault();const status=document.querySelector('#attempt-state');try{const attempt=await attemptRequest('start','POST',{missionId:'OT-AB-01',book:meta.code,chapter,locale:state.lang,groupId:groupId||undefined});sessionStorage.setItem('sa.activeAttempt',attempt.attemptId);state.activeAttempt=attempt;state.mission=null;window.saAnalytics?.track("quiz_start",{language:state.lang,mode:groupId?"group":"personal"});attemptChannel?.postMessage({type:'attempt-started',attemptId:attempt.attemptId,book:meta.code,chapter});document.querySelector('#attempt-dialog').close();state.currentReader=null;navigateTo(`/mission/attempt/${attempt.attemptId}`,true)}catch(error){window.saAnalytics?.track("quiz_start_error",{error:String(error.message).slice(0,60)});status.textContent=error.message==='chapter_must_be_read'?attemptCopy.readRequired:t('errorLoad')}});
   document.querySelector("#uk-spelling")?.addEventListener("click", () => {

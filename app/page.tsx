@@ -27,7 +27,7 @@ export default function Home() {
         </nav>
         <div className="header-tools">
           <label className="sr-only" htmlFor="language" data-i18n="language">Мова</label>
-          <select id="language" aria-label="Language" defaultValue="uk">
+          <select id="language" defaultValue="uk">
             <option value="uk">Українська</option><option value="ru">Русский</option><option value="en">English</option>
           </select>
         </div>

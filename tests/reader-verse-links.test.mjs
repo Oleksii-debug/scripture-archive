@@ -87,3 +87,41 @@ test('Bible corpus build manifest pins the current catalog bytes', async () => {
   assert.deepEqual([...manifest.locales].sort(), ['en', 'ru', 'uk']);
   assert.equal(manifest.bookFiles, manifest.commonCanonBooks * manifest.locales.length);
 });
+
+
+test('all 264 bundled local book files preserve edition-specific catalog coordinates', async () => {
+  const catalog = JSON.parse(await readFile(new URL('../public/data/catalog.json', import.meta.url), 'utf8'));
+  const groups = [
+    { folder: 'uk', locale: 'uk', uiId: 'uk-kulish', editionId: catalog.editions.uk.id, books: catalog.books.uk },
+    { folder: 'ru', locale: 'ru', uiId: 'ru-synodal', editionId: catalog.editions.ru.id, books: catalog.books.ru },
+    { folder: 'en', locale: 'en', uiId: 'en-web', editionId: catalog.editions.en.id, books: catalog.books.en },
+    { folder: 'uk-ohiienko', locale: 'uk', uiId: 'uk-ohiienko', editionId: 'uk-ohiienko', books: catalog.editionBooks['uk-ohiienko'] },
+  ];
+  let checkedBooks = 0;
+  for (const { folder, locale, uiId, editionId, books } of groups) {
+    const option = EDITIONS[locale].find(candidate => candidate.id === uiId);
+    assert.ok(option?.local, `${uiId}: source must be a bundled local edition`);
+    assert.equal(option.folder || locale, folder, `${uiId}: UI source-folder mismatch`);
+    assert.equal(books.length, 66, `${folder}: incomplete catalog`);
+    assert.equal(new Set(books.map(book => book.code)).size, books.length, `${folder}: duplicate book codes`);
+    for (const meta of books) {
+      const path = new URL(`../public/data/bible/${folder}/${meta.code}.json`, import.meta.url);
+      const book = JSON.parse(await readFile(path, 'utf8'));
+      const label = `${folder}/${meta.code}`;
+      assert.equal(book.bookCode, meta.code, `${label}: wrong book`);
+      assert.equal(book.locale, locale, `${label}: wrong language`);
+      assert.equal(book.editionId, editionId, `${label}: wrong edition`);
+      assert.equal(book.testament, meta.testament, `${label}: wrong testament`);
+      assert.equal(book.chapters.length, meta.chapters, `${label}: wrong chapter count`);
+      book.chapters.forEach((verses, chapterIndex) => {
+        assert.ok(Array.isArray(verses) && verses.length > 0, `${label} chapter ${chapterIndex + 1}: missing verses`);
+        verses.forEach((verse, verseIndex) => {
+          assert.ok(typeof verse === 'string' && verse.trim().length > 0,
+            `${label} ${chapterIndex + 1}:${verseIndex + 1}: empty verse`);
+        });
+      });
+      checkedBooks += 1;
+    }
+  }
+  assert.equal(checkedBooks, 264);
+});

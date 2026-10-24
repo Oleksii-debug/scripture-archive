@@ -50,6 +50,18 @@ integration("account, progress, attempts, groups, marathon limit and password re
   result = await request("/api/account?action=me");
   assert.equal(result.data.user.email, email);
   assert.equal(result.data.user.emailVerified, true);
+  const analyticsSession = crypto.randomUUID();
+  result = await request("/api/analytics", { method: "POST", body: { action: "event", sessionId: analyticsSession, eventType: "page_view", pageName: "account", source: "direct", value: { page_name: "account" } } });
+  assert.equal(result.response.status, 202);
+  result = await request("/api/analytics", { method: "POST", body: { action: "heartbeat", sessionId: analyticsSession, pageName: "account", source: "direct", activeSeconds: 30 } });
+  assert.equal(result.response.status, 202);
+  const analyticsResponse = await fetch(`${base}/api/analytics?days=30`, { headers: { "oai-authenticated-user-id": "owner-test", "oai-authenticated-user-email": "dordiaioleksii1@gmail.com" } });
+  assert.equal(analyticsResponse.status, 200);
+  const analytics = await analyticsResponse.json();
+  assert.equal(Number(analytics.summary.sessions), 1);
+  assert.equal(Number(analytics.summary.page_views), 1);
+  assert.equal(Number(analytics.summary.active_seconds), 30);
+  assert.equal(analytics.pages[0].label, "account");
   result = await request("/api/account?action=progress", { method: "PUT", body: { progress: { complete: false, correct: [1] } } });
   assert.equal(result.response.status, 200);
   result = await request("/api/account?action=progress");

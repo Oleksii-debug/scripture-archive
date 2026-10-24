@@ -209,6 +209,8 @@ export async function POST(request: Request) {
       env.DB.prepare("DELETE FROM study_materials WHERE owner_user_id=?").bind(identity.userId),
       env.DB.prepare("DELETE FROM home_groups WHERE owner_user_id=?").bind(identity.userId),
       env.DB.prepare("DELETE FROM profiles WHERE user_id=?").bind(identity.userId),
+      env.DB.prepare("UPDATE usage_sessions SET user_id=NULL WHERE user_id=?").bind(identity.userId),
+      env.DB.prepare("UPDATE usage_events SET user_id=NULL WHERE user_id=?").bind(identity.userId),
       env.DB.prepare("UPDATE accounts SET email=?,deleted_at=CURRENT_TIMESTAMP,session_version=session_version+1,password_hash='',password_salt='' WHERE id=?")
         .bind(`deleted-${identity.userId}@invalid.local`, identity.userId),
       env.DB.prepare("UPDATE auth_sessions SET revoked_at=CURRENT_TIMESTAMP WHERE user_id=? AND revoked_at IS NULL").bind(identity.userId),

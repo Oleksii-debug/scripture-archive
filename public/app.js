@@ -99,8 +99,8 @@ const I18N = {
     supportLead:
       "Підтримка допомагає готувати біблійні матеріали, переклади, нові навчальні маршрути та зустрічі домашніх груп.",
     supportRule:
-      "Scripture Archive не має окремої перевіреної платіжної форми. Кнопка нижче веде на офіційну сторінку БФ «Рука Допомоги». Перед переказом на цей проєкт уточніть цільове призначення у фонду.",
-    officialSupport: "Офіційна сторінка підтримки фонду",
+      "Для підтримки Scripture Archive використовується лише офіційна сторінка monobank, зазначена на платформі.",
+    officialSupport: "Офіційна сторінка підтримки",
     contactProject: "Написати команді проєкту",
     whatSupport: "Що розвиваємо",
     supportItems: [
@@ -220,8 +220,8 @@ const I18N = {
     supportLead:
       "Поддержка помогает готовить библейские материалы, переводы, новые учебные маршруты и встречи домашних групп.",
     supportRule:
-      "У Scripture Archive нет отдельной проверенной платёжной формы. Кнопка ниже ведёт на официальную страницу БФ «Рука Допомоги». Перед переводом на этот проект уточните целевое назначение у фонда.",
-    officialSupport: "Официальная страница поддержки фонда",
+      "Для поддержки Scripture Archive используется только официальная страница monobank, указанная на платформе.",
+    officialSupport: "Официальная страница поддержки",
     contactProject: "Написать команде проекта",
     whatSupport: "Что развиваем",
     supportItems: [
@@ -341,8 +341,8 @@ const I18N = {
     supportLead:
       "Support funds Bible text preparation, translation, accessibility, editorial review, new learning courses, and sustainable web infrastructure.",
     supportRule:
-      "Scripture Archive has no separate verified payment form. The button below leads to the official Helping Hand Foundation support page. Ask the foundation to confirm project designation before donating specifically to Scripture Archive.",
-    officialSupport: "Official foundation support page",
+      "Scripture Archive uses only the official monobank support page listed on the platform.",
+    officialSupport: "Official support page",
     contactProject: "Contact the project team",
     whatSupport: "What support develops",
     supportItems: [
@@ -575,7 +575,7 @@ const LIVE_LAB_COPY = {
     ],
     labSupportTitle: "На що потрібна підтримка",
     labSupportText:
-      "На друк комплектів, доступні формати, підготовку ведучих, поїздки та проведення зустрічей. Перекази приймає лише офіційна сторінка БФ «Рука Допомоги».",
+      "На друк комплектів, доступні формати, підготовку ведучих, поїздки та проведення зустрічей. Для переказів використовується офіційна сторінка monobank.",
     labMission: "Почати живу місію",
     labInvite: "Запросити зустріч",
     labSupport: "Підтримати програму",
@@ -634,7 +634,7 @@ const LIVE_LAB_COPY = {
     ],
     labSupportTitle: "На что нужна поддержка",
     labSupportText:
-      "На печать комплектов, доступные форматы, подготовку ведущих, поездки и проведение встреч. Переводы принимает только официальная страница БФ «Рука Допомоги».",
+      "На печать комплектов, доступные форматы, подготовку ведущих, поездки и проведение встреч. Для переводов используется официальная страница monobank.",
     labMission: "Начать живую миссию",
     labInvite: "Пригласить встречу",
     labSupport: "Поддержать программу",
@@ -698,7 +698,7 @@ const LIVE_LAB_COPY = {
     ],
     labSupportTitle: "What support makes possible",
     labSupportText:
-      "Printing kits, accessible formats, facilitator preparation, travel, and hosted gatherings. Donations are accepted only through the official Helping Hand Foundation page.",
+      "Support covers printed kits, accessible formats, facilitator preparation, travel, and hosted gatherings. Donations use the official monobank page.",
     labMission: "Start the live mission",
     labInvite: "Invite a gathering",
     labSupport: "Support the programme",
@@ -1180,7 +1180,7 @@ Object.assign(EDITORIAL_COPY.uk, {
   readerIntro:
     "Оберіть книгу і главу. Назву видання, джерело та умови використання зазначено поруч із текстом.",
   supportRule:
-    "Перекази приймає БФ «Рука Допомоги» через свою офіційну сторінку. Якщо ви хочете підтримати саме Scripture Archive, уточніть призначення платежу у фонду.",
+    "Для підтримки Scripture Archive використовується офіційна сторінка monobank, зазначена на платформі.",
   supportLead:
     "Підтримка допомагає готувати нові навчальні маршрути, редагувати тексти, перекладати матеріали та забезпечувати зустрічі домашніх груп.",
   supportItems: [
@@ -1210,7 +1210,7 @@ Object.assign(EDITORIAL_COPY.ru, {
   todayText:
     "Прочитайте стихи 16–18. Обратите внимание, что текст говорит о Божьей любви, вере и ответе человека.",
   supportRule:
-    "Переводы принимает БФ «Рука Допомоги» через свою официальную страницу. Если вы хотите поддержать именно Scripture Archive, уточните назначение платежа у фонда.",
+    "Для поддержки Scripture Archive используется официальная страница monobank, указанная на платформе.",
   supportLead:
     "Поддержка помогает готовить новые учебные маршруты, редактировать тексты, переводить материалы и проводить встречи домашних групп.",
   supportItems: [
@@ -1233,7 +1233,7 @@ Object.assign(EDITORIAL_COPY.en, {
   todayText:
     "Read verses 16–18. Notice what the text says about God’s love, belief, and the human response.",
   supportRule:
-    "The Helping Hand Foundation receives donations through its official giving page. If you wish to support Scripture Archive specifically, please confirm the payment designation with the foundation.",
+    "Scripture Archive uses the official monobank support page listed on the platform.",
   supportLead:
     "Support helps prepare new study routes, edit and translate materials, and equip home-group gatherings.",
   supportItems: [
@@ -2907,7 +2907,7 @@ function renderLiveLab() {
       .map((item) => `<li>${esc(item)}</li>`)
       .join(
         "",
-      )}</ul></section><section class="lab-card lab-support"><h2>${t("labSupportTitle")}</h2><p>${t("labSupportText")}</p><div class="action-row"><a class="button primary" href="https://rukadopomogy.org.ua/donaty/" target="_blank" rel="noreferrer">${t("labSupport")} ↗</a><a class="button light" href="mailto:dordiaioleksii1@gmail.com?subject=${inviteSubject}">${t("labInvite")}</a></div></section></div><p class="lab-print-mark">Scripture Archive · dordiaioleksii1@gmail.com</p></article>`,
+      )}</ul></section><section class="lab-card lab-support"><h2>${t("labSupportTitle")}</h2><p>${t("labSupportText")}</p><div class="action-row"><a class="button primary" href="https://send.monobank.ua/9DfMWmErXF" target="_blank" rel="noreferrer">${t("labSupport")} ↗</a><a class="button light" href="mailto:dordiaioleksii1@gmail.com?subject=${inviteSubject}">${t("labInvite")}</a></div></section></div><p class="lab-print-mark">Scripture Archive · dordiaioleksii1@gmail.com</p></article>`,
   );
   document.querySelector("#print-lab").onclick = () => window.print();
 }
@@ -3158,12 +3158,17 @@ async function renderEditor() {
   }[state.lang];
   let users = [];
   let managed = { items: [], revisions: [] };
+  let analytics = { days:30, accounts:{}, summary:{}, daily:[], countries:[], devices:[], browsers:[], pages:[], events:[], recentUsers:[] };
   try {
     users = (await accountRequest("users")).users || [];
   } catch {}
   try {
     const response = await fetch("/api/content?admin=1", { cache: "no-store" });
     if (response.ok) managed = await response.json();
+  } catch {}
+  try {
+    const response = await fetch("/api/analytics?days=30", { cache: "no-store" });
+    if (response.ok) analytics = await response.json();
   } catch {}
   const note = state.cms?.liveNote || {};
   shell(
@@ -3174,6 +3179,15 @@ async function renderEditor() {
     : state.lang === "ru"
       ? { heading:"Учебный контент",lead:"Книги, главы, переводы, миссии, вопросы, маршруты, марафоны и тексты интерфейса.",kind:"Тип",locale:"Язык",title:"Название",status:"Состояние",data:"Данные JSON",draft:"Черновик",published:"Опубликовано",hidden:"Скрыто",history:"История изменений",save:"Сохранить материал" }
       : { heading:"Learning content",lead:"Books, chapters, translations, missions, questions, routes, marathons, and interface text.",kind:"Type",locale:"Language",title:"Title",status:"Status",data:"JSON data",draft:"Draft",published:"Published",hidden:"Hidden",history:"Revision history",save:"Save material" };
+  const analyticsLabels = state.lang === "uk"
+    ? { heading:"Аналітика платформи",lead:"Власна статистика за останні 30 днів. Активний час рахується лише тоді, коли сторінка відкрита й користувач погодився на аналітику.",accounts:"Облікові записи",verified:"Підтверджені",sessions:"Сеанси",views:"Перегляди",time:"Активний час",users:"Активні користувачі",countries:"Країни",devices:"Пристрої",pages:"Сторінки",actions:"Дії",recent:"Останні реєстрації",never:"Ще не користувався" }
+    : state.lang === "ru"
+      ? { heading:"Аналитика платформы",lead:"Собственная статистика за последние 30 дней. Активное время учитывается только при открытой странице и после согласия пользователя.",accounts:"Учётные записи",verified:"Подтверждённые",sessions:"Сеансы",views:"Просмотры",time:"Активное время",users:"Активные пользователи",countries:"Страны",devices:"Устройства",pages:"Страницы",actions:"Действия",recent:"Последние регистрации",never:"Ещё не пользовался" }
+      : { heading:"Platform analytics",lead:"First-party statistics for the last 30 days. Active time is measured only while the page is open and after consent.",accounts:"Accounts",verified:"Verified",sessions:"Sessions",views:"Views",time:"Active time",users:"Active users",countries:"Countries",devices:"Devices",pages:"Pages",actions:"Actions",recent:"Recent registrations",never:"No activity yet" };
+  const formatNumber = value => new Intl.NumberFormat(state.lang === "uk" ? "uk-UA" : state.lang === "ru" ? "ru-RU" : "en-GB").format(Number(value) || 0);
+  const formatDuration = value => { const seconds=Number(value)||0; if(seconds>=86400)return `${(seconds/86400).toFixed(1)} d`; if(seconds>=3600)return `${(seconds/3600).toFixed(1)} h`; return `${Math.round(seconds/60)} min`; };
+  const ranking = (title, rows, valueKey="sessions") => `<section class="analytics-list"><h3>${title}</h3>${rows.length?`<ol>${rows.map(row=>`<li><span>${esc(row.label)}</span><strong>${formatNumber(row[valueKey])}</strong></li>`).join("")}</ol>`:"<p>—</p>"}</section>`;
+  document.querySelector(".editor-grid").insertAdjacentHTML("afterbegin", `<section class="card full analytics-dashboard"><div class="section-head compact"><div><p class="eyebrow">Scripture Archive</p><h2>${analyticsLabels.heading}</h2></div><p>${analyticsLabels.lead}</p></div><div class="analytics-metrics"><article><strong>${formatNumber(analytics.accounts.total)}</strong><span>${analyticsLabels.accounts}</span></article><article><strong>${formatNumber(analytics.accounts.verified)}</strong><span>${analyticsLabels.verified}</span></article><article><strong>${formatNumber(analytics.summary.sessions)}</strong><span>${analyticsLabels.sessions}</span></article><article><strong>${formatNumber(analytics.summary.page_views)}</strong><span>${analyticsLabels.views}</span></article><article><strong>${formatDuration(analytics.summary.active_seconds)}</strong><span>${analyticsLabels.time}</span></article><article><strong>${formatNumber(analytics.summary.signed_in_users)}</strong><span>${analyticsLabels.users}</span></article></div><div class="analytics-rankings">${ranking(analyticsLabels.countries,analytics.countries)}${ranking(analyticsLabels.devices,analytics.devices)}${ranking(analyticsLabels.pages,analytics.pages,"views")}${ranking(analyticsLabels.actions,analytics.events,"total")}</div><details class="analytics-users"><summary>${analyticsLabels.recent} · ${analytics.recentUsers.length}</summary><div class="table-scroll"><table><thead><tr><th>Email</th><th>${analyticsLabels.verified}</th><th>${analyticsLabels.time}</th><th>${analyticsLabels.views}</th><th>${analyticsLabels.countries}</th><th>Last activity</th></tr></thead><tbody>${analytics.recentUsers.map(user=>`<tr><td><strong>${esc(user.first_name)} ${esc(user.last_name)}</strong><br><span>${esc(user.email)}</span></td><td>${user.email_verified_at?"✓":"—"}</td><td>${formatDuration(user.active_seconds)}</td><td>${formatNumber(user.page_views)}</td><td>${esc(user.country||"—")}</td><td>${esc(user.last_seen_at||analyticsLabels.never)}</td></tr>`).join("")}</tbody></table></div></details></section>`);
   document.querySelector(".editor-grid").insertAdjacentHTML("beforeend", `<section class="card full"><h2>${adminLabels.heading}</h2><p>${adminLabels.lead}</p><form id="managed-content-form" class="account-form account-form-grid"><label class="account-field"><span>ID</span><input name="id" maxlength="100"></label><label class="account-field"><span>${adminLabels.kind}</span><select name="kind"><option value="book">book</option><option value="chapter">chapter</option><option value="translation">translation</option><option value="mission">mission</option><option value="question">question</option><option value="route">route</option><option value="marathon">marathon</option><option value="ui_text">ui_text</option></select></label><label class="account-field"><span>${adminLabels.locale}</span><select name="locale"><option>uk</option><option>ru</option><option>en</option><option>all</option></select></label><label class="account-field"><span>${adminLabels.status}</span><select name="status"><option value="draft">${adminLabels.draft}</option><option value="published">${adminLabels.published}</option><option value="hidden">${adminLabels.hidden}</option></select></label>${field("title",adminLabels.title,"text",'required maxlength="200"')}<label class="account-field full"><span>${adminLabels.data}</span><textarea name="data" rows="8" required>{}</textarea></label><button class="button primary">${adminLabels.save}</button><p id="managed-content-state" role="status"></p></form><div class="managed-list">${managed.items.length?managed.items.map(item=>`<article><strong>${esc(item.title)}</strong><span>${esc(item.kind)} · ${esc(item.locale)} · ${esc(item.status)}</span></article>`).join(""):`<p>—</p>`}</div><details><summary>${adminLabels.history} · ${managed.revisions.length}</summary><ol>${managed.revisions.slice(0,30).map(revision=>`<li>${esc(revision.content_key)} · ${esc(revision.created_at)}</li>`).join("")}</ol></details></section>`);
   document.querySelector("#content-form").onsubmit = async (e) => {
     e.preventDefault();
@@ -3211,21 +3225,21 @@ function renderPrivacy() {
       "Приватність і облікові записи",
       "Scripture Archive підтверджує електронну адресу одноразовим посиланням і зберігає пароль лише як стійкий криптографічний хеш. Захищені серверні сесії дають змогу синхронізувати профіль і прогрес між пристроями.",
       "Конфесія, конкретна церква, сімейний стан і стать є необов’язковими приватними даними. Вони не впливають на оцінювання. У домашніх групах ім’я учасника може бути показане лише після його окремої згоди; електронна адреса не публікується.",
-      "Аналітика вмикається лише після згоди на аналітичні cookie. До неї не передаються електронна пошта, паролі, відповіді, назви груп або інші дані профілю; згоду можна скасувати очищенням налаштувань сайту у браузері.",
+      "Аналітика вмикається лише після згоди на аналітичні cookie. Вона фіксує переглянуті розділи, тип пристрою, приблизну країну, виконані дії та активний час. Паролі, відповіді, назви груп і вміст профілю до аналітики не передаються; згоду можна скасувати очищенням налаштувань сайту у браузері.",
       "Дані профілю можна виправити в обліковому записі, а обліковий запис і пов’язані особисті дані — видалити там само. Для додаткового звернення: dordiaioleksii1@gmail.com.",
     ],
     ru: [
       "Приватность и учётные записи",
       "Scripture Archive подтверждает электронный адрес одноразовой ссылкой и хранит пароль только как стойкий криптографический хеш. Защищённые серверные сессии синхронизируют профиль и прогресс между устройствами.",
       "Конфессия, конкретная церковь, семейное положение и пол — необязательные приватные данные. Они не влияют на оценивание. В домашних группах имя участника может отображаться только после его отдельного согласия; электронная почта не публикуется.",
-      "Аналитика включается только после согласия на аналитические cookie. В неё не передаются электронная почта, пароли, ответы, названия групп или другие данные профиля; согласие можно отменить, очистив настройки сайта в браузере.",
+      "Аналитика включается только после согласия на аналитические cookie. Она фиксирует просмотренные разделы, тип устройства, примерную страну, выполненные действия и активное время. Пароли, ответы, названия групп и содержимое профиля в аналитику не передаются; согласие можно отменить, очистив настройки сайта в браузере.",
       "Данные профиля можно исправить в учётной записи, а учётную запись и связанные личные данные — удалить там же. Для дополнительного обращения: dordiaioleksii1@gmail.com.",
     ],
     en: [
       "Privacy and accounts",
       "Scripture Archive verifies an email address with a one-time link and stores the password only as a strong cryptographic hash. Secure server sessions synchronize the profile and progress across devices.",
       "Christian tradition, specific church, marital status, and gender are optional private data and never affect grading. In home groups, a member’s name may be displayed only after their separate consent; email addresses are never published.",
-      "Analytics runs only after consent to analytics cookies. Email, passwords, answers, group names, and other profile data are never sent; consent can be withdrawn by clearing this site’s browser settings.",
+      "Analytics runs only after consent to analytics cookies. It records sections viewed, device type, approximate country, actions, and active time. Passwords, answers, group names, and profile content are never sent; consent can be withdrawn by clearing this site’s browser settings.",
       "You can correct profile data in your account and delete the account and its associated personal data there. For an additional request, email dordiaioleksii1@gmail.com.",
     ],
   }[state.lang];

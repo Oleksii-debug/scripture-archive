@@ -47,3 +47,17 @@ Important limit: MIT in the Ohiienko source repository applies to its code, **no
 - **NEXT:** review this focused PR; rebase on newest main if it advanced; obtain a full exact-SHA checkout; run `node --test tests/reader-verse-links.test.mjs`, `npm test`, `npm run build` (count executed, not skipped/queued); verify current catalog hash, four local editions and intentionally external publisher links; browser-test search phrase → exact verse focus including malformed deep links; verify deployed release SHA and accessibility; only then merge/deploy and record actual readback.
 
 **Overall:** two source-level acceptance gaps corrected in an unmerged candidate. Product/library complete, legally cleared in every jurisdiction, and deployed **NOT VERIFIED**.
+
+
+## 2026-10-25 — SA-08 supplemental corpus-to-reader coordinate regression
+
+**Exact checked Git candidate before test amendment:** `c88588a44bb40d3dfd470a4c8ba3ddcea75f3b44` (PR #286); same main-base SHA `93591836b53a36e0114ab2bc4bd92632128e8d96`.
+**Actually executed:** using authenticated GitHub reads from that exact ref, parsed 16 real book assets: GEN, JOL, JHN and REV in each of `uk`, `uk-ohiienko`, `ru` and `en`. Six checks per asset compared canonical catalog entry with JSON bookCode, locale, editionId, testament, chapter count and all nonempty verse slots. **96 assertions PASSED, 0 FAILED; 16/16 assets read**. These are connector-based readback assertions, not a full checkout, npm suite, HTTP/browser or source-text word-for-word equivalence test.
+
+**Edition-specific differences preserved:** `JOL` in Ohienko has four chapters with [20,27,5,21] verse slots; historical UK has three [20,32,21]. Both contain 73 slots, while the catalog correctly names chapter counts 4 and 3 respectively. The REV count in Ohienko is 405 versus 404 in each of historical UK, RU, EN; differences are tracked as edition-specific and **not** silently normalized. Genesis UK historical has 1,530 verse slots versus 1,533 in each of other three versions, so cross-edition verse offsets cannot be assumed identical.
+
+**Durable test added:** The existing `tests/reader-verse-links.test.mjs` now includes a single metadata-focused regression enumerating all four UI-local edition folder mappings and all 264 catalog-book JSON files. It checks book identity, language, edition, testament, chapter count, and nonblank verses, preserving the four-chapter Ohienko Joel. No duplicate production parser, storage, translation text or new architecture is introduced.
+
+**Execution truth:** The newly added 264-book Node regression is **COMMITTED BUT NOT_EXECUTED** on the amended PR SHA because full Git checkout through the container remains unavailable (GitHub DNS lookup failure). The 16-asset connector assertions are actual executions but **cannot** qualify the entire new test suite. No main merge, live deployment, exact deployed SHA, browser navigation or Windows/NVDA PASS is claimed. Existing PR #285 also edits reader verse behavior and needs conflict/ownership reconciliation; avoid independently merging either without joint review.
+
+**NEXT:** Obtain exact amended PR full checkout; execute `node --test tests/reader-verse-links.test.mjs`, `npm test`, `npm run build`, and a real UK/RU/EN keyboard/browser search → exact verse → reload and malformed deep link refusal. Independently review rights and source-to-text provenance, reconcile #285, then integrate only with test evidence; refresh this record with exact qualified SHA.

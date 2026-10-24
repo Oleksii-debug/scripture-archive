@@ -1,0 +1,10 @@
+{
+  "catalogSha256": "bea42bacf1d3e910fa6471cb7772a63cc11a271540ff38b839e367a0bbce38f3",
+  "bookFiles": 198,
+  "commonCanonBooks": 66,
+  "locales": [
+    "uk",
+    "ru",
+    "en"
+  ]
+}

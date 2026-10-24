@@ -1,0 +1,1637 @@
+{
+  "schemaVersion": 1,
+  "editions": {
+    "uk": {
+      "folder": "ukr1871",
+      "file_prefix": "ukr1871",
+      "id": "UKRPAN",
+      "title": "Біблія в пер. П. Куліша та І. Пулюя, 1905",
+      "license": "Public Domain",
+      "source": "https://ebible.org/find/details.php?id=ukr1871"
+    },
+    "ru": {
+      "folder": "russyn",
+      "file_prefix": "russyn",
+      "id": "RUSSYN",
+      "title": "Синодальный перевод",
+      "license": "Public Domain",
+      "source": "https://ebible.org/find/details.php?id=russyn"
+    },
+    "en": {
+      "folder": "engwebu",
+      "file_prefix": "engwebu",
+      "id": "ENGWEBU",
+      "title": "World English Bible Updated",
+      "license": "Public Domain",
+      "source": "https://ebible.org/find/details.php?id=engwebu"
+    }
+  },
+  "books": {
+    "uk": [
+      {
+        "code": "GEN",
+        "title": "Перва книга Мойсея",
+        "testament": "OT",
+        "chapters": 50
+      },
+      {
+        "code": "EXO",
+        "title": "Друга книга Мойсея",
+        "testament": "OT",
+        "chapters": 40
+      },
+      {
+        "code": "LEV",
+        "title": "Третя книга Мойсея",
+        "testament": "OT",
+        "chapters": 27
+      },
+      {
+        "code": "NUM",
+        "title": "Четверта книга Мойсея",
+        "testament": "OT",
+        "chapters": 36
+      },
+      {
+        "code": "DEU",
+        "title": "Пята книга Мойсея",
+        "testament": "OT",
+        "chapters": 34
+      },
+      {
+        "code": "JOS",
+        "title": "Книга Ісуса Навина",
+        "testament": "OT",
+        "chapters": 24
+      },
+      {
+        "code": "JDG",
+        "title": "Книга Суддїв",
+        "testament": "OT",
+        "chapters": 21
+      },
+      {
+        "code": "RUT",
+        "title": "Книга Рути",
+        "testament": "OT",
+        "chapters": 4
+      },
+      {
+        "code": "1SA",
+        "title": "Перва книга Самуїлова",
+        "testament": "OT",
+        "chapters": 31
+      },
+      {
+        "code": "2SA",
+        "title": "Друга книга Самуїлова",
+        "testament": "OT",
+        "chapters": 24
+      },
+      {
+        "code": "1KI",
+        "title": "Перва книга Царів",
+        "testament": "OT",
+        "chapters": 22
+      },
+      {
+        "code": "2KI",
+        "title": "Друга книга Царів",
+        "testament": "OT",
+        "chapters": 25
+      },
+      {
+        "code": "1CH",
+        "title": "Перша книга Паралипоменон",
+        "testament": "OT",
+        "chapters": 29
+      },
+      {
+        "code": "2CH",
+        "title": "Друга книга Паралипоменон",
+        "testament": "OT",
+        "chapters": 36
+      },
+      {
+        "code": "EZR",
+        "title": "Книга Ездри",
+        "testament": "OT",
+        "chapters": 10
+      },
+      {
+        "code": "NEH",
+        "title": "Книга Неємії",
+        "testament": "OT",
+        "chapters": 13
+      },
+      {
+        "code": "EST",
+        "title": "Книга Естери",
+        "testament": "OT",
+        "chapters": 10
+      },
+      {
+        "code": "JOB",
+        "title": "Книга Йова",
+        "testament": "OT",
+        "chapters": 42
+      },
+      {
+        "code": "PSA",
+        "title": "Псалтир",
+        "testament": "OT",
+        "chapters": 150
+      },
+      {
+        "code": "PRO",
+        "title": "Книга Приповісток Соломонових",
+        "testament": "OT",
+        "chapters": 31
+      },
+      {
+        "code": "ECC",
+        "title": "Книга Екклезіаста",
+        "testament": "OT",
+        "chapters": 12
+      },
+      {
+        "code": "SNG",
+        "title": "Пісня Пісень",
+        "testament": "OT",
+        "chapters": 8
+      },
+      {
+        "code": "ISA",
+        "title": "Книга пророка Ісаїї",
+        "testament": "OT",
+        "chapters": 66
+      },
+      {
+        "code": "JER",
+        "title": "Книга пророка Еремії",
+        "testament": "OT",
+        "chapters": 52
+      },
+      {
+        "code": "LAM",
+        "title": "Книга Плач Еремії",
+        "testament": "OT",
+        "chapters": 5
+      },
+      {
+        "code": "EZK",
+        "title": "Книга пророка Езекиїла",
+        "testament": "OT",
+        "chapters": 48
+      },
+      {
+        "code": "DAN",
+        "title": "Книга пророка Даниїла",
+        "testament": "OT",
+        "chapters": 12
+      },
+      {
+        "code": "HOS",
+        "title": "Книга пророка Осії",
+        "testament": "OT",
+        "chapters": 14
+      },
+      {
+        "code": "JOL",
+        "title": "Книга пророка Иоіла",
+        "testament": "OT",
+        "chapters": 3
+      },
+      {
+        "code": "AMO",
+        "title": "Книга пророка Амоса",
+        "testament": "OT",
+        "chapters": 9
+      },
+      {
+        "code": "OBA",
+        "title": "Книга пророка Авдія",
+        "testament": "OT",
+        "chapters": 1
+      },
+      {
+        "code": "JON",
+        "title": "Книга пророка Йони",
+        "testament": "OT",
+        "chapters": 4
+      },
+      {
+        "code": "MIC",
+        "title": "Книга пророка Михея",
+        "testament": "OT",
+        "chapters": 7
+      },
+      {
+        "code": "NAM",
+        "title": "Книга пророка Наума",
+        "testament": "OT",
+        "chapters": 3
+      },
+      {
+        "code": "HAB",
+        "title": "Книга пророка Аввакума",
+        "testament": "OT",
+        "chapters": 3
+      },
+      {
+        "code": "ZEP",
+        "title": "Книга пророка Софонїї",
+        "testament": "OT",
+        "chapters": 3
+      },
+      {
+        "code": "HAG",
+        "title": "Книга пророка Аггея",
+        "testament": "OT",
+        "chapters": 2
+      },
+      {
+        "code": "ZEC",
+        "title": "Книга пророка Захарії",
+        "testament": "OT",
+        "chapters": 14
+      },
+      {
+        "code": "MAL",
+        "title": "Книга пророка Малахія",
+        "testament": "OT",
+        "chapters": 4
+      },
+      {
+        "code": "MAT",
+        "title": "Євангелия від сьв. Маттея",
+        "testament": "NT",
+        "chapters": 28
+      },
+      {
+        "code": "MRK",
+        "title": "Євангелия від сьв. Марка",
+        "testament": "NT",
+        "chapters": 16
+      },
+      {
+        "code": "LUK",
+        "title": "Євангелия від сьв. Луки",
+        "testament": "NT",
+        "chapters": 24
+      },
+      {
+        "code": "JHN",
+        "title": "Євангелия від сьв. Йоана",
+        "testament": "NT",
+        "chapters": 21
+      },
+      {
+        "code": "ACT",
+        "title": "Дїяння сьвятих Апостолів",
+        "testament": "NT",
+        "chapters": 28
+      },
+      {
+        "code": "ROM",
+        "title": "Посланнє сьв. Ап. Павла до Римлян",
+        "testament": "NT",
+        "chapters": 16
+      },
+      {
+        "code": "1CO",
+        "title": "Перве Посланнє сьв. Ап. Павла до Коринтян",
+        "testament": "NT",
+        "chapters": 16
+      },
+      {
+        "code": "2CO",
+        "title": "Друге Посланнє сьв. Ап. Павла до Коринтян",
+        "testament": "NT",
+        "chapters": 13
+      },
+      {
+        "code": "GAL",
+        "title": "Посланнє cьв. Ап. Павла до Галат",
+        "testament": "NT",
+        "chapters": 6
+      },
+      {
+        "code": "EPH",
+        "title": "Посланнє cьв. Ап. Павла до Єфесян",
+        "testament": "NT",
+        "chapters": 6
+      },
+      {
+        "code": "PHP",
+        "title": "Посланнє cьв. Ап. Павла до Филипян",
+        "testament": "NT",
+        "chapters": 4
+      },
+      {
+        "code": "COL",
+        "title": "Посланнє cьв. Ап. Павла до Колосян",
+        "testament": "NT",
+        "chapters": 4
+      },
+      {
+        "code": "1TH",
+        "title": "Перве Посланнє cьв. Ап. Павла до Солунян",
+        "testament": "NT",
+        "chapters": 5
+      },
+      {
+        "code": "2TH",
+        "title": "Друге Посланнє cьв. Ап. Павла до Солунян",
+        "testament": "NT",
+        "chapters": 3
+      },
+      {
+        "code": "1TI",
+        "title": "Перве Посланнє cьв. Ап. Павла до Тимотея",
+        "testament": "NT",
+        "chapters": 6
+      },
+      {
+        "code": "2TI",
+        "title": "Друге Посланнє cьв. Ап. Павла до Тимотея",
+        "testament": "NT",
+        "chapters": 4
+      },
+      {
+        "code": "TIT",
+        "title": "Посланнє cьв. Ап. Павла до Тита",
+        "testament": "NT",
+        "chapters": 3
+      },
+      {
+        "code": "PHM",
+        "title": "Посланнє cьв. Ап. Павла до Филимона",
+        "testament": "NT",
+        "chapters": 1
+      },
+      {
+        "code": "HEB",
+        "title": "Посланнє cьв. Ап. Павла до Жидів",
+        "testament": "NT",
+        "chapters": 13
+      },
+      {
+        "code": "JAS",
+        "title": "Соборне Посланнє cьв. Ап. Якова",
+        "testament": "NT",
+        "chapters": 5
+      },
+      {
+        "code": "1PE",
+        "title": "Перве соборне Посланнє cьв. Ап. Петра",
+        "testament": "NT",
+        "chapters": 5
+      },
+      {
+        "code": "2PE",
+        "title": "Друге соборне Посланнє cьв. Ап. Петра",
+        "testament": "NT",
+        "chapters": 3
+      },
+      {
+        "code": "1JN",
+        "title": "Перве соборне Посланнє cьв. Ап. Йоана Богослова",
+        "testament": "NT",
+        "chapters": 5
+      },
+      {
+        "code": "2JN",
+        "title": "Друге соборне Посланнє cьв. Ап. Йоана Богослова",
+        "testament": "NT",
+        "chapters": 1
+      },
+      {
+        "code": "3JN",
+        "title": "Третє соборне Посланнє cьв. Ап. Йоана Богослова",
+        "testament": "NT",
+        "chapters": 1
+      },
+      {
+        "code": "JUD",
+        "title": "Соборне Посланнє cьв. Ап. Юди",
+        "testament": "NT",
+        "chapters": 1
+      },
+      {
+        "code": "REV",
+        "title": "Одкриттє сьв. Йоана Богослова",
+        "testament": "NT",
+        "chapters": 22
+      }
+    ],
+    "ru": [
+      {
+        "code": "GEN",
+        "title": "Бытие",
+        "testament": "OT",
+        "chapters": 50
+      },
+      {
+        "code": "EXO",
+        "title": "Исход",
+        "testament": "OT",
+        "chapters": 40
+      },
+      {
+        "code": "LEV",
+        "title": "Левит",
+        "testament": "OT",
+        "chapters": 27
+      },
+      {
+        "code": "NUM",
+        "title": "Числа",
+        "testament": "OT",
+        "chapters": 36
+      },
+      {
+        "code": "DEU",
+        "title": "Второзаконие",
+        "testament": "OT",
+        "chapters": 34
+      },
+      {
+        "code": "JOS",
+        "title": "Книга Иисуса Навина",
+        "testament": "OT",
+        "chapters": 24
+      },
+      {
+        "code": "JDG",
+        "title": "Книга Судей Израилевых",
+        "testament": "OT",
+        "chapters": 21
+      },
+      {
+        "code": "RUT",
+        "title": "Книга Руфь",
+        "testament": "OT",
+        "chapters": 4
+      },
+      {
+        "code": "1SA",
+        "title": "Первая книга Царств",
+        "testament": "OT",
+        "chapters": 31
+      },
+      {
+        "code": "2SA",
+        "title": "Вторая книга Царств",
+        "testament": "OT",
+        "chapters": 24
+      },
+      {
+        "code": "1KI",
+        "title": "Третья книга Царств",
+        "testament": "OT",
+        "chapters": 22
+      },
+      {
+        "code": "2KI",
+        "title": "Четвертая книга Царств",
+        "testament": "OT",
+        "chapters": 25
+      },
+      {
+        "code": "1CH",
+        "title": "Первая книга Паралипоменон",
+        "testament": "OT",
+        "chapters": 29
+      },
+      {
+        "code": "2CH",
+        "title": "Вторая книга Паралипоменон",
+        "testament": "OT",
+        "chapters": 36
+      },
+      {
+        "code": "EZR",
+        "title": "Книга Ездры",
+        "testament": "OT",
+        "chapters": 10
+      },
+      {
+        "code": "NEH",
+        "title": "Неемия",
+        "testament": "OT",
+        "chapters": 13
+      },
+      {
+        "code": "EST",
+        "title": "Книга Есфирь",
+        "testament": "OT",
+        "chapters": 10
+      },
+      {
+        "code": "JOB",
+        "title": "Книга Иова",
+        "testament": "OT",
+        "chapters": 42
+      },
+      {
+        "code": "PSA",
+        "title": "Псалтырь",
+        "testament": "OT",
+        "chapters": 150
+      },
+      {
+        "code": "PRO",
+        "title": "Притчи Соломона",
+        "testament": "OT",
+        "chapters": 31
+      },
+      {
+        "code": "ECC",
+        "title": "Книга Екклесиаста",
+        "testament": "OT",
+        "chapters": 12
+      },
+      {
+        "code": "SNG",
+        "title": "Песни Песней",
+        "testament": "OT",
+        "chapters": 8
+      },
+      {
+        "code": "ISA",
+        "title": "Книга пророка Исаии",
+        "testament": "OT",
+        "chapters": 66
+      },
+      {
+        "code": "JER",
+        "title": "Книга пророка Иеремии",
+        "testament": "OT",
+        "chapters": 52
+      },
+      {
+        "code": "LAM",
+        "title": "Плач Иеремии",
+        "testament": "OT",
+        "chapters": 5
+      },
+      {
+        "code": "EZK",
+        "title": "Книга пророка Иезекииля",
+        "testament": "OT",
+        "chapters": 48
+      },
+      {
+        "code": "DAN",
+        "title": "Книга пророка Даниила",
+        "testament": "OT",
+        "chapters": 12
+      },
+      {
+        "code": "HOS",
+        "title": "Книга пророка Осии",
+        "testament": "OT",
+        "chapters": 14
+      },
+      {
+        "code": "JOL",
+        "title": "Книга пророка Иоиля",
+        "testament": "OT",
+        "chapters": 3
+      },
+      {
+        "code": "AMO",
+        "title": "Книга пророка Амоса",
+        "testament": "OT",
+        "chapters": 9
+      },
+      {
+        "code": "OBA",
+        "title": "Книга пророка Авдия",
+        "testament": "OT",
+        "chapters": 1
+      },
+      {
+        "code": "JON",
+        "title": "Книга пророка Ионы",
+        "testament": "OT",
+        "chapters": 4
+      },
+      {
+        "code": "MIC",
+        "title": "Книга пророка Михея",
+        "testament": "OT",
+        "chapters": 7
+      },
+      {
+        "code": "NAM",
+        "title": "Книга пророка Наума",
+        "testament": "OT",
+        "chapters": 3
+      },
+      {
+        "code": "HAB",
+        "title": "Книга пророка Аввакума",
+        "testament": "OT",
+        "chapters": 3
+      },
+      {
+        "code": "ZEP",
+        "title": "Книга пророка Софонии",
+        "testament": "OT",
+        "chapters": 3
+      },
+      {
+        "code": "HAG",
+        "title": "Книга пророка Аггея",
+        "testament": "OT",
+        "chapters": 2
+      },
+      {
+        "code": "ZEC",
+        "title": "Книга пророка Захарии",
+        "testament": "OT",
+        "chapters": 14
+      },
+      {
+        "code": "MAL",
+        "title": "Книга пророка Малахии",
+        "testament": "OT",
+        "chapters": 4
+      },
+      {
+        "code": "MAT",
+        "title": "Евангелие от Матфея",
+        "testament": "NT",
+        "chapters": 28
+      },
+      {
+        "code": "MRK",
+        "title": "Евангелие от Марка",
+        "testament": "NT",
+        "chapters": 16
+      },
+      {
+        "code": "LUK",
+        "title": "Евангелие от Луки",
+        "testament": "NT",
+        "chapters": 24
+      },
+      {
+        "code": "JHN",
+        "title": "Евангелие от Иоанна",
+        "testament": "NT",
+        "chapters": 21
+      },
+      {
+        "code": "ACT",
+        "title": "Деяния",
+        "testament": "NT",
+        "chapters": 28
+      },
+      {
+        "code": "ROM",
+        "title": "Послание к Римлянам",
+        "testament": "NT",
+        "chapters": 16
+      },
+      {
+        "code": "1CO",
+        "title": "Первое послание к Коринфянам",
+        "testament": "NT",
+        "chapters": 16
+      },
+      {
+        "code": "2CO",
+        "title": "Второе послание к Коринфянам",
+        "testament": "NT",
+        "chapters": 13
+      },
+      {
+        "code": "GAL",
+        "title": "Послание к Галатам",
+        "testament": "NT",
+        "chapters": 6
+      },
+      {
+        "code": "EPH",
+        "title": "Послание к Ефесянам",
+        "testament": "NT",
+        "chapters": 6
+      },
+      {
+        "code": "PHP",
+        "title": "Послание к Филлиппийцам",
+        "testament": "NT",
+        "chapters": 4
+      },
+      {
+        "code": "COL",
+        "title": "Послание к Колоссянам",
+        "testament": "NT",
+        "chapters": 4
+      },
+      {
+        "code": "1TH",
+        "title": "Первое послание к Фессалоникийцам",
+        "testament": "NT",
+        "chapters": 5
+      },
+      {
+        "code": "2TH",
+        "title": "Второе послание к Фессалоникийцам",
+        "testament": "NT",
+        "chapters": 3
+      },
+      {
+        "code": "1TI",
+        "title": "Первое послание к Тимофею",
+        "testament": "NT",
+        "chapters": 6
+      },
+      {
+        "code": "2TI",
+        "title": "Второе послание к Тимофею",
+        "testament": "NT",
+        "chapters": 4
+      },
+      {
+        "code": "TIT",
+        "title": "Послание к Титу",
+        "testament": "NT",
+        "chapters": 3
+      },
+      {
+        "code": "PHM",
+        "title": "Послание к Филимону",
+        "testament": "NT",
+        "chapters": 1
+      },
+      {
+        "code": "HEB",
+        "title": "Послание к Евреям",
+        "testament": "NT",
+        "chapters": 13
+      },
+      {
+        "code": "JAS",
+        "title": "Послание Иакова",
+        "testament": "NT",
+        "chapters": 5
+      },
+      {
+        "code": "1PE",
+        "title": "Первое послание Петра",
+        "testament": "NT",
+        "chapters": 5
+      },
+      {
+        "code": "2PE",
+        "title": "Второе послание Петра",
+        "testament": "NT",
+        "chapters": 3
+      },
+      {
+        "code": "1JN",
+        "title": "Первое послание Иоанна",
+        "testament": "NT",
+        "chapters": 5
+      },
+      {
+        "code": "2JN",
+        "title": "Второе послание Иоанна",
+        "testament": "NT",
+        "chapters": 1
+      },
+      {
+        "code": "3JN",
+        "title": "Третье послание Иоанна",
+        "testament": "NT",
+        "chapters": 1
+      },
+      {
+        "code": "JUD",
+        "title": "Послание Иуды",
+        "testament": "NT",
+        "chapters": 1
+      },
+      {
+        "code": "REV",
+        "title": "Откровение Иоанна Богослова",
+        "testament": "NT",
+        "chapters": 22
+      }
+    ],
+    "en": [
+      {
+        "code": "GEN",
+        "title": "The First Book of Moses, Commonly Called Genesis",
+        "testament": "OT",
+        "chapters": 50
+      },
+      {
+        "code": "EXO",
+        "title": "The Second Book of Mosis, Commonly Called Exodus",
+        "testament": "OT",
+        "chapters": 40
+      },
+      {
+        "code": "LEV",
+        "title": "The Third Book of Mosis, Commonly Called Leviticus",
+        "testament": "OT",
+        "chapters": 27
+      },
+      {
+        "code": "NUM",
+        "title": "The Fourth Book of Moses, Commonly Called Numbers",
+        "testament": "OT",
+        "chapters": 36
+      },
+      {
+        "code": "DEU",
+        "title": "The Fifth Book of Moses, Commonly Called Deuteronomy",
+        "testament": "OT",
+        "chapters": 34
+      },
+      {
+        "code": "JOS",
+        "title": "The Book of Joshua",
+        "testament": "OT",
+        "chapters": 24
+      },
+      {
+        "code": "JDG",
+        "title": "The Book of Judges",
+        "testament": "OT",
+        "chapters": 21
+      },
+      {
+        "code": "RUT",
+        "title": "The Book of Ruth",
+        "testament": "OT",
+        "chapters": 4
+      },
+      {
+        "code": "1SA",
+        "title": "The First Book of Samuel",
+        "testament": "OT",
+        "chapters": 31
+      },
+      {
+        "code": "2SA",
+        "title": "The Second Book of Samuel",
+        "testament": "OT",
+        "chapters": 24
+      },
+      {
+        "code": "1KI",
+        "title": "The First Book of Kings",
+        "testament": "OT",
+        "chapters": 22
+      },
+      {
+        "code": "2KI",
+        "title": "The Second Book of Kings",
+        "testament": "OT",
+        "chapters": 25
+      },
+      {
+        "code": "1CH",
+        "title": "The First Book of Chronicles",
+        "testament": "OT",
+        "chapters": 29
+      },
+      {
+        "code": "2CH",
+        "title": "The Second Book of Chronicles",
+        "testament": "OT",
+        "chapters": 36
+      },
+      {
+        "code": "EZR",
+        "title": "The Book of Ezra",
+        "testament": "OT",
+        "chapters": 10
+      },
+      {
+        "code": "NEH",
+        "title": "The Book of Nehemiah",
+        "testament": "OT",
+        "chapters": 13
+      },
+      {
+        "code": "EST",
+        "title": "The Book of Esther",
+        "testament": "OT",
+        "chapters": 10
+      },
+      {
+        "code": "JOB",
+        "title": "The Book of Job",
+        "testament": "OT",
+        "chapters": 42
+      },
+      {
+        "code": "PSA",
+        "title": "The Psalms",
+        "testament": "OT",
+        "chapters": 150
+      },
+      {
+        "code": "PRO",
+        "title": "The Proverbs",
+        "testament": "OT",
+        "chapters": 31
+      },
+      {
+        "code": "ECC",
+        "title": "Ecclesiates or, The Preacher",
+        "testament": "OT",
+        "chapters": 12
+      },
+      {
+        "code": "SNG",
+        "title": "The Song of Solomon",
+        "testament": "OT",
+        "chapters": 8
+      },
+      {
+        "code": "ISA",
+        "title": "The Book of Isaiah",
+        "testament": "OT",
+        "chapters": 66
+      },
+      {
+        "code": "JER",
+        "title": "The Book of Jeremiah",
+        "testament": "OT",
+        "chapters": 52
+      },
+      {
+        "code": "LAM",
+        "title": "The Lamentations of Jeremiah",
+        "testament": "OT",
+        "chapters": 5
+      },
+      {
+        "code": "EZK",
+        "title": "The Book of Ezekiel",
+        "testament": "OT",
+        "chapters": 48
+      },
+      {
+        "code": "DAN",
+        "title": "The Book of Daniel",
+        "testament": "OT",
+        "chapters": 12
+      },
+      {
+        "code": "HOS",
+        "title": "The Book of Hosea",
+        "testament": "OT",
+        "chapters": 14
+      },
+      {
+        "code": "JOL",
+        "title": "The Book of Joel",
+        "testament": "OT",
+        "chapters": 3
+      },
+      {
+        "code": "AMO",
+        "title": "The Book of Amos",
+        "testament": "OT",
+        "chapters": 9
+      },
+      {
+        "code": "OBA",
+        "title": "The Book of Obadiah",
+        "testament": "OT",
+        "chapters": 1
+      },
+      {
+        "code": "JON",
+        "title": "The Book of Jonah",
+        "testament": "OT",
+        "chapters": 4
+      },
+      {
+        "code": "MIC",
+        "title": "The Book of Micah",
+        "testament": "OT",
+        "chapters": 7
+      },
+      {
+        "code": "NAM",
+        "title": "The Book of Nahum",
+        "testament": "OT",
+        "chapters": 3
+      },
+      {
+        "code": "HAB",
+        "title": "The Book of Habakkuk",
+        "testament": "OT",
+        "chapters": 3
+      },
+      {
+        "code": "ZEP",
+        "title": "The Book of Zephaniah",
+        "testament": "OT",
+        "chapters": 3
+      },
+      {
+        "code": "HAG",
+        "title": "The Book of Haggai",
+        "testament": "OT",
+        "chapters": 2
+      },
+      {
+        "code": "ZEC",
+        "title": "The Book of Zechariah",
+        "testament": "OT",
+        "chapters": 14
+      },
+      {
+        "code": "MAL",
+        "title": "The Book of Malachi",
+        "testament": "OT",
+        "chapters": 4
+      },
+      {
+        "code": "MAT",
+        "title": "The Good News According to Matthew",
+        "testament": "NT",
+        "chapters": 28
+      },
+      {
+        "code": "MRK",
+        "title": "The Good News According to Mark",
+        "testament": "NT",
+        "chapters": 16
+      },
+      {
+        "code": "LUK",
+        "title": "The Good News According to Luke",
+        "testament": "NT",
+        "chapters": 24
+      },
+      {
+        "code": "JHN",
+        "title": "The Good News According to John",
+        "testament": "NT",
+        "chapters": 21
+      },
+      {
+        "code": "ACT",
+        "title": "The Acts of the Apostles",
+        "testament": "NT",
+        "chapters": 28
+      },
+      {
+        "code": "ROM",
+        "title": "Paul’s Letter to the Romans",
+        "testament": "NT",
+        "chapters": 16
+      },
+      {
+        "code": "1CO",
+        "title": "Paul’s First Letter to the Corinthians",
+        "testament": "NT",
+        "chapters": 16
+      },
+      {
+        "code": "2CO",
+        "title": "Paul’s Second Letter to the Corinthians",
+        "testament": "NT",
+        "chapters": 13
+      },
+      {
+        "code": "GAL",
+        "title": "Paul’s Letter to the Galatians",
+        "testament": "NT",
+        "chapters": 6
+      },
+      {
+        "code": "EPH",
+        "title": "Paul’s Letter to the Ephesians",
+        "testament": "NT",
+        "chapters": 6
+      },
+      {
+        "code": "PHP",
+        "title": "Paul’s Letter to the Philippians",
+        "testament": "NT",
+        "chapters": 4
+      },
+      {
+        "code": "COL",
+        "title": "Paul’s Letter to the Colossians",
+        "testament": "NT",
+        "chapters": 4
+      },
+      {
+        "code": "1TH",
+        "title": "Paul’s First Letter to the Thessalonians",
+        "testament": "NT",
+        "chapters": 5
+      },
+      {
+        "code": "2TH",
+        "title": "Paul’s Second Letter to the Thessalonians",
+        "testament": "NT",
+        "chapters": 3
+      },
+      {
+        "code": "1TI",
+        "title": "Paul’s First Letter to Timothy",
+        "testament": "NT",
+        "chapters": 6
+      },
+      {
+        "code": "2TI",
+        "title": "Paul’s Second Letter to Timothy",
+        "testament": "NT",
+        "chapters": 4
+      },
+      {
+        "code": "TIT",
+        "title": "Paul’s Letter to Titus",
+        "testament": "NT",
+        "chapters": 3
+      },
+      {
+        "code": "PHM",
+        "title": "Paul’s Letter to Philemon",
+        "testament": "NT",
+        "chapters": 1
+      },
+      {
+        "code": "HEB",
+        "title": "The Letter to the Hebrews",
+        "testament": "NT",
+        "chapters": 13
+      },
+      {
+        "code": "JAS",
+        "title": "The Letter from James",
+        "testament": "NT",
+        "chapters": 5
+      },
+      {
+        "code": "1PE",
+        "title": "Peter’s First Letter",
+        "testament": "NT",
+        "chapters": 5
+      },
+      {
+        "code": "2PE",
+        "title": "Peter’s Second Letter",
+        "testament": "NT",
+        "chapters": 3
+      },
+      {
+        "code": "1JN",
+        "title": "John’s First Letter",
+        "testament": "NT",
+        "chapters": 5
+      },
+      {
+        "code": "2JN",
+        "title": "John’s Second Letter",
+        "testament": "NT",
+        "chapters": 1
+      },
+      {
+        "code": "3JN",
+        "title": "John’s Third Letter",
+        "testament": "NT",
+        "chapters": 1
+      },
+      {
+        "code": "JUD",
+        "title": "The Letter from Jude",
+        "testament": "NT",
+        "chapters": 1
+      },
+      {
+        "code": "REV",
+        "title": "The Revelation to John",
+        "testament": "NT",
+        "chapters": 22
+      }
+    ]
+  },
+  "translations": {
+    "uk-ohiienko": {
+      "id": "uk-ohiienko",
+      "folder": "uk-ohiienko",
+      "title": "Біблія. Переклад Івана Огієнка",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "source": "https://github.com/onlydotbible/ohienko",
+      "attribution": "Переклад Івана Огієнка. Джерело: українські Вікіджерела, з дозволу Українського Біблійного Товариства. Електронне видання підготовлено only.bible.",
+      "formatting": "USJ перетворено на JSON для читальні. Примітки та заголовки збережено окремо. Слова, правопис, пунктуацію й нумерацію віршів не редаговано."
+    }
+  },
+  "editionBooks": {
+    "uk-ohiienko": [
+      {
+        "code": "GEN",
+        "title": "Перва книга Мойсея",
+        "testament": "OT",
+        "chapters": 50
+      },
+      {
+        "code": "EXO",
+        "title": "Друга книга Мойсея",
+        "testament": "OT",
+        "chapters": 40
+      },
+      {
+        "code": "LEV",
+        "title": "Третя книга Мойсея",
+        "testament": "OT",
+        "chapters": 27
+      },
+      {
+        "code": "NUM",
+        "title": "Четверта книга Мойсея",
+        "testament": "OT",
+        "chapters": 36
+      },
+      {
+        "code": "DEU",
+        "title": "Пята книга Мойсея",
+        "testament": "OT",
+        "chapters": 34
+      },
+      {
+        "code": "JOS",
+        "title": "Книга Ісуса Навина",
+        "testament": "OT",
+        "chapters": 24
+      },
+      {
+        "code": "JDG",
+        "title": "Книга Суддїв",
+        "testament": "OT",
+        "chapters": 21
+      },
+      {
+        "code": "RUT",
+        "title": "Книга Рути",
+        "testament": "OT",
+        "chapters": 4
+      },
+      {
+        "code": "1SA",
+        "title": "Перва книга Самуїлова",
+        "testament": "OT",
+        "chapters": 31
+      },
+      {
+        "code": "2SA",
+        "title": "Друга книга Самуїлова",
+        "testament": "OT",
+        "chapters": 24
+      },
+      {
+        "code": "1KI",
+        "title": "Перва книга Царів",
+        "testament": "OT",
+        "chapters": 22
+      },
+      {
+        "code": "2KI",
+        "title": "Друга книга Царів",
+        "testament": "OT",
+        "chapters": 25
+      },
+      {
+        "code": "1CH",
+        "title": "Перша книга Паралипоменон",
+        "testament": "OT",
+        "chapters": 29
+      },
+      {
+        "code": "2CH",
+        "title": "Друга книга Паралипоменон",
+        "testament": "OT",
+        "chapters": 36
+      },
+      {
+        "code": "EZR",
+        "title": "Книга Ездри",
+        "testament": "OT",
+        "chapters": 10
+      },
+      {
+        "code": "NEH",
+        "title": "Книга Неємії",
+        "testament": "OT",
+        "chapters": 13
+      },
+      {
+        "code": "EST",
+        "title": "Книга Естери",
+        "testament": "OT",
+        "chapters": 10
+      },
+      {
+        "code": "JOB",
+        "title": "Книга Йова",
+        "testament": "OT",
+        "chapters": 42
+      },
+      {
+        "code": "PSA",
+        "title": "Псалтир",
+        "testament": "OT",
+        "chapters": 150
+      },
+      {
+        "code": "PRO",
+        "title": "Книга Приповісток Соломонових",
+        "testament": "OT",
+        "chapters": 31
+      },
+      {
+        "code": "ECC",
+        "title": "Книга Екклезіаста",
+        "testament": "OT",
+        "chapters": 12
+      },
+      {
+        "code": "SNG",
+        "title": "Пісня Пісень",
+        "testament": "OT",
+        "chapters": 8
+      },
+      {
+        "code": "ISA",
+        "title": "Книга пророка Ісаїї",
+        "testament": "OT",
+        "chapters": 66
+      },
+      {
+        "code": "JER",
+        "title": "Книга пророка Еремії",
+        "testament": "OT",
+        "chapters": 52
+      },
+      {
+        "code": "LAM",
+        "title": "Книга Плач Еремії",
+        "testament": "OT",
+        "chapters": 5
+      },
+      {
+        "code": "EZK",
+        "title": "Книга пророка Езекиїла",
+        "testament": "OT",
+        "chapters": 48
+      },
+      {
+        "code": "DAN",
+        "title": "Книга пророка Даниїла",
+        "testament": "OT",
+        "chapters": 12
+      },
+      {
+        "code": "HOS",
+        "title": "Книга пророка Осії",
+        "testament": "OT",
+        "chapters": 14
+      },
+      {
+        "code": "JOL",
+        "title": "Книга пророка Иоіла",
+        "testament": "OT",
+        "chapters": 4
+      },
+      {
+        "code": "AMO",
+        "title": "Книга пророка Амоса",
+        "testament": "OT",
+        "chapters": 9
+      },
+      {
+        "code": "OBA",
+        "title": "Книга пророка Авдія",
+        "testament": "OT",
+        "chapters": 1
+      },
+      {
+        "code": "JON",
+        "title": "Книга пророка Йони",
+        "testament": "OT",
+        "chapters": 4
+      },
+      {
+        "code": "MIC",
+        "title": "Книга пророка Михея",
+        "testament": "OT",
+        "chapters": 7
+      },
+      {
+        "code": "NAM",
+        "title": "Книга пророка Наума",
+        "testament": "OT",
+        "chapters": 3
+      },
+      {
+        "code": "HAB",
+        "title": "Книга пророка Аввакума",
+        "testament": "OT",
+        "chapters": 3
+      },
+      {
+        "code": "ZEP",
+        "title": "Книга пророка Софонїї",
+        "testament": "OT",
+        "chapters": 3
+      },
+      {
+        "code": "HAG",
+        "title": "Книга пророка Аггея",
+        "testament": "OT",
+        "chapters": 2
+      },
+      {
+        "code": "ZEC",
+        "title": "Книга пророка Захарії",
+        "testament": "OT",
+        "chapters": 14
+      },
+      {
+        "code": "MAL",
+        "title": "Книга пророка Малахія",
+        "testament": "OT",
+        "chapters": 4
+      },
+      {
+        "code": "MAT",
+        "title": "Євангелия від сьв. Маттея",
+        "testament": "NT",
+        "chapters": 28
+      },
+      {
+        "code": "MRK",
+        "title": "Євангелия від сьв. Марка",
+        "testament": "NT",
+        "chapters": 16
+      },
+      {
+        "code": "LUK",
+        "title": "Євангелия від сьв. Луки",
+        "testament": "NT",
+        "chapters": 24
+      },
+      {
+        "code": "JHN",
+        "title": "Євангелия від сьв. Йоана",
+        "testament": "NT",
+        "chapters": 21
+      },
+      {
+        "code": "ACT",
+        "title": "Дїяння сьвятих Апостолів",
+        "testament": "NT",
+        "chapters": 28
+      },
+      {
+        "code": "ROM",
+        "title": "Посланнє сьв. Ап. Павла до Римлян",
+        "testament": "NT",
+        "chapters": 16
+      },
+      {
+        "code": "1CO",
+        "title": "Перве Посланнє сьв. Ап. Павла до Коринтян",
+        "testament": "NT",
+        "chapters": 16
+      },
+      {
+        "code": "2CO",
+        "title": "Друге Посланнє сьв. Ап. Павла до Коринтян",
+        "testament": "NT",
+        "chapters": 13
+      },
+      {
+        "code": "GAL",
+        "title": "Посланнє cьв. Ап. Павла до Галат",
+        "testament": "NT",
+        "chapters": 6
+      },
+      {
+        "code": "EPH",
+        "title": "Посланнє cьв. Ап. Павла до Єфесян",
+        "testament": "NT",
+        "chapters": 6
+      },
+      {
+        "code": "PHP",
+        "title": "Посланнє cьв. Ап. Павла до Филипян",
+        "testament": "NT",
+        "chapters": 4
+      },
+      {
+        "code": "COL",
+        "title": "Посланнє cьв. Ап. Павла до Колосян",
+        "testament": "NT",
+        "chapters": 4
+      },
+      {
+        "code": "1TH",
+        "title": "Перве Посланнє cьв. Ап. Павла до Солунян",
+        "testament": "NT",
+        "chapters": 5
+      },
+      {
+        "code": "2TH",
+        "title": "Друге Посланнє cьв. Ап. Павла до Солунян",
+        "testament": "NT",
+        "chapters": 3
+      },
+      {
+        "code": "1TI",
+        "title": "Перве Посланнє cьв. Ап. Павла до Тимотея",
+        "testament": "NT",
+        "chapters": 6
+      },
+      {
+        "code": "2TI",
+        "title": "Друге Посланнє cьв. Ап. Павла до Тимотея",
+        "testament": "NT",
+        "chapters": 4
+      },
+      {
+        "code": "TIT",
+        "title": "Посланнє cьв. Ап. Павла до Тита",
+        "testament": "NT",
+        "chapters": 3
+      },
+      {
+        "code": "PHM",
+        "title": "Посланнє cьв. Ап. Павла до Филимона",
+        "testament": "NT",
+        "chapters": 1
+      },
+      {
+        "code": "HEB",
+        "title": "Посланнє cьв. Ап. Павла до Жидів",
+        "testament": "NT",
+        "chapters": 13
+      },
+      {
+        "code": "JAS",
+        "title": "Соборне Посланнє cьв. Ап. Якова",
+        "testament": "NT",
+        "chapters": 5
+      },
+      {
+        "code": "1PE",
+        "title": "Перве соборне Посланнє cьв. Ап. Петра",
+        "testament": "NT",
+        "chapters": 5
+      },
+      {
+        "code": "2PE",
+        "title": "Друге соборне Посланнє cьв. Ап. Петра",
+        "testament": "NT",
+        "chapters": 3
+      },
+      {
+        "code": "1JN",
+        "title": "Перве соборне Посланнє cьв. Ап. Йоана Богослова",
+        "testament": "NT",
+        "chapters": 5
+      },
+      {
+        "code": "2JN",
+        "title": "Друге соборне Посланнє cьв. Ап. Йоана Богослова",
+        "testament": "NT",
+        "chapters": 1
+      },
+      {
+        "code": "3JN",
+        "title": "Третє соборне Посланнє cьв. Ап. Йоана Богослова",
+        "testament": "NT",
+        "chapters": 1
+      },
+      {
+        "code": "JUD",
+        "title": "Соборне Посланнє cьв. Ап. Юди",
+        "testament": "NT",
+        "chapters": 1
+      },
+      {
+        "code": "REV",
+        "title": "Одкриттє сьв. Йоана Богослова",
+        "testament": "NT",
+        "chapters": 22
+      }
+    ]
+  }
+}

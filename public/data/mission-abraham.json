@@ -1,0 +1,24 @@
+{
+  "id": "OT-AB-01-WEB-PILOT",
+  "title": {
+    "uk": "Авраам: покликання, земля і віра",
+    "ru": "Авраам: призвание, земля и вера",
+    "en": "Abraham: calling, land, and faith"
+  },
+  "intro": {
+    "uk": "Прочитайте уривки про покликання Аврама. Звертайте увагу на накази, обіцянки й обставини подорожі, а відповіді перевіряйте за текстом.",
+    "ru": "Прочитайте отрывки о призвании Аврама. Обращайте внимание на повеления, обещания и обстоятельства путешествия, а ответы проверяйте по тексту.",
+    "en": "Read the passages about Abram’s calling. Notice the commands, promises, and circumstances of the journey, and check each answer against the text."
+  },
+  "taskCount": 5,
+  "chapters": [
+    {
+      "book": "GEN",
+      "chapter": 12
+    },
+    {
+      "book": "GEN",
+      "chapter": 13
+    }
+  ]
+}

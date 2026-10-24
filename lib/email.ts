@@ -1,0 +1,42 @@
+import { env } from "cloudflare:workers";
+
+type Locale = "uk" | "ru" | "en";
+type Purpose = "verify" | "reset";
+
+const COPY: Record<Locale, Record<Purpose, { subject: string; title: string; body: string; action: string; expiry: string }>> = {
+  uk: {
+    verify: { subject: "Підтвердіть адресу — Scripture Archive", title: "Підтвердження електронної адреси", body: "Завершіть створення облікового запису Scripture Archive.", action: "Підтвердити адресу", expiry: "Посилання діє 24 години й використовується один раз." },
+    reset: { subject: "Новий пароль — Scripture Archive", title: "Встановлення нового пароля", body: "Ви запросили відновлення доступу до Scripture Archive.", action: "Встановити новий пароль", expiry: "Посилання діє 30 хвилин й використовується один раз." },
+  },
+  ru: {
+    verify: { subject: "Подтвердите адрес — Scripture Archive", title: "Подтверждение электронной почты", body: "Завершите создание учётной записи Scripture Archive.", action: "Подтвердить адрес", expiry: "Ссылка действует 24 часа и используется один раз." },
+    reset: { subject: "Новый пароль — Scripture Archive", title: "Создание нового пароля", body: "Вы запросили восстановление доступа к Scripture Archive.", action: "Установить новый пароль", expiry: "Ссылка действует 30 минут и используется один раз." },
+  },
+  en: {
+    verify: { subject: "Verify your email — Scripture Archive", title: "Verify your email address", body: "Complete your Scripture Archive account registration.", action: "Verify email", expiry: "This one-time link expires in 24 hours." },
+    reset: { subject: "Reset your password — Scripture Archive", title: "Create a new password", body: "A password reset was requested for your Scripture Archive account.", action: "Create new password", expiry: "This one-time link expires in 30 minutes." },
+  },
+};
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
+}
+
+export async function sendSecurityEmail(email: string, localeValue: string, purpose: Purpose, url: string) {
+  const locale: Locale = localeValue === "ru" || localeValue === "en" ? localeValue : "uk";
+  const copy = COPY[locale][purpose];
+  if (!env.EMAIL_API_KEY || !env.EMAIL_FROM) return { delivered: false, reason: "email_not_configured" };
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${env.EMAIL_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      from: env.EMAIL_FROM,
+      to: [email],
+      subject: copy.subject,
+      html: `<div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;color:#152b3c"><h1>${escapeHtml(copy.title)}</h1><p>${escapeHtml(copy.body)}</p><p><a href="${escapeHtml(url)}" style="display:inline-block;background:#12374a;color:#fff;padding:12px 20px;border-radius:7px;text-decoration:none">${escapeHtml(copy.action)}</a></p><p>${escapeHtml(copy.expiry)}</p><p>Scripture Archive</p></div>`,
+      text: `${copy.title}\n\n${copy.body}\n\n${url}\n\n${copy.expiry}\n\nScripture Archive`,
+    }),
+  });
+  if (!response.ok) return { delivered: false, reason: "email_provider_error" };
+  return { delivered: true };
+}

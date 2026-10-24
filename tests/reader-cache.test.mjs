@@ -79,3 +79,34 @@ test('uk, ru and en cache keys remain independent', async () => {
   for (const locale of ['uk', 'ru', 'en'])
     assert.ok(paths.some(path => path.includes('/' + locale + '/GEN.json')), locale);
 });
+
+// SA-05 Drive handoff adopted into the existing SA-02 reader-cache workline:
+// exercise the canonical route error handler, not a second router.
+const routeStart = source.indexOf('async function route()');
+const routeEnd = source.indexOf('\nlangSelect.addEventListener("change"', routeStart);
+assert.ok(routeStart >= 0 && routeEnd > routeStart, 'canonical route must exist');
+const routeFailure = source.slice(routeStart, routeEnd).match(/  } catch \(error\) \{\s*console\.error\(error\);\s*([\s\S]*?)\n  }\n}/);
+assert.ok(routeFailure, 'canonical route error handler must remain testable');
+const retryCopy = { uk: 'Повторити спробу', ru: 'Повторить попытку', en: 'Try again' };
+for (const [locale, label] of Object.entries(retryCopy)) {
+  test(locale + ': failure offers native retry without leaking internal errors', () => {
+    assert.ok(source.includes('retryLoad: "' + label + '"'), 'trilingual retry translation missing');
+    let view = '', retry, routeCalls = 0;
+    const button = { addEventListener(type, fn) { assert.equal(type, 'click'); retry = fn; } };
+    const context = {
+      shell: html => { view = html; },
+      t: key => key === 'retryLoad' ? label : 'Failed to load',
+      document: { querySelector: selector => selector === '#retry-load' ? button : null },
+      route: () => { routeCalls++; },
+      console: { error() {} },
+    };
+    vm.runInNewContext('(error) => {' + routeFailure[1] + '}', context)(new Error('PRIVATE_FILE_PATH'));
+    assert.match(view, /role="alert"/);
+    assert.match(view, /<button[^>]*type="button"[^>]*id="retry-load"/);
+    assert.ok(view.includes(label));
+    assert.ok(!view.includes('PRIVATE_FILE_PATH'), 'never show internal errors');
+    assert.equal(typeof retry, 'function');
+    retry();
+    assert.equal(routeCalls, 1, 'retry must invoke existing route()');
+  });
+}

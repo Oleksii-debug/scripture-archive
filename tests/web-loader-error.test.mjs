@@ -64,11 +64,13 @@ for (const [lang, title, retryText] of [
     assert.equal(page.main.childElementCount, 0);
     assert.equal(page.main.focused, true);
     assert.equal(page.scripts[1].removed, true);
-    assert.equal(page.scripts.at(-1).src, '/app.js');
+    assert.equal(page.scripts.at(-1).src, '/app.js?sa-retry=1', 'retry needs a new module URL after a failed module fetch');
     assert.equal(page.scripts.length, 3);
     assert.ok(page.announcer.textContent.length > 0);
     page.scripts.at(-1).onerror();
     assert.equal(page.main.childElementCount, 1);
+    page.main.childNodes[0].childNodes[2].click();
+    assert.equal(page.scripts.at(-1).src, '/app.js?sa-retry=2', 'each failed module request should get a fresh URL');
     page.cleanup();
     assert.equal(page.scripts.at(-1).removed, true);
     assert.equal(page.scripts[0].removed, true);
@@ -91,4 +93,19 @@ test('late load errors cannot replace already-rendered content or modify unmount
   unmounted.cleanup();
   unmounted.scripts[1].onerror();
   assert.equal(unmounted.main.childElementCount, 0);
+});
+
+
+test('late error from a replaced module attempt never clobbers a new loading state', () => {
+  const page = boot('en');
+  const first = page.scripts.at(-1);
+  first.onerror();
+  page.main.childNodes[0].childNodes[2].click();
+  assert.equal(page.main.childElementCount, 0);
+  const second = page.scripts.at(-1);
+  first.onerror(); // A removed script may still finish a queued request.
+  assert.equal(page.main.childElementCount, 0, 'stale failure must not replace active retry');
+  second.onerror();
+  assert.equal(page.main.childElementCount, 1, 'current failure must still show the recovery control');
+  page.cleanup();
 });

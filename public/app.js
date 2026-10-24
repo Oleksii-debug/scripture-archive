@@ -2,6 +2,7 @@ import {renderWorkspace, workspaceCopy} from './workspace.js';
 import {supportSection} from './support.js';
 import {homePage} from './home.js';
 import {EDITIONS, editionCopy, selectedEdition, editionUrl, editionSelect} from './editions.js';
+import {readerVerseHref, focusRequestedVerse} from './reader-verse-links.js';
 
 const I18N = {
   uk: {
@@ -2563,7 +2564,7 @@ async function renderReader(parts) {
       ? results
           .map(
             (r) =>
-              `<li><a href="/reader/${meta.code}/${r.chapter}">${esc(bookTitle(meta))} ${r.chapter}:${r.verse}</a><p>${esc(r.text)}</p></li>`,
+              `<li><a href="${readerVerseHref(meta.code, r.chapter, r.verse)}">${esc(bookTitle(meta))} ${r.chapter}:${r.verse}</a><p>${esc(r.text)}</p></li>`,
           )
           .join("")
       : `<li>${t("noResults")}</li>`;
@@ -3301,6 +3302,7 @@ async function route() {
     updatePageMetadata(name);
     window.saAnalytics?.track("page_view",{language:state.lang});
     window.scrollTo({ top: 0, behavior: "instant" });
+    if (name === "reader") focusRequestedVerse(location.search, main);
   } catch (error) {
     console.error(error);
     shell(`<div class="notice error">${t("errorLoad")}</div>`);

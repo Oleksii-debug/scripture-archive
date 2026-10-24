@@ -37,3 +37,36 @@ test("state-changing API routes enforce same-origin writes", async () => {
   for (const path of ["app/api/auth/route.ts", "app/api/attempts/route.ts", "app/api/account/route.ts", "app/api/groups/route.ts", "app/api/materials/route.ts", "app/api/content/route.ts"])
     assert.match(await read(path), /sameOrigin\(request\)/, path);
 });
+
+test("public navigation exposes crawlable paths instead of fragment-only routes", async () => {
+  for (const path of ["app/page.tsx", "public/app.js", "public/home.js", "public/workspace.js"])
+    assert.doesNotMatch(await read(path), /href=["'`]#\//, path);
+  const route = await read("app/[...slug]/page.tsx");
+  for (const page of ["reader", "campaigns", "missions", "groups", "support", "about", "privacy"])
+    assert.match(route, new RegExp(`\\b${page}\\b`), page);
+});
+
+test("SEO endpoints use the configured public origin and protect private routes", async () => {
+  const [site, robots, sitemap, route] = await Promise.all([
+    read("lib/site.ts"),
+    read("app/robots.txt/route.ts"),
+    read("app/sitemap.xml/route.ts"),
+    read("app/[...slug]/page.tsx"),
+  ]);
+  assert.match(site, /NEXT_PUBLIC_SITE_URL/);
+  assert.match(robots, /Disallow: \/api\//);
+  assert.match(robots, /Sitemap:/);
+  assert.match(sitemap, /\/reader/);
+  assert.match(sitemap, /\/privacy/);
+  assert.match(route, /index: false, follow: false/);
+});
+
+test("analytics requires consent and removes sensitive URL components", async () => {
+  const analytics = await read("public/analytics.js");
+  assert.match(analytics, /analytics_storage: consent === "granted" \? "granted" : "denied"/);
+  assert.match(analytics, /privateRoutes\.has\(route\)/);
+  assert.match(analytics, /location\.pathname/);
+  assert.doesNotMatch(analytics, /page_location:\s*location\.(href|search)/);
+  assert.match(analytics, /track\("page_view"\)/);
+  assert.match(analytics, /allow_google_signals: false/);
+});

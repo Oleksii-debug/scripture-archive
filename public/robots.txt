@@ -1,9 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /api/
-Disallow: /account
-Disallow: /mission
-Disallow: /progress
-Disallow: /editor
-
-Sitemap: https://scripture-archive.com/sitemap.xml

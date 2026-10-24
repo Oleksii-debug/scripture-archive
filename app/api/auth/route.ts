@@ -79,7 +79,7 @@ export async function GET(request: Request) {
     env.DB.prepare("UPDATE auth_tokens SET used_at=CURRENT_TIMESTAMP WHERE token_hash=?").bind(row.token_hash),
     env.DB.prepare("UPDATE accounts SET email_verified_at=COALESCE(email_verified_at,CURRENT_TIMESTAMP),updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(row.user_id),
   ]);
-  return Response.redirect(`${baseUrl(request)}/?verified=1#/account`, 303);
+  return Response.redirect(`${baseUrl(request)}/account?verified=1`, 303);
 }
 
 export async function POST(request: Request) {
@@ -156,7 +156,7 @@ export async function POST(request: Request) {
     if (account?.email_verified_at) {
       const token = await createOneTimeToken(account.id, "reset", 30);
       if (env.AUTH_TEST_MODE === "1") testToken = token;
-      await sendSecurityEmail(account.email, account.locale || "uk", "reset", `${baseUrl(request)}/?reset=${encodeURIComponent(token)}#/account`);
+      await sendSecurityEmail(account.email, account.locale || "uk", "reset", `${baseUrl(request)}/account?reset=${encodeURIComponent(token)}`);
     }
     return json({ ok: true, ...(testToken ? { testToken } : {}) });
   }

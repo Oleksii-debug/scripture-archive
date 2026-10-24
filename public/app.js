@@ -1949,6 +1949,38 @@ const langSelect = document.querySelector("#language");
 const nav = document.querySelector("#primary-nav");
 let timerInterval;
 
+const PAGE_TITLES = {
+  uk: { home:"Архів Писання", reader:"Біблійна читальня", campaigns:"Навчальні кампанії", missions:"Місії", groups:"Домашні групи", support:"Підтримати", about:"Про проєкт", privacy:"Приватність", atlas:"Атлас розвитку", dossiers:"Дослідницькі досьє", builder:"Конструктор", account:"Обліковий запис", progress:"Мій прогрес", mission:"Завдання", editor:"Редактор" },
+  ru: { home:"Архив Писания", reader:"Библейская читальня", campaigns:"Учебные кампании", missions:"Миссии", groups:"Домашние группы", support:"Поддержать", about:"О проекте", privacy:"Приватность", atlas:"Атлас развития", dossiers:"Исследовательские досье", builder:"Конструктор", account:"Учётная запись", progress:"Мой прогресс", mission:"Задания", editor:"Редактор" },
+  en: { home:"Scripture Archive", reader:"Bible reader", campaigns:"Learning campaigns", missions:"Missions", groups:"Home groups", support:"Support", about:"About", privacy:"Privacy", atlas:"Learning atlas", dossiers:"Research dossiers", builder:"Builder", account:"Account", progress:"My progress", mission:"Assessment", editor:"Editor" },
+};
+const PRIVATE_ROUTES = new Set(["account", "mission", "progress", "editor"]);
+
+function navigateTo(path, replace = false) {
+  window.history[replace ? "replaceState" : "pushState"](null, "", path);
+  route();
+}
+
+function updatePageMetadata(name) {
+  const title = PAGE_TITLES[state.lang]?.[name] || PAGE_TITLES[state.lang]?.home || "Scripture Archive";
+  document.title = title === "Scripture Archive" ? title : `${title} · Scripture Archive`;
+  const canonicalPath = PRIVATE_ROUTES.has(name) || name === "home" ? "/" : `/${name}`;
+  let canonical = document.querySelector('link[rel="canonical"]');
+  if (!canonical) {
+    canonical = document.createElement("link");
+    canonical.rel = "canonical";
+    document.head.appendChild(canonical);
+  }
+  canonical.href = `${location.origin}${canonicalPath}`;
+  let robots = document.querySelector('meta[name="robots"]');
+  if (!robots) {
+    robots = document.createElement("meta");
+    robots.name = "robots";
+    document.head.appendChild(robots);
+  }
+  robots.content = PRIVATE_ROUTES.has(name) ? "noindex, nofollow" : "index, follow";
+}
+
 function loadJSON(key, fallback) {
   try {
     return JSON.parse(localStorage.getItem(key)) || fallback;
@@ -2417,7 +2449,7 @@ async function attemptRequest(action, method = "GET", body, params = "") {
 
 function renderLockedChapter(book, chapter) {
   const copy = ATTEMPT_COPY[state.lang];
-  shell(`<section class="gate-panel attempt-locked" role="alert"><p class="eyebrow">Scripture Archive</p><h1>${copy.lockedTitle}</h1><p class="lead">${copy.lockedText}</p><a class="button primary" href="#/reader/${book}/${chapter}">${copy.reread}</a></section>`);
+  shell(`<section class="gate-panel attempt-locked" role="alert"><p class="eyebrow">Scripture Archive</p><h1>${copy.lockedTitle}</h1><p class="lead">${copy.lockedText}</p><a class="button primary" href="/reader/${book}/${chapter}">${copy.reread}</a></section>`);
 }
 
 attemptChannel?.addEventListener("message", event => {
@@ -2470,7 +2502,7 @@ async function renderReader(parts) {
       `<option value="${i + 1}" ${i + 1 === chapter ? "selected" : ""}>${i + 1}</option>`,
   ).join("");
   shell(
-    `<div class="section-head reader-heading"><div><p class="eyebrow">${t("reader")}</p><h1>${t("readerTitle")}</h1></div><p>${t("readerIntro")}</p></div><div class="toolbar"><div class="field grow"><label for="book-select">${t("book")}</label><select id="book-select">${options}</select></div><div class="field"><label for="chapter-select">${t("chapter")}</label><select id="chapter-select">${chapters}</select></div><form id="book-search" class="field grow"><label for="search-input">${t("searchBook")}</label><div style="display:flex;gap:.4rem"><input id="search-input" type="search" placeholder="${t("searchPlaceholder")}"><button class="button" type="submit">${t("search")}</button></div></form></div><div class="reader-layout"><article class="reading-pane"><p class="eyebrow">${meta.testament === "OT" ? t("oldTestament") : t("newTestament")}</p><h1>${esc(bookTitle(meta))} ${chapter}</h1><p class="chapter-meta">${esc(editionInfo.title)}</p><div class="verses">${verses.map((v, i) => `<p class="verse" id="v${i + 1}"><span class="verse-number">${i + 1}</span>${esc(bibleText(v))}</p>`).join("")}</div><div class="chapter-nav">${chapter > 1 ? `<a class="button" href="#/reader/${meta.code}/${chapter - 1}">← ${t("previous")}</a>` : "<span></span>"}${chapter < meta.chapters ? `<a class="button" href="#/reader/${meta.code}/${chapter + 1}">${t("next")} →</a>` : "<span></span>"}</div></article><aside class="reader-aside"><div class="card edition-card"><h2>${t("edition")}</h2><p><strong>${esc(editionInfo.title)}</strong></p>${editionInfo.note ? `<p>${esc(editionInfo.note)}</p>` : ""}<p>${t("license")}: ${esc(editionInfo.license)}</p><a href="${editionInfo.source}" target="_blank" rel="noreferrer">${t("sourceLink")} ↗</a></div>${editionToggle(meta.code)}${timerCard()}<div class="card" id="search-panel" hidden><h2>${t("search")}</h2><ol class="search-results" id="search-results"></ol></div></aside></div>`,
+    `<div class="section-head reader-heading"><div><p class="eyebrow">${t("reader")}</p><h1>${t("readerTitle")}</h1></div><p>${t("readerIntro")}</p></div><div class="toolbar"><div class="field grow"><label for="book-select">${t("book")}</label><select id="book-select">${options}</select></div><div class="field"><label for="chapter-select">${t("chapter")}</label><select id="chapter-select">${chapters}</select></div><form id="book-search" class="field grow"><label for="search-input">${t("searchBook")}</label><div style="display:flex;gap:.4rem"><input id="search-input" type="search" placeholder="${t("searchPlaceholder")}"><button class="button" type="submit">${t("search")}</button></div></form></div><div class="reader-layout"><article class="reading-pane"><p class="eyebrow">${meta.testament === "OT" ? t("oldTestament") : t("newTestament")}</p><h1>${esc(bookTitle(meta))} ${chapter}</h1><p class="chapter-meta">${esc(editionInfo.title)}</p><div class="verses">${verses.map((v, i) => `<p class="verse" id="v${i + 1}"><span class="verse-number">${i + 1}</span>${esc(bibleText(v))}</p>`).join("")}</div><div class="chapter-nav">${chapter > 1 ? `<a class="button" href="/reader/${meta.code}/${chapter - 1}">← ${t("previous")}</a>` : "<span></span>"}${chapter < meta.chapters ? `<a class="button" href="/reader/${meta.code}/${chapter + 1}">${t("next")} →</a>` : "<span></span>"}</div></article><aside class="reader-aside"><div class="card edition-card"><h2>${t("edition")}</h2><p><strong>${esc(editionInfo.title)}</strong></p>${editionInfo.note ? `<p>${esc(editionInfo.note)}</p>` : ""}<p>${t("license")}: ${esc(editionInfo.license)}</p><a href="${editionInfo.source}" target="_blank" rel="noreferrer">${t("sourceLink")} ↗</a></div>${editionToggle(meta.code)}${timerCard()}<div class="card" id="search-panel" hidden><h2>${t("search")}</h2><ol class="search-results" id="search-results"></ol></div></aside></div>`,
   );
   activateTimer();
   const editionText=editionCopy[state.lang];
@@ -2482,10 +2514,10 @@ async function renderReader(parts) {
   const w=workspaceCopy(state.lang),history=loadJSON('sa.readingHistory',[]),attemptCopy=ATTEMPT_COPY[state.lang],missionManifest=await getMission();
   const alreadyRead=history.some(r=>r.book===meta.code&&r.chapter===chapter);
   const hasTasks=missionManifest.chapters?.some(item=>item.book===meta.code&&Number(item.chapter)===chapter);
-  document.querySelector('.chapter-nav').insertAdjacentHTML('beforebegin',`<div class="read-completion"><button class="button primary" id="mark-read">${attemptCopy.finishReading}</button>${hasTasks?`<button class="button" id="start-questions" disabled>${attemptCopy.transition}</button>`:""}<a href="#/progress">${w.progress}</a></div>${hasTasks?`<dialog id="attempt-dialog" class="attempt-dialog" aria-labelledby="attempt-dialog-title"><form method="dialog"><h2 id="attempt-dialog-title">${attemptCopy.prepareTitle}</h2><p>${attemptCopy.prepareText}</p><ul>${attemptCopy.prepareRules.map(rule=>`<li>${rule}</li>`).join("")}</ul><div class="action-row"><button class="button" value="cancel">${attemptCopy.cancel}</button><button class="button primary" id="confirm-attempt" value="default">${attemptCopy.begin}</button></div><p id="attempt-state" role="status"></p></form></dialog>`:""}`);
+  document.querySelector('.chapter-nav').insertAdjacentHTML('beforebegin',`<div class="read-completion"><button class="button primary" id="mark-read">${attemptCopy.finishReading}</button>${hasTasks?`<button class="button" id="start-questions" disabled>${attemptCopy.transition}</button>`:""}<a href="/progress">${w.progress}</a></div>${hasTasks?`<dialog id="attempt-dialog" class="attempt-dialog" aria-labelledby="attempt-dialog-title"><form method="dialog"><h2 id="attempt-dialog-title">${attemptCopy.prepareTitle}</h2><p>${attemptCopy.prepareText}</p><ul>${attemptCopy.prepareRules.map(rule=>`<li>${rule}</li>`).join("")}</ul><div class="action-row"><button class="button" value="cancel">${attemptCopy.cancel}</button><button class="button primary" id="confirm-attempt" value="default">${attemptCopy.begin}</button></div><p id="attempt-state" role="status"></p></form></dialog>`:""}`);
   document.querySelector('#mark-read').onclick=async()=>{if(!alreadyRead)history.push({book:meta.code,chapter,title:bookTitle(meta)});localStorage.setItem('sa.readingHistory',JSON.stringify(history));if(state.user)try{await accountRequest('reading','PUT',{reading:history})}catch{}try{if(hasTasks)await attemptRequest('read','POST',{book:meta.code,chapter,groupId:groupId||undefined});document.querySelector('#start-questions')?.removeAttribute('disabled');document.querySelector('#mark-read').disabled=true;document.querySelector('#mark-read').textContent=w.readMarked;announce(w.readMarked)}catch{announce(t('errorLoad'))}};
   document.querySelector('#start-questions')?.addEventListener('click',()=>document.querySelector('#attempt-dialog').showModal());
-  document.querySelector('#confirm-attempt')?.addEventListener('click',async event=>{event.preventDefault();const status=document.querySelector('#attempt-state');try{const attempt=await attemptRequest('start','POST',{missionId:'OT-AB-01',book:meta.code,chapter,locale:state.lang,groupId:groupId||undefined});sessionStorage.setItem('sa.activeAttempt',attempt.attemptId);state.activeAttempt=attempt;state.mission=null;window.saAnalytics?.track("quiz_start",{language:state.lang,mode:groupId?"group":"personal"});attemptChannel?.postMessage({type:'attempt-started',attemptId:attempt.attemptId,book:meta.code,chapter});document.querySelector('#attempt-dialog').close();state.currentReader=null;window.history.replaceState(null,'',`#/mission/attempt/${attempt.attemptId}`);route()}catch(error){window.saAnalytics?.track("quiz_start_error",{error:String(error.message).slice(0,60)});status.textContent=error.message==='chapter_must_be_read'?attemptCopy.readRequired:t('errorLoad')}});
+  document.querySelector('#confirm-attempt')?.addEventListener('click',async event=>{event.preventDefault();const status=document.querySelector('#attempt-state');try{const attempt=await attemptRequest('start','POST',{missionId:'OT-AB-01',book:meta.code,chapter,locale:state.lang,groupId:groupId||undefined});sessionStorage.setItem('sa.activeAttempt',attempt.attemptId);state.activeAttempt=attempt;state.mission=null;window.saAnalytics?.track("quiz_start",{language:state.lang,mode:groupId?"group":"personal"});attemptChannel?.postMessage({type:'attempt-started',attemptId:attempt.attemptId,book:meta.code,chapter});document.querySelector('#attempt-dialog').close();state.currentReader=null;navigateTo(`/mission/attempt/${attempt.attemptId}`,true)}catch(error){window.saAnalytics?.track("quiz_start_error",{error:String(error.message).slice(0,60)});status.textContent=error.message==='chapter_must_be_read'?attemptCopy.readRequired:t('errorLoad')}});
   document.querySelector("#uk-spelling")?.addEventListener("click", () => {
     state.ukOriginal = !state.ukOriginal;
     localStorage.setItem(
@@ -2498,13 +2530,13 @@ async function renderReader(parts) {
     .querySelector("#book-select")
     .addEventListener(
       "change",
-      (e) => (location.hash = `#/reader/${e.target.value}/1`),
+      (e) => navigateTo(`/reader/${e.target.value}/1`),
     );
   document
     .querySelector("#chapter-select")
     .addEventListener(
       "change",
-      (e) => (location.hash = `#/reader/${meta.code}/${e.target.value}`),
+      (e) => navigateTo(`/reader/${meta.code}/${e.target.value}`),
     );
   document.querySelector("#book-search").addEventListener("submit", (e) => {
     e.preventDefault();
@@ -2531,7 +2563,7 @@ async function renderReader(parts) {
       ? results
           .map(
             (r) =>
-              `<li><a href="#/reader/${meta.code}/${r.chapter}">${esc(bookTitle(meta))} ${r.chapter}:${r.verse}</a><p>${esc(r.text)}</p></li>`,
+              `<li><a href="/reader/${meta.code}/${r.chapter}">${esc(bookTitle(meta))} ${r.chapter}:${r.verse}</a><p>${esc(r.text)}</p></li>`,
           )
           .join("")
       : `<li>${t("noResults")}</li>`;
@@ -2544,7 +2576,7 @@ async function renderMissions() {
   const mission = await getMission();
   const pilotAction = ATTEMPT_COPY[state.lang].reread;
   shell(
-    `<div class="section-head"><div><p class="eyebrow">${t("today")}</p><h1>${t("missionTitle")}</h1></div><p>${t("missionIntro")}</p></div><div class="card-grid"><article class="card featured">${statusBadge("live")}<h2>${esc(mission.title[state.lang])}</h2><p>${esc(mission.intro[state.lang])}</p><a class="button" href="#/reader/GEN/12">${pilotAction}</a></article><article class="card">${statusBadge("soon")}<h2>${t("lastNight")}</h2><p>${t("lastNightText")}</p></article><article class="card">${statusBadge("soon")}<h2>${t("paulRoad")}</h2><p>${t("paulRoadText")}</p></article></div>`,
+    `<div class="section-head"><div><p class="eyebrow">${t("today")}</p><h1>${t("missionTitle")}</h1></div><p>${t("missionIntro")}</p></div><div class="card-grid"><article class="card featured">${statusBadge("live")}<h2>${esc(mission.title[state.lang])}</h2><p>${esc(mission.intro[state.lang])}</p><a class="button" href="/reader/GEN/12">${pilotAction}</a></article><article class="card">${statusBadge("soon")}<h2>${t("lastNight")}</h2><p>${t("lastNightText")}</p></article><article class="card">${statusBadge("soon")}<h2>${t("paulRoad")}</h2><p>${t("paulRoadText")}</p></article></div>`,
   );
 }
 
@@ -2635,7 +2667,7 @@ function groupCard(group) {
     pace = group.marathonEnabled
       ? `<strong>${group.weeklyGoal}</strong> ${t("weeklyGoal").toLocaleLowerCase(state.lang)} · ${group.catchupMode === "steady" ? t("steady") : t("flexible")}`
       : t("regularGroup");
-  return `<article class="group-card">${groupStatus(group)}<h3>${esc(group.name)}</h3>${group.church ? `<p class="group-church">${esc(group.church)}</p>` : ""}${place ? `<p>${esc(place)}</p>` : ""}<p>${esc(group.description || "")}</p><p class="pace">${pace}</p><p>${esc(edition || "")}</p>${groupMetrics(group)}<a class="button" href="#/groups/${esc(group.id)}">${t("openGroup")}</a></article>`;
+  return `<article class="group-card">${groupStatus(group)}<h3>${esc(group.name)}</h3>${group.church ? `<p class="group-church">${esc(group.church)}</p>` : ""}${place ? `<p>${esc(place)}</p>` : ""}<p>${esc(group.description || "")}</p><p class="pace">${pace}</p><p>${esc(edition || "")}</p>${groupMetrics(group)}<a class="button" href="/groups/${esc(group.id)}">${t("openGroup")}</a></article>`;
 }
 async function renderGroups() {
   setActiveNav("groups");
@@ -2650,9 +2682,9 @@ async function renderGroups() {
     .map((value) => `<option value="${value}">${value}</option>`)
     .join("");
   const createPanel = !state.user
-    ? `<section class="groups-cta"><h2>${t("createGroup")}</h2><p>${t("signInGroups")}</p><a class="button primary" href="#/account">${t("signIn")}</a></section>`
+    ? `<section class="groups-cta"><h2>${t("createGroup")}</h2><p>${t("signInGroups")}</p><a class="button primary" href="/account">${t("signIn")}</a></section>`
     : !state.user.profileComplete
-      ? `<section class="groups-cta"><h2>${t("createGroup")}</h2><p>${t("profileNeeded")}</p><a class="button primary" href="#/account">${t("account")}</a></section>`
+      ? `<section class="groups-cta"><h2>${t("createGroup")}</h2><p>${t("profileNeeded")}</p><a class="button primary" href="/account">${t("account")}</a></section>`
       : `<div class="groups-actions"><section class="card group-form-card"><h2>${t("createGroup")}</h2><form id="group-form" class="account-form account-form-grid">${field("name", t("groupName"), "text", 'required maxlength="100"')}${field("church", `${t("churchName")} · ${t("optional")}`)}${field("country", `${t("country")} · ${t("optional")}`)}${field("city", `${t("city")} · ${t("optional")}`)}<label class="account-field full"><span>${t("description")} · ${t("optional")}</span><textarea name="description" rows="3" maxlength="600"></textarea></label><label class="account-field"><span>${t("visibility")}</span><select name="visibility"><option value="public">${t("publicGroup")}</option><option value="private">${t("privateGroup")}</option></select></label><label class="account-field"><span>${t("roster")}</span><select name="rosterVisibility"><option value="count">${t("countOnly")}</option><option value="names">${t("publicNames")}</option><option value="private">${t("hiddenRoster")}</option></select></label><label class="account-field"><span>${t("weeklyGoal")}</span><select name="weeklyGoal">${paceOptions}</select><small>${t("oddPace")}</small></label><label class="account-field"><span>${t("catchup")}</span><select name="catchupMode"><option value="flexible">${t("flexible")}</option><option value="steady">${t("steady")}</option></select></label><label class="account-check"><input name="publicOwnerName" type="checkbox"><span>${t("publicOwner")}</span></label><p class="privacy-hint">${t("privacyNote")}</p><button class="button primary">${t("saveGroup")}</button><p id="group-form-state" role="status"></p></form></section><section class="card join-card"><h2>${t("joinGroup")}</h2><form id="join-form" class="account-form"><label class="account-field"><span>${t("inviteCode")}</span><input name="inviteCode" required maxlength="12" autocomplete="off"></label><label class="account-check"><input name="publicName" type="checkbox"><span>${t("publicOwner")}</span></label><button class="button">${t("joinGroup")}</button><p id="join-state" role="status"></p></form></section></div>`;
   shell(
     `<section class="groups-hero"><p class="eyebrow">${t("groupsEye")}</p><h1>${t("groupsTitle")}</h1><p class="lead">${t("groupsLead")}</p><div class="principle-card">${t("groupsPrinciple")}</div></section>${mine.length ? `<section class="groups-section"><div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h2>${t("myGroups")}</h2></div></div><div class="group-grid">${mine.map(groupCard).join("")}</div></section>` : ""}${createPanel}<section class="groups-section"><div class="section-head"><div><p class="eyebrow">${t("cohort")}</p><h2>${t("directory")}</h2></div><p>${t("directoryIntro")}</p></div>${groups.length ? `<div class="group-grid">${groups.map(groupCard).join("")}</div>` : `<div class="notice info">${t("noGroups")}</div>`}</section>`,
@@ -2667,7 +2699,7 @@ async function renderGroups() {
       try {
         const result = await groupRequest("create", "POST", data);
         announce(t("groupSaved"));
-        location.hash = `#/groups/${result.groupId}`;
+        navigateTo(`/groups/${result.groupId}`);
       } catch {
         document.querySelector("#group-form-state").textContent =
           t("groupError");
@@ -2682,7 +2714,7 @@ async function renderGroups() {
       try {
         const result = await groupRequest("join", "POST", data);
         announce(t("joined"));
-        location.hash = `#/groups/${result.groupId}`;
+        navigateTo(`/groups/${result.groupId}`);
       } catch {
         document.querySelector("#join-state").textContent = t("groupError");
       }
@@ -2734,7 +2766,7 @@ async function renderGroup(groupId) {
     )
     .join("");
   shell(
-    `<article class="group-detail"><header class="group-detail-head">${groupStatus(group)}<p class="eyebrow">${t("groups")}</p><h1>${esc(group.name)}</h1><p class="lead">${esc(group.description || group.church || "")}</p><p>${[group.church, group.city, group.country].filter(Boolean).map(esc).join(" · ")}</p>${group.inviteCode ? `<div class="invite-code"><span>${t("inviteCode")}</span><strong>${esc(group.inviteCode)}</strong></div>` : ""}</header>${groupMetrics(group)}<div class="group-detail-grid"><section class="card reading-target"><p class="eyebrow">${t("readingTarget")}</p><h2 id="reading-preview">${esc(bookTitle(books[0]))} 12</h2><p>${t("discussionRoute")}</p><div class="target-controls"><select id="target-book">${bookOptions}</select><input id="target-chapter" aria-label="${t("chapter")}" type="number" min="1" max="200" value="12"></div><div class="action-row"><a class="button primary" id="chapter-link" href="#/reader/${books[0].code}/12/group/${encodeURIComponent(group.id)}">${t("openChapter")}</a></div></section><section class="card cohort-card"><p class="eyebrow">${t("cohort")}</p><h2>${group.weeklyGoal} · ${t("weeklyGoal").toLocaleLowerCase(state.lang)}</h2><p>${group.catchupMode === "steady" ? t("steady") : t("flexible")}</p><p>${t("cohortNeed")}</p></section></div>${names ? `<section class="card member-list"><h2>${t("members")}</h2><ul>${names}</ul></section>` : ""}${record}<section class="groups-section"><div class="section-head"><div><p class="eyebrow">${t("meetings")}</p><h2>${t("recentMeetings")}</h2></div></div>${sessions || `<div class="notice info">${t("noMeetings")}</div>`}</section><section class="groups-section"><div class="section-head"><div><p class="eyebrow">${t("cohort")}</p><h2>${t("cohortPeers")}</h2></div><p>${t("cohortExplain")}</p></div><div class="peer-table">${peers}</div></section></article>`,
+    `<article class="group-detail"><header class="group-detail-head">${groupStatus(group)}<p class="eyebrow">${t("groups")}</p><h1>${esc(group.name)}</h1><p class="lead">${esc(group.description || group.church || "")}</p><p>${[group.church, group.city, group.country].filter(Boolean).map(esc).join(" · ")}</p>${group.inviteCode ? `<div class="invite-code"><span>${t("inviteCode")}</span><strong>${esc(group.inviteCode)}</strong></div>` : ""}</header>${groupMetrics(group)}<div class="group-detail-grid"><section class="card reading-target"><p class="eyebrow">${t("readingTarget")}</p><h2 id="reading-preview">${esc(bookTitle(books[0]))} 12</h2><p>${t("discussionRoute")}</p><div class="target-controls"><select id="target-book">${bookOptions}</select><input id="target-chapter" aria-label="${t("chapter")}" type="number" min="1" max="200" value="12"></div><div class="action-row"><a class="button primary" id="chapter-link" href="/reader/${books[0].code}/12/group/${encodeURIComponent(group.id)}">${t("openChapter")}</a></div></section><section class="card cohort-card"><p class="eyebrow">${t("cohort")}</p><h2>${group.weeklyGoal} · ${t("weeklyGoal").toLocaleLowerCase(state.lang)}</h2><p>${group.catchupMode === "steady" ? t("steady") : t("flexible")}</p><p>${t("cohortNeed")}</p></section></div>${names ? `<section class="card member-list"><h2>${t("members")}</h2><ul>${names}</ul></section>` : ""}${record}<section class="groups-section"><div class="section-head"><div><p class="eyebrow">${t("meetings")}</p><h2>${t("recentMeetings")}</h2></div></div>${sessions || `<div class="notice info">${t("noMeetings")}</div>`}</section><section class="groups-section"><div class="section-head"><div><p class="eyebrow">${t("cohort")}</p><h2>${t("cohortPeers")}</h2></div><p>${t("cohortExplain")}</p></div><div class="peer-table">${peers}</div></section></article>`,
   );
   const targetBook = document.querySelector("#target-book"),
     targetChapter = document.querySelector("#target-chapter"),
@@ -2744,7 +2776,7 @@ async function renderGroup(groupId) {
       document.querySelector("#reading-preview").textContent =
         `${titleFor(code)} ${chapter}`;
       document.querySelector("#chapter-link").href =
-        `#/reader/${code}/${chapter}/group/${encodeURIComponent(group.id)}`;
+        `/reader/${code}/${chapter}/group/${encodeURIComponent(group.id)}`;
     };
   targetBook.onchange = updateTarget;
   targetChapter.oninput = updateTarget;
@@ -2778,7 +2810,7 @@ function renderAttemptResult(result, book, chapter, groupId = "") {
   const mistakes = result.mistakes?.length
     ? result.mistakes.map(item => `<article class="result-review"><h3>${esc(item.reference)}</h3><p>${esc(item.explanation)}</p><p><strong>${state.lang === "uk" ? "Правильна відповідь" : state.lang === "ru" ? "Правильный ответ" : "Correct answer"}:</strong> ${item.correctAnswers.map(esc).join("; ")}</p></article>`).join("")
     : `<div class="notice success">${copy.noMistakes}</div>`;
-  shell(`<article class="prose attempt-results"><p class="eyebrow">Scripture Archive</p><h1>${copy.completed}</h1><p class="score-line"><strong>${result.score}</strong> ${copy.score} ${result.total}</p><h2>${copy.mastered}</h2>${mastered}<h2>${copy.mistakes}</h2>${mistakes}<div class="action-row"><a class="button primary" href="#/reader/${book}/${chapter}">${copy.reopen}</a>${groupId?`<a class="button" href="#/groups/${encodeURIComponent(groupId)}">${t("groups")}</a>`:""}</div></article>`);
+  shell(`<article class="prose attempt-results"><p class="eyebrow">Scripture Archive</p><h1>${copy.completed}</h1><p class="score-line"><strong>${result.score}</strong> ${copy.score} ${result.total}</p><h2>${copy.mastered}</h2>${mastered}<h2>${copy.mistakes}</h2>${mistakes}<div class="action-row"><a class="button primary" href="/reader/${book}/${chapter}">${copy.reopen}</a>${groupId?`<a class="button" href="/groups/${encodeURIComponent(groupId)}">${t("groups")}</a>`:""}</div></article>`);
   window.saAnalytics?.track("quiz_complete",{score:Number(result.score),total:Number(result.total),language:state.lang,mode:groupId?"group":"personal"});
   play("done");
 }
@@ -2788,7 +2820,7 @@ async function renderMission(parts = []) {
   state.currentReader = null;
   const copy = ATTEMPT_COPY[state.lang], attemptId = parts[2] || sessionStorage.getItem("sa.activeAttempt");
   if (!attemptId) {
-    shell(`<section class="gate-panel"><p class="eyebrow">${t("missionTitle")}</p><h1>${copy.prepareTitle}</h1><p class="lead">${copy.readRequired}</p><a class="button primary" href="#/reader/GEN/12">${copy.reread}</a></section>`);
+    shell(`<section class="gate-panel"><p class="eyebrow">${t("missionTitle")}</p><h1>${copy.prepareTitle}</h1><p class="lead">${copy.readRequired}</p><a class="button primary" href="/reader/GEN/12">${copy.reread}</a></section>`);
     return;
   }
   let data;
@@ -2857,7 +2889,7 @@ function renderLiveLab() {
     inviteSubject = encodeURIComponent(t("labInvite")),
     note = state.cms?.liveNote?.[state.lang];
   shell(
-    `<article class="live-lab"><section class="lab-hero"><p class="eyebrow">${t("labEye")}</p><h1>${t("labTitle")}</h1><p class="lead">${t("labLead")}</p><p class="lab-tagline">${t("labTagline")}</p>${note ? `<div class="notice live-note">${esc(note)}</div>` : ""}<div class="action-row"><a class="button primary" href="#/mission/abraham">${t("labMission")}</a><a class="button light" href="mailto:dordiaioleksii1@gmail.com?subject=${inviteSubject}">${t("labInvite")}</a><button class="button light" id="print-lab" type="button">${t("labPrint")}</button></div></section><section aria-labelledby="lab-how"><div class="section-head"><div><p class="eyebrow">${t("labTry")}</p><h2 id="lab-how">${t("labHow")}</h2></div></div><div class="lab-flow">${steps.map(([number, title, text]) => `<article class="lab-step"><span class="lab-step-number">${esc(number)}</span><h3>${esc(title)}</h3><p>${esc(text)}</p></article>`).join("")}</div></section><div class="lab-columns"><section class="lab-card lab-timing"><h2>${t("labTiming")}</h2><ol>${t(
+    `<article class="live-lab"><section class="lab-hero"><p class="eyebrow">${t("labEye")}</p><h1>${t("labTitle")}</h1><p class="lead">${t("labLead")}</p><p class="lab-tagline">${t("labTagline")}</p>${note ? `<div class="notice live-note">${esc(note)}</div>` : ""}<div class="action-row"><a class="button primary" href="/mission/abraham">${t("labMission")}</a><a class="button light" href="mailto:dordiaioleksii1@gmail.com?subject=${inviteSubject}">${t("labInvite")}</a><button class="button light" id="print-lab" type="button">${t("labPrint")}</button></div></section><section aria-labelledby="lab-how"><div class="section-head"><div><p class="eyebrow">${t("labTry")}</p><h2 id="lab-how">${t("labHow")}</h2></div></div><div class="lab-flow">${steps.map(([number, title, text]) => `<article class="lab-step"><span class="lab-step-number">${esc(number)}</span><h3>${esc(title)}</h3><p>${esc(text)}</p></article>`).join("")}</div></section><div class="lab-columns"><section class="lab-card lab-timing"><h2>${t("labTiming")}</h2><ol>${t(
       "labTimes",
     )
       .map((item) => `<li>${esc(item)}</li>`)
@@ -2932,7 +2964,7 @@ async function renderAbout() {
 function renderGate() {
   setActiveNav("account");
   shell(
-    `<section class="gate-panel"><p class="eyebrow">Scripture Archive</p><h1>${t("gateTitle")}</h1><p class="lead">${t("gateText")}</p><div class="action-row"><a class="button primary" href="#/account">${t("signUp")}</a><a class="button" href="#/reader">${t("reader")}</a></div></section>`,
+    `<section class="gate-panel"><p class="eyebrow">Scripture Archive</p><h1>${t("gateTitle")}</h1><p class="lead">${t("gateText")}</p><div class="action-row"><a class="button primary" href="/account">${t("signUp")}</a><a class="button" href="/reader">${t("reader")}</a></div></section>`,
   );
 }
 
@@ -3075,18 +3107,18 @@ function renderAccount() {
   if (!state.user) {
     if (resetToken) {
       shell(`<section class="card auth-card"><p class="eyebrow">Scripture Archive</p><h1>${copy.reset}</h1><form id="reset-form" class="account-form">${field("password", copy.password, "password", `autocomplete="new-password" minlength="12" maxlength="128" required aria-describedby="password-rule"`)}<small id="password-rule">${copy.passwordRule}</small><button class="button primary">${copy.reset}</button><p id="auth-state" role="status"></p></form></section>`);
-      document.querySelector("#reset-form").onsubmit=async event=>{event.preventDefault();const status=document.querySelector("#auth-state");try{await authRequest("reset-password",{token:resetToken,password:new FormData(event.currentTarget).get("password")});status.textContent=copy.resetDone;window.history.replaceState(null,"","/#/account")}catch{status.textContent=copy.error}};
+      document.querySelector("#reset-form").onsubmit=async event=>{event.preventDefault();const status=document.querySelector("#auth-state");try{await authRequest("reset-password",{token:resetToken,password:new FormData(event.currentTarget).get("password")});status.textContent=copy.resetDone;window.history.replaceState(null,"","/account")}catch{status.textContent=copy.error}};
       return;
     }
-    shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${copy.title}</h1></div><p>${copy.intro}</p></div>${verified?`<div class="notice success" role="status">${copy.verified}</div>`:""}<div class="auth-grid"><section class="card auth-card"><h2>${copy.login}</h2><form id="login-form" class="account-form">${field("email",copy.email,"email",'autocomplete="email" required')}${field("password",copy.password,"password",'autocomplete="current-password" required')}<button class="button primary">${copy.login}</button><p id="login-state" role="status"></p></form><details><summary>${copy.forgot}</summary><form id="forgot-form" class="account-form">${field("email",copy.email,"email",'autocomplete="email" required')}<button class="button">${copy.send}</button><p id="forgot-state" role="status"></p></form></details></section><section class="card auth-card"><h2>${copy.register}</h2><form id="register-form" class="account-form account-form-grid">${field("firstName",t("firstName"),"text",'autocomplete="given-name" required maxlength="80"')}${field("lastName",t("lastName"),"text",'autocomplete="family-name" required maxlength="80"')}${field("age",copy.age,"number",'min="13" max="120" inputmode="numeric" required')}<label class="account-field"><span>${t("gender")}</span><select name="gender" required>${options(sets.gender)}</select></label><label class="account-field"><span>${t("religion")}</span><select name="tradition" required>${options(sets.religion)}</select></label>${field("denomination",`${copy.denomination} · ${t("optional")}`)}<label class="account-field"><span>${t("marital")}</span><select name="maritalStatus" required>${options(sets.marital)}</select></label><label class="account-field"><span>${copy.children} · ${t("optional")}</span><select name="hasChildren"><option value=""></option><option value="yes">${copy.yes}</option><option value="no">${copy.no}</option></select></label>${field("email",copy.email,"email",'autocomplete="email" required')}${field("password",copy.password,"password",'autocomplete="new-password" minlength="12" maxlength="128" required aria-describedby="register-password-rule"')}<small id="register-password-rule" class="full">${copy.passwordRule}</small><label class="account-check full"><input name="acceptPrivacy" type="checkbox" required><span>${t("privacyAgree")} <a href="#/privacy">${t("privacy")}</a></span></label><button class="button primary">${copy.register}</button><p id="register-state" role="status"></p></form></section></div>`);
-    document.querySelector("#login-form").onsubmit=async event=>{event.preventDefault();const status=document.querySelector("#login-state"),data=Object.fromEntries(new FormData(event.currentTarget));try{await authRequest("login",data);await getSession();window.saAnalytics?.track("login",{method:"password"});if(state.user?.profileComplete)await syncProgress();window.history.replaceState(null,"","/#/account");renderAccount()}catch(error){if(error.message==="email_not_verified")await authRequest("resend-verification",{email:data.email}).catch(()=>{});window.saAnalytics?.track("login_error",{error:String(error.message).slice(0,60)});status.textContent=error.message==="email_not_verified"?copy.verification:copy.error}};
+    shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${copy.title}</h1></div><p>${copy.intro}</p></div>${verified?`<div class="notice success" role="status">${copy.verified}</div>`:""}<div class="auth-grid"><section class="card auth-card"><h2>${copy.login}</h2><form id="login-form" class="account-form">${field("email",copy.email,"email",'autocomplete="email" required')}${field("password",copy.password,"password",'autocomplete="current-password" required')}<button class="button primary">${copy.login}</button><p id="login-state" role="status"></p></form><details><summary>${copy.forgot}</summary><form id="forgot-form" class="account-form">${field("email",copy.email,"email",'autocomplete="email" required')}<button class="button">${copy.send}</button><p id="forgot-state" role="status"></p></form></details></section><section class="card auth-card"><h2>${copy.register}</h2><form id="register-form" class="account-form account-form-grid">${field("firstName",t("firstName"),"text",'autocomplete="given-name" required maxlength="80"')}${field("lastName",t("lastName"),"text",'autocomplete="family-name" required maxlength="80"')}${field("age",copy.age,"number",'min="13" max="120" inputmode="numeric" required')}<label class="account-field"><span>${t("gender")}</span><select name="gender" required>${options(sets.gender)}</select></label><label class="account-field"><span>${t("religion")}</span><select name="tradition" required>${options(sets.religion)}</select></label>${field("denomination",`${copy.denomination} · ${t("optional")}`)}<label class="account-field"><span>${t("marital")}</span><select name="maritalStatus" required>${options(sets.marital)}</select></label><label class="account-field"><span>${copy.children} · ${t("optional")}</span><select name="hasChildren"><option value=""></option><option value="yes">${copy.yes}</option><option value="no">${copy.no}</option></select></label>${field("email",copy.email,"email",'autocomplete="email" required')}${field("password",copy.password,"password",'autocomplete="new-password" minlength="12" maxlength="128" required aria-describedby="register-password-rule"')}<small id="register-password-rule" class="full">${copy.passwordRule}</small><label class="account-check full"><input name="acceptPrivacy" type="checkbox" required><span>${t("privacyAgree")} <a href="/privacy">${t("privacy")}</a></span></label><button class="button primary">${copy.register}</button><p id="register-state" role="status"></p></form></section></div>`);
+    document.querySelector("#login-form").onsubmit=async event=>{event.preventDefault();const status=document.querySelector("#login-state"),data=Object.fromEntries(new FormData(event.currentTarget));try{await authRequest("login",data);await getSession();window.saAnalytics?.track("login",{method:"password"});if(state.user?.profileComplete)await syncProgress();window.history.replaceState(null,"","/account");renderAccount()}catch(error){if(error.message==="email_not_verified")await authRequest("resend-verification",{email:data.email}).catch(()=>{});window.saAnalytics?.track("login_error",{error:String(error.message).slice(0,60)});status.textContent=error.message==="email_not_verified"?copy.verification:copy.error}};
     document.querySelector("#forgot-form").onsubmit=async event=>{event.preventDefault();const status=document.querySelector("#forgot-state");try{await authRequest("forgot-password",Object.fromEntries(new FormData(event.currentTarget)));status.textContent=copy.resetSent}catch{status.textContent=copy.error}};
     document.querySelector("#register-form").onsubmit=async event=>{event.preventDefault();const status=document.querySelector("#register-state"),form=new FormData(event.currentTarget),data=Object.fromEntries(form);data.age=Number(data.age);data.acceptPrivacy=form.has("acceptPrivacy");data.hasChildren=data.hasChildren==="yes"?true:data.hasChildren==="no"?false:null;data.locale=state.lang;try{const result=await authRequest("register",data);window.saAnalytics?.track("sign_up",{method:"password",language:state.lang});status.textContent=result.emailDelivered?copy.verification:`${copy.verification} ${copy.error}`;event.currentTarget.querySelector("button").disabled=true}catch(error){window.saAnalytics?.track("sign_up_error",{error:String(error.message).slice(0,60)});status.textContent=copy.error}};
     return;
   }
   if (state.user.profileComplete) {
     const visibility=state.user.visibility||{};
-    shell(`<article class="prose account-dashboard"><p class="eyebrow">${t("account")}</p><h1>${esc(state.user.firstName)} ${esc(state.user.lastName)}</h1><p>${esc(state.user.email)}</p><div class="notice success">${copy.saved}</div><div class="action-row"><a class="button primary" href="#/missions">${t("continue")}</a><a class="button" href="#/groups">${t("myGroups")}</a>${state.user.isOwner?`<a class="button" href="#/editor">${copy.edit}</a>`:""}<button class="button" id="logout-button">${copy.logout}</button></div><section class="profile-controls"><h2>${copy.visibility}</h2><p>${copy.visibilityHelp}</p><form id="visibility-form" class="account-form"><label class="account-check"><input name="firstName" type="checkbox" ${visibility.firstName?"checked":""}><span>${copy.publicFirst}</span></label><label class="account-check"><input name="lastName" type="checkbox" ${visibility.lastName?"checked":""}><span>${copy.publicLast}</span></label><label class="account-check"><input name="church" type="checkbox" ${visibility.church?"checked":""}><span>${copy.publicChurch}</span></label><button class="button">${copy.save}</button><p id="visibility-state" role="status"></p></form></section>${state.user.authProvider==="password"?`<details class="profile-controls"><summary>${copy.change}</summary><form id="password-form" class="account-form">${field("currentPassword",copy.currentPassword,"password",'autocomplete="current-password" required')}${field("newPassword",copy.newPassword,"password",'autocomplete="new-password" minlength="12" maxlength="128" required')}<small>${copy.passwordRule}</small><button class="button">${copy.change}</button><p id="password-state" role="status"></p></form></details><details class="danger-zone"><summary>${copy.delete}</summary><p>${copy.deleteHelp}</p><form id="delete-form" class="account-form">${field("password",copy.password,"password",'autocomplete="current-password" required')}<label class="account-check"><input name="confirm" type="checkbox" required><span>${copy.confirmDelete}</span></label><button class="button">${copy.delete}</button><p id="delete-state" role="status"></p></form></details>`:""}</article>`);
+    shell(`<article class="prose account-dashboard"><p class="eyebrow">${t("account")}</p><h1>${esc(state.user.firstName)} ${esc(state.user.lastName)}</h1><p>${esc(state.user.email)}</p><div class="notice success">${copy.saved}</div><div class="action-row"><a class="button primary" href="/missions">${t("continue")}</a><a class="button" href="/groups">${t("myGroups")}</a>${state.user.isOwner?`<a class="button" href="/editor">${copy.edit}</a>`:""}<button class="button" id="logout-button">${copy.logout}</button></div><section class="profile-controls"><h2>${copy.visibility}</h2><p>${copy.visibilityHelp}</p><form id="visibility-form" class="account-form"><label class="account-check"><input name="firstName" type="checkbox" ${visibility.firstName?"checked":""}><span>${copy.publicFirst}</span></label><label class="account-check"><input name="lastName" type="checkbox" ${visibility.lastName?"checked":""}><span>${copy.publicLast}</span></label><label class="account-check"><input name="church" type="checkbox" ${visibility.church?"checked":""}><span>${copy.publicChurch}</span></label><button class="button">${copy.save}</button><p id="visibility-state" role="status"></p></form></section>${state.user.authProvider==="password"?`<details class="profile-controls"><summary>${copy.change}</summary><form id="password-form" class="account-form">${field("currentPassword",copy.currentPassword,"password",'autocomplete="current-password" required')}${field("newPassword",copy.newPassword,"password",'autocomplete="new-password" minlength="12" maxlength="128" required')}<small>${copy.passwordRule}</small><button class="button">${copy.change}</button><p id="password-state" role="status"></p></form></details><details class="danger-zone"><summary>${copy.delete}</summary><p>${copy.deleteHelp}</p><form id="delete-form" class="account-form">${field("password",copy.password,"password",'autocomplete="current-password" required')}<label class="account-check"><input name="confirm" type="checkbox" required><span>${copy.confirmDelete}</span></label><button class="button">${copy.delete}</button><p id="delete-state" role="status"></p></form></details>`:""}</article>`);
     document.querySelector("#logout-button").onclick=async()=>{await authRequest("logout");state.user=null;localStorage.removeItem("sa.progressOwner");renderAccount()};
     document.querySelector("#visibility-form").onsubmit=async event=>{event.preventDefault();const form=new FormData(event.currentTarget),status=document.querySelector("#visibility-state");try{state.user=(await accountRequest("visibility","PUT",{firstName:form.has("firstName"),lastName:form.has("lastName"),church:form.has("church")})).user;status.textContent=copy.saved}catch{status.textContent=copy.error}};
     if(document.querySelector("#password-form"))document.querySelector("#password-form").onsubmit=async event=>{event.preventDefault();const status=document.querySelector("#password-state"),data=Object.fromEntries(new FormData(event.currentTarget));try{await authRequest("change-password",data);state.user=null;localStorage.removeItem("sa.progressOwner");renderAccount()}catch{status.textContent=copy.error}};
@@ -3094,7 +3126,7 @@ function renderAccount() {
     return;
   }
   const ageOptions=["13-17","18-24","25-34","35-44","45-54","55-64","65+"].map(value=>`<option>${value}</option>`).join("");
-  shell(`<div class="section-head"><div><p class="eyebrow">${esc(state.user.email)}</p><h1>${copy.title}</h1></div><p>${copy.intro}</p></div><section class="card profile-card"><form id="profile-form" class="account-form account-form-grid">${field("firstName",t("firstName"),"text",'autocomplete="given-name" required')}${field("lastName",t("lastName"),"text",'autocomplete="family-name" required')}<label class="account-field"><span>${t("ageRange")}</span><select name="ageRange" required><option value=""></option>${ageOptions}</select></label><label class="account-field"><span>${t("religion")} · ${t("optional")}</span><select name="tradition">${options(sets.religion)}</select></label>${field("church",`${t("church")} · ${t("optional")}`)}<label class="account-field"><span>${t("marital")} · ${t("optional")}</span><select name="maritalStatus">${options(sets.marital)}</select></label><label class="account-field"><span>${t("gender")} · ${t("optional")}</span><select name="gender">${options(sets.gender)}</select></label><label class="account-check"><input name="acceptSensitive" type="checkbox"><span>${t("sensitiveAgree")}</span></label><label class="account-check"><input name="acceptPrivacy" type="checkbox" required><span>${t("privacyAgree")} <a href="#/privacy">${t("privacy")}</a></span></label><button class="button primary">${copy.save}</button><p id="profile-state" role="status"></p></form></section>`);
+  shell(`<div class="section-head"><div><p class="eyebrow">${esc(state.user.email)}</p><h1>${copy.title}</h1></div><p>${copy.intro}</p></div><section class="card profile-card"><form id="profile-form" class="account-form account-form-grid">${field("firstName",t("firstName"),"text",'autocomplete="given-name" required')}${field("lastName",t("lastName"),"text",'autocomplete="family-name" required')}<label class="account-field"><span>${t("ageRange")}</span><select name="ageRange" required><option value=""></option>${ageOptions}</select></label><label class="account-field"><span>${t("religion")} · ${t("optional")}</span><select name="tradition">${options(sets.religion)}</select></label>${field("church",`${t("church")} · ${t("optional")}`)}<label class="account-field"><span>${t("marital")} · ${t("optional")}</span><select name="maritalStatus">${options(sets.marital)}</select></label><label class="account-field"><span>${t("gender")} · ${t("optional")}</span><select name="gender">${options(sets.gender)}</select></label><label class="account-check"><input name="acceptSensitive" type="checkbox"><span>${t("sensitiveAgree")}</span></label><label class="account-check"><input name="acceptPrivacy" type="checkbox" required><span>${t("privacyAgree")} <a href="/privacy">${t("privacy")}</a></span></label><button class="button primary">${copy.save}</button><p id="profile-state" role="status"></p></form></section>`);
   document.querySelector("#profile-form").onsubmit=async event=>{event.preventDefault();const form=new FormData(event.currentTarget),data=Object.fromEntries(form);data.acceptSensitive=form.has("acceptSensitive");data.acceptPrivacy=form.has("acceptPrivacy");data.locale=state.lang;try{state.user=(await accountRequest("profile","POST",data)).user;await syncProgress();renderAccount()}catch{document.querySelector("#profile-state").textContent=copy.error}};
 }
 
@@ -3235,7 +3267,6 @@ async function route() {
     const sourceRoute = location.hash ? location.hash.replace(/^#\/?/, "") : location.pathname.replace(/^\/?/, "");
     const parts = sourceRoute.split("/").filter(Boolean);
     const name = parts[0] || "home";
-    window.saAnalytics?.track("page_view",{page_name:name,language:state.lang});
     if (name !== "reader") state.currentReader = null;
     if (name === "reader")
       await renderReader(parts.length > 1 ? parts : ["reader", "JHN", "3"]);
@@ -3253,6 +3284,8 @@ async function route() {
     else await renderHome();
     cleanPublicCopy();
     setStaticI18n();
+    updatePageMetadata(name);
+    window.saAnalytics?.track("page_view",{language:state.lang});
     window.scrollTo({ top: 0, behavior: "instant" });
   } catch (error) {
     console.error(error);
@@ -3272,7 +3305,22 @@ document.querySelector("#menu-toggle").addEventListener("click", (e) => {
   const open = nav.classList.toggle("open");
   e.currentTarget.setAttribute("aria-expanded", String(open));
 });
+document.addEventListener("click", event => {
+  const link = event.target.closest?.("a[href]");
+  if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.target || link.hasAttribute("download")) return;
+  const url = new URL(link.href, location.href);
+  if (url.origin !== location.origin) {
+    if (url.hostname === "send.monobank.ua") window.saAnalytics?.track("support_click", { destination: "monobank" });
+    return;
+  }
+  if (url.hash && !url.hash.startsWith("#/")) return;
+  event.preventDefault();
+  const destination = url.pathname.split("/").filter(Boolean)[0] || "home";
+  window.saAnalytics?.track("navigation_click", { destination });
+  navigateTo(`${url.pathname}${url.search}`);
+}, true);
 window.addEventListener("hashchange", route);
+window.addEventListener("popstate", route);
 Promise.all([getCMS(), getSession()]).finally(async () => {
   if (state.user?.profileComplete) await syncProgress();
   setStaticI18n();

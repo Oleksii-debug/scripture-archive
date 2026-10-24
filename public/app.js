@@ -2195,14 +2195,18 @@ async function getBook(code) {
   const edition = selected.local ? selected : EDITIONS[state.lang].find(e => e.local);
   const folder = edition.folder || state.lang;
   const key = `${folder}:${code}`;
-  if (!state.bookCache.has(key))
-    state.bookCache.set(
-      key,
-      fetch(`/data/bible/${folder}/${code}.json`).then((r) => {
+  if (!state.bookCache.has(key)) {
+    const request = fetch(`/data/bible/${folder}/${code}.json`)
+      .then((r) => {
         if (!r.ok) throw Error(r.status);
         return r.json();
-      }),
-    );
+      })
+      .catch((error) => {
+        if (state.bookCache.get(key) === request) state.bookCache.delete(key);
+        throw error;
+      });
+    state.bookCache.set(key, request);
+  }
   return state.bookCache.get(key);
 }
 function localEditionMetadata(catalog) {

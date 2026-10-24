@@ -6,18 +6,21 @@ const LOADER_COPY = {
     title: "Не вдалося відкрити сторінку",
     detail: "Не завантажився інтерфейс Архіву Писання. Перевірте з'єднання та повторіть спробу.",
     retry: "Повторити завантаження",
+    reload: "Перезавантажити сторінку",
     loading: "Повторне завантаження інтерфейсу…",
   },
   ru: {
     title: "Не удалось открыть страницу",
     detail: "Не загрузился интерфейс Архива Писания. Проверьте соединение и повторите попытку.",
     retry: "Повторить загрузку",
+    reload: "Перезагрузить страницу",
     loading: "Повторная загрузка интерфейса…",
   },
   en: {
     title: "The page could not open",
     detail: "The Scripture Archive interface did not load. Check your connection and try again.",
     retry: "Retry loading",
+    reload: "Reload the page",
     loading: "Reloading the interface…",
   },
 } as const;
@@ -71,9 +74,15 @@ export default function ScriptLoader() {
         const retry = document.createElement("button");
         retry.className = "button primary";
         retry.type = "button";
-        retry.textContent = copy.retry;
+        // Retrying the top-level URL cannot refresh a failed imported module.
+        // A full navigation resets the document-scoped browser module map.
+        retry.textContent = attempt > 1 ? copy.reload : copy.retry;
         retry.addEventListener("click", () => {
           if (!active) return;
+          if (attempt > 1) {
+            window.location.reload();
+            return;
+          }
           main.replaceChildren();
           main.focus();
           if (announcer) announcer.textContent = LOADER_COPY[loaderLanguage()].loading;

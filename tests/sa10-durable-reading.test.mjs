@@ -186,3 +186,37 @@ for (const mode of ['DELETE', 'WAL']) {
     }finally{f.dispose()}
   });
 }
+
+
+// SA10: a stale visibility form must never receive a success ACK after its
+// canonical profile has disappeared (or before it was created).
+for (const mode of ['DELETE', 'WAL']) {
+  test(`${mode}: missing/deleted profile visibility refuses false ACK`, async () => {
+    const f=fixture(mode);
+    try {
+      const db=new D1Test(f.file),api=worker(db);
+      const payload={firstName:true,lastName:false,church:false,progress:true};
+      const missing=await call(api,'visibility','PUT',payload);
+      assert.equal(missing.status,409,'missing profile must not ACK a non-applied UPDATE');
+      assert.equal(missing.body.error,'profile_not_found');
+      assert.equal(db.db.prepare("SELECT count(*) AS n FROM profiles WHERE user_id='reader-a'").get().n,0);
+
+      const created=await call(api,'profile','PUT',{firstName:'Synthetic',lastName:'Reader',ageRange:'25-34',acceptPrivacy:true,locale:'en'});
+      assert.equal(created.status,200);
+      const visible=await call(api,'visibility','PUT',payload);
+      assert.equal(visible.status,200);
+      assert.equal(visible.body.user.visibility.firstName,true);
+      assert.equal(visible.body.user.visibility.progress,true);
+      db.close();
+
+      const restarted=new D1Test(f.file),again=worker(restarted);
+      assert.equal((await call(again,'profile')).body.user.visibility.progress,true);
+      restarted.db.prepare('DELETE FROM profiles WHERE user_id=?').run('reader-a'); // disposable test data only
+      const stale=await call(again,'visibility','PUT',payload);
+      assert.equal(stale.status,409,'stale tab must not ACK a deleted profile');
+      assert.equal(stale.body.error,'profile_not_found');
+      assert.equal(restarted.db.prepare("SELECT count(*) AS n FROM profiles WHERE user_id='reader-a'").get().n,0);
+      restarted.close();
+    } finally {f.dispose()}
+  });
+}

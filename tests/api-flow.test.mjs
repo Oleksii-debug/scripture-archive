@@ -41,8 +41,8 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal(result.response.status, 403);
   assert.equal(result.data.error, "email_not_verified");
 
-  result = await request(`/api/auth?action=verify&token=${encodeURIComponent(registration.data.testToken)}`, { redirect: "manual", origin: "" });
-  assert.equal(result.response.status, 303);
+  const confirmations = await Promise.all([0, 1].map(() => request(`/api/auth?action=verify&token=${encodeURIComponent(registration.data.testToken)}`, { redirect: "manual", origin: "" })));
+  assert.deepEqual(confirmations.map(item => item.response.status).sort(), [303, 400]);
   result = await request("/api/auth?action=login", { method: "POST", body: { email, password: firstPassword } });
   assert.equal(result.response.status, 200);
   assert.match(cookie, /^sa_session=/);
@@ -55,7 +55,21 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal(result.response.status, 202);
   result = await request("/api/analytics", { method: "POST", body: { action: "heartbeat", sessionId: analyticsSession, pageName: "account", source: "direct", activeSeconds: 30 } });
   assert.equal(result.response.status, 202);
-  const analyticsResponse = await fetch(`${base}/api/analytics?days=30`, { headers: { "oai-authenticated-user-id": "owner-test", "oai-authenticated-user-email": "dordiaioleksii1@gmail.com" } });
+  const spoofedOwner = await fetch(`${base}/api/analytics?days=30`, { headers: { "oai-authenticated-user-id": "owner-test", "oai-authenticated-user-email": "dordiaioleksii1@gmail.com" } });
+  assert.equal(spoofedOwner.status, 403, "client identity headers must not grant owner access");
+  const malformedCookie = await fetch(`${base}/api/account?action=me`, { headers: { Cookie: "sa_session=%E0%A4%A" } });
+  assert.equal(malformedCookie.status, 200);
+  assert.equal((await malformedCookie.json()).user, null);
+  const ownerPassword = `Owner-${crypto.randomUUID()}!`;
+  const ownerPayload = {firstName:"Owner",lastName:"Test",age:30,gender:"prefer_not",tradition:"other",maritalStatus:"prefer_not",email:"dordiaioleksii1@gmail.com",password:ownerPassword,acceptPrivacy:true,locale:"en"};
+  const ownerRegister = await fetch(`${base}/api/auth?action=register`, {method:"POST",headers:{Origin:base,"Content-Type":"application/json"},body:JSON.stringify(ownerPayload)});
+  const ownerRegistration = await ownerRegister.json();
+  assert.equal(ownerRegister.status, 201);
+  await fetch(`${base}/api/auth?action=verify&token=${encodeURIComponent(ownerRegistration.testToken)}`, {redirect:"manual"});
+  const ownerLogin = await fetch(`${base}/api/auth?action=login`, {method:"POST",headers:{Origin:base,"Content-Type":"application/json"},body:JSON.stringify({email:ownerPayload.email,password:ownerPassword})});
+  assert.equal(ownerLogin.status, 200);
+  const ownerCookie = ownerLogin.headers.get("set-cookie").split(";",1)[0];
+  const analyticsResponse = await fetch(`${base}/api/analytics?days=30`, { headers: { Cookie:ownerCookie } });
   assert.equal(analyticsResponse.status, 200);
   const analytics = await analyticsResponse.json();
   assert.equal(Number(analytics.summary.sessions), 1);
@@ -63,9 +77,9 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal(Number(analytics.summary.active_seconds), 30);
   assert.equal(analytics.pages[0].label, "account");
   result = await request("/api/account?action=progress", { method: "PUT", body: { progress: { complete: false, correct: [1] } } });
-  assert.equal(result.response.status, 200);
+  assert.equal(result.response.status, 403, "scores are written only by server-side grading");
   result = await request("/api/account?action=progress");
-  assert.deepEqual(result.data.progress.correct, [1]);
+  assert.deepEqual(result.data.progress.correct, []);
   result = await request("/api/account?action=visibility", { method: "PUT", body: { firstName: true, lastName: true, progress: true } });
   assert.equal(result.data.user.visibility.progress, true);
   const communityResponse = await fetch(`${base}/api/community?q=Test%20Reader&pageSize=12`);
@@ -88,7 +102,11 @@ integration("account, progress, attempts, groups, marathon limit and password re
   result = await request("/api/attempts?action=manifest");
   assert.deepEqual(Object.keys(result.data).sort(), ["id", "locked", "taskCount"]);
   for (let index = 0; index < chapter12.length; index += 1) {
-    result = await request("/api/attempts?action=answer", { method: "POST", body: { attemptId, taskIndex: index + 1, selected: chapter12[index].correct } });
+    if(index===0){
+      const answers=await Promise.all([0,1].map(()=>request("/api/attempts?action=answer", {method:"POST",body:{attemptId,taskIndex:1,selected:chapter12[0].correct}})));
+      assert.deepEqual(answers.map(answer=>answer.response.status).sort(),[200,409]);
+      result=answers.find(answer=>answer.response.status===200);
+    }else result = await request("/api/attempts?action=answer", { method: "POST", body: { attemptId, taskIndex: index + 1, selected: chapter12[index].correct } });
     assert.equal(result.response.status, 200);
     if (index < chapter12.length - 1) {
       assert.equal(result.data.completed, undefined);
@@ -100,6 +118,12 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal(result.data.result.score, chapter12.length);
   assert.equal(result.data.book, "GEN");
   assert.equal(result.data.chapter, 12);
+  result = await request("/api/account?action=progress");
+  assert.equal(result.data.progress.correct.length, chapter12.length);
+  const secondBrowserLogin = await fetch(`${base}/api/auth?action=login`, {method:"POST",headers:{Origin:base,"Content-Type":"application/json"},body:JSON.stringify({email,password:firstPassword})});
+  const secondBrowserCookie = secondBrowserLogin.headers.get("set-cookie").split(";",1)[0];
+  const restoredProgress = await fetch(`${base}/api/account?action=progress`, {headers:{Cookie:secondBrowserCookie}});
+  assert.equal((await restoredProgress.json()).progress.correct.length, chapter12.length);
 
   await request("/api/attempts?action=read", { method: "POST", body: { book: "GEN", chapter: 12 } });
   result = await request("/api/attempts?action=start", { method: "POST", body: { missionId: "OT-AB-01", book: "GEN", chapter: 12, locale: "en" } });
@@ -139,8 +163,11 @@ integration("account, progress, attempts, groups, marathon limit and password re
 
   result = await request("/api/auth?action=forgot-password", { method: "POST", body: { email } });
   assert.ok(result.data.testToken);
-  result = await request("/api/auth?action=reset-password", { method: "POST", body: { token: result.data.testToken, password: secondPassword } });
-  assert.equal(result.response.status, 200);
+  const resetToken = result.data.testToken;
+  const resets = await Promise.all([0, 1].map(() => request("/api/auth?action=reset-password", { method: "POST", body: { token: resetToken, password: secondPassword } })));
+  assert.deepEqual(resets.map(item => item.response.status).sort(), [200, 400]);
+  const revokedSecondSession = await fetch(`${base}/api/account?action=me`, {headers:{Cookie:secondBrowserCookie}});
+  assert.equal((await revokedSecondSession.json()).user, null);
   result = await request("/api/account?action=me");
   assert.equal(result.data.user, null);
   result = await request("/api/auth?action=login", { method: "POST", body: { email, password: firstPassword } });

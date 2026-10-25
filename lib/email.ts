@@ -28,6 +28,7 @@ export async function sendSecurityEmail(email: string, localeValue: string, purp
   if (!env.EMAIL_API_KEY || !env.EMAIL_FROM) return { delivered: false, reason: "email_not_configured" };
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
+    signal: AbortSignal.timeout(10_000),
     headers: { Authorization: `Bearer ${env.EMAIL_API_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       from: env.EMAIL_FROM,
@@ -36,8 +37,8 @@ export async function sendSecurityEmail(email: string, localeValue: string, purp
       html: `<div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;color:#152b3c"><h1>${escapeHtml(copy.title)}</h1><p>${escapeHtml(copy.body)}</p><p><a href="${escapeHtml(url)}" style="display:inline-block;background:#12374a;color:#fff;padding:12px 20px;border-radius:7px;text-decoration:none">${escapeHtml(copy.action)}</a></p><p>${escapeHtml(copy.expiry)}</p><p>Scripture Archive</p></div>`,
       text: `${copy.title}\n\n${copy.body}\n\n${url}\n\n${copy.expiry}\n\nScripture Archive`,
     }),
-  });
-  if (!response.ok) return { delivered: false, reason: "email_provider_error" };
+  }).catch(() => null);
+  if (!response?.ok) return { delivered: false, reason: "email_provider_error" };
   return { delivered: true };
 }
 
@@ -56,6 +57,7 @@ export async function sendSupportRequestEmail(input: {
   const recipient = env.SUPPORT_RECIPIENT || "dordiaioleksii1@gmail.com";
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
+    signal: AbortSignal.timeout(10_000),
     headers: { Authorization: `Bearer ${env.EMAIL_API_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       from: env.EMAIL_FROM,
@@ -66,8 +68,8 @@ export async function sendSupportRequestEmail(input: {
       text: `Нове звернення до служби підтримки\n\nID: ${input.requestId}\nВід: ${input.userName || input.email} <${input.email}>\nМова: ${input.locale}\n\n${input.subject}\n\n${input.message}`,
       attachments: input.attachments.map(file => ({ filename: file.filename, content_type: file.contentType, content: file.content })),
     }),
-  });
-  if (!response.ok) return { delivered: false, reason: "email_provider_error" };
+  }).catch(() => null);
+  if (!response?.ok) return { delivered: false, reason: "email_provider_error" };
   return { delivered: true };
 }
 

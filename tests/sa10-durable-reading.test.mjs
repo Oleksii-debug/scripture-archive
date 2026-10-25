@@ -86,3 +86,36 @@ for(const mode of ['DELETE','WAL']){
     }finally{f.dispose()}
   });
 }
+
+
+// SA10: A damaged canonical row must not masquerade as successful readback or change on GET.
+for (const mode of ['DELETE', 'WAL']) {
+  test(`${mode}: corrupt/nonarray reading returns explicit unavailable without mutation`,async()=>{
+    const f=fixture(mode);try{const db=new D1Test(f.file),api=worker(db);
+      for(const broken of ['{invalid-json','{}']){
+        db.db.prepare("INSERT INTO progress (user_id,mission_id,data) VALUES (?,'READING',?) ON CONFLICT(user_id,mission_id) DO UPDATE SET data=excluded.data").run('reader-a',broken);
+        const response=await call(api,'reading');
+        assert.equal(response.status,503,'corrupt reading must not ACK as successful 200 or raise uncontrolled exception');
+        assert.equal(response.body.error,'reading_state_unavailable');
+        assert.equal(db.db.prepare("SELECT data FROM progress WHERE user_id=? AND mission_id='READING'").get('reader-a').data,broken,'GET is read-only');
+        assert.deepEqual((await call(api,'reading','GET',undefined,'reader-b')).body.reading,[],'unaffected user still accessible');
+      }
+      db.db.prepare("UPDATE progress SET data=? WHERE user_id=? AND mission_id='READING'").run(JSON.stringify([chapter(9)]),'reader-a');
+      db.close();const reopened=new D1Test(f.file);
+      assert.deepEqual((await call(worker(reopened),'reading')).body.reading,[chapter(9)],'repaired test-only row restored after reopening');
+      reopened.close();
+    }finally{f.dispose()}
+  });
+  test(`${mode}: corrupt mission JSON GET returns unavailable without mutation`,async()=>{
+    const f=fixture(mode);try{const db=new D1Test(f.file),api=worker(db);
+      db.db.prepare("INSERT INTO progress(user_id,mission_id,data) VALUES (?,'OT-AB-01',?)").run('reader-a','{broken');
+      const result=await call(api,'progress');
+      assert.equal(result.status,503);
+      assert.equal(result.body.error,'progress_state_unavailable');
+      assert.equal(db.db.prepare("SELECT data FROM progress WHERE user_id=? AND mission_id='OT-AB-01'").get('reader-a').data,'{broken');
+      db.close();const reopened=new D1Test(f.file);
+      assert.equal((await call(worker(reopened),'progress','GET',undefined,'reader-b')).body.progress,null);
+      reopened.close();
+    }finally{f.dispose()}
+  });
+}

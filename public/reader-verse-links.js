@@ -41,3 +41,18 @@ export function focusReaderRouteVerse(search, root, routeParts, activeReader) {
       routeParts[2] !== String(activeReader.chapter)) return false;
   return focusRequestedVerse(search, root);
 }
+
+// A clamped or malformed route must not keep advertising a different chapter.
+// Drop a stale ?verse query when the displayed coordinate differs, while
+// leaving valid deep links (and their queries) untouched.
+export function readerCanonicalPath(routeParts, activeReader, groupId = '') {
+  if (!Array.isArray(routeParts) || routeParts[0] !== 'reader' || !routeParts[1] ||
+      !activeReader || typeof activeReader.book !== 'string' ||
+      !/^[A-Z0-9]{3}$/.test(activeReader.book) ||
+      !Number.isSafeInteger(activeReader.chapter) || activeReader.chapter < 1) return null;
+  if (routeParts[1] === activeReader.book &&
+      routeParts[2] === String(activeReader.chapter)) return null;
+  const group = routeParts[3] === 'group' && groupId
+    ? `/group/${encodeURIComponent(groupId)}` : '';
+  return `/reader/${activeReader.book}/${activeReader.chapter}${group}`;
+}

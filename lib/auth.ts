@@ -60,7 +60,10 @@ export function parseCookies(request: Request) {
       .split(";")
       .map(part => part.trim().split("="))
       .filter(parts => parts.length >= 2)
-      .map(([key, ...rest]) => [key, decodeURIComponent(rest.join("="))]),
+      .flatMap(([key, ...rest]) => {
+        try { return [[key, decodeURIComponent(rest.join("="))] as const]; }
+        catch { return []; }
+      }),
   );
 }
 
@@ -85,10 +88,15 @@ export function sameOrigin(request: Request) {
   return !site || site === "same-origin" || site === "same-site" || site === "none";
 }
 
+export function isAuthTestRequest(request: Request) {
+  return env.AUTH_TEST_MODE === "1" && ["localhost", "127.0.0.1", "[::1]"].includes(new URL(request.url).hostname);
+}
+
 export async function authenticateRequest(request: Request): Promise<Identity | null> {
   const headerUserId = request.headers.get("oai-authenticated-user-id");
   const headerEmail = request.headers.get("oai-authenticated-user-email")?.trim().toLowerCase();
-  if (headerUserId && headerEmail) {
+  // Enable only behind a gateway that strips client-supplied identity headers.
+  if (env.TRUST_PLATFORM_AUTH === "1" && headerUserId && headerEmail) {
     const encoded = request.headers.get("oai-authenticated-user-full-name");
     let fullName: string | null = null;
     if (encoded && request.headers.get("oai-authenticated-user-full-name-encoding") === "percent-encoded-utf-8") {

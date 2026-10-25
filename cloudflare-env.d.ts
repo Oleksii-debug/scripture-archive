@@ -8,6 +8,7 @@ declare namespace Cloudflare {
     EMAIL_FROM?: string;
     SUPPORT_RECIPIENT?: string;
     AUTH_TEST_MODE?: string;
+    TRUST_PLATFORM_AUTH?: string;
   }
 }
 

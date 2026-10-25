@@ -2192,7 +2192,7 @@ async function getSession() {
     state.user = null;
   }
   const previousOwner=localStorage.getItem('sa.progressOwner');
-  if(previousOwner&&previousOwner!==state.user?.id){state.missionProgress={index:0,correct:[],complete:false};localStorage.setItem('sa.mission.OTAB01',JSON.stringify(state.missionProgress));localStorage.setItem('sa.readingHistory','[]')}
+  if(previousOwner&&previousOwner!==state.user?.id)clearPersonalProgress();
   if(state.user)localStorage.setItem('sa.progressOwner',state.user.id);else localStorage.removeItem('sa.progressOwner');
   return state.user;
 }
@@ -2834,6 +2834,7 @@ async function renderGroup(groupId) {
 }
 
 function renderAttemptResult(result, book, chapter, groupId = "") {
+  if(state.user)void syncProgress();
   const copy = ATTEMPT_COPY[state.lang];
   const mastered = result.mastered?.length ? `<ul>${result.mastered.map(item => `<li>${esc(item)}</li>`).join("")}</ul>` : `<p>—</p>`;
   const mistakes = result.mistakes?.length
@@ -2942,7 +2943,7 @@ function renderLiveLab() {
 }
 function renderSupport() {
   setActiveNav("support");
-  main.innerHTML=supportSection(state.lang);
+  main.innerHTML=supportSection(state.lang,true);
   main.focus({preventScroll:true});
 }
 function renderHelp() {
@@ -3126,18 +3127,17 @@ async function syncProgress() {
     localStorage.setItem('sa.readingHistory',JSON.stringify(mergedReading));
     if(mergedReading.length)await accountRequest('reading','PUT',{reading:mergedReading});
     const data = await accountRequest("progress");
-    if (
-      data.progress &&
-      (data.progress.correct?.length || 0) >
-        (state.missionProgress.correct?.length || 0)
-    ) {
+    if (data.progress) {
       state.missionProgress = data.progress;
       localStorage.setItem("sa.mission.OTAB01", JSON.stringify(data.progress));
-    } else
-      await accountRequest("progress", "PUT", {
-        progress: state.missionProgress,
-      });
+    }
   } catch {}
+}
+function clearPersonalProgress() {
+  state.missionProgress={index:0,correct:[],complete:false};
+  localStorage.setItem("sa.mission.OTAB01",JSON.stringify(state.missionProgress));
+  localStorage.setItem("sa.readingHistory","[]");
+  localStorage.removeItem("sa.progressOwner");
 }
 function field(name, label, type = "text", extra = "") {
   return `<label class="account-field"><span>${label}</span><input name="${name}" type="${type}" ${extra}></label>`;
@@ -3149,26 +3149,61 @@ function renderAccount() {
     ru: { title:"Учётная запись",intro:"Подтверждённая почта защищает доступ, а серверное сохранение возвращает прогресс на другом устройстве.",login:"Войти",register:"Создать учётную запись",forgot:"Забыли пароль?",reset:"Установить новый пароль",change:"Изменить пароль",currentPassword:"Текущий пароль",newPassword:"Новый пароль",email:"Электронная почта",password:"Пароль",passwordRule:"Не менее 12 символов",age:"Возраст",denomination:"Деноминация или название церкви",children:"Есть ли дети",yes:"Да",no:"Нет",send:"Отправить ссылку",verification:"Проверьте почту и откройте одноразовую ссылку подтверждения.",verified:"Электронный адрес подтверждён. Теперь войдите.",resetSent:"Если учётная запись существует, письмо уже отправлено.",resetDone:"Пароль изменён. Другие активные сессии завершены. Войдите с новым паролем.",saved:"Профиль и прогресс синхронизируются между устройствами.",edit:"Редактировать сайт",visibility:"Публичная видимость",visibilityHelp:"Все чувствительные поля остаются приватными. Отдельно можно разрешить только перечисленные поля.",publicFirst:"Показывать имя",publicLast:"Показывать фамилию",publicChurch:"Показывать название церкви",publicProgress:"Показывать учебный прогресс",save:"Сохранить",delete:"Удалить учётную запись",deleteHelp:"Будут удалены профиль, личный прогресс и ваши группы.",confirmDelete:"Я понимаю, что данные будут удалены",logout:"Выйти",error:"Не удалось выполнить действие. Проверьте данные и попробуйте снова." },
     en: { title:"Account",intro:"Verified email protects access, and server-side storage restores your progress on another device.",login:"Sign in",register:"Create account",forgot:"Forgot your password?",reset:"Create a new password",change:"Change password",currentPassword:"Current password",newPassword:"New password",email:"Email",password:"Password",passwordRule:"At least 12 characters",age:"Age",denomination:"Denomination or church name",children:"Do you have children?",yes:"Yes",no:"No",send:"Send one-time link",verification:"Check your inbox and open the one-time verification link.",verified:"Your email is verified. You can now sign in.",resetSent:"If the account exists, the message has been sent.",resetDone:"Password changed. Other active sessions have been ended. Sign in with the new password.",saved:"Your profile and progress synchronize across devices.",edit:"Edit site",visibility:"Public visibility",visibilityHelp:"Sensitive fields remain private. You may separately allow only the fields listed below.",publicFirst:"Show first name",publicLast:"Show last name",publicChurch:"Show church name",publicProgress:"Show learning progress",save:"Save",delete:"Delete account",deleteHelp:"This removes your profile, personal progress, and groups you own.",confirmDelete:"I understand that the data will be deleted",logout:"Sign out",error:"The action could not be completed. Check the details and try again." },
   }[state.lang];
-  const sets = ACCOUNT_OPTIONS[state.lang], resetToken = new URLSearchParams(location.search).get("reset"), verified = new URLSearchParams(location.search).get("verified") === "1";
+  Object.assign(copy, {
+    uk: {mailDelayed:"Обліковий запис створено, але лист підтвердження поки не вдалося надіслати. Спробуйте надіслати його повторно.",resend:"Надіслати лист повторно",requested:"Запит прийнято. Перевірте пошту.",emailInUse:"Цю адресу вже зареєстровано. Увійдіть або скористайтеся відновленням пароля.",rateLimited:"Забагато спроб. Зачекайте й повторіть пізніше.",resetSent:"Якщо ця адреса належить підтвердженому обліковому запису, ви отримаєте лист для відновлення доступу."},
+    ru: {mailDelayed:"Учётная запись создана, но письмо подтверждения пока не удалось отправить. Попробуйте отправить его повторно.",resend:"Отправить письмо повторно",requested:"Запрос принят. Проверьте почту.",emailInUse:"Этот адрес уже зарегистрирован. Войдите или воспользуйтесь восстановлением пароля.",rateLimited:"Слишком много попыток. Подождите и попробуйте позже.",resetSent:"Если этот адрес принадлежит подтверждённой учётной записи, вы получите письмо для восстановления доступа."},
+    en: {mailDelayed:"Your account was created, but the verification email could not be sent yet. Try sending it again.",resend:"Resend verification email",requested:"Request accepted. Check your email.",emailInUse:"This email is already registered. Sign in or reset your password.",rateLimited:"Too many attempts. Please wait and try again later.",resetSent:"If this address belongs to a verified account, you will receive a password reset email."}
+  }[state.lang]);
+  const sets = ACCOUNT_OPTIONS[state.lang], resetToken = new URLSearchParams(location.search).get("reset"), verified = new URLSearchParams(location.search).get("verified") === "1", passwordChanged = new URLSearchParams(location.search).get("passwordChanged") === "1";
   if (!state.user) {
     if (resetToken) {
       shell(`<section class="card auth-card"><p class="eyebrow">Scripture Archive</p><h1>${copy.reset}</h1><form id="reset-form" class="account-form">${field("password", copy.password, "password", `autocomplete="new-password" minlength="12" maxlength="128" required aria-describedby="password-rule"`)}<small id="password-rule">${copy.passwordRule}</small><button class="button primary">${copy.reset}</button><p id="auth-state" role="status"></p></form></section>`);
-      document.querySelector("#reset-form").onsubmit=async event=>{event.preventDefault();const status=document.querySelector("#auth-state");try{await authRequest("reset-password",{token:resetToken,password:new FormData(event.currentTarget).get("password")});status.textContent=copy.resetDone;window.history.replaceState(null,"","/account")}catch{status.textContent=copy.error}};
+      document.querySelector("#reset-form").onsubmit=async event=>{
+        event.preventDefault();
+        const form=event.currentTarget,status=document.querySelector("#auth-state"),button=form.querySelector("button");
+        button.disabled=true;
+        try{
+          await authRequest("reset-password",{token:resetToken,password:new FormData(form).get("password")});
+          state.user=null;clearPersonalProgress();navigateTo("/account?passwordChanged=1",true);
+        }catch{status.textContent=copy.error;button.disabled=false}
+      };
       return;
     }
-    shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${copy.title}</h1></div><p>${copy.intro}</p></div>${verified?`<div class="notice success" role="status">${copy.verified}</div>`:""}<div class="auth-grid"><section class="card auth-card"><h2>${copy.login}</h2><form id="login-form" class="account-form">${field("email",copy.email,"email",'autocomplete="email" required')}${field("password",copy.password,"password",'autocomplete="current-password" required')}<button class="button primary">${copy.login}</button><p id="login-state" role="status"></p></form><details><summary>${copy.forgot}</summary><form id="forgot-form" class="account-form">${field("email",copy.email,"email",'autocomplete="email" required')}<button class="button">${copy.send}</button><p id="forgot-state" role="status"></p></form></details></section><section class="card auth-card"><h2>${copy.register}</h2><form id="register-form" class="account-form account-form-grid">${field("firstName",t("firstName"),"text",'autocomplete="given-name" required maxlength="80"')}${field("lastName",t("lastName"),"text",'autocomplete="family-name" required maxlength="80"')}${field("age",copy.age,"number",'min="13" max="120" inputmode="numeric" required')}<label class="account-field"><span>${t("gender")}</span><select name="gender" required>${options(sets.gender)}</select></label><label class="account-field"><span>${t("religion")}</span><select name="tradition" required>${options(sets.religion)}</select></label>${field("denomination",`${copy.denomination} · ${t("optional")}`)}<label class="account-field"><span>${t("marital")}</span><select name="maritalStatus" required>${options(sets.marital)}</select></label><label class="account-field"><span>${copy.children} · ${t("optional")}</span><select name="hasChildren"><option value=""></option><option value="yes">${copy.yes}</option><option value="no">${copy.no}</option></select></label>${field("email",copy.email,"email",'autocomplete="email" required')}${field("password",copy.password,"password",'autocomplete="new-password" minlength="12" maxlength="128" required aria-describedby="register-password-rule"')}<small id="register-password-rule" class="full">${copy.passwordRule}</small><label class="account-check full"><input name="acceptPrivacy" type="checkbox" required><span>${t("privacyAgree")} <a href="/privacy">${t("privacy")}</a></span></label><button class="button primary">${copy.register}</button><p id="register-state" role="status"></p></form></section></div>`);
+    shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${copy.title}</h1></div><p>${copy.intro}</p></div>${verified?`<div class="notice success" role="status">${copy.verified}</div>`:""}${passwordChanged?`<div class="notice success" role="status">${copy.resetDone}</div>`:""}<div class="auth-grid"><section class="card auth-card"><h2>${copy.login}</h2><form id="login-form" class="account-form">${field("email",copy.email,"email",'autocomplete="email" required')}${field("password",copy.password,"password",'autocomplete="current-password" required')}<button class="button primary">${copy.login}</button><p id="login-state" role="status"></p></form><details><summary>${copy.forgot}</summary><form id="forgot-form" class="account-form">${field("email",copy.email,"email",'autocomplete="email" required')}<button class="button">${copy.send}</button><p id="forgot-state" role="status"></p></form></details></section><section class="card auth-card"><h2>${copy.register}</h2><form id="register-form" class="account-form account-form-grid">${field("firstName",t("firstName"),"text",'autocomplete="given-name" required maxlength="80"')}${field("lastName",t("lastName"),"text",'autocomplete="family-name" required maxlength="80"')}${field("age",copy.age,"number",'min="13" max="120" inputmode="numeric" required')}<label class="account-field"><span>${t("gender")}</span><select name="gender" required>${options(sets.gender)}</select></label><label class="account-field"><span>${t("religion")}</span><select name="tradition" required>${options(sets.religion)}</select></label>${field("denomination",`${copy.denomination} · ${t("optional")}`)}<label class="account-field"><span>${t("marital")}</span><select name="maritalStatus" required>${options(sets.marital)}</select></label><label class="account-field"><span>${copy.children} · ${t("optional")}</span><select name="hasChildren"><option value=""></option><option value="yes">${copy.yes}</option><option value="no">${copy.no}</option></select></label>${field("email",copy.email,"email",'autocomplete="email" required')}${field("password",copy.password,"password",'autocomplete="new-password" minlength="12" maxlength="128" required aria-describedby="register-password-rule"')}<small id="register-password-rule" class="full">${copy.passwordRule}</small><label class="account-check full"><input name="acceptPrivacy" type="checkbox" required><span>${t("privacyAgree")} <a href="/privacy">${t("privacy")}</a></span></label><button class="button primary">${copy.register}</button><p id="register-state" role="status"></p></form></section></div>`);
     document.querySelector("#login-form").onsubmit=async event=>{event.preventDefault();const status=document.querySelector("#login-state"),data=Object.fromEntries(new FormData(event.currentTarget));try{await authRequest("login",data);await getSession();window.saAnalytics?.track("login",{method:"password"});if(state.user?.profileComplete)await syncProgress();window.history.replaceState(null,"","/account");renderAccount()}catch(error){if(error.message==="email_not_verified")await authRequest("resend-verification",{email:data.email}).catch(()=>{});window.saAnalytics?.track("login_error",{error:String(error.message).slice(0,60)});status.textContent=error.message==="email_not_verified"?copy.verification:copy.error}};
     document.querySelector("#forgot-form").onsubmit=async event=>{event.preventDefault();const status=document.querySelector("#forgot-state");try{await authRequest("forgot-password",Object.fromEntries(new FormData(event.currentTarget)));status.textContent=copy.resetSent}catch{status.textContent=copy.error}};
-    document.querySelector("#register-form").onsubmit=async event=>{event.preventDefault();const status=document.querySelector("#register-state"),form=new FormData(event.currentTarget),data=Object.fromEntries(form);data.age=Number(data.age);data.acceptPrivacy=form.has("acceptPrivacy");data.hasChildren=data.hasChildren==="yes"?true:data.hasChildren==="no"?false:null;data.locale=state.lang;try{const result=await authRequest("register",data);window.saAnalytics?.track("sign_up",{method:"password",language:state.lang});status.textContent=result.emailDelivered?copy.verification:`${copy.verification} ${copy.error}`;event.currentTarget.querySelector("button").disabled=true}catch(error){window.saAnalytics?.track("sign_up_error",{error:String(error.message).slice(0,60)});status.textContent=copy.error}};
+    document.querySelector("#register-form").onsubmit=async event=>{
+      event.preventDefault();
+      const registerForm=event.currentTarget,status=document.querySelector("#register-state"),button=registerForm.querySelector("button[type=submit],button:not([type])"),form=new FormData(registerForm),data=Object.fromEntries(form);
+      data.age=Number(data.age);data.acceptPrivacy=form.has("acceptPrivacy");data.hasChildren=data.hasChildren==="yes"?true:data.hasChildren==="no"?false:null;data.locale=state.lang;
+      button.disabled=true;
+      try{
+        const result=await authRequest("register",data);
+        window.saAnalytics?.track("sign_up",{method:"password",language:state.lang});
+        status.textContent=result.emailDelivered?copy.verification:copy.mailDelayed;
+        registerForm.querySelector('[name="password"]').value="";
+        status.insertAdjacentHTML("afterend",`<button class="button" type="button" id="resend-verification">${copy.resend}</button>`);
+        document.querySelector("#resend-verification").onclick=async event=>{
+          const resendButton=event.currentTarget;resendButton.disabled=true;
+          try{await authRequest("resend-verification",{email:data.email});status.textContent=copy.requested}
+          catch(error){status.textContent=error.message==="too_many_requests"?copy.rateLimited:copy.error}
+          finally{resendButton.disabled=false}
+        };
+      }catch(error){
+        window.saAnalytics?.track("sign_up_error",{error:String(error.message).slice(0,60)});
+        status.textContent=error.message==="email_in_use"?copy.emailInUse:error.message==="too_many_requests"?copy.rateLimited:copy.error;
+        button.disabled=false;
+      }
+    };
     return;
   }
   if (state.user.profileComplete) {
     const visibility=state.user.visibility||{};
     shell(`<article class="prose account-dashboard"><p class="eyebrow">${t("account")}</p><h1>${esc(state.user.firstName)} ${esc(state.user.lastName)}</h1><p>${esc(state.user.email)}</p><div class="notice success">${copy.saved}</div><div class="action-row"><a class="button primary" href="/missions">${t("continue")}</a><a class="button" href="/groups">${t("myGroups")}</a>${state.user.isOwner?`<a class="button" href="/editor">${copy.edit}</a>`:""}<button class="button" id="logout-button">${copy.logout}</button></div><section class="profile-controls"><h2>${copy.visibility}</h2><p>${copy.visibilityHelp}</p><form id="visibility-form" class="account-form"><label class="account-check"><input name="firstName" type="checkbox" ${visibility.firstName?"checked":""}><span>${copy.publicFirst}</span></label><label class="account-check"><input name="lastName" type="checkbox" ${visibility.lastName?"checked":""}><span>${copy.publicLast}</span></label><label class="account-check"><input name="church" type="checkbox" ${visibility.church?"checked":""}><span>${copy.publicChurch}</span></label><label class="account-check"><input name="progress" type="checkbox" ${visibility.progress?"checked":""}><span>${copy.publicProgress}</span></label><button class="button">${copy.save}</button><p id="visibility-state" role="status"></p></form></section>${state.user.authProvider==="password"?`<details class="profile-controls"><summary>${copy.change}</summary><form id="password-form" class="account-form">${field("currentPassword",copy.currentPassword,"password",'autocomplete="current-password" required')}${field("newPassword",copy.newPassword,"password",'autocomplete="new-password" minlength="12" maxlength="128" required')}<small>${copy.passwordRule}</small><button class="button">${copy.change}</button><p id="password-state" role="status"></p></form></details><details class="danger-zone"><summary>${copy.delete}</summary><p>${copy.deleteHelp}</p><form id="delete-form" class="account-form">${field("password",copy.password,"password",'autocomplete="current-password" required')}<label class="account-check"><input name="confirm" type="checkbox" required><span>${copy.confirmDelete}</span></label><button class="button">${copy.delete}</button><p id="delete-state" role="status"></p></form></details>`:""}</article>`);
-    document.querySelector("#logout-button").onclick=async()=>{await authRequest("logout");state.user=null;localStorage.removeItem("sa.progressOwner");renderAccount()};
+    document.querySelector("#logout-button").onclick=async()=>{await authRequest("logout");state.user=null;clearPersonalProgress();renderAccount()};
     document.querySelector("#visibility-form").onsubmit=async event=>{event.preventDefault();const form=new FormData(event.currentTarget),status=document.querySelector("#visibility-state");try{state.user=(await accountRequest("visibility","PUT",{firstName:form.has("firstName"),lastName:form.has("lastName"),church:form.has("church"),progress:form.has("progress")})).user;status.textContent=copy.saved}catch{status.textContent=copy.error}};
-    if(document.querySelector("#password-form"))document.querySelector("#password-form").onsubmit=async event=>{event.preventDefault();const status=document.querySelector("#password-state"),data=Object.fromEntries(new FormData(event.currentTarget));try{await authRequest("change-password",data);state.user=null;localStorage.removeItem("sa.progressOwner");renderAccount()}catch{status.textContent=copy.error}};
-    if(document.querySelector("#delete-form"))document.querySelector("#delete-form").onsubmit=async event=>{event.preventDefault();const status=document.querySelector("#delete-state"),form=new FormData(event.currentTarget);if(!form.has("confirm"))return;try{await authRequest("delete-account",{password:form.get("password")});state.user=null;localStorage.removeItem("sa.progressOwner");renderAccount()}catch{status.textContent=copy.error}};
+    if(document.querySelector("#password-form"))document.querySelector("#password-form").onsubmit=async event=>{event.preventDefault();const status=document.querySelector("#password-state"),data=Object.fromEntries(new FormData(event.currentTarget));try{await authRequest("change-password",data);state.user=null;clearPersonalProgress();renderAccount()}catch{status.textContent=copy.error}};
+    if(document.querySelector("#delete-form"))document.querySelector("#delete-form").onsubmit=async event=>{event.preventDefault();const status=document.querySelector("#delete-state"),form=new FormData(event.currentTarget);if(!form.has("confirm"))return;try{await authRequest("delete-account",{password:form.get("password")});state.user=null;clearPersonalProgress();renderAccount()}catch{status.textContent=copy.error}};
     return;
   }
   const ageOptions=["13-17","18-24","25-34","35-44","45-54","55-64","65+"].map(value=>`<option>${value}</option>`).join("");
@@ -3339,7 +3374,10 @@ async function route() {
     else if (name === "groups" && parts[1]) await renderGroup(parts[1]);
     else if (name === "groups") await renderGroups();
     else if (name === "community") await renderCommunity(Number(new URLSearchParams(location.search).get("page"))||1,new URLSearchParams(location.search).get("q")||"",new URLSearchParams(location.search).get("sort")||"recent");
-    else if (["home-groups", "live", "campaigns", "dossiers", "builder", "progress", "about"].includes(name)) await renderWorkspace(name==='home-groups'?'live':name,{state,t,esc,shell,getMission,setActiveNav,loadJSON,announce,play});
+    else if (["home-groups", "live", "campaigns", "dossiers", "builder", "progress", "about"].includes(name)) {
+      if(name==="progress"&&state.user)await syncProgress();
+      await renderWorkspace(name==='home-groups'?'live':name,{state,t,esc,shell,getMission,setActiveNav,loadJSON,announce,play});
+    }
     else if (name === "atlas") renderAtlas();
     else if (name === "support") renderSupport();
     else if (name === "help") renderHelp();

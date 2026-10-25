@@ -40,3 +40,35 @@ export async function sendSecurityEmail(email: string, localeValue: string, purp
   if (!response.ok) return { delivered: false, reason: "email_provider_error" };
   return { delivered: true };
 }
+
+type SupportAttachment = { filename: string; contentType: string; content: string };
+
+export async function sendSupportRequestEmail(input: {
+  requestId: string;
+  email: string;
+  subject: string;
+  message: string;
+  locale: string;
+  userName?: string | null;
+  attachments: SupportAttachment[];
+}) {
+  if (!env.EMAIL_API_KEY || !env.EMAIL_FROM) return { delivered: false, reason: "email_not_configured" };
+  const recipient = env.SUPPORT_RECIPIENT || "dordiaioleksii1@gmail.com";
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${env.EMAIL_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      from: env.EMAIL_FROM,
+      to: [recipient],
+      reply_to: input.email,
+      subject: `[Scripture Archive] ${input.subject}`,
+      html: `<div style="font-family:Arial,sans-serif;max-width:720px;margin:auto;color:#152b3c"><h1>Нове звернення до служби підтримки</h1><p><strong>ID:</strong> ${escapeHtml(input.requestId)}</p><p><strong>Від:</strong> ${escapeHtml(input.userName || input.email)} &lt;${escapeHtml(input.email)}&gt;</p><p><strong>Мова:</strong> ${escapeHtml(input.locale)}</p><h2>${escapeHtml(input.subject)}</h2><div style="white-space:pre-wrap">${escapeHtml(input.message)}</div></div>`,
+      text: `Нове звернення до служби підтримки\n\nID: ${input.requestId}\nВід: ${input.userName || input.email} <${input.email}>\nМова: ${input.locale}\n\n${input.subject}\n\n${input.message}`,
+      attachments: input.attachments.map(file => ({ filename: file.filename, content_type: file.contentType, content: file.content })),
+    }),
+  });
+  if (!response.ok) return { delivered: false, reason: "email_provider_error" };
+  return { delivered: true };
+}
+
+

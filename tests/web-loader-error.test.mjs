@@ -19,7 +19,7 @@ function element(tag) {
   return el;
 }
 
-function boot(lang = 'uk', blockedStorage = false, query = '') {
+function boot(lang = 'uk', blockedStorage = false, query = '', observeRender = false) {
   const main = element('main');
   const announcer = element('div');
   const body = element('body');
@@ -41,11 +41,19 @@ function boot(lang = 'uk', blockedStorage = false, query = '') {
     removeEventListener(type, handler) {if (eventListeners.get(type) === handler) eventListeners.delete(type);},
   };
   let cleanup;
+  const observers = [];
+  class FakeMutationObserver {
+    constructor(callback) { this.callback = callback; observers.push(this); this.active = false; }
+    observe(target, options) { this.target = target; this.options = options; this.active = true; }
+    disconnect() { this.active = false; }
+    notify() { if (this.active) this.callback([{ type:'childList', target:this.target }]); }
+  }
   const code = ts.transpileModule(fs.readFileSync(new URL('../app/script-loader.tsx', import.meta.url), 'utf8'), {
     compilerOptions: {module: ts.ModuleKind.CommonJS, target:ts.ScriptTarget.ES2022},
   }).outputText;
   const exports = {};
-  vm.runInNewContext(code, {exports, document, window, URL, URLSearchParams, require(name) {
+  vm.runInNewContext(code, {exports, document, window, URL, URLSearchParams,
+    ...(observeRender ? {MutationObserver:FakeMutationObserver} : {}), require(name) {
     if(name !== 'react') throw Error(`Unexpected import: ${name}`);
     return {useEffect(fn) {cleanup = fn();}};
   }}, {filename:'app/script-loader.tsx'});
@@ -53,7 +61,9 @@ function boot(lang = 'uk', blockedStorage = false, query = '') {
   return {main, announcer, scripts, cleanup: () => cleanup(), reloadCalls: () => reloads,
     dispatchError: (filename) => eventListeners.get('error')?.({filename}),
     hasErrorListener: () => eventListeners.has('error'),
-    unblockStorage: () => {storage.blocked = false;}};
+    unblockStorage: () => {storage.blocked = false;},
+    notifyRender: () => observers.forEach(o => o.notify()),
+    activeObservers: () => observers.filter(o => o.active).length};
 }
 
 for (const [lang, title, retryText, reloadText] of [
@@ -326,4 +336,36 @@ test('unrelated script and foreign-origin exceptions do not hijack startup UI', 
   page.scripts.at(-1).onload();
   assert.equal(page.main.attributes['aria-busy'], 'false');
   page.cleanup();
+});
+
+for (const [lang, announcement] of [
+  ['uk', 'Завантаження інтерфейсу…'],
+  ['ru', 'Загрузка интерфейса…'],
+  ['en', 'Loading the interface…'],
+]) {
+  test(lang + ' ESM onload keeps aria-busy until the actual asynchronous route renders', () => {
+    const page = boot(lang, false, '', true);
+    assert.equal(page.main.attributes['aria-busy'], 'true');
+    page.scripts.at(-1).onload();
+    assert.equal(page.main.childElementCount, 0);
+    assert.equal(page.main.attributes['aria-busy'], 'true', 'loaded ESM is not a ready route');
+    assert.equal(page.announcer.textContent, announcement);
+    assert.equal(page.activeObservers(), 1);
+    page.main.replaceChildren(element('section'));
+    page.notifyRender();
+    assert.equal(page.main.attributes['aria-busy'], 'false');
+    assert.equal(page.announcer.textContent, '');
+    assert.equal(page.activeObservers(), 0);
+    page.cleanup();
+  });
+}
+test('async readiness observer is disconnected on cleanup', () => {
+  const page = boot('en', false, '', true);
+  page.scripts.at(-1).onload();
+  assert.equal(page.activeObservers(), 1);
+  page.cleanup();
+  assert.equal(page.activeObservers(), 0);
+  page.main.replaceChildren(element('h1'));
+  page.notifyRender();
+  assert.equal(page.main.childElementCount, 1);
 });

@@ -2,6 +2,7 @@ import {renderWorkspace, workspaceCopy} from './workspace.js';
 import {supportSection} from './support.js';
 import {homePage} from './home.js';
 import {EDITIONS, editionCopy, selectedEdition, editionUrl, editionSelect} from './editions.js';
+import {routeSourceFromLocation, legacyRouteHashChanged} from './route-location.js';
 
 const I18N = {
   uk: {
@@ -3363,7 +3364,7 @@ function cleanPublicCopy() {
 async function route() {
   clearInterval(timerInterval);
   try {
-    const sourceRoute = location.hash ? location.hash.replace(/^#\/?/, "") : location.pathname.replace(/^\/?/, "");
+    const sourceRoute = routeSourceFromLocation(location);
     const parts = sourceRoute.split("/").filter(Boolean);
     const name = parts[0] || "home";
     if (name !== "reader") state.currentReader = null;
@@ -3423,7 +3424,9 @@ document.addEventListener("click", event => {
   window.saAnalytics?.track("navigation_click", { destination });
   navigateTo(`${url.pathname}${url.search}`);
 }, true);
-window.addEventListener("hashchange", route);
+window.addEventListener("hashchange", event => {
+  if (legacyRouteHashChanged(event.oldURL, event.newURL)) route();
+});
 window.addEventListener("popstate", route);
 Promise.all([getCMS(), getSession()]).finally(async () => {
   if (state.user?.profileComplete) await syncProgress();

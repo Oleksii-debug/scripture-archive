@@ -23,7 +23,16 @@ async function identityToken(){
   tokenExpires=Date.now()+120000;
   return currentToken;
 }
-if(!await verifyCommunityRunner(await identityToken()))throw Error("GitHub workload identity does not match the approved scheduler.");
+const identity=await identityToken();
+if(!await verifyCommunityRunner(identity)){
+  const decode=value=>JSON.parse(Buffer.from(value,"base64url").toString("utf8"));
+  const header=decode(identity.split(".")[0]),claims=decode(identity.split(".")[1]);
+  const fields=["iss","aud","repository","repository_id","ref","workflow_ref","job_workflow_ref","sub","event_name","iat","exp","nbf"];
+  const keysResponse=await fetch("https://token.actions.githubusercontent.com/.well-known/jwks",{redirect:"error"});
+  const keys=keysResponse.ok?(await keysResponse.json()).keys:[];
+  console.error(JSON.stringify({identityCheck:{alg:header.alg,claims:Object.fromEntries(fields.map(field=>[field,claims[field]])),now:Math.floor(Date.now()/1000),jwksStatus:keysResponse.status,matchingPublicKey:keys.some(key=>key.kid===header.kid)}}));
+  throw Error("GitHub workload identity does not match the approved scheduler.");
+}
 console.log("Approved scheduler identity verified; no credentials are written to logs.");
 if(!await communityDeploymentReady(origin)){
   console.log("The new public deployment is not ready; no activity was started.");

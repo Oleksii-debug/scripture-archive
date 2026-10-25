@@ -143,5 +143,5 @@ test('reader chapter routing never indexes a fractional or malformed Bible chapt
 
 test('production reader reuses the canonical guarded chapter coordinate', async () => {
   const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
-  assert.match(app, /readerChapterNumber\\(parts\\[2\\] \\|\\| state\\.reader\\.chapter \\|\\| 1, meta\\.chapters\\)/);
+  assert.ok(app.includes('readerChapterNumber(parts[2] || state.reader.chapter || 1, meta.chapters)'));
 });

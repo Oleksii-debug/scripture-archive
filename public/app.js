@@ -2191,7 +2191,7 @@ async function getSession() {
   if(state.user)localStorage.setItem('sa.progressOwner',state.user.id);else localStorage.removeItem('sa.progressOwner');
   return state.user;
 }
-async function getBook(code, chosenAtRequest = selectedEdition(state.lang), languageAtRequest = state.lang) {
+async function getBook(code, chosenAtRequest = selectedEdition(state.lang), languageAtRequest = state.lang, expectedMeta = null, expectedEditionId = null) {
   const edition = chosenAtRequest.local ? chosenAtRequest : EDITIONS[languageAtRequest].find(e => e.local);
   const folder = edition.folder || languageAtRequest;
   const key = `${folder}:${code}`;
@@ -2203,7 +2203,12 @@ async function getBook(code, chosenAtRequest = selectedEdition(state.lang), lang
         return r.json();
       }),
     );
-  return state.bookCache.get(key);
+  const book = await state.bookCache.get(key);
+  if (expectedMeta && !readerBookMatchesCatalog(book, expectedMeta, languageAtRequest, expectedEditionId)) {
+    state.bookCache.delete(key);
+    throw Error("Bible book source does not match the selected catalog edition");
+  }
+  return book;
 }
 function localEditionMetadata(catalog, chosenAtRequest = selectedEdition(state.lang), languageAtRequest = state.lang) {
   const local = chosenAtRequest.local ? chosenAtRequest : EDITIONS[languageAtRequest].find(e => e.local);
@@ -2473,9 +2478,7 @@ async function renderReader(parts) {
   const meta = books.find((b) => b.code === code) || books[0];
   const chapter = readerChapterNumber(parts[2] || state.reader.chapter || 1, meta.chapters);
   const groupId = parts[3] === "group" ? parts[4] || "" : "";
-  state.reader = { book: meta.code, chapter };
   state.currentReader = { book: meta.code, chapter };
-  localStorage.setItem("sa.reader", JSON.stringify(state.reader));
   try {
     const attemptState = await attemptRequest("chapter", "GET", undefined, `book=${encodeURIComponent(meta.code)}&chapter=${chapter}&groupId=${encodeURIComponent(groupId)}`);
     if (obsolete()) return;
@@ -2490,11 +2493,11 @@ async function renderReader(parts) {
     console.warn("Attempt state could not be checked", error);
   }
   if (obsolete()) return;
-  const book = await getBook(meta.code, chosenEdition, readerLanguage);
-  if (obsolete() || state.lang !== readerLanguage || selectedEdition(readerLanguage).id !== chosenEdition.id) return;
   const edition = localEditionMetadata(catalog, chosenEdition, readerLanguage);
-  if (!readerBookMatchesCatalog(book, meta, readerLanguage, edition.id))
-    throw Error("Bible book source does not match the selected catalog edition");
+  const book = await getBook(meta.code, chosenEdition, readerLanguage, meta, edition.id);
+  if (obsolete() || state.lang !== readerLanguage || selectedEdition(readerLanguage).id !== chosenEdition.id) return;
+  state.reader = { book: meta.code, chapter };
+  localStorage.setItem("sa.reader", JSON.stringify(state.reader));
   const verses = book.chapters[chapter - 1];
   const canonicalReaderPath = readerCanonicalPath(parts, { book: meta.code, chapter }, groupId);
   if (canonicalReaderPath && `${location.pathname}${location.search}${location.hash}` === requestedAddress)

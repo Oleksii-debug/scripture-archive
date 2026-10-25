@@ -92,7 +92,6 @@ export default function ScriptLoader() {
     const loadApp = () => {
       if (!active) return;
       appScript?.remove();
-      attempt += 1;
       // The canonical app reads these keys at module initialization. If
       // storage access throws, executing /app.js would leave #main blank;
       // a script onerror does not fire for a module's runtime exception.
@@ -103,6 +102,9 @@ export default function ScriptLoader() {
         showFailure(true);
         return;
       }
+      // Count only real script injections. Storage-denied retries never
+      // fetched a module, so they must not consume the network retry budget.
+      attempt += 1;
       const script = document.createElement("script");
       script.type = "module";
       // Failed module fetches can be memoized by the browser module map.

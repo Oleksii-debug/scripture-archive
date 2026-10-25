@@ -3354,9 +3354,11 @@ document.addEventListener("click", event => {
   }
   if (url.hash && !url.hash.startsWith("#/")) return;
   event.preventDefault();
-  const destination = url.pathname.split("/").filter(Boolean)[0] || "home";
+  const destination = (url.hash.startsWith("#/")
+    ? url.hash.slice(2).split("/")[0]
+    : url.pathname.split("/").filter(Boolean)[0]) || "home";
   window.saAnalytics?.track("navigation_click", { destination });
-  navigateTo(`${url.pathname}${url.search}`);
+  navigateTo(`${url.pathname}${url.search}${url.hash.startsWith("#/") ? url.hash : ""}`);
 }, true);
 window.addEventListener("hashchange", () => {
   if (location.hash && !location.hash.startsWith("#/")) return;

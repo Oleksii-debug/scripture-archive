@@ -14,8 +14,8 @@ const copy = {
   ru: { retry: 'Повторить сохранение', pending: 'Прочитанное сохранено на этом устройстве, но сервер не подтвердил сохранение. Повторите попытку.' },
   en: { retry: 'Retry saving', pending: 'Your reading is saved on this device, but the server did not confirm the save. Please retry.' },
 };
-function scenario({ locale = 'uk', signedIn = true, cloud = [true], refuseAttempt = false } = {}) {
-  const button = { disabled: false, textContent: 'Mark' };
+function scenario({ locale = 'uk', signedIn = true, cloud = [true], refuseAttempt = false, cloudGate = null } = {}) {
+  const button = { disabled: false, textContent: 'Mark', dataset: {}, attrs: {}, setAttribute(k,v) { this.attrs[k]=v; }, removeAttribute(k) { delete this.attrs[k]; } };
   const questions = { unlocked: false, removeAttribute(name) { assert.equal(name, 'disabled'); this.unlocked = true; } };
   const document = { querySelector: (selector) =>
     selector === '#mark-read' ? button : selector === '#start-questions' ? questions : null };
@@ -30,6 +30,7 @@ function scenario({ locale = 'uk', signedIn = true, cloud = [true], refuseAttemp
     assert.equal(action, 'reading'); assert.equal(method, 'PUT');
     assert.ok(Array.isArray(payload.reading));
     if (!cloud[cloudCalls++]) throw Error('503');
+    if (cloudGate) await cloudGate;
   };
   const attemptRequest = async () => {
     attemptCalls++;
@@ -59,6 +60,7 @@ test('refused authenticated PUT cannot report synced completion or unlock questi
   assert.equal(h.cloudCalls, 1);
   assert.equal(h.attemptCalls, 0);
   assert.equal(h.button.disabled, false);
+  assert.equal(h.button.attrs['aria-busy'], undefined);
   assert.equal(h.button.textContent, copy.uk.retry);
   assert.deepEqual(h.announcements, [copy.uk.pending]);
   assert.equal(h.saved.length, 1);
@@ -98,3 +100,21 @@ for (const locale of ['uk', 'ru', 'en']) {
     assert.ok(source.includes('readingSyncPending: "' + copy[locale].pending + '"'));
   });
 }
+
+test('two rapid activations cannot double-submit reading receipt or unlock twice', async () => {
+  let release;
+  const cloudGate = new Promise(resolve => { release = resolve; });
+  const h = scenario({ cloud: [true], cloudGate });
+  const first = h.click();
+  const second = h.click();
+  assert.equal(h.cloudCalls, 1, 'only one request while the server is pending');
+  assert.equal(h.button.disabled, false, 'keep native button focusable while saving');
+  assert.equal(h.button.attrs['aria-busy'], 'true');
+  release();
+  await Promise.all([first, second]);
+  assert.equal(h.cloudCalls, 1);
+  assert.equal(h.attemptCalls, 1);
+  assert.equal(h.saved.length, 1);
+  assert.deepEqual(h.announcements, ['Read marked']);
+  assert.equal(h.button.attrs['aria-busy'], undefined);
+});

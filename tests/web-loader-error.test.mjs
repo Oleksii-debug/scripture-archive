@@ -19,7 +19,7 @@ function element(tag) {
   return el;
 }
 
-function boot(lang = 'uk', blockedStorage = false) {
+function boot(lang = 'uk', blockedStorage = false, query = '') {
   const main = element('main');
   const announcer = element('div');
   const body = element('body');
@@ -32,13 +32,13 @@ function boot(lang = 'uk', blockedStorage = false) {
   };
   let reloads = 0;
   const storage = {blocked: blockedStorage};
-  const window = {localStorage: {getItem() { if (storage.blocked) throw Error('denied'); return lang; }}, location: {reload() {reloads += 1;}}};
+  const window = {localStorage: {getItem() { if (storage.blocked) throw Error('denied'); return lang; }}, location: {search: query, reload() {reloads += 1;}}};
   let cleanup;
   const code = ts.transpileModule(fs.readFileSync(new URL('../app/script-loader.tsx', import.meta.url), 'utf8'), {
     compilerOptions: {module: ts.ModuleKind.CommonJS, target:ts.ScriptTarget.ES2022},
   }).outputText;
   const exports = {};
-  vm.runInNewContext(code, {exports, document, window, require(name) {
+  vm.runInNewContext(code, {exports, document, window, URLSearchParams, require(name) {
     if(name !== 'react') throw Error(`Unexpected import: ${name}`);
     return {useEffect(fn) {cleanup = fn();}};
   }}, {filename:'app/script-loader.tsx'});
@@ -154,5 +154,28 @@ test('late error from a replaced module attempt never clobbers a new loading sta
   assert.equal(page.main.childElementCount, 0, 'stale failure must not replace active retry');
   second.onerror();
   assert.equal(page.main.childElementCount, 1, 'current failure must still show the recovery control');
+  page.cleanup();
+});
+
+for (const [query, stored, expectedTitle, storageBlocked] of [
+  ['?lang=ru', 'uk', 'Не удалось открыть страницу', false],
+  ['?lang=en', 'uk', 'The page could not open', true],
+  ['?lang=uk', 'en', 'Не вдалося відкрити сторінку', false],
+]) {
+  test(`explicit ${query} takes priority over saved ${stored} for localized recovery`, () => {
+    const page = boot(stored, storageBlocked, query);
+    if (!storageBlocked) page.scripts[1].onerror();
+    const notice = page.main.childNodes[0];
+    assert.equal(notice.attributes.role, 'alert');
+    assert.equal(notice.childNodes[0].textContent, expectedTitle);
+    assert.equal(notice.childNodes[2].focused, true);
+    page.cleanup();
+  });
+}
+
+test('invalid query language retains the saved language instead of selecting an unsupported locale', () => {
+  const page = boot('ru', true, '?lang=de');
+  const notice = page.main.childNodes[0];
+  assert.equal(notice.childNodes[0].textContent, 'Не удалось открыть страницу');
   page.cleanup();
 });

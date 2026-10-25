@@ -31,7 +31,8 @@ function boot(lang = 'uk', blockedStorage = false) {
     getElementById(id) { return ({main, announcer, language: {value: lang}})[id] || null; },
   };
   let reloads = 0;
-  const window = {localStorage: {getItem() { if (blockedStorage) throw Error('denied'); return lang; }}, location: {reload() {reloads += 1;}}};
+  const storage = {blocked: blockedStorage};
+  const window = {localStorage: {getItem() { if (storage.blocked) throw Error('denied'); return lang; }}, location: {reload() {reloads += 1;}}};
   let cleanup;
   const code = ts.transpileModule(fs.readFileSync(new URL('../app/script-loader.tsx', import.meta.url), 'utf8'), {
     compilerOptions: {module: ts.ModuleKind.CommonJS, target:ts.ScriptTarget.ES2022},
@@ -42,7 +43,7 @@ function boot(lang = 'uk', blockedStorage = false) {
     return {useEffect(fn) {cleanup = fn();}};
   }}, {filename:'app/script-loader.tsx'});
   exports.default();
-  return {main, announcer, scripts, cleanup: () => cleanup(), reloadCalls: () => reloads};
+  return {main, announcer, scripts, cleanup: () => cleanup(), reloadCalls: () => reloads, unblockStorage: () => {storage.blocked = false;}};
 }
 
 for (const [lang, title, retryText, reloadText] of [
@@ -82,11 +83,27 @@ for (const [lang, title, retryText, reloadText] of [
   });
 }
 
-test('blocked localStorage still exposes retry and no user data', () => {
-  const page = boot('ru', true);
-  page.scripts[1].onerror();
-  assert.equal(page.main.childNodes[0].childNodes[2].textContent, 'Повторить загрузку');
-});
+for (const [lang, reason, retryLabel] of [
+  ['uk', 'Браузер заблокував доступ', 'Повторити завантаження'],
+  ['ru', 'Браузер заблокировал доступ', 'Повторить загрузку'],
+  ['en', 'Your browser blocked access', 'Retry loading'],
+]) {
+  test(`blocked browser storage shows a useful ${lang} error before the app crashes, then recovers`, () => {
+    const page = boot(lang, true);
+    assert.deepEqual(page.scripts.map(x => x.src), ['/analytics.js'], 'never execute the crashing /app.js');
+    const notice = page.main.childNodes[0];
+    assert.equal(notice.attributes.role, 'alert');
+    assert.match(notice.childNodes[1].textContent, new RegExp(reason));
+    const retry = notice.childNodes[2];
+    assert.equal(retry.textContent, retryLabel);
+    assert.equal(retry.focused, true);
+    page.unblockStorage();
+    retry.click();
+    assert.equal(page.main.childElementCount, 0);
+    assert.equal(page.scripts[1].src, '/app.js?sa-retry=1');
+    page.cleanup();
+  });
+}
 
 test('late load errors cannot replace already-rendered content or modify unmounted views', () => {
   const populated = boot();

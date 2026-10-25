@@ -16,7 +16,7 @@ const clean = (value: unknown, max = 120) => typeof value === "string" ? value.t
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
 type Wave = { id: string; next_at: string; created_count: number; target_count: number; interval_pattern: string; pattern_index: number };
 type SyntheticRow = { id: string; first_name: string; last_name: string; locale: string; country_code: string; persona: string; seed: number; joined_at: string };
-type RealRow = { id: string; display_name: string; locale: string; joined_at: string; last_active_at: string | null; reading_data: string | null; mission_data: string | null };
+type RealRow = { id: string; display_name: string; locale: string; joined_at: string; last_active_at: string | null; reading_data: string | null; mission_count: number };
 
 async function initializeRun(now: Date) {
   const existing = await env.DB!.prepare("SELECT id FROM community_runs WHERE id=?").bind(COMMUNITY_RUN_ID).first();
@@ -117,7 +117,7 @@ export async function GET(request: Request) {
         trim(CASE WHEN p.public_first_name=1 THEN p.first_name ELSE '' END || ' ' || CASE WHEN p.public_last_name=1 THEN p.last_name ELSE '' END) display_name,
         p.locale,a.created_at joined_at,MAX(s.last_seen_at) last_active_at,
         CASE WHEN p.public_progress=1 THEN MAX(CASE WHEN pr.mission_id='READING' THEN pr.data END) END reading_data,
-        CASE WHEN p.public_progress=1 THEN MAX(CASE WHEN pr.mission_id='OT-AB-01' THEN pr.data END) END mission_data
+        CASE WHEN p.public_progress=1 THEN COUNT(DISTINCT CASE WHEN pr.mission_id LIKE 'OT-AB-01:%' THEN pr.mission_id END) ELSE 0 END mission_count
       FROM accounts a JOIN profiles p ON p.user_id=a.id
       LEFT JOIN usage_sessions s ON s.user_id=a.id LEFT JOIN progress pr ON pr.user_id=a.id
       WHERE a.deleted_at IS NULL AND (p.public_first_name=1 OR p.public_last_name=1)
@@ -129,9 +129,8 @@ export async function GET(request: Request) {
   const synthetic = (syntheticRows.results as unknown as SyntheticRow[]).map(row => publicSynthetic(row, now));
   const real = (realRows.results as unknown as RealRow[]).map(row => {
     const online = Boolean(row.last_active_at && new Date(`${row.last_active_at.replace(" ", "T")}Z`).getTime() >= now.getTime() - 300_000);
-    const mission = row.mission_data ? (() => { try { return JSON.parse(row.mission_data); } catch { return {}; } })() : {};
     return { id: row.id, displayName: row.display_name, locale: row.locale, countryCode: null, joinedAt: row.joined_at, online,
-      activity: online ? "exploring" : "away", chaptersRead: progressCount(row.reading_data), missionsCompleted: mission?.complete ? 1 : 0 };
+      activity: online ? "exploring" : "away", chaptersRead: progressCount(row.reading_data), missionsCompleted: Number(row.mission_count||0) };
   });
   let members = [...real, ...synthetic];
   if (query) members = members.filter(member => member.displayName.toLocaleLowerCase().includes(query));

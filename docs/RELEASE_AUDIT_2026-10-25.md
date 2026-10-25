@@ -76,3 +76,18 @@
 No production files or DNS records were changed. The previous source is retained
 in Git and the pre-change handoff archive. The user subsequently prioritized bot
 activation; unrelated design/hosting development should not expand further.
+
+## Follow-up: prioritized agent work
+
+Added a scheduler process with three fail-fast response checks and a local
+learning-agent journey. The latest fresh-database run passed all 16 tests with
+none skipped, then ran an agent through registration, local token verification,
+sign-in, chapter fetch, four server-graded answers (1 correct), logout and progress
+restoration. The agent does not read answer keys. Its opted-in community profile
+also showed one actually completed chapter attempt and one read chapter.
+
+The public scheduler preflight used the configured HTTPS proxy and stopped on
+404 from the production community endpoint. The local scheduler was started
+separately in this temporary workspace. The 2,100-profile schedule is not a
+2,100-agent production rollout. Durable production execution, verified agent
+provisioning and the missing deployment remain incomplete.

@@ -65,6 +65,28 @@ function docxHasParts(bytes: Uint8Array) {
   return false;
 }
 
+// Check PNG chunk boundaries, mandatory IHDR/IDAT/IEND ordering, and dimensions.
+// This is a bounded structural gate, not a full image decoder or CRC audit.
+function pngHasRequiredChunks(bytes: Uint8Array) {
+  if (bytes.length < 45 || ![0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a].every((byte, index) => bytes[index] === byte)) return false;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let offset = 8, hasHeader = false, hasData = false;
+  while (offset + 12 <= bytes.length) {
+    const size = view.getUint32(offset, false);
+    const next = offset + 12 + size;
+    if (next > bytes.length) return false;
+    const type = String.fromCharCode(...bytes.subarray(offset + 4, offset + 8));
+    if (!hasHeader) {
+      if (type !== "IHDR" || size !== 13 || view.getUint32(offset + 8, false) === 0 || view.getUint32(offset + 12, false) === 0) return false;
+      hasHeader = true;
+    } else if (type === "IHDR") return false;
+    if (type === "IDAT") hasData = true;
+    if (type === "IEND") return size === 0 && hasData && next === bytes.length;
+    offset = next;
+  }
+  return false;
+}
+
 function matchesAttachment(file: File, bytes: Uint8Array) {
   const lowerName = file.name.toLowerCase();
   if (!FILE_SUFFIXES[file.type]?.some(suffix => lowerName.endsWith(suffix))) return false;
@@ -72,7 +94,7 @@ function matchesAttachment(file: File, bytes: Uint8Array) {
   switch (file.type) {
     case "application/pdf": return starts(0x25, 0x50, 0x44, 0x46, 0x2d);
     case "image/jpeg": return starts(0xff, 0xd8, 0xff);
-    case "image/png": return starts(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a);
+    case "image/png": return pngHasRequiredChunks(bytes);
     case "image/webp": return starts(0x52, 0x49, 0x46, 0x46) &&
       bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50;
     case "application/vnd.openxmlformats-officedocument.wordprocessingml.document": return docxHasParts(bytes);

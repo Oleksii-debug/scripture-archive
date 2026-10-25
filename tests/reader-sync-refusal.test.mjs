@@ -14,21 +14,30 @@ const copy = {
   ru: { retry: 'Повторить сохранение', pending: 'Прочитанное сохранено на этом устройстве, но сервер не подтвердил сохранение. Повторите попытку.' },
   en: { retry: 'Retry saving', pending: 'Your reading is saved on this device, but the server did not confirm the save. Please retry.' },
 };
-function scenario({ locale = 'uk', signedIn = true, cloud = [true], refuseAttempt = false, cloudGate = null, attemptGate = null } = {}) {
+function scenario({ locale = 'uk', signedIn = true, cloud = [true], refuseAttempt = false, cloudGate = null, attemptGate = null, sharedStore = null, chapter = 1 } = {}) {
   const button = { disabled: false, textContent: 'Mark', dataset: {}, attrs: {}, setAttribute(k,v) { this.attrs[k]=v; }, removeAttribute(k) { delete this.attrs[k]; } };
   const questions = { unlocked: false, removeAttribute(name) { assert.equal(name, 'disabled'); this.unlocked = true; } };
   const document = { querySelector: (selector) =>
     selector === '#mark-read' ? button : selector === '#start-questions' ? questions : null };
-  const history = [], meta = { code: 'GEN' }, chapter = 1, alreadyRead = false;
+  const store = sharedStore || new Map();
+  const history = store.has('sa.readingHistory') ? JSON.parse(store.get('sa.readingHistory')) : [];
+  const meta = { code: 'GEN' }, alreadyRead = false;
   const state = { user: signedIn ? { id: 'person-1' } : null }, hasTasks = true, groupId = '';
   const w = { readMarked: 'Read marked' }, bookTitle = () => 'Genesis';
   let saved = [], cloudCalls = 0, attemptCalls = 0;
+  const cloudReadings = [];
   const localStorage = { setItem(key, json) {
-    assert.equal(key, 'sa.readingHistory'); saved = JSON.parse(json);
+    assert.equal(key, 'sa.readingHistory'); saved = JSON.parse(json); store.set(key,json);
   } };
+  const loadJSON = (key, fallback) => {
+    assert.equal(key, 'sa.readingHistory');
+    try { return store.has(key) ? JSON.parse(store.get(key)) : fallback; }
+    catch { return fallback; }
+  };
   const accountRequest = async (action, method, payload) => {
     assert.equal(action, 'reading'); assert.equal(method, 'PUT');
     assert.ok(Array.isArray(payload.reading));
+    cloudReadings.push(payload.reading.map(item => item.chapter));
     if (!cloud[cloudCalls++]) throw Error('503');
     if (cloudGate) await cloudGate;
   };
@@ -43,7 +52,7 @@ function scenario({ locale = 'uk', signedIn = true, cloud = [true], refuseAttemp
     readingSyncPending: copy[locale].pending,
     errorLoad: 'Load failed',
   })[key];
-  const args = { document, history, meta, chapter, alreadyRead, state,
+  const args = { document, history, loadJSON, meta, chapter, alreadyRead, state,
     hasTasks, groupId, w, bookTitle, localStorage, accountRequest, attemptRequest, announce, t };
   const init = new Function(...Object.keys(args),
     statement + '\nreturn document.querySelector("#mark-read").onclick;');
@@ -55,7 +64,8 @@ function scenario({ locale = 'uk', signedIn = true, cloud = [true], refuseAttemp
       document.querySelector = selector => selector === '#mark-read' ? nextButton : selector === '#start-questions' ? nextQuestions : null;
     },
     nextButton, nextQuestions,
-    click, button, questions, announcements,
+    click, button, questions, announcements, cloudReadings,
+    initialHistory: history,
     get saved() { return saved; },
     get cloudCalls() { return cloudCalls; },
     get attemptCalls() { return attemptCalls; },
@@ -172,3 +182,20 @@ test('navigation during pending attempt receipt cannot unlock another chapter qu
   assert.deepEqual(h.announcements, []);
   assert.equal(h.button.attrs['aria-busy'], undefined);
 });
+
+for (const locale of ['uk', 'ru', 'en']) {
+  test(locale + ' reopens combined progress after two independently opened tabs', async () => {
+    const sharedStore = new Map();
+    const first = scenario({ locale, sharedStore, chapter: 1 });
+    const second = scenario({ locale, sharedStore, chapter: 2 });
+    assert.deepEqual(first.initialHistory, []);
+    assert.deepEqual(second.initialHistory, []);
+    await first.click();
+    await second.click();
+    const saved = JSON.parse(sharedStore.get('sa.readingHistory'));
+    assert.deepEqual(saved.map(row => row.chapter), [1, 2]);
+    assert.deepEqual(second.cloudReadings.at(-1), [1, 2]);
+    const reopened = scenario({ locale, sharedStore, chapter: 1 });
+    assert.deepEqual(reopened.initialHistory.map(row => row.chapter), [1, 2]);
+  });
+}

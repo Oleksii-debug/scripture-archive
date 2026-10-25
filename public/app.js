@@ -2517,7 +2517,7 @@ async function renderReader(parts) {
   const code = (parts[1] || state.reader.book || "GEN").toUpperCase();
   const meta = books.find((b) => b.code === code) || books[0];
   const chapter = Math.min(
-    Math.max(Number(parts[2] || state.reader.chapter || 1) || 1, 1),
+    Math.max(Math.trunc(Number(parts[2] || state.reader.chapter || 1)) || 1, 1),
     meta.chapters,
   );
   const groupId = parts[3] === "group" ? parts[4] || "" : "";

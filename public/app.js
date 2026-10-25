@@ -2191,10 +2191,9 @@ async function getSession() {
   if(state.user)localStorage.setItem('sa.progressOwner',state.user.id);else localStorage.removeItem('sa.progressOwner');
   return state.user;
 }
-async function getBook(code) {
-  const selected = selectedEdition(state.lang);
-  const edition = selected.local ? selected : EDITIONS[state.lang].find(e => e.local);
-  const folder = edition.folder || state.lang;
+async function getBook(code, chosenAtRequest = selectedEdition(state.lang), languageAtRequest = state.lang) {
+  const edition = chosenAtRequest.local ? chosenAtRequest : EDITIONS[languageAtRequest].find(e => e.local);
+  const folder = edition.folder || languageAtRequest;
   const key = `${folder}:${code}`;
   if (!state.bookCache.has(key))
     state.bookCache.set(
@@ -2206,10 +2205,9 @@ async function getBook(code) {
     );
   return state.bookCache.get(key);
 }
-function localEditionMetadata(catalog) {
-  const chosen = selectedEdition(state.lang);
-  const local = chosen.local ? chosen : EDITIONS[state.lang].find(e => e.local);
-  return catalog.translations?.[local.id] || catalog.editions[state.lang];
+function localEditionMetadata(catalog, chosenAtRequest = selectedEdition(state.lang), languageAtRequest = state.lang) {
+  const local = chosenAtRequest.local ? chosenAtRequest : EDITIONS[languageAtRequest].find(e => e.local);
+  return catalog.translations?.[local.id] || catalog.editions[languageAtRequest];
 }
 async function getMission() {
   state.mission ??= await fetch("/api/attempts?action=manifest", { cache: "no-store" }).then((r) => {
@@ -2462,10 +2460,14 @@ attemptChannel?.addEventListener("message", event => {
 });
 
 async function renderReader(parts) {
+  const readerTicket = state.readerRenderTicket = (state.readerRenderTicket || 0) + 1;
+  const obsolete = () => readerTicket !== state.readerRenderTicket;
   const requestedAddress = `${location.pathname}${location.search}${location.hash}`;
   setActiveNav("reader");
   const catalog = await getCatalog();
-  const chosenEdition = selectedEdition(state.lang);
+  if (obsolete()) return;
+  const readerLanguage = state.lang;
+  const chosenEdition = selectedEdition(readerLanguage);
   const books = catalog.editionBooks?.[chosenEdition.id] || catalog.books[state.lang];
   const code = (parts[1] || state.reader.book || "GEN").toUpperCase();
   const meta = books.find((b) => b.code === code) || books[0];
@@ -2476,8 +2478,10 @@ async function renderReader(parts) {
   localStorage.setItem("sa.reader", JSON.stringify(state.reader));
   try {
     const attemptState = await attemptRequest("chapter", "GET", undefined, `book=${encodeURIComponent(meta.code)}&chapter=${chapter}&groupId=${encodeURIComponent(groupId)}`);
+    if (obsolete()) return;
     if (attemptState.active) {
       await attemptRequest("invalidate", "POST", { attemptId: attemptState.active.id, reason: "chapter_opened" });
+      if (obsolete()) return;
       sessionStorage.removeItem("sa.activeAttempt");
       renderLockedChapter(meta.code, chapter);
       return;
@@ -2485,12 +2489,14 @@ async function renderReader(parts) {
   } catch (error) {
     console.warn("Attempt state could not be checked", error);
   }
-  const book = await getBook(meta.code);
+  if (obsolete()) return;
+  const book = await getBook(meta.code, chosenEdition, readerLanguage);
+  if (obsolete() || state.lang !== readerLanguage || selectedEdition(readerLanguage).id !== chosenEdition.id) return;
   const verses = book.chapters[chapter - 1];
   const canonicalReaderPath = readerCanonicalPath(parts, { book: meta.code, chapter }, groupId);
   if (canonicalReaderPath && `${location.pathname}${location.search}${location.hash}` === requestedAddress)
     window.history.replaceState(null, "", canonicalReaderPath);
-  const edition = localEditionMetadata(catalog),
+  const edition = localEditionMetadata(catalog, chosenEdition, readerLanguage),
     editionInfo = editionDetails(edition, meta.code);
   const options = books
     .map(
@@ -2514,6 +2520,7 @@ async function renderReader(parts) {
   document.querySelector('#bible-edition').onchange=e=>{localStorage.setItem(`sa.edition.${state.lang}`,e.target.value);renderReader(parts)};
   if(!chosenEdition.local){document.querySelector('.verses').innerHTML=`<section class="publisher-reading"><p class="lead">${editionText.externalNote}</p><a class="button primary" target="_blank" rel="noreferrer" href="${editionUrl(chosenEdition,meta.code,chapter)}">${editionText.external} ↗</a></section>`;document.querySelector('.chapter-meta').textContent=chosenEdition.title;document.querySelector('.edition-card').innerHTML=`<h2>${t('edition')}</h2><p><strong>${esc(chosenEdition.title)}</strong></p><p>${editionText.whole}</p><a href="${chosenEdition.source}" target="_blank" rel="noreferrer">${t('sourceLink')} ↗</a>`;document.querySelector('#uk-spelling')?.remove();document.querySelector('#book-search').hidden=true;}
   const w=workspaceCopy(state.lang),history=loadJSON('sa.readingHistory',[]),attemptCopy=ATTEMPT_COPY[state.lang],missionManifest=await getMission();
+  if (obsolete()) return;
   const alreadyRead=history.some(r=>r.book===meta.code&&r.chapter===chapter);
   const hasTasks=missionManifest.chapters?.some(item=>item.book===meta.code&&Number(item.chapter)===chapter);
   document.querySelector('.chapter-nav').insertAdjacentHTML('beforebegin',`<div class="read-completion"><button class="button primary" id="mark-read">${attemptCopy.finishReading}</button>${hasTasks?`<button class="button" id="start-questions" disabled>${attemptCopy.transition}</button>`:""}<a href="/progress">${w.progress}</a></div>${hasTasks?`<dialog id="attempt-dialog" class="attempt-dialog" aria-labelledby="attempt-dialog-title"><form method="dialog"><h2 id="attempt-dialog-title">${attemptCopy.prepareTitle}</h2><p>${attemptCopy.prepareText}</p><ul>${attemptCopy.prepareRules.map(rule=>`<li>${rule}</li>`).join("")}</ul><div class="action-row"><button class="button" value="cancel">${attemptCopy.cancel}</button><button class="button primary" id="confirm-attempt" value="default">${attemptCopy.begin}</button></div><p id="attempt-state" role="status"></p></form></dialog>`:""}`);
@@ -3278,6 +3285,7 @@ function cleanPublicCopy() {
 }
 
 async function route() {
+  state.readerRenderTicket = (state.readerRenderTicket || 0) + 1;
   clearInterval(timerInterval);
   try {
     const sourceRoute = location.hash ? location.hash.replace(/^#\/?/, "") : location.pathname.replace(/^\/?/, "");

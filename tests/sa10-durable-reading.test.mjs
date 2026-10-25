@@ -72,7 +72,7 @@ for(const mode of ['DELETE','WAL']){
   test(`${mode}: bad predecessor and false D1 ACK fail closed`,async()=>{
     const f=fixture(mode);try{const db=new D1Test(f.file),api=worker(db);
       db.db.prepare('INSERT INTO progress(user_id,mission_id,data) VALUES (?,?,?)').run('reader-a','READING','{}');
-      await assert.rejects(call(api,'reading','PUT',{reading:[chapter(1)]}),/malformed JSON/i);
+      assert.equal((await call(api,'reading','PUT',{reading:[chapter(1)]})).status,503);
       assert.equal(db.db.prepare('SELECT data FROM progress WHERE user_id=?').get('reader-a').data,'{}');
       db.db.prepare('DELETE FROM progress WHERE user_id=?').run('reader-a');
       db.failNext=true;assert.equal((await call(api,'reading','PUT',{reading:[chapter(2)]})).status,503);
@@ -116,6 +116,42 @@ for (const mode of ['DELETE', 'WAL']) {
       db.close();const reopened=new D1Test(f.file);
       assert.equal((await call(worker(reopened),'progress','GET',undefined,'reader-b')).body.progress,null);
       reopened.close();
+    }finally{f.dispose()}
+  });
+}
+
+// SA10: both directions must reject structurally invalid receipts without a false 200 ACK.
+for (const mode of ['DELETE', 'WAL']) {
+  test(`${mode}: invalid incoming receipts are rejected atomically without damaging durable history`,async()=>{
+    const f=fixture(mode);try{const db=new D1Test(f.file),api=worker(db);
+      assert.equal((await call(api,'reading','PUT',{reading:[chapter(7)]})).status,200);
+      for(const payload of [
+        [null],
+        [{book:'BAD!',chapter:3,title:'Synthetic'}],
+        [{book:'GEN',chapter:8,title:'Good'}, {book:'GEN',chapter:0,title:'Bad'}],
+        [{book:'GEN',chapter:9,title:42}],
+      ]){
+        const r=await call(api,'reading','PUT',{reading:payload});
+        assert.equal(r.status,400,'invalid input must not return a false ACK');
+        assert.equal(r.body.error,'invalid_reading');
+      }
+      db.close();const reopened=new D1Test(f.file);
+      assert.deepEqual((await call(worker(reopened),'reading')).body.reading,[chapter(7)]);
+      reopened.close();
+    }finally{f.dispose()}
+  });
+  test(`${mode}: malformed-but-array stored history is not ACKed or overwritten`,async()=>{
+    const f=fixture(mode);try{const db=new D1Test(f.file),api=worker(db);
+      for(const bad of ['[null]','[1]','[{"book":"GEN","chapter":12}]', '[{"book":"GEN","chapter":0,"title":"x"}]', '[{"book":"BAD!","chapter":2,"title":"x"}]']){
+        db.db.prepare("INSERT INTO progress(user_id,mission_id,data) VALUES (?,'READING',?) ON CONFLICT(user_id,mission_id) DO UPDATE SET data=excluded.data").run('reader-a',bad);
+        const read=await call(api,'reading');
+        assert.equal(read.status,503,'structural corruption must not masquerade as good readback');
+        assert.equal(read.body.error,'reading_state_unavailable');
+        const write=await call(api,'reading','PUT',{reading:[chapter(10)]});
+        assert.equal(write.status,503,'cannot ACK a merged history that remains corrupted');
+        assert.equal(db.db.prepare("SELECT data FROM progress WHERE user_id=? AND mission_id='READING'").get('reader-a').data,bad,'no overwrite of corrupted original');
+      }
+      db.close();
     }finally{f.dispose()}
   });
 }

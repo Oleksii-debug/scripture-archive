@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { normalizeSecureOrigin, verifyDeclaredOrigins } from '../scripts/check-web-release-origin.mjs';
 
@@ -33,16 +34,16 @@ test('rejects HTTP, credentials, path, query, fragment and non-web protocols', (
 test('CLI fails closed without named origin and environment variables', () => {
   const script = new URL('../scripts/check-web-release-origin.mjs', import.meta.url);
   const env = { PATH: process.env.PATH };
-  const noArgs = spawnSync(process.execPath, [script.pathname], { env, encoding: 'utf8' });
+  const noArgs = spawnSync(process.execPath, [fileURLToPath(script)], { env, encoding: 'utf8' });
   assert.equal(noArgs.status, 1);
-  const missing = spawnSync(process.execPath, [script.pathname, '--expected-origin', example], { env, encoding: 'utf8' });
+  const missing = spawnSync(process.execPath, [fileURLToPath(script), '--expected-origin', example], { env, encoding: 'utf8' });
   assert.equal(missing.status, 1);
   assert.match(missing.stderr, /DECLARED_ORIGIN_INVALID/);
 });
 
 test('CLI reports only declaration parity, never "deployed"', () => {
   const script = new URL('../scripts/check-web-release-origin.mjs', import.meta.url);
-  const result = spawnSync(process.execPath, [script.pathname, '--expected-origin', example], {
+  const result = spawnSync(process.execPath, [fileURLToPath(script), '--expected-origin', example], {
     env: { PATH: process.env.PATH, NEXT_PUBLIC_SITE_URL: example, APP_BASE_URL: example }, encoding: 'utf8',
   });
   assert.equal(result.status, 0, result.stderr);

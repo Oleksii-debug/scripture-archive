@@ -2197,15 +2197,27 @@ async function getSession() {
   return state.user;
 }
 async function getBook(code) {
-  const selected = selectedEdition(state.lang);
-  const edition = selected.local ? selected : EDITIONS[state.lang].find(e => e.local);
-  const folder = edition.folder || state.lang;
+  const requestLocale = state.lang;
+  const selected = selectedEdition(requestLocale);
+  const edition = selected.local ? selected : EDITIONS[requestLocale].find(e => e.local);
+  const folder = edition.folder || requestLocale;
   const key = `${folder}:${code}`;
   if (!state.bookCache.has(key)) {
     const request = fetch(`/data/bible/${folder}/${code}.json`)
-      .then((r) => {
+      .then(async (r) => {
         if (!r.ok) throw Error(r.status);
-        return r.json();
+        const book = await r.json();
+        const entries = state.catalog?.editionBooks?.[edition.id] || state.catalog?.books?.[requestLocale];
+        const expectedChapters = entries?.find((entry) => entry.code === code)?.chapters;
+        if (!book || book.bookCode !== code || book.locale !== requestLocale ||
+            book.editionId !== edition.id || !Array.isArray(book.chapters) ||
+            !book.chapters.length ||
+            (expectedChapters && book.chapters.length !== expectedChapters) ||
+            book.chapters.some((chapter) => !Array.isArray(chapter) || !chapter.length ||
+              chapter.some((verse) => typeof verse !== "string" || !verse.trim()))) {
+          throw Error("Invalid Bible book data");
+        }
+        return book;
       })
       .catch((error) => {
         if (state.bookCache.get(key) === request) state.bookCache.delete(key);

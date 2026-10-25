@@ -142,6 +142,13 @@ integration("account, progress, attempts, groups, marathon limit and password re
   await request("/api/attempts?action=read", { method: "POST", body: { book: "GEN", chapter: 12, groupId } });
   result = await request("/api/attempts?action=start", { method: "POST", body: { missionId: "OT-AB-01", book: "GEN", chapter: 12, locale: "en", groupId } });
   const groupAttemptId = result.data.attemptId;
+  // A personal reader must never resume the group's in-progress chapter attempt.
+  result = await request("/api/attempts?action=chapter&book=GEN&chapter=12");
+  assert.equal(result.response.status, 200);
+  assert.equal(result.data.active, null, "personal chapter lookup must exclude group attempts");
+  result = await request(`/api/attempts?action=chapter&book=GEN&chapter=12&groupId=${encodeURIComponent(groupId)}`);
+  assert.equal(result.response.status, 200);
+  assert.equal(result.data.active?.id, groupAttemptId, "matching group must resume its own attempt");
   for (let index = 0; index < chapter12.length; index += 1)
     result = await request("/api/attempts?action=answer", { method: "POST", body: { attemptId: groupAttemptId, taskIndex: index + 1, selected: chapter12[index].correct } });
   assert.equal(result.data.groupId, groupId);

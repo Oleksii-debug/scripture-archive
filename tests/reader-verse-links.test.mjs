@@ -278,7 +278,7 @@ test('a superseded reader route cannot finalize stale focus, metadata, or an err
   // Execute the existing route() function; only its asynchronous reader dependency
   // is controlled to force new navigation to finish before an older request.
   const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
-  const match = app.match(/async function route\\(\\) \\{[\\s\\S]*?\\n\\}\\n(?=\\nlangSelect\\.addEventListener)/);
+  const match = app.match(/async function route\(\) \{[\s\S]*?\n\}\n(?=\nlangSelect\.addEventListener)/);
   assert.ok(match, 'canonical route implementation absent');
   for (const rejectOlder of [false, true]) {
     const events = [];
@@ -292,7 +292,7 @@ test('a superseded reader route cannot finalize stale focus, metadata, or an err
       'state', 'location', 'timerInterval', 'renderReader', 'cleanPublicCopy',
       'setStaticI18n', 'updatePageMetadata', 'window', 'focusReaderRouteVerse',
       'main', 'shell', 't',
-      match[0] + '\\nreturn route;',
+      match[0] + '\nreturn route;',
     )(
       state, browserLocation, undefined,
       async () => { state.readerRenderTicket += 1; return ++readers === 1 ? older : newer; },

@@ -98,6 +98,50 @@ function pngHasRequiredChunks(bytes: Uint8Array) {
   return false;
 }
 
+// RIFF/WebP validation: declared length, bounded chunks, and image frame markers.
+// This is deliberately not a full WebP decoder or an antivirus scan.
+function webpHasImageFrame(bytes: Uint8Array) {
+  if (bytes.length < 20 || bytes[0] !== 0x52 || bytes[1] !== 0x49 || bytes[2] !== 0x46 || bytes[3] !== 0x46 ||
+      bytes[8] !== 0x57 || bytes[9] !== 0x45 || bytes[10] !== 0x42 || bytes[11] !== 0x50) return false;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (view.getUint32(4, true) !== bytes.length - 8) return false;
+  const fourCC = (at: number) => String.fromCharCode(bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]);
+  const validFrame = (type: string, at: number, size: number) => {
+    if (type === "VP8 ") return size >= 10 && bytes[at + 3] === 0x9d && bytes[at + 4] === 0x01 && bytes[at + 5] === 0x2a &&
+      (view.getUint16(at + 6, true) & 0x3fff) > 0 && (view.getUint16(at + 8, true) & 0x3fff) > 0;
+    return type === "VP8L" && size >= 5 && bytes[at] === 0x2f && (bytes[at + 4] & 0xe0) === 0;
+  };
+  let offset = 12, frameFound = false, extended = false;
+  while (offset + 8 <= bytes.length) {
+    const type = fourCC(offset), size = view.getUint32(offset + 4, true);
+    const end = offset + 8 + size, next = end + (size & 1);
+    if (next > bytes.length) return false;
+    if (type === "VP8X") {
+      if (offset !== 12 || size !== 10) return false;
+      extended = true;
+    } else if (type === "VP8 " || type === "VP8L") {
+      if (!validFrame(type, offset + 8, size)) return false;
+      frameFound = true;
+    } else if (type === "ANMF") {
+      if (!extended || size < 16) return false;
+      let inner = offset + 8 + 16;
+      while (inner + 8 <= end) {
+        const childType = fourCC(inner), childSize = view.getUint32(inner + 4, true);
+        const childEnd = inner + 8 + childSize, childNext = childEnd + (childSize & 1);
+        if (childNext > end) return false;
+        if (childType === "VP8 " || childType === "VP8L") {
+          if (!validFrame(childType, inner + 8, childSize)) return false;
+          frameFound = true;
+        }
+        inner = childNext;
+      }
+      if (inner !== end) return false;
+    }
+    offset = next;
+  }
+  return offset === bytes.length && frameFound;
+}
+
 function matchesAttachment(file: File, bytes: Uint8Array) {
   const lowerName = file.name.toLowerCase();
   if (!FILE_SUFFIXES[file.type]?.some(suffix => lowerName.endsWith(suffix))) return false;
@@ -106,8 +150,7 @@ function matchesAttachment(file: File, bytes: Uint8Array) {
     case "application/pdf": return starts(0x25, 0x50, 0x44, 0x46, 0x2d);
     case "image/jpeg": return starts(0xff, 0xd8, 0xff);
     case "image/png": return pngHasRequiredChunks(bytes);
-    case "image/webp": return starts(0x52, 0x49, 0x46, 0x46) &&
-      bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50;
+    case "image/webp": return webpHasImageFrame(bytes);
     case "application/vnd.openxmlformats-officedocument.wordprocessingml.document": return docxHasParts(bytes);
     case "text/plain": {
       try {

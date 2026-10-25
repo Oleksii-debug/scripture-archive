@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { EDITIONS } from '../public/editions.js';
-import { readerVerseHref, focusRequestedVerse } from '../public/reader-verse-links.js';
+import { readerVerseHref, focusRequestedVerse, readerChapterNumber } from '../public/reader-verse-links.js';
 
 test('search reference links identify an exact book, chapter, and verse', () => {
   assert.equal(readerVerseHref('GEN', 1, 3), '/reader/GEN/1?verse=3');
@@ -124,4 +124,24 @@ test('all 264 bundled local book files preserve edition-specific catalog coordin
     }
   }
   assert.equal(checkedBooks, 264);
+});
+
+
+test('reader chapter routing never indexes a fractional or malformed Bible chapter', () => {
+  for (const max of [3, 4, 21, 50, 150]) {
+    assert.equal(readerChapterNumber('1', max), 1);
+    assert.equal(readerChapterNumber(String(max), max), max);
+    assert.equal(readerChapterNumber(max, max), max);
+    assert.equal(readerChapterNumber(max + 1, max), max);
+  }
+  for (const value of ['1.5', '0.5', 'NaN', 'Infinity', '-1', '1e2', '0x10', '01', '', Number.POSITIVE_INFINITY, Number.NaN, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+    assert.equal(readerChapterNumber(value, 21), 1, String(value));
+  }
+  assert.equal(readerChapterNumber('4', 4), 4, 'Ohiienko Joel has four chapters');
+  assert.equal(readerChapterNumber('4', 3), 3, 'Historical Ukrainian Joel has three chapters');
+});
+
+test('production reader reuses the canonical guarded chapter coordinate', async () => {
+  const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  assert.match(app, /readerChapterNumber\\(parts\\[2\\] \\|\\| state\\.reader\\.chapter \\|\\| 1, meta\\.chapters\\)/);
 });

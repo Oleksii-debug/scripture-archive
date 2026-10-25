@@ -1,5 +1,16 @@
 export const COMMUNITY_RUN_ID = "scripture-community-2026";
-export const COMMUNITY_TARGET = 2100;
+export const COMMUNITY_TARGET = 2700;
+
+export function communityWavePlan(activatedAt: Date) {
+  // Preserve the gaps from the original 02:55 / 08:00 / 15:00 plan, but anchor
+  // them to actual activation. Nothing is dated before that activation.
+  return [
+    { key: "initial", count: 100, offsetMinutes: 0, pattern: "[180]" },
+    { key: "morning", count: 200, offsetMinutes: 305, pattern: "[120,240,360]" },
+    { key: "afternoon", count: 300, offsetMinutes: 725, pattern: "[120,180,240]" },
+    { key: "continuous", count: 2100, offsetMinutes: 1268, pattern: "adaptive" },
+  ].map(wave => ({ ...wave, startsAt: sqlDate(new Date(activatedAt.getTime() + wave.offsetMinutes * 60_000)) }));
+}
 
 type NameSet = { first: readonly string[]; last: readonly string[]; locale: "uk" | "sk" | "en"; country: string };
 
@@ -60,22 +71,6 @@ export function identityFor(sequence: number) {
   const personaRoll = Math.floor(seed / 17) % 100;
   const persona = personaRoll < 30 ? "rare" : personaRoll < 70 ? "moderate" : personaRoll < 95 ? "regular" : "active";
   return { firstName, lastName, locale: set.locale, countryCode: set.country, persona, seed };
-}
-
-export function activityFor(seed: number, persona: string, joinedAt: string, now = new Date()) {
-  const slot = Math.floor(now.getTime() / 300_000);
-  const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Warsaw", hour: "2-digit", hour12: false }).format(now));
-  const base = ({ rare: 0.025, moderate: 0.06, regular: 0.115, active: 0.2 } as Record<string, number>)[persona] || 0.05;
-  const peak = hour >= 6 && hour < 10 ? 1.45 : hour >= 18 && hour < 23 ? 1.75 : hour >= 1 && hour < 6 ? 0.28 : 0.85;
-  const roll = stableNumber(`${seed}:${slot}`) / 0xffffffff;
-  const online = roll < Math.min(0.72, base * peak);
-  const choices = ["reading", "mission", "groups", "exploring"] as const;
-  const activity = online ? choices[stableNumber(`${seed}:activity:${slot}`) % choices.length] : "away";
-  const ageDays = Math.max(0, (now.getTime() - new Date(joinedAt).getTime()) / 86_400_000);
-  const pace = ({ rare: 0.18, moderate: 0.55, regular: 1.2, active: 2.1 } as Record<string, number>)[persona] || 0.4;
-  const chapters = Math.max(0, Math.floor(ageDays * pace + (seed % 4)));
-  const missions = Math.floor(chapters / (4 + (seed % 5)));
-  return { online, activity, chapters, missions };
 }
 
 export function intervalSeconds(pattern: string, patternIndex: number, nextAt: string) {

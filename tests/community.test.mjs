@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { activityFor, identityFor, intervalSeconds, warsawMoment } from "../lib/community.ts";
+import { COMMUNITY_TARGET, communityWavePlan, identityFor, intervalSeconds, warsawMoment } from "../lib/community.ts";
 
 test("community identities are deterministic, mostly Ukrainian, and preserve Slovak spelling", () => {
   const people = Array.from({ length: 2100 }, (_, index) => identityFor(index + 1));
@@ -23,11 +23,15 @@ test("registration intervals follow the requested waves and slow overnight", () 
   assert.ok(intervalSeconds("adaptive", 0, "2026-10-25 12:00:00") <= 360);
 });
 
-test("Warsaw wave times and activity remain bounded", () => {
+test("activation shifts every wave forward without backdated registrations", () => {
   const reference = new Date("2026-10-25T01:55:00Z");
   assert.equal(warsawMoment(reference, 8).toISOString(), "2026-10-25T07:00:00.000Z");
-  const activity = activityFor(12345, "active", "2026-10-20 10:00:00", new Date("2026-10-25T19:00:00Z"));
-  assert.ok(activity.chapters >= 0);
-  assert.ok(activity.missions >= 0);
-  assert.ok(["reading", "mission", "groups", "exploring", "away"].includes(activity.activity));
+  const activated = new Date("2026-10-25T16:30:00Z");
+  const waves = communityWavePlan(activated);
+  assert.equal(waves[0].startsAt, "2026-10-25 16:30:00");
+  assert.equal(waves[1].startsAt, "2026-10-25 21:35:00");
+  assert.equal(waves[2].startsAt, "2026-10-26 04:35:00");
+  assert.equal(waves.reduce((total, wave) => total + wave.count, 0), COMMUNITY_TARGET);
+  assert.equal(waves[3].count, 2100);
+  assert.ok(waves.every(wave => new Date(wave.startsAt.replace(" ","T")+"Z")>=activated));
 });

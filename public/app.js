@@ -1954,6 +1954,8 @@ const announcer = document.querySelector("#announcer");
 const langSelect = document.querySelector("#language");
 const nav = document.querySelector("#primary-nav");
 let timerInterval;
+let communityRefreshInterval;
+let communityOwnerRefreshInterval;
 
 const PAGE_TITLES = {
   uk: { home:"Архів Писання", reader:"Біблійна читальня", campaigns:"Навчальні кампанії", missions:"Місії", groups:"Домашні групи", community:"Спільнота", support:"Підтримати", help:"Служба підтримки", about:"Про проєкт", privacy:"Приватність", atlas:"Атлас розвитку", dossiers:"Дослідницькі досьє", builder:"Конструктор", account:"Обліковий запис", progress:"Мій прогрес", mission:"Завдання", editor:"Редактор" },
@@ -2250,10 +2252,19 @@ async function renderHome() {
   setActiveNav("");
   main.innerHTML=homePage(state.lang,state.user);
   main.focus({preventScroll:true});
-  try {
-    const response=await fetch("/api/community?public=summary",{cache:"no-store"});
-    if(response.ok){const data=await response.json(),values=document.querySelectorAll("[data-community-summary] strong");if(values[0])values[0].textContent=new Intl.NumberFormat(state.lang).format(data.summary.registered);if(values[1])values[1].textContent=new Intl.NumberFormat(state.lang).format(data.summary.online)}
-  } catch {}
+  if(!main.querySelector("[data-community-summary]")){
+    const copy={uk:["користувачів платформи","у мережі"],ru:["пользователей платформы","в сети"],en:["platform members","online"]}[state.lang];
+    main.querySelector(".hero-copy .lead")?.insertAdjacentHTML("afterend",`<div class="community-counter" data-community-summary><span><strong>—</strong>${copy[0]}</span><span><strong>—</strong>${copy[1]}</span></div>`);
+  }
+  main.querySelector("[data-community-summary]")?.setAttribute("aria-live","off");
+  const refresh=async()=>{
+    if(document.hidden)return;
+    try{
+      const response=await fetch("/api/community?public=summary",{cache:"no-store"});
+      if(response.ok){const data=await response.json(),values=main.querySelectorAll("[data-community-summary] strong");if(values[0])values[0].textContent=new Intl.NumberFormat(state.lang).format(data.summary.registered);if(values[1])values[1].textContent=new Intl.NumberFormat(state.lang).format(data.summary.online)}
+    }catch{}
+  };
+  await refresh();communityRefreshInterval=setInterval(refresh,30000);
 }
 
 const COMMUNITY_COPY={
@@ -3212,9 +3223,12 @@ function renderAccount() {
 }
 
 async function renderEditor() {
+  clearInterval(communityOwnerRefreshInterval);
   setActiveNav("account");
   if (!state.user?.isOwner) {
     renderAccount();
+    const ownerSignIn={uk:"Увійти до панелі власника через ChatGPT",ru:"Войти в панель владельца через ChatGPT",en:"Sign in to the owner panel with ChatGPT"}[state.lang];
+    main.querySelector(".shell")?.insertAdjacentHTML("afterbegin",`<p><a class="button" href="/signin-with-chatgpt?return_to=%2Feditor" target="_self">${ownerSignIn}</a></p>`);
     return;
   }
   const copy = {
@@ -3269,10 +3283,27 @@ async function renderEditor() {
   const formatDuration = value => { const seconds=Number(value)||0; if(seconds>=86400)return `${(seconds/86400).toFixed(1)} d`; if(seconds>=3600)return `${(seconds/3600).toFixed(1)} h`; return `${Math.round(seconds/60)} min`; };
   const ranking = (title, rows, valueKey="sessions") => `<section class="analytics-list"><h3>${title}</h3>${rows.length?`<ol>${rows.map(row=>`<li><span>${esc(row.label)}</span><strong>${formatNumber(row[valueKey])}</strong></li>`).join("")}</ol>`:"<p>—</p>"}</section>`;
   document.querySelector(".editor-grid").insertAdjacentHTML("afterbegin", `<section class="card full analytics-dashboard"><div class="section-head compact"><div><p class="eyebrow">Scripture Archive</p><h2>${analyticsLabels.heading}</h2></div><p>${analyticsLabels.lead}</p></div><div class="analytics-metrics"><article><strong>${formatNumber(analytics.accounts.total)}</strong><span>${analyticsLabels.accounts}</span></article><article><strong>${formatNumber(analytics.accounts.verified)}</strong><span>${analyticsLabels.verified}</span></article><article><strong>${formatNumber(analytics.summary.sessions)}</strong><span>${analyticsLabels.sessions}</span></article><article><strong>${formatNumber(analytics.summary.page_views)}</strong><span>${analyticsLabels.views}</span></article><article><strong>${formatDuration(analytics.summary.active_seconds)}</strong><span>${analyticsLabels.time}</span></article><article><strong>${formatNumber(analytics.summary.signed_in_users)}</strong><span>${analyticsLabels.users}</span></article></div><div class="analytics-rankings">${ranking(analyticsLabels.countries,analytics.countries)}${ranking(analyticsLabels.devices,analytics.devices)}${ranking(analyticsLabels.pages,analytics.pages,"views")}${ranking(analyticsLabels.actions,analytics.events,"total")}</div><details class="analytics-users"><summary>${analyticsLabels.recent} · ${analytics.recentUsers.length}</summary><div class="table-scroll"><table><thead><tr><th>Email</th><th>${analyticsLabels.verified}</th><th>${analyticsLabels.time}</th><th>${analyticsLabels.views}</th><th>${analyticsLabels.countries}</th><th>Last activity</th></tr></thead><tbody>${analytics.recentUsers.map(user=>`<tr><td><strong>${esc(user.first_name)} ${esc(user.last_name)}</strong><br><span>${esc(user.email)}</span></td><td>${user.email_verified_at?"✓":"—"}</td><td>${formatDuration(user.active_seconds)}</td><td>${formatNumber(user.page_views)}</td><td>${esc(user.country||"—")}</td><td>${esc(user.last_seen_at||analyticsLabels.never)}</td></tr>`).join("")}</tbody></table></div></details></section>`);
-  const communityAdmin=state.lang==="uk"?{title:"Керування спільнотою",real:"Реальні облікові записи",automatic:"Автоматичні учасники",status:"Стан",schedule:"Хвилі реєстрацій",pause:"Призупинити",resume:"Продовжити",stop:"Зупинити",created:"створено",of:"з",next:"наступна"}:state.lang==="ru"?{title:"Управление сообществом",real:"Реальные учётные записи",automatic:"Автоматические участники",status:"Состояние",schedule:"Волны регистраций",pause:"Приостановить",resume:"Продолжить",stop:"Остановить",created:"создано",of:"из",next:"следующая"}:{title:"Community controls",real:"Real accounts",automatic:"Automated participants",status:"Status",schedule:"Registration waves",pause:"Pause",resume:"Resume",stop:"Stop",created:"created",of:"of",next:"next"};
+  const communityAdmin=state.lang==="uk"?{title:"Керування спільнотою",real:"Реальні облікові записи",automatic:"Автоматичні учасники",status:"Стан",schedule:"Хвилі реєстрацій",start:"Запустити",refresh:"Оновити",log:"Журнал керування",pause:"Стоп",resume:"Продовжити",stop:"Зупинити",created:"створено",of:"з",next:"наступна"}:state.lang==="ru"?{title:"Управление сообществом",real:"Реальные учётные записи",automatic:"Автоматические участники",status:"Состояние",schedule:"Волны регистраций",start:"Запустить",refresh:"Обновить",log:"Журнал управления",pause:"Стоп",resume:"Продолжить",stop:"Остановить",created:"создано",of:"из",next:"следующая"}:{title:"Community controls",real:"Real accounts",automatic:"Automated participants",status:"Status",schedule:"Registration waves",start:"Start",refresh:"Refresh",log:"Control history",pause:"Stop",resume:"Resume",stop:"Stop",created:"created",of:"of",next:"next"};
   const communityState=analytics.community||{run:null,waves:[],synthetic:{total:0}};
-  document.querySelector(".analytics-dashboard").insertAdjacentHTML("afterend",`<section class="card full community-admin"><div class="section-head compact"><div><p class="eyebrow">Scripture Archive</p><h2>${communityAdmin.title}</h2></div><p>${communityAdmin.status}: <strong>${esc(communityState.run?.status||"—")}</strong></p></div><div class="analytics-metrics"><article><strong>${formatNumber(analytics.accounts.total)}</strong><span>${communityAdmin.real}</span></article><article><strong>${formatNumber(communityState.synthetic?.total)}</strong><span>${communityAdmin.automatic}</span></article></div><h3>${communityAdmin.schedule}</h3><div class="community-wave-list">${(communityState.waves||[]).map(wave=>`<p><strong>${esc(wave.label)}</strong><span>${formatNumber(wave.created_count)} ${communityAdmin.of} ${formatNumber(wave.target_count)} ${communityAdmin.created} · ${communityAdmin.next}: ${esc(wave.next_at)} · ${esc(wave.status)}</span></p>`).join("")||"<p>—</p>"}</div><div class="action-row"><button class="button" data-community-control="pause">${communityAdmin.pause}</button><button class="button" data-community-control="resume">${communityAdmin.resume}</button><button class="button" data-community-control="stop">${communityAdmin.stop}</button></div><p id="community-control-state" role="status"></p></section>`);
-  document.querySelectorAll("[data-community-control]").forEach(button=>button.onclick=async()=>{const status=document.querySelector("#community-control-state");try{const response=await fetch("/api/community",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:button.dataset.communityControl})});if(!response.ok)throw Error(String(response.status));const result=await response.json();status.textContent=result.status;await renderEditor()}catch{status.textContent=t("registerError")}});
+  const runStatus=communityState.run?.status||"waiting";
+  const stateNames={uk:{waiting:"Очікує запуску",running:"Працює",paused:"Призупинено",stopped:"Зупинено"},ru:{waiting:"Ожидает запуска",running:"Работает",paused:"Приостановлено",stopped:"Остановлено"},en:{waiting:"Ready to start",running:"Running",paused:"Paused",stopped:"Stopped"}}[state.lang];
+  const localTime=value=>value?new Intl.DateTimeFormat(state.lang,{timeZone:"Europe/Warsaw",dateStyle:"short",timeStyle:"short"}).format(new Date(value.replace(" ","T")+"Z")):"—";
+  document.querySelector(".analytics-dashboard").insertAdjacentHTML("afterend",`<section class="card full community-admin"><div class="section-head compact"><div><p class="eyebrow">Scripture Archive</p><h2>${communityAdmin.title}</h2></div><p>${communityAdmin.status}: <strong data-community-run-status>${esc(stateNames[runStatus]||runStatus)}</strong></p></div><div class="analytics-metrics"><article><strong>${formatNumber(analytics.accounts.total)}</strong><span>${communityAdmin.real}</span></article><article><strong>${formatNumber(communityState.synthetic?.total)}</strong><span>${communityAdmin.automatic}</span></article></div><h3>${communityAdmin.schedule}</h3><div class="community-wave-list">${(communityState.waves||[]).map(wave=>`<p><strong>${esc(wave.label)}</strong><span>${formatNumber(wave.created_count)} ${communityAdmin.of} ${formatNumber(wave.target_count)} ${communityAdmin.created} · ${communityAdmin.next}: ${esc(localTime(wave.next_at))} · ${esc(wave.status)}</span></p>`).join("")||"<p>—</p>"}</div><div class="action-row"><button class="button" data-community-control="pause" ${!["waiting","running"].includes(runStatus)?"disabled":""}>${communityAdmin.pause}</button><button class="button" data-community-control="resume" ${runStatus!=="paused"?"disabled":""}>${communityAdmin.resume}</button></div><p id="community-control-state" role="status"></p><details><summary>${communityAdmin.log}</summary><ol>${(communityState.log||[]).map(event=>`<li>${esc(localTime(event.created_at))} · ${esc(event.event_type)}</li>`).join("")}</ol></details></section>`);
+  document.querySelectorAll("[data-community-control]").forEach(button=>button.onclick=async()=>{button.disabled=true;const status=document.querySelector("#community-control-state");try{const response=await fetch("/api/community",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:button.dataset.communityControl})});if(!response.ok)throw Error(String(response.status));const result=await response.json();await renderEditor();announce(stateNames[result.status]||result.status)}catch{status.textContent=t("registerError")}});
+  communityOwnerRefreshInterval=setInterval(async()=>{
+    if(document.hidden)return;
+    try{
+      const response=await fetch("/api/community?action=owner",{cache:"no-store"});if(!response.ok)return;
+      const current=await response.json(),panel=main.querySelector(".community-admin");if(!panel)return;
+      const status=current.run?.status||"waiting";
+      panel.querySelector("[data-community-run-status]").textContent=stateNames[status]||status;
+      panel.querySelector('[data-community-control="pause"]').disabled=!["waiting","running"].includes(status);
+      panel.querySelector('[data-community-control="resume"]').disabled=status!=="paused";
+      panel.querySelector(".analytics-metrics article:last-child strong").textContent=formatNumber(current.synthetic?.total);
+      panel.querySelectorAll(".community-wave-list p span").forEach((element,index)=>{const wave=current.waves[index];if(wave)element.textContent=`${formatNumber(wave.created_count)} ${communityAdmin.of} ${formatNumber(wave.target_count)} ${communityAdmin.created} · ${communityAdmin.next}: ${localTime(wave.next_at)} · ${wave.status}`});
+    }catch{}
+  },15000);
+
   document.querySelector(".editor-grid").insertAdjacentHTML("beforeend", `<section class="card full"><h2>${adminLabels.heading}</h2><p>${adminLabels.lead}</p><form id="managed-content-form" class="account-form account-form-grid"><label class="account-field"><span>ID</span><input name="id" maxlength="100"></label><label class="account-field"><span>${adminLabels.kind}</span><select name="kind"><option value="book">book</option><option value="chapter">chapter</option><option value="translation">translation</option><option value="mission">mission</option><option value="question">question</option><option value="route">route</option><option value="marathon">marathon</option><option value="ui_text">ui_text</option></select></label><label class="account-field"><span>${adminLabels.locale}</span><select name="locale"><option>uk</option><option>ru</option><option>en</option><option>all</option></select></label><label class="account-field"><span>${adminLabels.status}</span><select name="status"><option value="draft">${adminLabels.draft}</option><option value="published">${adminLabels.published}</option><option value="hidden">${adminLabels.hidden}</option></select></label>${field("title",adminLabels.title,"text",'required maxlength="200"')}<label class="account-field full"><span>${adminLabels.data}</span><textarea name="data" rows="8" required>{}</textarea></label><button class="button primary">${adminLabels.save}</button><p id="managed-content-state" role="status"></p></form><div class="managed-list">${managed.items.length?managed.items.map(item=>`<article><strong>${esc(item.title)}</strong><span>${esc(item.kind)} · ${esc(item.locale)} · ${esc(item.status)}</span></article>`).join(""):`<p>—</p>`}</div><details><summary>${adminLabels.history} · ${managed.revisions.length}</summary><ol>${managed.revisions.slice(0,30).map(revision=>`<li>${esc(revision.content_key)} · ${esc(revision.created_at)}</li>`).join("")}</ol></details></section>`);
   document.querySelector("#content-form").onsubmit = async (e) => {
     e.preventDefault();
@@ -3362,6 +3393,8 @@ function cleanPublicCopy() {
 
 async function route() {
   clearInterval(timerInterval);
+  clearInterval(communityRefreshInterval);
+  clearInterval(communityOwnerRefreshInterval);
   try {
     const sourceRoute = location.hash ? location.hash.replace(/^#\/?/, "") : location.pathname.replace(/^\/?/, "");
     const parts = sourceRoute.split("/").filter(Boolean);

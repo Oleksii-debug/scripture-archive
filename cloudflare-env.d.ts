@@ -9,6 +9,7 @@ declare namespace Cloudflare {
     SUPPORT_RECIPIENT?: string;
     AUTH_TEST_MODE?: string;
     TRUST_PLATFORM_AUTH?: string;
+    COMMUNITY_AUTOSTART?: string;
   }
 }
 

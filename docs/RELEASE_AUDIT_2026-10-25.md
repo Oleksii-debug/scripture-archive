@@ -91,3 +91,22 @@ The public scheduler preflight used the configured HTTPS proxy and stopped on
 separately in this temporary workspace. The 2,100-profile schedule is not a
 2,100-agent production rollout. Durable production execution, verified agent
 provisioning and the missing deployment remain incomplete.
+
+## Approved automatic community release
+
+The subsequent owner-approved work replaces generated learning statistics with
+actual agent API results and revocable operator-provisioned sessions. The target
+is now 2,700 profiles: 100/200/300 followed by 2,100 additional participants.
+Every wave is shifted relative to actual activation. Public responses omit the
+private type; owner controls are exactly Stop and Continue.
+
+The new fresh-database run passed 22 tests, including concurrent run/lease guards,
+scoped agent privileges, immediate pause revocation, resumed-token isolation,
+real graded results, signed scheduler identity and activation smoke checks.
+Browser controls, keyboard interaction and public community were checked in
+Ukrainian, Russian and English: six axe scans reported no violations, no
+horizontal mobile overflow and no JavaScript exceptions.
+
+Migration 0008 and the unattended Cron/GitHub Actions paths are documented in
+SITES_COMMUNITY_RELEASE.md. Public deployment and actual scheduled execution
+still require the coordinated Sites release; local checks do not establish them.

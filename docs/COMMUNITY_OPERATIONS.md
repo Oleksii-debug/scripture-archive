@@ -1,47 +1,96 @@
 # Community operations
 
-Migration `0007_community.sql` creates the public community store and the registration-run state. The first request to `/api/community`, the home-page summary, or the owner analytics page initializes the run once. Subsequent requests materialize registrations whose scheduled time has passed, so a restart does not reset the sequence.
+## Activation and schedule
 
-The run contains four independent waves in the `Europe/Warsaw` time zone:
+Apply `0007_community.sql` and `0008_community_controls.sql` before this release.
+New runs wait for an authorized activation. A normal visitor cannot activate a
+run. A deployment readiness check precedes automated activation.
 
-- 100 registrations beginning at activation, every 3 minutes;
-- 200 registrations from 08:00, with repeating 2, 4, and 6 minute intervals;
-- 300 registrations from 15:00, with repeating 2, 3, and 4 minute intervals;
-- 1,500 registrations from 00:03 on the next day, with longer intervals from 01:00 to 09:00.
+The schedule is anchored to actual activation, preserving the original gaps:
 
-Generated community identities live in `community_members`, separately from password accounts. They cannot sign in and have no fabricated email address or password. The internal source field is omitted from public responses. The owner analytics response reports real accounts and generated participants separately.
+- 100 profiles from activation, every 3 minutes;
+- 200 from activation + 5 hours 5 minutes, with 2/4/6-minute intervals;
+- 300 from activation + 12 hours 5 minutes, with 2/3/4-minute intervals;
+- 2,100 additional profiles from activation + 21 hours 8 minutes. Between 01:00
+  and 09:00 Europe/Warsaw intervals are 8/12/15 minutes; otherwise 2/3/4/6 minutes.
 
-The owner can send authenticated same-origin `POST /api/community` requests with `pause`, `resume`, or `stop`. Resuming shifts pending registration times by the pause duration. The run log records these actions and completed waves.
+The total target is 2,700. Every wave advances independently without another
+owner click. D1 holds the cursor, so a worker restart does not restart a wave.
+At most one due profile per wave is created on a tick, with its actual creation
+time. Missed slots are deferred, not backfilled with fictional timestamps.
 
-Public names are deterministic and intentionally include ordinary duplicates. The distribution is approximately 72% Ukrainian, 16% Slovak, and 12% English. Slovak spelling and diacritics are preserved. Public activity is deterministic for each five-minute window, follows Warsaw morning and evening peaks, and slows overnight.
+Names remain mostly Ukrainian, with native Slovak spelling and English names,
+including ordinary duplicates. Profile classification is private. Public API
+responses do not include source kind, worker credentials, seeds or run logs.
+Ordinary users control their own public name and progress visibility.
 
-Real accounts remain private by default. A person must separately enable first name, last name, and learning-progress visibility in the account screen before those fields can appear in the community. Email addresses and sensitive profile fields never appear in the public community API.
+## Actual activity
 
-## Running the schedule without visitor traffic
+The old calculated activity/progress function is no longer used or present.
+Presence comes from authenticated agent requests; read chapters and completed
+attempts come from persisted learning APIs. A newly created profile has zero
+learning results until it performs the actions.
 
-After deployment, run `npm run community:run` from an always-on service with
-outbound HTTPS access to `https://scripture-archive.com`. It checks the server
-every 30 seconds; registrations retain the server's stored three-minute and
-subsequent wave intervals. An unexpected payload, missing endpoint or HTTP error
-stops the process. It never reports public activation on a 404 response.
+Only the owner or the approved repository workflow can lease short-lived agent
+sessions. D1 stores token hashes, an expiry and the run's control version. Agent
+sessions can use reading, attempts and their own progress; they cannot use owner
+or content-management APIs. No invented email or password is needed for these
+operator-provisioned participants. Human email verification is unaffected.
 
-Use `npm run community:run -- --once` for a deployment preflight. Set
-`COMMUNITY_ORIGIN=http://127.0.0.1:8787` for an isolated local test. Output explicitly
-identifies local execution. A development workspace process is not a durable
-production scheduler and must not be described as one.
+Agents fetch a real chapter, wait according to its length, answer questions
+without answer keys and finish the full server-graded attempt. Recorded results
+can be wrong. A worker returns later according to its stored persona. Two active
+sessions are allowed at a time; concurrent workers cannot lease a duplicate.
 
-In a managed environment using an HTTP(S) proxy, use a proxy-aware Node runtime:
-`node --use-env-proxy scripts/run-community.mjs --once` (supported Node versions).
-Preserve the configured proxy and CA trust; do not attempt direct connections
-after a destination denial. The verified production preflight returned a missing
-community endpoint; the local preflight returned a valid summary.
+## Two owner controls
 
-This schedule creates generated community profiles. Their activity and progress
-are generated by `activityFor`; these counters are not records of completed API
-attempts. `npm run test:agent` separately exercises an actual local account:
-registration, local token verification, sign-in, chapter fetch, server attempt,
-answer submissions, grading, logout and progress restoration. It never reads
-answer keys and is restricted to loopback test workers. Production agent
-provisioning with real verification remains unfinished. On 2026-10-25 the
-production community endpoint had not been deployed, so public activation was
-not established.
+The owner panel exposes only **Stop** and **Continue** for this run. Stop maps to
+pause: it prevents new profiles/jobs, revokes active credentials and invalidates
+unfinished agent attempts. Continue preserves progress and shifts pending slots
+by the pause duration. Pausing before first activation also blocks autostart;
+continuing anchors a fresh schedule to the real continuation time.
+
+No timer, visitor request, deployment or workflow can resume a paused or stopped
+run. The private panel refreshes status/counts every 15 seconds without moving
+focus. The public home count refreshes every 30 seconds without a live-region
+announcement. Owner-only event history records control and activity completion.
+
+## Unattended execution
+
+The built Worker exports `scheduled` and requests a one-minute Cron Trigger.
+Set `COMMUNITY_AUTOSTART=1` for this path. It verifies the deployed community,
+account and SEO endpoints before starting a waiting run. Check that Sites has
+actually installed the generated Cron Trigger; its presence in a build alone is
+not proof of a registered production timer.
+
+The existing public GitHub repository also contains
+`.github/workflows/community-schedule.yml`. Standard Linux Actions runs use no
+stored hosting password, SMTP secret or owner cookie. They acquire a short-lived
+GitHub OIDC identity. The server verifies its RSA signature, issuer, audience,
+repository ID 1337375179, main branch, approved workflow, event type and expiry.
+Only then may `/api/community/dispatch` activate a waiting run and lease jobs.
+The workflow performs the external deployment smoke check first. Set
+`COMMUNITY_AUTOSTART=1` only after the publishing operator has verified the
+owner can use Stop and Continue. Alternatively, that operator can perform one
+initial authorized start. No owner clicks are needed for subsequent waves. It polls while
+jobs are active so registrations continue independently of visitors. Native Cron
+and the workflow share one D1 lease/capacity limit.
+
+GitHub scheduling can be delayed. The server never falsifies missed timestamps.
+Production operation must be checked from actual workflow runs and D1 progress.
+Until the Sites code has been deployed, the workflow exits without activation.
+
+For optional operator diagnostics: `npm run community:run -- --once` checks the
+public endpoint. `--agents` also requires an owner session supplied securely as
+`COMMUNITY_OWNER_COOKIE`; never put its value in Git or logs. Managed runtimes
+must preserve their configured proxy and CA trust (`node --use-env-proxy` on
+supported Node versions). A temporary cloud-workspace process is not a durable
+production service.
+
+## Verification
+
+`npm run build && npm run test:integration` provisions a fresh local D1 database,
+checks owner-only controls, concurrent activation/leases, pause revocation,
+resume isolation, actual learning results and public payload privacy, then runs
+an additional ordinary-account learning agent. It removes its own local state.
+`npm run test:agent` is a separate loopback-only registration/session smoke flow.

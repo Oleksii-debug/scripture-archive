@@ -1,94 +1,23 @@
 import { env } from "cloudflare:workers";
 import { authenticateRequest, rateLimit, requestAddress, sameOrigin } from "../../../lib/auth";
-import {
-  activityFor,
-  COMMUNITY_RUN_ID,
-  identityFor,
-  intervalSeconds,
-  sqlDate,
-  warsawMoment,
-} from "../../../lib/community";
+import { COMMUNITY_RUN_ID } from "../../../lib/community";
+import { advanceCommunity, communityOwnerState, controlCommunity, leaseCommunityAgents } from "../../../lib/community-engine";
 
 export const dynamic = "force-dynamic";
 
 const OWNER_EMAIL = "dordiaioleksii1@gmail.com";
 const clean = (value: unknown, max = 120) => typeof value === "string" ? value.trim().slice(0, max) : "";
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
-type Wave = { id: string; next_at: string; created_count: number; target_count: number; interval_pattern: string; pattern_index: number };
-type SyntheticRow = { id: string; first_name: string; last_name: string; locale: string; country_code: string; persona: string; seed: number; joined_at: string };
+type SyntheticRow = { id: string; first_name: string; last_name: string; locale: string; country_code: string; joined_at: string; last_seen_at: string | null; activity: string | null; reading_data: string | null; mission_count: number };
 type RealRow = { id: string; display_name: string; locale: string; joined_at: string; last_active_at: string | null; reading_data: string | null; mission_count: number };
 
-async function initializeRun(now: Date) {
-  const existing = await env.DB!.prepare("SELECT id FROM community_runs WHERE id=?").bind(COMMUNITY_RUN_ID).first();
-  if (existing) return;
-  const morning = warsawMoment(now, 8);
-  const afternoon = warsawMoment(now, 15);
-  const continuous = warsawMoment(now, 0, 3, 1);
-  await env.DB!.batch([
-    env.DB!.prepare("INSERT OR IGNORE INTO community_runs (id,status,timezone,started_at,updated_at) VALUES (?,'running','Europe/Warsaw',?,?)")
-      .bind(COMMUNITY_RUN_ID, sqlDate(now), sqlDate(now)),
-    env.DB!.prepare("INSERT OR IGNORE INTO community_waves (id,run_id,label,starts_at,next_at,target_count,interval_pattern) VALUES (?,?,?,?,?,100,'[180]')")
-      .bind(`${COMMUNITY_RUN_ID}:initial`, COMMUNITY_RUN_ID, "initial-100", sqlDate(now), sqlDate(now)),
-    env.DB!.prepare("INSERT OR IGNORE INTO community_waves (id,run_id,label,starts_at,next_at,target_count,interval_pattern) VALUES (?,?,?,?,?,200,'[120,240,360]')")
-      .bind(`${COMMUNITY_RUN_ID}:morning`, COMMUNITY_RUN_ID, "morning-200", sqlDate(morning), sqlDate(morning)),
-    env.DB!.prepare("INSERT OR IGNORE INTO community_waves (id,run_id,label,starts_at,next_at,target_count,interval_pattern) VALUES (?,?,?,?,?,300,'[120,180,240]')")
-      .bind(`${COMMUNITY_RUN_ID}:afternoon`, COMMUNITY_RUN_ID, "afternoon-300", sqlDate(afternoon), sqlDate(afternoon)),
-    env.DB!.prepare("INSERT OR IGNORE INTO community_waves (id,run_id,label,starts_at,next_at,target_count,interval_pattern) VALUES (?,?,?,?,?,1500,'adaptive')")
-      .bind(`${COMMUNITY_RUN_ID}:continuous`, COMMUNITY_RUN_ID, "continuous-1500", sqlDate(continuous), sqlDate(continuous)),
-    env.DB!.prepare("INSERT INTO community_run_log (id,run_id,event_type,details_json,created_at) VALUES (?,?, 'started', ?, ?)")
-      .bind(crypto.randomUUID(), COMMUNITY_RUN_ID, JSON.stringify({ target: 2100, timezone: "Europe/Warsaw" }), sqlDate(now)),
-  ]);
-}
-
-async function materializeDue(now = new Date()) {
-  await initializeRun(now);
-  const run = await env.DB!.prepare("SELECT status FROM community_runs WHERE id=?").bind(COMMUNITY_RUN_ID).first<{ status: string }>();
-  if (run?.status !== "running") return;
-  const waves = await env.DB!.prepare(
-    "SELECT id,next_at,created_count,target_count,interval_pattern,pattern_index FROM community_waves WHERE run_id=? AND status='running' AND next_at<=? ORDER BY next_at",
-  ).bind(COMMUNITY_RUN_ID, sqlDate(now)).all<Wave>();
-
-  for (const wave of waves.results) {
-    let nextAt = wave.next_at, created = Number(wave.created_count), patternIndex = Number(wave.pattern_index);
-    const statements = [];
-    // A bounded catch-up protects D1. Repeated page requests continue from the saved cursor.
-    while (created < Number(wave.target_count) && new Date(`${nextAt.replace(" ", "T")}Z`) <= now && statements.length < 120) {
-      const sequence = wave.id.endsWith(":initial") ? created + 1
-        : wave.id.endsWith(":morning") ? 101 + created
-          : wave.id.endsWith(":afternoon") ? 301 + created : 601 + created;
-      const person = identityFor(sequence);
-      statements.push(env.DB!.prepare(`INSERT OR IGNORE INTO community_members
-        (id,run_id,wave_id,sequence_number,first_name,last_name,locale,country_code,persona,seed,joined_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?)`).bind(
-        crypto.randomUUID(), COMMUNITY_RUN_ID, wave.id, sequence, person.firstName, person.lastName,
-        person.locale, person.countryCode, person.persona, person.seed, nextAt,
-      ));
-      const seconds = intervalSeconds(wave.interval_pattern, patternIndex, nextAt);
-      nextAt = sqlDate(new Date(new Date(`${nextAt.replace(" ", "T")}Z`).getTime() + seconds * 1000));
-      created += 1;
-      patternIndex += 1;
-    }
-    const finished = created >= Number(wave.target_count);
-    statements.push(env.DB!.prepare("UPDATE community_waves SET next_at=?,created_count=?,pattern_index=?,status=? WHERE id=?")
-      .bind(nextAt, created, patternIndex, finished ? "complete" : "running", wave.id));
-    if (finished) statements.push(env.DB!.prepare("INSERT INTO community_run_log (id,run_id,event_type,details_json) VALUES (?,?, 'wave_completed', ?)")
-      .bind(crypto.randomUUID(), COMMUNITY_RUN_ID, JSON.stringify({ wave: wave.id, count: created })));
-    await env.DB!.batch(statements);
-  }
-}
-
 function publicSynthetic(row: SyntheticRow, now: Date) {
-  const activity = activityFor(Number(row.seed), row.persona, row.joined_at, now);
+  const online = Boolean(row.last_seen_at && new Date(`${row.last_seen_at.replace(" ", "T")}Z`).getTime() >= now.getTime() - 300_000);
   return {
-    id: row.id,
-    displayName: `${row.first_name} ${row.last_name}`,
-    locale: row.locale,
-    countryCode: row.country_code,
-    joinedAt: row.joined_at,
-    online: activity.online,
-    activity: activity.activity,
-    chaptersRead: activity.chapters,
-    missionsCompleted: activity.missions,
+    id: row.id, displayName: `${row.first_name} ${row.last_name}`, locale: row.locale,
+    countryCode: row.country_code, joinedAt: row.joined_at, online,
+    activity: online ? row.activity || "exploring" : "away",
+    chaptersRead: progressCount(row.reading_data), missionsCompleted: Number(row.mission_count || 0),
   };
 }
 
@@ -104,7 +33,13 @@ export async function GET(request: Request) {
   if (!env.DB) return json({ error: "database_unavailable" }, 503);
   if (!await rateLimit(`community:${requestAddress(request)}`, 600, 3600)) return json({ error: "too_many_requests" }, 429);
   const now = new Date();
-  await materializeDue(now);
+  const action = new URL(request.url).searchParams.get("action");
+  if (action === "owner") {
+    const identity = await authenticateRequest(request);
+    if (identity?.email !== OWNER_EMAIL) return json({ error: "forbidden" }, 403);
+    return json(await communityOwnerState());
+  }
+  await advanceCommunity(now);
   const url = new URL(request.url), page = Math.max(1, Math.min(10000, Number(url.searchParams.get("page")) || 1));
   const pageSize = Math.max(12, Math.min(48, Number(url.searchParams.get("pageSize")) || 24));
   const query = clean(url.searchParams.get("q"), 60).toLocaleLowerCase();
@@ -122,7 +57,14 @@ export async function GET(request: Request) {
       LEFT JOIN usage_sessions s ON s.user_id=a.id LEFT JOIN progress pr ON pr.user_id=a.id
       WHERE a.deleted_at IS NULL AND (p.public_first_name=1 OR p.public_last_name=1)
       GROUP BY a.id,p.first_name,p.last_name,p.public_first_name,p.public_last_name,p.public_progress,p.locale,a.created_at`),
-    env.DB!.prepare("SELECT id,first_name,last_name,locale,country_code,persona,seed,joined_at FROM community_members WHERE run_id=? ORDER BY joined_at DESC")
+    env.DB!.prepare(`SELECT m.id,m.first_name,m.last_name,m.locale,m.country_code,m.joined_at,
+      (SELECT MAX(s.last_seen_at) FROM community_agent_sessions s JOIN community_runs r ON r.id=m.run_id
+        WHERE s.member_id=m.id AND s.revoked_at IS NULL AND s.expires_at>CURRENT_TIMESTAMP AND r.status='running' AND s.control_version=r.control_version) last_seen_at,
+      (SELECT s.activity FROM community_agent_sessions s WHERE s.member_id=m.id AND s.revoked_at IS NULL
+        AND s.expires_at>CURRENT_TIMESTAMP AND s.control_version=(SELECT control_version FROM community_runs WHERE id=m.run_id) ORDER BY s.last_seen_at DESC LIMIT 1) activity,
+      (SELECT pr.data FROM progress pr WHERE pr.user_id=m.id AND pr.mission_id='READING') reading_data,
+      (SELECT COUNT(*) FROM progress pr WHERE pr.user_id=m.id AND pr.mission_id LIKE 'OT-AB-01:%') mission_count
+      FROM community_members m WHERE m.run_id=? ORDER BY m.joined_at DESC`)
       .bind(COMMUNITY_RUN_ID),
   ]);
 
@@ -158,32 +100,27 @@ export async function POST(request: Request) {
   if (!env.DB) return json({ error: "database_unavailable" }, 503);
   if (!sameOrigin(request)) return json({ error: "cross_origin_request" }, 403);
   const identity = await authenticateRequest(request);
-  if (identity?.email !== OWNER_EMAIL) return json({ error: "forbidden" }, 403);
-  const body = await request.json().catch(() => null) as { action?: string } | null;
+  const body = await request.json().catch(() => null) as { action?: string; limit?: number } | null;
   const action = clean(body?.action, 20);
-  await initializeRun(new Date());
-  if (!['pause','resume','stop'].includes(action)) return json({ error: "invalid_action" }, 400);
-  const status = action === "resume" ? "running" : action === "pause" ? "paused" : "stopped";
-  const timeField = action === "pause" ? "paused_at=CURRENT_TIMESTAMP," : action === "stop" ? "stopped_at=CURRENT_TIMESTAMP," : "paused_at=NULL,";
-  const statements = [];
-  if (action === "resume") statements.push(env.DB!.prepare(`UPDATE community_waves SET next_at=datetime(next_at,
-    '+' || COALESCE((SELECT unixepoch('now')-unixepoch(paused_at) FROM community_runs WHERE id=?),0) || ' seconds')
-    WHERE run_id=? AND status='running'`).bind(COMMUNITY_RUN_ID, COMMUNITY_RUN_ID));
-  statements.push(
-    env.DB!.prepare(`UPDATE community_runs SET status=?,${timeField}updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(status, COMMUNITY_RUN_ID),
-    env.DB!.prepare("INSERT INTO community_run_log (id,run_id,event_type,details_json) VALUES (?,?,?, '{}')")
-      .bind(crypto.randomUUID(), COMMUNITY_RUN_ID, action),
-  );
-  await env.DB!.batch(statements);
-  return json({ ok: true, status });
+  if (action === "finish" && identity?.provider === "agent") {
+    await env.DB.prepare("UPDATE community_agent_sessions SET revoked_at=CURRENT_TIMESTAMP WHERE member_id=? AND revoked_at IS NULL").bind(identity.userId).run();
+    const member = await env.DB.prepare("SELECT persona,seed FROM community_members WHERE id=?").bind(identity.userId).first<{persona:string;seed:number}>();
+    const hours = ({rare:48,moderate:24,regular:12,active:6} as Record<string,number>)[member?.persona||""]||24;
+    await env.DB.prepare("UPDATE community_members SET next_action_at=datetime('now',?) WHERE id=?")
+      .bind(`+${hours*3600+Number(member?.seed||0)%3600} seconds`,identity.userId).run();
+    await env.DB.prepare("INSERT INTO community_run_log (id,run_id,event_type,details_json) VALUES (?,?,'agent_session_completed',?)")
+      .bind(crypto.randomUUID(),COMMUNITY_RUN_ID,JSON.stringify({memberId:identity.userId})).run();
+    return json({ok:true});
+  }
+  if (identity?.email !== OWNER_EMAIL) return json({ error: "forbidden" }, 403);
+  if (action === "lease") {
+    return json(await leaseCommunityAgents(Math.max(1,Math.min(4,Math.trunc(Number(body?.limit)||1)))));
+  }
+  if (!["start","pause","resume","stop"].includes(action)) return json({error:"invalid_action"},400);
+  const result=await controlCommunity(action);
+  if(!result.ok)return json(result,409);
+  if(action==="start"||action==="resume")await advanceCommunity();
+  return json(result);
 }
 
-export async function ownerCommunityState() {
-  await materializeDue();
-  const [run, waves, synthetic] = await env.DB!.batch([
-    env.DB!.prepare("SELECT status,started_at,paused_at,stopped_at FROM community_runs WHERE id=?").bind(COMMUNITY_RUN_ID),
-    env.DB!.prepare("SELECT label,starts_at,next_at,created_count,target_count,status FROM community_waves WHERE run_id=? ORDER BY starts_at").bind(COMMUNITY_RUN_ID),
-    env.DB!.prepare("SELECT COUNT(*) total FROM community_members WHERE run_id=?").bind(COMMUNITY_RUN_ID),
-  ]);
-  return { run: run.results[0] || null, waves: waves.results, synthetic: synthetic.results[0] || { total: 0 } };
-}
+export async function ownerCommunityState() { return communityOwnerState(); }

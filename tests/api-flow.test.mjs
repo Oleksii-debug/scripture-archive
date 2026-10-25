@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { runCommunityAgent } from "../lib/run-community-agent.mjs";
 
 const base = process.env.SCRIPTURE_TEST_URL;
 const integration = base ? test : test.skip;
@@ -160,6 +161,68 @@ integration("account, progress, attempts, groups, marathon limit and password re
   result = await request("/api/attempts?action=start", { method: "POST", body: { missionId: "OT-AB-01", book: "GEN", chapter: 13, locale: "en", groupId: strictOne } });
   assert.equal(result.response.status, 409);
   assert.ok(["passage_not_in_current_plan", "weekly_limit_reached"].includes(result.data.error));
+
+  async function ownerCommunity(body) {
+    const response=await fetch(`${base}/api/community`,{method:"POST",headers:{Origin:base,Cookie:ownerCookie,"Content-Type":"application/json"},body:JSON.stringify(body)});
+    return {response,data:await response.json()};
+  }
+  let control=await fetch(`${base}/api/community?action=owner`,{headers:{Cookie:ownerCookie}});
+  let ownerState=await control.json();
+  assert.equal(ownerState.run.status,"waiting");
+  assert.equal(ownerState.synthetic.total,0,"a public visit must not start registrations");
+  const deniedStart=await fetch(`${base}/api/community`,{method:"POST",headers:{Origin:base,"Content-Type":"application/json"},body:JSON.stringify({action:"start"})});
+  assert.equal(deniedStart.status,403);
+  const deniedDispatch=await fetch(`${base}/api/community/dispatch`,{method:"POST"});
+  assert.equal(deniedDispatch.status,403);
+  const starts=await Promise.all([0,1].map(()=>ownerCommunity({action:"start"})));
+  assert.deepEqual(starts.map(item=>item.response.status).sort(),[200,409]);
+  control=await fetch(`${base}/api/community?action=owner`,{headers:{Cookie:ownerCookie}});
+  ownerState=await control.json();
+  assert.equal(ownerState.run.status,"running");
+  assert.equal(ownerState.synthetic.total,1);
+  assert.equal(ownerState.waves.reduce((sum,wave)=>sum+wave.target_count,0),2700);
+  assert.ok(ownerState.waves.every(wave=>wave.starts_at>=ownerState.run.started_at));
+  const leases=await Promise.all([0,1].map(()=>ownerCommunity({action:"lease",limit:2})));
+  const jobs=leases.flatMap(item=>item.data.jobs);
+  assert.equal(jobs.length,1,"concurrent workers must not receive the same participant");
+  const originalJob=jobs[0];
+  let actorMe=await fetch(`${base}/api/account?action=me`,{headers:{Cookie:`sa_agent=${originalJob.token}`}});
+  assert.equal((await actorMe.json()).user.authProvider,"agent");
+  const protectedUsers=await fetch(`${base}/api/account?action=users`,{headers:{Cookie:`sa_agent=${originalJob.token}`}});
+  assert.equal(protectedUsers.status,401);
+  let publicView=await (await fetch(`${base}/api/community`)).json();
+  let automated=publicView.members.find(member=>member.id===originalJob.memberId);
+  assert.equal(automated.online,true);
+  assert.equal(automated.chaptersRead,0);
+  assert.equal(automated.missionsCompleted,0);
+  for(const privateField of ["source_kind","sourceKind","persona","seed","token","isBot","automated"])
+    assert.equal(privateField in automated,false,privateField);
+  assert.equal(JSON.stringify(publicView).includes(originalJob.token),false);
+  assert.equal((await ownerCommunity({action:"pause"})).data.status,"paused");
+  actorMe=await fetch(`${base}/api/account?action=me`,{headers:{Cookie:`sa_agent=${originalJob.token}`}});
+  assert.equal((await actorMe.json()).user,null);
+  publicView=await (await fetch(`${base}/api/community`)).json();
+  assert.equal(publicView.members.find(member=>member.id===originalJob.memberId).online,false);
+  assert.equal((await ownerCommunity({action:"lease"})).data.jobs.length,0);
+  assert.equal((await ownerCommunity({action:"resume"})).data.status,"running");
+  actorMe=await fetch(`${base}/api/account?action=me`,{headers:{Cookie:`sa_agent=${originalJob.token}`}});
+  assert.equal((await actorMe.json()).user,null,"paused credentials stay revoked after resume");
+  const resumed=await ownerCommunity({action:"lease"});
+  assert.equal(resumed.data.jobs.length,1);
+  const job=resumed.data.jobs[0];
+  assert.notEqual(job.token,originalJob.token);
+  const activity=await runCommunityAgent({origin:base,token:job.token,seed:job.seed,smoke:true});
+  assert.equal(activity.completed,true);
+  publicView=await (await fetch(`${base}/api/community`)).json();
+  automated=publicView.members.find(member=>member.id===job.memberId);
+  assert.equal(automated.chaptersRead,1);
+  assert.equal(automated.missionsCompleted,1);
+  assert.equal(automated.online,false);
+  assert.equal((await ownerCommunity({action:"stop"})).data.status,"stopped");
+  assert.equal((await ownerCommunity({action:"resume"})).response.status,409);
+  const finalState=await (await fetch(`${base}/api/community?action=owner`,{headers:{Cookie:ownerCookie}})).json();
+  assert.ok(finalState.log.some(event=>event.event_type==="agent_session_completed"));
+  assert.equal((await fetch(`${base}/api/community?action=owner`)).status,403);
 
   result = await request("/api/auth?action=forgot-password", { method: "POST", body: { email } });
   assert.ok(result.data.testToken);

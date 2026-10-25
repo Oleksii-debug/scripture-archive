@@ -5,7 +5,7 @@ export type Identity = {
   email: string;
   fullName: string | null;
   emailVerified: boolean;
-  provider: "password" | "chatgpt";
+  provider: "password" | "chatgpt" | "agent";
 };
 
 const encoder = new TextEncoder();
@@ -105,7 +105,25 @@ export async function authenticateRequest(request: Request): Promise<Identity | 
     return { userId: headerUserId, email: headerEmail, fullName, emailVerified: true, provider: "chatgpt" };
   }
 
-  const token = parseCookies(request).get(SESSION_COOKIE);
+  const cookies = parseCookies(request), url = new URL(request.url);
+  const agentToken = cookies.get("sa_agent");
+  const agentRoute = url.pathname === "/api/attempts" ||
+    (url.pathname === "/api/account" && ["me","reading","progress"].includes(url.searchParams.get("action") || "me")) ||
+    (url.pathname === "/api/community" && request.method === "POST");
+  if (agentToken && env.DB && agentRoute) {
+    const row = await env.DB.prepare(`SELECT m.id,m.first_name,m.last_name,s.token_hash
+      FROM community_agent_sessions s JOIN community_members m ON m.id=s.member_id JOIN community_runs r ON r.id=m.run_id
+      WHERE s.token_hash=? AND s.revoked_at IS NULL AND s.expires_at>CURRENT_TIMESTAMP AND r.status='running' AND s.control_version=r.control_version`)
+      .bind(await sha256(agentToken)).first<{id:string;first_name:string;last_name:string;token_hash:string}>();
+    if (row) {
+      const activity = url.pathname === "/api/attempts" ? "mission" : url.searchParams.get("action") === "reading" ? "reading" : "exploring";
+      await env.DB.prepare("UPDATE community_agent_sessions SET last_seen_at=CURRENT_TIMESTAMP,activity=? WHERE token_hash=?")
+        .bind(activity,row.token_hash).run();
+      return {userId:row.id,email:"",fullName:`${row.first_name} ${row.last_name}`,emailVerified:true,provider:"agent"};
+    }
+  }
+
+  const token = cookies.get(SESSION_COOKIE);
   if (!token || !env.DB) return null;
   const tokenHash = await sha256(token);
   const row = await env.DB.prepare(

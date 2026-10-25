@@ -51,3 +51,45 @@ test('mark-read keeps keyboard workflow reachable without stealing focus', async
     }
   }
 });
+
+test('changing Bible edition restores keyboard focus without stealing user navigation', async () => {
+  const source = await read('public/app.js');
+  const listener = source.split('\n').find(line => line.includes("document.querySelector('#bible-edition').onchange="))?.trim();
+  assert.ok(listener, 'execute the canonical Bible-edition change listener');
+  for (const locale of ['uk', 'ru', 'en']) {
+    for (const scenario of ['normal', 'user-moved', 'navigated']) {
+      const main = { id: 'main' }, other = { id: 'other' };
+      const location = { pathname: '/reader/JHN/3', search: '', hash: '' };
+      const oldSelect = { value: 'edition-two' };
+      let currentSelect = oldSelect, focusCalls = 0, saved = null;
+      const newSelect = { focus(options) {
+        assert.equal(options.preventScroll, true);
+        document.activeElement = newSelect;
+        focusCalls++;
+      }};
+      const document = {
+        activeElement: oldSelect,
+        querySelector(selector) {
+          assert.equal(selector, '#bible-edition');
+          return currentSelect;
+        },
+      };
+      const renderReader = async () => {
+        currentSelect = newSelect;
+        document.activeElement = main; // canonical shell() sets main focus.
+        if (scenario === 'user-moved') document.activeElement = other;
+        if (scenario === 'navigated') location.pathname = '/help';
+      };
+      runInNewContext(listener, {
+        document, main, location, state: { lang: locale },
+        parts: ['reader', 'JHN', '3'], renderReader,
+        localStorage: { setItem(key, value) { saved = [key, value]; } },
+      });
+      await oldSelect.onchange({ target: oldSelect, currentTarget: oldSelect });
+      assert.deepEqual(saved, [`sa.edition.${locale}`, 'edition-two']);
+      assert.equal(document.activeElement,
+        scenario === 'normal' ? newSelect : scenario === 'user-moved' ? other : main);
+      assert.equal(focusCalls, scenario === 'normal' ? 1 : 0);
+    }
+  }
+});

@@ -100,3 +100,52 @@ for (const [lang, edition] of Object.entries({uk:'uk-ohiienko', ru:'ru', en:'en'
     assert.equal(announcements.at(-1), i18n[lang].noResults);
   });
 }
+
+
+test('reader entry route resumes the last book and chapter for uk/ru/en', async () => {
+  const routeStart = source.indexOf('async function route() {');
+  const routeEnd = source.indexOf('\n}\n\nlangSelect.addEventListener("change"', routeStart);
+  const readerStart = source.indexOf('async function renderReader(parts) {');
+  const selection = '  state.reader = { book: meta.code, chapter };';
+  const readerEnd = source.indexOf(selection, readerStart);
+  assert.ok(routeStart >= 0 && routeEnd > routeStart && readerEnd > readerStart, 'real route and reader selection missing');
+
+  // Evaluate actual route() and the original renderReader() book/chapter selection
+  // against the repository catalog, without simulating unrelated mission/UI effects.
+  const routeSource = source.slice(routeStart, routeEnd + 2);
+  const readerSource = source.slice(readerStart, readerEnd + selection.length) + '\n}';
+  const catalog = JSON.parse(await readFile(new URL('../public/data/catalog.json', import.meta.url), 'utf8'));
+  for (const lang of ['uk', 'ru', 'en']) {
+    const context = {
+      state: {lang, reader: {book:'GEN', chapter:12}, currentReader:null},
+      location: {hash:'', pathname:'/reader/GEN/12'},
+      setActiveNav() {},
+      async getCatalog() {return catalog;},
+      selectedEdition() {return {id:'not-a-local-edition'};},
+      clearInterval() {},
+      timerInterval: null,
+      cleanPublicCopy() {},
+      setStaticI18n() {},
+      updatePageMetadata() {},
+      main: {querySelector() {return null;}},
+      window: {scrollTo() {}, saAnalytics:null},
+      shell() {},
+      t() {return '';},
+      console: {error(error) {throw error;}},
+    };
+    const {route} = vm.runInNewContext(readerSource + '\n' + routeSource + '\n({route})', context);
+    for (const [path, expectedBook, expectedChapter] of [
+      ['/reader/GEN/12', 'GEN', 12],
+      ['/reader', 'GEN', 12],
+      ['/reader/JHN/3', 'JHN', 3],
+      ['/reader', 'JHN', 3],
+    ]) {
+      context.location.pathname = path;
+      await route();
+      assert.equal(context.state.reader.book, expectedBook, lang + ' ' + path + ': book must not jump');
+      assert.equal(context.state.reader.chapter, expectedChapter, lang + ' ' + path + ': chapter must not jump');
+      // Simulate existing sa.reader JSON readback on a later page load.
+      context.state.reader = JSON.parse(JSON.stringify(context.state.reader));
+    }
+  }
+});

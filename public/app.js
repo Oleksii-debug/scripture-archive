@@ -2165,11 +2165,38 @@ function play(kind) {
   audio.volume=0.15;
   audio.play().catch(()=>{});
 }
+function validBibleCatalog(catalog) {
+  if (!catalog || catalog.schemaVersion !== 1 || !catalog.books ||
+      !catalog.editions || typeof catalog.editions !== "object") return false;
+  const validBooks = (books) => Array.isArray(books) && books.length === 66 &&
+    books.every((book) => book && typeof book.code === "string" && !!book.code &&
+      typeof book.title === "string" && !!book.title.trim() &&
+      (book.testament === "OT" || book.testament === "NT") &&
+      Number.isInteger(book.chapters) && book.chapters > 0) &&
+    new Set(books.map((book) => book.code)).size === 66;
+  if (!validBooks(catalog.books.uk)) return false;
+  const canonicalCodes = new Set(catalog.books.uk.map((book) => book.code));
+  for (const locale of ["uk", "ru", "en"]) {
+    const edition = catalog.editions[locale];
+    const books = catalog.books[locale];
+    if (!edition || typeof edition.id !== "string" || !edition.id.trim() ||
+        !validBooks(books) || books.some((book) => !canonicalCodes.has(book.code))) return false;
+  }
+  if (catalog.editionBooks !== undefined) {
+    if (!catalog.editionBooks || typeof catalog.editionBooks !== "object" ||
+        Array.isArray(catalog.editionBooks)) return false;
+    for (const books of Object.values(catalog.editionBooks))
+      if (!validBooks(books) || books.some((book) => !canonicalCodes.has(book.code))) return false;
+  }
+  return true;
+}
 async function getCatalog() {
-  state.catalog ??= await fetch("/data/catalog.json").then((r) => {
-    if (!r.ok) throw Error(r.status);
-    return r.json();
-  });
+  if (state.catalog) return state.catalog;
+  const response = await fetch("/data/catalog.json");
+  if (!response.ok) throw Error(response.status);
+  const catalog = await response.json();
+  if (!validBibleCatalog(catalog)) throw Error("Invalid Bible catalog data");
+  state.catalog ??= catalog;
   return state.catalog;
 }
 async function getCMS() {

@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
@@ -14,9 +16,9 @@ assert.equal(route.match(/\.bind\(([^)]+)\)\.first\(\)/)?.[1],
   "currentActor.id, book, chapter, groupId", "lookup must bind four scope arguments");
 assert.equal((sql.match(/\?/g) || []).length, 4, "SQL must require exact group binding");
 
-function database() {
-  const db = new DatabaseSync(":memory:");
-  db.exec("CREATE TABLE mission_attempts (id TEXT, mission_id TEXT, actor_id TEXT, book_id TEXT, chapter INTEGER, group_id TEXT, started_at TEXT, status TEXT, expires_at TEXT)");
+function database(filename = ":memory:") {
+  const db = new DatabaseSync(filename);
+  db.exec("CREATE TABLE IF NOT EXISTS mission_attempts (id TEXT, mission_id TEXT, actor_id TEXT, book_id TEXT, chapter INTEGER, group_id TEXT, started_at TEXT, status TEXT, expires_at TEXT)");
   const insert = db.prepare("INSERT INTO mission_attempts VALUES (?,?,?,?,?,?,?,?,?)");
   const add = (id, actor, book, chapter, group, started) =>
     insert.run(id, "OT-AB-01", actor, book, chapter, group, started, "active", "2099-01-01");
@@ -106,3 +108,39 @@ test("actual GET branch excludes expired/invalidated attempts and picks newest a
     assert.equal((await chapterGet(db, "reader", "")).active, null);
   } finally { db.close(); }
 });
+
+
+// Verify real file-based persistence across a closed/reopened database. The
+// route fragment is exact source-extracted, but these tests are not a Worker E2E.
+for (const journal of ["DELETE", "WAL"]) {
+  test(`chapter scope survives a database restart (${journal})`, async () => {
+    const directory = await mkdtemp(join(tmpdir(), "sa03-chapter-scope-"));
+    try {
+      const filename = join(directory, "attempts.sqlite");
+      const initial = database(filename);
+      try {
+        initial.db.exec(`PRAGMA journal_mode=${journal}`);
+        initial.add("group-a", "reader", "GEN", 12, "group-a", "2026-10-25 00:00:00");
+        initial.add("group-b", "reader", "GEN", 12, "group-b", "2026-10-25 00:01:00");
+        initial.add("personal", "reader", "GEN", 12, null, "2026-10-25 00:02:00");
+        initial.add("other-user", "outsider", "GEN", 12, "group-a", "2026-10-25 00:03:00");
+      } finally { initial.db.close(); }
+
+      const resumed = database(filename);
+      try {
+        assert.equal((await chapterGet(resumed.db, "reader", "")).active?.id, "personal");
+        assert.equal((await chapterGet(resumed.db, "reader", "&groupId=group-a")).active?.id, "group-a");
+        assert.equal((await chapterGet(resumed.db, "reader", "&groupId=group-b")).active?.id, "group-b");
+        assert.equal((await chapterGet(resumed.db, "outsider", "&groupId=group-a")).active?.id, "other-user");
+        assert.equal((await chapterGet(resumed.db, "outsider", "")).active, null);
+        resumed.db.prepare("UPDATE mission_attempts SET status='invalidated' WHERE id='personal'").run();
+      } finally { resumed.db.close(); }
+
+      const reopened = database(filename);
+      try {
+        assert.equal((await chapterGet(reopened.db, "reader", "")).active, null);
+        assert.equal((await chapterGet(reopened.db, "reader", "&groupId=group-a")).active?.id, "group-a");
+      } finally { reopened.db.close(); }
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+}

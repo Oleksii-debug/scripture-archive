@@ -31,3 +31,13 @@ export function readerChapterNumber(value, maxChapters) {
   if (!Number.isSafeInteger(parsed) || parsed < 1) return 1;
   return Math.min(parsed, maxChapters);
 }
+
+// Never focus an unrelated verse after a route falls back to a different chapter.
+// The existing reader state is authoritative for the text on screen.
+export function focusReaderRouteVerse(search, root, routeParts, activeReader) {
+  if (!Array.isArray(routeParts) || !activeReader ||
+      !Number.isSafeInteger(activeReader.chapter) || activeReader.chapter < 1 ||
+      routeParts[1] !== activeReader.book ||
+      routeParts[2] !== String(activeReader.chapter)) return false;
+  return focusRequestedVerse(search, root);
+}

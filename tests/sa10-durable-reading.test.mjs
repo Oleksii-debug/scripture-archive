@@ -33,6 +33,7 @@ function fixture(mode){const dir=mkdtempSync(join(tmpdir(),'sa10-canonical-'));c
 }
 function worker(db){const exports={};vm.runInNewContext(compiled.outputText,{exports,require(id){
     if(id==='cloudflare:workers')return {env:{DB:db}};
+    if(id==='../../../content/mission-abraham.json')return {default:{tasks:[{id:'OTAB01-N001'},{id:'OTAB01-N002'},{id:'OTAB01-N003'},{id:'OTAB01-N004'},{id:'OTAB01-N005'}]}};
     if(id==='../../../lib/auth')return {sameOrigin:r=>r.headers.get('origin')==='https://test.invalid',authenticateRequest:async r=>{
       const userId=r.headers.get('x-test-user');return userId?{userId,email:`${userId}@test.invalid`,emailVerified:true,provider:'test',fullName:null}:null;
     }};
@@ -77,7 +78,8 @@ for(const mode of ['DELETE','WAL']){
       db.db.prepare('DELETE FROM progress WHERE user_id=?').run('reader-a');
       db.failNext=true;assert.equal((await call(api,'reading','PUT',{reading:[chapter(2)]})).status,503);
       assert.deepEqual((await call(api,'reading')).body.reading,[]);
-      db.failNext=true;assert.equal((await call(api,'progress','PUT',{progress:{correct:['A']}})).status,503);
+      db.failNext=true;assert.equal((await call(api,'progress','PUT',{progress:{correct:['A']}})).status,403);
+      assert.equal(db.db.prepare("SELECT count(*) AS n FROM progress WHERE mission_id='OT-AB-01'").get().n,0);
       const profile={firstName:'Synthetic',lastName:'Reader',ageRange:'25-34',acceptPrivacy:true,locale:'ru'};
       db.failNext=true;assert.equal((await call(api,'profile','PUT',profile)).status,503);
       assert.equal((await call(api,'profile','PUT',profile)).body.user.locale,'ru');
@@ -106,15 +108,18 @@ for (const mode of ['DELETE', 'WAL']) {
       reopened.close();
     }finally{f.dispose()}
   });
-  test(`${mode}: corrupt mission JSON GET returns unavailable without mutation`,async()=>{
+  test(`${mode}: legacy mission snapshots are rejected, attempts aggregate, corruption is isolated`,async()=>{
     const f=fixture(mode);try{const db=new D1Test(f.file),api=worker(db);
-      db.db.prepare("INSERT INTO progress(user_id,mission_id,data) VALUES (?,'OT-AB-01',?)").run('reader-a','{broken');
-      const result=await call(api,'progress');
-      assert.equal(result.status,503);
-      assert.equal(result.body.error,'progress_state_unavailable');
-      assert.equal(db.db.prepare("SELECT data FROM progress WHERE user_id=? AND mission_id='OT-AB-01'").get('reader-a').data,'{broken');
+      db.db.prepare("INSERT INTO progress(user_id,mission_id,data) VALUES (?,?,?)").run('reader-a','OT-AB-01','{"correct":["stale"]}');
+      db.db.prepare("INSERT INTO progress(user_id,mission_id,data) VALUES (?,?,?)").run('reader-a','OT-AB-01:broken','{broken');
+      db.db.prepare("INSERT INTO progress(user_id,mission_id,data) VALUES (?,?,?)").run('reader-a','OT-AB-01:ok',JSON.stringify({details:[{taskId:'OTAB01-N001',correct:true},{taskId:'OTAB01-N002',correct:false}]}));
+      const response=await call(api,'progress');
+      assert.equal(response.status,200);
+      assert.deepEqual(response.body.progress,{index:2,correct:['OTAB01-N001'],complete:false});
+      assert.equal((await call(api,'progress','PUT',{progress:{correct:['wrong']}})).status,403);
+      assert.equal(db.db.prepare("SELECT data FROM progress WHERE user_id=? AND mission_id='OT-AB-01'").get('reader-a').data,'{"correct":["stale"]}');
       db.close();const reopened=new D1Test(f.file);
-      assert.equal((await call(worker(reopened),'progress','GET',undefined,'reader-b')).body.progress,null);
+      assert.deepEqual((await call(worker(reopened),'progress')).body.progress,{index:2,correct:['OTAB01-N001'],complete:false});
       reopened.close();
     }finally{f.dispose()}
   });

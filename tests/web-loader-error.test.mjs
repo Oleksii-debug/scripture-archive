@@ -428,3 +428,35 @@ test('unmount cancels the pending recovery deadline', () => {
   page.fireTimers();
   assert.equal(page.main.childElementCount,0);
 });
+
+// SA-06: evaluated ESM may already have mutated state or registered events.
+// Unlike a fetch failure, a second same-document import is not a safe retry.
+for (const [lang, reloadText] of [
+  ['uk','Перезавантажити сторінку'],
+  ['ru','Перезагрузить страницу'],
+  ['en','Reload the page'],
+]) {
+  for (const modulePath of ['/app.js','/workspace.js']) {
+    test(`${lang}: ${modulePath} evaluation failure uses document reload, not duplicate bootstrap`, () => {
+      const page = boot(lang);
+      page.dispatchError(`https://sa06.test${modulePath}`);
+      const notice = page.main.childNodes[0];
+      assert.equal(notice.attributes.role, 'alert');
+      const button = notice.childNodes[2];
+      assert.equal(button.textContent, reloadText);
+      assert.equal(button.focused, true);
+      assert.equal(page.main.attributes['aria-busy'], 'false');
+      button.click();
+      assert.equal(page.reloadCalls(), 1, 'runtime side effects require a clean document');
+      assert.equal(page.scripts.length, 2, 'no second app module in current document');
+      page.cleanup();
+    });
+  }
+}
+test('unrelated analytics runtime errors do not claim canonical bootstrap UI', () => {
+  const page = boot('en');
+  page.dispatchError('https://sa06.test/analytics.js');
+  assert.equal(page.main.childElementCount, 0);
+  assert.equal(page.main.attributes['aria-busy'], 'true');
+  page.cleanup();
+});

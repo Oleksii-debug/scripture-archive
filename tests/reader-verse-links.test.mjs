@@ -211,7 +211,7 @@ test('reader path normalization refuses invalid state and cannot focus a differe
 
 test('reader URL correction uses the fetched chapter and must not rewrite a newer navigation', async () => {
   const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
-  assert.match(app, /async function renderReader\(parts\) \{\s+const requestedAddress = `\$\{location\.pathname\}\$\{location\.search\}\$\{location\.hash\}`;/);
+  assert.match(app, /async function renderReader\(parts\) \{\s+const readerTicket = state\.readerRenderTicket = \(state\.readerRenderTicket \|\| 0\) \+ 1;\s+const obsolete = \(\) => readerTicket !== state\.readerRenderTicket;\s+const requestedAddress = `\$\{location\.pathname\}\$\{location\.search\}\$\{location\.hash\}`;/);
   assert.match(app, /const verses = book\.chapters\[chapter - 1\];\s+const canonicalReaderPath = readerCanonicalPath\(parts, \{ book: meta\.code, chapter \}, groupId\);/);
   assert.match(app, /if \(canonicalReaderPath && `\$\{location\.pathname\}\$\{location\.search\}\$\{location\.hash\}` === requestedAddress\)\s+window\.history\.replaceState\(null, "", canonicalReaderPath\);/);
 });

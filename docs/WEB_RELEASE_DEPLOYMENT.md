@@ -107,36 +107,43 @@ Git blob hashes. Full exact-PR checkout `npm test`/`lint`/`build`, independent
 review and deployment are **NOT EXECUTED**. The release gate remains **NOT
 QUALIFIED**; UK/RU/EN are the only permanent interface languages.
 
-### 2026-10-25 /help direct-route regression and migration drift
+### 2026-10-25 direct-route drift and migration gates
 
-- Refreshed GitHub `main`: `e80779230fef246db9482decff2cfd75b3aeca12`
-  (this is the **source SHA**, not a deployed-SHA claim). The earlier
-  `93591836b53a36e0114ab2bc4bd92632128e8d96` above is a historical
-  inspection baseline, no longer the tip of main.
-- New main adds `/help` to the home navigation and XML sitemap but omitted
-  `help` from the Next catch-all `PUBLIC_ROUTES` set. Consequently the source
-  declares an advertised route that is rejected on direct navigation/reload.
-  The **candidate** on PR #288 adds `help` to the existing catch-all and
-  route metadata; no second router, deployment or DNS action was created.
-- `tests/public-route-release-contract.test.mjs` is a **source-level** gate
-  for public sitemap/nav/catch-all consistency, private route exclusion,
-  `/help` metadata and permanent interface languages `uk/ru/en`.
-  It does not prove that a server actually returns 200 or that NVDA works.
-- This main revision also introduces
-  `drizzle/0006_support_requests.sql` for support requests/attachments. No
-  production D1 migration, email-provider setup, data backfill or restore was
-  performed. Any staged promotion must account for this migration, use an
-  owner-authorized verified backup/rollback procedure and test attachment
-  privacy and retention before live acceptance.
-- Source resource listing now has 66 JSON books in each of `uk`, `ru`,
-  `en` and `uk-ohiienko` (two Ukrainian editions, **not** a fourth UI
-  language). The three-locale manifest declares 198 book files; verify both
-  the manifest-linked editions and the additional local Ukrainian edition
-  in the **actual built artifact** before claiming complete static resources.
+- Source snapshots observed in GitHub: `e80779230fef246db9482decff2cfd75b3aeca12`
+  introduced the `/help` home/sitemap link without accepting it in the
+  Next catch-all route. Later `main` commit
+  `6b7947e158ca44a6f049e02dbdaa037ea0125134` **independently fixed**
+  that route and its metadata and introduced public `/community`.
+  These commits are source snapshots, **not** deployed-SHA evidence.
+  The earlier `93591836b53a36e0114ab2bc4bd92632128e8d96`
+  was an even older main inspection baseline.
+- PR #288 intentionally **does not duplicate** the later main's route fix.
+  Its `tests/public-route-release-contract.test.mjs` checks that every
+  advertised sitemap and home-navigation route resolves to a server-side
+  public/private catch-all entry, that private routes are not indexed,
+  that an advertised `/help` has metadata, and that permanent UI locales
+  remain exactly `uk/ru/en`. These tests are source-level contracts,
+  not live HTTP, accessibility or deployment qualifications.
+  Reconcile this PR against newer main and execute the test on the
+  **actual rebased exact candidate** before any merge.
+- Main now includes `drizzle/0006_support_requests.sql` and
+  `drizzle/0007_community.sql`; they require explicit staging verification
+  of compatibility, backup/rollback and privacy. No production D1 migration,
+  provider email configuration or user-data restore has been executed.
+- The new `/api/community` path builds **synthetic** participants and
+  includes them in the `registered` public summary. A public site must
+  not represent generated participants as real registered users without
+  a conspicuous, accurate disclosure or correction. This is a separate
+  public-truth qualification blocker requiring review before promotion.
+- Source resource listing has 66 JSON books in each of `uk`, `ru`,
+  `en` and `uk-ohiienko` (two Ukrainian editions, **not** four permanent
+  UI languages). The three-locale manifest declares 198 files; verify
+  this coverage and the alternative local Ukrainian edition in the
+  **actually built artifact**, not only in GitHub source.
 
-**Checkpoint:** exact-file extracted source-contract tests are local-only;
-GitHub CI, exact-PR full build, browser route GET, HTTPS certificate, deployed
-SHA, owner approval and migration/rollback qualification remain **NOT DONE**.
+**Checkpoint:** focused source-level tests have local evidence; GitHub CI,
+exact-PR full build, external browser GET, HTTPS certificate, deployed SHA,
+owner permission and D1 migration/rollback qualification remain **NOT DONE**.
 
 ## Required production bindings
 

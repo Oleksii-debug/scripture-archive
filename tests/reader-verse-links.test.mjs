@@ -215,3 +215,66 @@ test('reader URL correction uses the fetched chapter and must not rewrite a newe
   assert.match(app, /const verses = book\.chapters\[chapter - 1\];\s+const canonicalReaderPath = readerCanonicalPath\(parts, \{ book: meta\.code, chapter \}, groupId\);/);
   assert.match(app, /if \(canonicalReaderPath && `\$\{location\.pathname\}\$\{location\.search\}\$\{location\.hash\}` === requestedAddress\)\s+window\.history\.replaceState\(null, "", canonicalReaderPath\);/);
 });
+
+test('failed Bible book responses do not poison the reader cache', async () => {
+  // Exercise the existing production getBook body with a controlled transport:
+  // this does not implement a second book loader or parser.
+  const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const start = app.indexOf('async function getBook(code) {');
+  const end = app.indexOf('\nfunction localEditionMetadata', start);
+  assert.ok(start >= 0 && end > start, 'production loader must be present');
+  const productionLoader = app.slice(start, end);
+  const state = { lang: 'uk', bookCache: new Map() };
+  const EDITIONS = { uk: [{ id: 'uk-kulish', local: true, folder: 'uk' }] };
+  const selectedEdition = lang => EDITIONS[lang][0];
+  let requests = 0;
+  const fetch = async url => {
+    assert.equal(url, '/data/bible/uk/GEN.json');
+    requests += 1;
+    if (requests === 1) return { ok: false, status: 503 };
+    if (requests === 2) return { ok: true, json: async () => { throw Error('invalid JSON'); } };
+    return { ok: true, json: async () => ({ bookCode: 'GEN', locale: 'uk', editionId: 'UKRPAN', chapters: [['synthetic fixture']] }) };
+  };
+  const getBook = new Function('state', 'EDITIONS', 'selectedEdition', 'fetch',
+    productionLoader + '\nreturn getBook;')(state, EDITIONS, selectedEdition, fetch);
+
+  await assert.rejects(getBook('GEN'), /503/, 'server refusal must remain a failure');
+  assert.equal(state.bookCache.has('uk:GEN'), false, 'HTTP failure must allow retry');
+  await assert.rejects(getBook('GEN'), /invalid JSON/, 'parsing refusal must remain a failure');
+  assert.equal(state.bookCache.has('uk:GEN'), false, 'JSON rejection must allow retry');
+  const recovered = await getBook('GEN');
+  assert.equal(recovered.bookCode, 'GEN');
+  assert.strictEqual(await getBook('GEN'), recovered, 'healthy book must remain cached');
+  assert.equal(requests, 3, 'two failures and one successful fetch');
+});
+
+test('transient network errors allow retry without crossing locale caches', async () => {
+  const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const start = app.indexOf('async function getBook(code) {');
+  const end = app.indexOf('\nfunction localEditionMetadata', start);
+  assert.ok(start >= 0 && end > start);
+  const state = { lang: 'uk', bookCache: new Map() };
+  const EDITIONS = {
+    uk: [{ id: 'uk-kulish', local: true, folder: 'uk' }],
+    ru: [{ id: 'ru-synodal', local: true, folder: 'ru' }],
+  };
+  const selectedEdition = lang => EDITIONS[lang][0];
+  const requests = [];
+  const fetch = async url => {
+    requests.push(url);
+    if (requests.length === 1) throw Error('network down');
+    return { ok: true, json: async () => ({ source: url }) };
+  };
+  const getBook = new Function('state', 'EDITIONS', 'selectedEdition', 'fetch',
+    app.slice(start, end) + '\nreturn getBook;')(state, EDITIONS, selectedEdition, fetch);
+  await assert.rejects(getBook('JHN'), /network down/);
+  assert.equal(state.bookCache.has('uk:JHN'), false);
+  const first = await getBook('JHN');
+  assert.equal(first.source, '/data/bible/uk/JHN.json');
+  state.lang = 'ru';
+  const second = await getBook('JHN');
+  assert.equal(second.source, '/data/bible/ru/JHN.json');
+  state.lang = 'uk';
+  assert.strictEqual(await getBook('JHN'), first);
+  assert.deepEqual(requests, ['/data/bible/uk/JHN.json', '/data/bible/uk/JHN.json', '/data/bible/ru/JHN.json']);
+});

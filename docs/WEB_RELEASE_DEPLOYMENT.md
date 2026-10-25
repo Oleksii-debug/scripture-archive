@@ -28,6 +28,14 @@ the provider-supplied SPF and DKIM records. Publish a DMARC record separately;
 start with an address-owned reporting mailbox and increase policy enforcement
 only after delivery reports are healthy.
 
+Migration `0005_usage_analytics.sql` adds consent-based first-party analytics.
+It stores a random browser-session identifier, approximate country/city supplied
+by the hosting edge, device/browser categories, page names, key event names and
+active seconds. It never stores an IP address, password, answer, reset token or
+page query string. The owner can review 30-day totals and recent registrations
+on `/editor`; account deletion removes the account link from retained aggregate
+analytics.
+
 ## Release checks
 
 ```sh
@@ -64,4 +72,6 @@ only its public `G-...` measurement ID in `NEXT_PUBLIC_GA4_ID`. Analytics loads
 after consent, sends manual page views for direct client-side routes, and strips
 query strings and private route identifiers so verification and reset tokens do
 not reach GA4. Link the verified Search Console property from GA4 Admin after
-both properties exist.
+both properties exist. The first-party `/editor` report remains available even
+without GA4 and measures active foreground time with a bounded heartbeat; GA4
+provides the independent Google acquisition, geography and engagement reports.

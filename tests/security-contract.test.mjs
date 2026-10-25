@@ -31,10 +31,13 @@ test("account security primitives and database tables are present", async () => 
   assert.match(auth, /HttpOnly; SameSite=Lax/);
   for (const table of ["accounts", "auth_sessions", "auth_tokens", "auth_rate_limits", "mission_attempts", "chapter_read_receipts"])
     assert.ok(migration.includes(`CREATE TABLE \`${table}\``), table);
+  const analyticsMigration = await read("drizzle/0005_usage_analytics.sql");
+  for (const table of ["usage_sessions", "usage_events"])
+    assert.ok(analyticsMigration.includes(`CREATE TABLE \`${table}\``), table);
 });
 
 test("state-changing API routes enforce same-origin writes", async () => {
-  for (const path of ["app/api/auth/route.ts", "app/api/attempts/route.ts", "app/api/account/route.ts", "app/api/groups/route.ts", "app/api/materials/route.ts", "app/api/content/route.ts"])
+  for (const path of ["app/api/auth/route.ts", "app/api/attempts/route.ts", "app/api/account/route.ts", "app/api/groups/route.ts", "app/api/materials/route.ts", "app/api/content/route.ts", "app/api/analytics/route.ts", "app/api/community/route.ts"])
     assert.match(await read(path), /sameOrigin\(request\)/, path);
 });
 
@@ -42,8 +45,21 @@ test("public navigation exposes crawlable paths instead of fragment-only routes"
   for (const path of ["app/page.tsx", "public/app.js", "public/home.js", "public/workspace.js"])
     assert.doesNotMatch(await read(path), /href=["'`]#\//, path);
   const route = await read("app/[...slug]/page.tsx");
-  for (const page of ["reader", "campaigns", "missions", "groups", "support", "about", "privacy"])
+  for (const page of ["reader", "campaigns", "missions", "groups", "community", "support", "help", "about", "privacy"])
     assert.match(route, new RegExp(`\\b${page}\\b`), page);
+});
+
+test("community keeps automated identity internal and real progress opt-in", async () => {
+  const [route, account, migration] = await Promise.all([
+    read("app/api/community/route.ts"), read("app/api/account/route.ts"), read("drizzle/0007_community.sql"),
+  ]);
+  for (const table of ["community_runs", "community_waves", "community_members", "community_run_log"])
+    assert.ok(migration.includes(`CREATE TABLE \`${table}\``), table);
+  assert.match(migration, /public_progress/);
+  assert.match(migration, /source_kind/);
+  const publicShape = route.slice(route.indexOf("return {", route.indexOf("function publicSynthetic")), route.indexOf("function progressCount"));
+  assert.doesNotMatch(publicShape, /source_kind/i);
+  assert.match(account, /public_progress/);
 });
 
 test("SEO endpoints use the configured public origin and protect private routes", async () => {
@@ -62,11 +78,15 @@ test("SEO endpoints use the configured public origin and protect private routes"
 });
 
 test("analytics requires consent and removes sensitive URL components", async () => {
-  const analytics = await read("public/analytics.js");
+  const [analytics, route] = await Promise.all([read("public/analytics.js"), read("app/api/analytics/route.ts")]);
   assert.match(analytics, /analytics_storage: consent === "granted" \? "granted" : "denied"/);
   assert.match(analytics, /privateRoutes\.has\(route\)/);
   assert.match(analytics, /location\.pathname/);
   assert.doesNotMatch(analytics, /page_location:\s*location\.(href|search)/);
   assert.match(analytics, /track\("page_view"\)/);
   assert.match(analytics, /allow_google_signals: false/);
+  assert.match(analytics, /activeSeconds/);
+  assert.match(analytics, /\/api\/analytics/);
+  assert.match(route, /identity\?\.email !== OWNER_EMAIL/);
+  assert.doesNotMatch(route, /cf-connecting-ip|x-forwarded-for/i);
 });

@@ -9,8 +9,10 @@ const I18N = {
     menu: "Меню",
     reader: "Читальня",
     missions: "Місії",
+    community: "Спільнота",
     atlas: "Атлас розвитку",
     support: "Підтримати",
+    help: "Служба підтримки",
     about: "Про проєкт",
     language: "Мова",
     skipContent: "Перейти до основного вмісту",
@@ -100,8 +102,8 @@ const I18N = {
     supportLead:
       "Підтримка допомагає готувати біблійні матеріали, переклади, нові навчальні маршрути та зустрічі домашніх груп.",
     supportRule:
-      "Scripture Archive не має окремої перевіреної платіжної форми. Кнопка нижче веде на офіційну сторінку БФ «Рука Допомоги». Перед переказом на цей проєкт уточніть цільове призначення у фонду.",
-    officialSupport: "Офіційна сторінка підтримки фонду",
+      "Для підтримки Scripture Archive використовується лише офіційна сторінка monobank, зазначена на платформі.",
+    officialSupport: "Офіційна сторінка підтримки",
     contactProject: "Написати команді проєкту",
     whatSupport: "Що розвиваємо",
     supportItems: [
@@ -131,8 +133,10 @@ const I18N = {
     menu: "Меню",
     reader: "Читальня",
     missions: "Миссии",
+    community: "Сообщество",
     atlas: "Атлас развития",
     support: "Поддержать",
+    help: "Служба поддержки",
     about: "О проекте",
     language: "Язык",
     skipContent: "Перейти к основному содержимому",
@@ -222,8 +226,8 @@ const I18N = {
     supportLead:
       "Поддержка помогает готовить библейские материалы, переводы, новые учебные маршруты и встречи домашних групп.",
     supportRule:
-      "У Scripture Archive нет отдельной проверенной платёжной формы. Кнопка ниже ведёт на официальную страницу БФ «Рука Допомоги». Перед переводом на этот проект уточните целевое назначение у фонда.",
-    officialSupport: "Официальная страница поддержки фонда",
+      "Для поддержки Scripture Archive используется только официальная страница monobank, указанная на платформе.",
+    officialSupport: "Официальная страница поддержки",
     contactProject: "Написать команде проекта",
     whatSupport: "Что развиваем",
     supportItems: [
@@ -253,8 +257,10 @@ const I18N = {
     menu: "Menu",
     reader: "Reader",
     missions: "Missions",
+    community: "Community",
     atlas: "Development atlas",
     support: "Support",
+    help: "Help centre",
     about: "About",
     language: "Language",
     skipContent: "Skip to main content",
@@ -344,8 +350,8 @@ const I18N = {
     supportLead:
       "Support funds Bible text preparation, translation, accessibility, editorial review, new learning courses, and sustainable web infrastructure.",
     supportRule:
-      "Scripture Archive has no separate verified payment form. The button below leads to the official Helping Hand Foundation support page. Ask the foundation to confirm project designation before donating specifically to Scripture Archive.",
-    officialSupport: "Official foundation support page",
+      "Scripture Archive uses only the official monobank support page listed on the platform.",
+    officialSupport: "Official support page",
     contactProject: "Contact the project team",
     whatSupport: "What support develops",
     supportItems: [
@@ -578,7 +584,7 @@ const LIVE_LAB_COPY = {
     ],
     labSupportTitle: "На що потрібна підтримка",
     labSupportText:
-      "На друк комплектів, доступні формати, підготовку ведучих, поїздки та проведення зустрічей. Перекази приймає лише офіційна сторінка БФ «Рука Допомоги».",
+      "На друк комплектів, доступні формати, підготовку ведучих, поїздки та проведення зустрічей. Для переказів використовується офіційна сторінка monobank.",
     labMission: "Почати живу місію",
     labInvite: "Запросити зустріч",
     labSupport: "Підтримати програму",
@@ -637,7 +643,7 @@ const LIVE_LAB_COPY = {
     ],
     labSupportTitle: "На что нужна поддержка",
     labSupportText:
-      "На печать комплектов, доступные форматы, подготовку ведущих, поездки и проведение встреч. Переводы принимает только официальная страница БФ «Рука Допомоги».",
+      "На печать комплектов, доступные форматы, подготовку ведущих, поездки и проведение встреч. Для переводов используется официальная страница monobank.",
     labMission: "Начать живую миссию",
     labInvite: "Пригласить встречу",
     labSupport: "Поддержать программу",
@@ -701,7 +707,7 @@ const LIVE_LAB_COPY = {
     ],
     labSupportTitle: "What support makes possible",
     labSupportText:
-      "Printing kits, accessible formats, facilitator preparation, travel, and hosted gatherings. Donations are accepted only through the official Helping Hand Foundation page.",
+      "Support covers printed kits, accessible formats, facilitator preparation, travel, and hosted gatherings. Donations use the official monobank page.",
     labMission: "Start the live mission",
     labInvite: "Invite a gathering",
     labSupport: "Support the programme",
@@ -1183,7 +1189,7 @@ Object.assign(EDITORIAL_COPY.uk, {
   readerIntro:
     "Оберіть книгу і главу. Назву видання, джерело та умови використання зазначено поруч із текстом.",
   supportRule:
-    "Перекази приймає БФ «Рука Допомоги» через свою офіційну сторінку. Якщо ви хочете підтримати саме Scripture Archive, уточніть призначення платежу у фонду.",
+    "Для підтримки Scripture Archive використовується офіційна сторінка monobank, зазначена на платформі.",
   supportLead:
     "Підтримка допомагає готувати нові навчальні маршрути, редагувати тексти, перекладати матеріали та забезпечувати зустрічі домашніх груп.",
   supportItems: [
@@ -1213,7 +1219,7 @@ Object.assign(EDITORIAL_COPY.ru, {
   todayText:
     "Прочитайте стихи 16–18. Обратите внимание, что текст говорит о Божьей любви, вере и ответе человека.",
   supportRule:
-    "Переводы принимает БФ «Рука Допомоги» через свою официальную страницу. Если вы хотите поддержать именно Scripture Archive, уточните назначение платежа у фонда.",
+    "Для поддержки Scripture Archive используется официальная страница monobank, указанная на платформе.",
   supportLead:
     "Поддержка помогает готовить новые учебные маршруты, редактировать тексты, переводить материалы и проводить встречи домашних групп.",
   supportItems: [
@@ -1236,7 +1242,7 @@ Object.assign(EDITORIAL_COPY.en, {
   todayText:
     "Read verses 16–18. Notice what the text says about God’s love, belief, and the human response.",
   supportRule:
-    "The Helping Hand Foundation receives donations through its official giving page. If you wish to support Scripture Archive specifically, please confirm the payment designation with the foundation.",
+    "Scripture Archive uses the official monobank support page listed on the platform.",
   supportLead:
     "Support helps prepare new study routes, edit and translate materials, and equip home-group gatherings.",
   supportItems: [
@@ -1953,9 +1959,9 @@ const nav = document.querySelector("#primary-nav");
 let timerInterval;
 
 const PAGE_TITLES = {
-  uk: { home:"Архів Писання", reader:"Біблійна читальня", campaigns:"Навчальні кампанії", missions:"Місії", groups:"Домашні групи", support:"Підтримати", about:"Про проєкт", privacy:"Приватність", atlas:"Атлас розвитку", dossiers:"Дослідницькі досьє", builder:"Конструктор", account:"Обліковий запис", progress:"Мій прогрес", mission:"Завдання", editor:"Редактор" },
-  ru: { home:"Архив Писания", reader:"Библейская читальня", campaigns:"Учебные кампании", missions:"Миссии", groups:"Домашние группы", support:"Поддержать", about:"О проекте", privacy:"Приватность", atlas:"Атлас развития", dossiers:"Исследовательские досье", builder:"Конструктор", account:"Учётная запись", progress:"Мой прогресс", mission:"Задания", editor:"Редактор" },
-  en: { home:"Scripture Archive", reader:"Bible reader", campaigns:"Learning campaigns", missions:"Missions", groups:"Home groups", support:"Support", about:"About", privacy:"Privacy", atlas:"Learning atlas", dossiers:"Research dossiers", builder:"Builder", account:"Account", progress:"My progress", mission:"Assessment", editor:"Editor" },
+  uk: { home:"Архів Писання", reader:"Біблійна читальня", campaigns:"Навчальні кампанії", missions:"Місії", groups:"Домашні групи", community:"Спільнота", support:"Підтримати", help:"Служба підтримки", about:"Про проєкт", privacy:"Приватність", atlas:"Атлас розвитку", dossiers:"Дослідницькі досьє", builder:"Конструктор", account:"Обліковий запис", progress:"Мій прогрес", mission:"Завдання", editor:"Редактор" },
+  ru: { home:"Архив Писания", reader:"Библейская читальня", campaigns:"Учебные кампании", missions:"Миссии", groups:"Домашние группы", community:"Сообщество", support:"Поддержать", help:"Служба поддержки", about:"О проекте", privacy:"Приватность", atlas:"Атлас развития", dossiers:"Исследовательские досье", builder:"Конструктор", account:"Учётная запись", progress:"Мой прогресс", mission:"Задания", editor:"Редактор" },
+  en: { home:"Scripture Archive", reader:"Bible reader", campaigns:"Learning campaigns", missions:"Missions", groups:"Home groups", community:"Community", support:"Support", help:"Help centre", about:"About", privacy:"Privacy", atlas:"Learning atlas", dossiers:"Research dossiers", builder:"Builder", account:"Account", progress:"My progress", mission:"Assessment", editor:"Editor" },
 };
 const PRIVATE_ROUTES = new Set(["account", "mission", "progress", "editor"]);
 
@@ -2247,6 +2253,29 @@ async function renderHome() {
   setActiveNav("");
   main.innerHTML=homePage(state.lang,state.user);
   main.focus({preventScroll:true});
+  try {
+    const response=await fetch("/api/community?public=summary",{cache:"no-store"});
+    if(response.ok){const data=await response.json(),values=document.querySelectorAll("[data-community-summary] strong");if(values[0])values[0].textContent=new Intl.NumberFormat(state.lang).format(data.summary.registered);if(values[1])values[1].textContent=new Intl.NumberFormat(state.lang).format(data.summary.online)}
+  } catch {}
+}
+
+const COMMUNITY_COPY={
+  uk:{eye:"Люди Scripture Archive",title:"Спільнота навколо Писання",lead:"Відкритий огляд учасників, які дозволили показувати своє ім’я, та їхнього доступного навчального поступу.",members:"Користувачів платформи",online:"У мережі",visible:"Відкритих профілів",search:"Знайти учасника",placeholder:"Ім’я або прізвище",sort:"Упорядкувати",recent:"Нещодавно долучилися",active:"Спочатку активні",progress:"За поступом",name:"За іменем",reading:"Читає Писання",mission:"Виконує завдання",groups:"Працює з домашньою групою",exploring:"Переглядає платформу",away:"Не в мережі",onlineNow:"У мережі",chapters:"прочитано глав",missions:"завершено місій",joined:"Долучився",previous:"Попередня сторінка",next:"Наступна сторінка",empty:"Учасників за цим запитом не знайдено.",page:"Сторінка"},
+  ru:{eye:"Люди Scripture Archive",title:"Сообщество вокруг Писания",lead:"Открытый обзор участников, разрешивших показывать имя, и доступного учебного прогресса.",members:"Пользователей платформы",online:"В сети",visible:"Открытых профилей",search:"Найти участника",placeholder:"Имя или фамилия",sort:"Упорядочить",recent:"Недавно присоединились",active:"Сначала активные",progress:"По прогрессу",name:"По имени",reading:"Читает Писание",mission:"Выполняет задание",groups:"Работает с домашней группой",exploring:"Просматривает платформу",away:"Не в сети",onlineNow:"В сети",chapters:"прочитано глав",missions:"завершено миссий",joined:"Присоединился",previous:"Предыдущая страница",next:"Следующая страница",empty:"Участников по этому запросу не найдено.",page:"Страница"},
+  en:{eye:"People of Scripture Archive",title:"A community around Scripture",lead:"A public view of members who chose to share their name and their available learning progress.",members:"Platform members",online:"Online",visible:"Public profiles",search:"Find a member",placeholder:"First or last name",sort:"Sort",recent:"Recently joined",active:"Active first",progress:"By progress",name:"By name",reading:"Reading Scripture",mission:"Working on an assessment",groups:"Studying with a home group",exploring:"Exploring the platform",away:"Offline",onlineNow:"Online",chapters:"chapters read",missions:"missions completed",joined:"Joined",previous:"Previous page",next:"Next page",empty:"No members match this search.",page:"Page"}
+};
+
+async function renderCommunity(page=1,query="",sort="recent"){
+  setActiveNav("community");
+  const copy=COMMUNITY_COPY[state.lang]||COMMUNITY_COPY.uk,params=new URLSearchParams({page:String(page),pageSize:innerWidth<=760?"12":"24",sort});
+  if(query)params.set("q",query);
+  const response=await fetch(`/api/community?${params}`,{cache:"no-store"});
+  if(!response.ok)throw Error(String(response.status));
+  const data=await response.json(),number=value=>new Intl.NumberFormat(state.lang).format(Number(value)||0);
+  const activity=member=>copy[member.activity]||copy.away;
+  shell(`<section class="community-hero"><p class="eyebrow">${copy.eye}</p><h1>${copy.title}</h1><p class="lead">${copy.lead}</p><div class="community-metrics" aria-label="${copy.title}"><article><strong>${number(data.summary.registered)}</strong><span>${copy.members}</span></article><article><strong>${number(data.summary.online)}</strong><span>${copy.online}</span></article><article><strong>${number(data.summary.visible)}</strong><span>${copy.visible}</span></article></div></section><form id="community-filter" class="community-filter" role="search"><label><span>${copy.search}</span><input name="q" type="search" value="${esc(query)}" placeholder="${copy.placeholder}" maxlength="60"></label><label><span>${copy.sort}</span><select name="sort"><option value="recent" ${sort==="recent"?"selected":""}>${copy.recent}</option><option value="active" ${sort==="active"?"selected":""}>${copy.active}</option><option value="progress" ${sort==="progress"?"selected":""}>${copy.progress}</option><option value="name" ${sort==="name"?"selected":""}>${copy.name}</option></select></label><button class="button" type="submit">${copy.search}</button></form><div class="community-list">${data.members.length?data.members.map(member=>`<article class="community-member"><div class="member-heading"><div class="member-monogram" aria-hidden="true">${esc(member.displayName.trim().slice(0,1))}</div><div><h2>${esc(member.displayName)}</h2><p class="member-status ${member.online?"online":""}"><span aria-hidden="true"></span>${member.online?copy.onlineNow:activity(member)}</p></div></div><p>${activity(member)}</p><dl><div><dt>${copy.chapters}</dt><dd>${number(member.chaptersRead)}</dd></div><div><dt>${copy.missions}</dt><dd>${number(member.missionsCompleted)}</dd></div></dl><small>${copy.joined}: ${new Intl.DateTimeFormat(state.lang,{dateStyle:"medium"}).format(new Date(`${member.joinedAt.replace(" ","T")}Z`))}</small></article>`).join(""):`<p class="notice">${copy.empty}</p>`}</div><nav class="community-pagination" aria-label="${copy.page}"><button class="button" data-community-page="${data.page-1}" ${data.page<=1?"disabled":""}>← ${copy.previous}</button><span>${copy.page} ${data.page} / ${data.totalPages}</span><button class="button" data-community-page="${data.page+1}" ${data.page>=data.totalPages?"disabled":""}>${copy.next} →</button></nav>`);
+  document.querySelector("#community-filter").onsubmit=event=>{event.preventDefault();const form=new FormData(event.currentTarget);renderCommunity(1,String(form.get("q")||""),String(form.get("sort")||"recent"))};
+  document.querySelectorAll("[data-community-page]").forEach(button=>button.onclick=()=>renderCommunity(Number(button.dataset.communityPage),query,sort));
 }
 
 function normalizeTimer() {
@@ -2910,7 +2939,7 @@ function renderLiveLab() {
       .map((item) => `<li>${esc(item)}</li>`)
       .join(
         "",
-      )}</ul></section><section class="lab-card lab-support"><h2>${t("labSupportTitle")}</h2><p>${t("labSupportText")}</p><div class="action-row"><a class="button primary" href="https://rukadopomogy.org.ua/donaty/" target="_blank" rel="noreferrer">${t("labSupport")} ↗</a><a class="button light" href="mailto:dordiaioleksii1@gmail.com?subject=${inviteSubject}">${t("labInvite")}</a></div></section></div><p class="lab-print-mark">Scripture Archive · dordiaioleksii1@gmail.com</p></article>`,
+      )}</ul></section><section class="lab-card lab-support"><h2>${t("labSupportTitle")}</h2><p>${t("labSupportText")}</p><div class="action-row"><a class="button primary" href="https://send.monobank.ua/9DfMWmErXF" target="_blank" rel="noreferrer">${t("labSupport")} ↗</a><a class="button light" href="mailto:dordiaioleksii1@gmail.com?subject=${inviteSubject}">${t("labInvite")}</a></div></section></div><p class="lab-print-mark">Scripture Archive · dordiaioleksii1@gmail.com</p></article>`,
   );
   document.querySelector("#print-lab").onclick = () => window.print();
 }
@@ -2918,6 +2947,23 @@ function renderSupport() {
   setActiveNav("support");
   main.innerHTML=supportSection(state.lang);
   main.focus({preventScroll:true});
+}
+function renderHelp() {
+  setActiveNav("help");
+  const copy = {
+    uk: {eye:"Зв’язок із командою",title:"Служба підтримки",lead:"Опишіть питання, повідомте про помилку або запропонуйте покращення. Ми відповімо на електронну адресу, пов’язану з вашим зверненням.",email:"Електронна адреса",subject:"Тема звернення",message:"Повідомлення",placeholder:"Опишіть ситуацію, очікуваний результат і кроки, після яких виникла проблема.",files:"Додати файли",fileHelp:"До трьох файлів: PDF, DOCX, JPG, PNG, WEBP або TXT. Один файл — до 1,5 МБ, разом — до 4 МБ.",privacy:"Я погоджуюся на обробку наданих даних для відповіді на звернення.",send:"Надіслати звернення",sent:"Звернення прийнято. Відповідь надійде на вашу електронну адресу.",error:"Не вдалося надіслати звернення. Перевірте поля й файли та спробуйте ще раз.",signed:"Відповідь надійде на адресу вашого облікового запису:"},
+    ru: {eye:"Связь с командой",title:"Служба поддержки",lead:"Опишите вопрос, сообщите об ошибке или предложите улучшение. Мы ответим на электронный адрес, связанный с обращением.",email:"Электронный адрес",subject:"Тема обращения",message:"Сообщение",placeholder:"Опишите ситуацию, ожидаемый результат и действия, после которых возникла проблема.",files:"Добавить файлы",fileHelp:"До трёх файлов: PDF, DOCX, JPG, PNG, WEBP или TXT. Один файл — до 1,5 МБ, вместе — до 4 МБ.",privacy:"Я согласен на обработку предоставленных данных для ответа на обращение.",send:"Отправить обращение",sent:"Обращение принято. Ответ придёт на ваш электронный адрес.",error:"Не удалось отправить обращение. Проверьте поля и файлы и повторите попытку.",signed:"Ответ придёт на адрес вашей учётной записи:"},
+    en: {eye:"Contact the team",title:"Help centre",lead:"Ask a question, report a problem, or suggest an improvement. We will reply to the email address connected with your request.",email:"Email address",subject:"Subject",message:"Message",placeholder:"Describe what happened, what you expected, and the steps that led to the problem.",files:"Attach files",fileHelp:"Up to three PDF, DOCX, JPG, PNG, WEBP, or TXT files. Maximum 1.5 MB per file and 4 MB in total.",privacy:"I agree that the information provided may be processed to answer this request.",send:"Send request",sent:"Your request has been received. We will reply by email.",error:"The request could not be sent. Check the fields and files, then try again.",signed:"We will reply to your account email:"},
+  }[state.lang];
+  shell(`<section class="help-centre"><div class="section-head"><div><p class="eyebrow">${copy.eye}</p><h1>${copy.title}</h1></div><p>${copy.lead}</p></div><div class="help-grid"><form id="help-form" class="account-form card" enctype="multipart/form-data">${state.user?`<p class="help-account"><span>${copy.signed}</span><strong>${esc(state.user.email)}</strong></p>`:`<label class="account-field"><span>${copy.email}</span><input name="email" type="email" autocomplete="email" maxlength="254" required></label>`}<label class="account-field"><span>${copy.subject}</span><input name="subject" maxlength="160" required></label><label class="account-field"><span>${copy.message}</span><textarea name="message" rows="11" maxlength="6000" placeholder="${copy.placeholder}" required></textarea></label><label class="account-field file-editor"><span>${copy.files}</span><input name="files" type="file" multiple accept=".pdf,.docx,.jpg,.jpeg,.png,.webp,.txt"><small>${copy.fileHelp}</small></label><label class="account-check"><input name="acceptPrivacy" type="checkbox" value="yes" required><span>${copy.privacy} <a href="/privacy">${t("privacy")}</a></span></label><button class="button primary" type="submit">${copy.send}</button><p id="help-state" role="status" aria-live="polite"></p></form><aside class="help-aside" aria-hidden="true"><span class="help-line"></span><p>Scripture Archive</p></aside></div></section>`);
+  document.querySelector("#help-form").onsubmit=async event=>{
+    event.preventDefault();
+    const form=event.currentTarget,status=document.querySelector("#help-state"),button=form.querySelector("button[type=submit]");
+    const data=new FormData(form); data.set("locale",state.lang);
+    button.disabled=true; status.textContent="";
+    try{const response=await fetch("/api/help",{method:"POST",body:data});if(!response.ok)throw Error(String(response.status));form.reset();status.textContent=copy.sent;window.saAnalytics?.track("support_click",{destination:"help_request"})}
+    catch{status.textContent=copy.error}finally{button.disabled=false}
+  };
 }
 async function renderAbout() {
   setActiveNav("about");
@@ -3102,9 +3148,9 @@ function field(name, label, type = "text", extra = "") {
 function renderAccount() {
   setActiveNav("account");
   const copy = {
-    uk: { title:"Обліковий запис",intro:"Підтверджена пошта захищає доступ, а серверне збереження повертає ваш прогрес на іншому пристрої.",login:"Увійти",register:"Створити обліковий запис",forgot:"Забули пароль?",reset:"Встановити новий пароль",change:"Змінити пароль",currentPassword:"Поточний пароль",newPassword:"Новий пароль",email:"Електронна пошта",password:"Пароль",passwordRule:"Щонайменше 12 символів",age:"Вік",denomination:"Деномінація або назва церкви",children:"Чи є діти",yes:"Так",no:"Ні",send:"Надіслати посилання",verification:"Перевірте пошту та відкрийте одноразове посилання підтвердження.",verified:"Електронну адресу підтверджено. Тепер увійдіть.",resetSent:"Якщо обліковий запис існує, лист уже надіслано.",resetDone:"Пароль змінено. Інші активні сесії завершено. Увійдіть з новим паролем.",saved:"Профіль і прогрес синхронізуються між пристроями.",edit:"Редагувати сайт",visibility:"Публічна видимість",visibilityHelp:"Усі чутливі поля залишаються приватними. Окремо можна дозволити лише наведені поля.",publicFirst:"Показувати ім’я",publicLast:"Показувати прізвище",publicChurch:"Показувати назву церкви",save:"Зберегти",delete:"Видалити обліковий запис",deleteHelp:"Ця дія видалить профіль, особистий прогрес і ваші групи.",confirmDelete:"Я розумію, що дані буде видалено",logout:"Вийти",error:"Не вдалося виконати дію. Перевірте дані та спробуйте ще раз." },
-    ru: { title:"Учётная запись",intro:"Подтверждённая почта защищает доступ, а серверное сохранение возвращает прогресс на другом устройстве.",login:"Войти",register:"Создать учётную запись",forgot:"Забыли пароль?",reset:"Установить новый пароль",change:"Изменить пароль",currentPassword:"Текущий пароль",newPassword:"Новый пароль",email:"Электронная почта",password:"Пароль",passwordRule:"Не менее 12 символов",age:"Возраст",denomination:"Деноминация или название церкви",children:"Есть ли дети",yes:"Да",no:"Нет",send:"Отправить ссылку",verification:"Проверьте почту и откройте одноразовую ссылку подтверждения.",verified:"Электронный адрес подтверждён. Теперь войдите.",resetSent:"Если учётная запись существует, письмо уже отправлено.",resetDone:"Пароль изменён. Другие активные сессии завершены. Войдите с новым паролем.",saved:"Профиль и прогресс синхронизируются между устройствами.",edit:"Редактировать сайт",visibility:"Публичная видимость",visibilityHelp:"Все чувствительные поля остаются приватными. Отдельно можно разрешить только перечисленные поля.",publicFirst:"Показывать имя",publicLast:"Показывать фамилию",publicChurch:"Показывать название церкви",save:"Сохранить",delete:"Удалить учётную запись",deleteHelp:"Будут удалены профиль, личный прогресс и ваши группы.",confirmDelete:"Я понимаю, что данные будут удалены",logout:"Выйти",error:"Не удалось выполнить действие. Проверьте данные и попробуйте снова." },
-    en: { title:"Account",intro:"Verified email protects access, and server-side storage restores your progress on another device.",login:"Sign in",register:"Create account",forgot:"Forgot your password?",reset:"Create a new password",change:"Change password",currentPassword:"Current password",newPassword:"New password",email:"Email",password:"Password",passwordRule:"At least 12 characters",age:"Age",denomination:"Denomination or church name",children:"Do you have children?",yes:"Yes",no:"No",send:"Send one-time link",verification:"Check your inbox and open the one-time verification link.",verified:"Your email is verified. You can now sign in.",resetSent:"If the account exists, the message has been sent.",resetDone:"Password changed. Other active sessions have been ended. Sign in with the new password.",saved:"Your profile and progress synchronize across devices.",edit:"Edit site",visibility:"Public visibility",visibilityHelp:"Sensitive fields remain private. You may separately allow only the fields listed below.",publicFirst:"Show first name",publicLast:"Show last name",publicChurch:"Show church name",save:"Save",delete:"Delete account",deleteHelp:"This removes your profile, personal progress, and groups you own.",confirmDelete:"I understand that the data will be deleted",logout:"Sign out",error:"The action could not be completed. Check the details and try again." },
+    uk: { title:"Обліковий запис",intro:"Підтверджена пошта захищає доступ, а серверне збереження повертає ваш прогрес на іншому пристрої.",login:"Увійти",register:"Створити обліковий запис",forgot:"Забули пароль?",reset:"Встановити новий пароль",change:"Змінити пароль",currentPassword:"Поточний пароль",newPassword:"Новий пароль",email:"Електронна пошта",password:"Пароль",passwordRule:"Щонайменше 12 символів",age:"Вік",denomination:"Деномінація або назва церкви",children:"Чи є діти",yes:"Так",no:"Ні",send:"Надіслати посилання",verification:"Перевірте пошту та відкрийте одноразове посилання підтвердження.",verified:"Електронну адресу підтверджено. Тепер увійдіть.",resetSent:"Якщо обліковий запис існує, лист уже надіслано.",resetDone:"Пароль змінено. Інші активні сесії завершено. Увійдіть з новим паролем.",saved:"Профіль і прогрес синхронізуються між пристроями.",edit:"Редагувати сайт",visibility:"Публічна видимість",visibilityHelp:"Усі чутливі поля залишаються приватними. Окремо можна дозволити лише наведені поля.",publicFirst:"Показувати ім’я",publicLast:"Показувати прізвище",publicChurch:"Показувати назву церкви",publicProgress:"Показувати навчальний поступ",save:"Зберегти",delete:"Видалити обліковий запис",deleteHelp:"Ця дія видалить профіль, особистий прогрес і ваші групи.",confirmDelete:"Я розумію, що дані буде видалено",logout:"Вийти",error:"Не вдалося виконати дію. Перевірте дані та спробуйте ще раз." },
+    ru: { title:"Учётная запись",intro:"Подтверждённая почта защищает доступ, а серверное сохранение возвращает прогресс на другом устройстве.",login:"Войти",register:"Создать учётную запись",forgot:"Забыли пароль?",reset:"Установить новый пароль",change:"Изменить пароль",currentPassword:"Текущий пароль",newPassword:"Новый пароль",email:"Электронная почта",password:"Пароль",passwordRule:"Не менее 12 символов",age:"Возраст",denomination:"Деноминация или название церкви",children:"Есть ли дети",yes:"Да",no:"Нет",send:"Отправить ссылку",verification:"Проверьте почту и откройте одноразовую ссылку подтверждения.",verified:"Электронный адрес подтверждён. Теперь войдите.",resetSent:"Если учётная запись существует, письмо уже отправлено.",resetDone:"Пароль изменён. Другие активные сессии завершены. Войдите с новым паролем.",saved:"Профиль и прогресс синхронизируются между устройствами.",edit:"Редактировать сайт",visibility:"Публичная видимость",visibilityHelp:"Все чувствительные поля остаются приватными. Отдельно можно разрешить только перечисленные поля.",publicFirst:"Показывать имя",publicLast:"Показывать фамилию",publicChurch:"Показывать название церкви",publicProgress:"Показывать учебный прогресс",save:"Сохранить",delete:"Удалить учётную запись",deleteHelp:"Будут удалены профиль, личный прогресс и ваши группы.",confirmDelete:"Я понимаю, что данные будут удалены",logout:"Выйти",error:"Не удалось выполнить действие. Проверьте данные и попробуйте снова." },
+    en: { title:"Account",intro:"Verified email protects access, and server-side storage restores your progress on another device.",login:"Sign in",register:"Create account",forgot:"Forgot your password?",reset:"Create a new password",change:"Change password",currentPassword:"Current password",newPassword:"New password",email:"Email",password:"Password",passwordRule:"At least 12 characters",age:"Age",denomination:"Denomination or church name",children:"Do you have children?",yes:"Yes",no:"No",send:"Send one-time link",verification:"Check your inbox and open the one-time verification link.",verified:"Your email is verified. You can now sign in.",resetSent:"If the account exists, the message has been sent.",resetDone:"Password changed. Other active sessions have been ended. Sign in with the new password.",saved:"Your profile and progress synchronize across devices.",edit:"Edit site",visibility:"Public visibility",visibilityHelp:"Sensitive fields remain private. You may separately allow only the fields listed below.",publicFirst:"Show first name",publicLast:"Show last name",publicChurch:"Show church name",publicProgress:"Show learning progress",save:"Save",delete:"Delete account",deleteHelp:"This removes your profile, personal progress, and groups you own.",confirmDelete:"I understand that the data will be deleted",logout:"Sign out",error:"The action could not be completed. Check the details and try again." },
   }[state.lang];
   const sets = ACCOUNT_OPTIONS[state.lang], resetToken = new URLSearchParams(location.search).get("reset"), verified = new URLSearchParams(location.search).get("verified") === "1";
   if (!state.user) {
@@ -3121,9 +3167,9 @@ function renderAccount() {
   }
   if (state.user.profileComplete) {
     const visibility=state.user.visibility||{};
-    shell(`<article class="prose account-dashboard"><p class="eyebrow">${t("account")}</p><h1>${esc(state.user.firstName)} ${esc(state.user.lastName)}</h1><p>${esc(state.user.email)}</p><div class="notice success">${copy.saved}</div><div class="action-row"><a class="button primary" href="/missions">${t("continue")}</a><a class="button" href="/groups">${t("myGroups")}</a>${state.user.isOwner?`<a class="button" href="/editor">${copy.edit}</a>`:""}<button class="button" id="logout-button">${copy.logout}</button></div><section class="profile-controls"><h2>${copy.visibility}</h2><p>${copy.visibilityHelp}</p><form id="visibility-form" class="account-form"><label class="account-check"><input name="firstName" type="checkbox" ${visibility.firstName?"checked":""}><span>${copy.publicFirst}</span></label><label class="account-check"><input name="lastName" type="checkbox" ${visibility.lastName?"checked":""}><span>${copy.publicLast}</span></label><label class="account-check"><input name="church" type="checkbox" ${visibility.church?"checked":""}><span>${copy.publicChurch}</span></label><button class="button">${copy.save}</button><p id="visibility-state" role="status"></p></form></section>${state.user.authProvider==="password"?`<details class="profile-controls"><summary>${copy.change}</summary><form id="password-form" class="account-form">${field("currentPassword",copy.currentPassword,"password",'autocomplete="current-password" required')}${field("newPassword",copy.newPassword,"password",'autocomplete="new-password" minlength="12" maxlength="128" required')}<small>${copy.passwordRule}</small><button class="button">${copy.change}</button><p id="password-state" role="status"></p></form></details><details class="danger-zone"><summary>${copy.delete}</summary><p>${copy.deleteHelp}</p><form id="delete-form" class="account-form">${field("password",copy.password,"password",'autocomplete="current-password" required')}<label class="account-check"><input name="confirm" type="checkbox" required><span>${copy.confirmDelete}</span></label><button class="button">${copy.delete}</button><p id="delete-state" role="status"></p></form></details>`:""}</article>`);
+    shell(`<article class="prose account-dashboard"><p class="eyebrow">${t("account")}</p><h1>${esc(state.user.firstName)} ${esc(state.user.lastName)}</h1><p>${esc(state.user.email)}</p><div class="notice success">${copy.saved}</div><div class="action-row"><a class="button primary" href="/missions">${t("continue")}</a><a class="button" href="/groups">${t("myGroups")}</a>${state.user.isOwner?`<a class="button" href="/editor">${copy.edit}</a>`:""}<button class="button" id="logout-button">${copy.logout}</button></div><section class="profile-controls"><h2>${copy.visibility}</h2><p>${copy.visibilityHelp}</p><form id="visibility-form" class="account-form"><label class="account-check"><input name="firstName" type="checkbox" ${visibility.firstName?"checked":""}><span>${copy.publicFirst}</span></label><label class="account-check"><input name="lastName" type="checkbox" ${visibility.lastName?"checked":""}><span>${copy.publicLast}</span></label><label class="account-check"><input name="church" type="checkbox" ${visibility.church?"checked":""}><span>${copy.publicChurch}</span></label><label class="account-check"><input name="progress" type="checkbox" ${visibility.progress?"checked":""}><span>${copy.publicProgress}</span></label><button class="button">${copy.save}</button><p id="visibility-state" role="status"></p></form></section>${state.user.authProvider==="password"?`<details class="profile-controls"><summary>${copy.change}</summary><form id="password-form" class="account-form">${field("currentPassword",copy.currentPassword,"password",'autocomplete="current-password" required')}${field("newPassword",copy.newPassword,"password",'autocomplete="new-password" minlength="12" maxlength="128" required')}<small>${copy.passwordRule}</small><button class="button">${copy.change}</button><p id="password-state" role="status"></p></form></details><details class="danger-zone"><summary>${copy.delete}</summary><p>${copy.deleteHelp}</p><form id="delete-form" class="account-form">${field("password",copy.password,"password",'autocomplete="current-password" required')}<label class="account-check"><input name="confirm" type="checkbox" required><span>${copy.confirmDelete}</span></label><button class="button">${copy.delete}</button><p id="delete-state" role="status"></p></form></details>`:""}</article>`);
     document.querySelector("#logout-button").onclick=async()=>{await authRequest("logout");state.user=null;localStorage.removeItem("sa.progressOwner");renderAccount()};
-    document.querySelector("#visibility-form").onsubmit=async event=>{event.preventDefault();const form=new FormData(event.currentTarget),status=document.querySelector("#visibility-state");try{state.user=(await accountRequest("visibility","PUT",{firstName:form.has("firstName"),lastName:form.has("lastName"),church:form.has("church")})).user;status.textContent=copy.saved}catch{status.textContent=copy.error}};
+    document.querySelector("#visibility-form").onsubmit=async event=>{event.preventDefault();const form=new FormData(event.currentTarget),status=document.querySelector("#visibility-state");try{state.user=(await accountRequest("visibility","PUT",{firstName:form.has("firstName"),lastName:form.has("lastName"),church:form.has("church"),progress:form.has("progress")})).user;status.textContent=copy.saved}catch{status.textContent=copy.error}};
     if(document.querySelector("#password-form"))document.querySelector("#password-form").onsubmit=async event=>{event.preventDefault();const status=document.querySelector("#password-state"),data=Object.fromEntries(new FormData(event.currentTarget));try{await authRequest("change-password",data);state.user=null;localStorage.removeItem("sa.progressOwner");renderAccount()}catch{status.textContent=copy.error}};
     if(document.querySelector("#delete-form"))document.querySelector("#delete-form").onsubmit=async event=>{event.preventDefault();const status=document.querySelector("#delete-state"),form=new FormData(event.currentTarget);if(!form.has("confirm"))return;try{await authRequest("delete-account",{password:form.get("password")});state.user=null;localStorage.removeItem("sa.progressOwner");renderAccount()}catch{status.textContent=copy.error}};
     return;
@@ -3161,12 +3207,17 @@ async function renderEditor() {
   }[state.lang];
   let users = [];
   let managed = { items: [], revisions: [] };
+  let analytics = { days:30, accounts:{}, summary:{}, daily:[], countries:[], devices:[], browsers:[], pages:[], events:[], recentUsers:[], community:{run:null,waves:[],synthetic:{total:0}} };
   try {
     users = (await accountRequest("users")).users || [];
   } catch {}
   try {
     const response = await fetch("/api/content?admin=1", { cache: "no-store" });
     if (response.ok) managed = await response.json();
+  } catch {}
+  try {
+    const response = await fetch("/api/analytics?days=30", { cache: "no-store" });
+    if (response.ok) analytics = await response.json();
   } catch {}
   const note = state.cms?.liveNote || {};
   shell(
@@ -3177,6 +3228,19 @@ async function renderEditor() {
     : state.lang === "ru"
       ? { heading:"Учебный контент",lead:"Книги, главы, переводы, миссии, вопросы, маршруты, марафоны и тексты интерфейса.",kind:"Тип",locale:"Язык",title:"Название",status:"Состояние",data:"Данные JSON",draft:"Черновик",published:"Опубликовано",hidden:"Скрыто",history:"История изменений",save:"Сохранить материал" }
       : { heading:"Learning content",lead:"Books, chapters, translations, missions, questions, routes, marathons, and interface text.",kind:"Type",locale:"Language",title:"Title",status:"Status",data:"JSON data",draft:"Draft",published:"Published",hidden:"Hidden",history:"Revision history",save:"Save material" };
+  const analyticsLabels = state.lang === "uk"
+    ? { heading:"Аналітика платформи",lead:"Власна статистика за останні 30 днів. Активний час рахується лише тоді, коли сторінка відкрита й користувач погодився на аналітику.",accounts:"Облікові записи",verified:"Підтверджені",sessions:"Сеанси",views:"Перегляди",time:"Активний час",users:"Активні користувачі",countries:"Країни",devices:"Пристрої",pages:"Сторінки",actions:"Дії",recent:"Останні реєстрації",never:"Ще не користувався" }
+    : state.lang === "ru"
+      ? { heading:"Аналитика платформы",lead:"Собственная статистика за последние 30 дней. Активное время учитывается только при открытой странице и после согласия пользователя.",accounts:"Учётные записи",verified:"Подтверждённые",sessions:"Сеансы",views:"Просмотры",time:"Активное время",users:"Активные пользователи",countries:"Страны",devices:"Устройства",pages:"Страницы",actions:"Действия",recent:"Последние регистрации",never:"Ещё не пользовался" }
+      : { heading:"Platform analytics",lead:"First-party statistics for the last 30 days. Active time is measured only while the page is open and after consent.",accounts:"Accounts",verified:"Verified",sessions:"Sessions",views:"Views",time:"Active time",users:"Active users",countries:"Countries",devices:"Devices",pages:"Pages",actions:"Actions",recent:"Recent registrations",never:"No activity yet" };
+  const formatNumber = value => new Intl.NumberFormat(state.lang === "uk" ? "uk-UA" : state.lang === "ru" ? "ru-RU" : "en-GB").format(Number(value) || 0);
+  const formatDuration = value => { const seconds=Number(value)||0; if(seconds>=86400)return `${(seconds/86400).toFixed(1)} d`; if(seconds>=3600)return `${(seconds/3600).toFixed(1)} h`; return `${Math.round(seconds/60)} min`; };
+  const ranking = (title, rows, valueKey="sessions") => `<section class="analytics-list"><h3>${title}</h3>${rows.length?`<ol>${rows.map(row=>`<li><span>${esc(row.label)}</span><strong>${formatNumber(row[valueKey])}</strong></li>`).join("")}</ol>`:"<p>—</p>"}</section>`;
+  document.querySelector(".editor-grid").insertAdjacentHTML("afterbegin", `<section class="card full analytics-dashboard"><div class="section-head compact"><div><p class="eyebrow">Scripture Archive</p><h2>${analyticsLabels.heading}</h2></div><p>${analyticsLabels.lead}</p></div><div class="analytics-metrics"><article><strong>${formatNumber(analytics.accounts.total)}</strong><span>${analyticsLabels.accounts}</span></article><article><strong>${formatNumber(analytics.accounts.verified)}</strong><span>${analyticsLabels.verified}</span></article><article><strong>${formatNumber(analytics.summary.sessions)}</strong><span>${analyticsLabels.sessions}</span></article><article><strong>${formatNumber(analytics.summary.page_views)}</strong><span>${analyticsLabels.views}</span></article><article><strong>${formatDuration(analytics.summary.active_seconds)}</strong><span>${analyticsLabels.time}</span></article><article><strong>${formatNumber(analytics.summary.signed_in_users)}</strong><span>${analyticsLabels.users}</span></article></div><div class="analytics-rankings">${ranking(analyticsLabels.countries,analytics.countries)}${ranking(analyticsLabels.devices,analytics.devices)}${ranking(analyticsLabels.pages,analytics.pages,"views")}${ranking(analyticsLabels.actions,analytics.events,"total")}</div><details class="analytics-users"><summary>${analyticsLabels.recent} · ${analytics.recentUsers.length}</summary><div class="table-scroll"><table><thead><tr><th>Email</th><th>${analyticsLabels.verified}</th><th>${analyticsLabels.time}</th><th>${analyticsLabels.views}</th><th>${analyticsLabels.countries}</th><th>Last activity</th></tr></thead><tbody>${analytics.recentUsers.map(user=>`<tr><td><strong>${esc(user.first_name)} ${esc(user.last_name)}</strong><br><span>${esc(user.email)}</span></td><td>${user.email_verified_at?"✓":"—"}</td><td>${formatDuration(user.active_seconds)}</td><td>${formatNumber(user.page_views)}</td><td>${esc(user.country||"—")}</td><td>${esc(user.last_seen_at||analyticsLabels.never)}</td></tr>`).join("")}</tbody></table></div></details></section>`);
+  const communityAdmin=state.lang==="uk"?{title:"Керування спільнотою",real:"Реальні облікові записи",automatic:"Автоматичні учасники",status:"Стан",schedule:"Хвилі реєстрацій",pause:"Призупинити",resume:"Продовжити",stop:"Зупинити",created:"створено",of:"з",next:"наступна"}:state.lang==="ru"?{title:"Управление сообществом",real:"Реальные учётные записи",automatic:"Автоматические участники",status:"Состояние",schedule:"Волны регистраций",pause:"Приостановить",resume:"Продолжить",stop:"Остановить",created:"создано",of:"из",next:"следующая"}:{title:"Community controls",real:"Real accounts",automatic:"Automated participants",status:"Status",schedule:"Registration waves",pause:"Pause",resume:"Resume",stop:"Stop",created:"created",of:"of",next:"next"};
+  const communityState=analytics.community||{run:null,waves:[],synthetic:{total:0}};
+  document.querySelector(".analytics-dashboard").insertAdjacentHTML("afterend",`<section class="card full community-admin"><div class="section-head compact"><div><p class="eyebrow">Scripture Archive</p><h2>${communityAdmin.title}</h2></div><p>${communityAdmin.status}: <strong>${esc(communityState.run?.status||"—")}</strong></p></div><div class="analytics-metrics"><article><strong>${formatNumber(analytics.accounts.total)}</strong><span>${communityAdmin.real}</span></article><article><strong>${formatNumber(communityState.synthetic?.total)}</strong><span>${communityAdmin.automatic}</span></article></div><h3>${communityAdmin.schedule}</h3><div class="community-wave-list">${(communityState.waves||[]).map(wave=>`<p><strong>${esc(wave.label)}</strong><span>${formatNumber(wave.created_count)} ${communityAdmin.of} ${formatNumber(wave.target_count)} ${communityAdmin.created} · ${communityAdmin.next}: ${esc(wave.next_at)} · ${esc(wave.status)}</span></p>`).join("")||"<p>—</p>"}</div><div class="action-row"><button class="button" data-community-control="pause">${communityAdmin.pause}</button><button class="button" data-community-control="resume">${communityAdmin.resume}</button><button class="button" data-community-control="stop">${communityAdmin.stop}</button></div><p id="community-control-state" role="status"></p></section>`);
+  document.querySelectorAll("[data-community-control]").forEach(button=>button.onclick=async()=>{const status=document.querySelector("#community-control-state");try{const response=await fetch("/api/community",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:button.dataset.communityControl})});if(!response.ok)throw Error(String(response.status));const result=await response.json();status.textContent=result.status;await renderEditor()}catch{status.textContent=t("registerError")}});
   document.querySelector(".editor-grid").insertAdjacentHTML("beforeend", `<section class="card full"><h2>${adminLabels.heading}</h2><p>${adminLabels.lead}</p><form id="managed-content-form" class="account-form account-form-grid"><label class="account-field"><span>ID</span><input name="id" maxlength="100"></label><label class="account-field"><span>${adminLabels.kind}</span><select name="kind"><option value="book">book</option><option value="chapter">chapter</option><option value="translation">translation</option><option value="mission">mission</option><option value="question">question</option><option value="route">route</option><option value="marathon">marathon</option><option value="ui_text">ui_text</option></select></label><label class="account-field"><span>${adminLabels.locale}</span><select name="locale"><option>uk</option><option>ru</option><option>en</option><option>all</option></select></label><label class="account-field"><span>${adminLabels.status}</span><select name="status"><option value="draft">${adminLabels.draft}</option><option value="published">${adminLabels.published}</option><option value="hidden">${adminLabels.hidden}</option></select></label>${field("title",adminLabels.title,"text",'required maxlength="200"')}<label class="account-field full"><span>${adminLabels.data}</span><textarea name="data" rows="8" required>{}</textarea></label><button class="button primary">${adminLabels.save}</button><p id="managed-content-state" role="status"></p></form><div class="managed-list">${managed.items.length?managed.items.map(item=>`<article><strong>${esc(item.title)}</strong><span>${esc(item.kind)} · ${esc(item.locale)} · ${esc(item.status)}</span></article>`).join(""):`<p>—</p>`}</div><details><summary>${adminLabels.history} · ${managed.revisions.length}</summary><ol>${managed.revisions.slice(0,30).map(revision=>`<li>${esc(revision.content_key)} · ${esc(revision.created_at)}</li>`).join("")}</ol></details></section>`);
   document.querySelector("#content-form").onsubmit = async (e) => {
     e.preventDefault();
@@ -3213,22 +3277,22 @@ function renderPrivacy() {
     uk: [
       "Приватність і облікові записи",
       "Scripture Archive підтверджує електронну адресу одноразовим посиланням і зберігає пароль лише як стійкий криптографічний хеш. Захищені серверні сесії дають змогу синхронізувати профіль і прогрес між пристроями.",
-      "Конфесія, конкретна церква, сімейний стан і стать є необов’язковими приватними даними. Вони не впливають на оцінювання. У домашніх групах ім’я учасника може бути показане лише після його окремої згоди; електронна адреса не публікується.",
-      "Аналітика вмикається лише після згоди на аналітичні cookie. До неї не передаються електронна пошта, паролі, відповіді, назви груп або інші дані профілю; згоду можна скасувати очищенням налаштувань сайту у браузері.",
+      "Конфесія, конкретна церква, сімейний стан і стать є необов’язковими приватними даними. Вони не впливають на оцінювання. У спільноті ім’я, прізвище та навчальний поступ реального користувача показуються лише після окремої згоди; електронна адреса не публікується.",
+      "Аналітика вмикається лише після згоди на аналітичні cookie. Вона фіксує переглянуті розділи, тип пристрою, приблизну країну, виконані дії та активний час. Паролі, відповіді, назви груп і вміст профілю до аналітики не передаються; згоду можна скасувати очищенням налаштувань сайту у браузері.",
       "Дані профілю можна виправити в обліковому записі, а обліковий запис і пов’язані особисті дані — видалити там само. Для додаткового звернення: dordiaioleksii1@gmail.com.",
     ],
     ru: [
       "Приватность и учётные записи",
       "Scripture Archive подтверждает электронный адрес одноразовой ссылкой и хранит пароль только как стойкий криптографический хеш. Защищённые серверные сессии синхронизируют профиль и прогресс между устройствами.",
-      "Конфессия, конкретная церковь, семейное положение и пол — необязательные приватные данные. Они не влияют на оценивание. В домашних группах имя участника может отображаться только после его отдельного согласия; электронная почта не публикуется.",
-      "Аналитика включается только после согласия на аналитические cookie. В неё не передаются электронная почта, пароли, ответы, названия групп или другие данные профиля; согласие можно отменить, очистив настройки сайта в браузере.",
+      "Конфессия, конкретная церковь, семейное положение и пол — необязательные приватные данные. Они не влияют на оценивание. В сообществе имя, фамилия и учебный прогресс реального пользователя показываются только после отдельного согласия; электронная почта не публикуется.",
+      "Аналитика включается только после согласия на аналитические cookie. Она фиксирует просмотренные разделы, тип устройства, примерную страну, выполненные действия и активное время. Пароли, ответы, названия групп и содержимое профиля в аналитику не передаются; согласие можно отменить, очистив настройки сайта в браузере.",
       "Данные профиля можно исправить в учётной записи, а учётную запись и связанные личные данные — удалить там же. Для дополнительного обращения: dordiaioleksii1@gmail.com.",
     ],
     en: [
       "Privacy and accounts",
       "Scripture Archive verifies an email address with a one-time link and stores the password only as a strong cryptographic hash. Secure server sessions synchronize the profile and progress across devices.",
-      "Christian tradition, specific church, marital status, and gender are optional private data and never affect grading. In home groups, a member’s name may be displayed only after their separate consent; email addresses are never published.",
-      "Analytics runs only after consent to analytics cookies. Email, passwords, answers, group names, and other profile data are never sent; consent can be withdrawn by clearing this site’s browser settings.",
+      "Christian tradition, specific church, marital status, and gender are optional private data and never affect grading. A real member’s first name, last name, and learning progress appear in the community only after separate consent; email addresses are never published.",
+      "Analytics runs only after consent to analytics cookies. It records sections viewed, device type, approximate country, actions, and active time. Passwords, answers, group names, and profile content are never sent; consent can be withdrawn by clearing this site’s browser settings.",
       "You can correct profile data in your account and delete the account and its associated personal data there. For an additional request, email dordiaioleksii1@gmail.com.",
     ],
   }[state.lang];
@@ -3277,9 +3341,11 @@ async function route() {
     else if (name === "mission") await renderMission(parts);
     else if (name === "groups" && parts[1]) await renderGroup(parts[1]);
     else if (name === "groups") await renderGroups();
+    else if (name === "community") await renderCommunity(Number(new URLSearchParams(location.search).get("page"))||1,new URLSearchParams(location.search).get("q")||"",new URLSearchParams(location.search).get("sort")||"recent");
     else if (["home-groups", "live", "campaigns", "dossiers", "builder", "progress", "about"].includes(name)) await renderWorkspace(name==='home-groups'?'live':name,{state,t,esc,shell,getMission,setActiveNav,loadJSON,announce,play});
     else if (name === "atlas") renderAtlas();
     else if (name === "support") renderSupport();
+    else if (name === "help") renderHelp();
     else if (name === "about") await renderAbout();
     else if (name === "privacy") renderPrivacy();
     else if (name === "account") renderAccount();
@@ -3297,12 +3363,17 @@ async function route() {
 }
 
 langSelect.addEventListener("change", () => {
+  const restorePickerFocus = document.activeElement === langSelect;
   state.lang = langSelect.value;
   localStorage.setItem("sa.lang", state.lang);
   state.mission = null;
   setStaticI18n();
   play("nav");
-  route();
+  void route().then(() => {
+    if (restorePickerFocus && document.activeElement === main && document.contains(langSelect)) {
+      langSelect.focus({ preventScroll: true });
+    }
+  });
 });
 document.querySelector("#menu-toggle").addEventListener("click", (e) => {
   const open = nav.classList.toggle("open");
@@ -3329,3 +3400,5 @@ Promise.all([getCMS(), getSession()]).finally(async () => {
   setStaticI18n();
   route();
 });
+
+

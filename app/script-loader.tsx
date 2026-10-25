@@ -156,7 +156,10 @@ export default function ScriptLoader() {
       }
       moduleRuntimeFailed = true;
       moduleEvaluating = false;
-      showFailure();
+      // An evaluated ESM module may have registered listeners or changed state
+      // before throwing. A same-document retry could start duplicate app logic.
+      // Use a fresh document, unlike a failed network fetch that never ran.
+      showFailure(false, true);
     };
     window.addEventListener("error", onModuleRuntimeError);
 

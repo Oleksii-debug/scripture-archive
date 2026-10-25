@@ -3300,7 +3300,7 @@ async function route() {
     const name = parts[0] || "home";
     if (name !== "reader") state.currentReader = null;
     if (name === "reader") {
-      const pendingReader = renderReader(parts.length > 1 ? parts : ["reader", "JHN", "3"]);
+      const pendingReader = renderReader(parts);
       finishingReaderTicket = state.readerRenderTicket;
       await pendingReader;
     }

@@ -149,3 +149,74 @@ for (const [locale, label] of Object.entries(retryCopy)) {
     assert.equal(routeCalls, 1, 'retry must invoke existing route()');
   });
 }
+// SA-05 -> SA-02 integration handoff: a parseable but incomplete HTTP 200
+// catalog must not become authoritative cached Bible metadata.
+const catalogMatch = source.match(/(async function getCatalog\(\) \{[\s\S]*?\n\})\nasync function getCMS\(/);
+assert.ok(catalogMatch, 'canonical getCatalog must exist');
+const catalogValidator = source.match(/(function validBibleCatalog\(catalog\) \{[\s\S]*?\n\})\nasync function getCatalog\(/);
+const catalogSource = (catalogValidator?.[1] || '') + '\n(' + catalogMatch[1] + ')';
+const genuineCatalog = JSON.parse(await readFile(new URL('../public/data/catalog.json', import.meta.url), 'utf8'));
+
+function setupCatalog(responses) {
+  const state = { catalog: null };
+  let calls = 0;
+  const fetch = async path => {
+    assert.equal(path, '/data/catalog.json');
+    const response = responses[Math.min(calls++, responses.length - 1)];
+    if (response instanceof Error) throw response;
+    return {
+      ok: response?.status !== 503,
+      status: response?.status || 200,
+      json: async () => {
+        if (response?.badJson) throw Error('invalid JSON');
+        return structuredClone(response?.data || response);
+      },
+    };
+  };
+  const getCatalog = vm.runInNewContext(catalogSource, { state, fetch, Error });
+  return { getCatalog, state, get calls() { return calls; } };
+}
+
+test('real trilingual Bible catalog and Ohiienko edition remain available and cached', async () => {
+  const fixture = setupCatalog([genuineCatalog]);
+  const result = await fixture.getCatalog();
+  for (const locale of ['uk', 'ru', 'en']) assert.equal(result.books[locale].length, 66);
+  assert.equal(result.editionBooks['uk-ohiienko'].length, 66);
+  assert.equal(await fixture.getCatalog(), result);
+  assert.equal(fixture.calls, 1);
+});
+
+test('corrupted HTTP 200 catalog is rejected, evicted, then healthy retry succeeds', async () => {
+  const corruptions = [
+    catalog => { delete catalog.books.ru; },
+    catalog => { catalog.books.en = []; },
+    catalog => { catalog.editions.uk = null; },
+    catalog => { catalog.books.uk[1].code = catalog.books.uk[0].code; },
+    catalog => { catalog.books.uk[0].chapters = 0; },
+    catalog => { catalog.books.ru[0].code = 'NOT-A-BOOK'; },
+    catalog => { catalog.editionBooks['uk-ohiienko'] = []; },
+    catalog => { delete catalog.books; },
+  ];
+  for (const corrupt of corruptions) {
+    const invalid = structuredClone(genuineCatalog);
+    corrupt(invalid);
+    const fixture = setupCatalog([invalid, genuineCatalog]);
+    await assert.rejects(fixture.getCatalog(), /Invalid Bible catalog data/);
+    assert.equal(fixture.state.catalog, null, 'reject must never cache a malformed catalog');
+    const restored = await fixture.getCatalog();
+    assert.equal(restored.books.uk.length, 66);
+    assert.equal(restored.books.ru.length, 66);
+    assert.equal(restored.books.en.length, 66);
+    assert.equal(fixture.calls, 2);
+  }
+});
+
+test('503 or malformed JSON catalog can be requested again without reload', async () => {
+  for (const bad of [{ status: 503 }, { badJson: true }]) {
+    const fixture = setupCatalog([bad, genuineCatalog]);
+    await assert.rejects(fixture.getCatalog());
+    assert.equal(fixture.state.catalog, null);
+    await fixture.getCatalog();
+    assert.equal(fixture.calls, 2);
+  }
+});

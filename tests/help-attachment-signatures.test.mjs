@@ -247,7 +247,7 @@ test('valid lossless WebP remains accepted without external email', async () => 
 
 test('valid animated WebP remains accepted without external email', async () => {
   const { route, state } = await fixture();
-  const valid = Uint8Array.from(Buffer.from('UklGRsgAAABXRUJQVlA4WAoAAAACAAAAAgAAAQAAQU5JTQYAAAAAAAAAAABBTk1GSAAAAAAAAAAAAAIAAAEAAEsAAAJWUDggMAAAADABAJ0BKgMAAgABQCYloAADcAD+3FH//8/M//gf/3T4M///hTX/+FNf/4U1/wAAAEFOTUZMAAAAAAAAAAAAAgAAAQAASwAAAFZQOCA0AAAANAEAnQEqAwACAAAAJiWgAANwAP7pIh//958//7nz//ufP+jP//8p+//yOP//I4/+UCAAAA', 'base64'));
+  const valid = Uint8Array.from(Buffer.from('UklGRsgAAABXRUJQVlA4WAoAAAACAAAAAgAAAQAAQU5JTQYAAAAAAAAAAABBTk1GSAAAAAAAAAAAAAIAAAEAAEsAAAJWUDggMAAAADABAJ0BKgMAAgABQCYloAADcAD+3FH//8/M//gf/3T4M///hTX/+FNf/4U1/wAAAEFOTUZMAAAAAAAAAAAAAgAAAQAASwAAAFZQOCA0AAAANAEAnQEqAwACAAAAJiWgAANwAP7pIh//958//7nz//ufP+jP//8p+//yOP//I4/+UCAAAA==', 'base64'));
   const response = await route.POST(submission({ locale: 'en', attachments: [file(valid, 'picture.webp', 'image/webp')] }));
   assert.equal(response.status, 201);
   assert.equal(state.batches.length, 1);

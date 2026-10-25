@@ -37,7 +37,7 @@ test("account security primitives and database tables are present", async () => 
 });
 
 test("state-changing API routes enforce same-origin writes", async () => {
-  for (const path of ["app/api/auth/route.ts", "app/api/attempts/route.ts", "app/api/account/route.ts", "app/api/groups/route.ts", "app/api/materials/route.ts", "app/api/content/route.ts", "app/api/analytics/route.ts"])
+  for (const path of ["app/api/auth/route.ts", "app/api/attempts/route.ts", "app/api/account/route.ts", "app/api/groups/route.ts", "app/api/materials/route.ts", "app/api/content/route.ts", "app/api/analytics/route.ts", "app/api/community/route.ts"])
     assert.match(await read(path), /sameOrigin\(request\)/, path);
 });
 
@@ -45,8 +45,21 @@ test("public navigation exposes crawlable paths instead of fragment-only routes"
   for (const path of ["app/page.tsx", "public/app.js", "public/home.js", "public/workspace.js"])
     assert.doesNotMatch(await read(path), /href=["'`]#\//, path);
   const route = await read("app/[...slug]/page.tsx");
-  for (const page of ["reader", "campaigns", "missions", "groups", "support", "about", "privacy"])
+  for (const page of ["reader", "campaigns", "missions", "groups", "community", "support", "help", "about", "privacy"])
     assert.match(route, new RegExp(`\\b${page}\\b`), page);
+});
+
+test("community keeps automated identity internal and real progress opt-in", async () => {
+  const [route, account, migration] = await Promise.all([
+    read("app/api/community/route.ts"), read("app/api/account/route.ts"), read("drizzle/0007_community.sql"),
+  ]);
+  for (const table of ["community_runs", "community_waves", "community_members", "community_run_log"])
+    assert.ok(migration.includes(`CREATE TABLE \`${table}\``), table);
+  assert.match(migration, /public_progress/);
+  assert.match(migration, /source_kind/);
+  const publicShape = route.slice(route.indexOf("return {", route.indexOf("function publicSynthetic")), route.indexOf("function progressCount"));
+  assert.doesNotMatch(publicShape, /source_kind/i);
+  assert.match(account, /public_progress/);
 });
 
 test("SEO endpoints use the configured public origin and protect private routes", async () => {

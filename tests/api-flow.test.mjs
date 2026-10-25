@@ -66,6 +66,15 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal(result.response.status, 200);
   result = await request("/api/account?action=progress");
   assert.deepEqual(result.data.progress.correct, [1]);
+  result = await request("/api/account?action=visibility", { method: "PUT", body: { firstName: true, lastName: true, progress: true } });
+  assert.equal(result.data.user.visibility.progress, true);
+  const communityResponse = await fetch(`${base}/api/community?q=Test%20Reader&pageSize=12`);
+  assert.equal(communityResponse.status, 200);
+  const community = await communityResponse.json();
+  const publicMember = community.members.find(member => member.displayName === "Test Reader");
+  assert.ok(publicMember);
+  assert.equal(publicMember.chaptersRead, 0);
+  assert.equal("sourceKind" in publicMember, false);
   result = await request("/api/account?action=progress", { method: "PUT", body: { progress: {} }, origin: "https://attacker.invalid" });
   assert.equal(result.response.status, 403);
 

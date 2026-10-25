@@ -6,6 +6,7 @@ const routes = [
   ["/campaigns", "weekly", "0.8"],
   ["/missions", "weekly", "0.8"],
   ["/groups", "weekly", "0.7"],
+  ["/community", "daily", "0.8"],
   ["/support", "monthly", "0.6"],
   ["/help", "monthly", "0.5"],
   ["/about", "monthly", "0.7"],

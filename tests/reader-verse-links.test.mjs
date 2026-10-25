@@ -215,3 +215,61 @@ test('reader URL correction uses the fetched chapter and must not rewrite a newe
   assert.match(app, /const verses = book\.chapters\[chapter - 1\];\s+const canonicalReaderPath = readerCanonicalPath\(parts, \{ book: meta\.code, chapter \}, groupId\);/);
   assert.match(app, /if \(canonicalReaderPath && `\$\{location\.pathname\}\$\{location\.search\}\$\{location\.hash\}` === requestedAddress\)\s+window\.history\.replaceState\(null, "", canonicalReaderPath\);/);
 });
+
+
+test('reader book requests bind source edition and locale across midflight translation changes', async () => {
+  // Execute the existing production getBook function, not a replacement data loader.
+  const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const match = app.match(/async function getBook\([\s\S]*?\n}\nfunction localEditionMetadata/);
+  assert.ok(match, 'canonical reader data access function absent');
+  const body = match[0].split('\nfunction localEditionMetadata')[0];
+  const observed = [];
+  const ohiienko = { id: 'uk-ohiienko', folder: 'uk-ohiienko', local: true };
+  const historical = { id: 'uk-kulish', folder: 'uk', local: true };
+  const english = { id: 'en-web', local: true };
+  const publisher = { id: 'uk-khomenko', local: false };
+  const userState = { lang: 'uk', bookCache: new Map() };
+  let currentlySelected = ohiienko;
+  const getBook = Function('state', 'selectedEdition', 'EDITIONS', 'fetch',
+    body + '; return getBook;')(
+    userState,
+    () => currentlySelected,
+    { uk: [ohiienko, historical, publisher], en: [english] },
+    async url => {
+      observed.push(url);
+      return { ok: true, json: async () => ({ fetchedFrom: url }) };
+    },
+  );
+
+  // A user can change the UI selection after the old render chose Ohiienko
+  // but before the old asynchronous request arrives at getBook().
+  currentlySelected = historical;
+  const preserved = await getBook('JOL', ohiienko, 'uk');
+  assert.equal(preserved.fetchedFrom, '/data/bible/uk-ohiienko/JOL.json');
+  const updated = await getBook('JOL', historical, 'uk');
+  assert.equal(updated.fetchedFrom, '/data/bible/uk/JOL.json');
+  assert.notEqual(preserved.fetchedFrom, updated.fetchedFrom);
+
+  // A language change cannot redirect the already-selected English corpus.
+  userState.lang = 'ru';
+  currentlySelected = historical;
+  const englishBook = await getBook('JHN', english, 'en');
+  assert.equal(englishBook.fetchedFrom, '/data/bible/en/JHN.json');
+
+  // An unbundled publisher choice can only fall back to an existing local
+  // Bible source, never silently fetch copyrighted publisher content.
+  const fallback = await getBook('GEN', publisher, 'uk');
+  assert.equal(fallback.fetchedFrom, '/data/bible/uk-ohiienko/GEN.json');
+  assert.equal(observed.length, 4, 'cache partitioned by locale + edition folder');
+  assert.match(app, /getBook\(meta\.code, chosenEdition, readerLanguage\)/);
+  assert.match(app, /localEditionMetadata\(catalog, chosenEdition, readerLanguage\)/);
+});
+
+test('superseded async reader renders refuse to attach a stale translation to the current UI', async () => {
+  const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  assert.match(app, /const readerTicket = state\.readerRenderTicket = \(state\.readerRenderTicket \|\| 0\) \+ 1;/);
+  assert.match(app, /const obsolete = \(\) => readerTicket !== state\.readerRenderTicket;/);
+  assert.match(app, /const book = await getBook\(meta\.code, chosenEdition, readerLanguage\);\s*if \(obsolete\(\) \|\| state\.lang !== readerLanguage/);
+  assert.match(app, /missionManifest=await getMission\(\);\s*if \(obsolete\(\)\) return;/);
+  assert.match(app, /async function route\(\) \{\s*state\.readerRenderTicket = \(state\.readerRenderTicket \|\| 0\) \+ 1;/);
+});

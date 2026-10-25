@@ -223,3 +223,65 @@ test('PNG with corrupted IDAT checksum is refused before persistence or email', 
   assert.equal(state.batches.length, 0);
   assert.equal(state.emails.length, 0);
 });
+
+// SA-12 WebP ingress regression: authentic WebP samples and malformed RIFF.
+// All requests use disposable fake D1/email, never production endpoints.
+
+test('valid lossy WebP remains accepted without external email', async () => {
+  const { route, state } = await fixture();
+  const valid = Uint8Array.from(Buffer.from('UklGRj4AAABXRUJQVlA4IDIAAADQAQCdASoDAAIAAQAcJaACdLoB+AADsAD+4Ll/9ej+ej+ej/P9//Qof0KH9Ch/9FwAAA==', 'base64'));
+  const response = await route.POST(submission({ locale: 'en', attachments: [file(valid, 'picture.webp', 'image/webp')] }));
+  assert.equal(response.status, 201);
+  assert.equal(state.batches.length, 1);
+  assert.equal(state.emails.length, 1); // fake only
+});
+
+test('valid lossless WebP remains accepted without external email', async () => {
+  const { route, state } = await fixture();
+  const valid = Uint8Array.from(Buffer.from('UklGRh4AAABXRUJQVlA4TBEAAAAvAkAAAAdQov5XpP+BiOh/AAA=', 'base64'));
+  const response = await route.POST(submission({ locale: 'en', attachments: [file(valid, 'picture.webp', 'image/webp')] }));
+  assert.equal(response.status, 201);
+  assert.equal(state.batches.length, 1);
+  assert.equal(state.emails.length, 1); // fake only
+});
+
+test('valid animated WebP remains accepted without external email', async () => {
+  const { route, state } = await fixture();
+  const valid = Uint8Array.from(Buffer.from('UklGRsgAAABXRUJQVlA4WAoAAAACAAAAAgAAAQAAQU5JTQYAAAAAAAAAAABBTk1GSAAAAAAAAAAAAAIAAAEAAEsAAAJWUDggMAAAADABAJ0BKgMAAgABQCYloAADcAD+3FH//8/M//gf/3T4M///hTX/+FNf/4U1/wAAAEFOTUZMAAAAAAAAAAAAAgAAAQAASwAAAFZQOCA0AAAANAEAnQEqAwACAAAAJiWgAANwAP7pIh//958//7nz//ufP+jP//8p+//yOP//I4/+UCAAAA', 'base64'));
+  const response = await route.POST(submission({ locale: 'en', attachments: [file(valid, 'picture.webp', 'image/webp')] }));
+  assert.equal(response.status, 201);
+  assert.equal(state.batches.length, 1);
+  assert.equal(state.emails.length, 1); // fake only
+});
+
+test('RIFF WEBP with no VP8 frame must not reach persistence or email', async () => {
+  const { route, state } = await fixture();
+  const bad = Uint8Array.from(Buffer.from('RIFF\x0c\x00\x00\x00WEBPJUNK\x00\x00\x00\x00', 'latin1'));
+  const response = await route.POST(submission({ attachments: [file(bad, 'spoofed.webp', 'image/webp')] }));
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: 'invalid_attachment' });
+  assert.equal(state.batches.length, 0);
+  assert.equal(state.emails.length, 0);
+});
+
+test('WebP whose RIFF declared size contradicts byte length is refused', async () => {
+  const { route, state } = await fixture();
+  const bad = Uint8Array.from(Buffer.from("UklGRj4AAABXRUJQVlA4IDIAAADQAQCdASoDAAIAAQAcJaACdLoB+AADsAD+4Ll/9ej+ej+ej/P9//Qof0KH9Ch/9FwAAA==" , 'base64'));
+  new DataView(bad.buffer).setUint32(4, 4, true);
+  const response = await route.POST(submission({ attachments: [file(bad, 'badlength.webp', 'image/webp')] }));
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: 'invalid_attachment' });
+  assert.equal(state.batches.length, 0);
+  assert.equal(state.emails.length, 0);
+});
+
+test('WebP frame with corrupt VP8 start code is refused', async () => {
+  const { route, state } = await fixture();
+  const bad = Uint8Array.from(Buffer.from("UklGRj4AAABXRUJQVlA4IDIAAADQAQCdASoDAAIAAQAcJaACdLoB+AADsAD+4Ll/9ej+ej+ej/P9//Qof0KH9Ch/9FwAAA==" , 'base64'));
+  bad[23] ^= 0x01; // VP8 frame start code: 0x9d 0x01 0x2a
+  const response = await route.POST(submission({ attachments: [file(bad, 'badframe.webp', 'image/webp')] }));
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: 'invalid_attachment' });
+  assert.equal(state.batches.length, 0);
+  assert.equal(state.emails.length, 0);
+});

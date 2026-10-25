@@ -65,8 +65,13 @@ function docxHasParts(bytes: Uint8Array) {
   return false;
 }
 
-// Check PNG chunk boundaries, mandatory IHDR/IDAT/IEND ordering, and dimensions.
-// This is a bounded structural gate, not a full image decoder or CRC audit.
+// Check PNG chunk boundaries, mandatory IHDR/IDAT/IEND ordering and CRC-32.
+// This is a bounded structural gate, not a full image decoder or malware scan.
+const PNG_CRC_TABLE = Uint32Array.from({ length: 256 }, (_, index) => {
+  let value = index;
+  for (let bit = 0; bit < 8; bit++) value = (value >>> 1) ^ (value & 1 ? 0xedb88320 : 0);
+  return value >>> 0;
+});
 function pngHasRequiredChunks(bytes: Uint8Array) {
   if (bytes.length < 45 || ![0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a].every((byte, index) => bytes[index] === byte)) return false;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -76,6 +81,12 @@ function pngHasRequiredChunks(bytes: Uint8Array) {
     const next = offset + 12 + size;
     if (next > bytes.length) return false;
     const type = String.fromCharCode(...bytes.subarray(offset + 4, offset + 8));
+    // PNG CRC-32 covers the four-byte chunk type and its data. A valid
+    // signature/chunk outline alone must not allow corrupted content in email.
+    let crc = 0xffffffff;
+    for (let index = offset + 4; index < offset + 8 + size; index++)
+      crc = (crc >>> 8) ^ PNG_CRC_TABLE[(crc ^ bytes[index]) & 0xff];
+    if (((crc ^ 0xffffffff) >>> 0) !== view.getUint32(offset + 8 + size, false)) return false;
     if (!hasHeader) {
       if (type !== "IHDR" || size !== 13 || view.getUint32(offset + 8, false) === 0 || view.getUint32(offset + 12, false) === 0) return false;
       hasHeader = true;

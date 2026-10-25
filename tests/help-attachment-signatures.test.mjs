@@ -62,7 +62,7 @@ function submission({ attachments = [], locale = 'uk', origin = 'https://sa.inva
 }
 
 const png = Uint8Array.from(Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAuMBgVOWyr0AAAAASUVORK5CYII=',
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGMQUDD4DwACBAFgjby7cQAAAABJRU5ErkJggg==',
   'base64',
 ));
 const file = (bytes, name, type) => new File([bytes], name, { type });
@@ -193,6 +193,33 @@ test('PNG with spoofed IEND but no IDAT cannot reach persistence', async () => {
   bytes.set(Buffer.from('IEND'), 37);
   const response = await route.POST(submission({ attachments: [file(bytes, 'fake.png', 'image/png')] }));
   assert.equal(response.status, 400);
+  assert.equal(state.batches.length, 0);
+  assert.equal(state.emails.length, 0);
+});
+
+
+test('PNG with corrupted IHDR CRC is refused before persistence or email', async () => {
+  const { route, state } = await fixture();
+  const tampered = Uint8Array.from(png);
+  tampered[29] ^= 0x01; // IHDR checksum, pixel dimensions unchanged.
+  const response = await route.POST(submission({ attachments: [file(tampered, 'crc-ihdr.png', 'image/png')] }));
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: 'invalid_attachment' });
+  assert.equal(state.batches.length, 0);
+  assert.equal(state.emails.length, 0);
+});
+
+test('PNG with corrupted IDAT checksum is refused before persistence or email', async () => {
+  const { route, state } = await fixture();
+  const tampered = Uint8Array.from(png);
+  const marker = Buffer.from('IDAT');
+  const at = Buffer.from(tampered).indexOf(marker);
+  assert.ok(at > 0, 'IDAT chunk is present');
+  const size = new DataView(tampered.buffer).getUint32(at - 4, false);
+  tampered[at + 4 + size] ^= 0x01; // CRC for the compressed image payload.
+  const response = await route.POST(submission({ attachments: [file(tampered, 'crc-idat.png', 'image/png')] }));
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: 'invalid_attachment' });
   assert.equal(state.batches.length, 0);
   assert.equal(state.emails.length, 0);
 });

@@ -57,3 +57,28 @@ test("permanent site language selector offers exactly UK, RU and EN", () => {
   const locales = [...select[0].matchAll(/<option value="([^"]+)"/g)].map((entry) => entry[1]);
   assert.deepEqual(locales, ["uk", "ru", "en"]);
 });
+
+// Robots exclusion patterns are prefix matches. In particular /mission (private)
+// also matches /missions (public) unless a more specific Allow rule wins.
+const robotsSource = load("../app/robots.txt/route.ts");
+function robotsAllows(path) {
+  const rules = [...robotsSource.matchAll(/"(Allow|Disallow): ([^"\n]+)"/g)]
+    .map(([, kind, prefix]) => ({ kind, prefix }))
+    .filter(({ prefix }) => path.startsWith(prefix))
+    .sort((a, b) => b.prefix.length - a.prefix.length ||
+      (a.kind === "Allow" ? -1 : 1));
+  return !rules.length || rules[0].kind === "Allow";
+}
+
+test("robots.txt permits every sitemap-advertised public route", () => {
+  for (const slug of advertisedPaths()) {
+    const path = slug ? `/${slug}` : "/";
+    assert.ok(robotsAllows(path), `robots.txt blocks public sitemap URL ${path}`);
+  }
+});
+
+test("robots.txt retains API and account, mission, progress, editor exclusions", () => {
+  for (const path of ["/api/auth", "/account", "/mission", "/mission/abraham", "/progress", "/editor"]) {
+    assert.ok(!robotsAllows(path), `robots.txt accidentally allows private URL ${path}`);
+  }
+});

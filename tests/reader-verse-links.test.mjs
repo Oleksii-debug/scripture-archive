@@ -56,6 +56,7 @@ test('licensed local editions match catalog metadata and copyrighted alternative
   assert.equal(catalog.translations['uk-ohiienko'].license, 'CC BY-SA 4.0');
   assert.ok(catalog.translations['uk-ohiienko'].licenseUrl);
   assert.ok(catalog.translations['uk-ohiienko'].attribution);
+  assert.match(catalog.translations['uk-ohiienko'].formatting, /Йов 34:2/);
   assert.equal(catalog.editionBooks['uk-ohiienko'].length, 66);
 });
 

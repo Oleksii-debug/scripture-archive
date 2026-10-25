@@ -8,6 +8,7 @@ const LOADER_COPY = {
     retry: "Повторити завантаження",
     reload: "Перезавантажити сторінку",
     loading: "Повторне завантаження інтерфейсу…",
+    loadingFirst: "Завантаження інтерфейсу…",
     storage: "Браузер заблокував доступ до локальних даних сайту. Перевірте налаштування конфіденційності та повторіть спробу.",
   },
   ru: {
@@ -16,6 +17,7 @@ const LOADER_COPY = {
     retry: "Повторить загрузку",
     reload: "Перезагрузить страницу",
     loading: "Повторная загрузка интерфейса…",
+    loadingFirst: "Загрузка интерфейса…",
     storage: "Браузер заблокировал доступ к локальным данным сайта. Проверьте настройки конфиденциальности и повторите попытку.",
   },
   en: {
@@ -24,6 +26,7 @@ const LOADER_COPY = {
     retry: "Retry loading",
     reload: "Reload the page",
     loading: "Reloading the interface…",
+    loadingFirst: "Loading the interface…",
     storage: "Your browser blocked access to the site’s local data. Check your privacy settings and try again.",
   },
 } as const;
@@ -58,9 +61,26 @@ export default function ScriptLoader() {
     let attempt = 0;
     const main = document.getElementById("main");
     const announcer = document.getElementById("announcer");
+    let loaderAnnouncement = "";
+
+    const startLoading = () => {
+      const copy = LOADER_COPY[loaderLanguage()];
+      loaderAnnouncement = attempt === 0 ? copy.loadingFirst : copy.loading;
+      main?.setAttribute("aria-busy", "true");
+      if (announcer) announcer.textContent = loaderAnnouncement;
+    };
+
+    const finishLoading = () => {
+      main?.setAttribute("aria-busy", "false");
+      // Leave route-specific announcements written by the real app intact.
+      if (announcer && announcer.textContent === loaderAnnouncement) announcer.textContent = "";
+      loaderAnnouncement = "";
+    };
 
     const showFailure = (storageBlocked = false) => {
-      if (!active || !main || main.childElementCount > 0) return;
+      if (!active) return;
+      finishLoading();
+      if (!main || main.childElementCount > 0) return;
       const copy = LOADER_COPY[loaderLanguage()];
       const notice = document.createElement("section");
       notice.className = "notice";
@@ -81,7 +101,6 @@ export default function ScriptLoader() {
         }
         main.replaceChildren();
         main.focus();
-        if (announcer) announcer.textContent = LOADER_COPY[loaderLanguage()].loading;
         loadApp();
       });
       notice.append(heading, description, retry);
@@ -104,6 +123,7 @@ export default function ScriptLoader() {
       }
       // Count only real script injections. Storage-denied retries never
       // fetched a module, so they must not consume the network retry budget.
+      startLoading();
       attempt += 1;
       const script = document.createElement("script");
       script.type = "module";
@@ -114,6 +134,10 @@ export default function ScriptLoader() {
         if (!active || appScript !== script) return;
         showFailure();
       };
+      script.onload = () => {
+        if (!active || appScript !== script) return;
+        finishLoading();
+      };
       appScript = script;
       document.body.appendChild(script);
     };
@@ -121,6 +145,7 @@ export default function ScriptLoader() {
     return () => {
       active = false;
       appScript?.remove();
+      finishLoading();
       analytics.remove();
     };
   }, []);

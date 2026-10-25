@@ -2462,6 +2462,7 @@ attemptChannel?.addEventListener("message", event => {
 });
 
 async function renderReader(parts) {
+  const requestedAddress = `${location.pathname}${location.search}${location.hash}`;
   setActiveNav("reader");
   const catalog = await getCatalog();
   const chosenEdition = selectedEdition(state.lang);
@@ -2486,8 +2487,9 @@ async function renderReader(parts) {
   }
   const book = await getBook(meta.code);
   const verses = book.chapters[chapter - 1];
-  const canonicalReaderPath = readerCanonicalPath(parts, state.reader, groupId);
-  if (canonicalReaderPath) window.history.replaceState(null, "", canonicalReaderPath);
+  const canonicalReaderPath = readerCanonicalPath(parts, { book: meta.code, chapter }, groupId);
+  if (canonicalReaderPath && `${location.pathname}${location.search}${location.hash}` === requestedAddress)
+    window.history.replaceState(null, "", canonicalReaderPath);
   const edition = localEditionMetadata(catalog),
     editionInfo = editionDetails(edition, meta.code);
   const options = books

@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 import { authenticateRequest, sameOrigin, type Identity } from "../../../lib/auth";
+import mission from "../../../content/mission-abraham.json";
 export const dynamic = "force-dynamic";
 const OWNER_EMAIL = "dordiaioleksii1@gmail.com";
 const AGE_RANGES = new Set(["13-17", "18-24", "25-34", "35-44", "45-54", "55-64", "65+"]);
@@ -27,9 +28,20 @@ export async function GET(request:Request){
     return Response.json({error:"reading_state_unavailable"},{status:503});
   }
   if(action==="progress"){
-    const row=await env.DB!.prepare("SELECT data FROM progress WHERE user_id=? AND mission_id=?").bind(id.userId,"OT-AB-01").first<{data:string}>();
-    if(!row)return Response.json({progress:null});
-    try{return Response.json({progress:JSON.parse(row.data)})}catch{return Response.json({error:"progress_state_unavailable"},{status:503})}
+    const rows=await env.DB!.prepare("SELECT data FROM progress WHERE user_id=? AND mission_id LIKE 'OT-AB-01:%'").bind(id.userId).all<{data:string}>();
+    const answered=new Set<string>(),correct=new Set<string>();
+    const validTasks=new Set(mission.tasks.map(task=>task.id));
+    for(const row of rows.results){
+      try{
+        const result=JSON.parse(row.data);
+        for(const detail of result.details||[]){
+          if(!validTasks.has(detail.taskId))continue;
+          answered.add(detail.taskId);
+          if(detail.correct===true)correct.add(detail.taskId);
+        }
+      }catch{}
+    }
+    return Response.json({progress:{index:answered.size,correct:[...correct],complete:answered.size===validTasks.size}})
   }
   if(action==="users"){if(id.email!==OWNER_EMAIL)return Response.json({error:"forbidden"},{status:403});const rows=await env.DB!.prepare("SELECT email,first_name,last_name,age_range,locale,created_at,updated_at FROM profiles ORDER BY created_at DESC LIMIT 250").all();return Response.json({users:rows.results})}
   const row=await env.DB!.prepare("SELECT * FROM profiles WHERE user_id=?").bind(id.userId).first<Record<string,unknown>>(); return Response.json({user:publicUser(id,row)});
@@ -104,7 +116,7 @@ async function write(request:Request){
     return Response.json({ok:true});
     }catch{return Response.json({error:"reading_state_unavailable"},{status:503});}
   }
-  if(action==="progress"){const encoded=JSON.stringify(body.progress??{});if(encoded.length>20000)return Response.json({error:"progress_too_large"},{status:413});const progressWrite=await env.DB!.prepare("INSERT INTO progress (user_id,mission_id,data,updated_at) VALUES (?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id,mission_id) DO UPDATE SET data=excluded.data,updated_at=CURRENT_TIMESTAMP").bind(id.userId,"OT-AB-01",encoded).run();if(!progressWrite.success)return Response.json({error:"progress_save_failed"},{status:503});return Response.json({ok:true})}
+  if(action==="progress")return Response.json({error:"progress_is_server_managed"},{status:403});
   if(action==="visibility"){const visibilityWrite=await env.DB!.prepare("UPDATE profiles SET public_first_name=?,public_last_name=?,public_church=?,public_progress=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?").bind(body.firstName===true?1:0,body.lastName===true?1:0,body.church===true?1:0,body.progress===true?1:0,id.userId).run();if(!visibilityWrite.success)return Response.json({error:"visibility_save_failed"},{status:503});const row=await env.DB!.prepare("SELECT * FROM profiles WHERE user_id=?").bind(id.userId).first<Record<string,unknown>>();return Response.json({user:publicUser(id,row)})}
   if(action!=="profile")return Response.json({error:"unknown_action"},{status:400});
   const firstName=clean(body.firstName,80),lastName=clean(body.lastName,80),ageRange=clean(body.ageRange,10),rawTradition=clean(body.tradition,40),maritalStatus=clean(body.maritalStatus,40),gender=clean(body.gender,30);if(!firstName||!lastName||!AGE_RANGES.has(ageRange)||body.acceptPrivacy!==true)return Response.json({error:"required_fields"},{status:400});

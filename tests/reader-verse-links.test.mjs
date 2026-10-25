@@ -179,7 +179,8 @@ test('chapter and book URLs already matching the visible reader are not rewritte
 test('fallback, malformed and cross-edition chapter routes produce the displayed chapter URL', () => {
   const historicJoel = { book: 'JOL', chapter: readerChapterNumber('4', 3) };
   assert.equal(readerCanonicalPath(['reader', 'JOL', '4'], historicJoel), '/reader/JOL/3');
-  assert.equal(readerCanonicalPath(['reader', 'JOL', '4', 'group', 'a b'], historicJoel, 'a b'), '/reader/JOL/3/group/a%20b');
+  assert.equal(readerCanonicalPath(['reader', 'JOL', '4', 'group', 'a%20b'], historicJoel, 'a%20b'), '/reader/JOL/3/group/a%20b');
+  assert.equal(readerCanonicalPath(['reader', 'JOL', '4', 'group', 'a%2Fb'], historicJoel, 'a%2Fb'), '/reader/JOL/3/group/a%2Fb');
   assert.equal(readerCanonicalPath(['reader', 'JOL', '1.5'], { book: 'JOL', chapter: 1 }), '/reader/JOL/1');
   assert.equal(readerCanonicalPath(['reader', 'JOL'], { book: 'JOL', chapter: 1 }), '/reader/JOL/1');
   assert.equal(readerCanonicalPath(['reader', 'jol', '1'], { book: 'JOL', chapter: 1 }), '/reader/JOL/1');

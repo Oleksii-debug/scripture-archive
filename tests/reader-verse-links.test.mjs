@@ -273,3 +273,48 @@ test('superseded async reader renders refuse to attach a stale translation to th
   assert.match(app, /missionManifest=await getMission\(\);\s*if \(obsolete\(\)\) return;/);
   assert.match(app, /async function route\(\) \{\s*state\.readerRenderTicket = \(state\.readerRenderTicket \|\| 0\) \+ 1;/);
 });
+
+test('a superseded reader route cannot finalize stale focus, metadata, or an error screen', async () => {
+  // Execute the existing route() function; only its asynchronous reader dependency
+  // is controlled to force new navigation to finish before an older request.
+  const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const match = app.match(/async function route\\(\\) \\{[\\s\\S]*?\\n\\}\\n(?=\\nlangSelect\\.addEventListener)/);
+  assert.ok(match, 'canonical route implementation absent');
+  for (const rejectOlder of [false, true]) {
+    const events = [];
+    let completeOld, failOld, completeNew;
+    const older = new Promise((resolve, reject) => { completeOld = resolve; failOld = reject; });
+    const newer = new Promise(resolve => { completeNew = resolve; });
+    const state = { lang: 'uk', readerRenderTicket: 0, reader: { book: 'EXO', chapter: 2 } };
+    const browserLocation = { hash: '', pathname: '/reader/GEN/1', search: '' };
+    let readers = 0;
+    const route = Function(
+      'state', 'location', 'timerInterval', 'renderReader', 'cleanPublicCopy',
+      'setStaticI18n', 'updatePageMetadata', 'window', 'focusReaderRouteVerse',
+      'main', 'shell', 't',
+      match[0] + '\\nreturn route;',
+    )(
+      state, browserLocation, undefined,
+      async () => { state.readerRenderTicket += 1; return ++readers === 1 ? older : newer; },
+      () => events.push('clean'),
+      () => events.push('i18n'),
+      () => events.push('metadata'),
+      { scrollTo() { events.push('scroll'); }, saAnalytics: { track() { events.push('analytics'); } } },
+      (_search, _main, parts) => events.push('focus:' + parts.join('/')),
+      {}, () => events.push('error-screen'), () => 'load error',
+    );
+    const oldRoute = route();
+    browserLocation.pathname = '/reader/EXO/2';
+    const newRoute = route();
+    completeNew();
+    await newRoute;
+    if (rejectOlder) failOld(Error('HTTP 503 from obsolete request'));
+    else completeOld();
+    await oldRoute;
+    assert.deepEqual(events.filter(value => value.startsWith('focus:')), ['focus:reader/EXO/2']);
+    assert.equal(events.filter(value => value === 'metadata').length, 1);
+    assert.equal(events.filter(value => value === 'analytics').length, 1);
+    assert.equal(events.filter(value => value === 'scroll').length, 1);
+    assert.ok(!events.includes('error-screen'), 'obsolete failure must not mask latest page');
+  }
+});

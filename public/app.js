@@ -2933,6 +2933,7 @@ function renderSupport() {
 async function renderAbout() {
   setActiveNav("about");
   const catalog = await getCatalog(),
+    ohiienko = catalog.translations["uk-ohiienko"],
     labels = {
       uk: {
         uk: "Українська",
@@ -2966,13 +2967,13 @@ async function renderAbout() {
       },
     }[state.lang],
     rows = [
-      `<tr><th scope="row">${labels.uk}</th><td>${esc(catalog.translations['uk-ohiienko'].title)}</td><td>${labels.whole}</td><td>CC BY-SA 4.0 · <a href="https://github.com/onlydotbible/ohienko" target="_blank" rel="noreferrer">only.bible ↗</a></td></tr>`,
-      `<tr><th scope="row">${labels.uk}</th><td>${t("ukEditionTitle")}</td><td>${labels.whole}</td><td>Public Domain · <a href="${catalog.editions.uk.source}" target="_blank" rel="noreferrer">eBible.org ↗</a></td></tr>`,
-      `<tr><th scope="row">${labels.ru}</th><td>${esc(catalog.editions.ru.title)}</td><td>${labels.whole}</td><td>${esc(catalog.editions.ru.license)} · <a href="${catalog.editions.ru.source}" target="_blank" rel="noreferrer">eBible.org ↗</a></td></tr>`,
-      `<tr><th scope="row">${labels.en}</th><td>${esc(catalog.editions.en.title)}</td><td>${labels.whole}</td><td>${esc(catalog.editions.en.license)} · <a href="${catalog.editions.en.source}" target="_blank" rel="noreferrer">eBible.org ↗</a></td></tr>`,
+      `<tr><th scope="row">${labels.uk}</th><td>${esc(catalog.translations['uk-ohiienko'].title)}</td><td>${labels.whole}</td><td>${esc(ohiienko.license)} · <a href="${esc(ohiienko.source)}" target="_blank" rel="noreferrer">${t("sourceLink")} ↗</a></td></tr>`,
+      `<tr><th scope="row">${labels.uk}</th><td>${esc(catalog.editions.uk.title)}</td><td>${labels.whole}</td><td>${esc(catalog.editions.uk.license)} · <a href="${esc(catalog.editions.uk.source)}" target="_blank" rel="noreferrer">${t("sourceLink")} ↗</a></td></tr>`,
+      `<tr><th scope="row">${labels.ru}</th><td>${esc(catalog.editions.ru.title)}</td><td>${labels.whole}</td><td>${esc(catalog.editions.ru.license)} · <a href="${esc(catalog.editions.ru.source)}" target="_blank" rel="noreferrer">${t("sourceLink")} ↗</a></td></tr>`,
+      `<tr><th scope="row">${labels.en}</th><td>${esc(catalog.editions.en.title)}</td><td>${labels.whole}</td><td>${esc(catalog.editions.en.license)} · <a href="${esc(catalog.editions.en.source)}" target="_blank" rel="noreferrer">${t("sourceLink")} ↗</a></td></tr>`,
     ].join("");
   shell(
-    `<article class="prose"><p class="eyebrow">Scripture Archive</p><h1>${t("aboutTitle")}</h1><p class="lead">${t("aboutLead")}</p><p>${t("aboutBody")}</p><h2>${t("rightsTitle")}</h2><p>${t("rightsIntro")}</p><table class="license-table"><thead><tr><th>${t("language")}</th><th>${t("edition")}</th><th>${labels.scope}</th><th>${t("license")}</th></tr></thead><tbody>${rows}</tbody></table><section class="rights-notice"><p>${esc(catalog.translations['uk-ohiienko'].attribution)}</p><a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noreferrer">Creative Commons Attribution-ShareAlike 4.0</a></section><h2>${t("accessTitle")}</h2><p>${t("accessBody")}</p></article>`,
+    `<article class="prose"><p class="eyebrow">Scripture Archive</p><h1>${t("aboutTitle")}</h1><p class="lead">${t("aboutLead")}</p><p>${t("aboutBody")}</p><h2>${t("rightsTitle")}</h2><p>${t("rightsIntro")}</p><table class="license-table"><thead><tr><th>${t("language")}</th><th>${t("edition")}</th><th>${labels.scope}</th><th>${t("license")}</th></tr></thead><tbody>${rows}</tbody></table><section class="rights-notice"><p>${esc(ohiienko.attribution)}</p><a href="${esc(ohiienko.licenseUrl)}" target="_blank" rel="noreferrer">${esc(ohiienko.license)}</a></section><h2>${t("accessTitle")}</h2><p>${t("accessBody")}</p></article>`,
   );
 }
 function renderGate() {

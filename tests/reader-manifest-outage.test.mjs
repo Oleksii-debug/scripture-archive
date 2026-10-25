@@ -12,10 +12,11 @@ const helper = source.match(
 );
 assert.ok(helper, "canonical reader manifest fallback must exist");
 
-function makeReaderManifest(getMission) {
+function makeReaderManifest(getMission, state = { mission: null }) {
   return vm.runInNewContext("(" + helper[1] + ")", {
     getMission,
     console: { warn() {} },
+    state,
   });
 }
 
@@ -62,7 +63,7 @@ function runGate(missionManifest) {
 }
 
 test("reader task gate fails open for Bible text but does not fabricate tasks", async () => {
-  assert.equal((await runGate(null)).hasTasks, undefined);
+  assert.equal((await runGate(null)).hasTasks, false);
   assert.equal(
     (await runGate({ chapters: [{ book: "GEN", chapter: 1 }] })).hasTasks,
     true,
@@ -81,4 +82,39 @@ test("UK/RU/EN have visible truthful temporary-unavailability notice", () => {
   ]) assert.ok(source.includes(message), message);
   assert.match(source, /<p class="notice" role="status">\$\{t\("readerMissionUnavailable"\)\}<\/p>/);
   assert.match(source, /missionManifest=await readerMissionManifest\(\)/);
+});
+
+test("malformed HTTP 200 manifests do not abort public reading", async () => {
+  const cache = { mission: { chapters: { fake: true } } };
+  const manifest = makeReaderManifest(async () => cache.mission, cache);
+  assert.equal(await manifest(), null);
+  assert.equal(cache.mission, null, "invalid success must not poison the cache");
+  assert.equal((await runGate({ chapters: { fake: true } })).hasTasks, false);
+});
+
+test("an invalid cached response can recover on the next reader route", async () => {
+  const cache = { mission: null };
+  let calls = 0;
+  const valid = { chapters: [{ book: "GEN", chapter: 1 }] };
+  const manifest = makeReaderManifest(async () => {
+    cache.mission = ++calls === 1 ? { chapters: "corrupt" } : valid;
+    return cache.mission;
+  }, cache);
+  assert.equal(await manifest(), null);
+  assert.equal(cache.mission, null);
+  assert.equal(await manifest(), valid);
+  assert.equal(calls, 2);
+});
+
+test("an active-attempt locked response stays locked but is not cached indefinitely", async () => {
+  const cache = { mission: { id: "mission", locked: true } };
+  const locked = cache.mission;
+  assert.equal(await makeReaderManifest(async () => cache.mission, cache)(), locked);
+  assert.equal(cache.mission, null);
+  assert.equal((await runGate(locked)).hasTasks, false);
+});
+
+test("malformed null chapter entries cannot crash reading or fabricate tasks", async () => {
+  assert.equal((await runGate({ chapters: [null] })).hasTasks, false);
+  assert.equal((await runGate({ chapters: [null, { book: "GEN", chapter: 1 }] })).hasTasks, true);
 });

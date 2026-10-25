@@ -3297,7 +3297,7 @@ function cleanPublicCopy() {
 async function route() {
   clearInterval(timerInterval);
   try {
-    const sourceRoute = location.hash ? location.hash.replace(/^#\/?/, "") : location.pathname.replace(/^\/?/, "");
+    const sourceRoute = location.hash.startsWith("#/") ? location.hash.replace(/^#\/?/, "") : location.pathname.replace(/^\/?/, "");
     const parts = sourceRoute.split("/").filter(Boolean);
     const name = parts[0] || "home";
     if (name !== "reader") state.currentReader = null;
@@ -3358,7 +3358,10 @@ document.addEventListener("click", event => {
   window.saAnalytics?.track("navigation_click", { destination });
   navigateTo(`${url.pathname}${url.search}`);
 }, true);
-window.addEventListener("hashchange", route);
+window.addEventListener("hashchange", () => {
+  if (location.hash && !location.hash.startsWith("#/")) return;
+  route();
+});
 window.addEventListener("popstate", route);
 Promise.all([getCMS(), getSession()]).finally(async () => {
   if (state.user?.profileComplete) await syncProgress();

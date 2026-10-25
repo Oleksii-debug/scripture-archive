@@ -149,3 +149,44 @@ test('reader entry route resumes the last book and chapter for uk/ru/en', async 
     }
   }
 });
+
+test('native fragment anchors remain inside the reader instead of navigating home', async () => {
+  const start = source.indexOf('async function route() {');
+  const end = source.indexOf('\n}\n\nlangSelect.addEventListener("change"', start);
+  assert.ok(start >= 0 && end > start, 'canonical route must be available');
+  const actualRoute = source.slice(start, end + 2);
+  const visited = [];
+  const location = {pathname:'/reader/JHN/3', hash:'#v16'};
+  const {route} = vm.runInNewContext(actualRoute + '\n({route})', {
+    location, state:{lang:'uk'}, timerInterval:null,
+    clearInterval() {},
+    async renderReader(parts) {visited.push('reader:' + parts.join('/'));},
+    async renderHome() {visited.push('home');},
+    cleanPublicCopy() {}, setStaticI18n() {}, updatePageMetadata() {},
+    window:{scrollTo() {}, saAnalytics:null},
+    main:{querySelector() {return null;}},
+    shell() {}, t() {return 'error';},
+    console:{error(error) {throw error;}},
+  });
+  await route();
+  assert.deepEqual(visited, ['reader:reader/JHN/3']);
+
+  const listenerStart = source.indexOf('window.addEventListener("hashchange",');
+  const listenerEnd = source.indexOf('window.addEventListener("popstate",', listenerStart);
+  assert.ok(listenerStart >= 0 && listenerEnd > listenerStart, 'real hashchange handler missing');
+  const handlerSource = source.slice(listenerStart, listenerEnd);
+  for (const [fragment, expectedCount] of [['#v16',0], ['#reading',0], ['#/reader/JHN/3',1]]) {
+    let callback, invocations = 0;
+    vm.runInNewContext(handlerSource, {
+      location:{hash:fragment},
+      route() {invocations++;},
+      window:{addEventListener(name, handler) {
+        assert.equal(name,'hashchange');
+        callback = handler;
+      }},
+    });
+    assert.equal(typeof callback, 'function', fragment);
+    callback();
+    assert.equal(invocations, expectedCount, fragment);
+  }
+});

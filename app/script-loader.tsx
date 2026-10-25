@@ -31,6 +31,10 @@ const LOADER_COPY = {
 type Language = keyof typeof LOADER_COPY;
 
 function loaderLanguage(): Language {
+  // Match the canonical app's explicit ?lang= precedence over saved settings.
+  // An error shown before /app.js initializes must use the same language.
+  const requested = new URLSearchParams(window.location.search).get("lang");
+  if (requested === "uk" || requested === "ru" || requested === "en") return requested;
   let value: string | null = null;
   try {
     value = window.localStorage.getItem("sa.lang");

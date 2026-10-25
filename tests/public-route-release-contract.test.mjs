@@ -15,9 +15,9 @@ function routeSet(name) {
 }
 
 function advertisedPaths() {
-  const match = sitemap.match(/const routes = \\[([\\s\\S]*?)\\] as const;/);
+  const match = sitemap.match(/const routes = \[([\s\S]*?)\] as const;/);
   assert.ok(match, "Cannot locate sitemap routes; review SEO contract");
-  return [...match[1].matchAll(/\\[\\s*"\\/([^"]*)"\\s*,/g)].map((entry) => entry[1]);
+  return [...match[1].matchAll(/\[\s*"\/([^"]*)"\s*,/g)].map((entry) => entry[1]);
 }
 
 const publicRoutes = routeSet("PUBLIC_ROUTES");
@@ -30,9 +30,9 @@ test("every advertised sitemap route is directly handled by the server", () => {
 });
 
 test("public navigation links can survive direct navigation and refresh", () => {
-  const nav = home.match(/<nav id="primary-nav"[\\s\\S]*?<\\/nav>/);
+  const nav = home.match(/<nav id="primary-nav"[\s\S]*?<\/nav>/);
   assert.ok(nav, "Primary navigation not found");
-  const slugs = [...nav[0].matchAll(/href="\\/([^"#?]*)"/g)].map((entry) => entry[1]);
+  const slugs = [...nav[0].matchAll(/href="\/([^"#?]*)"/g)].map((entry) => entry[1]);
   for (const slug of slugs) {
     if (slug) assert.ok(publicRoutes.has(slug) || privateRoutes.has(slug), `navigation / ${slug} is not accepted by catch-all route`);
   }
@@ -40,7 +40,7 @@ test("public navigation links can survive direct navigation and refresh", () => 
 
 test("/help has a direct route and accessible page metadata", () => {
   assert.ok(publicRoutes.has("help"), "Support page is unreachable on direct /help request");
-  assert.match(catchAll, /help:\\s*\\{\\s*title:\\s*"Служба підтримки Scripture Archive"/);
+  assert.match(catchAll, /help:\s*\{\s*title:\s*"Служба підтримки Scripture Archive"/);
 });
 
 test("private and authenticated paths are not advertised in sitemap", () => {
@@ -50,7 +50,7 @@ test("private and authenticated paths are not advertised in sitemap", () => {
 });
 
 test("permanent site language selector offers exactly UK, RU and EN", () => {
-  const select = home.match(/<select id="language"[\\s\\S]*?<\\/select>/);
+  const select = home.match(/<select id="language"[\s\S]*?<\/select>/);
   assert.ok(select, "Language selector missing");
   const locales = [...select[0].matchAll(/<option value="([^"]+)"/g)].map((entry) => entry[1]);
   assert.deepEqual(locales, ["uk", "ru", "en"]);

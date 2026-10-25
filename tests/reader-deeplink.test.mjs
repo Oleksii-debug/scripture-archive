@@ -230,3 +230,38 @@ test('legacy hash reader references survive delegated clicks while local verse a
   assert.equal(openLink('https://scripture-archive.test/reader/JHN/3#v16'), false);
   assert.equal(visits.length, count, 'native in-chapter fragment must not be intercepted');
 });
+
+test('book fetch failure keeps the last chapter until a successful retry (uk/ru/en)', async () => {
+  const start = source.indexOf('async function renderReader(parts) {');
+  const stop = source.indexOf('  const edition = localEditionMetadata(', start);
+  assert.ok(start >= 0 && stop > start, 'canonical reader fetch stage must exist');
+  const entry = source.slice(start, stop) + '\n}';
+  for (const [lang,edition] of Object.entries({uk:'uk-ohiienko',ru:'ru',en:'en'})) {
+    const book = JSON.parse(await readFile(new URL('../public/data/bible/'+edition+'/JHN.json',import.meta.url),'utf8'));
+    let fail = true;
+    const writes = [];
+    const saved = new Map([['sa.reader',JSON.stringify({book:'GEN',chapter:12})]]);
+    const state = {lang,reader:{book:'GEN',chapter:12}};
+    const ctx = {
+      state,location:{href:'https://scripture-archive.test/reader/JHN/3?verse=16'},
+      setActiveNav(){},getCatalog:async()=>({editionBooks:{local:[{code:'JHN',chapters:21}]}}),
+      selectedEdition:()=>({id:'local'}),attemptRequest:async()=>({active:null}),
+      getBook:async()=>{if(fail)throw Error('temporary_outage');return book;},
+      readerVerseFromUrl:helpers.readerVerseFromUrl,
+      localStorage:{setItem(k,v){writes.push([k,v]);saved.set(k,v)}},
+      sessionStorage:{removeItem(){}},console:{warn(){}}
+    };
+    const {renderReader} = vm.runInNewContext(entry+'\n({renderReader})',ctx);
+    await assert.rejects(renderReader(['reader','JHN','3']),/temporary_outage/);
+    assert.equal(state.reader.book,'GEN',lang);
+    assert.equal(state.reader.chapter,12,lang);
+    assert.equal(saved.get('sa.reader'),JSON.stringify({book:'GEN',chapter:12}),lang);
+    assert.equal(writes.length,0,lang);
+    fail = false;
+    await renderReader(['reader','JHN','3']);
+    assert.equal(state.reader.book,'JHN',lang);
+    assert.equal(state.reader.chapter,3,lang);
+    assert.equal(saved.get('sa.reader'),JSON.stringify({book:'JHN',chapter:3}),lang);
+    assert.equal(writes.length,1,lang);
+  }
+});

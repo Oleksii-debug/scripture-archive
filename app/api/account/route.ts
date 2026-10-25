@@ -21,13 +21,40 @@ export async function POST(request:Request){return write(request)} export async 
 async function write(request:Request){
   if(!sameOrigin(request))return Response.json({error:"cross_origin_request"},{status:403});
   const id=await authenticateRequest(request);if(!id)return unauthorized();const action=new URL(request.url).searchParams.get("action")??"profile";const body=await request.json().catch(()=>null) as Record<string,unknown>|null;if(!body)return Response.json({error:"invalid_json"},{status:400});
-  if(action==="reading"){if(!Array.isArray(body.reading)||body.reading.length>2000)return Response.json({error:"invalid_reading"},{status:400});const reading=body.reading.filter((r):r is Record<string,unknown>=>Boolean(r)&&typeof r==="object").map(r=>({book:clean(r.book,4),chapter:Number(r.chapter),title:clean(r.title,100)})).filter(r=>/^[1-3]?[A-Z]{2,3}$/.test(r.book)&&Number.isInteger(r.chapter)&&r.chapter>0&&r.chapter<=151);await env.DB!.prepare("INSERT INTO progress (user_id,mission_id,data,updated_at) VALUES (?,'READING',?,CURRENT_TIMESTAMP) ON CONFLICT(user_id,mission_id) DO UPDATE SET data=excluded.data,updated_at=CURRENT_TIMESTAMP").bind(id.userId,JSON.stringify(reading)).run();return Response.json({ok:true})}
-  if(action==="progress"){const encoded=JSON.stringify(body.progress??{});if(encoded.length>20000)return Response.json({error:"progress_too_large"},{status:413});await env.DB!.prepare("INSERT INTO progress (user_id,mission_id,data,updated_at) VALUES (?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id,mission_id) DO UPDATE SET data=excluded.data,updated_at=CURRENT_TIMESTAMP").bind(id.userId,"OT-AB-01",encoded).run();return Response.json({ok:true})}
-  if(action==="visibility"){await env.DB!.prepare("UPDATE profiles SET public_first_name=?,public_last_name=?,public_church=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?").bind(body.firstName===true?1:0,body.lastName===true?1:0,body.church===true?1:0,id.userId).run();const row=await env.DB!.prepare("SELECT * FROM profiles WHERE user_id=?").bind(id.userId).first<Record<string,unknown>>();return Response.json({user:publicUser(id,row)})}
+  if(action==="reading"){
+    if(!Array.isArray(body.reading)||body.reading.length>2000)return Response.json({error:"invalid_reading"},{status:400});
+    const reading=body.reading.filter((r):r is Record<string,unknown>=>Boolean(r)&&typeof r==="object").map(r=>({book:clean(r.book,4),chapter:Number(r.chapter),title:clean(r.title,100)})).filter(r=>/^[1-3]?[A-Z]{2,3}$/.test(r.book)&&Number.isInteger(r.chapter)&&r.chapter>0&&r.chapter<=151);
+    const unique=[...new Map(reading.map(r=>[`${r.book}:${r.chapter}`,r])).values()];
+    // Serialize the merge in one canonical D1 statement. Never replace a newer read receipt with a stale snapshot.
+    // Invalid stored JSON fails the transaction rather than overwriting evidence of corruption.
+    const result=await env.DB!.prepare(`
+      INSERT INTO progress (user_id,mission_id,data,updated_at)
+      VALUES (?,'READING',?,CURRENT_TIMESTAMP)
+      ON CONFLICT(user_id,mission_id) DO UPDATE SET
+        data=(
+          SELECT COALESCE(json_group_array(json(entry)), '[]')
+          FROM (
+            SELECT previous.value AS entry FROM json_each(CASE WHEN json_valid(progress.data) AND json_type(progress.data)='array' THEN progress.data ELSE 'invalid_reading_history' END) AS previous
+            UNION ALL
+            SELECT incoming.value AS entry FROM json_each(excluded.data) AS incoming
+            WHERE NOT EXISTS (
+              SELECT 1 FROM json_each(CASE WHEN json_valid(progress.data) AND json_type(progress.data)='array' THEN progress.data ELSE 'invalid_reading_history' END) AS previous
+              WHERE json_extract(previous.value,'$.book')=json_extract(incoming.value,'$.book')
+                AND json_extract(previous.value,'$.chapter')=json_extract(incoming.value,'$.chapter')
+            )
+          )
+        ),
+        updated_at=CURRENT_TIMESTAMP
+    `).bind(id.userId,JSON.stringify(unique)).run();
+    if(!result.success)return Response.json({error:"reading_save_failed"},{status:503});
+    return Response.json({ok:true});
+  }
+  if(action==="progress"){const encoded=JSON.stringify(body.progress??{});if(encoded.length>20000)return Response.json({error:"progress_too_large"},{status:413});const progressWrite=await env.DB!.prepare("INSERT INTO progress (user_id,mission_id,data,updated_at) VALUES (?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id,mission_id) DO UPDATE SET data=excluded.data,updated_at=CURRENT_TIMESTAMP").bind(id.userId,"OT-AB-01",encoded).run();if(!progressWrite.success)return Response.json({error:"progress_save_failed"},{status:503});return Response.json({ok:true})}
+  if(action==="visibility"){const visibilityWrite=await env.DB!.prepare("UPDATE profiles SET public_first_name=?,public_last_name=?,public_church=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?").bind(body.firstName===true?1:0,body.lastName===true?1:0,body.church===true?1:0,id.userId).run();if(!visibilityWrite.success)return Response.json({error:"visibility_save_failed"},{status:503});const row=await env.DB!.prepare("SELECT * FROM profiles WHERE user_id=?").bind(id.userId).first<Record<string,unknown>>();return Response.json({user:publicUser(id,row)})}
   if(action!=="profile")return Response.json({error:"unknown_action"},{status:400});
   const firstName=clean(body.firstName,80),lastName=clean(body.lastName,80),ageRange=clean(body.ageRange,10),rawTradition=clean(body.tradition,40),maritalStatus=clean(body.maritalStatus,40),gender=clean(body.gender,30);if(!firstName||!lastName||!AGE_RANGES.has(ageRange)||body.acceptPrivacy!==true)return Response.json({error:"required_fields"},{status:400});
   if((rawTradition&&!TRADITIONS.has(rawTradition))||(maritalStatus&&!MARITAL_STATUSES.has(maritalStatus))||(gender&&!GENDERS.has(gender)))return Response.json({error:"invalid_profile_option"},{status:400});
   const consent=body.acceptSensitive===true, locale=ALLOWED_LOCALES.has(clean(body.locale,2))?clean(body.locale,2):"uk",tradition=consent?rawTradition||null:null,church=consent?clean(body.church,160)||null:null;
-  await env.DB!.prepare("INSERT INTO profiles (user_id,email,first_name,last_name,age_range,tradition,church,marital_status,gender,locale,sensitive_consent,privacy_accepted_at,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET email=excluded.email,first_name=excluded.first_name,last_name=excluded.last_name,age_range=excluded.age_range,tradition=excluded.tradition,church=excluded.church,marital_status=excluded.marital_status,gender=excluded.gender,locale=excluded.locale,sensitive_consent=excluded.sensitive_consent,privacy_accepted_at=COALESCE(profiles.privacy_accepted_at,CURRENT_TIMESTAMP),updated_at=CURRENT_TIMESTAMP").bind(id.userId,id.email,firstName,lastName,ageRange,tradition,church,maritalStatus||null,gender||null,locale,consent?1:0).run();
+  const profileWrite=await env.DB!.prepare("INSERT INTO profiles (user_id,email,first_name,last_name,age_range,tradition,church,marital_status,gender,locale,sensitive_consent,privacy_accepted_at,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET email=excluded.email,first_name=excluded.first_name,last_name=excluded.last_name,age_range=excluded.age_range,tradition=excluded.tradition,church=excluded.church,marital_status=excluded.marital_status,gender=excluded.gender,locale=excluded.locale,sensitive_consent=excluded.sensitive_consent,privacy_accepted_at=COALESCE(profiles.privacy_accepted_at,CURRENT_TIMESTAMP),updated_at=CURRENT_TIMESTAMP").bind(id.userId,id.email,firstName,lastName,ageRange,tradition,church,maritalStatus||null,gender||null,locale,consent?1:0).run();if(!profileWrite.success)return Response.json({error:"profile_save_failed"},{status:503});
   const row=await env.DB!.prepare("SELECT * FROM profiles WHERE user_id=?").bind(id.userId).first<Record<string,unknown>>();return Response.json({user:publicUser(id,row)});
 }

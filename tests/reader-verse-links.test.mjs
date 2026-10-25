@@ -209,8 +209,9 @@ test('reader path normalization refuses invalid state and cannot focus a differe
   assert.equal(calls, 3);
 });
 
-test('production reader replaces a stale chapter address only after fetching the actual Bible chapter', async () => {
+test('reader URL correction uses the fetched chapter and must not rewrite a newer navigation', async () => {
   const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
-  assert.match(app, /const verses = book\.chapters\[chapter - 1\];\s+const canonicalReaderPath = readerCanonicalPath\(parts, state\.reader, groupId\);/);
-  assert.match(app, /if \(canonicalReaderPath\) window\.history\.replaceState\(null, "", canonicalReaderPath\);/);
+  assert.match(app, /async function renderReader\(parts\) \{\s+const requestedAddress = `\$\{location\.pathname\}\$\{location\.search\}\$\{location\.hash\}`;/);
+  assert.match(app, /const verses = book\.chapters\[chapter - 1\];\s+const canonicalReaderPath = readerCanonicalPath\(parts, \{ book: meta\.code, chapter \}, groupId\);/);
+  assert.match(app, /if \(canonicalReaderPath && `\$\{location\.pathname\}\$\{location\.search\}\$\{location\.hash\}` === requestedAddress\)\s+window\.history\.replaceState\(null, "", canonicalReaderPath\);/);
 });

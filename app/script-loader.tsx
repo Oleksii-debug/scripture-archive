@@ -31,6 +31,14 @@ const LOADER_COPY = {
   },
 } as const;
 
+// Only canonical startup ESM modules may claim the bootstrap recovery UI.
+// /app.js imports these four modules before its first route can render.
+// Do not treat unrelated analytics, extensions or arbitrary page errors as
+// a failed application bootstrap.
+const BOOT_MODULE_PATHS = new Set([
+  "/app.js", "/workspace.js", "/support.js", "/home.js", "/editions.js",
+]);
+
 type Language = keyof typeof LOADER_COPY;
 
 function loaderLanguage(): Language {
@@ -112,14 +120,21 @@ export default function ScriptLoader() {
 
     // A module can download successfully but throw while evaluating. Browsers
     // dispatch a window error followed by script.onload (not script.onerror).
-    // Only recover when the currently injected canonical /app.js itself fails;
-    // unrelated page/analytics errors must not replace the application UI.
+    // Also handle failures in the startup import graph: a dependency module
+    // can throw during evaluation while the top-level script still fires load.
+    // Unrelated page/analytics/extension errors must not replace the UI.
     const onModuleRuntimeError = (event: ErrorEvent) => {
       if (!active || !moduleEvaluating || !appScript || !event.filename) return;
       try {
         const requested = new URL(appScript.src, document.baseURI);
         const failed = new URL(event.filename, document.baseURI);
-        if (requested.pathname !== "/app.js" || failed.href !== requested.href) return;
+        if (requested.pathname !== "/app.js" || failed.origin !== requested.origin) return;
+        if (!BOOT_MODULE_PATHS.has(failed.pathname)) return;
+        // For the root module, match the active retry URL exactly so a late
+        // failure from an earlier attempt cannot overwrite current state.
+        if (failed.pathname === "/app.js" && failed.href !== requested.href) return;
+        // The four local imports are static files (no query parameters).
+        if (failed.pathname !== "/app.js" && (failed.search || failed.hash)) return;
       } catch {
         return;
       }

@@ -5,14 +5,14 @@ import ScriptLoader from "./script-loader";
 export default function Home() {
   return (
     <>
-      <a className="skip-link" href="#main">Skip to content</a>
+      <a className="skip-link" href="#main" data-i18n="skipToContent">Перейти до основного вмісту</a>
       <header className="site-header">
-        <a className="brand" href="/" aria-label="Scripture Archive — головна / главная / home">
+        <a className="brand" href="/" data-i18n-aria-label="brandHome" aria-label="Scripture Archive — головна">
           <img className="brand-symbol" src="/scripture-archive-logo.svg" alt="" width="54" height="54" />
           <span><strong>Scripture Archive</strong><small data-i18n="brandSub">Архів Писання</small></span>
         </a>
         <button className="menu-toggle" id="menu-toggle" type="button" aria-expanded="false" aria-controls="primary-nav" data-i18n="menu">Меню</button>
-        <nav id="primary-nav" className="primary-nav" aria-label="Навігація / Навигация / Navigation">
+        <nav id="primary-nav" className="primary-nav" data-i18n-aria-label="primaryNavigation" aria-label="Основна навігація">
           <a href="/" data-route="" data-workspace="home">Головна</a>
           <a href="/campaigns" data-route="campaigns" data-workspace="campaigns">Кампанії</a>
           <a href="/reader" data-route="reader" data-i18n="reader">Читальня</a>
@@ -29,7 +29,7 @@ export default function Home() {
         </nav>
         <div className="header-tools">
           <label className="sr-only" htmlFor="language" data-i18n="language">Мова</label>
-          <select id="language" aria-label="Language" defaultValue="uk">
+          <select id="language" defaultValue="uk">
             <option value="uk">Українська</option><option value="ru">Русский</option><option value="en">English</option>
           </select>
         </div>

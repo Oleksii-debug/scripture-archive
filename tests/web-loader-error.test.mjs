@@ -285,3 +285,45 @@ for (const [lang, title] of [
     assert.equal(page.main.childElementCount, 0, 'unmounted loader stays inactive');
   });
 }
+
+// A first-party dependency of canonical /app.js may fetch with 200 and then
+// throw during evaluation; Chromium reports the dependency filename and fires
+// top-level script.onload. The same recovery UI must remain available.
+for (const [lang, title] of [
+  ['uk', 'Не вдалося відкрити сторінку'],
+  ['ru', 'Не удалось открыть страницу'],
+  ['en', 'The page could not open'],
+]) {
+  test(`${lang} startup dependency evaluation errors expose existing recovery`, () => {
+    for (const path of ['/workspace.js', '/support.js', '/home.js', '/editions.js']) {
+      const page = boot(lang);
+      page.dispatchError(`https://sa06.test${path}`);
+      page.scripts.at(-1).onload();
+      const notice = page.main.childNodes[0];
+      assert.equal(notice?.attributes.role, 'alert', path);
+      assert.equal(notice.childNodes[0].textContent, title, path);
+      assert.equal(notice.childNodes[2].focused, true, path);
+      assert.equal(page.main.attributes['aria-busy'], 'false', path);
+      assert.equal(page.announcer.textContent, '', path);
+      page.cleanup();
+    }
+  });
+}
+
+test('unrelated script and foreign-origin exceptions do not hijack startup UI', () => {
+  const page = boot('en');
+  for (const other of [
+    'https://sa06.test/analytics.js',
+    'https://sa06.test/random.js',
+    'https://evil.example/workspace.js',
+    'https://sa06.test/workspace.js?other=1',
+    'chrome-extension://abc/workspace.js',
+  ]) {
+    page.dispatchError(other);
+    assert.equal(page.main.childElementCount, 0, other);
+    assert.equal(page.main.attributes['aria-busy'], 'true', other);
+  }
+  page.scripts.at(-1).onload();
+  assert.equal(page.main.attributes['aria-busy'], 'false');
+  page.cleanup();
+});

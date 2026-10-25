@@ -100,7 +100,7 @@ for (const [lang, reason, retryLabel] of [
     page.unblockStorage();
     retry.click();
     assert.equal(page.main.childElementCount, 0);
-    assert.equal(page.scripts[1].src, '/app.js?sa-retry=1');
+    assert.equal(page.scripts[1].src, '/app.js', 'first actual module load should use canonical module URL');
     page.cleanup();
   });
 }
@@ -124,7 +124,7 @@ for (const [lang, retryText] of [
     assert.equal(retry.textContent, retryText);
     page.unblockStorage();
     retry.click();
-    assert.equal(page.scripts.at(-1).src, '/app.js?sa-retry=3');
+    assert.equal(page.scripts.at(-1).src, '/app.js', 'blocked storage must not count as a module fetch');
     assert.equal(page.reloadCalls(), 0);
     page.cleanup();
   });
@@ -179,3 +179,30 @@ test('invalid query language retains the saved language instead of selecting an 
   assert.equal(notice.childNodes[0].textContent, 'Не удалось открыть страницу');
   page.cleanup();
 });
+
+for (const lang of ['uk', 'ru', 'en']) {
+  test(`storage denial does not consume the first network recovery retry in ${lang}`, () => {
+    const page = boot(lang, true);
+    for (let retryCount = 0; retryCount < 3; retryCount += 1) {
+      const button = page.main.childNodes[0].childNodes[2];
+      button.click();
+      assert.equal(page.scripts.length, 1, 'denied storage must not issue a module fetch');
+      assert.equal(page.reloadCalls(), 0, 'denied storage must not force a page reload');
+    }
+    page.unblockStorage();
+    page.main.childNodes[0].childNodes[2].click();
+    const firstActualLoad = page.scripts.at(-1);
+    assert.equal(firstActualLoad.src, '/app.js', 'first successful preflight is the first module fetch');
+    firstActualLoad.onerror();
+    const networkRecovery = page.main.childNodes[0].childNodes[2];
+    assert.equal(networkRecovery.textContent, ({uk:'Повторити завантаження',ru:'Повторить загрузку',en:'Retry loading'})[lang], 'first network fault must offer a proper retry, not immediate reload');
+    networkRecovery.click();
+    assert.equal(page.scripts.at(-1).src, '/app.js?sa-retry=1', 'failed first actual fetch must obtain fresh ESM URL');
+    page.scripts.at(-1).onerror();
+    const terminalRecovery = page.main.childNodes[0].childNodes[2];
+    assert.equal(terminalRecovery.textContent, ({uk:'Перезавантажити сторінку',ru:'Перезагрузить страницу',en:'Reload the page'})[lang]);
+    terminalRecovery.click();
+    assert.equal(page.reloadCalls(), 1, 'second actual module error may require a fresh document');
+    page.cleanup();
+  });
+}

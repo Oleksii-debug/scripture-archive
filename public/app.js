@@ -2224,7 +2224,19 @@ async function getMission() {
 // The Bible text is public content; a temporary quiz-manifest outage must not hide it.
 async function readerMissionManifest() {
   try {
-    return await getMission();
+    const manifest = await getMission();
+    if (manifest?.locked === true) {
+      // A cached active-attempt snapshot must not hide tasks on later routes.
+      state.mission = null;
+      return manifest;
+    }
+    if (!Array.isArray(manifest?.chapters)) {
+      // A malformed successful response must not crash reading or stay cached.
+      state.mission = null;
+      console.warn("Reader mission manifest is invalid");
+      return null;
+    }
+    return manifest;
   } catch (error) {
     console.warn("Reader missions unavailable", error);
     return null;
@@ -2526,7 +2538,7 @@ async function renderReader(parts) {
   if(!chosenEdition.local){document.querySelector('.verses').innerHTML=`<section class="publisher-reading"><p class="lead">${editionText.externalNote}</p><a class="button primary" target="_blank" rel="noreferrer" href="${editionUrl(chosenEdition,meta.code,chapter)}">${editionText.external} ↗</a></section>`;document.querySelector('.chapter-meta').textContent=chosenEdition.title;document.querySelector('.edition-card').innerHTML=`<h2>${t('edition')}</h2><p><strong>${esc(chosenEdition.title)}</strong></p><p>${editionText.whole}</p><a href="${chosenEdition.source}" target="_blank" rel="noreferrer">${t('sourceLink')} ↗</a>`;document.querySelector('#uk-spelling')?.remove();document.querySelector('#book-search').hidden=true;}
   const w=workspaceCopy(state.lang),history=loadJSON('sa.readingHistory',[]),attemptCopy=ATTEMPT_COPY[state.lang],missionManifest=await readerMissionManifest();
   const alreadyRead=history.some(r=>r.book===meta.code&&r.chapter===chapter);
-  const hasTasks=missionManifest?.chapters?.some(item=>item.book===meta.code&&Number(item.chapter)===chapter);
+  const hasTasks=Array.isArray(missionManifest?.chapters)&&missionManifest.chapters.some(item=>item?.book===meta.code&&Number(item.chapter)===chapter);
   document.querySelector('.chapter-nav').insertAdjacentHTML('beforebegin',`<div class="read-completion"><button class="button primary" id="mark-read">${attemptCopy.finishReading}</button>${hasTasks?`<button class="button" id="start-questions" disabled>${attemptCopy.transition}</button>`:""}<a href="/progress">${w.progress}</a></div>${hasTasks?`<dialog id="attempt-dialog" class="attempt-dialog" aria-labelledby="attempt-dialog-title"><form method="dialog"><h2 id="attempt-dialog-title">${attemptCopy.prepareTitle}</h2><p>${attemptCopy.prepareText}</p><ul>${attemptCopy.prepareRules.map(rule=>`<li>${rule}</li>`).join("")}</ul><div class="action-row"><button class="button" value="cancel">${attemptCopy.cancel}</button><button class="button primary" id="confirm-attempt" value="default">${attemptCopy.begin}</button></div><p id="attempt-state" role="status"></p></form></dialog>`:""}`);
   if (!missionManifest) {
     document.querySelector('.read-completion').insertAdjacentHTML(

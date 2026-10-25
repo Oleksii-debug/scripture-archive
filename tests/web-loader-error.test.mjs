@@ -105,6 +105,31 @@ for (const [lang, reason, retryLabel] of [
   });
 }
 
+for (const [lang, retryText] of [
+  ['uk', 'Повторити завантаження'],
+  ['ru', 'Повторить загрузку'],
+  ['en', 'Retry loading'],
+]) {
+  test(`blocked storage retry stays actionable without forced reload in ${lang}`, () => {
+    const page = boot(lang, true);
+    for (let i = 0; i < 2; i += 1) {
+      const retry = page.main.childNodes[0].childNodes[2];
+      assert.equal(retry.textContent, retryText);
+      assert.equal(retry.focused, true);
+      retry.click();
+      assert.equal(page.reloadCalls(), 0);
+      assert.equal(page.scripts.length, 1, 'no script should execute while storage is blocked');
+    }
+    const retry = page.main.childNodes[0].childNodes[2];
+    assert.equal(retry.textContent, retryText);
+    page.unblockStorage();
+    retry.click();
+    assert.equal(page.scripts.at(-1).src, '/app.js?sa-retry=3');
+    assert.equal(page.reloadCalls(), 0);
+    page.cleanup();
+  });
+}
+
 test('late load errors cannot replace already-rendered content or modify unmounted views', () => {
   const populated = boot();
   const existing = element('h1');

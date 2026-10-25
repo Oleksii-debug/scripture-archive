@@ -160,3 +160,29 @@ for (const mode of ['DELETE', 'WAL']) {
     }finally{f.dispose()}
   });
 }
+
+// SA10: all three planned profile locales persist through a fresh connection.
+for (const mode of ['DELETE', 'WAL']) {
+  test(`${mode}: UK/RU/EN locale durable write -> ACK -> independent reopen`,async()=>{
+    const f=fixture(mode);try{
+      for(const locale of ['uk','ru','en']){
+        const db=new D1Test(f.file),api=worker(db);
+        const profile={firstName:'Synthetic',lastName:'Reader',ageRange:'25-34',acceptPrivacy:true,locale};
+        const saved=await call(api,'profile','PUT',profile);
+        assert.equal(saved.status,200);
+        assert.equal(saved.body.user.locale,locale);
+        db.close();
+        const reopened=new D1Test(f.file);
+        const read=await call(worker(reopened),'me');
+        assert.equal(read.status,200);
+        assert.equal(read.body.user.locale,locale);
+        reopened.close();
+      }
+      const db=new D1Test(f.file);
+      const invalid=await call(worker(db),'profile','PUT',{firstName:'Synthetic',lastName:'Reader',ageRange:'25-34',acceptPrivacy:true,locale:'de'});
+      assert.equal(invalid.status,200);
+      assert.equal(invalid.body.user.locale,'uk','unsupported locale falls back to UK');
+      db.close();
+    }finally{f.dispose()}
+  });
+}

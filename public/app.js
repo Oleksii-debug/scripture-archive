@@ -2,7 +2,7 @@ import {renderWorkspace, workspaceCopy} from './workspace.js';
 import {supportSection} from './support.js';
 import {homePage} from './home.js';
 import {EDITIONS, editionCopy, selectedEdition, editionUrl, editionSelect} from './editions.js';
-import {readerVerseHref, focusReaderRouteVerse, readerChapterNumber} from './reader-verse-links.js';
+import {readerVerseHref, focusReaderRouteVerse, readerChapterNumber, readerCanonicalPath} from './reader-verse-links.js';
 
 const I18N = {
   uk: {
@@ -2486,6 +2486,8 @@ async function renderReader(parts) {
   }
   const book = await getBook(meta.code);
   const verses = book.chapters[chapter - 1];
+  const canonicalReaderPath = readerCanonicalPath(parts, state.reader, groupId);
+  if (canonicalReaderPath) window.history.replaceState(null, "", canonicalReaderPath);
   const edition = localEditionMetadata(catalog),
     editionInfo = editionDetails(edition, meta.code);
   const options = books

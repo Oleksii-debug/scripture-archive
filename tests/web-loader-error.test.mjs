@@ -31,7 +31,8 @@ function boot(lang = 'uk', blockedStorage = false, query = '', observeRender = f
     createElement: element,
     getElementById(id) { return ({main, announcer, language: {value: lang}})[id] || null; },
   };
-  let reloads = 0;
+  let reloads = 0, nextTimer = 0;
+  const timers = new Map();
   const storage = {blocked: blockedStorage};
   const eventListeners = new Map();
   const window = {
@@ -39,6 +40,8 @@ function boot(lang = 'uk', blockedStorage = false, query = '', observeRender = f
     location: {search: query, href: `https://sa06.test/${query}`, origin: 'https://sa06.test', reload() {reloads += 1;}},
     addEventListener(type, handler) {eventListeners.set(type, handler);},
     removeEventListener(type, handler) {if (eventListeners.get(type) === handler) eventListeners.delete(type);},
+    setTimeout(callback, delay) {const key=++nextTimer;timers.set(key,{callback,delay});return key;},
+    clearTimeout(key) {timers.delete(key);},
   };
   let cleanup;
   const observers = [];
@@ -63,7 +66,10 @@ function boot(lang = 'uk', blockedStorage = false, query = '', observeRender = f
     hasErrorListener: () => eventListeners.has('error'),
     unblockStorage: () => {storage.blocked = false;},
     notifyRender: () => observers.forEach(o => o.notify()),
-    activeObservers: () => observers.filter(o => o.active).length};
+    activeObservers: () => observers.filter(o => o.active).length,
+    activeTimers: () => timers.size,
+    scheduledDelays: () => [...timers.values()].map(v => v.delay),
+    fireTimers: () => {for(const [key,{callback}] of [...timers.entries()]) {timers.delete(key);callback();}}};
 }
 
 for (const [lang, title, retryText, reloadText] of [
@@ -368,4 +374,57 @@ test('async readiness observer is disconnected on cleanup', () => {
   page.main.replaceChildren(element('h1'));
   page.notifyRender();
   assert.equal(page.main.childElementCount, 1);
+});
+
+// SA-06: stuck canonical module/network or async startup must recover safely.
+for (const [lang, reloadText] of [
+  ['uk','Перезавантажити сторінку'],
+  ['ru','Перезагрузить страницу'],
+  ['en','Reload the page'],
+]) {
+  test(lang+': a never-settling module request offers a focused full-document reload', () => {
+    const page=boot(lang,false,'',true);
+    assert.deepEqual(page.scheduledDelays(),[30000]);
+    assert.equal(page.main.attributes['aria-busy'],'true');
+    page.fireTimers();
+    const notice=page.main.childNodes[0];
+    assert.equal(notice.attributes.role,'alert');
+    assert.equal(page.main.attributes['aria-busy'],'false');
+    const button=notice.childNodes[2];
+    assert.equal(button.textContent,reloadText);
+    assert.equal(button.focused,true);
+    button.click();
+    assert.equal(page.reloadCalls(),1);
+    assert.equal(page.scripts.length,2,'never inject a second active app instance after timeout');
+    page.cleanup();
+  });
+  test(lang+': a successfully loaded module with a stalled async route offers recovery', () => {
+    const page=boot(lang,false,'',true);
+    page.scripts.at(-1).onload();
+    assert.equal(page.main.attributes['aria-busy'],'true');
+    assert.deepEqual(page.scheduledDelays(),[30000]);
+    page.fireTimers();
+    assert.equal(page.main.childNodes[0].childNodes[2].textContent,reloadText);
+    page.cleanup();
+  });
+  test(lang+': route content cancels watchdog and retains the canonical view', () => {
+    const page=boot(lang,false,'',true);
+    page.scripts.at(-1).onload();
+    const routeHeading=element('h1');
+    page.main.replaceChildren(routeHeading);
+    page.notifyRender();
+    assert.equal(page.main.attributes['aria-busy'],'false');
+    assert.equal(page.activeTimers(),0);
+    page.fireTimers();
+    assert.equal(page.main.childNodes[0],routeHeading);
+    page.cleanup();
+  });
+}
+test('unmount cancels the pending recovery deadline', () => {
+  const page=boot('uk',false,'',true);
+  assert.equal(page.activeTimers(),1);
+  page.cleanup();
+  assert.equal(page.activeTimers(),0);
+  page.fireTimers();
+  assert.equal(page.main.childElementCount,0);
 });

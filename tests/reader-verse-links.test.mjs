@@ -261,7 +261,7 @@ test('reader book requests bind source edition and locale across midflight trans
   const fallback = await getBook('GEN', publisher, 'uk');
   assert.equal(fallback.fetchedFrom, '/data/bible/uk-ohiienko/GEN.json');
   assert.equal(observed.length, 4, 'cache partitioned by locale + edition folder');
-  assert.match(app, /getBook\(meta\.code, chosenEdition, readerLanguage\)/);
+  assert.match(app, /getBook\(meta\.code, chosenEdition, readerLanguage, meta, edition\.id\)/);
   assert.match(app, /localEditionMetadata\(catalog, chosenEdition, readerLanguage\)/);
 });
 
@@ -269,7 +269,7 @@ test('superseded async reader renders refuse to attach a stale translation to th
   const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
   assert.match(app, /const readerTicket = state\.readerRenderTicket = \(state\.readerRenderTicket \|\| 0\) \+ 1;/);
   assert.match(app, /const obsolete = \(\) => readerTicket !== state\.readerRenderTicket;/);
-  assert.match(app, /const book = await getBook\(meta\.code, chosenEdition, readerLanguage\);\s*if \(obsolete\(\) \|\| state\.lang !== readerLanguage/);
+  assert.match(app, /const edition = localEditionMetadata\(catalog, chosenEdition, readerLanguage\);\s*const book = await getBook\(meta\.code, chosenEdition, readerLanguage, meta, edition\.id\);\s*if \(obsolete\(\) \|\| state\.lang !== readerLanguage/);
   assert.match(app, /missionManifest=await getMission\(\);\s*if \(obsolete\(\)\) return;/);
   assert.match(app, /async function route\(\) \{\s*state\.readerRenderTicket = \(state\.readerRenderTicket \|\| 0\) \+ 1;/);
 });
@@ -351,6 +351,80 @@ test('reader accepts only matching source language, edition, book and complete c
 
 test('production reader checks the actual fetched corpus before verse rendering and attribution', async () => {
   const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
-  assert.match(app, /const edition = localEditionMetadata\(catalog, chosenEdition, readerLanguage\);\s*if \(!readerBookMatchesCatalog\(book, meta, readerLanguage, edition\.id\)\)/);
-  assert.match(app, /if \(!readerBookMatchesCatalog\([\s\S]*?throw Error\("Bible book source does not match the selected catalog edition"\);\s*const verses = book\.chapters\[chapter - 1\]/);
+  assert.match(app, /const edition = localEditionMetadata\(catalog, chosenEdition, readerLanguage\);\s*const book = await getBook\(meta\.code, chosenEdition, readerLanguage, meta, edition\.id\);/);
+  assert.match(app, /const book = await state\.bookCache\.get\(key\);\s*if \(expectedMeta && !readerBookMatchesCatalog\(book, expectedMeta, languageAtRequest, expectedEditionId\)\) \{\s*state\.bookCache\.delete\(key\);\s*throw Error\("Bible book source does not match the selected catalog edition"\);/);
+  assert.match(app, /state\.reader = \{ book: meta\.code, chapter \};\s*localStorage\.setItem\("sa\.reader", JSON\.stringify\(state\.reader\)\);\s*const verses = book\.chapters\[chapter - 1\]/);
+});
+
+
+test('invalid HTTP 200 source is not saved or cached and the same UK/RU/EN reader recovers', async () => {
+  // Execute the actual production fetch/cache and reader-route functions with
+  // synthetic responses. No protected Bible content is included in fixtures.
+  const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  const getBookSection = app.match(/async function getBook\([\s\S]*?\n}\nfunction localEditionMetadata/);
+  assert.ok(getBookSection, 'canonical getBook implementation must be present');
+  const readerStart = app.indexOf('async function renderReader(parts) {');
+  const readerEnd = app.indexOf('async function renderMissions()', readerStart);
+  assert.ok(readerStart >= 0 && readerEnd > readerStart, 'canonical renderReader must be present');
+  const production = getBookSection[0].split('\nfunction localEditionMetadata')[0]
+    + '\n' + app.slice(readerStart, readerEnd);
+  for (const [lang, id, folder, catalogId] of [
+    ['uk', 'uk-ohiienko', 'uk-ohiienko', 'uk-ohiienko'],
+    ['ru', 'ru-synodal', 'ru', 'RUSSYN'],
+    ['en', 'en-web', 'en', 'ENGWEBU'],
+  ]) {
+    const state = { lang, reader: { book: 'GEN', chapter: 1 }, bookCache: new Map(), readerRenderTicket: 0 };
+    const saved = [];
+    const edition = { id, folder, local: true };
+    const meta = { code: 'JHN', title: 'John', testament: 'NT', chapters: 1 };
+    const catalog = { books: { [lang]: [meta] },
+      editions: { [lang]: { id: catalogId, title: 'Edition', license: 'Public Domain', source: 'https://ebible.org/' } } };
+    const invalid = { bookCode: 'JHN', locale: lang, editionId: 'WRONG', testament: 'NT', chapters: [['bad fixture']] };
+    const valid = { bookCode: 'JHN', locale: lang, editionId: catalogId, testament: 'NT', chapters: [['good fixture']] };
+    let payload = invalid;
+    const fetched = [];
+    const dependencies = {
+      state,
+      setActiveNav: () => {},
+      getCatalog: async () => catalog,
+      selectedEdition: () => edition,
+      readerChapterNumber,
+      attemptRequest: async () => ({ active: null }),
+      localEditionMetadata: () => catalog.editions[lang],
+      readerBookMatchesCatalog,
+      localStorage: { setItem: (key, value) => saved.push([key, value]) },
+      location: { pathname: '/reader/JHN/1', search: '', hash: '' },
+      EDITIONS: { [lang]: [edition] },
+      esc: value => value,
+      bookTitle: entry => entry.title,
+      t: key => key,
+      shell: () => { throw Error('STOP_AFTER_VALID_SOURCE'); },
+      readerCanonicalPath: () => null,
+      editionDetails: () => ({ title: 'Edition' }),
+      editionToggle: () => '',
+      timerCard: () => '',
+      bibleText: value => value,
+      window: {},
+      fetch: async url => {
+        fetched.push(url);
+        return { ok: true, json: async () => payload };
+      },
+    };
+    const getBookAndReader = Function(...Object.keys(dependencies),
+      production + '\nreturn {getBook, renderReader};')(...Object.values(dependencies));
+    await assert.rejects(getBookAndReader.renderReader(['reader', 'JHN', '1']),
+      /Bible book source does not match the selected catalog edition/, lang);
+    assert.deepEqual(state.reader, { book: 'GEN', chapter: 1 }, lang + ': previous reopened selection survives invalid data');
+    assert.equal(saved.length, 0, lang + ': no unverified reader state persisted');
+    assert.equal(state.bookCache.size, 0, lang + ': the invalid success was evicted');
+    assert.deepEqual(fetched, ["/data/bible/" + folder + "/JHN.json"], lang);
+
+    payload = valid;
+    await assert.rejects(getBookAndReader.renderReader(['reader', 'JHN', '1']),
+      /STOP_AFTER_VALID_SOURCE/, lang + ': reached display after source validation');
+    assert.equal(fetched.length, 2, lang + ': retry must fetch again');
+    assert.deepEqual(state.reader, { book: 'JHN', chapter: 1 }, lang);
+    assert.deepEqual(saved, [['sa.reader', '{"book":"JHN","chapter":1}']], lang);
+    assert.equal(state.bookCache.size, 1, lang + ': valid corpus may be cached');
+  }
 });

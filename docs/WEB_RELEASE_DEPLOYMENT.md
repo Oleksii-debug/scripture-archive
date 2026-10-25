@@ -79,6 +79,34 @@ reviewed promotion, real browser flow, and physical NVDA remain
 or `PUBLIC_READY` from these notes.
 
 
+### Read-only declared-origin preflight
+
+Before considering any **owner-approved** staged deployment, run the existing
+Node test suite plus the separate non-deploying origin declaration check.
+Set `NEXT_PUBLIC_SITE_URL` and `APP_BASE_URL` in the **isolated release
+environment** to the owner-approved intended HTTPS origin; pass the same
+origin explicitly:
+
+```sh
+node scripts/check-web-release-origin.mjs --expected-origin https://APPROVED-HOST.EXAMPLE
+```
+
+It refuses absent, mismatched, HTTP, credential-bearing or path/query/fragment
+origins. A passing result is labeled `DECLARED_ORIGIN_MATCH_ONLY`: it checks
+**declared configuration parity**, not domain purchase/ownership, public DNS,
+certificate validity, actual host configuration, effective production secrets,
+deployed SHA, endpoint accessibility or existing user data. Do not export
+production credentials, use this check to modify bindings, or infer permission
+to publish. Real `GET /robots.txt`, `GET /sitemap.xml`, direct-path and
+public asset checks still require externally observed HTTPS after an approved
+deployment.
+
+Evidence checkpoint (2026-10-25): 6/6 isolated Node 22 declaration tests PASS
+and repeated PASS; committed source blobs matched locally executed sources by
+Git blob hashes. Full exact-PR checkout `npm test`/`lint`/`build`, independent
+review and deployment are **NOT EXECUTED**. The release gate remains **NOT
+QUALIFIED**; UK/RU/EN are the only permanent interface languages.
+
 ## Required production bindings
 
 - D1 binding: `DB`

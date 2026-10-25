@@ -8,6 +8,7 @@ const LOADER_COPY = {
     retry: "Повторити завантаження",
     reload: "Перезавантажити сторінку",
     loading: "Повторне завантаження інтерфейсу…",
+    storage: "Браузер заблокував доступ до локальних даних сайту. Перевірте налаштування конфіденційності та повторіть спробу.",
   },
   ru: {
     title: "Не удалось открыть страницу",
@@ -15,6 +16,7 @@ const LOADER_COPY = {
     retry: "Повторить загрузку",
     reload: "Перезагрузить страницу",
     loading: "Повторная загрузка интерфейса…",
+    storage: "Браузер заблокировал доступ к локальным данным сайта. Проверьте настройки конфиденциальности и повторите попытку.",
   },
   en: {
     title: "The page could not open",
@@ -22,6 +24,7 @@ const LOADER_COPY = {
     retry: "Retry loading",
     reload: "Reload the page",
     loading: "Reloading the interface…",
+    storage: "Your browser blocked access to the site’s local data. Check your privacy settings and try again.",
   },
 } as const;
 
@@ -52,45 +55,58 @@ export default function ScriptLoader() {
     const main = document.getElementById("main");
     const announcer = document.getElementById("announcer");
 
+    const showFailure = (storageBlocked = false) => {
+      if (!active || !main || main.childElementCount > 0) return;
+      const copy = LOADER_COPY[loaderLanguage()];
+      const notice = document.createElement("section");
+      notice.className = "notice";
+      notice.setAttribute("role", "alert");
+      const heading = document.createElement("h1");
+      heading.textContent = copy.title;
+      const description = document.createElement("p");
+      description.textContent = storageBlocked ? copy.storage : copy.detail;
+      const retry = document.createElement("button");
+      retry.className = "button primary";
+      retry.type = "button";
+      retry.textContent = attempt > 1 ? copy.reload : copy.retry;
+      retry.addEventListener("click", () => {
+        if (!active) return;
+        if (attempt > 1) {
+          window.location.reload();
+          return;
+        }
+        main.replaceChildren();
+        main.focus();
+        if (announcer) announcer.textContent = LOADER_COPY[loaderLanguage()].loading;
+        loadApp();
+      });
+      notice.append(heading, description, retry);
+      main.replaceChildren(notice);
+      retry.focus();
+    };
+
     const loadApp = () => {
       if (!active) return;
       appScript?.remove();
+      attempt += 1;
+      // The canonical app reads these keys at module initialization. If
+      // storage access throws, executing /app.js would leave #main blank;
+      // a script onerror does not fire for a module's runtime exception.
+      try {
+        window.localStorage.getItem("sa.lang");
+        window.localStorage.getItem("sa.ukSpelling");
+      } catch {
+        showFailure(true);
+        return;
+      }
       const script = document.createElement("script");
       script.type = "module";
       // Failed module fetches can be memoized by the browser module map.
       // Each retry must request a fresh URL for the same canonical file.
-      script.src = attempt === 0 ? "/app.js" : `/app.js?sa-retry=${attempt}`;
-      attempt += 1;
+      script.src = attempt === 1 ? "/app.js" : `/app.js?sa-retry=${attempt - 1}`;
       script.onerror = () => {
-        if (!active || appScript !== script || !main || main.childElementCount > 0) return;
-        const copy = LOADER_COPY[loaderLanguage()];
-        const notice = document.createElement("section");
-        notice.className = "notice";
-        notice.setAttribute("role", "alert");
-        const heading = document.createElement("h1");
-        heading.textContent = copy.title;
-        const description = document.createElement("p");
-        description.textContent = copy.detail;
-        const retry = document.createElement("button");
-        retry.className = "button primary";
-        retry.type = "button";
-        // Retrying the top-level URL cannot refresh a failed imported module.
-        // A full navigation resets the document-scoped browser module map.
-        retry.textContent = attempt > 1 ? copy.reload : copy.retry;
-        retry.addEventListener("click", () => {
-          if (!active) return;
-          if (attempt > 1) {
-            window.location.reload();
-            return;
-          }
-          main.replaceChildren();
-          main.focus();
-          if (announcer) announcer.textContent = LOADER_COPY[loaderLanguage()].loading;
-          loadApp();
-        });
-        notice.append(heading, description, retry);
-        main.replaceChildren(notice);
-        retry.focus();
+        if (!active || appScript !== script) return;
+        showFailure();
       };
       appScript = script;
       document.body.appendChild(script);

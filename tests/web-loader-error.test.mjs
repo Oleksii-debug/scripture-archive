@@ -26,24 +26,34 @@ function boot(lang = 'uk', blockedStorage = false, query = '') {
   const scripts = [];
   body.appendChild = function(script) { scripts.push(script); };
   const document = {
+    baseURI: 'https://sa06.test/',
     body,
     createElement: element,
     getElementById(id) { return ({main, announcer, language: {value: lang}})[id] || null; },
   };
   let reloads = 0;
   const storage = {blocked: blockedStorage};
-  const window = {localStorage: {getItem() { if (storage.blocked) throw Error('denied'); return lang; }}, location: {search: query, reload() {reloads += 1;}}};
+  const eventListeners = new Map();
+  const window = {
+    localStorage: {getItem() { if (storage.blocked) throw Error('denied'); return lang; }},
+    location: {search: query, href: `https://sa06.test/${query}`, origin: 'https://sa06.test', reload() {reloads += 1;}},
+    addEventListener(type, handler) {eventListeners.set(type, handler);},
+    removeEventListener(type, handler) {if (eventListeners.get(type) === handler) eventListeners.delete(type);},
+  };
   let cleanup;
   const code = ts.transpileModule(fs.readFileSync(new URL('../app/script-loader.tsx', import.meta.url), 'utf8'), {
     compilerOptions: {module: ts.ModuleKind.CommonJS, target:ts.ScriptTarget.ES2022},
   }).outputText;
   const exports = {};
-  vm.runInNewContext(code, {exports, document, window, URLSearchParams, require(name) {
+  vm.runInNewContext(code, {exports, document, window, URL, URLSearchParams, require(name) {
     if(name !== 'react') throw Error(`Unexpected import: ${name}`);
     return {useEffect(fn) {cleanup = fn();}};
   }}, {filename:'app/script-loader.tsx'});
   exports.default();
-  return {main, announcer, scripts, cleanup: () => cleanup(), reloadCalls: () => reloads, unblockStorage: () => {storage.blocked = false;}};
+  return {main, announcer, scripts, cleanup: () => cleanup(), reloadCalls: () => reloads,
+    dispatchError: (filename) => eventListeners.get('error')?.({filename}),
+    hasErrorListener: () => eventListeners.has('error'),
+    unblockStorage: () => {storage.blocked = false;}};
 }
 
 for (const [lang, title, retryText, reloadText] of [
@@ -236,5 +246,42 @@ for (const [lang, firstMessage, retryMessage] of [
     assert.equal(page.announcer.textContent, 'Canonical reader route ready');
     assert.equal(page.main.attributes['aria-busy'], 'false');
     page.cleanup();
+  });
+}
+
+// Chromium fires a global ErrorEvent before the module script's load event
+// when /app.js downloads with HTTP 200 but throws during ESM evaluation.
+// A blank #main must expose a real recovery action instead of silently idling.
+for (const [lang, title] of [
+  ['uk', 'Не вдалося відкрити сторінку'],
+  ['ru', 'Не удалось открыть страницу'],
+  ['en', 'The page could not open'],
+]) {
+  test(`${lang} evaluation error on current canonical app.js offers recovery despite onload`, () => {
+    const page = boot(lang);
+    assert.equal(page.hasErrorListener(), true);
+    page.dispatchError('https://sa06.test/analytics.js');
+    page.dispatchError('https://foreign.example/app.js');
+    assert.equal(page.main.childElementCount, 0, 'unrelated errors must not be presented as app failures');
+    const first = page.scripts.at(-1);
+    page.dispatchError('https://sa06.test/app.js');
+    first.onload(); // Browser sends onload even after ESM evaluation throws.
+    assert.equal(page.main.attributes['aria-busy'], 'false');
+    const notice = page.main.childNodes[0];
+    assert.equal(notice.attributes.role, 'alert');
+    assert.equal(notice.childNodes[0].textContent, title);
+    const retry = notice.childNodes[2];
+    assert.equal(retry.focused, true);
+    retry.click();
+    const next = page.scripts.at(-1);
+    assert.equal(next.src, '/app.js?sa-retry=1');
+    page.dispatchError('https://sa06.test/app.js'); // stale first attempt
+    assert.equal(page.main.childElementCount, 0, 'late errors from earlier attempt must be ignored');
+    next.onload();
+    assert.equal(page.main.attributes['aria-busy'], 'false');
+    page.cleanup();
+    assert.equal(page.hasErrorListener(), false, 'cleanup must remove global listener');
+    page.dispatchError('https://sa06.test/app.js?sa-retry=1');
+    assert.equal(page.main.childElementCount, 0, 'unmounted loader stays inactive');
   });
 }

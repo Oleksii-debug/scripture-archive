@@ -2485,9 +2485,7 @@ async function renderReader(parts) {
     meta.chapters,
   );
   const groupId = parts[3] === "group" ? parts[4] || "" : "";
-  state.reader = { book: meta.code, chapter };
   state.currentReader = { book: meta.code, chapter };
-  localStorage.setItem("sa.reader", JSON.stringify(state.reader));
   try {
     const attemptState = await attemptRequest("chapter", "GET", undefined, `book=${encodeURIComponent(meta.code)}&chapter=${chapter}&groupId=${encodeURIComponent(groupId)}`);
     if (attemptState.active) {
@@ -2502,6 +2500,9 @@ async function renderReader(parts) {
   const book = await getBook(meta.code);
   const verses = book.chapters[chapter - 1];
   const selectedVerse = readerVerseFromUrl(location.href, verses.length);
+  // Do not replace the last readable bookmark when book loading fails.
+  state.reader = { book: meta.code, chapter };
+  localStorage.setItem("sa.reader", JSON.stringify(state.reader));
   const edition = localEditionMetadata(catalog),
     editionInfo = editionDetails(edition, meta.code);
   const options = books

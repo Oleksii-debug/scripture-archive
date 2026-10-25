@@ -3324,7 +3324,7 @@ async function route() {
     window.scrollTo({ top: 0, behavior: "instant" });
   } catch (error) {
     console.error(error);
-    shell(`<div class="notice error">${t("errorLoad")}</div>`);
+    shell(`<div class="notice error" role="alert">${t("errorLoad")}</div>`);
   }
 }
 

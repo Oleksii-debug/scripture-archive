@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Home from "../page";
 
-const PUBLIC_ROUTES = new Set(["reader", "campaigns", "missions", "groups", "support", "about", "privacy", "atlas", "dossiers", "builder"]);
+const PUBLIC_ROUTES = new Set(["reader", "campaigns", "missions", "groups", "support", "help", "about", "privacy", "atlas", "dossiers", "builder"]);
 const PRIVATE_ROUTES = new Set(["account", "mission", "progress", "editor"]);
 const ROUTE_METADATA: Record<string, { title: string; description: string }> = {
   reader: { title: "Біблійна читальня", description: "Читайте доступні біблійні тексти з чітким зазначенням видання, джерела та умов використання." },
@@ -10,6 +10,7 @@ const ROUTE_METADATA: Record<string, { title: string; description: string }> = {
   missions: { title: "Місії", description: "Навчальні місії Scripture Archive для уважного читання й роботи з біблійним текстом." },
   groups: { title: "Домашні групи", description: "Спільне читання, обговорення та прозорий навчальний прогрес домашніх груп." },
   support: { title: "Підтримати Scripture Archive", description: "Офіційна сторінка підтримки розвитку Scripture Archive." },
+  help: { title: "Служба підтримки Scripture Archive", description: "Звернення до команди, повідомлення про помилки та пропозиції щодо покращення Scripture Archive." },
   about: { title: "Про Scripture Archive", description: "Мета платформи, принципи роботи з джерелами та відомості про засновника." },
   privacy: { title: "Приватність", description: "Як Scripture Archive захищає облікові записи, профіль, прогрес і аналітичні дані." },
   atlas: { title: "Атлас розвитку", description: "Навчальні напрями та поступ у роботі з біблійним текстом." },

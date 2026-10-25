@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { EDITIONS } from '../public/editions.js';
-import { readerVerseHref, focusRequestedVerse, focusReaderRouteVerse, readerChapterNumber } from '../public/reader-verse-links.js';
+import { readerVerseHref, focusRequestedVerse, focusReaderRouteVerse, readerChapterNumber, readerCanonicalPath } from '../public/reader-verse-links.js';
 
 test('search reference links identify an exact book, chapter, and verse', () => {
   assert.equal(readerVerseHref('GEN', 1, 3), '/reader/GEN/1?verse=3');
@@ -166,4 +166,50 @@ test('verse focus must match the actual rendered book/chapter, not a clamped URI
     'Ohiienko four-chapter Joel retains its own valid reference');
   assert.equal(hits.filter(value => value === 'focus').length, 2);
   assert.equal(focusReaderRouteVerse('?verse=1&verse=2', root, ['reader', 'JOL', '3'], historicalJoel), false);
+});
+
+
+test('chapter and book URLs already matching the visible reader are not rewritten', () => {
+  for (const [book, chapter] of [['GEN', 1], ['JHN', 3], ['PSA', 150], ['JOL', 4]]) {
+    assert.equal(readerCanonicalPath(['reader', book, String(chapter)], { book, chapter }), null);
+  }
+  assert.equal(readerCanonicalPath(['reader', 'GEN', '1', 'group', 'alpha'], { book: 'GEN', chapter: 1 }, 'alpha'), null);
+});
+
+test('fallback, malformed and cross-edition chapter routes produce the displayed chapter URL', () => {
+  const historicJoel = { book: 'JOL', chapter: readerChapterNumber('4', 3) };
+  assert.equal(readerCanonicalPath(['reader', 'JOL', '4'], historicJoel), '/reader/JOL/3');
+  assert.equal(readerCanonicalPath(['reader', 'JOL', '4', 'group', 'a b'], historicJoel, 'a b'), '/reader/JOL/3/group/a%20b');
+  assert.equal(readerCanonicalPath(['reader', 'JOL', '1.5'], { book: 'JOL', chapter: 1 }), '/reader/JOL/1');
+  assert.equal(readerCanonicalPath(['reader', 'JOL'], { book: 'JOL', chapter: 1 }), '/reader/JOL/1');
+  assert.equal(readerCanonicalPath(['reader', 'jol', '1'], { book: 'JOL', chapter: 1 }), '/reader/JOL/1');
+  assert.equal(readerCanonicalPath(['reader', 'BOGUS', '12'], { book: 'GEN', chapter: 1 }), '/reader/GEN/1');
+  assert.equal(readerCanonicalPath(['reader', 'JOL', '4'], { book: 'JOL', chapter: 4 }), null,
+    'Ohiienko Joel chapter four is valid and must not be rewritten');
+});
+
+test('reader path normalization refuses invalid state and cannot focus a different verse', () => {
+  for (const [parts, state] of [
+    [['reader', 'GEN', '1'], { book: 'GEN', chapter: 0 }],
+    [['reader', 'GEN', '1'], { book: 'GEN', chapter: 1.5 }],
+    [['reader', 'GEN', '1'], { book: '../', chapter: 1 }],
+    [['reader', 'GEN', '1'], { book: 'GEN', chapter: Number.MAX_SAFE_INTEGER + 1 }],
+    [['home'], { book: 'GEN', chapter: 1 }],
+    [['reader'], { book: 'GEN', chapter: 1 }],
+    [null, { book: 'GEN', chapter: 1 }],
+  ]) assert.equal(readerCanonicalPath(parts, state), null);
+  let calls = 0;
+  const root = { querySelector() { calls += 1; return { focus() { calls += 1; }, scrollIntoView() { calls += 1; } }; } };
+  const state = { book: 'JOL', chapter: 3 };
+  assert.equal(readerCanonicalPath(['reader', 'JOL', '4'], state), '/reader/JOL/3');
+  assert.equal(focusReaderRouteVerse('?verse=1', root, ['reader', 'JOL', '4'], state), false);
+  assert.equal(calls, 0, 'wrong-chapter URL must never focus the displayed last chapter');
+  assert.equal(focusReaderRouteVerse('?verse=1', root, ['reader', 'JOL', '3'], state), true);
+  assert.equal(calls, 3);
+});
+
+test('production reader replaces a stale chapter address only after fetching the actual Bible chapter', async () => {
+  const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  assert.match(app, /const verses = book\.chapters\[chapter - 1\];\s+const canonicalReaderPath = readerCanonicalPath\(parts, state\.reader, groupId\);/);
+  assert.match(app, /if \(canonicalReaderPath\) window\.history\.replaceState\(null, "", canonicalReaderPath\);/);
 });

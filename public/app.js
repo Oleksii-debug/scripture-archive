@@ -11,6 +11,7 @@ const I18N = {
     missions: "Місії",
     atlas: "Атлас розвитку",
     support: "Підтримати",
+    help: "Служба підтримки",
     about: "Про проєкт",
     language: "Мова",
     footerLine: "Читання, доказ і відповідальний висновок.",
@@ -132,6 +133,7 @@ const I18N = {
     missions: "Миссии",
     atlas: "Атлас развития",
     support: "Поддержать",
+    help: "Служба поддержки",
     about: "О проекте",
     language: "Язык",
     footerLine: "Чтение, доказательство и ответственный вывод.",
@@ -253,6 +255,7 @@ const I18N = {
     missions: "Missions",
     atlas: "Development atlas",
     support: "Support",
+    help: "Help centre",
     about: "About",
     language: "Language",
     footerLine: "Reading, evidence, and responsible conclusions.",
@@ -1950,9 +1953,9 @@ const nav = document.querySelector("#primary-nav");
 let timerInterval;
 
 const PAGE_TITLES = {
-  uk: { home:"Архів Писання", reader:"Біблійна читальня", campaigns:"Навчальні кампанії", missions:"Місії", groups:"Домашні групи", support:"Підтримати", about:"Про проєкт", privacy:"Приватність", atlas:"Атлас розвитку", dossiers:"Дослідницькі досьє", builder:"Конструктор", account:"Обліковий запис", progress:"Мій прогрес", mission:"Завдання", editor:"Редактор" },
-  ru: { home:"Архив Писания", reader:"Библейская читальня", campaigns:"Учебные кампании", missions:"Миссии", groups:"Домашние группы", support:"Поддержать", about:"О проекте", privacy:"Приватность", atlas:"Атлас развития", dossiers:"Исследовательские досье", builder:"Конструктор", account:"Учётная запись", progress:"Мой прогресс", mission:"Задания", editor:"Редактор" },
-  en: { home:"Scripture Archive", reader:"Bible reader", campaigns:"Learning campaigns", missions:"Missions", groups:"Home groups", support:"Support", about:"About", privacy:"Privacy", atlas:"Learning atlas", dossiers:"Research dossiers", builder:"Builder", account:"Account", progress:"My progress", mission:"Assessment", editor:"Editor" },
+  uk: { home:"Архів Писання", reader:"Біблійна читальня", campaigns:"Навчальні кампанії", missions:"Місії", groups:"Домашні групи", support:"Підтримати", help:"Служба підтримки", about:"Про проєкт", privacy:"Приватність", atlas:"Атлас розвитку", dossiers:"Дослідницькі досьє", builder:"Конструктор", account:"Обліковий запис", progress:"Мій прогрес", mission:"Завдання", editor:"Редактор" },
+  ru: { home:"Архив Писания", reader:"Библейская читальня", campaigns:"Учебные кампании", missions:"Миссии", groups:"Домашние группы", support:"Поддержать", help:"Служба поддержки", about:"О проекте", privacy:"Приватность", atlas:"Атлас развития", dossiers:"Исследовательские досье", builder:"Конструктор", account:"Учётная запись", progress:"Мой прогресс", mission:"Задания", editor:"Редактор" },
+  en: { home:"Scripture Archive", reader:"Bible reader", campaigns:"Learning campaigns", missions:"Missions", groups:"Home groups", support:"Support", help:"Help centre", about:"About", privacy:"Privacy", atlas:"Learning atlas", dossiers:"Research dossiers", builder:"Builder", account:"Account", progress:"My progress", mission:"Assessment", editor:"Editor" },
 };
 const PRIVATE_ROUTES = new Set(["account", "mission", "progress", "editor"]);
 
@@ -2916,6 +2919,23 @@ function renderSupport() {
   main.innerHTML=supportSection(state.lang);
   main.focus({preventScroll:true});
 }
+function renderHelp() {
+  setActiveNav("help");
+  const copy = {
+    uk: {eye:"Зв’язок із командою",title:"Служба підтримки",lead:"Опишіть питання, повідомте про помилку або запропонуйте покращення. Ми відповімо на електронну адресу, пов’язану з вашим зверненням.",email:"Електронна адреса",subject:"Тема звернення",message:"Повідомлення",placeholder:"Опишіть ситуацію, очікуваний результат і кроки, після яких виникла проблема.",files:"Додати файли",fileHelp:"До трьох файлів: PDF, DOCX, JPG, PNG, WEBP або TXT. Один файл — до 1,5 МБ, разом — до 4 МБ.",privacy:"Я погоджуюся на обробку наданих даних для відповіді на звернення.",send:"Надіслати звернення",sent:"Звернення прийнято. Відповідь надійде на вашу електронну адресу.",error:"Не вдалося надіслати звернення. Перевірте поля й файли та спробуйте ще раз.",signed:"Відповідь надійде на адресу вашого облікового запису:"},
+    ru: {eye:"Связь с командой",title:"Служба поддержки",lead:"Опишите вопрос, сообщите об ошибке или предложите улучшение. Мы ответим на электронный адрес, связанный с обращением.",email:"Электронный адрес",subject:"Тема обращения",message:"Сообщение",placeholder:"Опишите ситуацию, ожидаемый результат и действия, после которых возникла проблема.",files:"Добавить файлы",fileHelp:"До трёх файлов: PDF, DOCX, JPG, PNG, WEBP или TXT. Один файл — до 1,5 МБ, вместе — до 4 МБ.",privacy:"Я согласен на обработку предоставленных данных для ответа на обращение.",send:"Отправить обращение",sent:"Обращение принято. Ответ придёт на ваш электронный адрес.",error:"Не удалось отправить обращение. Проверьте поля и файлы и повторите попытку.",signed:"Ответ придёт на адрес вашей учётной записи:"},
+    en: {eye:"Contact the team",title:"Help centre",lead:"Ask a question, report a problem, or suggest an improvement. We will reply to the email address connected with your request.",email:"Email address",subject:"Subject",message:"Message",placeholder:"Describe what happened, what you expected, and the steps that led to the problem.",files:"Attach files",fileHelp:"Up to three PDF, DOCX, JPG, PNG, WEBP, or TXT files. Maximum 1.5 MB per file and 4 MB in total.",privacy:"I agree that the information provided may be processed to answer this request.",send:"Send request",sent:"Your request has been received. We will reply by email.",error:"The request could not be sent. Check the fields and files, then try again.",signed:"We will reply to your account email:"},
+  }[state.lang];
+  shell(`<section class="help-centre"><div class="section-head"><div><p class="eyebrow">${copy.eye}</p><h1>${copy.title}</h1></div><p>${copy.lead}</p></div><div class="help-grid"><form id="help-form" class="account-form card" enctype="multipart/form-data">${state.user?`<p class="help-account"><span>${copy.signed}</span><strong>${esc(state.user.email)}</strong></p>`:`<label class="account-field"><span>${copy.email}</span><input name="email" type="email" autocomplete="email" maxlength="254" required></label>`}<label class="account-field"><span>${copy.subject}</span><input name="subject" maxlength="160" required></label><label class="account-field"><span>${copy.message}</span><textarea name="message" rows="11" maxlength="6000" placeholder="${copy.placeholder}" required></textarea></label><label class="account-field file-editor"><span>${copy.files}</span><input name="files" type="file" multiple accept=".pdf,.docx,.jpg,.jpeg,.png,.webp,.txt"><small>${copy.fileHelp}</small></label><label class="account-check"><input name="acceptPrivacy" type="checkbox" value="yes" required><span>${copy.privacy} <a href="/privacy">${t("privacy")}</a></span></label><button class="button primary" type="submit">${copy.send}</button><p id="help-state" role="status" aria-live="polite"></p></form><aside class="help-aside" aria-hidden="true"><span class="help-line"></span><p>Scripture Archive</p></aside></div></section>`);
+  document.querySelector("#help-form").onsubmit=async event=>{
+    event.preventDefault();
+    const form=event.currentTarget,status=document.querySelector("#help-state"),button=form.querySelector("button[type=submit]");
+    const data=new FormData(form); data.set("locale",state.lang);
+    button.disabled=true; status.textContent="";
+    try{const response=await fetch("/api/help",{method:"POST",body:data});if(!response.ok)throw Error(String(response.status));form.reset();status.textContent=copy.sent;window.saAnalytics?.track("support_click",{destination:"help_request"})}
+    catch{status.textContent=copy.error}finally{button.disabled=false}
+  };
+}
 async function renderAbout() {
   setActiveNav("about");
   const catalog = await getCatalog(),
@@ -3291,6 +3311,7 @@ async function route() {
     else if (["home-groups", "live", "campaigns", "dossiers", "builder", "progress", "about"].includes(name)) await renderWorkspace(name==='home-groups'?'live':name,{state,t,esc,shell,getMission,setActiveNav,loadJSON,announce,play});
     else if (name === "atlas") renderAtlas();
     else if (name === "support") renderSupport();
+    else if (name === "help") renderHelp();
     else if (name === "about") await renderAbout();
     else if (name === "privacy") renderPrivacy();
     else if (name === "account") renderAccount();
@@ -3340,3 +3361,5 @@ Promise.all([getCMS(), getSession()]).finally(async () => {
   setStaticI18n();
   route();
 });
+
+

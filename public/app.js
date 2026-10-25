@@ -6,6 +6,9 @@ import {EDITIONS, editionCopy, selectedEdition, editionUrl, editionSelect} from 
 const I18N = {
   uk: {
     brandSub: "Архів Писання",
+    brandHome: "Scripture Archive — головна",
+    primaryNavigation: "Основна навігація",
+    skipToContent: "Перейти до основного вмісту",
     menu: "Меню",
     reader: "Читальня",
     missions: "Місії",
@@ -129,6 +132,9 @@ const I18N = {
   },
   ru: {
     brandSub: "Архив Писания",
+    brandHome: "Scripture Archive — главная",
+    primaryNavigation: "Основная навигация",
+    skipToContent: "Перейти к основному содержимому",
     menu: "Меню",
     reader: "Читальня",
     missions: "Миссии",
@@ -252,6 +258,9 @@ const I18N = {
   },
   en: {
     brandSub: "Scripture Archive",
+    brandHome: "Scripture Archive — home",
+    primaryNavigation: "Primary navigation",
+    skipToContent: "Skip to main content",
     menu: "Menu",
     reader: "Reader",
     missions: "Missions",
@@ -786,17 +795,22 @@ const GROUP_COPY = {
     meetingSaved: "Зустріч збережено.",
     joined: "Ви приєдналися до групи.",
     groupError: "Не вдалося зберегти. Перевірте поля й спробуйте ще раз.",
-    timerTitle: "Час особистого читання",
+    timerTitle: "Таймер особистого читання",
     timerIntro:
-      "Встановіть будь-яку тривалість від 1 хвилини до 168 годин. Значення 0 означає читання без ліміту.",
-    minutes: "Хвилини",
+      "Таймер допомагає запланувати читання: він відраховує вибраний час і повідомляє про завершення сесії. Введіть кількість хвилин від 1 до 10080 або 0 для читання без обмеження.",
+    minutes: "Тривалість у хвилинах",
     noLimit: "Без ліміту",
     timerStart: "Почати",
     timerPause: "Пауза",
     timerReset: "Скинути",
+    timerCountdown: "Залишилося часу",
+    timerStarted: "Відлік часу розпочато.",
+    timerStartedUnlimited: "Сесію читання розпочато без обмеження часу.",
+    timerPaused: "Відлік часу призупинено.",
+    timerResetDone: "Таймер скинуто.",
     timerActive: "Сесія триває без обмеження часу.",
     timerDone:
-      "Час завершився. Зробіть паузу або продовжуйте читати у власному ритмі.",
+      "Встановлений час завершився. Ви можете завершити читання або продовжити у власному ритмі.",
   },
   ru: {
     groups: "Домашние группы",
@@ -872,17 +886,22 @@ const GROUP_COPY = {
     meetingSaved: "Встреча сохранена.",
     joined: "Вы присоединились к группе.",
     groupError: "Не удалось сохранить. Проверьте поля и попробуйте снова.",
-    timerTitle: "Время личного чтения",
+    timerTitle: "Таймер личного чтения",
     timerIntro:
-      "Установите любую длительность от 1 минуты до 168 часов. Значение 0 означает чтение без лимита.",
-    minutes: "Минуты",
+      "Таймер помогает запланировать чтение: он отсчитывает выбранное время и сообщает о завершении сессии. Введите количество минут от 1 до 10080 или 0 для чтения без ограничения.",
+    minutes: "Продолжительность в минутах",
     noLimit: "Без лимита",
     timerStart: "Начать",
     timerPause: "Пауза",
     timerReset: "Сбросить",
+    timerCountdown: "Осталось времени",
+    timerStarted: "Отсчёт времени начался.",
+    timerStartedUnlimited: "Сессия чтения началась без ограничения времени.",
+    timerPaused: "Отсчёт времени приостановлен.",
+    timerResetDone: "Таймер сброшен.",
     timerActive: "Сессия идёт без ограничения времени.",
     timerDone:
-      "Время закончилось. Сделайте паузу или продолжайте читать в своём ритме.",
+      "Установленное время закончилось. Вы можете завершить чтение или продолжить в своём ритме.",
   },
   en: {
     groups: "Home groups",
@@ -958,16 +977,21 @@ const GROUP_COPY = {
     meetingSaved: "Gathering saved.",
     joined: "You joined the group.",
     groupError: "Could not save. Check the fields and try again.",
-    timerTitle: "Personal reading time",
+    timerTitle: "Personal reading timer",
     timerIntro:
-      "Choose any duration from 1 minute to 168 hours. Set 0 for no time limit.",
-    minutes: "Minutes",
+      "Use this timer to plan a reading session. It counts down the selected time and announces when the session ends. Enter 1 to 10080 minutes, or 0 for no time limit.",
+    minutes: "Duration in minutes",
     noLimit: "No limit",
     timerStart: "Start",
     timerPause: "Pause",
     timerReset: "Reset",
+    timerCountdown: "Time remaining",
+    timerStarted: "The countdown has started.",
+    timerStartedUnlimited: "The reading session has started with no time limit.",
+    timerPaused: "The countdown is paused.",
+    timerResetDone: "The timer has been reset.",
     timerActive: "This session has no time limit.",
-    timerDone: "Time is up. Pause or keep reading at your own pace.",
+    timerDone: "The selected time has ended. You can finish the session or continue reading at your own pace.",
   },
 };
 Object.assign(GROUP_COPY.uk, {
@@ -1956,6 +1980,19 @@ const nav = document.querySelector("#primary-nav");
 let timerInterval;
 let communityRefreshInterval;
 let communityOwnerRefreshInterval;
+let pendingFocusId = null;
+
+function applyRenderFocus() {
+  if (pendingFocusId) {
+    const focusId = pendingFocusId;
+    pendingFocusId = null;
+    requestAnimationFrame(() =>
+      document.getElementById(focusId)?.focus({ preventScroll: true }),
+    );
+    return;
+  }
+  main.focus({ preventScroll: true });
+}
 
 const PAGE_TITLES = {
   uk: { home:"Архів Писання", reader:"Біблійна читальня", campaigns:"Навчальні кампанії", missions:"Місії", groups:"Домашні групи", community:"Спільнота", support:"Підтримати", help:"Служба підтримки", about:"Про проєкт", privacy:"Приватність", atlas:"Атлас розвитку", dossiers:"Дослідницькі досьє", builder:"Конструктор", account:"Обліковий запис", progress:"Мій прогрес", mission:"Завдання", editor:"Редактор" },
@@ -2157,6 +2194,9 @@ function setStaticI18n() {
   document
     .querySelectorAll("[data-i18n]")
     .forEach((el) => (el.textContent = t(el.dataset.i18n)));
+  document
+    .querySelectorAll("[data-i18n-aria-label]")
+    .forEach((el) => el.setAttribute("aria-label", t(el.dataset.i18nAriaLabel)));
   langSelect.value = state.lang;
   document.querySelectorAll('[data-workspace]').forEach(el=>el.textContent=workspaceCopy(state.lang)[el.dataset.workspace]);
 }
@@ -2237,7 +2277,7 @@ function shell(content) {
   main.querySelector('#target-book')?.setAttribute('aria-label',t('book'));
   const progress=main.querySelector('.mission-progress');
   if(progress){progress.setAttribute('aria-label',t('missionTitle'));progress.setAttribute('role','progressbar');progress.setAttribute('aria-valuemin','0');progress.setAttribute('aria-valuemax','100');progress.setAttribute('aria-valuenow',String(Math.round(parseFloat(progress.firstElementChild?.style.width)||0)))}
-  main.focus({ preventScroll: true });
+  applyRenderFocus();
   requestAnimationFrame(() => {
     enhanceGroupForm();
     enhanceGroupsPage();
@@ -2251,7 +2291,7 @@ function statusBadge(kind) {
 async function renderHome() {
   setActiveNav("");
   main.innerHTML=homePage(state.lang,state.user);
-  main.focus({preventScroll:true});
+  applyRenderFocus();
   if(!main.querySelector("[data-community-summary]")){
     const copy={uk:["користувачів платформи","у мережі"],ru:["пользователей платформы","в сети"],en:["platform members","online"]}[state.lang];
     main.querySelector(".hero-copy .lead")?.insertAdjacentHTML("afterend",`<div class="community-counter" data-community-summary><span><strong>—</strong>${copy[0]}</span><span><strong>—</strong>${copy[1]}</span></div>`);
@@ -2322,7 +2362,7 @@ function timerText(timer) {
 }
 function timerCard() {
   const timer = normalizeTimer();
-  return `<div class="card study-timer"><p class="eyebrow">${t("timerTitle")}</p><p>${t("timerIntro")}</p><label class="account-field"><span>${t("minutes")}</span><input id="timer-minutes" type="number" min="0" max="10080" step="1" value="${timer.durationMinutes}"></label><div class="timer-display" id="timer-display" role="timer" aria-live="off">${timerText(timer)}</div><div class="timer-actions"><button class="button primary" id="timer-start" type="button">${timer.running ? t("timerPause") : t("timerStart")}</button><button class="button" id="timer-reset" type="button">${t("timerReset")}</button></div><p class="timer-status" id="timer-status" role="status"></p></div>`;
+  return `<section class="card study-timer" aria-labelledby="reading-timer-title" aria-describedby="reading-timer-help"><h2 class="timer-title" id="reading-timer-title">${t("timerTitle")}</h2><p id="reading-timer-help">${t("timerIntro")}</p><label class="account-field" for="timer-minutes"><span>${t("minutes")}</span><input id="timer-minutes" type="number" min="0" max="10080" step="1" value="${timer.durationMinutes}"></label><div class="timer-display" id="timer-display" role="timer" aria-label="${t("timerCountdown")}" aria-live="off">${timerText(timer)}</div><div class="timer-actions"><button class="button primary" id="timer-start" type="button" aria-controls="timer-display timer-status">${timer.running ? t("timerPause") : t("timerStart")}</button><button class="button" id="timer-reset" type="button" aria-controls="timer-display timer-status">${t("timerReset")}</button></div><p class="timer-status" id="timer-status" role="status" aria-live="polite" aria-atomic="true"></p></section>`;
 }
 function activateTimer() {
   clearInterval(timerInterval);
@@ -2332,9 +2372,11 @@ function activateTimer() {
     reset = document.querySelector("#timer-reset"),
     status = document.querySelector("#timer-status");
   if (!input) return;
+  let completionAnnounced = false;
   const paint = () => {
     const timer = normalizeTimer();
     display.textContent = timerText(timer);
+    display.setAttribute("aria-label", `${t("timerCountdown")}: ${timerText(timer)}`);
     start.textContent = timer.running ? t("timerPause") : t("timerStart");
     input.disabled = timer.running;
     if (
@@ -2342,8 +2384,11 @@ function activateTimer() {
       timer.durationMinutes > 0 &&
       timer.remainingSeconds === 0
     ) {
-      status.textContent = t("timerDone");
-      play("done");
+      if (!completionAnnounced) {
+        completionAnnounced = true;
+        status.textContent = t("timerDone");
+        play("done");
+      }
     }
     saveTimer();
   };
@@ -2358,12 +2403,13 @@ function activateTimer() {
       running: false,
       endsAt: null,
     };
+    completionAnnounced = false;
     status.textContent = "";
     paint();
   };
   start.onclick = () => {
     const timer = normalizeTimer();
-    status.textContent = "";
+    completionAnnounced = false;
     if (timer.running) {
       if (timer.durationMinutes > 0 && timer.endsAt)
         timer.remainingSeconds = Math.max(
@@ -2372,6 +2418,7 @@ function activateTimer() {
         );
       timer.running = false;
       timer.endsAt = null;
+      status.textContent = t("timerPaused");
     } else {
       timer.running = true;
       if (timer.durationMinutes > 0) {
@@ -2379,6 +2426,7 @@ function activateTimer() {
           timer.remainingSeconds = timer.durationMinutes * 60;
         timer.endsAt = Date.now() + timer.remainingSeconds * 1000;
       }
+      status.textContent = timer.durationMinutes === 0 ? t("timerStartedUnlimited") : t("timerStarted");
     }
     paint();
   };
@@ -2393,13 +2441,15 @@ function activateTimer() {
       running: false,
       endsAt: null,
     };
-    status.textContent = "";
+    completionAnnounced = false;
+    status.textContent = t("timerResetDone");
     paint();
   };
   paint();
   timerInterval = setInterval(() => {
+    const wasRunning = Boolean(state.studyTimer?.running);
     const timer = normalizeTimer();
-    if (timer.running && timer.durationMinutes > 0) {
+    if (wasRunning && timer.durationMinutes > 0) {
       paint();
       if (!timer.running) clearInterval(timerInterval);
     }
@@ -2549,7 +2599,7 @@ async function renderReader(parts) {
   if(editionInfo.attribution) document.querySelector('.edition-card').insertAdjacentHTML('beforeend', `<p class="edition-attribution">${esc(editionInfo.attribution)}</p>`);
   if(editionInfo.licenseUrl) document.querySelector('.edition-card').insertAdjacentHTML('beforeend', `<a href="${esc(editionInfo.licenseUrl)}" target="_blank" rel="noreferrer">${esc(editionInfo.license)} ↗</a>`);
   document.querySelector('.toolbar').insertAdjacentHTML('afterbegin',editionSelect(state.lang,esc));
-  document.querySelector('#bible-edition').onchange=e=>{localStorage.setItem(`sa.edition.${state.lang}`,e.target.value);renderReader(parts)};
+  document.querySelector('#bible-edition').onchange=e=>{pendingFocusId='bible-edition';localStorage.setItem(`sa.edition.${state.lang}`,e.target.value);renderReader(parts)};
   if(!chosenEdition.local){document.querySelector('.verses').innerHTML=`<section class="publisher-reading"><p class="lead">${editionText.externalNote}</p><a class="button primary" target="_blank" rel="noreferrer" href="${editionUrl(chosenEdition,meta.code,chapter)}">${editionText.external} ↗</a></section>`;document.querySelector('.chapter-meta').textContent=chosenEdition.title;document.querySelector('.edition-card').innerHTML=`<h2>${t('edition')}</h2><p><strong>${esc(chosenEdition.title)}</strong></p><p>${editionText.whole}</p><a href="${chosenEdition.source}" target="_blank" rel="noreferrer">${t('sourceLink')} ↗</a>`;document.querySelector('#uk-spelling')?.remove();document.querySelector('#book-search').hidden=true;}
   const w=workspaceCopy(state.lang),history=loadJSON('sa.readingHistory',[]),attemptCopy=ATTEMPT_COPY[state.lang],missionManifest=await getMission();
   const alreadyRead=history.some(r=>r.book===meta.code&&r.chapter===chapter);
@@ -2570,13 +2620,13 @@ async function renderReader(parts) {
     .querySelector("#book-select")
     .addEventListener(
       "change",
-      (e) => navigateTo(`/reader/${e.target.value}/1`),
+      (e) => {pendingFocusId='book-select';navigateTo(`/reader/${e.target.value}/1`);},
     );
   document
     .querySelector("#chapter-select")
     .addEventListener(
       "change",
-      (e) => navigateTo(`/reader/${meta.code}/${e.target.value}`),
+      (e) => {pendingFocusId='chapter-select';navigateTo(`/reader/${meta.code}/${e.target.value}`);},
     );
   document.querySelector("#book-search").addEventListener("submit", (e) => {
     e.preventDefault();
@@ -3431,6 +3481,7 @@ async function route() {
 }
 
 langSelect.addEventListener("change", () => {
+  pendingFocusId = "language";
   state.lang = langSelect.value;
   localStorage.setItem("sa.lang", state.lang);
   state.mission = null;
@@ -3463,5 +3514,6 @@ Promise.all([getCMS(), getSession()]).finally(async () => {
   setStaticI18n();
   route();
 });
+
 
 

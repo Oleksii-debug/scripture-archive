@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { EDITIONS } from '../public/editions.js';
-import { readerVerseHref, focusRequestedVerse, readerChapterNumber } from '../public/reader-verse-links.js';
+import { readerVerseHref, focusRequestedVerse, focusReaderRouteVerse, readerChapterNumber } from '../public/reader-verse-links.js';
 
 test('search reference links identify an exact book, chapter, and verse', () => {
   assert.equal(readerVerseHref('GEN', 1, 3), '/reader/GEN/1?verse=3');
@@ -34,7 +34,7 @@ test('invalid, duplicate, absent or overflow verse query cannot focus a target',
 test('reader search and router use verse-reference helpers', async () => {
   const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
   assert.match(app, /readerVerseHref\(meta\.code, r\.chapter, r\.verse\)/);
-  assert.match(app, /if \(name === "reader"\) focusRequestedVerse\(location\.search, main\)/);
+  assert.match(app, /if \(name === "reader"\) focusReaderRouteVerse\(location\.search, main, parts, state\.reader\)/);
 });
 
 test('licensed local editions match catalog metadata and copyrighted alternatives stay external', async () => {
@@ -145,4 +145,25 @@ test('reader chapter routing never indexes a fractional or malformed Bible chapt
 test('production reader reuses the canonical guarded chapter coordinate', async () => {
   const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
   assert.ok(app.includes('readerChapterNumber(parts[2] || state.reader.chapter || 1, meta.chapters)'));
+});
+
+
+test('verse focus must match the actual rendered book/chapter, not a clamped URI', () => {
+  const hits = [];
+  const root = { querySelector(selector) {
+    hits.push(selector);
+    return { focus() { hits.push('focus'); }, scrollIntoView() { hits.push('scroll'); } };
+  } };
+  const historicalJoel = { book: 'JOL', chapter: readerChapterNumber('4', 3) };
+  assert.equal(historicalJoel.chapter, 3);
+  assert.equal(focusReaderRouteVerse('?verse=1', root, ['reader', 'JOL', '4'], historicalJoel), false,
+    'historical three-chapter Joel may not silently focus JOL 3:1 from JOL/4?verse=1');
+  for (const route of [['reader', 'JOL', '1.5'], ['reader', 'JOL', '03'], ['reader', 'GEN', '3'], ['reader', 'JOL']])
+    assert.equal(focusReaderRouteVerse('?verse=1', root, route, historicalJoel), false);
+  assert.deepEqual(hits, [], 'unmatched deep links must not even inspect a verse DOM target');
+  assert.equal(focusReaderRouteVerse('?verse=1', root, ['reader', 'JOL', '3'], historicalJoel), true);
+  assert.equal(focusReaderRouteVerse('?verse=1', root, ['reader', 'JOL', '4'], {book:'JOL',chapter:4}), true,
+    'Ohiienko four-chapter Joel retains its own valid reference');
+  assert.equal(hits.filter(value => value === 'focus').length, 2);
+  assert.equal(focusReaderRouteVerse('?verse=1&verse=2', root, ['reader', 'JOL', '3'], historicalJoel), false);
 });

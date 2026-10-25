@@ -2,7 +2,7 @@ import {renderWorkspace, workspaceCopy} from './workspace.js';
 import {supportSection} from './support.js';
 import {homePage} from './home.js';
 import {EDITIONS, editionCopy, selectedEdition, editionUrl, editionSelect} from './editions.js';
-import {readerVerseHref, focusRequestedVerse, readerChapterNumber} from './reader-verse-links.js';
+import {readerVerseHref, focusReaderRouteVerse, readerChapterNumber} from './reader-verse-links.js';
 
 const I18N = {
   uk: {
@@ -3299,7 +3299,7 @@ async function route() {
     updatePageMetadata(name);
     window.saAnalytics?.track("page_view",{language:state.lang});
     window.scrollTo({ top: 0, behavior: "instant" });
-    if (name === "reader") focusRequestedVerse(location.search, main);
+    if (name === "reader") focusReaderRouteVerse(location.search, main, parts, state.reader);
   } catch (error) {
     console.error(error);
     shell(`<div class="notice error">${t("errorLoad")}</div>`);

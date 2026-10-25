@@ -190,3 +190,43 @@ test('native fragment anchors remain inside the reader instead of navigating hom
     assert.equal(invocations, expectedCount, fragment);
   }
 });
+
+
+test('legacy hash reader references survive delegated clicks while local verse anchors stay native', () => {
+  const start = source.indexOf('document.addEventListener("click", event => {');
+  const closing = '\n}, true);';
+  const end = source.indexOf(closing, start);
+  assert.ok(start >= 0 && end > start, 'existing global link handler missing');
+  let clickHandler;
+  const visits = [], analytics = [];
+  vm.runInNewContext(source.slice(start, end + closing.length), {
+    document: {addEventListener(type, handler, capture) {
+      if (type === 'click' && capture) clickHandler = handler;
+    }},
+    window: {saAnalytics: {track(name, info) {analytics.push([name, info.destination]);}}},
+    location: {origin: 'https://scripture-archive.test', href: 'https://scripture-archive.test/'},
+    URL,
+    navigateTo: path => visits.push(path),
+  });
+  assert.equal(typeof clickHandler, 'function');
+
+  const openLink = (href) => {
+    let prevented = false;
+    const anchor = {href, target: '', hasAttribute() {return false;}};
+    clickHandler({
+      target: {closest() {return anchor;}},
+      defaultPrevented: false, button: 0,
+      metaKey: false, ctrlKey: false, shiftKey: false, altKey: false,
+      preventDefault() {prevented = true;},
+    });
+    return prevented;
+  };
+  assert.equal(openLink('https://scripture-archive.test/#/reader/JHN/3'), true);
+  assert.equal(visits.at(-1), '/#/reader/JHN/3', 'the old #/reader link must not open home');
+  assert.deepEqual(analytics.at(-1), ['navigation_click', 'reader']);
+  assert.equal(openLink('https://scripture-archive.test/reader/JHN/3?verse=16'), true);
+  assert.equal(visits.at(-1), '/reader/JHN/3?verse=16', 'canonical verse reference stays intact');
+  const count = visits.length;
+  assert.equal(openLink('https://scripture-archive.test/reader/JHN/3#v16'), false);
+  assert.equal(visits.length, count, 'native in-chapter fragment must not be intercepted');
+});

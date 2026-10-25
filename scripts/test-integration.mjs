@@ -22,7 +22,11 @@ const port = server.address().port;
 await new Promise(resolve => server.close(resolve));
 const base = `http://127.0.0.1:${port}`;
 const wrangler = ["--import", "./scripts/sites-env.mjs", "./node_modules/wrangler/bin/wrangler.js"];
-const options = { cwd: root, env: { ...process.env, WRANGLER_SEND_METRICS: "false" } };
+const options = { cwd: root, env: { ...process.env, WRANGLER_SEND_METRICS: "false",
+  WRANGLER_REGISTRY_PATH: path.join(temporary,"registry"),
+  MINIFLARE_REGISTRY_PATH: path.join(temporary,"miniflare"),
+  WRANGLER_LOG_PATH: path.join(temporary,"logs"),
+} };
 function run(args, extra = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, args, { ...options, ...extra, stdio: "inherit" });
@@ -35,6 +39,7 @@ let logs = "";
 try {
   await run([...wrangler, "d1", "migrations", "apply", "DB", "--local", "--persist-to", state, "--config", migrationConfig]);
   worker = spawn(process.execPath, [...wrangler, "dev", "--local", "--persist-to", state,
+    "--name", `scripture-integration-${port}`,
     "--config", builtConfig, "--ip", "127.0.0.1", "--port", String(port), "--inspector-port", "0",
     "--var", "AUTH_TEST_MODE:1", "--var", `APP_BASE_URL:${base}`], { ...options, stdio: ["ignore", "pipe", "pipe"] });
   worker.stdout.on("data", data => { logs = (logs + data).slice(-12000); });
@@ -54,6 +59,9 @@ try {
     { env: { ...options.env, SCRIPTURE_TEST_URL: base } });
   await run(["--experimental-strip-types", "scripts/test-learning-agent.mjs", "--local-test", "--smoke"],
     { env: { ...options.env, COMMUNITY_ORIGIN: base } });
+} catch(error) {
+  console.error(logs.replace(/([?&](?:token|reset)=)[^&\s]+/g,"$1[redacted]").replace(/(sa_(?:agent|session)=)[^;\s]+/g,"$1[redacted]"));
+  throw error;
 } finally {
   if (worker && worker.exitCode === null) {
     worker.kill("SIGTERM");

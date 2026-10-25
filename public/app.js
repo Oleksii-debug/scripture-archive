@@ -124,6 +124,7 @@ const I18N = {
     accessBody:
       "Основні маршрути працюють із клавіатури, мають зрозумілі заголовки, помітний фокус і текстові повідомлення про результат дії.",
     errorLoad: "Не вдалося завантажити дані. Спробуйте оновити сторінку.",
+    readerMissionUnavailable: "Завдання тимчасово недоступні. Читання та пошук доступні.",
   },
   ru: {
     brandSub: "Архив Писания",
@@ -245,6 +246,7 @@ const I18N = {
     accessBody:
       "Основные маршруты работают с клавиатуры, имеют понятные заголовки, заметный фокус и текстовые сообщения о результате действия.",
     errorLoad: "Не удалось загрузить данные. Обновите страницу.",
+    readerMissionUnavailable: "Задания временно недоступны. Чтение и поиск доступны.",
   },
   en: {
     brandSub: "Scripture Archive",
@@ -366,6 +368,7 @@ const I18N = {
     accessBody:
       "Core routes work from the keyboard and provide clear headings, visible focus, and textual feedback for every important action.",
     errorLoad: "The data could not be loaded. Please refresh the page.",
+    readerMissionUnavailable: "Exercises are temporarily unavailable. Reading and search are still available.",
   },
 };
 
@@ -2217,6 +2220,16 @@ async function getMission() {
   });
   return state.mission;
 }
+
+// The Bible text is public content; a temporary quiz-manifest outage must not hide it.
+async function readerMissionManifest() {
+  try {
+    return await getMission();
+  } catch (error) {
+    console.warn("Reader missions unavailable", error);
+    return null;
+  }
+}
 function setActiveNav(route) {
   document
     .querySelectorAll("[data-route]")
@@ -2511,10 +2524,16 @@ async function renderReader(parts) {
   document.querySelector('.toolbar').insertAdjacentHTML('afterbegin',editionSelect(state.lang,esc));
   document.querySelector('#bible-edition').onchange=e=>{localStorage.setItem(`sa.edition.${state.lang}`,e.target.value);renderReader(parts)};
   if(!chosenEdition.local){document.querySelector('.verses').innerHTML=`<section class="publisher-reading"><p class="lead">${editionText.externalNote}</p><a class="button primary" target="_blank" rel="noreferrer" href="${editionUrl(chosenEdition,meta.code,chapter)}">${editionText.external} ↗</a></section>`;document.querySelector('.chapter-meta').textContent=chosenEdition.title;document.querySelector('.edition-card').innerHTML=`<h2>${t('edition')}</h2><p><strong>${esc(chosenEdition.title)}</strong></p><p>${editionText.whole}</p><a href="${chosenEdition.source}" target="_blank" rel="noreferrer">${t('sourceLink')} ↗</a>`;document.querySelector('#uk-spelling')?.remove();document.querySelector('#book-search').hidden=true;}
-  const w=workspaceCopy(state.lang),history=loadJSON('sa.readingHistory',[]),attemptCopy=ATTEMPT_COPY[state.lang],missionManifest=await getMission();
+  const w=workspaceCopy(state.lang),history=loadJSON('sa.readingHistory',[]),attemptCopy=ATTEMPT_COPY[state.lang],missionManifest=await readerMissionManifest();
   const alreadyRead=history.some(r=>r.book===meta.code&&r.chapter===chapter);
-  const hasTasks=missionManifest.chapters?.some(item=>item.book===meta.code&&Number(item.chapter)===chapter);
+  const hasTasks=missionManifest?.chapters?.some(item=>item.book===meta.code&&Number(item.chapter)===chapter);
   document.querySelector('.chapter-nav').insertAdjacentHTML('beforebegin',`<div class="read-completion"><button class="button primary" id="mark-read">${attemptCopy.finishReading}</button>${hasTasks?`<button class="button" id="start-questions" disabled>${attemptCopy.transition}</button>`:""}<a href="/progress">${w.progress}</a></div>${hasTasks?`<dialog id="attempt-dialog" class="attempt-dialog" aria-labelledby="attempt-dialog-title"><form method="dialog"><h2 id="attempt-dialog-title">${attemptCopy.prepareTitle}</h2><p>${attemptCopy.prepareText}</p><ul>${attemptCopy.prepareRules.map(rule=>`<li>${rule}</li>`).join("")}</ul><div class="action-row"><button class="button" value="cancel">${attemptCopy.cancel}</button><button class="button primary" id="confirm-attempt" value="default">${attemptCopy.begin}</button></div><p id="attempt-state" role="status"></p></form></dialog>`:""}`);
+  if (!missionManifest) {
+    document.querySelector('.read-completion').insertAdjacentHTML(
+      'afterend',
+      `<p class="notice" role="status">${t("readerMissionUnavailable")}</p>`,
+    );
+  }
   document.querySelector('#mark-read').onclick=async()=>{if(!alreadyRead)history.push({book:meta.code,chapter,title:bookTitle(meta)});localStorage.setItem('sa.readingHistory',JSON.stringify(history));if(state.user)try{await accountRequest('reading','PUT',{reading:history})}catch{}try{if(hasTasks)await attemptRequest('read','POST',{book:meta.code,chapter,groupId:groupId||undefined});document.querySelector('#start-questions')?.removeAttribute('disabled');document.querySelector('#mark-read').disabled=true;document.querySelector('#mark-read').textContent=w.readMarked;announce(w.readMarked)}catch{announce(t('errorLoad'))}};
   document.querySelector('#start-questions')?.addEventListener('click',()=>document.querySelector('#attempt-dialog').showModal());
   document.querySelector('#confirm-attempt')?.addEventListener('click',async event=>{event.preventDefault();const status=document.querySelector('#attempt-state');try{const attempt=await attemptRequest('start','POST',{missionId:'OT-AB-01',book:meta.code,chapter,locale:state.lang,groupId:groupId||undefined});sessionStorage.setItem('sa.activeAttempt',attempt.attemptId);state.activeAttempt=attempt;state.mission=null;window.saAnalytics?.track("quiz_start",{language:state.lang,mode:groupId?"group":"personal"});attemptChannel?.postMessage({type:'attempt-started',attemptId:attempt.attemptId,book:meta.code,chapter});document.querySelector('#attempt-dialog').close();state.currentReader=null;navigateTo(`/mission/attempt/${attempt.attemptId}`,true)}catch(error){window.saAnalytics?.track("quiz_start_error",{error:String(error.message).slice(0,60)});status.textContent=error.message==='chapter_must_be_read'?attemptCopy.readRequired:t('errorLoad')}});

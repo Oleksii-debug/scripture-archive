@@ -3286,14 +3286,18 @@ function cleanPublicCopy() {
 
 async function route() {
   state.readerRenderTicket = (state.readerRenderTicket || 0) + 1;
+  let finishingReaderTicket = state.readerRenderTicket;
   clearInterval(timerInterval);
   try {
     const sourceRoute = location.hash ? location.hash.replace(/^#\/?/, "") : location.pathname.replace(/^\/?/, "");
     const parts = sourceRoute.split("/").filter(Boolean);
     const name = parts[0] || "home";
     if (name !== "reader") state.currentReader = null;
-    if (name === "reader")
-      await renderReader(parts.length > 1 ? parts : ["reader", "JHN", "3"]);
+    if (name === "reader") {
+      const pendingReader = renderReader(parts.length > 1 ? parts : ["reader", "JHN", "3"]);
+      finishingReaderTicket = state.readerRenderTicket;
+      await pendingReader;
+    }
     else if (name === "missions") await renderMissions();
     else if (name === "mission") await renderMission(parts);
     else if (name === "groups" && parts[1]) await renderGroup(parts[1]);
@@ -3306,6 +3310,7 @@ async function route() {
     else if (name === "account") renderAccount();
     else if (name === "editor") await renderEditor();
     else await renderHome();
+    if (finishingReaderTicket !== state.readerRenderTicket) return;
     cleanPublicCopy();
     setStaticI18n();
     updatePageMetadata(name);
@@ -3313,6 +3318,7 @@ async function route() {
     window.scrollTo({ top: 0, behavior: "instant" });
     if (name === "reader") focusReaderRouteVerse(location.search, main, parts, state.reader);
   } catch (error) {
+    if (finishingReaderTicket !== state.readerRenderTicket) return;
     console.error(error);
     shell(`<div class="notice error">${t("errorLoad")}</div>`);
   }

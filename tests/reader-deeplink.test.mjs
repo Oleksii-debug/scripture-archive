@@ -68,9 +68,9 @@ test('verse selector can return from an exact verse to the chapter-only permalin
   assert.deepEqual(opened, ['/reader/JHN/3?verse=16', '/reader/JHN/3']);
 });
 
-const i18nDefinition = source.match(/const I18N = (\\{[\\s\\S]*?\\n\\});\\n/);
+const i18nDefinition = source.match(/const I18N = (\{[\s\S]*?\n\});\n/);
 const i18n = i18nDefinition ? vm.runInNewContext('(' + i18nDefinition[1] + ')') : null;
-const searchHandler = source.match(/document\\.querySelector\\("#book-search"\\)\\.addEventListener\\("submit", \\(e\\) => \\{([\\s\\S]*?)\\n  \\}\\);\\n\\}/);
+const searchHandler = source.match(/document\.querySelector\("#book-search"\)\.addEventListener\("submit", \(e\) => \{([\s\S]*?)\n  \}\);\n\}/);
 
 for (const [lang, edition] of Object.entries({uk:'uk-ohiienko', ru:'ru', en:'en'})) {
   test(`${lang}: real John 3:16 search returns focus, announcement and a reloadable link`, async () => {
@@ -83,7 +83,7 @@ for (const [lang, edition] of Object.entries({uk:'uk-ohiienko', ru:'ru', en:'en'
     const panel = {hidden:true, scrollIntoView() {}};
     const list = {innerHTML:'', focus(options) {focusEvents.push(options?.preventScroll === true);}};
     const elements = {'#search-input':searchInput,'#search-panel':panel,'#search-results':list};
-    const submit = vm.runInNewContext(`(e) => {${searchHandler[1]}\\n  }`, {
+    const submit = vm.runInNewContext(`(e) => {${searchHandler[1]}\n  }`, {
       document:{querySelector:key=>elements[key]}, state:{lang}, book,
       bibleText:String, meta:{code:'JHN'}, readerVerseUrl:helpers.readerVerseUrl,
       esc:String, bookTitle:()=> 'John', t:key=>i18n[lang][key],
@@ -91,7 +91,7 @@ for (const [lang, edition] of Object.entries({uk:'uk-ohiienko', ru:'ru', en:'en'
     });
     submit({preventDefault() {}});
     assert.equal(panel.hidden, false);
-    assert.match(list.innerHTML, /href="\\/reader\\/JHN\\/3\\?verse=16"/);
+    assert.match(list.innerHTML, /href="\/reader\/JHN\/3\?verse=16"/);
     assert.deepEqual(focusEvents,[true]);
     assert.deepEqual(announcements,[`${i18n[lang].search}: 1`]);
     searchInput.value = 'xyz-unmatched-Bible-000000000';

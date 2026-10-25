@@ -52,7 +52,7 @@ export function readerCanonicalPath(routeParts, activeReader, groupId = '') {
       !Number.isSafeInteger(activeReader.chapter) || activeReader.chapter < 1) return null;
   if (routeParts[1] === activeReader.book &&
       routeParts[2] === String(activeReader.chapter)) return null;
-  const group = routeParts[3] === 'group' && groupId
-    ? `/group/${encodeURIComponent(groupId)}` : '';
+  const group = routeParts[3] === 'group' && groupId && !/[/?#]/.test(groupId)
+    ? `/group/${groupId}` : '';
   return `/reader/${activeReader.book}/${activeReader.chapter}${group}`;
 }

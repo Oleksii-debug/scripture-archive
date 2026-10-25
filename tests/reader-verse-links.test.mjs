@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { EDITIONS } from '../public/editions.js';
-import { readerVerseHref, focusRequestedVerse, focusReaderRouteVerse, readerChapterNumber, readerCanonicalPath } from '../public/reader-verse-links.js';
+import { readerVerseHref, focusRequestedVerse, focusReaderRouteVerse, readerChapterNumber, readerCanonicalPath, readerBookMatchesCatalog } from '../public/reader-verse-links.js';
 
 test('search reference links identify an exact book, chapter, and verse', () => {
   assert.equal(readerVerseHref('GEN', 1, 3), '/reader/GEN/1?verse=3');
@@ -317,4 +317,40 @@ test('a superseded reader route cannot finalize stale focus, metadata, or an err
     assert.equal(events.filter(value => value === 'scroll').length, 1);
     assert.ok(!events.includes('error-screen'), 'obsolete failure must not mask latest page');
   }
+});
+
+
+test('reader accepts only matching source language, edition, book and complete chapter coordinates', async () => {
+  const catalog = JSON.parse(await readFile(new URL('../public/data/catalog.json', import.meta.url), 'utf8'));
+  const groups = [
+    ['uk', 'uk', catalog.editions.uk.id, catalog.books.uk],
+    ['ru', 'ru', catalog.editions.ru.id, catalog.books.ru],
+    ['en', 'en', catalog.editions.en.id, catalog.books.en],
+    ['uk-ohiienko', 'uk', 'uk-ohiienko', catalog.editionBooks['uk-ohiienko']],
+  ];
+  for (const [folder, locale, editionId, books] of groups) {
+    const meta = books.find(entry => entry.code === 'JOL');
+    const book = JSON.parse(await readFile(new URL(`../public/data/bible/${folder}/JOL.json`, import.meta.url), 'utf8'));
+    assert.equal(readerBookMatchesCatalog(book, meta, locale, editionId), true, `${folder}: genuine source refused`);
+    assert.equal(readerBookMatchesCatalog({ ...book, bookCode: 'GEN' }, meta, locale, editionId), false);
+    assert.equal(readerBookMatchesCatalog({ ...book, locale: locale === 'uk' ? 'en' : 'uk' }, meta, locale, editionId), false);
+    assert.equal(readerBookMatchesCatalog({ ...book, editionId: 'WRONG' }, meta, locale, editionId), false);
+    assert.equal(readerBookMatchesCatalog({ ...book, testament: 'WRONG' }, meta, locale, editionId), false);
+    assert.equal(readerBookMatchesCatalog({ ...book, chapters: book.chapters.slice(1) }, meta, locale, editionId), false);
+    const missing = structuredClone(book);
+    missing.chapters[0][0] = ' ';
+    assert.equal(readerBookMatchesCatalog(missing, meta, locale, editionId), false);
+    const brokenChapter = structuredClone(book);
+    brokenChapter.chapters[0] = [];
+    assert.equal(readerBookMatchesCatalog(brokenChapter, meta, locale, editionId), false);
+    assert.equal(readerBookMatchesCatalog(null, meta, locale, editionId), false);
+  }
+  assert.equal(readerBookMatchesCatalog({ bookCode: 'GEN', locale: 'en', editionId: 'ENGWEBU', testament: 'OT', chapters: [['A']] },
+    { code: 'GEN', testament: 'OT', chapters: 1 }, 'en', null), false, 'untrusted missing edition must fail closed');
+});
+
+test('production reader checks the actual fetched corpus before verse rendering and attribution', async () => {
+  const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+  assert.match(app, /const edition = localEditionMetadata\(catalog, chosenEdition, readerLanguage\);\s*if \(!readerBookMatchesCatalog\(book, meta, readerLanguage, edition\.id\)\)/);
+  assert.match(app, /if \(!readerBookMatchesCatalog\([\s\S]*?throw Error\("Bible book source does not match the selected catalog edition"\);\s*const verses = book\.chapters\[chapter - 1\]/);
 });

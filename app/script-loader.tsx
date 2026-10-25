@@ -72,6 +72,11 @@ export default function ScriptLoader() {
     const main = document.getElementById("main");
     const announcer = document.getElementById("announcer");
     let loaderAnnouncement = "";
+    let renderObserver: MutationObserver | null = null;
+    const stopWaitingForContent = () => {
+      renderObserver?.disconnect();
+      renderObserver = null;
+    };
 
     const startLoading = () => {
       const copy = LOADER_COPY[loaderLanguage()];
@@ -81,6 +86,7 @@ export default function ScriptLoader() {
     };
 
     const finishLoading = () => {
+      stopWaitingForContent();
       main?.setAttribute("aria-busy", "false");
       // Leave route-specific announcements written by the real app intact.
       if (announcer && announcer.textContent === loaderAnnouncement) announcer.textContent = "";
@@ -176,7 +182,20 @@ export default function ScriptLoader() {
       script.onload = () => {
         if (!active || appScript !== script) return;
         moduleEvaluating = false;
-        if (!moduleRuntimeFailed) finishLoading();
+        if (moduleRuntimeFailed) return;
+        // Canonical /app.js waits for account/CMS requests before route()
+        // first renders. A module load event is not page readiness.
+        // Preserve the real accessible loading status until #main has content.
+        if (main && main.childElementCount === 0 && typeof MutationObserver !== "undefined") {
+          stopWaitingForContent();
+          renderObserver = new MutationObserver(() => {
+            if (!active || appScript !== script || !main.childElementCount) return;
+            finishLoading();
+          });
+          renderObserver.observe(main, { childList: true });
+        } else {
+          finishLoading();
+        }
       };
       appScript = script;
       document.body.appendChild(script);

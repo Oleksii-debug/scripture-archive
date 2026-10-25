@@ -73,9 +73,19 @@ export default function ScriptLoader() {
     const announcer = document.getElementById("announcer");
     let loaderAnnouncement = "";
     let renderObserver: MutationObserver | null = null;
-    const stopWaitingForContent = () => {
+    // A stalled module fetch or unresolved account/CMS bootstrap must not
+    // leave keyboard and screen-reader users at a permanent loading state.
+    let startupDeadline: number | null = null;
+    const stopObservingContent = () => {
       renderObserver?.disconnect();
       renderObserver = null;
+    };
+    const stopWaitingForContent = () => {
+      stopObservingContent();
+      if (startupDeadline !== null) {
+        window.clearTimeout(startupDeadline);
+        startupDeadline = null;
+      }
     };
 
     const startLoading = () => {
@@ -93,7 +103,7 @@ export default function ScriptLoader() {
       loaderAnnouncement = "";
     };
 
-    const showFailure = (storageBlocked = false) => {
+    const showFailure = (storageBlocked = false, reloadOnly = false) => {
       if (!active) return;
       finishLoading();
       if (!main || main.childElementCount > 0) return;
@@ -108,10 +118,10 @@ export default function ScriptLoader() {
       const retry = document.createElement("button");
       retry.className = "button primary";
       retry.type = "button";
-      retry.textContent = storageBlocked ? copy.retry : attempt > 1 ? copy.reload : copy.retry;
+      retry.textContent = !storageBlocked && (reloadOnly || attempt > 1) ? copy.reload : copy.retry;
       retry.addEventListener("click", () => {
         if (!active) return;
-        if (attempt > 1 && !storageBlocked) {
+        if (!storageBlocked && (reloadOnly || attempt > 1)) {
           window.location.reload();
           return;
         }
@@ -187,7 +197,7 @@ export default function ScriptLoader() {
         // first renders. A module load event is not page readiness.
         // Preserve the real accessible loading status until #main has content.
         if (main && main.childElementCount === 0 && typeof MutationObserver !== "undefined") {
-          stopWaitingForContent();
+          stopObservingContent();
           renderObserver = new MutationObserver(() => {
             if (!active || appScript !== script || !main.childElementCount) return;
             finishLoading();
@@ -198,6 +208,17 @@ export default function ScriptLoader() {
         }
       };
       appScript = script;
+      // A timeout does not prove that /app.js stopped executing. Recover with
+      // a new document, never a second live app instance and duplicate events.
+      startupDeadline = window.setTimeout(() => {
+        if (!active || appScript !== script) return;
+        if (main?.childElementCount) {
+          finishLoading();
+          return;
+        }
+        moduleEvaluating = false;
+        showFailure(false, true);
+      }, 30000);
       document.body.appendChild(script);
     };
     loadApp();

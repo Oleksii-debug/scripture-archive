@@ -68,10 +68,10 @@ export default function ScriptLoader() {
       const retry = document.createElement("button");
       retry.className = "button primary";
       retry.type = "button";
-      retry.textContent = attempt > 1 ? copy.reload : copy.retry;
+      retry.textContent = storageBlocked ? copy.retry : attempt > 1 ? copy.reload : copy.retry;
       retry.addEventListener("click", () => {
         if (!active) return;
-        if (attempt > 1) {
+        if (attempt > 1 && !storageBlocked) {
           window.location.reload();
           return;
         }

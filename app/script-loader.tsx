@@ -59,6 +59,8 @@ export default function ScriptLoader() {
     let active = true;
     let appScript: HTMLScriptElement | null = null;
     let attempt = 0;
+    let moduleEvaluating = false;
+    let moduleRuntimeFailed = false;
     const main = document.getElementById("main");
     const announcer = document.getElementById("announcer");
     let loaderAnnouncement = "";
@@ -108,6 +110,25 @@ export default function ScriptLoader() {
       retry.focus();
     };
 
+    // A module can download successfully but throw while evaluating. Browsers
+    // dispatch a window error followed by script.onload (not script.onerror).
+    // Only recover when the currently injected canonical /app.js itself fails;
+    // unrelated page/analytics errors must not replace the application UI.
+    const onModuleRuntimeError = (event: ErrorEvent) => {
+      if (!active || !moduleEvaluating || !appScript || !event.filename) return;
+      try {
+        const requested = new URL(appScript.src, document.baseURI);
+        const failed = new URL(event.filename, document.baseURI);
+        if (requested.pathname !== "/app.js" || failed.href !== requested.href) return;
+      } catch {
+        return;
+      }
+      moduleRuntimeFailed = true;
+      moduleEvaluating = false;
+      showFailure();
+    };
+    window.addEventListener("error", onModuleRuntimeError);
+
     const loadApp = () => {
       if (!active) return;
       appScript?.remove();
@@ -124,6 +145,8 @@ export default function ScriptLoader() {
       // Count only real script injections. Storage-denied retries never
       // fetched a module, so they must not consume the network retry budget.
       startLoading();
+      moduleRuntimeFailed = false;
+      moduleEvaluating = true;
       attempt += 1;
       const script = document.createElement("script");
       script.type = "module";
@@ -132,11 +155,13 @@ export default function ScriptLoader() {
       script.src = attempt === 1 ? "/app.js" : `/app.js?sa-retry=${attempt - 1}`;
       script.onerror = () => {
         if (!active || appScript !== script) return;
+        moduleEvaluating = false;
         showFailure();
       };
       script.onload = () => {
         if (!active || appScript !== script) return;
-        finishLoading();
+        moduleEvaluating = false;
+        if (!moduleRuntimeFailed) finishLoading();
       };
       appScript = script;
       document.body.appendChild(script);
@@ -144,6 +169,7 @@ export default function ScriptLoader() {
     loadApp();
     return () => {
       active = false;
+      window.removeEventListener("error", onModuleRuntimeError);
       appScript?.remove();
       finishLoading();
       analytics.remove();

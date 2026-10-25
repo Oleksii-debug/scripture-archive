@@ -5,7 +5,7 @@ import { COMMUNITY_RUNNER_AUDIENCE,verifyCommunityRunner } from "../lib/communit
 const pair=await crypto.subtle.generateKey({name:"RSASSA-PKCS1-v1_5",modulusLength:2048,publicExponent:new Uint8Array([1,0,1]),hash:"SHA-256"},true,["sign","verify"]);
 const key={...await crypto.subtle.exportKey("jwk",pair.publicKey),kid:"test-signing-key",use:"sig"};
 const now=Date.parse("2026-10-25T08:00:00Z"),seconds=now/1000;
-const base={iss:"https://token.actions.githubusercontent.com",aud:COMMUNITY_RUNNER_AUDIENCE,repository:"Oleksii-debug/scripture-archive",repository_id:"1337375179",ref:"refs/heads/main",workflow_ref:"Oleksii-debug/scripture-archive/.github/workflows/community-schedule.yml@refs/heads/main",sub:"repo:Oleksii-debug/scripture-archive:ref:refs/heads/main",event_name:"schedule",iat:seconds,exp:seconds+300};
+const base={iss:"https://token.actions.githubusercontent.com",aud:COMMUNITY_RUNNER_AUDIENCE,repository:"Oleksii-debug/scripture-archive",repository_id:"1337375179",repository_owner_id:"316471245",ref:"refs/heads/main",workflow_ref:"Oleksii-debug/scripture-archive/.github/workflows/community-schedule.yml@refs/heads/main",sub:"repo:Oleksii-debug/scripture-archive:ref:refs/heads/main",event_name:"schedule",iat:seconds,exp:seconds+300};
 const encode=value=>Buffer.from(value).toString("base64url");
 async function token(changes={}){
   const message=`${encode(JSON.stringify({alg:"RS256",kid:key.kid}))}.${encode(JSON.stringify({...base,...changes}))}`;
@@ -14,9 +14,10 @@ async function token(changes={}){
 const options={now,fetcher:async url=>{assert.equal(url,"https://token.actions.githubusercontent.com/.well-known/jwks");return Response.json({keys:[key]})}};
 test("signed identity of the approved main-branch scheduler is accepted",async()=>{
   assert.equal(await verifyCommunityRunner(await token(),options),true);
+  assert.equal(await verifyCommunityRunner(await token({sub:"repo:Oleksii-debug@316471245/scripture-archive@1337375179:ref:refs/heads/main"}),options),true);
 });
 test("another repository, workflow, branch or audience cannot operate the scheduler",async()=>{
-  for(const changes of [{repository_id:"1"},{ref:"refs/pull/1/merge"},{workflow_ref:"other"},{aud:"other"},{event_name:"pull_request"}])
+  for(const changes of [{repository_id:"1"},{repository_owner_id:"1"},{sub:"repo:Oleksii-debug@1/scripture-archive@1337375179:ref:refs/heads/main"},{ref:"refs/pull/1/merge"},{workflow_ref:"other"},{aud:"other"},{event_name:"pull_request"}])
     assert.equal(await verifyCommunityRunner(await token(changes),options),false);
 });
 test("expired identities and a valid claim set with a forged signature are rejected",async()=>{

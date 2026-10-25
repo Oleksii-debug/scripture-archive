@@ -227,7 +227,7 @@ test('reader chapter hash and saved checkpoint normalize to server-safe integers
   const readerAt = source.indexOf('async function renderReader(parts) {');
   const groupAt = source.indexOf('  const groupId', readerAt);
   assert.ok(readerAt >= 0 && groupAt > readerAt, 'canonical reader boundaries');
-  const chapterAssignment = source.slice(readerAt, groupAt).match(/  const chapter = Math\\.min\\([\\s\\S]*?\\n  \\);/);
+  const chapterAssignment = source.slice(readerAt, groupAt).match(/  const chapter = Math\.min\([\s\S]*?\n  \);/);
   assert.ok(chapterAssignment, 'canonical renderReader chapter selection');
   const calculate = vm.runInNewContext('(parts, state, meta) => { ' + chapterAssignment[0] + '; return chapter; }');
   const scenarios = [

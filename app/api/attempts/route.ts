@@ -194,16 +194,19 @@ export async function POST(request: Request) {
       return json({ error: "attempt_expired" }, 410);
     }
     const tasks = tasksFor(attempt.book_id, attempt.chapter).slice(0, attempt.task_limit), task = tasks[attempt.current_index];
+    if (Number(body.taskIndex) < attempt.current_index + 1) return json({ error: "answer_already_submitted" }, 409);
     if (!task || Number(body.taskIndex) !== attempt.current_index + 1 || !Array.isArray(body.selected)) return json({ error: "invalid_answer" }, 400);
     const selected = [...new Set((body.selected as unknown[]).map(Number))].sort((a, b) => a - b);
     if (!selected.length || selected.some(index => !Number.isInteger(index) || index < 0 || index >= task.options[attempt.locale].length)) return json({ error: "invalid_answer" }, 400);
     const expected = [...task.correct].sort((a, b) => a - b), correct = JSON.stringify(selected) === JSON.stringify(expected);
     const nextIndex = attempt.current_index + 1;
-    await env.DB.batch([
-      env.DB.prepare("INSERT INTO mission_attempt_answers (attempt_id,task_id,selected_json,is_correct) VALUES (?,?,?,?)")
-        .bind(attempt.id, task.id, JSON.stringify(selected), correct ? 1 : 0),
-      env.DB.prepare("UPDATE mission_attempts SET current_index=? WHERE id=?").bind(nextIndex, attempt.id),
+    const accepted = await env.DB.batch([
+      env.DB.prepare("INSERT OR IGNORE INTO mission_attempt_answers (attempt_id,task_id,selected_json,is_correct) SELECT ?,?,?,? WHERE EXISTS (SELECT 1 FROM mission_attempts WHERE id=? AND status='active' AND current_index=?)")
+        .bind(attempt.id, task.id, JSON.stringify(selected), correct ? 1 : 0, attempt.id, attempt.current_index),
+      env.DB.prepare("UPDATE mission_attempts SET current_index=?,status=? WHERE id=? AND current_index=? AND status='active'")
+        .bind(nextIndex, nextIndex === tasks.length ? "grading" : "active", attempt.id, attempt.current_index),
     ]);
+    if (!accepted[1].meta.changes) return json({ error: "attempt_changed" }, 409);
     if (nextIndex < tasks.length) return json({ accepted: true, task: publicTask(tasks[nextIndex], attempt.locale, nextIndex + 1, tasks.length) });
     const rows = (await env.DB.prepare("SELECT task_id,selected_json,is_correct FROM mission_attempt_answers WHERE attempt_id=? ORDER BY answered_at").bind(attempt.id).all()).results as Array<Record<string, unknown>>;
     const result = resultFor(tasks, rows, attempt.locale), encoded = JSON.stringify(result);

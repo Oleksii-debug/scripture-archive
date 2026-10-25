@@ -12,8 +12,17 @@ function clean(value:unknown,max=120){return typeof value==="string"?value.trim(
 function publicUser(id:Identity,row:Record<string,unknown>|null){return {id:id.userId,email:id.email,emailVerified:id.emailVerified,authProvider:id.provider,fullName:id.fullName,firstName:row?.first_name??"",lastName:row?.last_name??"",ageRange:row?.age_range??"",age:row?.age??null,tradition:row?.tradition??"",denomination:row?.denomination??"",church:row?.church??"",maritalStatus:row?.marital_status??"",gender:row?.gender??"",hasChildren:row?.has_children==null?null:Boolean(row.has_children),locale:row?.locale??"uk",visibility:{firstName:Boolean(row?.public_first_name),lastName:Boolean(row?.public_last_name),church:Boolean(row?.public_church),progress:Boolean(row?.public_progress)},profileComplete:Boolean(row),isOwner:id.email===OWNER_EMAIL}}
 export async function GET(request:Request){
   const action=new URL(request.url).searchParams.get("action")??"me"; const id=await authenticateRequest(request); if(!id)return action==="me"?Response.json({user:null}):unauthorized();
-  if(action==="reading"){const row=await env.DB!.prepare("SELECT data FROM progress WHERE user_id=? AND mission_id='READING'").bind(id.userId).first<{data:string}>();return Response.json({reading:row?JSON.parse(row.data):[]})}
-  if(action==="progress"){const row=await env.DB!.prepare("SELECT data FROM progress WHERE user_id=? AND mission_id=?").bind(id.userId,"OT-AB-01").first<{data:string}>();return Response.json({progress:row?JSON.parse(row.data):null})}
+  if(action==="reading"){
+    const row=await env.DB!.prepare("SELECT data FROM progress WHERE user_id=? AND mission_id='READING'").bind(id.userId).first<{data:string}>();
+    if(!row)return Response.json({reading:[]});
+    try{const reading=JSON.parse(row.data);if(Array.isArray(reading))return Response.json({reading})}catch{}
+    return Response.json({error:"reading_state_unavailable"},{status:503});
+  }
+  if(action==="progress"){
+    const row=await env.DB!.prepare("SELECT data FROM progress WHERE user_id=? AND mission_id=?").bind(id.userId,"OT-AB-01").first<{data:string}>();
+    if(!row)return Response.json({progress:null});
+    try{return Response.json({progress:JSON.parse(row.data)})}catch{return Response.json({error:"progress_state_unavailable"},{status:503})}
+  }
   if(action==="users"){if(id.email!==OWNER_EMAIL)return Response.json({error:"forbidden"},{status:403});const rows=await env.DB!.prepare("SELECT email,first_name,last_name,age_range,locale,created_at,updated_at FROM profiles ORDER BY created_at DESC LIMIT 250").all();return Response.json({users:rows.results})}
   const row=await env.DB!.prepare("SELECT * FROM profiles WHERE user_id=?").bind(id.userId).first<Record<string,unknown>>(); return Response.json({user:publicUser(id,row)});
 }

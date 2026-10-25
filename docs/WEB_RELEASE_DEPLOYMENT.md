@@ -107,6 +107,37 @@ Git blob hashes. Full exact-PR checkout `npm test`/`lint`/`build`, independent
 review and deployment are **NOT EXECUTED**. The release gate remains **NOT
 QUALIFIED**; UK/RU/EN are the only permanent interface languages.
 
+### 2026-10-25 /help direct-route regression and migration drift
+
+- Refreshed GitHub `main`: `e80779230fef246db9482decff2cfd75b3aeca12`
+  (this is the **source SHA**, not a deployed-SHA claim). The earlier
+  `93591836b53a36e0114ab2bc4bd92632128e8d96` above is a historical
+  inspection baseline, no longer the tip of main.
+- New main adds `/help` to the home navigation and XML sitemap but omitted
+  `help` from the Next catch-all `PUBLIC_ROUTES` set. Consequently the source
+  declares an advertised route that is rejected on direct navigation/reload.
+  The **candidate** on PR #288 adds `help` to the existing catch-all and
+  route metadata; no second router, deployment or DNS action was created.
+- `tests/public-route-release-contract.test.mjs` is a **source-level** gate
+  for public sitemap/nav/catch-all consistency, private route exclusion,
+  `/help` metadata and permanent interface languages `uk/ru/en`.
+  It does not prove that a server actually returns 200 or that NVDA works.
+- This main revision also introduces
+  `drizzle/0006_support_requests.sql` for support requests/attachments. No
+  production D1 migration, email-provider setup, data backfill or restore was
+  performed. Any staged promotion must account for this migration, use an
+  owner-authorized verified backup/rollback procedure and test attachment
+  privacy and retention before live acceptance.
+- Source resource listing now has 66 JSON books in each of `uk`, `ru`,
+  `en` and `uk-ohiienko` (two Ukrainian editions, **not** a fourth UI
+  language). The three-locale manifest declares 198 book files; verify both
+  the manifest-linked editions and the additional local Ukrainian edition
+  in the **actual built artifact** before claiming complete static resources.
+
+**Checkpoint:** exact-file extracted source-contract tests are local-only;
+GitHub CI, exact-PR full build, browser route GET, HTTPS certificate, deployed
+SHA, owner approval and migration/rollback qualification remain **NOT DONE**.
+
 ## Required production bindings
 
 - D1 binding: `DB`

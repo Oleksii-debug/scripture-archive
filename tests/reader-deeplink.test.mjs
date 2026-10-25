@@ -27,7 +27,7 @@ test('reader exposes keyboard-selectable book, chapter and verse, then focuses a
   assert.match(source, /<select id="chapter-select">/);
   assert.match(source, /<label for="verse-select">\$\{t\("verse"\)\}<\/label><select id="verse-select">/);
   assert.match(source, /querySelector\("#verse-select"\)\.addEventListener\("change"/);
-  assert.match(source, /navigateTo\(readerVerseUrl\(meta.code, chapter, e.target.value\)\)/);
+  assert.match(source, /e\.target\.value \? readerVerseUrl\(meta.code, chapter, e.target.value\)/);
   for (const translation of ['Вірш','Стих','Verse']) assert.ok(source.includes(`verse: "${translation}"`));
 });
 
@@ -67,3 +67,36 @@ test('verse selector can return from an exact verse to the chapter-only permalin
   onChange({target:{value:''}});
   assert.deepEqual(opened, ['/reader/JHN/3?verse=16', '/reader/JHN/3']);
 });
+
+const i18nDefinition = source.match(/const I18N = (\\{[\\s\\S]*?\\n\\});\\n/);
+const i18n = i18nDefinition ? vm.runInNewContext('(' + i18nDefinition[1] + ')') : null;
+const searchHandler = source.match(/document\\.querySelector\\("#book-search"\\)\\.addEventListener\\("submit", \\(e\\) => \\{([\\s\\S]*?)\\n  \\}\\);\\n\\}/);
+
+for (const [lang, edition] of Object.entries({uk:'uk-ohiienko', ru:'ru', en:'en'})) {
+  test(`${lang}: real John 3:16 search returns focus, announcement and a reloadable link`, async () => {
+    assert.ok(searchHandler, 'production search submit handler must be available');
+    assert.ok(i18n?.[lang], 'permanent language copy is missing');
+    assert.match(source, /<ol class="search-results" id="search-results" tabindex="-1">/);
+    const book = JSON.parse(await readFile(new URL(`../public/data/bible/${edition}/JHN.json`, import.meta.url), 'utf8'));
+    const searchInput = {value: String(book.chapters[2][15]).slice(0,24).trim()};
+    const focusEvents = [], announcements = [];
+    const panel = {hidden:true, scrollIntoView() {}};
+    const list = {innerHTML:'', focus(options) {focusEvents.push(options?.preventScroll === true);}};
+    const elements = {'#search-input':searchInput,'#search-panel':panel,'#search-results':list};
+    const submit = vm.runInNewContext(`(e) => {${searchHandler[1]}\\n  }`, {
+      document:{querySelector:key=>elements[key]}, state:{lang}, book,
+      bibleText:String, meta:{code:'JHN'}, readerVerseUrl:helpers.readerVerseUrl,
+      esc:String, bookTitle:()=> 'John', t:key=>i18n[lang][key],
+      announce:message=>announcements.push(message),
+    });
+    submit({preventDefault() {}});
+    assert.equal(panel.hidden, false);
+    assert.match(list.innerHTML, /href="\\/reader\\/JHN\\/3\\?verse=16"/);
+    assert.deepEqual(focusEvents,[true]);
+    assert.deepEqual(announcements,[`${i18n[lang].search}: 1`]);
+    searchInput.value = 'xyz-unmatched-Bible-000000000';
+    submit({preventDefault() {}});
+    assert.deepEqual(focusEvents,[true,true]);
+    assert.equal(announcements.at(-1), i18n[lang].noResults);
+  });
+}

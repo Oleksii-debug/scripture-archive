@@ -226,3 +226,34 @@ not reach GA4. Link the verified Search Console property from GA4 Admin after
 both properties exist. The first-party `/editor` report remains available even
 without GA4 and measures active foreground time with a bounded heartbeat; GA4
 provides the independent Google acquisition, geography and engagement reports.
+
+
+### 2026-10-25 keyboard anchor / legacy fragment release guard
+
+On exact main source `6d2eff033380afef9d04f98ef98d87fa78688a11`,
+the canonical `public/app.js` treated **any** location fragment as a
+client-side workspace name. The actual `app/page.tsx` skip link is
+`href="#main"`, so activating it on a direct `/reader/GEN/1` route
+selected a bogus `main` route and fell back to the home view.
+Additionally, the unconditional `hashchange` handler rerendered the
+page when a normal keyboard-accessible anchor changed.
+
+Draft PR #288 retains the existing single client router and legacy
+`#/reader/GEN/1` links, but delegates fragment classification to
+`public/route-location.js`. Only `#/` fragments represent client
+routes; native `#main` and other HTML anchors preserve the canonical
+path and do **not** retrigger a route render. New
+`tests/hash-anchor-navigation.test.mjs` verifies skip links, direct
+reader/group paths, legacy fragment compatibility, leaving legacy
+fragments, and that the actual app imports and invokes the classifier.
+
+Local isolated Node 22 helper tests: **5/5 PASS**; remote source
+readback confirmed updated app wiring and tests against the candidate
+blobs. This is **source-level regression evidence**, not an actual
+browser/NVDA acceptance or full exact-PR `npm test`/`npm run build`.
+CI check-runs and independent review have not qualified this change.
+The latest branch SHA must be reacquired after this documentation
+commit. Domain ownership, current public DNS/TLS, active deployment
+SHA, database state and UK/RU/EN built asset delivery remain
+**NOT VERIFIED**. Do not merge, deploy, change public links or claim
+PUBLIC_READY merely from this source-level PASS.

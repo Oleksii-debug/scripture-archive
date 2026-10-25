@@ -206,3 +206,35 @@ for (const lang of ['uk', 'ru', 'en']) {
     page.cleanup();
   });
 }
+
+
+for (const [lang, firstMessage, retryMessage] of [
+  ['uk', 'Завантаження інтерфейсу…', 'Повторне завантаження інтерфейсу…'],
+  ['ru', 'Загрузка интерфейса…', 'Повторная загрузка интерфейса…'],
+  ['en', 'Loading the interface…', 'Reloading the interface…'],
+]) {
+  test(`initial ${lang} load, retry and success expose accurate accessible busy state`, () => {
+    const page = boot(lang);
+    assert.equal(page.main.attributes['aria-busy'], 'true', 'initial empty content must not look idle');
+    assert.equal(page.announcer.textContent, firstMessage);
+    assert.equal(page.main.focused, false, 'initial loader must not steal focus');
+    page.scripts.at(-1).onerror();
+    assert.equal(page.main.attributes['aria-busy'], 'false', 'error is actionable, not busy');
+    assert.equal(page.announcer.textContent, '', 'error alert is the active announcement');
+    page.main.childNodes[0].childNodes[2].click();
+    assert.equal(page.main.attributes['aria-busy'], 'true');
+    assert.equal(page.announcer.textContent, retryMessage);
+    page.scripts.at(-1).onload();
+    assert.equal(page.main.attributes['aria-busy'], 'false');
+    assert.equal(page.announcer.textContent, '', 'do not leave stale loading text after module success');
+    page.cleanup();
+  });
+  test(`successful ${lang} module must not clear canonical route announcements`, () => {
+    const page = boot(lang);
+    page.announcer.textContent = 'Canonical reader route ready';
+    page.scripts.at(-1).onload();
+    assert.equal(page.announcer.textContent, 'Canonical reader route ready');
+    assert.equal(page.main.attributes['aria-busy'], 'false');
+    page.cleanup();
+  });
+}

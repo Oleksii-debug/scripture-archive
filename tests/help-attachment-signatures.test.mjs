@@ -172,3 +172,27 @@ test('unchanged owner boundary prevents anonymous support list reads', async () 
   assert.equal(response.status, 403);
   assert.equal(state.reads, 0);
 });
+
+test('PNG magic header without image chunks never reaches persistence', async () => {
+  const { route, state } = await fixture();
+  const fake = Uint8Array.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a]);
+  const response = await route.POST(submission({ attachments: [file(fake, 'fake.png', 'image/png')] }));
+  assert.equal(response.status, 400);
+  assert.equal(state.batches.length, 0);
+  assert.equal(state.emails.length, 0);
+});
+
+test('PNG with spoofed IEND but no IDAT cannot reach persistence', async () => {
+  const { route, state } = await fixture();
+  const bytes = new Uint8Array(45);
+  bytes.set([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a]);
+  new DataView(bytes.buffer).setUint32(8, 13, false);
+  bytes.set(Buffer.from('IHDR'), 12);
+  new DataView(bytes.buffer).setUint32(16, 1, false);
+  new DataView(bytes.buffer).setUint32(20, 1, false);
+  bytes.set(Buffer.from('IEND'), 37);
+  const response = await route.POST(submission({ attachments: [file(bytes, 'fake.png', 'image/png')] }));
+  assert.equal(response.status, 400);
+  assert.equal(state.batches.length, 0);
+  assert.equal(state.emails.length, 0);
+});

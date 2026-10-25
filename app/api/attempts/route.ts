@@ -103,8 +103,8 @@ export async function GET(request: Request) {
   if (action === "chapter") {
     const currentActor = await actor(request), book = clean(url.searchParams.get("book"), 8).toUpperCase(), chapter = Number(url.searchParams.get("chapter")), groupId = clean(url.searchParams.get("groupId"), 80);
     if (!currentActor) return json({ active: null });
-    const active = await env.DB.prepare("SELECT id,mission_id,book_id,chapter,group_id,started_at FROM mission_attempts WHERE actor_id=? AND book_id=? AND chapter=? AND (?='' OR COALESCE(group_id,'')=?) AND status='active' AND expires_at>CURRENT_TIMESTAMP ORDER BY started_at DESC LIMIT 1")
-      .bind(currentActor.id, book, chapter, groupId, groupId).first();
+    const active = await env.DB.prepare("SELECT id,mission_id,book_id,chapter,group_id,started_at FROM mission_attempts WHERE actor_id=? AND book_id=? AND chapter=? AND COALESCE(group_id,'')=? AND status='active' AND expires_at>CURRENT_TIMESTAMP ORDER BY started_at DESC LIMIT 1")
+      .bind(currentActor.id, book, chapter, groupId).first();
     return json({ active: active || null });
   }
   const attemptId = clean(url.searchParams.get("attemptId"), 80);

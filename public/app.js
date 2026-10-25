@@ -2,7 +2,7 @@ import {renderWorkspace, workspaceCopy} from './workspace.js';
 import {supportSection} from './support.js';
 import {homePage} from './home.js';
 import {EDITIONS, editionCopy, selectedEdition, editionUrl, editionSelect} from './editions.js';
-import {readerVerseHref, focusReaderRouteVerse, readerChapterNumber, readerCanonicalPath} from './reader-verse-links.js';
+import {readerVerseHref, focusReaderRouteVerse, readerChapterNumber, readerCanonicalPath, readerBookMatchesCatalog} from './reader-verse-links.js';
 
 const I18N = {
   uk: {
@@ -2492,12 +2492,14 @@ async function renderReader(parts) {
   if (obsolete()) return;
   const book = await getBook(meta.code, chosenEdition, readerLanguage);
   if (obsolete() || state.lang !== readerLanguage || selectedEdition(readerLanguage).id !== chosenEdition.id) return;
+  const edition = localEditionMetadata(catalog, chosenEdition, readerLanguage);
+  if (!readerBookMatchesCatalog(book, meta, readerLanguage, edition.id))
+    throw Error("Bible book source does not match the selected catalog edition");
   const verses = book.chapters[chapter - 1];
   const canonicalReaderPath = readerCanonicalPath(parts, { book: meta.code, chapter }, groupId);
   if (canonicalReaderPath && `${location.pathname}${location.search}${location.hash}` === requestedAddress)
     window.history.replaceState(null, "", canonicalReaderPath);
-  const edition = localEditionMetadata(catalog, chosenEdition, readerLanguage),
-    editionInfo = editionDetails(edition, meta.code);
+  const editionInfo = editionDetails(edition, meta.code);
   const options = books
     .map(
       (b) =>

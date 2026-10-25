@@ -18,3 +18,16 @@ export function focusRequestedVerse(search, root) {
   target.scrollIntoView({ block: 'center' });
   return true;
 }
+
+// Keep malformed route chapter values out of book.chapters[chapter - 1].
+// Existing positive overflow behavior (last chapter) is intentionally preserved.
+export function readerChapterNumber(value, maxChapters) {
+  if (!Number.isSafeInteger(maxChapters) || maxChapters < 1) return 1;
+  const parsed = typeof value === 'number'
+    ? value
+    : typeof value === 'string' && /^[1-9][0-9]*$/.test(value)
+      ? Number(value)
+      : NaN;
+  if (!Number.isSafeInteger(parsed) || parsed < 1) return 1;
+  return Math.min(parsed, maxChapters);
+}

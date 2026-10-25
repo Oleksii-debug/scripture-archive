@@ -56,3 +56,21 @@ export function readerCanonicalPath(routeParts, activeReader, groupId = '') {
     ? `/group/${groupId}` : '';
   return `/reader/${activeReader.book}/${activeReader.chapter}${group}`;
 }
+
+// Refuse an HTTP 200 payload whose book/edition differs from the catalog that
+// selected this chapter. Catalog metadata remains the single source of truth;
+// this is a render boundary check, not an alternate corpus parser.
+export function readerBookMatchesCatalog(book, meta, locale, editionId) {
+  if (!book || !meta ||
+      typeof meta.code !== 'string' || !/^[A-Z0-9]{3}$/.test(meta.code) ||
+      (meta.testament !== 'OT' && meta.testament !== 'NT') ||
+      typeof locale !== 'string' || !locale ||
+      typeof editionId !== 'string' || !editionId ||
+      book.bookCode !== meta.code || book.locale !== locale ||
+      book.editionId !== editionId || book.testament !== meta.testament ||
+      !Number.isSafeInteger(meta.chapters) || meta.chapters < 1 ||
+      !Array.isArray(book.chapters) || book.chapters.length !== meta.chapters) return false;
+  return book.chapters.every(chapter =>
+    Array.isArray(chapter) && chapter.length > 0 &&
+    chapter.every(verse => typeof verse === 'string' && verse.trim().length > 0));
+}

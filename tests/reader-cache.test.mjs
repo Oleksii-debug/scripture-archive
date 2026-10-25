@@ -21,7 +21,7 @@ function setup(fetch) {
   return { state, getBook };
 }
 
-const book = { chapters: [['In the beginning']] };
+const book = { bookCode: 'GEN', locale: 'uk', editionId: 'uk', chapters: [['In the beginning']] };
 
 test('reader retries transient HTTP failure without page reload', async () => {
   let calls = 0;
@@ -68,7 +68,8 @@ test('uk, ru and en cache keys remain independent', async () => {
   const paths = [];
   const { getBook, state } = setup(async path => {
     paths.push(path);
-    return { ok: true, json: async () => book };
+    const locale = path.split('/')[3];
+    return { ok: true, json: async () => ({ ...book, locale, editionId: locale }) };
   });
   for (const locale of ['uk', 'ru', 'en']) {
     state.lang = locale;
@@ -78,6 +79,44 @@ test('uk, ru and en cache keys remain independent', async () => {
   assert.equal(state.bookCache.size, 3);
   for (const locale of ['uk', 'ru', 'en'])
     assert.ok(paths.some(path => path.includes('/' + locale + '/GEN.json')), locale);
+});
+
+// SA-05 semantic-data handoff integrated into the existing cache/retry workline:
+// HTTP 200 with malformed content must not become authoritative cached Scripture.
+test('invalid HTTP 200 metadata or verse arrays are rejected, evicted and retried', async () => {
+  const wrongBodies = [
+    { ...book, bookCode: 'EXO' },
+    { ...book, locale: 'ru' },
+    { ...book, editionId: 'wrong-edition' },
+    { ...book, chapters: null },
+    { ...book, chapters: [[null]] },
+    { ...book, chapters: [['  ']] },
+  ];
+  for (const invalidBody of wrongBodies) {
+    let calls = 0;
+    const { state, getBook } = setup(async () => ({
+      ok: true,
+      json: async () => ++calls === 1 ? invalidBody : book,
+    }));
+    await assert.rejects(getBook('GEN'), /Invalid Bible book data/);
+    assert.equal(state.bookCache.has('uk:GEN'), false, 'invalid success response cannot poison cache');
+    assert.deepEqual(await getBook('GEN'), book, 'second request must recover');
+    assert.equal(calls, 2);
+  }
+});
+
+test('book shorter than the already loaded catalog must be rejected until corrected', async () => {
+  let calls = 0;
+  const complete = { ...book, chapters: [['chapter one'], ['chapter two']] };
+  const { state, getBook } = setup(async () => ({
+    ok: true,
+    json: async () => ++calls === 1 ? book : complete,
+  }));
+  state.catalog = { editionBooks: { uk: [{ code: 'GEN', chapters: 2 }] } };
+  await assert.rejects(getBook('GEN'), /Invalid Bible book data/);
+  assert.equal(state.bookCache.has('uk:GEN'), false);
+  assert.deepEqual(await getBook('GEN'), complete);
+  assert.equal(calls, 2);
 });
 
 // SA-05 Drive handoff adopted into the existing SA-02 reader-cache workline:

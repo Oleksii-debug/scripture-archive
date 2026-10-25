@@ -31,10 +31,13 @@ test("account security primitives and database tables are present", async () => 
   assert.match(auth, /HttpOnly; SameSite=Lax/);
   for (const table of ["accounts", "auth_sessions", "auth_tokens", "auth_rate_limits", "mission_attempts", "chapter_read_receipts"])
     assert.ok(migration.includes(`CREATE TABLE \`${table}\``), table);
+  const analyticsMigration = await read("drizzle/0005_usage_analytics.sql");
+  for (const table of ["usage_sessions", "usage_events"])
+    assert.ok(analyticsMigration.includes(`CREATE TABLE \`${table}\``), table);
 });
 
 test("state-changing API routes enforce same-origin writes", async () => {
-  for (const path of ["app/api/auth/route.ts", "app/api/attempts/route.ts", "app/api/account/route.ts", "app/api/groups/route.ts", "app/api/materials/route.ts", "app/api/content/route.ts"])
+  for (const path of ["app/api/auth/route.ts", "app/api/attempts/route.ts", "app/api/account/route.ts", "app/api/groups/route.ts", "app/api/materials/route.ts", "app/api/content/route.ts", "app/api/analytics/route.ts"])
     assert.match(await read(path), /sameOrigin\(request\)/, path);
 });
 
@@ -62,11 +65,15 @@ test("SEO endpoints use the configured public origin and protect private routes"
 });
 
 test("analytics requires consent and removes sensitive URL components", async () => {
-  const analytics = await read("public/analytics.js");
+  const [analytics, route] = await Promise.all([read("public/analytics.js"), read("app/api/analytics/route.ts")]);
   assert.match(analytics, /analytics_storage: consent === "granted" \? "granted" : "denied"/);
   assert.match(analytics, /privateRoutes\.has\(route\)/);
   assert.match(analytics, /location\.pathname/);
   assert.doesNotMatch(analytics, /page_location:\s*location\.(href|search)/);
   assert.match(analytics, /track\("page_view"\)/);
   assert.match(analytics, /allow_google_signals: false/);
+  assert.match(analytics, /activeSeconds/);
+  assert.match(analytics, /\/api\/analytics/);
+  assert.match(route, /identity\?\.email !== OWNER_EMAIL/);
+  assert.doesNotMatch(route, /cf-connecting-ip|x-forwarded-for/i);
 });

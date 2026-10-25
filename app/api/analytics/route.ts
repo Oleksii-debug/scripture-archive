@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 import { authenticateRequest, rateLimit, requestAddress, sameOrigin } from "../../../lib/auth";
+import { ownerCommunityState } from "../community/route";
 
 export const dynamic = "force-dynamic";
 
@@ -81,5 +82,6 @@ export async function GET(request: Request) {
       FROM accounts a LEFT JOIN usage_sessions s ON s.user_id=a.id
       WHERE a.deleted_at IS NULL GROUP BY a.id ORDER BY a.created_at DESC LIMIT 100`),
   ]);
-  return json({ days, accounts: accounts.results[0] || {}, summary: summary.results[0] || {}, daily: daily.results, countries: countries.results, devices: devices.results, browsers: browsers.results, pages: pages.results, events: events.results, recentUsers: recentUsers.results });
+  const community = await ownerCommunityState();
+  return json({ days, accounts: accounts.results[0] || {}, summary: summary.results[0] || {}, daily: daily.results, countries: countries.results, devices: devices.results, browsers: browsers.results, pages: pages.results, events: events.results, recentUsers: recentUsers.results, community });
 }

@@ -4,6 +4,7 @@ import {
   clearSessionCookie,
   createSession,
   hashPassword,
+  isAuthTestRequest,
   PASSWORD_ITERATIONS,
   randomToken,
   rateLimit,
@@ -71,14 +72,13 @@ export async function GET(request: Request) {
   const token = clean(url.searchParams.get("token"), 200);
   if (!token) return json({ error: "invalid_token" }, 400);
   const row = await env.DB.prepare(
-    `SELECT t.token_hash,t.user_id FROM auth_tokens t JOIN accounts a ON a.id=t.user_id
-      WHERE t.token_hash=? AND t.purpose='verify' AND t.used_at IS NULL AND t.expires_at>CURRENT_TIMESTAMP AND a.deleted_at IS NULL`,
-  ).bind(await sha256(token)).first<{ token_hash: string; user_id: string }>();
+    `UPDATE auth_tokens SET used_at=CURRENT_TIMESTAMP
+      WHERE token_hash=? AND purpose='verify' AND used_at IS NULL AND expires_at>CURRENT_TIMESTAMP
+        AND user_id IN (SELECT id FROM accounts WHERE deleted_at IS NULL)
+      RETURNING user_id`,
+  ).bind(await sha256(token)).first<{ user_id: string }>();
   if (!row) return json({ error: "invalid_or_expired_token" }, 400);
-  await env.DB.batch([
-    env.DB.prepare("UPDATE auth_tokens SET used_at=CURRENT_TIMESTAMP WHERE token_hash=?").bind(row.token_hash),
-    env.DB.prepare("UPDATE accounts SET email_verified_at=COALESCE(email_verified_at,CURRENT_TIMESTAMP),updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(row.user_id),
-  ]);
+  await env.DB.prepare("UPDATE accounts SET email_verified_at=COALESCE(email_verified_at,CURRENT_TIMESTAMP),updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(row.user_id).run();
   return Response.redirect(`${baseUrl(request)}/account?verified=1`, 303);
 }
 
@@ -115,7 +115,7 @@ export async function POST(request: Request) {
     } catch { return json({ error: "email_in_use" }, 409); }
     const token = await createOneTimeToken(id, "verify", 24 * 60);
     const delivery = await sendSecurityEmail(email, selectedLocale, "verify", `${baseUrl(request)}/api/auth?action=verify&token=${encodeURIComponent(token)}`);
-    return json({ ok: true, verificationRequired: true, emailDelivered: delivery.delivered, ...(env.AUTH_TEST_MODE === "1" ? { testToken: token } : {}) }, 201);
+    return json({ ok: true, verificationRequired: true, emailDelivered: delivery.delivered, ...(isAuthTestRequest(request) ? { testToken: token } : {}) }, 201);
   }
 
   if (action === "login") {
@@ -155,7 +155,7 @@ export async function POST(request: Request) {
     let testToken: string | undefined;
     if (account?.email_verified_at) {
       const token = await createOneTimeToken(account.id, "reset", 30);
-      if (env.AUTH_TEST_MODE === "1") testToken = token;
+      if (isAuthTestRequest(request)) testToken = token;
       await sendSecurityEmail(account.email, account.locale || "uk", "reset", `${baseUrl(request)}/account?reset=${encodeURIComponent(token)}`);
     }
     return json({ ok: true, ...(testToken ? { testToken } : {}) });
@@ -169,10 +169,16 @@ export async function POST(request: Request) {
     const record = await env.DB.prepare("SELECT token_hash,user_id FROM auth_tokens WHERE token_hash=? AND purpose='reset' AND used_at IS NULL AND expires_at>CURRENT_TIMESTAMP").bind(tokenHash).first<{ token_hash: string; user_id: string }>();
     if (!record) return json({ error: "invalid_or_expired_token" }, 400);
     const passwordData = await hashPassword(password);
+    const claimed = await env.DB.prepare(
+      `UPDATE auth_tokens SET used_at=CURRENT_TIMESTAMP
+       WHERE token_hash=? AND purpose='reset' AND used_at IS NULL AND expires_at>CURRENT_TIMESTAMP
+         AND user_id IN (SELECT id FROM accounts WHERE deleted_at IS NULL)
+       RETURNING user_id`,
+    ).bind(tokenHash).first<{ user_id: string }>();
+    if (!claimed) return json({ error: "invalid_or_expired_token" }, 400);
     await env.DB.batch([
       env.DB.prepare("UPDATE accounts SET password_hash=?,password_salt=?,password_iterations=?,session_version=session_version+1,updated_at=CURRENT_TIMESTAMP WHERE id=?")
         .bind(passwordData.hash, passwordData.salt, passwordData.iterations, record.user_id),
-      env.DB.prepare("UPDATE auth_tokens SET used_at=CURRENT_TIMESTAMP WHERE token_hash=?").bind(tokenHash),
       env.DB.prepare("UPDATE auth_sessions SET revoked_at=CURRENT_TIMESTAMP WHERE user_id=? AND revoked_at IS NULL").bind(record.user_id),
     ]);
     return json({ ok: true }, 200, { "Set-Cookie": clearSessionCookie(request) });

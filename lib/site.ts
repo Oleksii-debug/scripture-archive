@@ -1,4 +1,4 @@
-const FALLBACK_SITE_URL = "https://scripture-archive-live.bubblybasil20.chatgpt.site";
+const FALLBACK_SITE_URL = "https://scripture-archive.com";
 
 export function siteUrl() {
   const configured = process.env.NEXT_PUBLIC_SITE_URL || process.env.APP_BASE_URL || FALLBACK_SITE_URL;

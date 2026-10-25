@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 import { authenticateRequest, sameOrigin, type Identity } from "../../../lib/auth";
+import mission from "../../../content/mission-abraham.json";
 export const dynamic = "force-dynamic";
 const OWNER_EMAIL = "dordiaioleksii1@gmail.com";
 const AGE_RANGES = new Set(["13-17", "18-24", "25-34", "35-44", "45-54", "55-64", "65+"]);
@@ -9,11 +10,26 @@ const MARITAL_STATUSES = new Set(["married", "married_children", "single", "seek
 const GENDERS = new Set(["man", "woman", "prefer_not"]);
 function unauthorized(){return Response.json({error:"authentication_required"},{status:401})}
 function clean(value:unknown,max=120){return typeof value==="string"?value.trim().slice(0,max):""}
-function publicUser(id:Identity,row:Record<string,unknown>|null){return {id:id.userId,email:id.email,emailVerified:id.emailVerified,authProvider:id.provider,fullName:id.fullName,firstName:row?.first_name??"",lastName:row?.last_name??"",ageRange:row?.age_range??"",age:row?.age??null,tradition:row?.tradition??"",denomination:row?.denomination??"",church:row?.church??"",maritalStatus:row?.marital_status??"",gender:row?.gender??"",hasChildren:row?.has_children==null?null:Boolean(row.has_children),locale:row?.locale??"uk",visibility:{firstName:Boolean(row?.public_first_name),lastName:Boolean(row?.public_last_name),church:Boolean(row?.public_church)},profileComplete:Boolean(row),isOwner:id.email===OWNER_EMAIL}}
+function publicUser(id:Identity,row:Record<string,unknown>|null){return {id:id.userId,email:id.email,emailVerified:id.emailVerified,authProvider:id.provider,fullName:id.fullName,firstName:row?.first_name??"",lastName:row?.last_name??"",ageRange:row?.age_range??"",age:row?.age??null,tradition:row?.tradition??"",denomination:row?.denomination??"",church:row?.church??"",maritalStatus:row?.marital_status??"",gender:row?.gender??"",hasChildren:row?.has_children==null?null:Boolean(row.has_children),locale:row?.locale??"uk",visibility:{firstName:Boolean(row?.public_first_name),lastName:Boolean(row?.public_last_name),church:Boolean(row?.public_church),progress:Boolean(row?.public_progress)},profileComplete:Boolean(row),isOwner:id.email===OWNER_EMAIL}}
 export async function GET(request:Request){
   const action=new URL(request.url).searchParams.get("action")??"me"; const id=await authenticateRequest(request); if(!id)return action==="me"?Response.json({user:null}):unauthorized();
   if(action==="reading"){const row=await env.DB!.prepare("SELECT data FROM progress WHERE user_id=? AND mission_id='READING'").bind(id.userId).first<{data:string}>();return Response.json({reading:row?JSON.parse(row.data):[]})}
-  if(action==="progress"){const row=await env.DB!.prepare("SELECT data FROM progress WHERE user_id=? AND mission_id=?").bind(id.userId,"OT-AB-01").first<{data:string}>();return Response.json({progress:row?JSON.parse(row.data):null})}
+  if(action==="progress"){
+    const rows=await env.DB!.prepare("SELECT data FROM progress WHERE user_id=? AND mission_id LIKE 'OT-AB-01:%'").bind(id.userId).all<{data:string}>();
+    const answered=new Set<string>(),correct=new Set<string>();
+    const validTasks=new Set(mission.tasks.map(task=>task.id));
+    for(const row of rows.results){
+      try{
+        const result=JSON.parse(row.data);
+        for(const detail of result.details||[]){
+          if(!validTasks.has(detail.taskId))continue;
+          answered.add(detail.taskId);
+          if(detail.correct===true)correct.add(detail.taskId);
+        }
+      }catch{}
+    }
+    return Response.json({progress:{index:answered.size,correct:[...correct],complete:answered.size===validTasks.size}})
+  }
   if(action==="users"){if(id.email!==OWNER_EMAIL)return Response.json({error:"forbidden"},{status:403});const rows=await env.DB!.prepare("SELECT email,first_name,last_name,age_range,locale,created_at,updated_at FROM profiles ORDER BY created_at DESC LIMIT 250").all();return Response.json({users:rows.results})}
   const row=await env.DB!.prepare("SELECT * FROM profiles WHERE user_id=?").bind(id.userId).first<Record<string,unknown>>(); return Response.json({user:publicUser(id,row)});
 }
@@ -22,8 +38,8 @@ async function write(request:Request){
   if(!sameOrigin(request))return Response.json({error:"cross_origin_request"},{status:403});
   const id=await authenticateRequest(request);if(!id)return unauthorized();const action=new URL(request.url).searchParams.get("action")??"profile";const body=await request.json().catch(()=>null) as Record<string,unknown>|null;if(!body)return Response.json({error:"invalid_json"},{status:400});
   if(action==="reading"){if(!Array.isArray(body.reading)||body.reading.length>2000)return Response.json({error:"invalid_reading"},{status:400});const reading=body.reading.filter((r):r is Record<string,unknown>=>Boolean(r)&&typeof r==="object").map(r=>({book:clean(r.book,4),chapter:Number(r.chapter),title:clean(r.title,100)})).filter(r=>/^[1-3]?[A-Z]{2,3}$/.test(r.book)&&Number.isInteger(r.chapter)&&r.chapter>0&&r.chapter<=151);await env.DB!.prepare("INSERT INTO progress (user_id,mission_id,data,updated_at) VALUES (?,'READING',?,CURRENT_TIMESTAMP) ON CONFLICT(user_id,mission_id) DO UPDATE SET data=excluded.data,updated_at=CURRENT_TIMESTAMP").bind(id.userId,JSON.stringify(reading)).run();return Response.json({ok:true})}
-  if(action==="progress"){const encoded=JSON.stringify(body.progress??{});if(encoded.length>20000)return Response.json({error:"progress_too_large"},{status:413});await env.DB!.prepare("INSERT INTO progress (user_id,mission_id,data,updated_at) VALUES (?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id,mission_id) DO UPDATE SET data=excluded.data,updated_at=CURRENT_TIMESTAMP").bind(id.userId,"OT-AB-01",encoded).run();return Response.json({ok:true})}
-  if(action==="visibility"){await env.DB!.prepare("UPDATE profiles SET public_first_name=?,public_last_name=?,public_church=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?").bind(body.firstName===true?1:0,body.lastName===true?1:0,body.church===true?1:0,id.userId).run();const row=await env.DB!.prepare("SELECT * FROM profiles WHERE user_id=?").bind(id.userId).first<Record<string,unknown>>();return Response.json({user:publicUser(id,row)})}
+  if(action==="progress")return Response.json({error:"progress_is_server_managed"},{status:403});
+  if(action==="visibility"){await env.DB!.prepare("UPDATE profiles SET public_first_name=?,public_last_name=?,public_church=?,public_progress=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?").bind(body.firstName===true?1:0,body.lastName===true?1:0,body.church===true?1:0,body.progress===true?1:0,id.userId).run();const row=await env.DB!.prepare("SELECT * FROM profiles WHERE user_id=?").bind(id.userId).first<Record<string,unknown>>();return Response.json({user:publicUser(id,row)})}
   if(action!=="profile")return Response.json({error:"unknown_action"},{status:400});
   const firstName=clean(body.firstName,80),lastName=clean(body.lastName,80),ageRange=clean(body.ageRange,10),rawTradition=clean(body.tradition,40),maritalStatus=clean(body.maritalStatus,40),gender=clean(body.gender,30);if(!firstName||!lastName||!AGE_RANGES.has(ageRange)||body.acceptPrivacy!==true)return Response.json({error:"required_fields"},{status:400});
   if((rawTradition&&!TRADITIONS.has(rawTradition))||(maritalStatus&&!MARITAL_STATUSES.has(maritalStatus))||(gender&&!GENDERS.has(gender)))return Response.json({error:"invalid_profile_option"},{status:400});

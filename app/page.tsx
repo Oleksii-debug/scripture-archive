@@ -20,8 +20,10 @@ export default function Home() {
           <a href="/builder" data-route="builder" data-workspace="builder">Конструктор</a>
           <a href="/progress" data-route="progress" data-workspace="progress">Мій прогрес</a>
           <a href="/groups" data-route="groups" data-i18n="groups">Домашні групи</a>
+          <a href="/community" data-route="community" data-i18n="community">Спільнота</a>
           <a href="/atlas" data-route="atlas" data-i18n="atlas">Атлас розвитку</a>
           <a href="/support" data-route="support" data-i18n="support">Підтримати</a>
+          <a href="/help" data-route="help" data-i18n="help">Служба підтримки</a>
           <a href="/about" data-route="about" data-i18n="about">Про проєкт</a>
           <a href="/account" data-route="account" data-i18n="account">Обліковий запис</a>
         </nav>
@@ -43,3 +45,5 @@ export default function Home() {
     </>
   );
 }
+
+

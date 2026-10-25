@@ -6,7 +6,7 @@ This document describes the **existing** Vinext/Cloudflare Sites project declare
 in `.openai/hosting.json`; the presence of a project binding is **not**
 evidence that an artifact or this commit is serving public requests.
 
-- Exact inspected GitHub `main` commit: `93591836b53a36e0114ab2bc4bd92632128e8d96`.
+- Exact GitHub `main` commit inspected for this checkpoint: `6d2eff033380afef9d04f98ef98d87fa78688a11` (source only; **NOT** a deployed SHA). Historical initial PR base: `93591836b53a36e0114ab2bc4bd92632128e8d96`.
 - The separately stored Google Drive archive
   `scripture-archive-live-f8eba64.zip` follows historical source commit
   `f8eba649ba404b9751e22bd45773a0fa0c06f122`. It must not
@@ -27,7 +27,7 @@ evidence that an artifact or this commit is serving public requests.
   `/about`, and `/privacy` routes. **Reject promoting this old artifact
   to the temporary origin without rebuilding and requalifying it.**
   Current `main` defines dynamic SEO routes, but their live behavior has
-  not been verified.
+  not been independently verified in this SA-13 run.
 - A public URL in a file, domain mention in SEO metadata, or a successful
   source test does **not** prove the domain is registered, DNS is configured,
   HTTPS works, or the correct SHA was deployed.
@@ -73,9 +73,9 @@ evidence that an artifact or this commit is serving public requests.
    migration is safe; preserve migration/backup evidence.
 
 **Current gate:** source and historical-artifact inspection only.
-Live HTTPS, DNS/ownership, current-SHA deployment, database migration,
+Independently observed current live HTTPS, DNS/ownership, current-SHA deployment, database migration,
 reviewed promotion, real browser flow, and physical NVDA remain
-**NOT VERIFIED**. Do not label any release `DEPLOYED_SHA_VERIFIED`
+**NOT VERIFIED in SA-13**. The repository's separate `docs/RELEASE_AUDIT_2026-10-25.md` reports HTTPS 200 for an older public application and 404 for new routes; that is historical audit evidence, not a release-SHA match. Do not label any release `DEPLOYED_SHA_VERIFIED`
 or `PUBLIC_READY` from these notes.
 
 
@@ -148,12 +148,10 @@ owner permission and D1 migration/rollback qualification remain **NOT DONE**.
 ## Required production bindings
 
 - D1 binding: `DB`
-- `APP_BASE_URL` set to the current public origin; use
-  `https://scripture-archive-live.bubblybasil20.chatgpt.site` until the custom
-  domain is connected, then change it to `https://scripture-archive.com`
+- `APP_BASE_URL` set only to the explicitly owner-approved, verified HTTPS origin (do not assume `scripture-archive.com` is owned or connected solely because it appears in source)
 - `NEXT_PUBLIC_SITE_URL` set to the same public origin; canonical links,
   `robots.txt`, `sitemap.xml`, Open Graph URLs, and structured data use it
-- `EMAIL_FROM=Scripture Archive <no-reply@scripture-archive.com>`
+- `EMAIL_FROM=Scripture Archive <no-reply@scripture-archive.com>` only after owner approval and sending-domain verification
 - secret `EMAIL_API_KEY` for the Resend API
 - `NEXT_PUBLIC_GA4_ID` after the owner creates or selects the Scripture Archive
   GA4 property
@@ -161,10 +159,14 @@ owner permission and D1 migration/rollback qualification remain **NOT DONE**.
   verification token for a URL-prefix property
 
 `AUTH_TEST_MODE` must be absent in production. It is only for local automated
-tests and exposes one-time test tokens in API responses.
+tests; one-time test tokens are returned only for loopback request origins.
+Leave `TRUST_PLATFORM_AUTH` absent for ordinary hosting. Set it to `1` only
+when an authenticated hosting gateway guarantees that client-supplied
+`oai-authenticated-*` headers are removed and replaced. Password accounts do not
+need this setting. Untrusted headers must never grant owner access.
 
-Apply all migrations in `drizzle/` to the production D1 database before the
-new worker receives traffic. Configure the sending domain in Resend and publish
+Only after explicit owner approval, a validated backup and an isolated rehearsal, apply the required migrations in `drizzle/` to the intended D1 database before
+any new worker receives production traffic. Do not automatically run production migrations. Configure the sending domain in Resend and publish
 the provider-supplied SPF and DKIM records. Publish a DMARC record separately;
 start with an address-owned reporting mailbox and increase policy enforcement
 only after delivery reports are healthy.
@@ -185,9 +187,16 @@ npx tsc --noEmit
 npm run lint
 npm test
 npm run build
+npm run test:integration
 ```
 
-The integration test requires a local worker with the migrations applied:
+`test:integration` creates a new temporary local D1 database, applies all eight
+migrations, starts a loopback worker, runs the checks, then stops the worker and
+removes its own temporary database. It never uses the production database.
+Checks include concurrent reuse of verification/reset tokens, rejected identity
+header spoofing, server-owned grading and progress restored in another session.
+
+Alternatively, tests can target an already running local test worker:
 
 ```sh
 SCRIPTURE_TEST_URL=http://127.0.0.1:8787 node --test tests/api-flow.test.mjs
@@ -199,10 +208,11 @@ domain only after registration is complete, then verify the apex and `www`
 hostnames, HTTPS redirects, certificate renewal, direct public routes,
 `robots.txt`, and `sitemap.xml` from an external connection.
 
+The separate repository `docs/RELEASE_AUDIT_2026-10-25.md` reports an HTTPS 200 response serving an older build on 2026-10-25; `/account`, `/api/auth`, `/robots.txt`, and `/sitemap.xml` reportedly returned 404. This is attributed prior-run evidence, not an independently repeated live probe in the present SA-13 run, proof of domain ownership, or confirmation that this release was deployed.
+
 ## Google verification and analytics
 
-The current `chatgpt.site` origin can be indexed before the custom domain is
-available. Create a URL-prefix Search Console property for the exact HTTPS
+An owner-authorized, verified `chatgpt.site` origin may be indexed before a separately verified custom domain is available. Create a URL-prefix Search Console property for the exact HTTPS
 origin, place its HTML-tag token in `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION`,
 redeploy, verify ownership, and submit `/sitemap.xml`. When the custom domain is
 connected, create the domain property with its DNS TXT record and update both

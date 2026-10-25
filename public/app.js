@@ -2,7 +2,7 @@ import {renderWorkspace, workspaceCopy} from './workspace.js';
 import {supportSection} from './support.js';
 import {homePage} from './home.js';
 import {EDITIONS, editionCopy, selectedEdition, editionUrl, editionSelect} from './editions.js';
-import {readerVerseHref, focusRequestedVerse} from './reader-verse-links.js';
+import {readerVerseHref, focusRequestedVerse, readerChapterNumber} from './reader-verse-links.js';
 
 const I18N = {
   uk: {
@@ -2468,10 +2468,7 @@ async function renderReader(parts) {
   const books = catalog.editionBooks?.[chosenEdition.id] || catalog.books[state.lang];
   const code = (parts[1] || state.reader.book || "GEN").toUpperCase();
   const meta = books.find((b) => b.code === code) || books[0];
-  const chapter = Math.min(
-    Math.max(Number(parts[2] || state.reader.chapter || 1) || 1, 1),
-    meta.chapters,
-  );
+  const chapter = readerChapterNumber(parts[2] || state.reader.chapter || 1, meta.chapters);
   const groupId = parts[3] === "group" ? parts[4] || "" : "";
   state.reader = { book: meta.code, chapter };
   state.currentReader = { book: meta.code, chapter };

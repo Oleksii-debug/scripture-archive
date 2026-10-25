@@ -3302,7 +3302,7 @@ async function route() {
     const name = parts[0] || "home";
     if (name !== "reader") state.currentReader = null;
     if (name === "reader")
-      await renderReader(parts.length > 1 ? parts : ["reader", "JHN", "3"]);
+      await renderReader(parts);
     else if (name === "missions") await renderMissions();
     else if (name === "mission") await renderMission(parts);
     else if (name === "groups" && parts[1]) await renderGroup(parts[1]);

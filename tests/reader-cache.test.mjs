@@ -23,6 +23,26 @@ function setup(fetch) {
 
 const book = { bookCode: 'GEN', locale: 'uk', editionId: 'uk', chapters: [['In the beginning']] };
 
+test('every shipped local edition can load its actual catalog books', async () => {
+  const { EDITIONS } = await import('../public/editions.js');
+  const catalog = JSON.parse(await readFile(new URL('../public/data/catalog.json', import.meta.url), 'utf8'));
+  for (const locale of ['uk', 'ru', 'en']) {
+    for (const edition of EDITIONS[locale].filter(value => value.local)) {
+      const state = { lang: locale, bookCache: new Map(), catalog };
+      const getBook = vm.runInNewContext('(' + functionSource + ')', {
+        state, EDITIONS, selectedEdition: () => edition, Error,
+        fetch: async path => ({ ok: true, json: async () => JSON.parse(await readFile(new URL('../public' + path, import.meta.url), 'utf8')) }),
+      });
+      const books = catalog.editionBooks?.[edition.id] || catalog.books[locale];
+      for (const entry of books) {
+        const loaded = await getBook(entry.code);
+        assert.equal(loaded.editionId, edition.contentId || edition.id, edition.id);
+        assert.equal(loaded.chapters.length, entry.chapters, `${edition.id} ${entry.code}`);
+      }
+    }
+  }
+});
+
 test('reader retries transient HTTP failure without page reload', async () => {
   let calls = 0;
   const { state, getBook } = setup(async () =>

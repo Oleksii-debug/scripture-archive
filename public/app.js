@@ -2251,7 +2251,7 @@ async function getBook(code) {
         const entries = state.catalog?.editionBooks?.[edition.id] || state.catalog?.books?.[requestLocale];
         const expectedChapters = entries?.find((entry) => entry.code === code)?.chapters;
         if (!book || book.bookCode !== code || book.locale !== requestLocale ||
-            book.editionId !== edition.id || !Array.isArray(book.chapters) ||
+            book.editionId !== (edition.contentId || edition.id) || !Array.isArray(book.chapters) ||
             !book.chapters.length ||
             (expectedChapters && book.chapters.length !== expectedChapters) ||
             book.chapters.some((chapter) => !Array.isArray(chapter) || !chapter.length ||

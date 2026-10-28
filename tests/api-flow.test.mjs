@@ -70,6 +70,35 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const ownerLogin = await fetch(`${base}/api/auth?action=login`, {method:"POST",headers:{Origin:base,"Content-Type":"application/json"},body:JSON.stringify({email:ownerPayload.email,password:ownerPassword})});
   assert.equal(ownerLogin.status, 200);
   const ownerCookie = ownerLogin.headers.get("set-cookie").split(";",1)[0];
+  const mark = { edition: "en-web", book: "GEN", chapter: 12 };
+  const bookmarkWrite = (body, method = "PUT", origin = base) => fetch(`${base}/api/bookmarks`, { method, headers: { Origin: origin, Cookie: cookie, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  assert.equal((await fetch(`${base}/api/bookmarks`)).status, 401);
+  assert.equal((await bookmarkWrite(mark, "PUT", "https://attacker.invalid")).status, 403);
+  const invalidBookmark = await bookmarkWrite({ ...mark, chapter: -1 });
+  assert.equal(invalidBookmark.status, 400, (await invalidBookmark.text()).slice(0, 500));
+  assert.equal((await bookmarkWrite(mark)).status, 200);
+  assert.equal((await bookmarkWrite(mark)).status, 200, "saving a bookmark twice is idempotent");
+  const ownBookmarks = await (await fetch(`${base}/api/bookmarks`, { headers: { Cookie: cookie } })).json();
+  assert.equal(ownBookmarks.bookmarks.length, 1);
+  assert.equal(ownBookmarks.bookmarks[0].book, "GEN");
+  assert.equal((await fetch(`${base}/api/reading-export`)).status, 401);
+  const exportResponse = await fetch(`${base}/api/reading-export`, { headers: { Cookie: cookie } });
+  assert.equal(exportResponse.status, 200);
+  assert.match(exportResponse.headers.get("cache-control"), /no-store/);
+  assert.match(exportResponse.headers.get("content-disposition"), /attachment/);
+  const ownExport = await exportResponse.json();
+  assert.equal(ownExport.account.email, email);
+  assert.equal(ownExport.profile.first_name, "Test");
+  assert.equal(ownExport.bookmarks.length, 1);
+  assert.equal(JSON.stringify(ownExport).includes(firstPassword), false);
+  assert.doesNotMatch(JSON.stringify(ownExport), /password_hash|password_salt|token_hash/);
+  const ownerExport = await (await fetch(`${base}/api/reading-export`, { headers: { Cookie: ownerCookie } })).json();
+  assert.equal(ownerExport.bookmarks.length, 0, "another account's bookmarks must never appear in this export");
+  assert.notEqual(ownerExport.account.email, ownExport.account.email);
+  const otherBookmarks = await (await fetch(`${base}/api/bookmarks`, { headers: { Cookie: ownerCookie } })).json();
+  assert.equal(otherBookmarks.bookmarks.length, 0, "bookmarks are private to the account");
+  assert.equal((await bookmarkWrite(mark, "DELETE")).status, 200);
+  assert.equal((await (await fetch(`${base}/api/bookmarks`, { headers: { Cookie: cookie } })).json()).bookmarks.length, 0);
   const beforeHelp = await (await fetch(`${base}/api/help`, { headers: { Cookie: ownerCookie } })).json();
   async function submitHelp(bytes, filename, type) {
     const form = new FormData();
@@ -86,6 +115,24 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const afterHelp = await (await fetch(`${base}/api/help`, { headers: { Cookie: ownerCookie } })).json();
   assert.equal(afterHelp.items.length, beforeHelp.items.length + 1);
   assert.equal(afterHelp.items[0].attachment_count, 1);
+  // Exercise the real Worker and local D1 with stale snapshots from concurrent tabs.
+  const reading = chapter => ({ book: "GEN", chapter, title: `Genesis ${chapter}` });
+  const writes = await Promise.all([12, 13].map(chapter => request("/api/account?action=reading", {
+    method: "PUT", body: { reading: [reading(chapter)] },
+  })));
+  assert.deepEqual(writes.map(item => item.response.status), [200, 200]);
+  result = await request("/api/account?action=reading", { method: "PUT", body: { reading: [reading(12)] } });
+  assert.equal(result.response.status, 200);
+  result = await request("/api/account?action=reading");
+  assert.deepEqual(result.data.reading.map(row => row.chapter).sort((a, b) => a - b), [12, 13]);
+
+  const material = { id: `integration-${crypto.randomUUID()}`, title: "Test material", prompt: "Choose an answer", reference: "GEN 12", explanation: "Test explanation", answer: "one", options: ["one", "two"] };
+  result = await request("/api/materials", { method: "POST", body: material });
+  assert.equal(result.response.status, 201);
+  const forbiddenMaterial = await fetch(`${base}/api/materials`, { method: "POST", headers: { Origin: base, Cookie: ownerCookie, "Content-Type": "application/json" }, body: JSON.stringify({ ...material, title: "Overwrite attempt" }) });
+  assert.equal(forbiddenMaterial.status, 403);
+  result = await request("/api/materials?mine=1");
+  assert.equal(result.data.materials.find(item => item.id === material.id).title, material.title);
   const analyticsResponse = await fetch(`${base}/api/analytics?days=30`, { headers: { Cookie:ownerCookie } });
   assert.equal(analyticsResponse.status, 200);
   const analytics = await analyticsResponse.json();
@@ -104,7 +151,7 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const community = await communityResponse.json();
   const publicMember = community.members.find(member => member.displayName === "Test Reader");
   assert.ok(publicMember);
-  assert.equal(publicMember.chaptersRead, 0);
+  assert.equal(publicMember.chaptersRead, 2);
   assert.equal("sourceKind" in publicMember, false);
   result = await request("/api/account?action=progress", { method: "PUT", body: { progress: {} }, origin: "https://attacker.invalid" });
   assert.equal(result.response.status, 403);
@@ -141,6 +188,8 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const secondBrowserCookie = secondBrowserLogin.headers.get("set-cookie").split(";",1)[0];
   const restoredProgress = await fetch(`${base}/api/account?action=progress`, {headers:{Cookie:secondBrowserCookie}});
   assert.equal((await restoredProgress.json()).progress.correct.length, chapter12.length);
+  const learningExport = await (await fetch(`${base}/api/reading-export`, { headers: { Cookie: cookie } })).json();
+  assert.ok(learningExport.progress.some(item => item.mission.startsWith("OT-AB-01:")));
 
   await request("/api/attempts?action=read", { method: "POST", body: { book: "GEN", chapter: 12 } });
   result = await request("/api/attempts?action=start", { method: "POST", body: { missionId: "OT-AB-01", book: "GEN", chapter: 12, locale: "en" } });
@@ -175,6 +224,15 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal(result.data.error, "attempt_invalidated");
 
   const groupBody = { name: "Integration group", visibility: "private", rosterVisibility: "private", weeklyGoal: 3, catchupMode: "flexible", marathonEnabled: false, bibleEdition: "en-web" };
+  result = await request("/api/groups?action=create", { method: "POST", body: { ...groupBody, name: "Public privacy test", visibility: "public" } });
+  const publicGroupId = result.data.groupId;
+  result = await request("/api/groups?action=session", { method: "POST", body: { groupId: publicGroupId, bookId: "GEN", chapter: 12, answersTotal: 2, answersCorrect: 1, meetingDate: "2026-10-28", reflection: "Private group discussion" } });
+  assert.equal(result.response.status, 200);
+  result = await request(`/api/groups?groupId=${encodeURIComponent(publicGroupId)}`);
+  assert.equal(result.data.sessions[0].reflection, "Private group discussion");
+  const publicGroup = await fetch(`${base}/api/groups?groupId=${encodeURIComponent(publicGroupId)}`);
+  assert.equal(publicGroup.status, 200);
+  assert.equal((await publicGroup.json()).sessions[0].reflection, null);
   result = await request("/api/groups?action=create", { method: "POST", body: groupBody });
   assert.equal(result.response.status, 201);
   const groupId = result.data.groupId;
@@ -287,4 +345,16 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal(result.response.status, 200);
   result = await request("/api/account?action=me");
   assert.equal(result.data.user, null);
+  result = await request("/api/auth?action=login", { method: "POST", body: { email, password: secondPassword } });
+  assert.equal(result.response.status, 200);
+  assert.equal((await bookmarkWrite(mark)).status, 200);
+  const deletionSession = cookie;
+  result = await request("/api/auth?action=delete-account", { method: "POST", body: { password: "wrong-password" } });
+  assert.equal(result.response.status, 401);
+  result = await request("/api/auth?action=delete-account", { method: "POST", body: { password: secondPassword } });
+  assert.equal(result.response.status, 200);
+  assert.equal((await (await fetch(`${base}/api/account?action=me`, { headers: { Cookie: deletionSession } })).json()).user, null);
+  assert.equal((await fetch(`${base}/api/bookmarks`, { headers: { Cookie: cookie } })).status, 401);
+  result = await request("/api/auth?action=login", { method: "POST", body: { email, password: secondPassword } });
+  assert.equal(result.response.status, 401);
 });

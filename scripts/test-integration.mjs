@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
-import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
+import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -59,6 +60,21 @@ try {
     { env: { ...options.env, SCRIPTURE_TEST_URL: base } });
   await run(["--experimental-strip-types", "scripts/test-learning-agent.mjs", "--local-test", "--smoke"],
     { env: { ...options.env, COMMUNITY_ORIGIN: base } });
+  // The HTTP test deletes the only user who saved a bookmark. Inspect the
+  // actual disposable D1 backing database to verify deletion removed its rows.
+  const directory = path.join(state, "v3", "d1", "miniflare-D1DatabaseObject");
+  const databases = (await readdir(directory)).filter(name => name.endsWith(".sqlite"));
+  let inspected = 0;
+  for (const name of databases) {
+    const db = new DatabaseSync(path.join(directory, name), { readOnly: true });
+    try {
+      if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='reader_bookmarks'").get()) continue;
+      inspected++;
+      const row = db.prepare("SELECT COUNT(*) AS count FROM reader_bookmarks").get();
+      if (Number(row.count) !== 0) throw Error("Deleted account retained reader bookmarks");
+    } finally { db.close(); }
+  }
+  if (inspected !== 1) throw Error(`Expected one bookmark database, found ${inspected}`);
 } catch(error) {
   console.error(logs.replace(/([?&](?:token|reset)=)[^&\s]+/g,"$1[redacted]").replace(/(sa_(?:agent|session)=)[^;\s]+/g,"$1[redacted]"));
   throw error;

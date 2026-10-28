@@ -70,21 +70,22 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const ownerLogin = await fetch(`${base}/api/auth?action=login`, {method:"POST",headers:{Origin:base,"Content-Type":"application/json"},body:JSON.stringify({email:ownerPayload.email,password:ownerPassword})});
   assert.equal(ownerLogin.status, 200);
   const ownerCookie = ownerLogin.headers.get("set-cookie").split(";",1)[0];
-  const supportList = async () => (await (await fetch(`${base}/api/help`, { headers: { Cookie: ownerCookie } })).json()).items;
-  const beforeSupport = await supportList();
-  function supportForm(file) {
+  const beforeHelp = await (await fetch(`${base}/api/help`, { headers: { Cookie: ownerCookie } })).json();
+  async function submitHelp(bytes, filename, type) {
     const form = new FormData();
-    form.set("email", "fixture@example.invalid"); form.set("subject", "Integration test");
-    form.set("message", "Disposable support test"); form.set("acceptPrivacy", "yes");
-    form.append("files", file); return form;
+    for (const [key, value] of Object.entries({ email, subject: "Support fixture", message: "Local integration fixture only", locale: "en", acceptPrivacy: "yes" })) form.set(key, value);
+    form.append("files", new File([bytes], filename, { type }));
+    return fetch(`${base}/api/help`, { method: "POST", headers: { Origin: base, Cookie: cookie }, body: form });
   }
-  const invalidUpload = await fetch(`${base}/api/help`, { method: "POST", headers: { Origin: base }, body: supportForm(new File(["not a png"], "fake.png", { type: "image/png" })) });
-  assert.equal(invalidUpload.status, 400);
-  assert.equal((await supportList()).length, beforeSupport.length);
-  const validUpload = await fetch(`${base}/api/help`, { method: "POST", headers: { Origin: base }, body: supportForm(new File(["safe fixture"], "note.txt", { type: "text/plain" })) });
-  assert.equal(validUpload.status, 201);
-  assert.equal((await supportList()).length, beforeSupport.length + 1);
-  assert.equal((await fetch(`${base}/api/help`)).status, 403);
+  const rejectedHelp = await submitHelp("not a PNG", "fake.png", "image/png");
+  assert.equal(rejectedHelp.status, 400);
+  assert.equal((await (await fetch(`${base}/api/help`, { headers: { Cookie: ownerCookie } })).json()).items.length, beforeHelp.items.length);
+  const image = Uint8Array.from(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGMQUDD4DwACBAFgjby7cQAAAABJRU5ErkJggg==", "base64"));
+  const acceptedHelp = await submitHelp(image, "fixture.png", "image/png");
+  assert.equal(acceptedHelp.status, 201);
+  const afterHelp = await (await fetch(`${base}/api/help`, { headers: { Cookie: ownerCookie } })).json();
+  assert.equal(afterHelp.items.length, beforeHelp.items.length + 1);
+  assert.equal(afterHelp.items[0].attachment_count, 1);
   // Exercise the real Worker and local D1 with stale snapshots from concurrent tabs.
   const reading = chapter => ({ book: "GEN", chapter, title: `Genesis ${chapter}` });
   const writes = await Promise.all([12, 13].map(chapter => request("/api/account?action=reading", {
@@ -134,7 +135,7 @@ integration("account, progress, attempts, groups, marathon limit and password re
   for (const forbidden of ["book", "chapter", "verses", "reference", "correct", "success", "hint", "id"])
     assert.equal(forbidden in result.data.task, false, forbidden);
   result = await request("/api/attempts?action=manifest");
-  assert.deepEqual(Object.keys(result.data).sort(), ["id", "locked", "taskCount"]);
+  assert.deepEqual(Object.keys(result.data).sort(), ["locked", "taskCount"]);
   for (let index = 0; index < chapter12.length; index += 1) {
     if(index===0){
       const answers=await Promise.all([0,1].map(()=>request("/api/attempts?action=answer", {method:"POST",body:{attemptId,taskIndex:1,selected:chapter12[0].correct}})));
@@ -163,8 +164,30 @@ integration("account, progress, attempts, groups, marathon limit and password re
   result = await request("/api/attempts?action=start", { method: "POST", body: { missionId: "OT-AB-01", book: "GEN", chapter: 12, locale: "en" } });
   const invalidatedId = result.data.attemptId;
   result = await request("/api/attempts?action=chapter&book=GEN&chapter=12");
-  assert.equal(result.data.active.id, invalidatedId);
-  await request("/api/attempts?action=invalidate", { method: "POST", body: { attemptId: invalidatedId, reason: "chapter_opened" } });
+  assert.equal(result.response.status, 405);
+  assert.equal(result.response.headers.get("allow"), "POST");
+  assert.deepEqual(result.data, { error: "method_not_allowed" });
+  const unrelatedLookup = await request("/api/attempts?action=chapter&book=JHN&chapter=3", { useCookie: false });
+  assert.equal(unrelatedLookup.response.status, 405);
+  assert.deepEqual(unrelatedLookup.data, result.data);
+  result = await request("/api/attempts?action=chapter", { method: "POST", body: { book: "GEN", chapter: 12 }, origin: "https://attacker.invalid" });
+  assert.equal(result.response.status, 403);
+  for (const options of [
+    { body: { book: "GEN", chapter: 12 }, useCookie: false },
+    { body: { book: "GEN", chapter: 13 } },
+  ]) {
+    result = await request("/api/attempts?action=chapter", { method: "POST", ...options });
+    assert.equal(result.response.status, 200);
+    assert.deepEqual(result.data, { invalidated: false });
+  }
+  const otherActorReopen = await fetch(`${base}/api/attempts?action=chapter`, { method: "POST", headers: { Cookie: ownerCookie, Origin: base, "Content-Type": "application/json" }, body: JSON.stringify({ book: "GEN", chapter: 12 }) });
+  assert.deepEqual(await otherActorReopen.json(), { invalidated: false });
+  result = await request(`/api/attempts?action=current&attemptId=${encodeURIComponent(invalidatedId)}`);
+  assert.equal(result.response.status, 200, "unrelated readers and cross-origin requests must not invalidate an attempt");
+  const reopened = await Promise.all([0, 1].map(() => request("/api/attempts?action=chapter", { method: "POST", body: { book: "GEN", chapter: 12, groupId: "unrelated-group" } })));
+  assert.deepEqual(reopened.map(item => item.response.status), [200, 200]);
+  assert.deepEqual(reopened.map(item => item.data.invalidated).sort(), [false, true]);
+  for (const item of reopened) assert.deepEqual(Object.keys(item.data), ["invalidated"]);
   result = await request(`/api/attempts?action=current&attemptId=${encodeURIComponent(invalidatedId)}`);
   assert.equal(result.response.status, 409);
   assert.equal(result.data.error, "attempt_invalidated");
@@ -184,6 +207,17 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const groupId = result.data.groupId;
   await request("/api/attempts?action=read", { method: "POST", body: { book: "GEN", chapter: 12, groupId } });
   result = await request("/api/attempts?action=start", { method: "POST", body: { missionId: "OT-AB-01", book: "GEN", chapter: 12, locale: "en", groupId } });
+  assert.equal(result.response.status, 201);
+  const firstGroupAttemptId = result.data.attemptId;
+  // A personal reader still exposes the same text to the same person. It must
+  // invalidate a group assessment even when no group context is supplied.
+  result = await request("/api/attempts?action=chapter", { method: "POST", body: { book: "GEN", chapter: 12 } });
+  assert.deepEqual(result.data, { invalidated: true });
+  result = await request(`/api/attempts?action=current&attemptId=${encodeURIComponent(firstGroupAttemptId)}`);
+  assert.equal(result.response.status, 409);
+  await request("/api/attempts?action=read", { method: "POST", body: { book: "GEN", chapter: 12, groupId } });
+  result = await request("/api/attempts?action=start", { method: "POST", body: { missionId: "OT-AB-01", book: "GEN", chapter: 12, locale: "en", groupId } });
+  assert.equal(result.response.status, 201);
   const groupAttemptId = result.data.attemptId;
   for (let index = 0; index < chapter12.length; index += 1)
     result = await request("/api/attempts?action=answer", { method: "POST", body: { attemptId: groupAttemptId, taskIndex: index + 1, selected: chapter12[index].correct } });

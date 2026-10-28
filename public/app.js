@@ -3372,6 +3372,20 @@ function renderAccount() {
       en: ["Export data", "Download profile, learning history and bookmarks", "The file does not include other account data or support attachments."],
     }[state.lang] || ["Export data", "Download profile, learning history and bookmarks", "The file does not include other account data or support attachments."];
     document.querySelector(".profile-controls")?.insertAdjacentHTML("beforebegin", `<section class="profile-controls"><h2>${exportCopy[0]}</h2><p>${exportCopy[2]}</p><a class="button" href="/api/reading-export" download="scripture-archive-reading-data.json">${exportCopy[1]}</a></section>`);
+    const sensitiveCopy = {
+      uk: ["Релігійні відомості", "Якщо зняти згоду та зберегти, традицію, деномінацію і церкву буде видалено з профілю.", "Деномінація", "Церква", "Збережено."],
+      ru: ["Религиозные сведения", "Если снять согласие и сохранить, традиция, деноминация и церковь будут удалены из профиля.", "Деноминация", "Церковь", "Сохранено."],
+      en: ["Religious information", "If you withdraw consent and save, your tradition, denomination and church are removed from your profile.", "Denomination", "Church", "Saved."],
+    }[state.lang];
+    const traditionOptions=sets.religion.map(([value,label])=>`<option value="${esc(value)}" ${value===(state.user.tradition||"")?"selected":""}>${esc(label)}</option>`).join("");
+    document.querySelector(".profile-controls")?.insertAdjacentHTML("beforebegin", `<section class="profile-controls"><h2>${sensitiveCopy[0]}</h2><p>${sensitiveCopy[1]}</p><form id="sensitive-form" class="account-form"><label class="account-field"><span>${t("religion")} · ${t("optional")}</span><select name="tradition">${traditionOptions}</select></label><label class="account-field"><span>${sensitiveCopy[2]} · ${t("optional")}</span><input name="denomination" maxlength="160" value="${esc(state.user.denomination||"")}"></label><label class="account-field"><span>${sensitiveCopy[3]} · ${t("optional")}</span><input name="church" maxlength="160" value="${esc(state.user.church||"")}"></label><label class="account-check"><input name="acceptSensitive" type="checkbox"><span>${t("sensitiveAgree")}</span></label><button class="button" type="submit">${copy.save}</button><p id="sensitive-state" role="status"></p></form></section>`);
+    document.querySelector("#sensitive-form").onsubmit=async event=>{
+      event.preventDefault();const form=event.currentTarget,data=new FormData(form),status=document.querySelector("#sensitive-state"),accepted=data.has("acceptSensitive");
+      try{state.user=(await accountRequest("sensitive-consent","PUT",{acceptSensitive:accepted,tradition:data.get("tradition"),denomination:data.get("denomination"),church:data.get("church")})).user;
+        if(!accepted){form.elements.tradition.value="";form.elements.denomination.value="";form.elements.church.value="";const publicChurch=document.querySelector('#visibility-form [name="church"]');if(publicChurch)publicChurch.checked=false;}
+        status.textContent=sensitiveCopy[4];
+      }catch{status.textContent=copy.error}
+    };
     document.querySelector("#logout-button").onclick=async()=>{await authRequest("logout");state.user=null;clearPersonalProgress();renderAccount()};
     document.querySelector("#visibility-form").onsubmit=async event=>{event.preventDefault();const form=new FormData(event.currentTarget),status=document.querySelector("#visibility-state");try{state.user=(await accountRequest("visibility","PUT",{firstName:form.has("firstName"),lastName:form.has("lastName"),church:form.has("church"),progress:form.has("progress")})).user;status.textContent=copy.saved}catch{status.textContent=copy.error}};
     if(document.querySelector("#password-form"))document.querySelector("#password-form").onsubmit=async event=>{event.preventDefault();const status=document.querySelector("#password-state"),data=Object.fromEntries(new FormData(event.currentTarget));try{await authRequest("change-password",data);state.user=null;clearPersonalProgress();renderAccount()}catch{status.textContent=copy.error}};

@@ -28,7 +28,7 @@ class D1Test {
 }
 function fixture(mode){const dir=mkdtempSync(join(tmpdir(),'sa10-canonical-'));const file=join(dir,'test.sqlite');const db=new D1Test(file);
   db.db.exec(`PRAGMA journal_mode=${mode}`);db.db.exec(sqlTable('progress'));db.db.exec(sqlTable('profiles'));
-  for(const col of ['privacy_accepted_at text','public_first_name integer','public_last_name integer','public_church integer','public_progress integer'])db.db.exec(`ALTER TABLE profiles ADD COLUMN ${col}`);
+  for(const col of ['privacy_accepted_at text','public_first_name integer','public_last_name integer','public_church integer','public_progress integer','denomination text'])db.db.exec(`ALTER TABLE profiles ADD COLUMN ${col}`);
   db.close();return {file,dispose:()=>rmSync(dir,{recursive:true,force:true})};
 }
 function worker(db){const exports={};vm.runInNewContext(compiled.outputText,{exports,require(id){

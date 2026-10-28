@@ -70,7 +70,7 @@ export async function GET(request: Request) {
     const names = row.roster_visibility === "names"
       ? (await env.DB!.prepare("SELECT display_name,role FROM home_group_members WHERE group_id=? AND public_name=1 ORDER BY joined_at").bind(groupId).all()).results
       : [];
-    const sessions = (await env.DB!.prepare("SELECT id,book_id,chapter,answers_correct,answers_total,participant_count,meeting_date,reflection FROM group_sessions WHERE group_id=? ORDER BY meeting_date DESC,created_at DESC LIMIT 12").bind(groupId).all()).results;
+    const sessions = (await env.DB!.prepare("SELECT id,book_id,chapter,answers_correct,answers_total,participant_count,meeting_date,CASE WHEN ?=1 THEN reflection ELSE NULL END AS reflection FROM group_sessions WHERE group_id=? ORDER BY meeting_date DESC,created_at DESC LIMIT 12").bind(member ? 1 : 0, groupId).all()).results;
     const peers = row.cohort_key ? (await env.DB!.prepare(`${groupSelect} WHERE g.visibility='public' AND m.cohort_key=? ORDER BY chapters_completed DESC,g.name LIMIT 50`).bind(row.cohort_key).all<Row>()).results.map(value => publicGroup(value)) : [];
     const answers=member?(await env.DB!.prepare("SELECT task_id,solved,first_correct FROM group_answers WHERE group_id=?").bind(groupId).all()).results:[];
     return Response.json({ group: publicGroup(row, Boolean(member)), members: names, sessions, peers, answers, membership: member?.role ?? null }, { headers: { "Cache-Control": "no-store" } });

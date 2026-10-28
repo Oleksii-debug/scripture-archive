@@ -45,9 +45,9 @@ async function fixture() {
     };
     throw new Error('Unexpected dependency ' + id);
   };
-  const module = { exports: {} };
-  new Function('require', 'module', 'exports', transpiled.outputText)(requireFake, module, module.exports);
-  return { route: module.exports, state };
+  const fixtureModule = { exports: {} };
+  new Function('require', 'module', 'exports', transpiled.outputText)(requireFake, fixtureModule, fixtureModule.exports);
+  return { route: fixtureModule.exports, state };
 }
 
 function submission({ attachments = [], locale = 'uk', origin = 'https://sa.invalid' } = {}) {

@@ -90,7 +90,7 @@ export async function GET(request: Request) {
     const currentActor = await actor(request);
     if (currentActor) {
       const active = await env.DB.prepare("SELECT id FROM mission_attempts WHERE actor_id=? AND status='active' AND expires_at>CURRENT_TIMESTAMP LIMIT 1").bind(currentActor.id).first();
-      if (active) return json({ id: MISSION_ID, taskCount: mission.tasks.length, locked: true });
+      if (active) return json({ taskCount: mission.tasks.length, locked: true });
     }
     return json({
       id: MISSION_ID,
@@ -101,11 +101,7 @@ export async function GET(request: Request) {
     });
   }
   if (action === "chapter") {
-    const currentActor = await actor(request), book = clean(url.searchParams.get("book"), 8).toUpperCase(), chapter = Number(url.searchParams.get("chapter")), groupId = clean(url.searchParams.get("groupId"), 80);
-    if (!currentActor) return json({ active: null });
-    const active = await env.DB.prepare("SELECT id,mission_id,book_id,chapter,group_id,started_at FROM mission_attempts WHERE actor_id=? AND book_id=? AND chapter=? AND (?='' OR COALESCE(group_id,'')=?) AND status='active' AND expires_at>CURRENT_TIMESTAMP ORDER BY started_at DESC LIMIT 1")
-      .bind(currentActor.id, book, chapter, groupId, groupId).first();
-    return json({ active: active || null });
+    return json({ error: "method_not_allowed" }, 405, { Allow: "POST" });
   }
   const attemptId = clean(url.searchParams.get("attemptId"), 80);
   const { attempt } = await ownedAttempt(request, attemptId);
@@ -124,6 +120,18 @@ export async function POST(request: Request) {
   const action = new URL(request.url).searchParams.get("action") || "start";
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   if (!body) return json({ error: "invalid_json" }, 400);
+
+  if (action === "chapter") {
+    const book = clean(body.book, 8).toUpperCase(), chapter = Number(body.chapter);
+    if (!book || !Number.isInteger(chapter) || chapter < 1) return json({ error: "invalid_chapter" }, 400);
+    const currentActor = await actor(request);
+    if (!currentActor) return json({ invalidated: false });
+    // Invalidate before reporting a match: a read-only lookup would reveal the
+    // active passage through enumeration. Group context must not bypass this.
+    const result = await env.DB.prepare("UPDATE mission_attempts SET status='invalidated',invalidated_at=CURRENT_TIMESTAMP,invalidation_reason='chapter_opened' WHERE actor_id=? AND book_id=? AND chapter=? AND status='active' AND expires_at>CURRENT_TIMESTAMP")
+      .bind(currentActor.id, book, chapter).run();
+    return json({ invalidated: result.meta.changes > 0 });
+  }
 
   if (action === "read") {
     const currentActor = await actor(request, true);

@@ -117,7 +117,7 @@ integration("account, progress, attempts, groups, marathon limit and password re
   for (const forbidden of ["book", "chapter", "verses", "reference", "correct", "success", "hint", "id"])
     assert.equal(forbidden in result.data.task, false, forbidden);
   result = await request("/api/attempts?action=manifest");
-  assert.deepEqual(Object.keys(result.data).sort(), ["id", "locked", "taskCount"]);
+  assert.deepEqual(Object.keys(result.data).sort(), ["locked", "taskCount"]);
   for (let index = 0; index < chapter12.length; index += 1) {
     if(index===0){
       const answers=await Promise.all([0,1].map(()=>request("/api/attempts?action=answer", {method:"POST",body:{attemptId,taskIndex:1,selected:chapter12[0].correct}})));
@@ -146,8 +146,30 @@ integration("account, progress, attempts, groups, marathon limit and password re
   result = await request("/api/attempts?action=start", { method: "POST", body: { missionId: "OT-AB-01", book: "GEN", chapter: 12, locale: "en" } });
   const invalidatedId = result.data.attemptId;
   result = await request("/api/attempts?action=chapter&book=GEN&chapter=12");
-  assert.equal(result.data.active.id, invalidatedId);
-  await request("/api/attempts?action=invalidate", { method: "POST", body: { attemptId: invalidatedId, reason: "chapter_opened" } });
+  assert.equal(result.response.status, 405);
+  assert.equal(result.response.headers.get("allow"), "POST");
+  assert.deepEqual(result.data, { error: "method_not_allowed" });
+  const unrelatedLookup = await request("/api/attempts?action=chapter&book=JHN&chapter=3", { useCookie: false });
+  assert.equal(unrelatedLookup.response.status, 405);
+  assert.deepEqual(unrelatedLookup.data, result.data);
+  result = await request("/api/attempts?action=chapter", { method: "POST", body: { book: "GEN", chapter: 12 }, origin: "https://attacker.invalid" });
+  assert.equal(result.response.status, 403);
+  for (const options of [
+    { body: { book: "GEN", chapter: 12 }, useCookie: false },
+    { body: { book: "GEN", chapter: 13 } },
+  ]) {
+    result = await request("/api/attempts?action=chapter", { method: "POST", ...options });
+    assert.equal(result.response.status, 200);
+    assert.deepEqual(result.data, { invalidated: false });
+  }
+  const otherActorReopen = await fetch(`${base}/api/attempts?action=chapter`, { method: "POST", headers: { Cookie: ownerCookie, Origin: base, "Content-Type": "application/json" }, body: JSON.stringify({ book: "GEN", chapter: 12 }) });
+  assert.deepEqual(await otherActorReopen.json(), { invalidated: false });
+  result = await request(`/api/attempts?action=current&attemptId=${encodeURIComponent(invalidatedId)}`);
+  assert.equal(result.response.status, 200, "unrelated readers and cross-origin requests must not invalidate an attempt");
+  const reopened = await Promise.all([0, 1].map(() => request("/api/attempts?action=chapter", { method: "POST", body: { book: "GEN", chapter: 12, groupId: "unrelated-group" } })));
+  assert.deepEqual(reopened.map(item => item.response.status), [200, 200]);
+  assert.deepEqual(reopened.map(item => item.data.invalidated).sort(), [false, true]);
+  for (const item of reopened) assert.deepEqual(Object.keys(item.data), ["invalidated"]);
   result = await request(`/api/attempts?action=current&attemptId=${encodeURIComponent(invalidatedId)}`);
   assert.equal(result.response.status, 409);
   assert.equal(result.data.error, "attempt_invalidated");
@@ -158,6 +180,17 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const groupId = result.data.groupId;
   await request("/api/attempts?action=read", { method: "POST", body: { book: "GEN", chapter: 12, groupId } });
   result = await request("/api/attempts?action=start", { method: "POST", body: { missionId: "OT-AB-01", book: "GEN", chapter: 12, locale: "en", groupId } });
+  assert.equal(result.response.status, 201);
+  const firstGroupAttemptId = result.data.attemptId;
+  // A personal reader still exposes the same text to the same person. It must
+  // invalidate a group assessment even when no group context is supplied.
+  result = await request("/api/attempts?action=chapter", { method: "POST", body: { book: "GEN", chapter: 12 } });
+  assert.deepEqual(result.data, { invalidated: true });
+  result = await request(`/api/attempts?action=current&attemptId=${encodeURIComponent(firstGroupAttemptId)}`);
+  assert.equal(result.response.status, 409);
+  await request("/api/attempts?action=read", { method: "POST", body: { book: "GEN", chapter: 12, groupId } });
+  result = await request("/api/attempts?action=start", { method: "POST", body: { missionId: "OT-AB-01", book: "GEN", chapter: 12, locale: "en", groupId } });
+  assert.equal(result.response.status, 201);
   const groupAttemptId = result.data.attemptId;
   for (let index = 0; index < chapter12.length; index += 1)
     result = await request("/api/attempts?action=answer", { method: "POST", body: { attemptId: groupAttemptId, taskIndex: index + 1, selected: chapter12[index].correct } });

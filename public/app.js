@@ -2516,15 +2516,21 @@ async function renderReader(parts) {
   state.currentReader = { book: meta.code, chapter };
   localStorage.setItem("sa.reader", JSON.stringify(state.reader));
   try {
-    const attemptState = await attemptRequest("chapter", "GET", undefined, `book=${encodeURIComponent(meta.code)}&chapter=${chapter}&groupId=${encodeURIComponent(groupId)}`);
-    if (attemptState.active) {
-      await attemptRequest("invalidate", "POST", { attemptId: attemptState.active.id, reason: "chapter_opened" });
+    const attemptState = await attemptRequest("chapter", "POST", { book: meta.code, chapter });
+    if (!attemptState || typeof attemptState.invalidated !== "boolean") {
+      throw new Error("invalid_attempt_guard_response");
+    }
+    if (attemptState.invalidated) {
       sessionStorage.removeItem("sa.activeAttempt");
+      state.mission = null;
+      state.currentReader = null;
       renderLockedChapter(meta.code, chapter);
       return;
     }
-  } catch (error) {
-    console.warn("Attempt state could not be checked", error);
+  } catch {
+    state.currentReader = null;
+    shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1></section>`);
+    return;
   }
   const book = await getBook(meta.code);
   const verses = book.chapters[chapter - 1];
@@ -2614,6 +2620,11 @@ async function renderReader(parts) {
 async function renderMissions() {
   setActiveNav("missions");
   const mission = await getMission();
+  if (mission.locked) {
+    const attemptId = sessionStorage.getItem("sa.activeAttempt");
+    shell(`<section class="gate-panel"><h1>${ATTEMPT_COPY[state.lang].prepareTitle}</h1><p>${ATTEMPT_COPY[state.lang].memory}</p>${attemptId ? `<a class="button primary" href="/mission/attempt/${encodeURIComponent(attemptId)}">${ATTEMPT_COPY[state.lang].transition}</a>` : ""}</section>`);
+    return;
+  }
   const pilotAction = ATTEMPT_COPY[state.lang].reread;
   shell(
     `<div class="section-head"><div><p class="eyebrow">${t("today")}</p><h1>${t("missionTitle")}</h1></div><p>${t("missionIntro")}</p></div><div class="card-grid"><article class="card featured">${statusBadge("live")}<h2>${esc(mission.title[state.lang])}</h2><p>${esc(mission.intro[state.lang])}</p><a class="button" href="/reader/GEN/12">${pilotAction}</a></article><article class="card">${statusBadge("soon")}<h2>${t("lastNight")}</h2><p>${t("lastNightText")}</p></article><article class="card">${statusBadge("soon")}<h2>${t("paulRoad")}</h2><p>${t("paulRoadText")}</p></article></div>`,

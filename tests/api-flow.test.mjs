@@ -70,6 +70,21 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const ownerLogin = await fetch(`${base}/api/auth?action=login`, {method:"POST",headers:{Origin:base,"Content-Type":"application/json"},body:JSON.stringify({email:ownerPayload.email,password:ownerPassword})});
   assert.equal(ownerLogin.status, 200);
   const ownerCookie = ownerLogin.headers.get("set-cookie").split(";",1)[0];
+  const supportList = async () => (await (await fetch(`${base}/api/help`, { headers: { Cookie: ownerCookie } })).json()).items;
+  const beforeSupport = await supportList();
+  function supportForm(file) {
+    const form = new FormData();
+    form.set("email", "fixture@example.invalid"); form.set("subject", "Integration test");
+    form.set("message", "Disposable support test"); form.set("acceptPrivacy", "yes");
+    form.append("files", file); return form;
+  }
+  const invalidUpload = await fetch(`${base}/api/help`, { method: "POST", headers: { Origin: base }, body: supportForm(new File(["not a png"], "fake.png", { type: "image/png" })) });
+  assert.equal(invalidUpload.status, 400);
+  assert.equal((await supportList()).length, beforeSupport.length);
+  const validUpload = await fetch(`${base}/api/help`, { method: "POST", headers: { Origin: base }, body: supportForm(new File(["safe fixture"], "note.txt", { type: "text/plain" })) });
+  assert.equal(validUpload.status, 201);
+  assert.equal((await supportList()).length, beforeSupport.length + 1);
+  assert.equal((await fetch(`${base}/api/help`)).status, 403);
   // Exercise the real Worker and local D1 with stale snapshots from concurrent tabs.
   const reading = chapter => ({ book: "GEN", chapter, title: `Genesis ${chapter}` });
   const writes = await Promise.all([12, 13].map(chapter => request("/api/account?action=reading", {

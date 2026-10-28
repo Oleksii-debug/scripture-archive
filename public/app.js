@@ -125,7 +125,8 @@ const I18N = {
     accessTitle: "Доступність",
     accessBody:
       "Основні маршрути працюють із клавіатури, мають зрозумілі заголовки, помітний фокус і текстові повідомлення про результат дії.",
-    errorLoad: "Не вдалося завантажити дані. Спробуйте оновити сторінку.",
+    errorLoad: "Не вдалося завантажити дані. Перевірте з’єднання та спробуйте ще раз.",
+    retryLoad: "Повторити спробу",
     readingSyncPending: "Прочитане збережено на цьому пристрої, але сервер не підтвердив збереження. Повторіть спробу.",
     readingSyncRetry: "Повторити збереження",
     readerMissionUnavailable: "Завдання тимчасово недоступні. Читання та пошук доступні.",
@@ -251,7 +252,8 @@ const I18N = {
     accessTitle: "Доступность",
     accessBody:
       "Основные маршруты работают с клавиатуры, имеют понятные заголовки, заметный фокус и текстовые сообщения о результате действия.",
-    errorLoad: "Не удалось загрузить данные. Обновите страницу.",
+    errorLoad: "Не удалось загрузить данные. Проверьте соединение и попробуйте ещё раз.",
+    retryLoad: "Повторить попытку",
     readingSyncPending: "Прочитанное сохранено на этом устройстве, но сервер не подтвердил сохранение. Повторите попытку.",
     readingSyncRetry: "Повторить сохранение",
     readerMissionUnavailable: "Задания временно недоступны. Чтение и поиск доступны.",
@@ -377,7 +379,8 @@ const I18N = {
     accessTitle: "Accessibility",
     accessBody:
       "Core routes work from the keyboard and provide clear headings, visible focus, and textual feedback for every important action.",
-    errorLoad: "The data could not be loaded. Please refresh the page.",
+    errorLoad: "The data could not be loaded. Check your connection and try again.",
+    retryLoad: "Try again",
     readingSyncPending: "Your reading is saved on this device, but the server did not confirm the save. Please retry.",
     readingSyncRetry: "Retry saving",
     readerMissionUnavailable: "Exercises are temporarily unavailable. Reading and search are still available.",
@@ -2176,11 +2179,38 @@ function play(kind) {
   audio.volume=0.15;
   audio.play().catch(()=>{});
 }
+function validBibleCatalog(catalog) {
+  if (!catalog || catalog.schemaVersion !== 1 || !catalog.books ||
+      !catalog.editions || typeof catalog.editions !== "object") return false;
+  const validBooks = (books) => Array.isArray(books) && books.length === 66 &&
+    books.every((book) => book && typeof book.code === "string" && !!book.code &&
+      typeof book.title === "string" && !!book.title.trim() &&
+      (book.testament === "OT" || book.testament === "NT") &&
+      Number.isInteger(book.chapters) && book.chapters > 0) &&
+    new Set(books.map((book) => book.code)).size === 66;
+  if (!validBooks(catalog.books.uk)) return false;
+  const canonicalCodes = new Set(catalog.books.uk.map((book) => book.code));
+  for (const locale of ["uk", "ru", "en"]) {
+    const edition = catalog.editions[locale];
+    const books = catalog.books[locale];
+    if (!edition || typeof edition.id !== "string" || !edition.id.trim() ||
+        !validBooks(books) || books.some((book) => !canonicalCodes.has(book.code))) return false;
+  }
+  if (catalog.editionBooks !== undefined) {
+    if (!catalog.editionBooks || typeof catalog.editionBooks !== "object" ||
+        Array.isArray(catalog.editionBooks)) return false;
+    for (const books of Object.values(catalog.editionBooks))
+      if (!validBooks(books) || books.some((book) => !canonicalCodes.has(book.code))) return false;
+  }
+  return true;
+}
 async function getCatalog() {
-  state.catalog ??= await fetch("/data/catalog.json").then((r) => {
-    if (!r.ok) throw Error(r.status);
-    return r.json();
-  });
+  if (state.catalog) return state.catalog;
+  const response = await fetch("/data/catalog.json");
+  if (!response.ok) throw Error(response.status);
+  const catalog = await response.json();
+  if (!validBibleCatalog(catalog)) throw Error("Invalid Bible catalog data");
+  state.catalog ??= catalog;
   return state.catalog;
 }
 async function getCMS() {
@@ -2208,18 +2238,34 @@ async function getSession() {
   return state.user;
 }
 async function getBook(code) {
-  const selected = selectedEdition(state.lang);
-  const edition = selected.local ? selected : EDITIONS[state.lang].find(e => e.local);
-  const folder = edition.folder || state.lang;
+  const requestLocale = state.lang;
+  const selected = selectedEdition(requestLocale);
+  const edition = selected.local ? selected : EDITIONS[requestLocale].find(e => e.local);
+  const folder = edition.folder || requestLocale;
   const key = `${folder}:${code}`;
-  if (!state.bookCache.has(key))
-    state.bookCache.set(
-      key,
-      fetch(`/data/bible/${folder}/${code}.json`).then((r) => {
+  if (!state.bookCache.has(key)) {
+    const request = fetch(`/data/bible/${folder}/${code}.json`)
+      .then(async (r) => {
         if (!r.ok) throw Error(r.status);
-        return r.json();
-      }),
-    );
+        const book = await r.json();
+        const entries = state.catalog?.editionBooks?.[edition.id] || state.catalog?.books?.[requestLocale];
+        const expectedChapters = entries?.find((entry) => entry.code === code)?.chapters;
+        if (!book || book.bookCode !== code || book.locale !== requestLocale ||
+            book.editionId !== edition.id || !Array.isArray(book.chapters) ||
+            !book.chapters.length ||
+            (expectedChapters && book.chapters.length !== expectedChapters) ||
+            book.chapters.some((chapter) => !Array.isArray(chapter) || !chapter.length ||
+              chapter.some((verse) => typeof verse !== "string" || !verse.trim()))) {
+          throw Error("Invalid Bible book data");
+        }
+        return book;
+      })
+      .catch((error) => {
+        if (state.bookCache.get(key) === request) state.bookCache.delete(key);
+        throw error;
+      });
+    state.bookCache.set(key, request);
+  }
   return state.bookCache.get(key);
 }
 function localEditionMetadata(catalog) {
@@ -2539,7 +2585,7 @@ async function renderReader(parts) {
   const code = (parts[1] || state.reader.book || "GEN").toUpperCase();
   const meta = books.find((b) => b.code === code) || books[0];
   const chapter = Math.min(
-    Math.max(Number(parts[2] || state.reader.chapter || 1) || 1, 1),
+    Math.max(Math.trunc(Number(parts[2] || state.reader.chapter || 1)) || 1, 1),
     meta.chapters,
   );
   const groupId = parts[3] === "group" ? parts[4] || "" : "";
@@ -3473,7 +3519,8 @@ async function route() {
     window.scrollTo({ top: 0, behavior: "instant" });
   } catch (error) {
     console.error(error);
-    shell(`<div class="notice error" role="alert">${t("errorLoad")}</div>`);
+    shell(`<div class="notice error" role="alert"><p>${t("errorLoad")}</p><button class="button primary" type="button" id="retry-load">${t("retryLoad")}</button></div>`);
+    document.querySelector("#retry-load")?.addEventListener("click", () => route());
   }
 }
 

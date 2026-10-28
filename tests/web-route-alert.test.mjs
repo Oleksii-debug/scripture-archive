@@ -25,13 +25,15 @@ test("fatal route errors expose a localized screen-reader alert without internal
       state: { lang, currentReader: null },
       async renderReader() { throw new Error("private internal diagnostics"); },
       shell(html) { rendered = html; },
-      t(key) { assert.equal(key, "errorLoad"); return message; },
+      t(key) { assert.ok(["errorLoad", "retryLoad"].includes(key)); return key === "errorLoad" ? message : "retry"; },
+      document: { querySelector() { return { addEventListener() {} }; } },
       console: { error() {} },
       window: { saAnalytics: null, scrollTo() {} },
     };
     await runInNewContext(actualRoute + "\nroute();", context);
     assert.match(rendered, /<div class="notice error" role="alert">/, `${lang}: error announcement must be a live alert`);
     assert.ok(rendered.includes(message), `${lang}: localized error content must be visible`);
+    assert.ok(rendered.includes('id="retry-load"'), "retry control must remain available");
     assert.ok(!rendered.includes("private internal diagnostics"), "do not expose internal exception details");
   }
 });

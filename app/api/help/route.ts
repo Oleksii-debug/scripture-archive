@@ -26,6 +26,142 @@ function safeFilename(value: string) {
   return (normalized || "attachment").slice(0, 120);
 }
 
+
+// Browser-provided File.type is only a claim. Check the suffix and basic file
+// structure before persisting or forwarding an attachment to support.
+const FILE_SUFFIXES: Record<string, readonly string[]> = {
+  "application/pdf": [".pdf"],
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
+  "image/jpeg": [".jpg", ".jpeg"],
+  "image/png": [".png"],
+  "image/webp": [".webp"],
+  "text/plain": [".txt"],
+};
+
+function docxHasParts(bytes: Uint8Array) {
+  // Inspect ZIP central-directory names rather than trusting a PK prefix.
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const u16 = (at: number) => view.getUint16(at, true);
+  const u32 = (at: number) => view.getUint32(at, true);
+  if (bytes.length < 22 || u32(0) !== 0x04034b50) return false;
+  for (let end = bytes.length - 22; end >= Math.max(0, bytes.length - 65557); end--) {
+    if (u32(end) !== 0x06054b50 || end + 22 + u16(end + 20) !== bytes.length) continue;
+    if (u16(end + 4) !== 0 || u16(end + 6) !== 0 || u16(end + 8) !== u16(end + 10)) return false;
+    const count = u16(end + 10), centralSize = u32(end + 12), centralStart = u32(end + 16);
+    if (count < 2 || count > 1000 || centralStart + centralSize !== end) return false;
+    let offset = centralStart;
+    const parts = new Set<string>();
+    for (let index = 0; index < count; index++) {
+      if (offset + 46 > end || u32(offset) !== 0x02014b50 || (u16(offset + 8) & 1)) return false;
+      const nameSize = u16(offset + 28), extraSize = u16(offset + 30), commentSize = u16(offset + 32);
+      const next = offset + 46 + nameSize + extraSize + commentSize;
+      if (next > end) return false;
+      const name = new TextDecoder().decode(bytes.subarray(offset + 46, offset + 46 + nameSize));
+      if (name === "[Content_Types].xml" || name === "word/document.xml") parts.add(name);
+      offset = next;
+    }
+    return offset === end && parts.size === 2;
+  }
+  return false;
+}
+
+// Check PNG chunk boundaries, mandatory IHDR/IDAT/IEND ordering and CRC-32.
+// This is a bounded structural gate, not a full image decoder or malware scan.
+const PNG_CRC_TABLE = Uint32Array.from({ length: 256 }, (_, index) => {
+  let value = index;
+  for (let bit = 0; bit < 8; bit++) value = (value >>> 1) ^ (value & 1 ? 0xedb88320 : 0);
+  return value >>> 0;
+});
+function pngHasRequiredChunks(bytes: Uint8Array) {
+  if (bytes.length < 45 || ![0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a].every((byte, index) => bytes[index] === byte)) return false;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let offset = 8, hasHeader = false, hasData = false;
+  while (offset + 12 <= bytes.length) {
+    const size = view.getUint32(offset, false);
+    const next = offset + 12 + size;
+    if (next > bytes.length) return false;
+    const type = String.fromCharCode(...bytes.subarray(offset + 4, offset + 8));
+    // PNG CRC-32 covers the four-byte chunk type and its data. A valid
+    // signature/chunk outline alone must not allow corrupted content in email.
+    let crc = 0xffffffff;
+    for (let index = offset + 4; index < offset + 8 + size; index++)
+      crc = (crc >>> 8) ^ PNG_CRC_TABLE[(crc ^ bytes[index]) & 0xff];
+    if (((crc ^ 0xffffffff) >>> 0) !== view.getUint32(offset + 8 + size, false)) return false;
+    if (!hasHeader) {
+      if (type !== "IHDR" || size !== 13 || view.getUint32(offset + 8, false) === 0 || view.getUint32(offset + 12, false) === 0) return false;
+      hasHeader = true;
+    } else if (type === "IHDR") return false;
+    if (type === "IDAT") hasData = true;
+    if (type === "IEND") return size === 0 && hasData && next === bytes.length;
+    offset = next;
+  }
+  return false;
+}
+
+// RIFF/WebP validation: declared length, bounded chunks, and image frame markers.
+// This is deliberately not a full WebP decoder or an antivirus scan.
+function webpHasImageFrame(bytes: Uint8Array) {
+  if (bytes.length < 20 || bytes[0] !== 0x52 || bytes[1] !== 0x49 || bytes[2] !== 0x46 || bytes[3] !== 0x46 ||
+      bytes[8] !== 0x57 || bytes[9] !== 0x45 || bytes[10] !== 0x42 || bytes[11] !== 0x50) return false;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (view.getUint32(4, true) !== bytes.length - 8) return false;
+  const fourCC = (at: number) => String.fromCharCode(bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]);
+  const validFrame = (type: string, at: number, size: number) => {
+    if (type === "VP8 ") return size >= 10 && bytes[at + 3] === 0x9d && bytes[at + 4] === 0x01 && bytes[at + 5] === 0x2a &&
+      (view.getUint16(at + 6, true) & 0x3fff) > 0 && (view.getUint16(at + 8, true) & 0x3fff) > 0;
+    return type === "VP8L" && size >= 5 && bytes[at] === 0x2f && (bytes[at + 4] & 0xe0) === 0;
+  };
+  let offset = 12, frameFound = false, extended = false;
+  while (offset + 8 <= bytes.length) {
+    const type = fourCC(offset), size = view.getUint32(offset + 4, true);
+    const end = offset + 8 + size, next = end + (size & 1);
+    if (next > bytes.length) return false;
+    if (type === "VP8X") {
+      if (offset !== 12 || size !== 10) return false;
+      extended = true;
+    } else if (type === "VP8 " || type === "VP8L") {
+      if (!validFrame(type, offset + 8, size)) return false;
+      frameFound = true;
+    } else if (type === "ANMF") {
+      if (!extended || size < 16) return false;
+      let inner = offset + 8 + 16;
+      while (inner + 8 <= end) {
+        const childType = fourCC(inner), childSize = view.getUint32(inner + 4, true);
+        const childEnd = inner + 8 + childSize, childNext = childEnd + (childSize & 1);
+        if (childNext > end) return false;
+        if (childType === "VP8 " || childType === "VP8L") {
+          if (!validFrame(childType, inner + 8, childSize)) return false;
+          frameFound = true;
+        }
+        inner = childNext;
+      }
+      if (inner !== end) return false;
+    }
+    offset = next;
+  }
+  return offset === bytes.length && frameFound;
+}
+
+function matchesAttachment(file: File, bytes: Uint8Array) {
+  const lowerName = file.name.toLowerCase();
+  if (!FILE_SUFFIXES[file.type]?.some(suffix => lowerName.endsWith(suffix))) return false;
+  const starts = (...head: number[]) => head.every((value, index) => bytes[index] === value);
+  switch (file.type) {
+    case "application/pdf": return starts(0x25, 0x50, 0x44, 0x46, 0x2d);
+    case "image/jpeg": return starts(0xff, 0xd8, 0xff);
+    case "image/png": return pngHasRequiredChunks(bytes);
+    case "image/webp": return webpHasImageFrame(bytes);
+    case "application/vnd.openxmlformats-officedocument.wordprocessingml.document": return docxHasParts(bytes);
+    case "text/plain": {
+      try {
+        const content = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+        return !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(content);
+      } catch { return false; }
+    }
+    default: return false;
+  }
+}
+
 function toBase64(bytes: Uint8Array) {
   let binary = "";
   for (let index = 0; index < bytes.length; index += 0x8000)
@@ -52,14 +188,16 @@ export async function POST(request: Request) {
   if (files.length > MAX_FILES || files.some(file => file.size > MAX_FILE_BYTES || !ALLOWED_TYPES.has(file.type)) || files.reduce((sum, file) => sum + file.size, 0) > MAX_TOTAL_BYTES)
     return json({ error: "invalid_attachment" }, 400);
 
+  const attachments: { id: string; filename: string; contentType: string; size: number; content: string }[] = [];
+  for (const file of files) {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    if (!matchesAttachment(file, bytes)) return json({ error: "invalid_attachment" }, 400);
+    attachments.push({
+      id: crypto.randomUUID(), filename: safeFilename(file.name), contentType: file.type,
+      size: file.size, content: toBase64(bytes),
+    });
+  }
   const requestId = crypto.randomUUID();
-  const attachments = await Promise.all(files.map(async file => ({
-    id: crypto.randomUUID(),
-    filename: safeFilename(file.name),
-    contentType: file.type,
-    size: file.size,
-    content: toBase64(new Uint8Array(await file.arrayBuffer())),
-  })));
   const statements = [env.DB.prepare(`INSERT INTO support_requests
       (id,user_id,email,subject,message,locale,status,email_delivered,attachment_count)
       VALUES (?,?,?,?,?,?,'new',0,?)`)

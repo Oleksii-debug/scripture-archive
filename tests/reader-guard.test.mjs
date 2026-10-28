@@ -43,6 +43,15 @@ test("reader uses the invalidating POST and clears stale mission metadata", asyn
   assert.deepEqual(h.events.find(event => event[0] === "locked"), ["locked", "GEN", 12]);
 });
 
+test("reader refuses malformed guard responses instead of opening the chapter", async () => {
+  for (const reply of [null, {}, { invalidated: "false" }, { invalidated: 0 }]) {
+    const h = harness(() => reply);
+    await h.run();
+    assert.equal(h.events.some(event => event[0] === "load-text"), false);
+    assert.match(h.events.find(event => event[0] === "render")[1], /role="alert"/);
+  }
+});
+
 test("reader loads text only after the server permits reading", async () => {
   const h = harness(() => ({ invalidated: false }));
   await assert.rejects(h.run(), /text boundary/);

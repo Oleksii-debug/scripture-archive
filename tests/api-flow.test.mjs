@@ -164,6 +164,17 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const groupId = result.data.groupId;
   await request("/api/attempts?action=read", { method: "POST", body: { book: "GEN", chapter: 12, groupId } });
   result = await request("/api/attempts?action=start", { method: "POST", body: { missionId: "OT-AB-01", book: "GEN", chapter: 12, locale: "en", groupId } });
+  assert.equal(result.response.status, 201);
+  const firstGroupAttemptId = result.data.attemptId;
+  // A personal reader still exposes the same text to the same person. It must
+  // invalidate a group assessment even when no group context is supplied.
+  result = await request("/api/attempts?action=chapter", { method: "POST", body: { book: "GEN", chapter: 12 } });
+  assert.deepEqual(result.data, { invalidated: true });
+  result = await request(`/api/attempts?action=current&attemptId=${encodeURIComponent(firstGroupAttemptId)}`);
+  assert.equal(result.response.status, 409);
+  await request("/api/attempts?action=read", { method: "POST", body: { book: "GEN", chapter: 12, groupId } });
+  result = await request("/api/attempts?action=start", { method: "POST", body: { missionId: "OT-AB-01", book: "GEN", chapter: 12, locale: "en", groupId } });
+  assert.equal(result.response.status, 201);
   const groupAttemptId = result.data.attemptId;
   for (let index = 0; index < chapter12.length; index += 1)
     result = await request("/api/attempts?action=answer", { method: "POST", body: { attemptId: groupAttemptId, taskIndex: index + 1, selected: chapter12[index].correct } });

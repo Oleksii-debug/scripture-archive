@@ -2517,6 +2517,9 @@ async function renderReader(parts) {
   localStorage.setItem("sa.reader", JSON.stringify(state.reader));
   try {
     const attemptState = await attemptRequest("chapter", "POST", { book: meta.code, chapter });
+    if (!attemptState || typeof attemptState.invalidated !== "boolean") {
+      throw new Error("invalid_attempt_guard_response");
+    }
     if (attemptState.invalidated) {
       sessionStorage.removeItem("sa.activeAttempt");
       state.mission = null;

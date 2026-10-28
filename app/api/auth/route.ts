@@ -212,15 +212,21 @@ export async function POST(request: Request) {
     await env.DB.batch([
       env.DB.prepare("DELETE FROM progress WHERE user_id=?").bind(identity.userId),
       env.DB.prepare("DELETE FROM reader_bookmarks WHERE user_id=?").bind(identity.userId),
+      env.DB.prepare("DELETE FROM mission_attempt_answers WHERE attempt_id IN (SELECT id FROM mission_attempts WHERE actor_id=?)").bind(identity.userId),
+      env.DB.prepare("DELETE FROM mission_attempts WHERE actor_id=?").bind(identity.userId),
+      env.DB.prepare("DELETE FROM chapter_read_receipts WHERE actor_id=?").bind(identity.userId),
+      env.DB.prepare("DELETE FROM support_attachments WHERE request_id IN (SELECT id FROM support_requests WHERE user_id=?)").bind(identity.userId),
+      env.DB.prepare("DELETE FROM support_requests WHERE user_id=?").bind(identity.userId),
+      env.DB.prepare("DELETE FROM auth_tokens WHERE user_id=?").bind(identity.userId),
       env.DB.prepare("DELETE FROM home_group_members WHERE user_id=?").bind(identity.userId),
       env.DB.prepare("DELETE FROM study_materials WHERE owner_user_id=?").bind(identity.userId),
       env.DB.prepare("DELETE FROM home_groups WHERE owner_user_id=?").bind(identity.userId),
       env.DB.prepare("DELETE FROM profiles WHERE user_id=?").bind(identity.userId),
       env.DB.prepare("UPDATE usage_sessions SET user_id=NULL WHERE user_id=?").bind(identity.userId),
       env.DB.prepare("UPDATE usage_events SET user_id=NULL WHERE user_id=?").bind(identity.userId),
-      env.DB.prepare("UPDATE accounts SET email=?,deleted_at=CURRENT_TIMESTAMP,session_version=session_version+1,password_hash='',password_salt='' WHERE id=?")
+      env.DB.prepare("UPDATE accounts SET email=?,first_name='',last_name='',deleted_at=CURRENT_TIMESTAMP,session_version=session_version+1,password_hash='',password_salt='' WHERE id=?")
         .bind(`deleted-${identity.userId}@invalid.local`, identity.userId),
-      env.DB.prepare("UPDATE auth_sessions SET revoked_at=CURRENT_TIMESTAMP WHERE user_id=? AND revoked_at IS NULL").bind(identity.userId),
+      env.DB.prepare("DELETE FROM auth_sessions WHERE user_id=?").bind(identity.userId),
     ]);
     return json({ ok: true }, 200, { "Set-Cookie": clearSessionCookie(request) });
   }

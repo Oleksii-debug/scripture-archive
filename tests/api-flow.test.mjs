@@ -75,7 +75,7 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal((await fetch(`${base}/api/bookmarks`)).status, 401);
   assert.equal((await bookmarkWrite(mark, "PUT", "https://attacker.invalid")).status, 403);
   const invalidBookmark = await bookmarkWrite({ ...mark, chapter: -1 });
-  assert.equal(invalidBookmark.status, 400, JSON.stringify(await invalidBookmark.json()));
+  assert.equal(invalidBookmark.status, 400, (await invalidBookmark.text()).slice(0, 500));
   assert.equal((await bookmarkWrite(mark)).status, 200);
   assert.equal((await bookmarkWrite(mark)).status, 200, "saving a bookmark twice is idempotent");
   const ownBookmarks = await (await fetch(`${base}/api/bookmarks`, { headers: { Cookie: cookie } })).json();
@@ -348,7 +348,13 @@ integration("account, progress, attempts, groups, marathon limit and password re
   result = await request("/api/auth?action=login", { method: "POST", body: { email, password: secondPassword } });
   assert.equal(result.response.status, 200);
   assert.equal((await bookmarkWrite(mark)).status, 200);
+  const deletionSession = cookie;
+  result = await request("/api/auth?action=delete-account", { method: "POST", body: { password: "wrong-password" } });
+  assert.equal(result.response.status, 401);
   result = await request("/api/auth?action=delete-account", { method: "POST", body: { password: secondPassword } });
   assert.equal(result.response.status, 200);
+  assert.equal((await (await fetch(`${base}/api/account?action=me`, { headers: { Cookie: deletionSession } })).json()).user, null);
   assert.equal((await fetch(`${base}/api/bookmarks`, { headers: { Cookie: cookie } })).status, 401);
+  result = await request("/api/auth?action=login", { method: "POST", body: { email, password: secondPassword } });
+  assert.equal(result.response.status, 401);
 });

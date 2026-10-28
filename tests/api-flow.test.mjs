@@ -63,6 +63,11 @@ integration("account, progress, attempts, groups, marathon limit and password re
   result = await request("/api/account?action=me");
   assert.equal(result.data.user.email, email);
   assert.equal(result.data.user.emailVerified, true);
+  assert.match(result.response.headers.get("cache-control"), /no-store/);
+  assert.match(result.response.headers.get("cache-control"), /private/);
+  const anonymousProgress = await request("/api/account?action=progress", { useCookie: false });
+  assert.equal(anonymousProgress.response.status, 401);
+  assert.match(anonymousProgress.response.headers.get("cache-control"), /no-store/);
   const analyticsSession = crypto.randomUUID();
   result = await request("/api/analytics", { method: "POST", body: { action: "event", sessionId: analyticsSession, eventType: "page_view", pageName: "account", source: "direct", value: { page_name: "account" } } });
   assert.equal(result.response.status, 202);
@@ -189,6 +194,7 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal(result.response.status, 403, "scores are written only by server-side grading");
   result = await request("/api/account?action=progress");
   assert.deepEqual(result.data.progress.correct, []);
+  assert.match(result.response.headers.get("cache-control"), /no-store/);
   result = await request("/api/account?action=visibility", { method: "PUT", body: { firstName: true, lastName: true, progress: true } });
   assert.equal(result.data.user.visibility.progress, true);
   const communityResponse = await fetch(`${base}/api/community?q=Test%20Reader&pageSize=12`);

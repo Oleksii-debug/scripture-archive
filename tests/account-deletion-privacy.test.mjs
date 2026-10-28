@@ -21,7 +21,8 @@ test('account deletion clears personal records while preserving other users', as
     db.prepare("INSERT INTO support_requests(id,user_id,email,subject,message) VALUES (?,?,?,'Subject','Synthetic message')").run('request-'+id,id,`${id}@example.invalid`);
     db.prepare("INSERT INTO support_attachments(id,request_id,filename,content_type,size_bytes,content_base64) VALUES (?,?,'a.txt','text/plain',1,'YQ==')").run('attachment-'+id,'request-'+id);
   }
-  const D1 = {prepare(sql) {return {bind(...args) {return {first: async () => db.prepare(sql).get(...args), run: async () => db.prepare(sql).run(...args)};}};}, async batch(statements) {db.exec('BEGIN');try {for (const statement of statements) await statement.run();db.exec('COMMIT');} catch(error) {db.exec('ROLLBACK');throw error;}}};
+  let failAfter = -1;
+  const D1 = {prepare(sql) {return {bind(...args) {return {first: async () => db.prepare(sql).get(...args), run: async () => db.prepare(sql).run(...args)};}};}, async batch(statements) {db.exec('BEGIN');try {for (const [index, statement] of statements.entries()) {if(index === failAfter) throw Error('simulated database failure'); await statement.run();}db.exec('COMMIT');} catch(error) {db.exec('ROLLBACK');throw error;}}};
   const source = readFileSync(new URL('../app/api/auth/route.ts', import.meta.url), 'utf8');
   const compiled = ts.transpileModule(source, {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
   const exports = {};
@@ -34,6 +35,11 @@ test('account deletion clears personal records while preserving other users', as
   const request = password => new Request('https://example.invalid/api/auth?action=delete-account', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password})});
   assert.equal((await exports.POST(request('wrong'))).status, 401);
   assert.equal(db.prepare('SELECT count(*) n FROM mission_attempts').get().n, 2);
+  failAfter = 3;
+  await assert.rejects(exports.POST(request('correct')), /simulated database failure/);
+  assert.equal(db.prepare("SELECT count(*) n FROM progress WHERE user_id='alice'").get().n, 1, 'failed batch rolls back earlier deletions');
+  assert.equal(db.prepare("SELECT deleted_at FROM accounts WHERE id='alice'").get().deleted_at, null);
+  failAfter = -1;
   assert.equal((await exports.POST(request('correct'))).status, 200);
   const alice = db.prepare("SELECT email,first_name,last_name,password_hash,password_salt,deleted_at FROM accounts WHERE id='alice'").get();
   assert.equal(alice.first_name, ''); assert.equal(alice.last_name, ''); assert.equal(alice.password_hash, ''); assert.equal(alice.password_salt, ''); assert.ok(alice.deleted_at); assert.equal(alice.email, 'deleted-alice@invalid.local');

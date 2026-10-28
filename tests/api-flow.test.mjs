@@ -30,9 +30,21 @@ integration("account, progress, attempts, groups, marathon limit and password re
     return { response, data };
   }
 
+  const withoutSensitiveConsent = await request("/api/auth?action=register", { method: "POST", body: {
+    firstName: "Test", lastName: "Reader", age: 30, gender: "prefer_not", tradition: "other",
+    maritalStatus: "prefer_not", email, password: firstPassword, acceptPrivacy: true, locale: "en",
+  }});
+  assert.equal(withoutSensitiveConsent.response.status, 400);
+  assert.equal(withoutSensitiveConsent.data.error, "sensitive_consent_required");
+  const invalidSensitiveConsent = await request("/api/auth?action=register", { method: "POST", body: {
+    firstName: "Test", lastName: "Reader", age: 30, gender: "prefer_not", tradition: "prefer_not", denomination: "Church",
+    maritalStatus: "prefer_not", email, password: firstPassword, acceptPrivacy: true, acceptSensitive: "true", locale: "en",
+  }});
+  assert.equal(invalidSensitiveConsent.response.status, 400);
+  assert.equal(invalidSensitiveConsent.data.error, "sensitive_consent_required");
   const registration = await request("/api/auth?action=register", { method: "POST", body: {
     firstName: "Test", lastName: "Reader", age: 30, gender: "prefer_not", tradition: "other",
-    maritalStatus: "prefer_not", hasChildren: null, email, password: firstPassword, acceptPrivacy: true, locale: "en",
+    maritalStatus: "prefer_not", hasChildren: null, email, password: firstPassword, acceptPrivacy: true, acceptSensitive: true, locale: "en",
   }});
   assert.equal(registration.response.status, 201);
   assert.equal(registration.data.verificationRequired, true);
@@ -62,7 +74,7 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal(malformedCookie.status, 200);
   assert.equal((await malformedCookie.json()).user, null);
   const ownerPassword = `Owner-${crypto.randomUUID()}!`;
-  const ownerPayload = {firstName:"Owner",lastName:"Test",age:30,gender:"prefer_not",tradition:"other",maritalStatus:"prefer_not",email:"dordiaioleksii1@gmail.com",password:ownerPassword,acceptPrivacy:true,locale:"en"};
+  const ownerPayload = {firstName:"Owner",lastName:"Test",age:30,gender:"prefer_not",tradition:"prefer_not",maritalStatus:"prefer_not",email:"dordiaioleksii1@gmail.com",password:ownerPassword,acceptPrivacy:true,locale:"en"};
   const ownerRegister = await fetch(`${base}/api/auth?action=register`, {method:"POST",headers:{Origin:base,"Content-Type":"application/json"},body:JSON.stringify(ownerPayload)});
   const ownerRegistration = await ownerRegister.json();
   assert.equal(ownerRegister.status, 201);
@@ -89,11 +101,15 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const ownExport = await exportResponse.json();
   assert.equal(ownExport.account.email, email);
   assert.equal(ownExport.profile.first_name, "Test");
+  assert.equal(ownExport.profile.tradition, "other");
+  assert.equal(ownExport.profile.sensitive_consent, 1);
   assert.equal(ownExport.bookmarks.length, 1);
   assert.equal(JSON.stringify(ownExport).includes(firstPassword), false);
   assert.doesNotMatch(JSON.stringify(ownExport), /password_hash|password_salt|token_hash/);
   const ownerExport = await (await fetch(`${base}/api/reading-export`, { headers: { Cookie: ownerCookie } })).json();
   assert.equal(ownerExport.bookmarks.length, 0, "another account's bookmarks must never appear in this export");
+  assert.equal(ownerExport.profile.tradition, null);
+  assert.equal(ownerExport.profile.sensitive_consent, 0);
   assert.notEqual(ownerExport.account.email, ownExport.account.email);
   const otherBookmarks = await (await fetch(`${base}/api/bookmarks`, { headers: { Cookie: ownerCookie } })).json();
   assert.equal(otherBookmarks.bookmarks.length, 0, "bookmarks are private to the account");

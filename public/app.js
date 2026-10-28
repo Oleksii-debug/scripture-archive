@@ -2492,6 +2492,41 @@ function renderLockedChapter(book, chapter) {
   shell(`<section class="gate-panel attempt-locked" role="alert"><p class="eyebrow">Scripture Archive</p><h1>${copy.lockedTitle}</h1><p class="lead">${copy.lockedText}</p><a class="button primary" href="/reader/${book}/${chapter}">${copy.reread}</a></section>`);
 }
 
+const bookmarkCopy = {
+  uk: { title: "Закладки", save: "Додати цю главу", remove: "Прибрати цю главу", empty: "У цьому виданні закладок ще немає.", login: "Увійдіть, щоб зберігати закладки в обліковому записі.", error: "Не вдалося завантажити або зберегти закладки. Спробуйте ще раз." },
+  ru: { title: "Закладки", save: "Добавить эту главу", remove: "Убрать эту главу", empty: "В этом издании пока нет закладок.", login: "Войдите, чтобы сохранять закладки в учётной записи.", error: "Не удалось загрузить или сохранить закладки. Попробуйте ещё раз." },
+  en: { title: "Bookmarks", save: "Bookmark this chapter", remove: "Remove this bookmark", empty: "No bookmarks in this edition yet.", login: "Sign in to save bookmarks to your account.", error: "Could not load or save bookmarks. Please try again." },
+};
+
+async function mountReaderBookmarks(meta, chapter, edition, books) {
+  const panel = document.querySelector("#reader-bookmarks");
+  if (!panel) return;
+  const copy = bookmarkCopy[state.lang] || bookmarkCopy.uk;
+  if (!state.user) { panel.innerHTML = `<h2>${copy.title}</h2><p>${copy.login}</p>`; return; }
+  const current = { edition: edition.id, book: meta.code, chapter };
+  async function load() {
+    const response = await fetch("/api/bookmarks", { cache: "no-store" });
+    if (!response.ok) throw Error("bookmark_load_failed");
+    const data = await response.json();
+    if (!Array.isArray(data.bookmarks)) throw Error("bookmark_load_failed");
+    if (!panel.isConnected) return;
+    const items = data.bookmarks.filter(item => item.edition === edition.id && books.some(book => book.code === item.book) && Number.isInteger(item.chapter) && item.chapter > 0);
+    const saved = items.some(item => item.book === meta.code && item.chapter === chapter);
+    panel.innerHTML = `<h2>${copy.title}</h2><button class="button" type="button" id="toggle-bookmark" aria-pressed="${saved}">${saved ? copy.remove : copy.save}</button><p role="status" id="bookmark-status"></p>${items.length ? `<ul>${items.map(item => { const book = books.find(value => value.code === item.book); return `<li><a href="/reader/${encodeURIComponent(item.book)}/${item.chapter}">${esc(bookTitle(book))} ${item.chapter}</a></li>`; }).join("")}</ul>` : `<p>${copy.empty}</p>`}`;
+    panel.querySelector("#toggle-bookmark").addEventListener("click", async event => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {
+        const response = await fetch("/api/bookmarks", { method: saved ? "DELETE" : "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(current) });
+        if (!response.ok) throw Error("bookmark_save_failed");
+        await load();
+        panel.querySelector("#toggle-bookmark")?.focus();
+      } catch { panel.querySelector("#bookmark-status").textContent = copy.error; button.disabled = false; }
+    });
+  }
+  try { await load(); } catch { if (panel.isConnected) panel.innerHTML = `<h2>${copy.title}</h2><p role="alert">${copy.error}</p>`; }
+}
+
 attemptChannel?.addEventListener("message", event => {
   const message = event.data;
   if (message?.type === "attempt-started" && state.currentReader?.book === message.book && state.currentReader?.chapter === message.chapter) {
@@ -2551,6 +2586,8 @@ async function renderReader(parts) {
     `<div class="section-head reader-heading"><div><p class="eyebrow">${t("reader")}</p><h1>${t("readerTitle")}</h1></div><p>${t("readerIntro")}</p></div><div class="toolbar"><div class="field grow"><label for="book-select">${t("book")}</label><select id="book-select">${options}</select></div><div class="field"><label for="chapter-select">${t("chapter")}</label><select id="chapter-select">${chapters}</select></div><form id="book-search" class="field grow"><label for="search-input">${t("searchBook")}</label><div style="display:flex;gap:.4rem"><input id="search-input" type="search" placeholder="${t("searchPlaceholder")}"><button class="button" type="submit">${t("search")}</button></div></form></div><div class="reader-layout"><article class="reading-pane"><p class="eyebrow">${meta.testament === "OT" ? t("oldTestament") : t("newTestament")}</p><h1>${esc(bookTitle(meta))} ${chapter}</h1><p class="chapter-meta">${esc(editionInfo.title)}</p><div class="verses">${verses.map((v, i) => `<p class="verse" id="v${i + 1}"><span class="verse-number">${i + 1}</span>${esc(bibleText(v))}</p>`).join("")}</div><div class="chapter-nav">${chapter > 1 ? `<a class="button" href="/reader/${meta.code}/${chapter - 1}">← ${t("previous")}</a>` : "<span></span>"}${chapter < meta.chapters ? `<a class="button" href="/reader/${meta.code}/${chapter + 1}">${t("next")} →</a>` : "<span></span>"}</div></article><aside class="reader-aside"><div class="card edition-card"><h2>${t("edition")}</h2><p><strong>${esc(editionInfo.title)}</strong></p>${editionInfo.note ? `<p>${esc(editionInfo.note)}</p>` : ""}<p>${t("license")}: ${esc(editionInfo.license)}</p><a href="${editionInfo.source}" target="_blank" rel="noreferrer">${t("sourceLink")} ↗</a></div>${editionToggle(meta.code)}${timerCard()}<div class="card" id="search-panel" hidden><h2>${t("search")}</h2><ol class="search-results" id="search-results"></ol></div></aside></div>`,
   );
   activateTimer();
+  document.querySelector(".reader-aside")?.insertAdjacentHTML("beforeend", '<section class="card" id="reader-bookmarks" aria-live="polite"></section>');
+  void mountReaderBookmarks(meta, chapter, chosenEdition, books);
   const editionText=editionCopy[state.lang];
   if(editionInfo.attribution) document.querySelector('.edition-card').insertAdjacentHTML('beforeend', `<p class="edition-attribution">${esc(editionInfo.attribution)}</p>`);
   if(editionInfo.licenseUrl) document.querySelector('.edition-card').insertAdjacentHTML('beforeend', `<a href="${esc(editionInfo.licenseUrl)}" target="_blank" rel="noreferrer">${esc(editionInfo.license)} ↗</a>`);

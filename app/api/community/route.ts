@@ -8,18 +8,7 @@ export const dynamic = "force-dynamic";
 const OWNER_EMAIL = "dordiaioleksii1@gmail.com";
 const clean = (value: unknown, max = 120) => typeof value === "string" ? value.trim().slice(0, max) : "";
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
-type SyntheticRow = { id: string; first_name: string; last_name: string; locale: string; country_code: string; joined_at: string; last_seen_at: string | null; activity: string | null; reading_data: string | null; mission_count: number };
 type RealRow = { id: string; display_name: string; locale: string; joined_at: string; last_active_at: string | null; reading_data: string | null; mission_count: number };
-
-function publicSynthetic(row: SyntheticRow, now: Date) {
-  const online = Boolean(row.last_seen_at && new Date(`${row.last_seen_at.replace(" ", "T")}Z`).getTime() >= now.getTime() - 300_000);
-  return {
-    id: row.id, displayName: `${row.first_name} ${row.last_name}`, locale: row.locale,
-    countryCode: row.country_code, joinedAt: row.joined_at, online,
-    activity: online ? row.activity || "exploring" : "away",
-    chaptersRead: progressCount(row.reading_data), missionsCompleted: Number(row.mission_count || 0),
-  };
-}
 
 function progressCount(raw: string | null) {
   if (!raw) return 0;
@@ -45,9 +34,9 @@ export async function GET(request: Request) {
   const query = clean(url.searchParams.get("q"), 60).toLocaleLowerCase();
   const sort = ["recent", "active", "progress", "name"].includes(clean(url.searchParams.get("sort"), 20)) ? clean(url.searchParams.get("sort"), 20) : "recent";
 
-  const [accountCount, realOnline, realRows, syntheticRows] = await env.DB!.batch([
+  const [accountCount, realOnline, realRows] = await env.DB!.batch([
     env.DB!.prepare("SELECT COUNT(*) total FROM accounts WHERE deleted_at IS NULL"),
-    env.DB!.prepare("SELECT COUNT(DISTINCT user_id) total FROM usage_sessions WHERE user_id IS NOT NULL AND last_seen_at>=datetime('now','-5 minutes')"),
+    env.DB!.prepare("SELECT COUNT(DISTINCT s.user_id) total FROM usage_sessions s JOIN accounts a ON a.id=s.user_id AND a.deleted_at IS NULL WHERE s.last_seen_at>=datetime('now','-5 minutes')"),
     env.DB!.prepare(`SELECT a.id,
         trim(CASE WHEN p.public_first_name=1 THEN p.first_name ELSE '' END || ' ' || CASE WHEN p.public_last_name=1 THEN p.last_name ELSE '' END) display_name,
         p.locale,a.created_at joined_at,MAX(s.last_seen_at) last_active_at,
@@ -57,35 +46,24 @@ export async function GET(request: Request) {
       LEFT JOIN usage_sessions s ON s.user_id=a.id LEFT JOIN progress pr ON pr.user_id=a.id
       WHERE a.deleted_at IS NULL AND (p.public_first_name=1 OR p.public_last_name=1)
       GROUP BY a.id,p.first_name,p.last_name,p.public_first_name,p.public_last_name,p.public_progress,p.locale,a.created_at`),
-    env.DB!.prepare(`SELECT m.id,m.first_name,m.last_name,m.locale,m.country_code,m.joined_at,
-      (SELECT MAX(s.last_seen_at) FROM community_agent_sessions s JOIN community_runs r ON r.id=m.run_id
-        WHERE s.member_id=m.id AND s.revoked_at IS NULL AND s.expires_at>CURRENT_TIMESTAMP AND r.status='running' AND s.control_version=r.control_version) last_seen_at,
-      (SELECT s.activity FROM community_agent_sessions s WHERE s.member_id=m.id AND s.revoked_at IS NULL
-        AND s.expires_at>CURRENT_TIMESTAMP AND s.control_version=(SELECT control_version FROM community_runs WHERE id=m.run_id) ORDER BY s.last_seen_at DESC LIMIT 1) activity,
-      (SELECT pr.data FROM progress pr WHERE pr.user_id=m.id AND pr.mission_id='READING') reading_data,
-      (SELECT COUNT(*) FROM progress pr WHERE pr.user_id=m.id AND pr.mission_id LIKE 'OT-AB-01:%') mission_count
-      FROM community_members m WHERE m.run_id=? ORDER BY m.joined_at DESC`)
-      .bind(COMMUNITY_RUN_ID),
   ]);
 
-  const synthetic = (syntheticRows.results as unknown as SyntheticRow[]).map(row => publicSynthetic(row, now));
   const real = (realRows.results as unknown as RealRow[]).map(row => {
     const online = Boolean(row.last_active_at && new Date(`${row.last_active_at.replace(" ", "T")}Z`).getTime() >= now.getTime() - 300_000);
     return { id: row.id, displayName: row.display_name, locale: row.locale, countryCode: null, joinedAt: row.joined_at, online,
       activity: online ? "exploring" : "away", chaptersRead: progressCount(row.reading_data), missionsCompleted: Number(row.mission_count||0) };
   });
-  let members = [...real, ...synthetic];
+  let members = real;
   if (query) members = members.filter(member => member.displayName.toLocaleLowerCase().includes(query));
   members.sort((a, b) => sort === "name" ? a.displayName.localeCompare(b.displayName)
     : sort === "active" ? Number(b.online) - Number(a.online) || b.joinedAt.localeCompare(a.joinedAt)
       : sort === "progress" ? b.chaptersRead - a.chaptersRead || b.missionsCompleted - a.missionsCompleted
         : b.joinedAt.localeCompare(a.joinedAt));
   const totalVisible = members.length, offset = (page - 1) * pageSize;
-  const syntheticOnline = synthetic.filter(member => member.online).length;
   return json({
     summary: {
-      registered: Number((accountCount.results[0] as { total?: number })?.total || 0) + synthetic.length,
-      online: Number((realOnline.results[0] as { total?: number })?.total || 0) + syntheticOnline,
+      registered: Number((accountCount.results[0] as { total?: number })?.total || 0),
+      online: Number((realOnline.results[0] as { total?: number })?.total || 0),
       visible: totalVisible,
     },
     page, pageSize, totalPages: Math.max(1, Math.ceil(totalVisible / pageSize)), members: members.slice(offset, offset + pageSize),

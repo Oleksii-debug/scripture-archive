@@ -72,8 +72,12 @@ export async function controlCommunity(action: string, now = new Date()) {
     WHERE id=? AND control_version=? AND status=?`).bind(status, control, status, activate?1:0, activate?1:0, status, COMMUNITY_RUN_ID, run.control_version, run.status)];
   if (activate) {
     for (const wave of communityWavePlan(now)) statements.push(env.DB!.prepare(
-      `UPDATE community_waves SET starts_at=?,next_at=?,target_count=?,label=? WHERE id=? AND created_count=0 AND ${guard}`,
-    ).bind(wave.startsAt, wave.startsAt, wave.count, `${wave.key}-${wave.count}`, `${COMMUNITY_RUN_ID}:${wave.key}`, COMMUNITY_RUN_ID, control));
+      `UPDATE community_waves SET
+        starts_at=datetime((SELECT activated_at FROM community_runs WHERE id=?), ?),
+        next_at=datetime((SELECT activated_at FROM community_runs WHERE id=?), ?),
+        target_count=?,label=? WHERE id=? AND created_count=0 AND ${guard}`,
+    ).bind(COMMUNITY_RUN_ID, `+${wave.offsetMinutes} minutes`, COMMUNITY_RUN_ID, `+${wave.offsetMinutes} minutes`,
+      wave.count, `${wave.key}-${wave.count}`, `${COMMUNITY_RUN_ID}:${wave.key}`, COMMUNITY_RUN_ID, control));
   }
   if (action === "resume" && !activate) {
     const seconds = run.paused_at ? Math.max(0, Math.floor((now.getTime()-new Date(run.paused_at.replace(" ","T")+"Z").getTime())/1000)) : 0;

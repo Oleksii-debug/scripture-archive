@@ -81,6 +81,20 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const ownBookmarks = await (await fetch(`${base}/api/bookmarks`, { headers: { Cookie: cookie } })).json();
   assert.equal(ownBookmarks.bookmarks.length, 1);
   assert.equal(ownBookmarks.bookmarks[0].book, "GEN");
+  assert.equal((await fetch(`${base}/api/reading-export`)).status, 401);
+  const exportResponse = await fetch(`${base}/api/reading-export`, { headers: { Cookie: cookie } });
+  assert.equal(exportResponse.status, 200);
+  assert.match(exportResponse.headers.get("cache-control"), /no-store/);
+  assert.match(exportResponse.headers.get("content-disposition"), /attachment/);
+  const ownExport = await exportResponse.json();
+  assert.equal(ownExport.account.email, email);
+  assert.equal(ownExport.profile.first_name, "Test");
+  assert.equal(ownExport.bookmarks.length, 1);
+  assert.equal(JSON.stringify(ownExport).includes(firstPassword), false);
+  assert.doesNotMatch(JSON.stringify(ownExport), /password_hash|password_salt|token_hash/);
+  const ownerExport = await (await fetch(`${base}/api/reading-export`, { headers: { Cookie: ownerCookie } })).json();
+  assert.equal(ownerExport.bookmarks.length, 0, "another account's bookmarks must never appear in this export");
+  assert.notEqual(ownerExport.account.email, ownExport.account.email);
   const otherBookmarks = await (await fetch(`${base}/api/bookmarks`, { headers: { Cookie: ownerCookie } })).json();
   assert.equal(otherBookmarks.bookmarks.length, 0, "bookmarks are private to the account");
   assert.equal((await bookmarkWrite(mark, "DELETE")).status, 200);
@@ -174,6 +188,8 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const secondBrowserCookie = secondBrowserLogin.headers.get("set-cookie").split(";",1)[0];
   const restoredProgress = await fetch(`${base}/api/account?action=progress`, {headers:{Cookie:secondBrowserCookie}});
   assert.equal((await restoredProgress.json()).progress.correct.length, chapter12.length);
+  const learningExport = await (await fetch(`${base}/api/reading-export`, { headers: { Cookie: cookie } })).json();
+  assert.ok(learningExport.progress.some(item => item.mission.startsWith("OT-AB-01:")));
 
   await request("/api/attempts?action=read", { method: "POST", body: { book: "GEN", chapter: 12 } });
   result = await request("/api/attempts?action=start", { method: "POST", body: { missionId: "OT-AB-01", book: "GEN", chapter: 12, locale: "en" } });

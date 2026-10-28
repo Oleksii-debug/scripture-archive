@@ -2572,6 +2572,41 @@ function renderLockedChapter(book, chapter) {
   shell(`<section class="gate-panel attempt-locked" role="alert"><p class="eyebrow">Scripture Archive</p><h1>${copy.lockedTitle}</h1><p class="lead">${copy.lockedText}</p><a class="button primary" href="/reader/${book}/${chapter}">${copy.reread}</a></section>`);
 }
 
+const bookmarkCopy = {
+  uk: { title: "Закладки", save: "Додати цю главу", remove: "Прибрати цю главу", empty: "У цьому виданні закладок ще немає.", login: "Увійдіть, щоб зберігати закладки в обліковому записі.", error: "Не вдалося завантажити або зберегти закладки. Спробуйте ще раз." },
+  ru: { title: "Закладки", save: "Добавить эту главу", remove: "Убрать эту главу", empty: "В этом издании пока нет закладок.", login: "Войдите, чтобы сохранять закладки в учётной записи.", error: "Не удалось загрузить или сохранить закладки. Попробуйте ещё раз." },
+  en: { title: "Bookmarks", save: "Bookmark this chapter", remove: "Remove this bookmark", empty: "No bookmarks in this edition yet.", login: "Sign in to save bookmarks to your account.", error: "Could not load or save bookmarks. Please try again." },
+};
+
+async function mountReaderBookmarks(meta, chapter, edition, books) {
+  const panel = document.querySelector("#reader-bookmarks");
+  if (!panel) return;
+  const copy = bookmarkCopy[state.lang] || bookmarkCopy.uk;
+  if (!state.user) { panel.innerHTML = `<h2>${copy.title}</h2><p>${copy.login}</p>`; return; }
+  const current = { edition: edition.id, book: meta.code, chapter };
+  async function load() {
+    const response = await fetch("/api/bookmarks", { cache: "no-store" });
+    if (!response.ok) throw Error("bookmark_load_failed");
+    const data = await response.json();
+    if (!Array.isArray(data.bookmarks)) throw Error("bookmark_load_failed");
+    if (!panel.isConnected) return;
+    const items = data.bookmarks.filter(item => item.edition === edition.id && books.some(book => book.code === item.book) && Number.isInteger(item.chapter) && item.chapter > 0);
+    const saved = items.some(item => item.book === meta.code && item.chapter === chapter);
+    panel.innerHTML = `<h2>${copy.title}</h2><button class="button" type="button" id="toggle-bookmark" aria-pressed="${saved}">${saved ? copy.remove : copy.save}</button><p role="status" id="bookmark-status"></p>${items.length ? `<ul>${items.map(item => { const book = books.find(value => value.code === item.book); return `<li><a href="/reader/${encodeURIComponent(item.book)}/${item.chapter}">${esc(bookTitle(book))} ${item.chapter}</a></li>`; }).join("")}</ul>` : `<p>${copy.empty}</p>`}`;
+    panel.querySelector("#toggle-bookmark").addEventListener("click", async event => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {
+        const response = await fetch("/api/bookmarks", { method: saved ? "DELETE" : "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(current) });
+        if (!response.ok) throw Error("bookmark_save_failed");
+        await load();
+        panel.querySelector("#toggle-bookmark")?.focus();
+      } catch { const status = panel.querySelector("#bookmark-status"); if (status) status.textContent = copy.error; button.disabled = false; }
+    });
+  }
+  try { await load(); } catch { if (panel.isConnected) panel.innerHTML = `<h2>${copy.title}</h2><p role="alert">${copy.error}</p>`; }
+}
+
 attemptChannel?.addEventListener("message", event => {
   const message = event.data;
   if (message?.type === "attempt-started" && state.currentReader?.book === message.book && state.currentReader?.chapter === message.chapter) {
@@ -2643,6 +2678,8 @@ async function renderReader(parts) {
     `<div class="section-head reader-heading"><div><p class="eyebrow">${t("reader")}</p><h1>${t("readerTitle")}</h1></div><p>${t("readerIntro")}</p></div><div class="toolbar"><div class="field grow"><label for="book-select">${t("book")}</label><select id="book-select">${options}</select></div><div class="field"><label for="chapter-select">${t("chapter")}</label><select id="chapter-select">${chapters}</select></div><div class="field"><label for="verse-select">${t("verse")}</label><select id="verse-select"><option value="" ${selectedVerse === null ? "selected" : ""}>—</option>${verses.map((_, i) => `<option value="${i + 1}" ${selectedVerse === i + 1 ? "selected" : ""}>${i + 1}</option>`).join("")}</select></div><form id="book-search" class="field grow"><label for="search-input">${t("searchBook")}</label><div style="display:flex;gap:.4rem"><input id="search-input" type="search" placeholder="${t("searchPlaceholder")}"><button class="button" type="submit">${t("search")}</button></div></form></div><div class="reader-layout"><article class="reading-pane"><p class="eyebrow">${meta.testament === "OT" ? t("oldTestament") : t("newTestament")}</p><h1>${esc(bookTitle(meta))} ${chapter}</h1><p class="chapter-meta">${esc(editionInfo.title)}</p><div class="verses">${verses.map((v, i) => `<p class="verse" id="v${i + 1}" ${selectedVerse === i + 1 ? 'data-selected-verse tabindex="-1"' : ''}><a class="verse-number" href="${readerVerseUrl(meta.code, chapter, i + 1)}" aria-label="${esc(bookTitle(meta))} ${chapter}:${i + 1}">${i + 1}</a> ${esc(bibleText(v))}</p>`).join("")}</div><div class="chapter-nav">${chapter > 1 ? `<a class="button" href="/reader/${meta.code}/${chapter - 1}">← ${t("previous")}</a>` : "<span></span>"}${chapter < meta.chapters ? `<a class="button" href="/reader/${meta.code}/${chapter + 1}">${t("next")} →</a>` : "<span></span>"}</div></article><aside class="reader-aside"><div class="card edition-card"><h2>${t("edition")}</h2><p><strong>${esc(editionInfo.title)}</strong></p>${editionInfo.note ? `<p>${esc(editionInfo.note)}</p>` : ""}<p>${t("license")}: ${esc(editionInfo.license)}</p><a href="${editionInfo.source}" target="_blank" rel="noreferrer">${t("sourceLink")} ↗</a></div>${editionToggle(meta.code)}${timerCard()}<div class="card" id="search-panel" hidden><h2>${t("search")}</h2><ol class="search-results" id="search-results" tabindex="-1"></ol></div></aside></div>`,
   );
   activateTimer();
+  document.querySelector(".reader-aside")?.insertAdjacentHTML("beforeend", '<section class="card" id="reader-bookmarks" aria-live="polite"></section>');
+  void mountReaderBookmarks(meta, chapter, chosenEdition, books);
   const editionText=editionCopy[state.lang];
   if(editionInfo.attribution) document.querySelector('.edition-card').insertAdjacentHTML('beforeend', `<p class="edition-attribution">${esc(editionInfo.attribution)}</p>`);
   if(editionInfo.licenseUrl) document.querySelector('.edition-card').insertAdjacentHTML('beforeend', `<a href="${esc(editionInfo.licenseUrl)}" target="_blank" rel="noreferrer">${esc(editionInfo.license)} ↗</a>`);
@@ -3324,6 +3361,12 @@ function renderAccount() {
   if (state.user.profileComplete) {
     const visibility=state.user.visibility||{};
     shell(`<article class="prose account-dashboard"><p class="eyebrow">${t("account")}</p><h1>${esc(state.user.firstName)} ${esc(state.user.lastName)}</h1><p>${esc(state.user.email)}</p><div class="notice success">${copy.saved}</div><div class="action-row"><a class="button primary" href="/missions">${t("continue")}</a><a class="button" href="/groups">${t("myGroups")}</a>${state.user.isOwner?`<a class="button" href="/editor">${copy.edit}</a>`:""}<button class="button" id="logout-button">${copy.logout}</button></div><section class="profile-controls"><h2>${copy.visibility}</h2><p>${copy.visibilityHelp}</p><form id="visibility-form" class="account-form"><label class="account-check"><input name="firstName" type="checkbox" ${visibility.firstName?"checked":""}><span>${copy.publicFirst}</span></label><label class="account-check"><input name="lastName" type="checkbox" ${visibility.lastName?"checked":""}><span>${copy.publicLast}</span></label><label class="account-check"><input name="church" type="checkbox" ${visibility.church?"checked":""}><span>${copy.publicChurch}</span></label><label class="account-check"><input name="progress" type="checkbox" ${visibility.progress?"checked":""}><span>${copy.publicProgress}</span></label><button class="button">${copy.save}</button><p id="visibility-state" role="status"></p></form></section>${state.user.authProvider==="password"?`<details class="profile-controls"><summary>${copy.change}</summary><form id="password-form" class="account-form">${field("currentPassword",copy.currentPassword,"password",'autocomplete="current-password" required')}${field("newPassword",copy.newPassword,"password",'autocomplete="new-password" minlength="12" maxlength="128" required')}<small>${copy.passwordRule}</small><button class="button">${copy.change}</button><p id="password-state" role="status"></p></form></details><details class="danger-zone"><summary>${copy.delete}</summary><p>${copy.deleteHelp}</p><form id="delete-form" class="account-form">${field("password",copy.password,"password",'autocomplete="current-password" required')}<label class="account-check"><input name="confirm" type="checkbox" required><span>${copy.confirmDelete}</span></label><button class="button">${copy.delete}</button><p id="delete-state" role="status"></p></form></details>`:""}</article>`);
+    const exportCopy = {
+      uk: ["Експорт даних", "Завантажити профіль, історію навчання та закладки", "Файл не містить інших даних акаунта або вкладень звернень."],
+      ru: ["Экспорт данных", "Скачать профиль, историю обучения и закладки", "Файл не содержит другие данные аккаунта или вложения обращений."],
+      en: ["Export data", "Download profile, learning history and bookmarks", "The file does not include other account data or support attachments."],
+    }[state.lang] || ["Export data", "Download profile, learning history and bookmarks", "The file does not include other account data or support attachments."];
+    document.querySelector(".profile-controls")?.insertAdjacentHTML("beforebegin", `<section class="profile-controls"><h2>${exportCopy[0]}</h2><p>${exportCopy[2]}</p><a class="button" href="/api/reading-export" download="scripture-archive-reading-data.json">${exportCopy[1]}</a></section>`);
     document.querySelector("#logout-button").onclick=async()=>{await authRequest("logout");state.user=null;clearPersonalProgress();renderAccount()};
     document.querySelector("#visibility-form").onsubmit=async event=>{event.preventDefault();const form=new FormData(event.currentTarget),status=document.querySelector("#visibility-state");try{state.user=(await accountRequest("visibility","PUT",{firstName:form.has("firstName"),lastName:form.has("lastName"),church:form.has("church"),progress:form.has("progress")})).user;status.textContent=copy.saved}catch{status.textContent=copy.error}};
     if(document.querySelector("#password-form"))document.querySelector("#password-form").onsubmit=async event=>{event.preventDefault();const status=document.querySelector("#password-state"),data=Object.fromEntries(new FormData(event.currentTarget));try{await authRequest("change-password",data);state.user=null;clearPersonalProgress();renderAccount()}catch{status.textContent=copy.error}};

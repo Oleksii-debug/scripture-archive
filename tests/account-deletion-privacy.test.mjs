@@ -8,11 +8,12 @@ import vm from 'node:vm';
 test('account deletion clears personal records while preserving other users', async () => {
   const db = new DatabaseSync(':memory:');
   db.exec('PRAGMA foreign_keys=ON');
-  for (const name of readdirSync(new URL('../drizzle/', import.meta.url)).filter(n => /^000[0-8]_.*\.sql$/.test(n)).sort())
+  for (const name of readdirSync(new URL('../drizzle/', import.meta.url)).filter(n => /^000[0-9]_.*\.sql$/.test(n)).sort())
     db.exec(readFileSync(new URL('../drizzle/' + name, import.meta.url), 'utf8'));
   for (const id of ['alice', 'bob']) {
     db.prepare("INSERT INTO accounts (id,email,password_hash,password_salt,password_iterations,first_name,last_name) VALUES (?,?,?,?,?,?,?)").run(id, `${id}@example.invalid`, 'hash', 'salt', 1, 'First', 'Last');
     db.prepare("INSERT INTO progress(user_id,mission_id,data) VALUES (?,'READING','[]')").run(id);
+    db.prepare("INSERT INTO reader_bookmarks(user_id,edition,book,chapter) VALUES (?,'en-web','GEN',1)").run(id);
     db.prepare("INSERT INTO auth_tokens(token_hash,user_id,purpose,expires_at) VALUES (?,?,'reset','2099-01-01')").run('token-'+id,id);
     db.prepare("INSERT INTO auth_sessions(token_hash,user_id,session_version,user_agent_hash,expires_at) VALUES (?,?,1,'agent','2099-01-01')").run('session-'+id,id);
     db.prepare("INSERT INTO mission_attempts(id,actor_id,mission_id,book_id,chapter,locale,task_limit,expires_at) VALUES (?,?,'M','GEN',1,'uk',1,'2099-01-01')").run('attempt-'+id,id);
@@ -43,7 +44,7 @@ test('account deletion clears personal records while preserving other users', as
   assert.equal((await exports.POST(request('correct'))).status, 200);
   const alice = db.prepare("SELECT email,first_name,last_name,password_hash,password_salt,deleted_at FROM accounts WHERE id='alice'").get();
   assert.equal(alice.first_name, ''); assert.equal(alice.last_name, ''); assert.equal(alice.password_hash, ''); assert.equal(alice.password_salt, ''); assert.ok(alice.deleted_at); assert.equal(alice.email, 'deleted-alice@invalid.local');
-  for (const [table,column] of [['progress','user_id'],['auth_tokens','user_id'],['auth_sessions','user_id'],['mission_attempts','actor_id'],['chapter_read_receipts','actor_id'],['support_requests','user_id']]) {
+  for (const [table,column] of [['progress','user_id'],['reader_bookmarks','user_id'],['auth_tokens','user_id'],['auth_sessions','user_id'],['mission_attempts','actor_id'],['chapter_read_receipts','actor_id'],['support_requests','user_id']]) {
     assert.equal(db.prepare(`SELECT count(*) n FROM ${table} WHERE ${column}=?`).get('alice').n, 0, table);
     assert.equal(db.prepare(`SELECT count(*) n FROM ${table} WHERE ${column}=?`).get('bob').n, 1, table);
   }

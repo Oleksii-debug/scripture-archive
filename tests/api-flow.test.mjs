@@ -170,6 +170,7 @@ integration("account, progress, attempts, groups, marathon limit and password re
   let ownerState=await control.json();
   assert.equal(ownerState.run.status,"waiting");
   assert.equal(ownerState.synthetic.total,0,"a public visit must not start registrations");
+  const realCommunityBefore = await (await fetch(`${base}/api/community`)).json();
   const deniedStart=await fetch(`${base}/api/community`,{method:"POST",headers:{Origin:base,"Content-Type":"application/json"},body:JSON.stringify({action:"start"})});
   assert.equal(deniedStart.status,403);
   const deniedDispatch=await fetch(`${base}/api/community/dispatch`,{method:"POST"});
@@ -191,18 +192,16 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const protectedUsers=await fetch(`${base}/api/account?action=users`,{headers:{Cookie:`sa_agent=${originalJob.token}`}});
   assert.equal(protectedUsers.status,401);
   let publicView=await (await fetch(`${base}/api/community`)).json();
-  let automated=publicView.members.find(member=>member.id===originalJob.memberId);
-  assert.equal(automated.online,true);
-  assert.equal(automated.chaptersRead,0);
-  assert.equal(automated.missionsCompleted,0);
-  for(const privateField of ["source_kind","sourceKind","persona","seed","token","isBot","automated"])
-    assert.equal(privateField in automated,false,privateField);
+  assert.equal(publicView.members.some(member=>member.id===originalJob.memberId),false);
+  assert.equal(publicView.summary.registered,realCommunityBefore.summary.registered);
+  assert.equal(publicView.summary.visible,realCommunityBefore.summary.visible);
+  assert.equal(publicView.summary.online,realCommunityBefore.summary.online);
   assert.equal(JSON.stringify(publicView).includes(originalJob.token),false);
   assert.equal((await ownerCommunity({action:"pause"})).data.status,"paused");
   actorMe=await fetch(`${base}/api/account?action=me`,{headers:{Cookie:`sa_agent=${originalJob.token}`}});
   assert.equal((await actorMe.json()).user,null);
   publicView=await (await fetch(`${base}/api/community`)).json();
-  assert.equal(publicView.members.find(member=>member.id===originalJob.memberId).online,false);
+  assert.equal(publicView.members.some(member=>member.id===originalJob.memberId),false);
   assert.equal((await ownerCommunity({action:"lease"})).data.jobs.length,0);
   assert.equal((await ownerCommunity({action:"resume"})).data.status,"running");
   actorMe=await fetch(`${base}/api/account?action=me`,{headers:{Cookie:`sa_agent=${originalJob.token}`}});
@@ -214,10 +213,8 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const activity=await runCommunityAgent({origin:base,token:job.token,seed:job.seed,smoke:true});
   assert.equal(activity.completed,true);
   publicView=await (await fetch(`${base}/api/community`)).json();
-  automated=publicView.members.find(member=>member.id===job.memberId);
-  assert.equal(automated.chaptersRead,1);
-  assert.equal(automated.missionsCompleted,1);
-  assert.equal(automated.online,false);
+  assert.equal(publicView.members.some(member=>member.id===job.memberId),false);
+  assert.equal(publicView.summary.registered,realCommunityBefore.summary.registered);
   assert.equal((await ownerCommunity({action:"stop"})).data.status,"stopped");
   assert.equal((await ownerCommunity({action:"resume"})).response.status,409);
   const finalState=await (await fetch(`${base}/api/community?action=owner`,{headers:{Cookie:ownerCookie}})).json();

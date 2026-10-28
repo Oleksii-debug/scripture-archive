@@ -211,6 +211,7 @@ export async function POST(request: Request) {
       return json({ error: "invalid_credentials" }, 401);
     await env.DB.batch([
       env.DB.prepare("DELETE FROM progress WHERE user_id=?").bind(identity.userId),
+      env.DB.prepare("DELETE FROM reader_bookmarks WHERE user_id=?").bind(identity.userId),
       env.DB.prepare("DELETE FROM home_group_members WHERE user_id=?").bind(identity.userId),
       env.DB.prepare("DELETE FROM study_materials WHERE owner_user_id=?").bind(identity.userId),
       env.DB.prepare("DELETE FROM home_groups WHERE owner_user_id=?").bind(identity.userId),

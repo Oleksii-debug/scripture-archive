@@ -203,3 +203,5 @@ body{background:linear-gradient(180deg,#f8f6f0 0,#eef2f1 58%,#f8f6f0 100%)}
 @media(max-width:760px){.community-counter{display:grid;grid-template-columns:1fr 1fr}.community-counter span{display:grid;gap:.2rem}.community-hero{min-height:480px;display:flex;flex-direction:column;justify-content:flex-end;padding:1.5rem}.community-hero h1{font-size:clamp(2.8rem,13vw,4.2rem)}.community-metrics{grid-template-columns:1fr}.community-metrics article{display:flex;justify-content:space-between;align-items:center;border-right:0;border-bottom:1px solid rgba(255,255,255,.17)}.community-filter{display:grid}.community-list{grid-template-columns:1fr}.community-member{padding:1rem}.community-pagination{display:grid;grid-template-columns:1fr 1fr}.community-pagination span{grid-column:1/-1;grid-row:1;text-align:center}.community-wave-list p{display:grid}}
 
 .groups-hero .eyebrow,.lab-hero .eyebrow,.community-hero .eyebrow{color:#f0d89f}
+/* SA-04: selected deep-linked verse remains visible and keyboard readable. */
+.verse[data-selected-verse]{border-inline-start:3px solid var(--gold);padding-inline-start:.75rem;background:rgba(200,154,75,.08);scroll-margin-block:6rem}

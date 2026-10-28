@@ -33,8 +33,11 @@ export async function POST(request: Request) {
   const existing = await env.DB!.prepare("SELECT owner_user_id FROM study_materials WHERE id=?").bind(id).first<{ owner_user_id: string }>();
   if (existing && existing.owner_user_id !== userId) return Response.json({ error: "forbidden" }, { status: 403 });
   const data = JSON.stringify({ prompt, reference, explanation, answer, options });
-  await env.DB!.prepare("INSERT INTO study_materials (id,owner_user_id,title,locale,data,visibility) VALUES (?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,locale=excluded.locale,data=excluded.data,visibility=excluded.visibility,updated_at=CURRENT_TIMESTAMP")
-    .bind(id, userId, title, locale, data, visibility).run();
+  // The owner constraint must be enforced by the write itself: another user can
+  // create this ID after the preflight read but before the UPSERT executes.
+  const saved = await env.DB!.prepare("INSERT INTO study_materials (id,owner_user_id,title,locale,data,visibility) VALUES (?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,locale=excluded.locale,data=excluded.data,visibility=excluded.visibility,updated_at=CURRENT_TIMESTAMP WHERE study_materials.owner_user_id=excluded.owner_user_id RETURNING id")
+    .bind(id, userId, title, locale, data, visibility).first<{ id: string }>();
+  if (!saved) return Response.json({ error: "forbidden" }, { status: 403 });
   return Response.json({ ok: true, id }, { status: existing ? 200 : 201 });
 }
 

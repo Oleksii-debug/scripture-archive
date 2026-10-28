@@ -7,6 +7,7 @@ export function GET() {
     "Disallow: /api/",
     "Disallow: /account",
     "Disallow: /mission",
+    "Allow: /missions",
     "Disallow: /progress",
     "Disallow: /editor",
     "",

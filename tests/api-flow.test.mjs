@@ -287,4 +287,15 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal(result.response.status, 200);
   result = await request("/api/account?action=me");
   assert.equal(result.data.user, null);
+  result = await request("/api/auth?action=login", { method: "POST", body: { email, password: secondPassword } });
+  assert.equal(result.response.status, 200);
+  const deletionSession = cookie;
+  result = await request("/api/auth?action=delete-account", { method: "POST", body: { password: "wrong-password" } });
+  assert.equal(result.response.status, 401);
+  result = await request("/api/auth?action=delete-account", { method: "POST", body: { password: secondPassword } });
+  assert.equal(result.response.status, 200);
+  const deletedSession = await fetch(`${base}/api/account?action=me`, { headers: { Cookie: deletionSession } });
+  assert.equal((await deletedSession.json()).user, null);
+  result = await request("/api/auth?action=login", { method: "POST", body: { email, password: secondPassword } });
+  assert.equal(result.response.status, 401);
 });

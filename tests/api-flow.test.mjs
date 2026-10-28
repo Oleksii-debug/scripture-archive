@@ -70,6 +70,22 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const ownerLogin = await fetch(`${base}/api/auth?action=login`, {method:"POST",headers:{Origin:base,"Content-Type":"application/json"},body:JSON.stringify({email:ownerPayload.email,password:ownerPassword})});
   assert.equal(ownerLogin.status, 200);
   const ownerCookie = ownerLogin.headers.get("set-cookie").split(";",1)[0];
+  const beforeHelp = await (await fetch(`${base}/api/help`, { headers: { Cookie: ownerCookie } })).json();
+  async function submitHelp(bytes, filename, type) {
+    const form = new FormData();
+    for (const [key, value] of Object.entries({ email, subject: "Support fixture", message: "Local integration fixture only", locale: "en", acceptPrivacy: "yes" })) form.set(key, value);
+    form.append("files", new File([bytes], filename, { type }));
+    return fetch(`${base}/api/help`, { method: "POST", headers: { Origin: base, Cookie: cookie }, body: form });
+  }
+  const rejectedHelp = await submitHelp("not a PNG", "fake.png", "image/png");
+  assert.equal(rejectedHelp.status, 400);
+  assert.equal((await (await fetch(`${base}/api/help`, { headers: { Cookie: ownerCookie } })).json()).items.length, beforeHelp.items.length);
+  const image = Uint8Array.from(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGMQUDD4DwACBAFgjby7cQAAAABJRU5ErkJggg==", "base64"));
+  const acceptedHelp = await submitHelp(image, "fixture.png", "image/png");
+  assert.equal(acceptedHelp.status, 201);
+  const afterHelp = await (await fetch(`${base}/api/help`, { headers: { Cookie: ownerCookie } })).json();
+  assert.equal(afterHelp.items.length, beforeHelp.items.length + 1);
+  assert.equal(afterHelp.items[0].attachment_count, 1);
   const analyticsResponse = await fetch(`${base}/api/analytics?days=30`, { headers: { Cookie:ownerCookie } });
   assert.equal(analyticsResponse.status, 200);
   const analytics = await analyticsResponse.json();

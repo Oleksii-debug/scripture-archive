@@ -10,6 +10,7 @@ function element(tag) {
     removed: false, focused: false, childElementCount: 0,
     setAttribute(name, value) { this.attributes[name] = value; },
     append(...items) { this.childNodes.push(...items); this.childElementCount = this.childNodes.length; },
+    appendChild(item) { this.append(item); return item; },
     replaceChildren(...items) { this.childNodes = [...items]; this.childElementCount = this.childNodes.length; },
     addEventListener(name, fn) { this.listeners[name] = fn; },
     click() { this.listeners.click?.({type:'click'}); },

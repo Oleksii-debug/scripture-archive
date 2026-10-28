@@ -129,7 +129,9 @@ export default function ScriptLoader() {
         main.focus();
         loadApp();
       });
-      notice.append(heading, description, retry);
+      notice.appendChild(heading);
+      notice.appendChild(description);
+      notice.appendChild(retry);
       main.replaceChildren(notice);
       retry.focus();
     };

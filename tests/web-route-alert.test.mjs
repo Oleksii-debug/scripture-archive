@@ -19,6 +19,8 @@ test("fatal route errors expose a localized screen-reader alert without internal
     const context = {
       clearInterval() {},
       timerInterval: null,
+      communityRefreshInterval: null,
+      communityOwnerRefreshInterval: null,
       location: { hash: "", pathname: "/reader" },
       state: { lang, currentReader: null },
       async renderReader() { throw new Error("private internal diagnostics"); },

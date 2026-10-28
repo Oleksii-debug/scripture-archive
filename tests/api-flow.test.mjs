@@ -70,6 +70,24 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const ownerLogin = await fetch(`${base}/api/auth?action=login`, {method:"POST",headers:{Origin:base,"Content-Type":"application/json"},body:JSON.stringify({email:ownerPayload.email,password:ownerPassword})});
   assert.equal(ownerLogin.status, 200);
   const ownerCookie = ownerLogin.headers.get("set-cookie").split(";",1)[0];
+  // Exercise the real Worker and local D1 with stale snapshots from concurrent tabs.
+  const reading = chapter => ({ book: "GEN", chapter, title: `Genesis ${chapter}` });
+  const writes = await Promise.all([12, 13].map(chapter => request("/api/account?action=reading", {
+    method: "PUT", body: { reading: [reading(chapter)] },
+  })));
+  assert.deepEqual(writes.map(item => item.response.status), [200, 200]);
+  result = await request("/api/account?action=reading", { method: "PUT", body: { reading: [reading(12)] } });
+  assert.equal(result.response.status, 200);
+  result = await request("/api/account?action=reading");
+  assert.deepEqual(result.data.reading.map(row => row.chapter).sort((a, b) => a - b), [12, 13]);
+
+  const material = { id: `integration-${crypto.randomUUID()}`, title: "Test material", prompt: "Choose an answer", reference: "GEN 12", explanation: "Test explanation", answer: "one", options: ["one", "two"] };
+  result = await request("/api/materials", { method: "POST", body: material });
+  assert.equal(result.response.status, 201);
+  const forbiddenMaterial = await fetch(`${base}/api/materials`, { method: "POST", headers: { Origin: base, Cookie: ownerCookie, "Content-Type": "application/json" }, body: JSON.stringify({ ...material, title: "Overwrite attempt" }) });
+  assert.equal(forbiddenMaterial.status, 403);
+  result = await request("/api/materials?mine=1");
+  assert.equal(result.data.materials.find(item => item.id === material.id).title, material.title);
   const analyticsResponse = await fetch(`${base}/api/analytics?days=30`, { headers: { Cookie:ownerCookie } });
   assert.equal(analyticsResponse.status, 200);
   const analytics = await analyticsResponse.json();
@@ -88,7 +106,7 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const community = await communityResponse.json();
   const publicMember = community.members.find(member => member.displayName === "Test Reader");
   assert.ok(publicMember);
-  assert.equal(publicMember.chaptersRead, 0);
+  assert.equal(publicMember.chaptersRead, 2);
   assert.equal("sourceKind" in publicMember, false);
   result = await request("/api/account?action=progress", { method: "PUT", body: { progress: {} }, origin: "https://attacker.invalid" });
   assert.equal(result.response.status, 403);
@@ -137,6 +155,15 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal(result.data.error, "attempt_invalidated");
 
   const groupBody = { name: "Integration group", visibility: "private", rosterVisibility: "private", weeklyGoal: 3, catchupMode: "flexible", marathonEnabled: false, bibleEdition: "en-web" };
+  result = await request("/api/groups?action=create", { method: "POST", body: { ...groupBody, name: "Public privacy test", visibility: "public" } });
+  const publicGroupId = result.data.groupId;
+  result = await request("/api/groups?action=session", { method: "POST", body: { groupId: publicGroupId, bookId: "GEN", chapter: 12, answersTotal: 2, answersCorrect: 1, meetingDate: "2026-10-28", reflection: "Private group discussion" } });
+  assert.equal(result.response.status, 200);
+  result = await request(`/api/groups?groupId=${encodeURIComponent(publicGroupId)}`);
+  assert.equal(result.data.sessions[0].reflection, "Private group discussion");
+  const publicGroup = await fetch(`${base}/api/groups?groupId=${encodeURIComponent(publicGroupId)}`);
+  assert.equal(publicGroup.status, 200);
+  assert.equal((await publicGroup.json()).sessions[0].reflection, null);
   result = await request("/api/groups?action=create", { method: "POST", body: groupBody });
   assert.equal(result.response.status, 201);
   const groupId = result.data.groupId;

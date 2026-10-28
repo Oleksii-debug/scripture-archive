@@ -33,7 +33,8 @@ async function write(request: Request, remove: boolean) {
   const body: unknown = await request.json().catch(() => null);
   if (!valid(body)) return json({ error: "invalid_bookmark" }, 400);
   if (remove) {
-    await env.DB.prepare("DELETE FROM reader_bookmarks WHERE user_id=? AND edition=? AND book=? AND chapter=?").bind(id, body.edition, body.book, body.chapter).run();
+    const result = await env.DB.prepare("DELETE FROM reader_bookmarks WHERE user_id=? AND edition=? AND book=? AND chapter=?").bind(id, body.edition, body.book, body.chapter).run();
+    if (!result.success) return json({ error: "bookmark_save_failed" }, 503);
     return json({ ok: true });
   }
   const result = await env.DB.prepare("INSERT INTO reader_bookmarks(user_id,edition,book,chapter) SELECT ?,?,?,? WHERE (SELECT COUNT(*) FROM reader_bookmarks WHERE user_id=?)<500 ON CONFLICT(user_id,edition,book,chapter) DO NOTHING").bind(id, body.edition, body.book, body.chapter, id).run();

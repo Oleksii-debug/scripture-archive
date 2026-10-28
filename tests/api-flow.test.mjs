@@ -74,7 +74,8 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const bookmarkWrite = (body, method = "PUT", origin = base) => fetch(`${base}/api/bookmarks`, { method, headers: { Origin: origin, Cookie: cookie, "Content-Type": "application/json" }, body: JSON.stringify(body) });
   assert.equal((await fetch(`${base}/api/bookmarks`)).status, 401);
   assert.equal((await bookmarkWrite(mark, "PUT", "https://attacker.invalid")).status, 403);
-  assert.equal((await bookmarkWrite({ ...mark, chapter: -1 })).status, 400);
+  const invalidBookmark = await bookmarkWrite({ ...mark, chapter: -1 });
+  assert.equal(invalidBookmark.status, 400, JSON.stringify(await invalidBookmark.json()));
   assert.equal((await bookmarkWrite(mark)).status, 200);
   assert.equal((await bookmarkWrite(mark)).status, 200, "saving a bookmark twice is idempotent");
   const ownBookmarks = await (await fetch(`${base}/api/bookmarks`, { headers: { Cookie: cookie } })).json();

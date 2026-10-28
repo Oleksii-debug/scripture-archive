@@ -2521,7 +2521,7 @@ async function mountReaderBookmarks(meta, chapter, edition, books) {
         if (!response.ok) throw Error("bookmark_save_failed");
         await load();
         panel.querySelector("#toggle-bookmark")?.focus();
-      } catch { panel.querySelector("#bookmark-status").textContent = copy.error; button.disabled = false; }
+      } catch { const status = panel.querySelector("#bookmark-status"); if (status) status.textContent = copy.error; button.disabled = false; }
     });
   }
   try { await load(); } catch { if (panel.isConnected) panel.innerHTML = `<h2>${copy.title}</h2><p role="alert">${copy.error}</p>`; }

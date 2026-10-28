@@ -1,5 +1,15 @@
 # scripture-archive
-Pre-production, game design, scenario and structured content for Архів Писання / Scripture Archive
+
+## Current site and expanded product planning (owner decision 2026-10-28)
+- The last verified handoff (2026-10-26) records a **publicly published website** at https://scripture-archive.com (Sites version 10, deployed source `3a04d12`); live site and this repository's main are separate technical authorities until exact re-verification.
+- **[Expanded final product vision](docs/product/SCRIPTURE_ARCHIVE_EXPANDED_PRODUCT_VISION_2026-10-28.md)** — biblical research, Christian academy, churches, digital library, atlas, social community, events, charity, partnerships and AI.
+- **[20-section roadmap & technical acceptance](docs/roadmap/SCRIPTURE_ARCHIVE_EXPANSION_SECTION_PLAN_2026-10-28.md)** — planned status, dependencies, release-first gates.
+- **[Separate Christian community/dating technical specification](docs/architecture/CHRISTIAN_COMMUNITY_AND_DATING_TECHNICAL_SPEC_2026-10-28.md)** — optional adult-only, consent-based stand-alone product; no existing Scripture Archive users auto-enrolled.
+- **[Documentation index](docs/EXPANSION_SCOPE_INDEX.md)**; [scope registry issue #295](https://github.com/Oleksii-debug/scripture-archive/issues/295).
+- The above are **approved planning additions, not implemented feature or deployment claims**. Continue to protect existing production blockers, handoff/archives, privacy, accessibility and security.
+
+## Historical repository bootstrap description
+Pre-production, game design, scenario and structured content for Архів Писання / Scripture Archive (historical bootstrap text, not the current deployed-site status)
 
 ## Binding accessibility architecture
 

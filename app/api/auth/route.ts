@@ -108,9 +108,12 @@ export async function POST(request: Request) {
     const maritalStatus = clean(data.maritalStatus, 40), denomination = clean(data.denomination, 160);
     const church = clean(data.church, 160), selectedLocale = locale(data.locale);
     const hasChildren = data.hasChildren === true ? 1 : data.hasChildren === false ? 0 : null;
+    const sensitiveConsent = data.acceptSensitive === true;
     if (!await rateLimit(`register:${address}`, 5, 3600)) return json({ error: "too_many_requests" }, 429);
-    if (!EMAIL.test(email) || !validPassword(password) || !firstName || !lastName || !Number.isInteger(age) || age < 13 || age > 120 || !GENDERS.has(gender) || !TRADITIONS.has(tradition) || !MARITAL.has(maritalStatus) || data.acceptPrivacy !== true)
+    if (!EMAIL.test(email) || !validPassword(password) || !firstName || !lastName || !Number.isInteger(age) || age < 13 || age > 120 || !GENDERS.has(gender) || (tradition && !TRADITIONS.has(tradition)) || !MARITAL.has(maritalStatus) || data.acceptPrivacy !== true)
       return json({ error: "invalid_registration" }, 400);
+    if (!sensitiveConsent && ((tradition && tradition !== "prefer_not") || denomination || church))
+      return json({ error: "sensitive_consent_required" }, 400);
     const duplicate = await env.DB.prepare("SELECT id FROM accounts WHERE email=? AND deleted_at IS NULL").bind(email).first();
     if (duplicate) return json({ error: "email_in_use" }, 409);
     const id = crypto.randomUUID(), passwordData = await hashPassword(password);
@@ -121,7 +124,7 @@ export async function POST(request: Request) {
         env.DB.prepare(`INSERT INTO profiles
           (user_id,email,first_name,last_name,age_range,age,tradition,denomination,church,marital_status,gender,has_children,locale,sensitive_consent,privacy_accepted_at,created_at,updated_at)
           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`)
-          .bind(id, email, firstName, lastName, ageRange(age), age, tradition, denomination || null, church || null, maritalStatus, gender, hasChildren, selectedLocale, 1),
+          .bind(id, email, firstName, lastName, ageRange(age), age, sensitiveConsent && tradition !== "prefer_not" ? tradition || null : null, sensitiveConsent ? denomination || null : null, sensitiveConsent ? church || null : null, maritalStatus, gender, hasChildren, selectedLocale, sensitiveConsent ? 1 : 0),
       ]);
     } catch { return json({ error: "email_in_use" }, 409); }
     const token = await createOneTimeToken(id, "verify", 24 * 60);

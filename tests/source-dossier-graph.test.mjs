@@ -24,6 +24,19 @@ test('the source-linked dossier graph validates against the canonical 3-language
   assert.ok(allSources.some(r=>catalog.books.en.find(b=>b.code===r.book)?.testament==='OT'));
 });
 
+test('every cited verse range exists in all four bundled editions',()=>{
+  for(const dossier of scriptureDossiers){
+    for(const ref of [...dossier.sources,...dossier.related.map(link=>link.via)]){
+      for(const edition of ['uk','ru','en','uk-ohiienko']){
+        const book=JSON.parse(readFileSync(new URL(`../public/data/bible/${edition}/${ref.book}.json`,import.meta.url),'utf8'));
+        const verses=book.chapters[ref.chapter-1];
+        assert.ok(Array.isArray(verses) && ref.first>=1 && ref.last<=verses.length,
+          `${dossier.id}: ${edition} ${ref.book} ${ref.chapter}:${ref.first}-${ref.last}`);
+      }
+    }
+  }
+});
+
 test('each dossier is reachable via real internal navigation, has labeled evidence and source links',()=>{
   for(const language of ['uk','ru','en']){
     for(const item of scriptureDossiers){

@@ -63,10 +63,19 @@ export async function POST(request: Request) {
   const data = JSON.stringify({ prompt, reference, explanation, answer, options });
   // The owner constraint must be enforced by the write itself: another user can
   // create this ID after the preflight read but before the UPSERT executes.
-  const saved = await env.DB!.prepare("INSERT INTO study_materials (id,owner_user_id,title,locale,data,visibility) VALUES (?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,locale=excluded.locale,data=excluded.data,visibility=excluded.visibility,updated_at=CURRENT_TIMESTAMP WHERE study_materials.owner_user_id=excluded.owner_user_id RETURNING id")
-    .bind(id, userId, title, locale, data, visibility).first<{ id: string }>();
-  if (!saved) return Response.json({ error: "forbidden" }, { status: 403 });
-  return Response.json({ ok: true, id }, { status: existing ? 200 : 201 });
+  // Keep the guarded UPSERT atomic, but read the D1 mutation ACK via run().
+  // A SELECT-style .first() on a write with RETURNING is not a durable ACK.
+  try {
+    const saved = await env.DB!.prepare("INSERT INTO study_materials (id,owner_user_id,title,locale,data,visibility) VALUES (?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,locale=excluded.locale,data=excluded.data,visibility=excluded.visibility,updated_at=CURRENT_TIMESTAMP WHERE study_materials.owner_user_id=excluded.owner_user_id")
+      .bind(id, userId, title, locale, data, visibility).run();
+    const changes = Number(saved.meta?.changes);
+    if (!saved.success || !Number.isSafeInteger(changes) || changes < 0)
+      return Response.json({ error: "material_save_failed" }, { status: 503 });
+    if (changes === 0) return Response.json({ error: "forbidden" }, { status: 403 });
+    return Response.json({ ok: true, id }, { status: existing ? 200 : 201 });
+  } catch {
+    return Response.json({ error: "material_save_failed" }, { status: 503 });
+  }
 }
 
 export async function DELETE(request: Request) {

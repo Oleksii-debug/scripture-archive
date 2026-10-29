@@ -37,7 +37,7 @@ test('each dossier is reachable via real internal navigation, has labeled eviden
       assert.ok(markup.includes('href="/reader/'),item.id);
       assert.ok(markup.includes(esc(item.prompts[language][0])),item.id);
       for(const reference of item.sources){
-        assert.ok(markup.includes('href="/reader/'+reference.book+'/'+reference.chapter+'"'),item.id);
+        assert.ok(markup.includes('href="/reader/'+reference.book+'/'+reference.chapter+'?verse='+reference.first+'"'),item.id);
       }
       for(const relation of item.related){
         assert.ok(markup.includes('href="/dossiers?id='+relation.to+'"'),item.id);
@@ -47,6 +47,17 @@ test('each dossier is reachable via real internal navigation, has labeled eviden
       assert.ok(!markup.includes('onclick='));
     }
   }
+});
+
+test('every navigable dossier reference opens the canonical reader at the cited first verse',()=>{
+  const abraham=dossierMarkup(catalog,'uk','abraham',esc);
+  assert.match(abraham,/href="\\/reader\\/GEN\\/12\\?verse=1"/);
+  assert.match(abraham,/href="\\/reader\\/GEN\\/15\\?verse=1"/);
+  assert.match(abraham,/href="\\/reader\\/ROM\\/4\\?verse=1"/);
+  assert.match(abraham,/href="\\/reader\\/GEN\\/17\\?verse=15"/);
+  const result=dossierMarkup(catalog,'en','jerusalem',esc);
+  assert.match(result,/href="\\/reader\\/LUK\\/19\\?verse=41"/);
+  assert.doesNotMatch(abraham,/href="\\/reader\\/GEN\\/12"/);
 });
 
 test('the existing Abraham mission remains linked without making other dossiers fake missions',()=>{

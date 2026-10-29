@@ -36,7 +36,7 @@ const LOADER_COPY = {
 // Do not treat unrelated analytics, extensions or arbitrary page errors as
 // a failed application bootstrap.
 const BOOT_MODULE_PATHS = new Set([
-  "/app.js", "/workspace.js", "/support.js", "/home.js", "/editions.js",
+  "/app.js", "/workspace.js", "/material-review.js", "/support.js", "/home.js", "/editions.js",
 ]);
 
 type Language = keyof typeof LOADER_COPY;

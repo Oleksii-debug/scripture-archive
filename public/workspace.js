@@ -1,3 +1,5 @@
+import { reviewText, submissionForm, historyMarkup, queueMarkup, auditMarkup, attachReviewControls, renderPublicMaterials, loadReviewData } from './material-review.js';
+
 const COPY = {
   uk: {
     home:'Головна', campaigns:'Кампанії', dossiers:'Дослідницькі досьє', builder:'Конструктор', progress:'Мій прогрес',
@@ -55,18 +57,26 @@ export async function renderWorkspace(name,c) {
     return;
   }
   if(name==='builder') {
-    if(!state.user) { shell(`<section class="gate-panel"><h1>${w.builder}</h1><p class="lead">${w.accountNeeded}</p><a class="button primary" href="/account">${w.signIn}</a></section>`); return; }
-    const data=await request('/api/materials?mine=1');
+    const review = reviewText(state.lang);
+    if(!state.user) { shell(`<section class="gate-panel"><h1>${w.builder}</h1><p class="lead">${w.accountNeeded}</p><a class="button primary" href="/account">${w.signIn}</a></section><section class="card" id="public-materials" aria-live="polite"></section>`); await renderPublicMaterials(document.querySelector('#public-materials'),review,esc); return; }
+    const [data,reviews]=await Promise.all([request('/api/materials?mine=1'),loadReviewData(state.user.isOwner)]);
     let editing=null;
     function draw() {
       const d=editing?.data||{},form=(key,label,rows)=>`<label class="account-field"><span>${label}</span>${rows?`<textarea name="${key}" rows="${rows}" required>${esc(d[key]||'')}</textarea>`:`<input name="${key}" value="${esc(key==='title'?editing?.title||'':d[key]||'')}" required>`}</label>`;
-      shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${w.builder}</h1></div><p>${w.builderLead}</p></div><div class="builder-layout"><section class="card"><h2>${editing?w.edit:w.newMaterial}</h2><form id="material-form" class="account-form">${form('title',w.title)}${form('prompt',w.prompt,3)}${form('reference',w.reference)}<label class="account-field"><span>${w.options}</span><textarea name="options" rows="4" required>${esc((d.options||[]).join('\n'))}</textarea></label>${form('answer',w.answer)}${form('explanation',w.explanation,3)}${state.user.isOwner?`<label class="account-check"><input type="checkbox" name="publish" ${editing?.visibility==='public'?'checked':''}><span>${w.publish}</span></label>`:''}<button class="button primary">${w.save}</button><p id="material-status" role="status"></p></form></section><aside class="card"><h2>${w.myMaterials}</h2><div class="material-list">${data.materials.length?data.materials.map(m=>`<article><span class="status">${m.visibility==='public'?w.public:w.private}</span><h3>${esc(m.title)}</h3><p>${esc(m.data.reference)}</p><div class="action-row"><button class="button" data-edit="${esc(m.id)}">${w.edit}</button><button class="button" data-test="${esc(m.id)}">${w.test}</button></div></article>`).join(''):`<p>${w.empty}</p>`}</div><button class="button" id="new-material">${w.newMaterial}</button></aside></div>`);
+      shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${w.builder}</h1></div><p>${w.builderLead}</p></div><div class="builder-layout"><section class="card"><h2>${editing?w.edit:w.newMaterial}</h2><form id="material-form" class="account-form">${form('title',w.title)}${form('prompt',w.prompt,3)}${form('reference',w.reference)}<label class="account-field"><span>${w.options}</span><textarea name="options" rows="4" required>${esc((d.options||[]).join('\n'))}</textarea></label>${form('answer',w.answer)}${form('explanation',w.explanation,3)}<button class="button primary">${w.save}</button><p id="material-status" role="status"></p></form></section><aside class="card"><h2>${w.myMaterials}</h2><div class="material-list">${data.materials.length?data.materials.map(m=>`<article><span class="status">${m.visibility==='public'?w.public:w.private}</span><h3>${esc(m.title)}</h3><p>${esc(m.data.reference)}</p><div class="action-row"><button class="button" data-edit="${esc(m.id)}">${w.edit}</button><button class="button" data-test="${esc(m.id)}">${w.test}</button><button class="button" data-delete="${esc(m.id)}">${review.remove}</button></div>${submissionForm(m,review,esc)}</article>`).join(''):`<p>${w.empty}</p>`}</div><button class="button" id="new-material">${w.newMaterial}</button> <a class="button" href="/api/materials?mine=1&amp;export=1" download>${w.export}</a></aside></div>${historyMarkup(reviews.mine,review,esc)}${state.user.isOwner?queueMarkup(reviews.queue,review,esc)+auditMarkup(reviews.history,review,esc):''}<section class="card" id="public-materials" aria-live="polite"></section>`);
+      attachReviewControls(document.querySelector('main'),review,()=>renderWorkspace('builder',c),c.announce);
+      void renderPublicMaterials(document.querySelector('#public-materials'),review,esc);
       document.querySelector('#new-material').onclick=()=>{editing=null;draw()};
       document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{editing=data.materials.find(m=>m.id===b.dataset.edit);draw()});
       document.querySelectorAll('[data-test]').forEach(b=>b.onclick=()=>test(data.materials.find(m=>m.id===b.dataset.test)));
+      document.querySelectorAll('[data-delete]').forEach(button=>button.onclick=async()=>{
+        if(!window.confirm(review.confirm))return; button.disabled=true;
+        try{await request(`/api/materials?id=${encodeURIComponent(button.dataset.delete)}`,{method:'DELETE'});await renderWorkspace('builder',c);c.announce(review.removed)}
+        catch{document.querySelector('#material-status').textContent=review.error;button.disabled=false}
+      });
       document.querySelector('#material-form').onsubmit=async e=>{
         e.preventDefault();const f=new FormData(e.currentTarget),payload=Object.fromEntries(f);
-        payload.options=payload.options.split(/\r?\n/).map(v=>v.trim()).filter(Boolean);payload.locale=state.lang;payload.visibility=f.has('publish')?'public':'private';if(editing)payload.id=editing.id;
+        payload.options=payload.options.split(/\r?\n/).map(v=>v.trim()).filter(Boolean);payload.locale=state.lang;if(editing)payload.id=editing.id;
         try{await request('/api/materials',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});await renderWorkspace('builder',c);c.announce(w.saved)}catch{document.querySelector('#material-status').textContent=w.error}
       };
     }

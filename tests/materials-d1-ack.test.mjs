@@ -35,7 +35,9 @@ function fixture() {
         const result = db.prepare(sql).run(...args);
         if (sql.startsWith("INSERT INTO study_materials") && ack !== "normal") {
           const mode = ack; ack = "normal";
-          return mode === "missing" ? { success: true, meta: {} } : { success: false, meta: { changes: Number(result.changes) } };
+          if (mode === "missing") return { success: true, meta: {} };
+          if (mode === "negative") return { success: true, meta: { changes: -1 } };
+          return { success: false, meta: { changes: Number(result.changes) } };
         }
         return { success: true, meta: { changes: Number(result.changes) } };
       },
@@ -93,7 +95,7 @@ test("saved material ACK represents a committed owner-conditional write", async 
 });
 
 test("false and missing D1 ACKs return 503 even when SQLite completed the write", async () => {
-  for (const mode of ["failed", "missing"]) {
+  for (const mode of ["failed", "missing", "negative"]) {
     const f = fixture();
     try {
       f.setAck(mode);

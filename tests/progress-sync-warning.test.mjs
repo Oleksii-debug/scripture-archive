@@ -14,7 +14,7 @@ const client=readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
 test('the real account synchronization records full read failure, partial read and clears on logout',()=>{
   assert.match(client,/progressSyncStatus: null/);
   assert.match(client,/data\.warning === "partial_progress_history" \? "partial" : null/);
-  assert.match(client,/if \(!data\.progress\) throw Error\("missing_progress"\)/);
+  assert.match(client,/if \(!data\.progress \|\| !Number\.isSafeInteger\(data\.progress\.index\)/);
   assert.match(client,/state\.progressSyncStatus = "unavailable";/);
   assert.match(client,/function clearPersonalProgress\(\) \{\s*state\.progressSyncStatus=null/);
 });

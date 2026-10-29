@@ -89,6 +89,20 @@ test('revisions are immutable; failed review rolls back and withdrawal revokes a
   }finally{f.db.close();}
 });
 
+test('an editor cannot review their own submission or supersede its published version',async()=>{
+  const f=fixture();try {
+    f.db.prepare("UPDATE study_materials SET owner_user_id='editor' WHERE id='m1'").run();
+    const first=(await f.post(submission,'editor')).data.id;
+    // An already published snapshot represents a past independent review.
+    f.db.prepare("UPDATE material_submissions SET status='approved',reviewed_by='other-editor',reviewed_at=CURRENT_TIMESTAMP,source_checked=1,rights_checked=1 WHERE id=?").run(first);
+    const second=(await f.post(submission,'editor')).data.id;
+    assert.equal((await f.post(approve(second),'editor')).status,409);
+    assert.equal((await f.post({action:'review',id:second,decision:'reject',note:'Needs work'},'editor')).status,409);
+    assert.equal((await f.get('public')).data.items[0].id,first);
+    assert.equal(f.db.prepare('SELECT status FROM material_submissions WHERE id=?').get(second).status,'pending');
+  }finally{f.db.close();}
+});
+
 test('a concurrent draft edit cannot silently change the version sent for review',async()=>{
   const f=fixture();try {
     f.afterDraftRead(()=>f.db.prepare("UPDATE study_materials SET title='Concurrent edit' WHERE id='m1'").run());

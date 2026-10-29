@@ -44,10 +44,14 @@ export async function POST(request: Request) {
   if ((body.action === "revoke" && !userId) || (body.action === "grant" && Boolean(userId) === Boolean(email)) || userId === id.userId) return json({error:"invalid_request"},400);
   try {
     if (body.action === "grant") {
-      const row = await env.DB.prepare(`INSERT INTO editorial_roles(user_id,granted_by)
-        SELECT id,? FROM accounts WHERE (id=? OR (?!='' AND lower(email)=?)) AND email_verified_at IS NOT NULL AND deleted_at IS NULL AND lower(email)<>?
-        ON CONFLICT(user_id) DO NOTHING RETURNING user_id`).bind(id.userId,userId,email,email,ownerEmail).first();
-      return row ? json({ok:true}) : json({error:"not_eligible_or_granted"},409);
+      // One atomic conditional insert is the authority: retry and concurrent
+      // grants cannot duplicate roles or audit events. Avoid D1 RETURNING/first
+      // on a write; consult the acknowledged mutation count instead.
+      const result = await env.DB.prepare(`INSERT OR IGNORE INTO editorial_roles(user_id,granted_by)
+        SELECT id,? FROM accounts WHERE (id=? OR (?!='' AND lower(email)=?)) AND email_verified_at IS NOT NULL AND deleted_at IS NULL AND lower(email)<>?`)
+        .bind(id.userId,userId,email,email,ownerEmail).run();
+      if (!result.success) throw Error("write failed");
+      return result.meta.changes === 1 ? json({ok:true}) : json({error:"not_eligible_or_granted"},409);
     }
     const results = await env.DB.batch([
       env.DB.prepare("UPDATE editorial_roles SET revoked_by=? WHERE user_id=?").bind(id.userId,userId),

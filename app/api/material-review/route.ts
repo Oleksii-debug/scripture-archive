@@ -17,8 +17,14 @@ function readSnapshot(raw: string): Snapshot | null {
     return v as Snapshot;
   } catch { return null; }
 }
-function editor(identity: Awaited<ReturnType<typeof authenticateRequest>>) {
+function owner(identity: Awaited<ReturnType<typeof authenticateRequest>>) {
   return Boolean(identity && identity.provider !== "agent" && identity.emailVerified && identity.email.toLowerCase() === OWNER_EMAIL);
+}
+async function editor(identity: Awaited<ReturnType<typeof authenticateRequest>>) {
+  if (!identity || identity.provider === "agent" || !identity.emailVerified) return false;
+  if (owner(identity)) return true;
+  if (identity.provider !== "password") return false;
+  return Boolean(await env.DB!.prepare("SELECT r.user_id FROM editorial_roles r JOIN accounts a ON a.id=r.user_id WHERE r.user_id=? AND a.deleted_at IS NULL AND a.email_verified_at IS NOT NULL").bind(identity.userId).first());
 }
 
 export async function GET(request: Request) {
@@ -39,7 +45,7 @@ export async function GET(request: Request) {
   const identity = await authenticateRequest(request);
   if (!identity || identity.provider === "agent") return json({ error: "authentication_required" }, 401);
   if (view !== "mine" && view !== "queue" && view !== "history") return json({ error: "unknown_view" }, 400);
-  if ((view === "queue" || view === "history") && !editor(identity)) return json({ error: "forbidden" }, 403);
+  if ((view === "queue" || view === "history") && !await editor(identity)) return json({ error: "forbidden" }, 403);
   const query = view === "mine"
     ? env.DB.prepare("SELECT id,material_id,snapshot,provenance,status,submitted_at,reviewed_at,review_note,closed_at FROM material_submissions WHERE author_id=? ORDER BY submitted_at DESC,id DESC LIMIT 200").bind(identity.userId)
     : view === "queue"
@@ -106,7 +112,8 @@ export async function POST(request: Request) {
     } catch { return json({ error: "withdraw_failed" }, 503); }
   }
   if (body.action === "review") {
-    if (!editor(identity)) return json({ error: "forbidden" }, 403);
+    try { if (!await editor(identity)) return json({ error: "forbidden" }, 403); }
+    catch { return json({ error: "review_failed" }, 503); }
     if (!validId(body.id) || (body.decision !== "approve" && body.decision !== "reject") || (body.note !== undefined && typeof body.note !== "string")) return json({ error: "invalid_review" }, 400);
     const note = typeof body.note === "string" ? body.note.trim().slice(0, 2000) : "";
     if (body.decision === "reject" && !note) return json({ error: "review_note_required" }, 400);
@@ -115,9 +122,9 @@ export async function POST(request: Request) {
       const results = await env.DB.batch([
         env.DB.prepare(`UPDATE material_submissions SET status='superseded',closed_at=CURRENT_TIMESTAMP
           WHERE material_id=(SELECT material_id FROM material_submissions WHERE id=? AND status='pending' AND author_id<>?)
-          AND status='approved' AND ?='approve'`).bind(body.id, identity.userId, body.decision),
-        env.DB.prepare("UPDATE material_submissions SET status=?,reviewed_at=CURRENT_TIMESTAMP,reviewed_by=?,review_note=?,source_checked=?,rights_checked=? WHERE id=? AND status='pending' AND author_id<>?")
-          .bind(body.decision === "approve" ? "approved" : "rejected", identity.userId, note, body.sourceChecked === true ? 1 : 0, body.rightsChecked === true ? 1 : 0, body.id, identity.userId),
+          AND status='approved' AND ?='approve' AND (?=1 OR EXISTS (SELECT 1 FROM editorial_roles r JOIN accounts a ON a.id=r.user_id WHERE r.user_id=? AND a.deleted_at IS NULL AND a.email_verified_at IS NOT NULL))`).bind(body.id, identity.userId, body.decision, owner(identity) ? 1 : 0, identity.userId),
+        env.DB.prepare("UPDATE material_submissions SET status=?,reviewed_at=CURRENT_TIMESTAMP,reviewed_by=?,review_note=?,source_checked=?,rights_checked=? WHERE id=? AND status='pending' AND author_id<>? AND (?=1 OR EXISTS (SELECT 1 FROM editorial_roles r JOIN accounts a ON a.id=r.user_id WHERE r.user_id=? AND a.deleted_at IS NULL AND a.email_verified_at IS NOT NULL))")
+          .bind(body.decision === "approve" ? "approved" : "rejected", identity.userId, note, body.sourceChecked === true ? 1 : 0, body.rightsChecked === true ? 1 : 0, body.id, identity.userId, owner(identity) ? 1 : 0, identity.userId),
       ]);
       if (results.some(result => !result.success)) return json({ error: "review_failed" }, 503);
       if (results[1].meta.changes) return json({ ok: true });

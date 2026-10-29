@@ -38,14 +38,18 @@ export async function GET(request:Request){
       const answered=new Set<string>(),correct=new Set<string>();
       const validTasks=new Set(mission.tasks.map(task=>task.id));
       for(const row of rows.results){
-        try{
-          const result=JSON.parse(row.data);
-          for(const detail of result.details||[]){
-            if(!validTasks.has(detail.taskId))continue;
-            answered.add(detail.taskId);
-            if(detail.correct===true)correct.add(detail.taskId);
-          }
-        }catch{}
+        // A stored mission result is server-managed evidence. A damaged row
+        // must not silently disappear and misreport the user's mastery.
+        const result=JSON.parse(row.data);
+        if(!result||typeof result!=="object"||!Array.isArray(result.details))
+          throw Error("invalid saved mission result");
+        for(const detail of result.details){
+          if(!detail||typeof detail.taskId!=="string"||typeof detail.correct!=="boolean")
+            throw Error("invalid saved mission answer");
+          if(!validTasks.has(detail.taskId))continue;
+          answered.add(detail.taskId);
+          if(detail.correct)correct.add(detail.taskId);
+        }
       }
       return privateJson({progress:{index:answered.size,correct:[...correct],complete:answered.size===validTasks.size}});
     }catch{

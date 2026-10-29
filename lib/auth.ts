@@ -8,6 +8,14 @@ export type Identity = {
   provider: "password" | "chatgpt" | "agent";
 };
 
+// One verified owner predicate for private reports and privileged mutations.
+// Matching an unverified email address is not sufficient authorization.
+export const OWNER_EMAIL = "dordiaioleksii1@gmail.com";
+export function isVerifiedOwner(identity: Identity | null | undefined): identity is Identity {
+  return Boolean(identity && identity.provider !== "agent" && identity.emailVerified &&
+    identity.email.toLowerCase() === OWNER_EMAIL);
+}
+
 const encoder = new TextEncoder();
 export const SESSION_COOKIE = "sa_session";
 export const GUEST_COOKIE = "sa_guest";

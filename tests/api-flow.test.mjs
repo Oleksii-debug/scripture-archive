@@ -196,6 +196,20 @@ integration("account, progress, attempts, groups, marathon limit and password re
     if (response.status >= 500) console.error("Local review HTTP failure", response.status, response.headers.get("content-type"), (await response.clone().text()).slice(0, 300));
     return { response, data: await response.json() };
   };
+  const ownerMaterial = { ...material, id: `owner-${crypto.randomUUID()}` };
+  const ownerDraft = await fetch(`${base}/api/materials`, { method: 'POST', headers: { Origin: base, Cookie: ownerCookie, 'Content-Type': 'application/json' }, body: JSON.stringify(ownerMaterial) });
+  assert.equal(ownerDraft.status, 201);
+  const ownerSubmission = await reviewPost({ ...submitReview, materialId: ownerMaterial.id }, ownerCookie);
+  assert.equal(ownerSubmission.response.status, 201);
+  for (const decision of ['approve', 'reject']) {
+    const ownDecision = await reviewPost({ action: 'review', id: ownerSubmission.data.id, decision, sourceChecked: true, rightsChecked: true, note: 'Review note' }, ownerCookie);
+    assert.equal(ownDecision.response.status, 403);
+    assert.equal(ownDecision.data.error, 'self_review_forbidden');
+  }
+  const ownerQueue = await (await fetch(`${base}/api/material-review?view=queue`, { headers: { Cookie: ownerCookie } })).json();
+  assert.ok(ownerQueue.items.some(item => item.id === ownerSubmission.data.id), 'self-review keeps the submission pending');
+  const ownerDelete = await fetch(`${base}/api/materials?id=${encodeURIComponent(ownerMaterial.id)}`, { method: 'DELETE', headers: { Origin: base, Cookie: ownerCookie } });
+  assert.equal(ownerDelete.status, 200);
   assert.equal((await reviewPost(submitReview, cookie, "https://attacker.invalid")).response.status, 403);
   assert.equal((await reviewPost({ ...submitReview, rightsConfirmed: false })).response.status, 400);
   assert.equal((await reviewPost(submitReview, ownerCookie)).response.status, 409, "another user cannot submit the author's draft");

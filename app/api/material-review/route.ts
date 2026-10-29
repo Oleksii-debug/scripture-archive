@@ -16,7 +16,7 @@ function readSnapshot(raw: string): Snapshot | null {
     return v as Snapshot;
   } catch { return null; }
 }
-function owner(identity: Awaited<ReturnType<typeof authenticateRequest>>) {
+function owner(identity: Awaited<ReturnType<typeof authenticateRequest>>): boolean {
   return isVerifiedOwner(identity);
 }
 async function editor(identity: Awaited<ReturnType<typeof authenticateRequest>>) {

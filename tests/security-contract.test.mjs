@@ -87,6 +87,6 @@ test("analytics requires consent and removes sensitive URL components", async ()
   assert.match(analytics, /allow_google_signals: false/);
   assert.match(analytics, /activeSeconds/);
   assert.match(analytics, /\/api\/analytics/);
-  assert.match(route, /identity\?\.email !== OWNER_EMAIL/);
+  assert.match(route, /!isVerifiedOwner\(identity\)/);
   assert.doesNotMatch(route, /cf-connecting-ip|x-forwarded-for/i);
 });

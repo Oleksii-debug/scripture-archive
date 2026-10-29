@@ -22,6 +22,16 @@ test('account deletion clears personal records while preserving other users', as
     db.prepare("INSERT INTO support_requests(id,user_id,email,subject,message) VALUES (?,?,?,'Subject','Synthetic message')").run('request-'+id,id,`${id}@example.invalid`);
     db.prepare("INSERT INTO support_attachments(id,request_id,filename,content_type,size_bytes,content_base64) VALUES (?,?,'a.txt','text/plain',1,'YQ==')").run('attachment-'+id,'request-'+id);
   }
+  // Alice facilitated one meeting in Bob's group and owns another group.
+  // Deletion must not erase Bob's independent records or retain Alice's
+  // identifier or free-text reflection in a surviving shared group.
+  db.prepare("INSERT INTO home_groups(id,owner_user_id,name,invite_code) VALUES ('bob-group','bob','Bob group','invite-bob')").run();
+  db.prepare("INSERT INTO home_groups(id,owner_user_id,name,invite_code) VALUES ('alice-group','alice','Alice group','invite-alice')").run();
+  db.prepare("INSERT INTO home_group_members(group_id,user_id,display_name,role) VALUES ('bob-group','alice','Alice','facilitator')").run();
+  db.prepare("INSERT INTO home_group_members(group_id,user_id,display_name,role) VALUES ('bob-group','bob','Bob','owner')").run();
+  db.prepare("INSERT INTO group_sessions(id,group_id,created_by,book_id,chapter,meeting_date,reflection,answers_correct,answers_total) VALUES ('alice-meeting','bob-group','alice','GEN',12,'2026-10-27','Alice private reflection',2,3)").run();
+  db.prepare("INSERT INTO group_sessions(id,group_id,created_by,book_id,chapter,meeting_date,reflection,answers_correct,answers_total) VALUES ('bob-meeting','bob-group','bob','GEN',13,'2026-10-28','Bob authored text',3,3)").run();
+  db.prepare("INSERT INTO group_sessions(id,group_id,created_by,book_id,chapter,meeting_date,reflection) VALUES ('owned-meeting','alice-group','alice','GEN',14,'2026-10-28','Owner text')").run();
   let failAfter = -1;
   const D1 = {prepare(sql) {return {bind(...args) {return {first: async () => db.prepare(sql).get(...args), run: async () => db.prepare(sql).run(...args)};}};}, async batch(statements) {db.exec('BEGIN');try {for (const [index, statement] of statements.entries()) {if(index === failAfter) throw Error('simulated database failure'); await statement.run();}db.exec('COMMIT');} catch(error) {db.exec('ROLLBACK');throw error;}}};
   const source = readFileSync(new URL('../app/api/auth/route.ts', import.meta.url), 'utf8');
@@ -40,6 +50,11 @@ test('account deletion clears personal records while preserving other users', as
   await assert.rejects(exports.POST(request('correct')), /simulated database failure/);
   assert.equal(db.prepare("SELECT count(*) n FROM progress WHERE user_id='alice'").get().n, 1, 'failed batch rolls back earlier deletions');
   assert.equal(db.prepare("SELECT deleted_at FROM accounts WHERE id='alice'").get().deleted_at, null);
+  // Fail after shared-session redaction to prove the entire batch rolls back.
+  failAfter = 9;
+  await assert.rejects(exports.POST(request('correct')), /simulated database failure/);
+  assert.deepEqual(db.prepare("SELECT created_by,reflection FROM group_sessions WHERE id='alice-meeting'").get(), {created_by:'alice',reflection:'Alice private reflection'});
+  assert.equal(db.prepare("SELECT count(*) AS n FROM home_group_members WHERE group_id='bob-group'").get().n, 2);
   failAfter = -1;
   assert.equal((await exports.POST(request('correct'))).status, 200);
   const alice = db.prepare("SELECT email,first_name,last_name,password_hash,password_salt,deleted_at FROM accounts WHERE id='alice'").get();
@@ -51,5 +66,13 @@ test('account deletion clears personal records while preserving other users', as
   assert.equal(db.prepare("SELECT count(*) n FROM mission_attempt_answers WHERE attempt_id='attempt-alice'").get().n, 0);
   assert.equal(db.prepare("SELECT count(*) n FROM support_attachments WHERE request_id='request-alice'").get().n, 0);
   assert.equal(db.prepare("SELECT count(*) n FROM support_attachments WHERE request_id='request-bob'").get().n, 1);
+  const shared = db.prepare("SELECT created_by,reflection,answers_correct,answers_total,meeting_date FROM group_sessions WHERE id='alice-meeting'").get();
+  assert.deepEqual(shared, {created_by:'deleted-account',reflection:null,answers_correct:2,answers_total:3,meeting_date:'2026-10-27'});
+  assert.deepEqual(db.prepare("SELECT created_by,reflection FROM group_sessions WHERE id='bob-meeting'").get(), {created_by:'bob',reflection:'Bob authored text'});
+  assert.equal(db.prepare("SELECT count(*) AS n FROM home_groups WHERE id='bob-group'").get().n, 1);
+  assert.equal(db.prepare("SELECT count(*) AS n FROM home_group_members WHERE group_id='bob-group' AND user_id='alice'").get().n, 0);
+  assert.equal(db.prepare("SELECT count(*) AS n FROM home_group_members WHERE group_id='bob-group' AND user_id='bob'").get().n, 1);
+  assert.equal(db.prepare("SELECT count(*) AS n FROM home_groups WHERE id='alice-group'").get().n, 0);
+  assert.equal(db.prepare("SELECT count(*) AS n FROM group_sessions WHERE group_id='alice-group'").get().n, 0);
   db.close();
 });

@@ -223,6 +223,7 @@ export async function POST(request: Request) {
     const account = await env.DB.prepare("SELECT * FROM accounts WHERE id=? AND deleted_at IS NULL").bind(identity.userId).first<Account>();
     if (!account || typeof password !== "string" || !await verifyPassword(password, account.password_hash, account.password_salt, account.password_iterations))
       return json({ error: "invalid_credentials" }, 401);
+    try {
     await env.DB.batch([
       env.DB.prepare("DELETE FROM progress WHERE user_id=?").bind(identity.userId),
       env.DB.prepare("DELETE FROM reader_bookmarks WHERE user_id=?").bind(identity.userId),
@@ -248,6 +249,10 @@ export async function POST(request: Request) {
         .bind(`deleted-${identity.userId}@invalid.local`, identity.userId),
       env.DB.prepare("DELETE FROM auth_sessions WHERE user_id=?").bind(identity.userId),
     ]);
+    } catch {
+      // D1 rejects the whole transaction; a failed deletion is not acknowledged.
+      return json({ error: "deletion_failed" }, 503);
+    }
     return json({ ok: true }, 200, { "Set-Cookie": clearSessionCookie(request) });
   }
 

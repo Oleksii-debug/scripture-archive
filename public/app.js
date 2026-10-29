@@ -2640,6 +2640,7 @@ async function renderReader(parts) {
   );
   const groupId = parts[3] === "group" ? parts[4] || "" : "";
   state.currentReader = { book: meta.code, chapter };
+  const readerContext = state.currentReader;
   try {
     const attemptState = await attemptRequest("chapter", "POST", { book: meta.code, chapter });
     if (!attemptState || typeof attemptState.invalidated !== "boolean") {
@@ -2658,6 +2659,26 @@ async function renderReader(parts) {
     return;
   }
   const book = await getBook(meta.code);
+  // A different device may start a new attempt while the Bible JSON loads.
+  // Prevent the async reader from undoing an invalidation in another tab.
+  if (state.currentReader !== readerContext) return;
+  try {
+    const finalState = await attemptRequest("chapter", "POST", { book: meta.code, chapter });
+    if (state.currentReader !== readerContext) return;
+    if (!finalState || typeof finalState.invalidated !== "boolean") throw Error("invalid_attempt_guard_response");
+    if (finalState.invalidated) {
+      sessionStorage.removeItem("sa.activeAttempt");
+      state.mission = null;
+      state.currentReader = null;
+      renderLockedChapter(meta.code, chapter);
+      return;
+    }
+  } catch {
+    if (state.currentReader !== readerContext) return;
+    state.currentReader = null;
+    shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1></section>`);
+    return;
+  }
   const verses = book.chapters[chapter - 1];
   const selectedVerse = readerVerseFromUrl(location.href, verses.length);
   // Do not replace the last readable bookmark when book loading fails.

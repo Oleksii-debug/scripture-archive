@@ -4,11 +4,17 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 
+// A retry is safe only when the *one failed test* positively identifies a
+// disposable proxy restart. A restart phrase elsewhere in stdout/stderr, a
+// truncated JSON parse error, or any assertion failure is not proof.
 export function isDisposableWorkerRestart(log) {
-  return typeof log === 'string' && (
-    log.includes('Your worker restarted mid-request') ||
-    /Unexpected token 'Y', "Your worke/.test(log)
-  );
+  if (typeof log !== 'string' || !/(?:^|\\n)ℹ fail 1(?:\\r?\\n|$)/u.test(log)) return false;
+  const marker = log.lastIndexOf('✖ failing tests:');
+  if (marker < 0) return false;
+  const failures = log.slice(marker).split(/\\n(?:\\[wrangler:|file:\/\/\/[^\\n]*\/scripts\/test-integration\\.mjs)/u)[0];
+  const cases = failures.match(/(?:^|\\n)\\s*✖ (?!failing tests:)[^\\n]+/gu) || [];
+  if (cases.length !== 1 || /AssertionError|ERR_ASSERTION|Expected values to be strictly equal/u.test(failures)) return false;
+  return /Your worker restarted mid-request/u.test(failures);
 }
 
 export async function runWithFreshState(execute, report = () => {}) {

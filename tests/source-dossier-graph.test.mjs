@@ -37,14 +37,28 @@ test('each dossier is reachable via real internal navigation, has labeled eviden
       assert.ok(markup.includes('href="/reader/'),item.id);
       assert.ok(markup.includes(esc(item.prompts[language][0])),item.id);
       for(const reference of item.sources){
-        assert.ok(markup.includes('href="/reader/'+reference.book+'/'+reference.chapter+'"'),item.id);
+        assert.ok(markup.includes('href="/reader/'+reference.book+'/'+reference.chapter+'?verse='+reference.first+'"'),item.id);
       }
       for(const relation of item.related){
         assert.ok(markup.includes('href="/dossiers?id='+relation.to+'"'),item.id);
+        assert.ok(markup.includes('href="/reader/'+relation.via.book+'/'+relation.via.chapter+'?verse='+relation.via.first+'"'),item.id);
       }
       assert.ok(!markup.includes('href="http://'),'references never leave canonical reader');
       assert.ok(!markup.includes('<iframe'));
       assert.ok(!markup.includes('onclick='));
+    }
+  }
+});
+
+test('every cited verse range exists in all four bundled editions',()=>{
+  for(const dossier of scriptureDossiers){
+    for(const ref of [...dossier.sources,...dossier.related.map(link=>link.via)]){
+      for(const edition of ['uk','ru','en','uk-ohiienko']){
+        const book=JSON.parse(readFileSync(new URL(`../public/data/bible/${edition}/${ref.book}.json`,import.meta.url),'utf8'));
+        const verses=book.chapters[ref.chapter-1];
+        assert.ok(Array.isArray(verses) && ref.first>=1 && ref.last<=verses.length,
+          `${dossier.id}: ${edition} ${ref.book} ${ref.chapter}:${ref.first}-${ref.last}`);
+      }
     }
   }
 });

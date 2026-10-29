@@ -46,22 +46,27 @@ try {
   worker.stdout.on("data", data => { logs = (logs + data).slice(-12000); });
   worker.stderr.on("data", data => { logs = (logs + data).slice(-12000); });
   worker.on("error", error => { logs += error.message; });
-  let ready = false;
-  for (let count = 0; count < 100; count += 1) {
+  // Wrangler can announce "Ready" before its watched worker settles;
+  // wait for a continuous safe GET health window, never replay a mutating POST.
+  let ready = false, stableSince = 0;
+  for (let count = 0; count < 110; count += 1) {
     if (worker.exitCode !== null) break;
     try {
       const response = await fetch(`${base}/api/account?action=me`, { signal: AbortSignal.timeout(1000) });
-      if (response.ok && (await response.json()).user === null) { ready = true; break; }
-    } catch {}
+      if (response.ok && (await response.json()).user === null) {
+        if (!stableSince) stableSince = Date.now();
+        if (Date.now() - stableSince >= 2000) { ready = true; break; }
+      } else stableSince = 0;
+    } catch { stableSince = 0; }
     await new Promise(resolve => setTimeout(resolve, 300));
   }
   if (!ready) throw Error(`Local worker did not become ready. ${logs}`);
-  await run(["--test", "tests/api-flow.test.mjs", "tests/community.test.mjs", "tests/community-runner.test.mjs", "tests/community-smoke.test.mjs", "tests/community-runner-identity.test.mjs", "tests/security-contract.test.mjs"],
+  await run(["--test", "--test-concurrency=1", "tests/api-flow.test.mjs", "tests/community.test.mjs", "tests/community-runner.test.mjs", "tests/community-smoke.test.mjs", "tests/community-runner-identity.test.mjs", "tests/security-contract.test.mjs"],
     { env: { ...options.env, SCRIPTURE_TEST_URL: base } });
   await run(["--experimental-strip-types", "scripts/test-learning-agent.mjs", "--local-test", "--smoke"],
     { env: { ...options.env, COMMUNITY_ORIGIN: base } });
-  // The HTTP test deletes the only user who saved a bookmark. Inspect the
-  // actual disposable D1 backing database to verify deletion removed its rows.
+  // The HTTP test deletes the user who created bookmarks and submissions.
+  // Inspect the disposable D1 database to verify both were removed.
   const directory = path.join(state, "v3", "d1", "miniflare-D1DatabaseObject");
   const databases = (await readdir(directory)).filter(name => name.endsWith(".sqlite"));
   let inspected = 0;
@@ -72,6 +77,10 @@ try {
       inspected++;
       const row = db.prepare("SELECT COUNT(*) AS count FROM reader_bookmarks").get();
       if (Number(row.count) !== 0) throw Error("Deleted account retained reader bookmarks");
+      const submissions = db.prepare("SELECT COUNT(*) AS count FROM material_submissions").get();
+      if (Number(submissions.count) !== 0) throw Error("Deleted account retained material submissions");
+      const roleEvents = db.prepare("SELECT COUNT(*) AS count FROM editorial_role_events").get();
+      if (Number(roleEvents.count) !== 0) throw Error("Deleted account retained editorial role events");
     } finally { db.close(); }
   }
   if (inspected !== 1) throw Error(`Expected one bookmark database, found ${inspected}`);

@@ -1,3 +1,5 @@
+import { reviewText, submissionForm, historyMarkup, queueMarkup, auditMarkup, attachReviewControls, renderPublicMaterials, loadReviewData, editorRolesMarkup, attachEditorRoles } from './material-review.js';
+
 const COPY = {
   uk: {
     home:'Головна', campaigns:'Кампанії', dossiers:'Дослідницькі досьє', builder:'Конструктор', progress:'Мій прогрес',
@@ -21,6 +23,94 @@ const COPY = {
 
 export function workspaceCopy(lang) { return COPY[lang] || COPY.uk; }
 
+const GROUP_MANAGE={
+  uk:{title:'Керування участю',leave:'Вийти з групи',leaveHelp:'Після виходу приватні обговорення групи будуть недоступні. Створені раніше записи зустрічей залишаться в групі.',leaveConfirm:'Вийти з групи?',left:'Ви вийшли з групи.',transferTitle:'Передати власність',transferHelp:'Оберіть учасника, який стане власником. Після передавання ви залишитесь учасником і зможете вийти.',transferLabel:'Новий власник',transfer:'Передати власність',transferConfirm:'Передати власність учаснику: ',transferred:'Власність передано.',noMembers:'Щоб передати власність, спочатку запросіть іншого учасника.',delete:'Видалити групу',deleteHelp:'Буде видалено групу, членство, зустрічі та марафон. Особисті завершені результати залишаться в акаунтах учасників.',deleteConfirm:'Видалити групу разом із зустрічами та марафоном? Цю дію не можна скасувати.',deleted:'Групу видалено.',error:'Не вдалося виконати дію. Перевірте права й повторіть спробу.'},
+  ru:{title:'Управление участием',leave:'Выйти из группы',leaveHelp:'После выхода приватные обсуждения группы будут недоступны. Созданные ранее записи встреч останутся в группе.',leaveConfirm:'Выйти из группы?',left:'Вы вышли из группы.',transferTitle:'Передать владение',transferHelp:'Выберите участника, который станет владельцем. После передачи вы останетесь участником и сможете выйти.',transferLabel:'Новый владелец',transfer:'Передать владение',transferConfirm:'Передать владение участнику: ',transferred:'Владение передано.',noMembers:'Чтобы передать владение, сначала пригласите другого участника.',delete:'Удалить группу',deleteHelp:'Группа, участники, встречи и марафон будут удалены. Личные завершённые результаты останутся в аккаунтах участников.',deleteConfirm:'Удалить группу вместе со встречами и марафоном? Это действие нельзя отменить.',deleted:'Группа удалена.',error:'Не удалось выполнить действие. Проверьте права и повторите попытку.'},
+  en:{title:'Manage membership',leave:'Leave group',leaveHelp:'After leaving, private group discussions will no longer be available. Meeting records already created stay with the group.',leaveConfirm:'Leave this group?',left:'You left the group.',transferTitle:'Transfer ownership',transferHelp:'Choose a member to become the owner. After the transfer you remain a member and can leave.',transferLabel:'New owner',transfer:'Transfer ownership',transferConfirm:'Transfer ownership to: ',transferred:'Ownership transferred.',noMembers:'Invite another member before transferring ownership.',delete:'Delete group',deleteHelp:'The group, memberships, meetings and marathon will be deleted. Members keep their completed personal results.',deleteConfirm:'Delete the group, its meetings and marathon? This cannot be undone.',deleted:'Group deleted.',error:'The action could not be completed. Check your permissions and try again.'},
+};
+const GROUP_ROLES={
+  uk:{roles:'Ведучі групи',roleHelp:'Ведучий може зберігати зустрічі й проходити групові місії. Звичайний учасник зберігає доступ до обговорень.',promote:'Призначити ведучим',demote:'Зняти роль ведучого',roleConfirm:'Змінити роль учасника: ',roleSaved:'Роль оновлено.',rotate:'Замінити код запрошення',rotateHelp:'Старий код припинить діяти. Чинні учасники залишаться в групі; передайте новий код тим, кого запрошуєте.',rotateConfirm:'Замінити код запрошення? Старий код більше не дозволятиме вступити до групи.',rotated:'Код запрошення замінено. Новий код показано на сторінці.'},
+  ru:{roles:'Ведущие группы',roleHelp:'Ведущий может сохранять встречи и проходить групповые миссии. Обычный участник сохраняет доступ к обсуждениям.',promote:'Назначить ведущим',demote:'Снять роль ведущего',roleConfirm:'Изменить роль участника: ',roleSaved:'Роль обновлена.',rotate:'Заменить код приглашения',rotateHelp:'Старый код перестанет действовать. Участники останутся в группе; передайте новый код тем, кого приглашаете.',rotateConfirm:'Заменить код приглашения? Старый код больше не позволит вступить в группу.',rotated:'Код приглашения заменён. Новый код показан на странице.'},
+  en:{roles:'Group facilitators',roleHelp:'Facilitators can record meetings and take group missions. Ordinary members keep access to discussions.',promote:'Make facilitator',demote:'Remove facilitator role',roleConfirm:'Change the role for: ',roleSaved:'Role updated.',rotate:'Replace invitation code',rotateHelp:'The old code will stop working. Current members stay in the group; share the new code with people you invite.',rotateConfirm:'Replace the invitation code? The old code will no longer allow anyone to join.',rotated:'Invitation code replaced. The new code is shown on the page.'},
+};
+export function groupManagementCopy(lang){return {...(GROUP_MANAGE[lang]||GROUP_MANAGE.uk),...(GROUP_ROLES[lang]||GROUP_ROLES.uk)};}
+export function groupManagementMarkup(data,lang,esc){
+  const w=groupManagementCopy(lang);
+  if(!data.membership)return '';
+  if(data.membership!=='owner')return `<section class="card"><h2>${w.title}</h2><p>${w.leaveHelp}</p><button class="button" id="leave-group">${w.leave}</button><p id="group-manage-status" role="status"></p></section>`;
+  const candidates=(data.managementMembers||[]).filter(member=>['member','facilitator'].includes(member.role));
+  const transfer=candidates.length?`<form id="transfer-group" class="account-form"><label class="account-field"><span>${w.transferLabel}</span><select name="targetUserId" required>${candidates.map(member=>`<option value="${esc(member.user_id)}">${esc(member.display_name)}</option>`).join('')}</select></label><button class="button">${w.transfer}</button></form>`:`<p>${w.noMembers}</p>`;
+  const roles=candidates.length?`<h3>${w.roles}</h3><p>${w.roleHelp}</p><ul>${candidates.map(member=>`<li><strong>${esc(member.display_name)}</strong> <button type="button" class="button group-role-button" data-user-id="${esc(member.user_id)}" data-role="${esc(member.role)}" aria-label="${esc((member.role==='facilitator'?w.demote:w.promote)+': '+member.display_name)}">${member.role==='facilitator'?w.demote:w.promote}</button></li>`).join('')}</ul>`:'';
+  return `<section class="card"><h2>${w.title}</h2><h3>${w.transferTitle}</h3><p>${w.transferHelp}</p>${transfer}${roles}<h3>${w.rotate}</h3><p>${w.rotateHelp}</p><button type="button" class="button" id="rotate-group-invite">${w.rotate}</button><details class="danger-zone"><summary>${w.delete}</summary><p>${w.deleteHelp}</p><button class="button" id="delete-group">${w.delete}</button></details><p id="group-manage-status" role="status"></p></section>`;
+}
+
+const HISTORY = {
+  uk: { title:'Історія спроб', login:'Увійдіть, щоб бачити збережену історію спроб на інших пристроях.', empty:'Завершених спроб поки немає.', locked:'Історія прихована під час активної спроби.', error:'Не вдалося завантажити історію спроб.', retry:'Спробувати ще раз', details:'Переглянути результат', reread:'Перечитати й повторити', limit:'Показано останні 100 завершених спроб.', score:'Правильних відповідей', pending:'Є відповідь, збереження результату якої потрібно завершити.', resume:'Завершити збереження результату', personal:'Особиста спроба', group:'Групова спроба' },
+  ru: { title:'История попыток', login:'Войдите, чтобы видеть сохранённую историю попыток на других устройствах.', empty:'Завершённых попыток пока нет.', locked:'История скрыта во время активной попытки.', error:'Не удалось загрузить историю попыток.', retry:'Попробовать снова', details:'Посмотреть результат', reread:'Перечитать и повторить', limit:'Показаны последние 100 завершённых попыток.', score:'Правильных ответов', pending:'Для сохранённого ответа нужно завершить запись результата.', resume:'Завершить сохранение результата', personal:'Личная попытка', group:'Групповая попытка' },
+  en: { title:'Attempt history', login:'Sign in to see saved attempt history on other devices.', empty:'There are no completed attempts yet.', locked:'History is hidden during an active attempt.', error:'Could not load attempt history.', retry:'Try again', details:'View result', reread:'Read and try again', limit:'Showing the latest 100 completed attempts.', score:'Correct answers', pending:'An answer was saved, but its result still needs to be finalized.', resume:'Finish saving the result', personal:'Personal attempt', group:'Group attempt' },
+};
+
+export function missionHistoryMarkup(history, lang, esc) {
+  const w=HISTORY[lang] || HISTORY.uk;
+  let content;
+  if(history.guest) content=`<p>${w.login}</p>`;
+  else if(history.error) content=`<p role="status">${w.error}</p><button class="button" id="retry-mission-history">${w.retry}</button>`;
+  else if(history.locked) content=`<p>${w.locked}</p>`;
+  else if(!history.attempts?.length) content=`<p>${w.empty}</p>`;
+  else content=`<p>${w.limit}</p><ol>${history.attempts.map(item=>`<li><p>${esc(item.book)} ${Number(item.chapter)} — ${item.mode==='group'?w.group:w.personal}; ${w.score}: ${Number(item.score)} / ${Number(item.total)}; ${esc(item.completedAt || '')} UTC</p><div class="action-row"><a class="button" href="/mission/attempt/${encodeURIComponent(item.id)}">${w.details}: ${esc(item.book)} ${Number(item.chapter)} — ${esc(item.completedAt || '')} UTC</a>${Number(item.score)<Number(item.total)?`<a class="button" href="/reader/${encodeURIComponent(item.book)}/${Number(item.chapter)}">${w.reread}: ${esc(item.book)} ${Number(item.chapter)}</a>`:''}</div></li>`).join('')}</ol>`;
+  const pending=!history.guest&&!history.error&&!history.locked&&history.pending?.length?`<p>${w.pending}</p><ul>${history.pending.map(item=>`<li><a class="button" href="/mission/attempt/${encodeURIComponent(item.id)}">${w.resume}: ${esc(item.book)} ${Number(item.chapter)} — ${esc(item.startedAt || '')} UTC</a></li>`).join('')}</ul>`:'';
+  return `<section class="card resume-card"><h2>${w.title}</h2>${pending}${content}</section>`;
+}
+
+// A small, deterministic reading suggestion, not an estimate of mastery.
+// History is supplied newest-started-first by the server and capped at 100.
+export function reviewSuggestions(attempts, now=new Date()) {
+  if(!Array.isArray(attempts)||!(now instanceof Date)||!Number.isFinite(now.getTime()))return [];
+  const passages=new Map(),invalid=new Set(),intervals=[1,3,7,14];
+  for(const item of [...attempts].reverse()) {
+    if(item?.mode!=='personal'||typeof item.book!=='string'||!/^([1-3])?[A-Z]{2,3}$/.test(item.book)||!Number.isInteger(item.chapter)||item.chapter<1||item.chapter>151)continue;
+    const key=`${item.book}:${item.chapter}`;
+    if(!Number.isInteger(item.score)||!Number.isInteger(item.total)||item.total<1||item.score<0||item.score>item.total||typeof item.completedAt!=='string'||!/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/.test(item.completedAt)) {invalid.add(key);continue;}
+    const completed=new Date(item.completedAt.replace(' ','T')+'Z');
+    if(!Number.isFinite(completed.getTime())||completed.toISOString().slice(0,10)!==item.completedAt.slice(0,10)){invalid.add(key);continue;}
+    const previous=passages.get(key),streak=item.score===item.total?(previous?.streak||0)+1:0;
+    const interval=intervals[Math.max(0,Math.min(streak-1,intervals.length-1))];
+    const dueAt=new Date(Date.parse(item.completedAt.slice(0,10)+'T00:00:00Z')+interval*86400000).toISOString().slice(0,10);
+    passages.set(key,{book:item.book,chapter:item.chapter,streak,dueAt});
+  }
+  const today=now.toISOString().slice(0,10);
+  return [...passages.entries()].filter(([key])=>!invalid.has(key)).map(([,item])=>({...item,due:item.dueAt<=today})).sort((a,b)=>a.dueAt<b.dueAt?-1:a.dueAt>b.dueAt?1:a.book<b.book?-1:a.book>b.book?1:a.chapter-b.chapter);
+}
+
+const REVIEW_COPY={
+  uk:{title:'Пропозиції для повторення',description:'На основі останніх 100 завершених спроб. Враховуються лише особисті спроби; це нагадування, а не оцінка засвоєння.',empty:'Завершіть особисту спробу, щоб отримати пропозиції.',due:'Можна повторити зараз',later:'Заплановано з',open:'Перечитати главу'},
+  ru:{title:'Предложения для повторения',description:'На основе последних 100 завершённых попыток. Учитываются только личные попытки; это напоминание, а не оценка усвоения.',empty:'Завершите личную попытку, чтобы получить предложения.',due:'Можно повторить сейчас',later:'Запланировано с',open:'Перечитать главу'},
+  en:{title:'Suggested review',description:'Based on the latest 100 completed attempts. Only personal attempts count; these are reminders, not a measure of mastery.',empty:'Complete a personal attempt to receive suggestions.',due:'Ready to review',later:'Suggested from',open:'Read the chapter again'},
+};
+export function reviewScheduleMarkup(history,lang,esc,now=new Date()) {
+  if(history.guest||history.error||history.locked)return '';
+  const w=REVIEW_COPY[lang]||REVIEW_COPY.uk,suggestions=reviewSuggestions(history.attempts,now);
+  return `<section class="card resume-card"><h2>${w.title}</h2><p>${w.description}</p>${suggestions.length?`<ol>${suggestions.map(item=>`<li><p>${esc(item.book)} ${item.chapter} — ${item.due?w.due:w.later} <time datetime="${item.dueAt}">${item.dueAt}</time> UTC</p><a class="button" href="/reader/${encodeURIComponent(item.book)}/${item.chapter}">${w.open}: ${esc(item.book)} ${item.chapter}</a></li>`).join('')}</ol>`:`<p>${w.empty}</p>`}</section>`;
+}
+
+const EDITION_ABOUT = {
+  uk: {title:'Біблійні видання',intro:'Видання збережено окремо. Назва перекладу залишається поруч із текстом.',local:'Видання для читання на платформі',external:'Інші видання',externalText:'Хоменка, Турконяка та інші видання можна відкрити на сайтах їхніх видавців із читальні.',source:'Джерело',license:'Умови використання',missing:'Відомості про це видання недоступні.'},
+  ru: {title:'Библейские издания',intro:'Издания хранятся отдельно. Название перевода остаётся рядом с текстом.',local:'Издания для чтения на платформе',external:'Другие издания',externalText:'Переводы Хоменко, Турконяка и другие издания можно открыть на сайтах их издателей из читальни.',source:'Источник',license:'Условия использования',missing:'Сведения об этом издании недоступны.'},
+  en: {title:'Bible editions',intro:'Editions are stored separately. The translation name stays beside the text.',local:'Editions available on the platform',external:'Other editions',externalText:'Khomenko, Turkoniak and other editions can be opened on their publishers’ websites from the reader.',source:'Source',license:'Terms of use',missing:'Details for this edition are unavailable.'},
+};
+const httpsUrl=value=>{try {const url=new URL(value);return url.protocol==='https:'?url.href:'';} catch {return '';}};
+
+export function editionAboutMarkup(catalog,lang,esc) {
+  const w=EDITION_ABOUT[lang]||EDITION_ABOUT.uk;
+  const editions=[catalog?.translations?.['uk-ohiienko'],catalog?.editions?.uk,catalog?.editions?.ru,catalog?.editions?.en];
+  const entries=editions.map(edition=>{
+    if(!edition||typeof edition.title!=='string')return `<li>${w.missing}</li>`;
+    const source=httpsUrl(edition.source),license=httpsUrl(edition.licenseUrl);
+    return `<li><strong>${esc(edition.title)}</strong> — ${esc(edition.license||'—')}${source?` · <a href="${esc(source)}" rel="noreferrer">${w.source}</a>`:''}${license?` · <a href="${esc(license)}" rel="noreferrer">${w.license}</a>`:''}${edition.attribution?`<p>${esc(edition.attribution)}</p>`:''}${edition.formatting?`<p>${esc(edition.formatting)}</p>`:''}</li>`;
+  }).join('');
+  return `<h2>${w.title}</h2><p>${w.intro}</p><h3>${w.local}</h3><ul>${entries}</ul><h3>${w.external}</h3><p>${w.externalText}</p>`;
+}
+
 async function request(path, options) {
   const response=await fetch(path,options), data=await response.json();
   if(!response.ok) throw Error(data.error || response.status);
@@ -31,8 +121,8 @@ export async function renderWorkspace(name,c) {
   const {state,t,esc,shell,getMission,setActiveNav}=c, w=workspaceCopy(state.lang);
   setActiveNav(name);
   if(name==='about') {
-    const labels={uk:['Біблійні видання','Повні видання збережено окремо. Назва обраного перекладу завжди залишається поруч із текстом.','Видання для читання на платформі','Інші видання','Джерела'],ru:['Библейские издания','Полные издания хранятся отдельно. Название выбранного перевода всегда остаётся рядом с текстом.','Издания для чтения на платформе','Другие издания','Источники'],en:['Bible editions','Complete editions stay separate. The selected translation’s name always appears beside the text.','Editions available on the platform','Other editions','Sources']}[state.lang];
-    shell(`<article class="prose"><p class="eyebrow">Scripture Archive</p><h1>${t('aboutTitle')}</h1><p class="lead">${t('aboutBody')}</p><h2>${labels[0]}</h2><p>${labels[1]}</p><h3>${labels[2]}</h3><ul><li>Куліш, Пулюй і Нечуй-Левицький. Public Domain. <a href="https://ebible.org/find/details.php?id=ukr1871">eBible.org</a></li><li>Синодальный перевод. Public Domain. <a href="https://ebible.org/find/details.php?id=russyn">eBible.org</a></li><li>World English Bible Updated. Public Domain. <a href="https://ebible.org/find/details.php?id=engwebu">eBible.org</a></li></ul><h3>${labels[3]}</h3><p>${{uk:'Огієнка, Хоменка, Турконяка та інші захищені видання можна відкрити на сайтах видавців із читальні.',ru:'Переводы Огиенко, Хоменко, Турконяка и другие защищённые издания можно открыть на сайтах издателей из читальни.',en:'Ohiienko, Khomenko, Turkoniak, and other protected editions open on the publishers’ websites from the reader.'}[state.lang]}</p><h2>${t('accessTitle')}</h2><p>${t('accessBody')}</p></article>`);
+    const catalog=await c.getCatalog();
+    shell(`<article class="prose"><p class="eyebrow">Scripture Archive</p><h1>${t('aboutTitle')}</h1><p class="lead">${t('aboutBody')}</p>${editionAboutMarkup(catalog,state.lang,esc)}<h2>${t('accessTitle')}</h2><p>${t('accessBody')}</p></article>`);
     return;
   }
   if(name==='campaigns') {
@@ -51,22 +141,35 @@ export async function renderWorkspace(name,c) {
   if(name==='progress') {
     const p=state.missionProgress,read=c.loadJSON('sa.readingHistory',[]),mission=await getMission();
     const taskCount=Number(mission.taskCount||0);
-    shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${w.progress}</h1></div><p>${w.progressLead}</p></div><div class="card-grid"><article class="card progress-stat"><strong>${p.correct.length} / ${taskCount}</strong><p>${w.tasks}</p></article><article class="card progress-stat"><strong>${read.length}</strong><p>${w.chapters}</p></article><article class="card progress-stat"><strong>${p.complete?w.finished:p.index?w.inProgress:w.notStarted}</strong><p>${w.status}</p></article></div><section class="card resume-card"><h2>${esc((mission.title?.[state.lang]||t("missionTitle")))}</h2><progress aria-label="${w.tasks}" max="${taskCount||1}" value="${p.correct.length}"></progress><div class="action-row"><a class="button primary" href="/mission/abraham">${w.continue}</a><a class="button" href="/groups">${t('myGroups')}</a></div></section><section class="card resume-card"><h2>${w.readingHistory}</h2>${read.length?`<div class="reading-links">${read.slice().reverse().map(r=>`<a class="button" href="/reader/${encodeURIComponent(r.book)}/${Number(r.chapter)}">${esc(r.title)} ${Number(r.chapter)}</a>`).join('')}</div>`:`<p>${w.nothingRead}</p>`}</section>`);
+    let history={guest:true};
+    if(state.user) try { history=await request('/api/attempts?action=history'); } catch { history={error:true}; }
+    shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${w.progress}</h1></div><p>${w.progressLead}</p></div><div class="card-grid"><article class="card progress-stat"><strong>${p.correct.length} / ${taskCount}</strong><p>${w.tasks}</p></article><article class="card progress-stat"><strong>${read.length}</strong><p>${w.chapters}</p></article><article class="card progress-stat"><strong>${p.complete?w.finished:p.index?w.inProgress:w.notStarted}</strong><p>${w.status}</p></article></div><section class="card resume-card"><h2>${esc((mission.title?.[state.lang]||t("missionTitle")))}</h2><progress aria-label="${w.tasks}" max="${taskCount||1}" value="${p.correct.length}"></progress><div class="action-row"><a class="button primary" href="/mission/abraham">${w.continue}</a><a class="button" href="/groups">${t('myGroups')}</a></div></section>${reviewScheduleMarkup(history,state.lang,esc)}${missionHistoryMarkup(history,state.lang,esc)}<section class="card resume-card"><h2>${w.readingHistory}</h2>${read.length?`<div class="reading-links">${read.slice().reverse().map(r=>`<a class="button" href="/reader/${encodeURIComponent(r.book)}/${Number(r.chapter)}">${esc(r.title)} ${Number(r.chapter)}</a>`).join('')}</div>`:`<p>${w.nothingRead}</p>`}</section>`);
+    document.querySelector('#retry-mission-history')?.addEventListener('click',()=>renderWorkspace('progress',c));
     return;
   }
   if(name==='builder') {
-    if(!state.user) { shell(`<section class="gate-panel"><h1>${w.builder}</h1><p class="lead">${w.accountNeeded}</p><a class="button primary" href="/account">${w.signIn}</a></section>`); return; }
-    const data=await request('/api/materials?mine=1');
+    const review = reviewText(state.lang);
+    if(!state.user) { shell(`<section class="gate-panel"><h1>${w.builder}</h1><p class="lead">${w.accountNeeded}</p><a class="button primary" href="/account">${w.signIn}</a></section><section class="card" id="public-materials" aria-live="polite"></section>`); await renderPublicMaterials(document.querySelector('#public-materials'),review,esc); return; }
+    const role=await request('/api/editor-roles?view=me');
+    const [data,reviews,roles,roleAudit]=await Promise.all([request('/api/materials?mine=1'),loadReviewData(role.editor),role.owner?request('/api/editor-roles'):Promise.resolve({editors:[]}),role.owner?request('/api/editor-roles?view=audit'):Promise.resolve({events:[]})]);
     let editing=null;
     function draw() {
       const d=editing?.data||{},form=(key,label,rows)=>`<label class="account-field"><span>${label}</span>${rows?`<textarea name="${key}" rows="${rows}" required>${esc(d[key]||'')}</textarea>`:`<input name="${key}" value="${esc(key==='title'?editing?.title||'':d[key]||'')}" required>`}</label>`;
-      shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${w.builder}</h1></div><p>${w.builderLead}</p></div><div class="builder-layout"><section class="card"><h2>${editing?w.edit:w.newMaterial}</h2><form id="material-form" class="account-form">${form('title',w.title)}${form('prompt',w.prompt,3)}${form('reference',w.reference)}<label class="account-field"><span>${w.options}</span><textarea name="options" rows="4" required>${esc((d.options||[]).join('\n'))}</textarea></label>${form('answer',w.answer)}${form('explanation',w.explanation,3)}${state.user.isOwner?`<label class="account-check"><input type="checkbox" name="publish" ${editing?.visibility==='public'?'checked':''}><span>${w.publish}</span></label>`:''}<button class="button primary">${w.save}</button><p id="material-status" role="status"></p></form></section><aside class="card"><h2>${w.myMaterials}</h2><div class="material-list">${data.materials.length?data.materials.map(m=>`<article><span class="status">${m.visibility==='public'?w.public:w.private}</span><h3>${esc(m.title)}</h3><p>${esc(m.data.reference)}</p><div class="action-row"><button class="button" data-edit="${esc(m.id)}">${w.edit}</button><button class="button" data-test="${esc(m.id)}">${w.test}</button></div></article>`).join(''):`<p>${w.empty}</p>`}</div><button class="button" id="new-material">${w.newMaterial}</button></aside></div>`);
+      shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${w.builder}</h1></div><p>${w.builderLead}</p></div><div class="builder-layout"><section class="card"><h2>${editing?w.edit:w.newMaterial}</h2><form id="material-form" class="account-form">${form('title',w.title)}${form('prompt',w.prompt,3)}${form('reference',w.reference)}<label class="account-field"><span>${w.options}</span><textarea name="options" rows="4" required>${esc((d.options||[]).join('\n'))}</textarea></label>${form('answer',w.answer)}${form('explanation',w.explanation,3)}<button class="button primary">${w.save}</button><p id="material-status" role="status"></p></form></section><aside class="card"><h2>${w.myMaterials}</h2><div class="material-list">${data.materials.length?data.materials.map(m=>`<article><span class="status">${m.visibility==='public'?w.public:w.private}</span><h3>${esc(m.title)}</h3><p>${esc(m.data.reference)}</p><div class="action-row"><button class="button" data-edit="${esc(m.id)}">${w.edit}</button><button class="button" data-test="${esc(m.id)}">${w.test}</button><button class="button" data-delete="${esc(m.id)}">${review.remove}</button></div>${submissionForm(m,review,esc)}</article>`).join(''):`<p>${w.empty}</p>`}</div><button class="button" id="new-material">${w.newMaterial}</button> <a class="button" href="/api/materials?mine=1&amp;export=1" download>${w.export}</a></aside></div>${historyMarkup(reviews.mine,review,esc)}${role.editor?queueMarkup(reviews.queue,review,esc)+auditMarkup(reviews.history,review,esc):''}${role.owner?editorRolesMarkup(roles.editors,state.lang,esc,roleAudit.events):''}<section class="card" id="public-materials" aria-live="polite"></section>`);
+      attachReviewControls(document.querySelector('main'),review,()=>renderWorkspace('builder',c),c.announce);
+      if(role.owner) attachEditorRoles(document.querySelector('main'),state.lang,()=>renderWorkspace('builder',c),c.announce);
+      void renderPublicMaterials(document.querySelector('#public-materials'),review,esc);
       document.querySelector('#new-material').onclick=()=>{editing=null;draw()};
       document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{editing=data.materials.find(m=>m.id===b.dataset.edit);draw()});
       document.querySelectorAll('[data-test]').forEach(b=>b.onclick=()=>test(data.materials.find(m=>m.id===b.dataset.test)));
+      document.querySelectorAll('[data-delete]').forEach(button=>button.onclick=async()=>{
+        if(!window.confirm(review.confirm))return; button.disabled=true;
+        try{await request(`/api/materials?id=${encodeURIComponent(button.dataset.delete)}`,{method:'DELETE'});await renderWorkspace('builder',c);c.announce(review.removed)}
+        catch{document.querySelector('#material-status').textContent=review.error;button.disabled=false}
+      });
       document.querySelector('#material-form').onsubmit=async e=>{
         e.preventDefault();const f=new FormData(e.currentTarget),payload=Object.fromEntries(f);
-        payload.options=payload.options.split(/\r?\n/).map(v=>v.trim()).filter(Boolean);payload.locale=state.lang;payload.visibility=f.has('publish')?'public':'private';if(editing)payload.id=editing.id;
+        payload.options=payload.options.split(/\r?\n/).map(v=>v.trim()).filter(Boolean);payload.locale=state.lang;if(editing)payload.id=editing.id;
         try{await request('/api/materials',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});await renderWorkspace('builder',c);c.announce(w.saved)}catch{document.querySelector('#material-status').textContent=w.error}
       };
     }

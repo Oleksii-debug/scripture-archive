@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import ts from 'typescript';
 import vm from 'node:vm';
-import { historyMarkup, queueMarkup, submissionForm, reviewText, renderPublicMaterials, attachReviewControls } from '../public/material-review.js';
+import { historyMarkup, queueMarkup, submissionForm, reviewText, renderPublicMaterials, attachReviewControls, editorRolesMarkup } from '../public/material-review.js';
 
 function fixture() {
   const db = new DatabaseSync(':memory:');
@@ -101,6 +101,9 @@ test('a verified granted editor may review, and revocation immediately removes a
     assert.equal((await f.post(approve(first),'bob')).status,200);
     const next=(await f.post(submission)).data.id;
     f.afterRoleRead(()=>f.db.prepare("DELETE FROM editorial_roles WHERE user_id='bob'").run());
+    assert.equal((await f.get('queue','bob')).data.items.length,0,'revoked role cannot read pending snapshots');
+    f.db.prepare("INSERT INTO editorial_roles(user_id,granted_by) VALUES('bob','editor')").run();
+    f.afterRoleRead(()=>f.db.prepare("DELETE FROM editorial_roles WHERE user_id='bob'").run());
     assert.equal((await f.post(approve(next),'bob')).status,409,'revocation after authorization cannot publish or supersede');
     assert.equal((await f.get('queue','bob')).status,403);
     assert.equal((await f.post(approve(next),'bob')).status,403);
@@ -140,6 +143,15 @@ test('self-review refusal is announced and the review controls remain usable',as
       assert.equal(button.disabled,false); assert.equal(refreshed,false);
     }
   } finally { globalThis.fetch=oldFetch; globalThis.FormData=oldFormData; }
+});
+
+test('editor role controls label email and escape account information',()=>{
+  const esc=s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
+  for (const lang of ['uk','ru','en']) {
+    const html=editorRolesMarkup([{id:'" onmouseover="x',email:'<script>'}],lang,esc);
+    assert.match(html,/type="email"/); assert.match(html,/role="status"/);
+    assert.ok(!html.includes('<script>')); assert.ok(!html.includes('data-id="" onmouseover='));
+  }
 });
 
 test('a concurrent draft edit cannot silently change the version sent for review',async()=>{

@@ -24,6 +24,9 @@ await new Promise(resolve => server.close(resolve));
 const base = `http://127.0.0.1:${port}`;
 const wrangler = ["--import", "./scripts/sites-env.mjs", "./node_modules/wrangler/bin/wrangler.js"];
 const options = { cwd: root, env: { ...process.env, WRANGLER_SEND_METRICS: "false",
+  // Built config is immutable during this disposable run. Never restart the
+  // Worker mid-POST because the dev watcher notices unrelated local churn.
+  WRANGLER_CI_DISABLE_CONFIG_WATCHING: "true",
   WRANGLER_REGISTRY_PATH: path.join(temporary,"registry"),
   MINIFLARE_REGISTRY_PATH: path.join(temporary,"miniflare"),
   WRANGLER_LOG_PATH: path.join(temporary,"logs"),

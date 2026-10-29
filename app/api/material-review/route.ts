@@ -94,11 +94,16 @@ export async function POST(request: Request) {
       try { snapshot = JSON.stringify({ title: draft.title, locale: draft.locale, data: JSON.parse(draft.data) }); }
       catch { return json({ error: "invalid_material" }, 400); }
       if (!readSnapshot(snapshot)) return json({ error: "invalid_material" }, 400);
+      // The conditional INSERT is the source of truth; D1 .run() reports its
+      // receipt without a SELECT-style write RETURNING race.
       const result = await env.DB.prepare(`INSERT INTO material_submissions(id,material_id,author_id,snapshot,provenance,rights_attested,status)
         SELECT ?,id,owner_user_id,json_object('title',title,'locale',locale,'data',json(data)),?,1,'pending'
         FROM study_materials WHERE id=? AND owner_user_id=? AND title=? AND locale=? AND data=?
-        ON CONFLICT DO NOTHING RETURNING id`).bind(id, provenance, body.materialId, identity.userId, draft.title, draft.locale, draft.data).first<{id:string}>();
-      if (!result) return json({ error: "not_found_or_pending" }, 409);
+        ON CONFLICT DO NOTHING`).bind(id, provenance, body.materialId, identity.userId, draft.title, draft.locale, draft.data).run();
+      if (!result.success) return json({ error: "submission_failed" }, 503);
+      const changes = Number(result.meta?.changes);
+      if (!Number.isSafeInteger(changes) || changes < 0 || changes > 1) return json({ error: "submission_failed" }, 503);
+      if (changes === 0) return json({ error: "not_found_or_pending" }, 409);
       return json({ ok: true, id }, 201);
     } catch { return json({ error: "submission_failed" }, 503); }
   }

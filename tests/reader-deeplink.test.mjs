@@ -6,8 +6,11 @@ import vm from 'node:vm';
 // Exercise the existing production URL helpers and actual search link template,
 // with the repository's three licensed local John 3 corpora.
 const source = (await readFile(process.env.SA_SOURCE || new URL('../public/app.js', import.meta.url), 'utf8')).replaceAll('\r\n', '\n');
-const helperMatch = source.match(/(function readerVerseUrl\(code, chapter, verse\) \{[\s\S]*?\n\}\nfunction readerVerseFromUrl\(url, availableVerses\) \{[\s\S]*?\n\})\n\nasync function renderReader\(/);
-const helpers = helperMatch ? vm.runInNewContext(helperMatch[1]+';({readerVerseUrl,readerVerseFromUrl})', {URL, Number, encodeURIComponent}) : null;
+const helperStart = source.indexOf('function readerVerseUrl(');
+const helperEnd = source.indexOf('\nasync function renderReader(', helperStart);
+const helpers = helperStart >= 0 && helperEnd > helperStart
+  ? vm.runInNewContext(source.slice(helperStart, helperEnd) + ';({readerVerseUrl,readerVerseFromUrl,readerChapterNumber})', {URL, Number, encodeURIComponent})
+  : null;
 const templateMatch = source.match(/`<li><a href="[^"\n]*">\$\{esc\(bookTitle\(meta\)\)\} \$\{r.chapter\}:\$\{r.verse\}<\/a><p>\$\{esc\(r.text\)\}<\/p><\/li>`/);
 
 test('search result opens a verse-specific reference rather than the top of chapter', () => {
@@ -127,7 +130,8 @@ test('reader entry route resumes the last book and chapter for uk/ru/en', async 
       communityRefreshInterval: null, communityOwnerRefreshInterval: null,
       attemptRequest: async () => ({invalidated:false}),
       getBook: async () => ({chapters:Array.from({length:150}, () => ['fixture'])}),
-      readerVerseFromUrl: helpers.readerVerseFromUrl,
+      readerVerseFromUrl:helpers.readerVerseFromUrl,
+      readerChapterNumber:helpers.readerChapterNumber,
       cleanPublicCopy() {},
       setStaticI18n() {},
       updatePageMetadata() {},
@@ -252,6 +256,7 @@ test('book fetch failure keeps the last chapter until a successful retry (uk/ru/
       selectedEdition:()=>({id:'local'}),attemptRequest:async()=>({invalidated:false}),
       getBook:async()=>{if(fail)throw Error('temporary_outage');return book;},
       readerVerseFromUrl:helpers.readerVerseFromUrl,
+      readerChapterNumber:helpers.readerChapterNumber,
       localStorage:{setItem(k,v){writes.push([k,v]);saved.set(k,v)}},
       sessionStorage:{removeItem(){}},console:{warn(){}}
     };

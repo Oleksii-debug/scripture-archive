@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "scope": "SA-EXT-01 Ukrainian Ohienko verse-text parity only; NOT footnote/headline/license clearance",
+  "auditedOn": "2026-10-29",
+  "localRepository": "Oleksii-debug/scripture-archive",
+  "localCommit": "88c188da8505b4019ba35de376b5ea3ecb1c3daa",
+  "localPath": "public/data/bible/uk-ohiienko/{CODE}.json",
+  "upstreamRepository": "onlydotbible/ohienko",
+  "upstreamCommit": "a849415161c588156cae144c7ae870c54f3b9969",
+  "upstreamPath": "usj/{code}.json",
+  "upstreamDataLicense": "CC BY-SA 4.0 per upstream source/README.md; code LICENSE MIT does NOT cover source data",
+  "compareMethod": "USJ verses extracted in order from chapter/para nodes; skip note/figure/verse structural nodes; include inline char text; normalize each verse with trim() and whitespace regex /\\s+/g to one space; exact normalized string equality required.",
+  "allowedParagraphMarkers": "^(p|m|q|q\\d+|pi\\d*|li\\d*|nb|pc|pr|cls|ph\\d*|b)$",
+  "limitations": [
+    "Does not compare footnotes, headings, punctuation outside verses, formatting, source historical revision prior to pinned commit, or independent legal permission.",
+    "A GitHub blob SHA is file identity, not an external signed attestation.",
+    "Do not mark SA-EXT-01 TERMINAL solely on this manifest."
+  ],
+  "bookFilesExpected": 66,
+  "books": {}
+}

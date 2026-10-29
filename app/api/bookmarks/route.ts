@@ -21,8 +21,11 @@ export async function GET(request: Request) {
   if (!env.DB) return json({ error: "database_unavailable" }, 503);
   const id = await user(request);
   if (!id) return json({ error: "authentication_required" }, 401);
-  const rows = await env.DB.prepare("SELECT edition,book,chapter,created_at FROM reader_bookmarks WHERE user_id=? ORDER BY created_at DESC,book,chapter LIMIT 500").bind(id).all();
-  return json({ bookmarks: rows.results });
+  try {
+    const rows = await env.DB.prepare("SELECT edition,book,chapter,created_at FROM reader_bookmarks WHERE user_id=? ORDER BY created_at DESC,book,chapter LIMIT 500").bind(id).all();
+    if (!rows.success || !Array.isArray(rows.results)) return json({ error: "bookmarks_unavailable" }, 503);
+    return json({ bookmarks: rows.results });
+  } catch { return json({ error: "bookmarks_unavailable" }, 503); }
 }
 
 async function write(request: Request, remove: boolean) {

@@ -50,15 +50,15 @@ function harness({ sent = true, receipt = { success: true, meta: { changes: 1 } 
     };
     throw Error("Unexpected import " + name);
   };
-  const module = { exports: {} };
-  new Function("require", "module", "exports", transpiled.outputText)(deps, module, module.exports);
+  const fixtureModule = { exports: {} };
+  new Function("require", "module", "exports", transpiled.outputText)(deps, fixtureModule, fixtureModule.exports);
   const submit = async () => {
     const form = new FormData();
     form.set("email", "sample@example.invalid");
     form.set("subject", "Disposable test");
     form.set("message", "No real email leaves this test.");
     form.set("acceptPrivacy", "yes");
-    return module.exports.POST(new Request("https://sa.invalid/api/help", {
+    return fixtureModule.exports.POST(new Request("https://sa.invalid/api/help", {
       method: "POST", headers: { Origin: "https://sa.invalid" }, body: form,
     }));
   };

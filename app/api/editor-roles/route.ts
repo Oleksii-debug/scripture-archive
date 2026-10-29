@@ -1,19 +1,18 @@
 import { env } from "cloudflare:workers";
-import { authenticateRequest, sameOrigin } from "../../../lib/auth";
+import { authenticateRequest, isVerifiedOwner, OWNER_EMAIL, sameOrigin } from "../../../lib/auth";
 
 export const dynamic = "force-dynamic";
-const ownerEmail = "dordiaioleksii1@gmail.com";
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "private, no-store" } });
 async function owner(request: Request) {
   const id = await authenticateRequest(request);
-  return id && id.provider !== "agent" && id.emailVerified && id.email.toLowerCase() === ownerEmail ? id : null;
+  return isVerifiedOwner(id) ? id : null;
 }
 export async function GET(request: Request) {
   if (!env.DB) return json({error:"database_unavailable"},503);
   if (new URL(request.url).searchParams.get("view") === "me") {
     const identity = await authenticateRequest(request);
     if (!identity || identity.provider === "agent" || !identity.emailVerified) return json({editor:false});
-    if (identity.email.toLowerCase() === ownerEmail) return json({editor:true,owner:true});
+    if (isVerifiedOwner(identity)) return json({editor:true,owner:true});
     if (identity.provider !== "password") return json({editor:false});
     try {
       const row = await env.DB.prepare("SELECT r.user_id FROM editorial_roles r JOIN accounts a ON a.id=r.user_id WHERE r.user_id=? AND a.deleted_at IS NULL AND a.email_verified_at IS NOT NULL").bind(identity.userId).first();
@@ -46,7 +45,7 @@ export async function POST(request: Request) {
     if (body.action === "grant") {
       const row = await env.DB.prepare(`INSERT INTO editorial_roles(user_id,granted_by)
         SELECT id,? FROM accounts WHERE (id=? OR (?!='' AND lower(email)=?)) AND email_verified_at IS NOT NULL AND deleted_at IS NULL AND lower(email)<>?
-        ON CONFLICT(user_id) DO NOTHING RETURNING user_id`).bind(id.userId,userId,email,email,ownerEmail).first();
+        ON CONFLICT(user_id) DO NOTHING RETURNING user_id`).bind(id.userId,userId,email,email,OWNER_EMAIL).first();
       return row ? json({ok:true}) : json({error:"not_eligible_or_granted"},409);
     }
     const results = await env.DB.batch([

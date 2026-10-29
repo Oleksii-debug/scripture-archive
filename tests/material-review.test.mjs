@@ -148,7 +148,7 @@ test('self-review refusal is announced and the review controls remain usable',as
 test('editor role controls label email and escape account information',()=>{
   const esc=s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
   for (const lang of ['uk','ru','en']) {
-    const html=editorRolesMarkup([{id:'" onmouseover="x',email:'<script>'}],lang,esc);
+    const html=editorRolesMarkup([{id:'" onmouseover="x',email:'<script>'}],lang,esc,[{action:'grant',subject_email:'<script>',created_at:'2026-01-01',actor_user_id:'<script>'}]);
     assert.match(html,/type="email"/); assert.match(html,/role="status"/);
     assert.ok(!html.includes('<script>')); assert.ok(!html.includes('data-id="" onmouseover='));
   }

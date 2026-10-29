@@ -137,6 +137,46 @@
       "compared": 47,
       "upstreamBlob": "47997c303aa18f1600657dd8873eb09accadcc03",
       "localBlob": "e7d2047938feb029d7aab36e2bbbf01c97df178a"
+    },
+    "2TI": {
+      "status": "PASS",
+      "chapters": 4,
+      "verses": 83,
+      "compared": 83,
+      "upstreamBlob": "b93b7583966b4f1637e24d592ebaec3f64eaa229",
+      "localBlob": "eaebed0d16343fafc52469cfa8d875d74b9fa6c3"
+    },
+    "3JN": {
+      "status": "PASS",
+      "chapters": 1,
+      "verses": 15,
+      "compared": 15,
+      "upstreamBlob": "86c40d6e34240f82b0130eb2ec9a08efe6df79c9",
+      "localBlob": "8156f4e1941872e10d02b231d3194d45ef152b4b"
+    },
+    "ACT": {
+      "status": "PASS",
+      "chapters": 28,
+      "verses": 1006,
+      "compared": 1006,
+      "upstreamBlob": "6335f1e50429c00e3f308cb863d9c68a8e50a94c",
+      "localBlob": "8d1ca5c00d25ecb4aa75234b24da14af1763a06b"
+    },
+    "AMO": {
+      "status": "PASS",
+      "chapters": 9,
+      "verses": 146,
+      "compared": 146,
+      "upstreamBlob": "e0eb376f466e2c28b1ad0e8e12d2ca6bec4aa302",
+      "localBlob": "2dddd841fca01d1f9ddc714ed9c18c22652a5442"
+    },
+    "COL": {
+      "status": "PASS",
+      "chapters": 4,
+      "verses": 95,
+      "compared": 95,
+      "upstreamBlob": "065948673eef58199c0fd7080fb6ac7dea25635e",
+      "localBlob": "d0d0650b0616ccb36d45b5e5aa9c33167040ee39"
     }
   },
   "expectedCodes": [
@@ -208,7 +248,7 @@
     "ZEP"
   ],
   "auditProgress": {
-    "completedBooks": 15,
+    "completedBooks": 20,
     "expectedBooks": 66,
     "allBooksPass": false
   }

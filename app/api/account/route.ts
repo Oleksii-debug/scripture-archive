@@ -22,26 +22,36 @@ function publicUser(id:Identity,row:Record<string,unknown>|null){return {id:id.u
 export async function GET(request:Request){
   const action=new URL(request.url).searchParams.get("action")??"me"; const id=await authenticateRequest(request); if(!id)return action==="me"?privateJson({user:null}):unauthorized();
   if(action==="reading"){
-    const row=await env.DB!.prepare("SELECT data FROM progress WHERE user_id=? AND mission_id='READING'").bind(id.userId).first<{data:string}>();
-    if(!row)return privateJson({reading:[]});
-    try{const reading=JSON.parse(row.data);if(Array.isArray(reading)&&reading.every(validReadingReceipt))return privateJson({reading})}catch{}
+    try{
+      const row=await env.DB!.prepare("SELECT data FROM progress WHERE user_id=? AND mission_id='READING'").bind(id.userId).first<{data:string}>();
+      if(!row)return privateJson({reading:[]});
+      const reading=JSON.parse(row.data);
+      if(Array.isArray(reading)&&reading.every(validReadingReceipt))return privateJson({reading});
+    }catch{}
+    // D1 errors and corrupt history are unavailable, not an empty reading history.
     return privateJson({error:"reading_state_unavailable"},{status:503});
   }
   if(action==="progress"){
-    const rows=await env.DB!.prepare("SELECT data FROM progress WHERE user_id=? AND mission_id LIKE 'OT-AB-01:%'").bind(id.userId).all<{data:string}>();
-    const answered=new Set<string>(),correct=new Set<string>();
-    const validTasks=new Set(mission.tasks.map(task=>task.id));
-    for(const row of rows.results){
-      try{
-        const result=JSON.parse(row.data);
-        for(const detail of result.details||[]){
-          if(!validTasks.has(detail.taskId))continue;
-          answered.add(detail.taskId);
-          if(detail.correct===true)correct.add(detail.taskId);
-        }
-      }catch{}
+    try{
+      const rows=await env.DB!.prepare("SELECT data FROM progress WHERE user_id=? AND mission_id LIKE 'OT-AB-01:%'").bind(id.userId).all<{data:string}>();
+      if((rows as {success?:boolean}).success===false||!Array.isArray(rows.results))throw Error("progress read not acknowledged");
+      const answered=new Set<string>(),correct=new Set<string>();
+      const validTasks=new Set(mission.tasks.map(task=>task.id));
+      for(const row of rows.results){
+        try{
+          const result=JSON.parse(row.data);
+          for(const detail of result.details||[]){
+            if(!validTasks.has(detail.taskId))continue;
+            answered.add(detail.taskId);
+            if(detail.correct===true)correct.add(detail.taskId);
+          }
+        }catch{}
+      }
+      return privateJson({progress:{index:answered.size,correct:[...correct],complete:answered.size===validTasks.size}});
+    }catch{
+      // Never assert "no progress" when the private database read failed.
+      return privateJson({error:"progress_state_unavailable"},{status:503});
     }
-    return privateJson({progress:{index:answered.size,correct:[...correct],complete:answered.size===validTasks.size}})
   }
   if(action==="users"){if(!isVerifiedOwner(id))return privateJson({error:"forbidden"},{status:403});const rows=await env.DB!.prepare("SELECT email,first_name,last_name,age_range,locale,created_at,updated_at FROM profiles ORDER BY created_at DESC LIMIT 250").all();return privateJson({users:rows.results})}
   const row=await env.DB!.prepare("SELECT * FROM profiles WHERE user_id=?").bind(id.userId).first<Record<string,unknown>>(); return privateJson({user:publicUser(id,row)});

@@ -32,8 +32,8 @@ export async function GET(request: Request) {
   } catch { return json({error:"database_unavailable"},503); }
 }
 export async function POST(request: Request) {
-  if (!env.DB) return json({error:"database_unavailable"},503);
   if (!sameOrigin(request)) return json({error:"cross_origin_request"},403);
+  if (!env.DB) return json({error:"database_unavailable"},503);
   const id = await owner(request);
   if (!id) return json({error:"forbidden"},403);
   const body = await request.json().catch(() => null) as {action?: unknown; userId?: unknown; email?: unknown} | null;
@@ -43,10 +43,15 @@ export async function POST(request: Request) {
   if ((body.action === "revoke" && !userId) || (body.action === "grant" && Boolean(userId) === Boolean(email)) || userId === id.userId) return json({error:"invalid_request"},400);
   try {
     if (body.action === "grant") {
-      const row = await env.DB.prepare(`INSERT INTO editorial_roles(user_id,granted_by)
-        SELECT id,? FROM accounts WHERE (id=? OR (?!='' AND lower(email)=?)) AND email_verified_at IS NOT NULL AND deleted_at IS NULL AND lower(email)<>?
-        ON CONFLICT(user_id) DO NOTHING RETURNING user_id`).bind(id.userId,userId,email,email,OWNER_EMAIL).first();
-      return row ? json({ok:true}) : json({error:"not_eligible_or_granted"},409);
+      // One atomic conditional mutation is the grant authority. Read its D1
+      // write receipt, not a SELECT-style first() on INSERT RETURNING.
+      const result = await env.DB.prepare(`INSERT OR IGNORE INTO editorial_roles(user_id,granted_by)
+        SELECT id,? FROM accounts WHERE (id=? OR (?!='' AND lower(email)=?)) AND email_verified_at IS NOT NULL AND deleted_at IS NULL AND lower(email)<>?`)
+        .bind(id.userId,userId,email,email,OWNER_EMAIL).run();
+      if (!result.success) throw Error("write not acknowledged");
+      const changed = Number(result.meta?.changes);
+      if (!Number.isSafeInteger(changed) || changed < 0) throw Error("missing write receipt");
+      return changed > 0 ? json({ok:true}) : json({error:"not_eligible_or_granted"},409);
     }
     const results = await env.DB.batch([
       env.DB.prepare("UPDATE editorial_roles SET revoked_by=? WHERE user_id=?").bind(id.userId,userId),

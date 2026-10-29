@@ -34,7 +34,7 @@ export async function GET(request:Request){
   if(action==="progress"){
     try{
       const rows=await env.DB!.prepare("SELECT data FROM progress WHERE user_id=? AND mission_id LIKE 'OT-AB-01:%'").bind(id.userId).all<{data:string}>();
-      if(rows.success===false||!Array.isArray(rows.results))throw Error("progress read not acknowledged");
+      if((rows as {success?:boolean}).success===false||!Array.isArray(rows.results))throw Error("progress read not acknowledged");
       const answered=new Set<string>(),correct=new Set<string>();
       const validTasks=new Set(mission.tasks.map(task=>task.id));
       for(const row of rows.results){

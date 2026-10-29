@@ -63,9 +63,10 @@ export async function POST(request: Request) {
   try {
     const saved = await env.DB!.prepare("INSERT INTO study_materials (id,owner_user_id,title,locale,data,visibility) VALUES (?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,locale=excluded.locale,data=excluded.data,visibility=excluded.visibility,updated_at=CURRENT_TIMESTAMP WHERE study_materials.owner_user_id=excluded.owner_user_id")
       .bind(id, userId, title, locale, data, visibility).run();
-    if (!saved.success || !Number.isSafeInteger(Number(saved.meta?.changes)))
+    const changes = Number(saved.meta?.changes);
+    if (!saved.success || !Number.isSafeInteger(changes) || changes < 0)
       return Response.json({ error: "material_save_failed" }, { status: 503 });
-    if (Number(saved.meta.changes) === 0) return Response.json({ error: "forbidden" }, { status: 403 });
+    if (changes === 0) return Response.json({ error: "forbidden" }, { status: 403 });
     return Response.json({ ok: true, id }, { status: existing ? 200 : 201 });
   } catch {
     return Response.json({ error: "material_save_failed" }, { status: 503 });

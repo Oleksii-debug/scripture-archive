@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { parallelControls, mountParallelReader } from '../public/parallel-reader.js';
 
 const esc = value => String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
-const edition={id:'uk-kulish',title:'Куліш',local:true};
-const catalog={translations:{},editions:{uk:{title:'Куліш',source:'https://source.example/',license:'Public Domain'}}};
+const edition={id:'uk-kulish',contentId:'UKRPAN',title:'Куліш',local:true};
+const catalog={translations:{},editions:{uk:{id:'UKRPAN',title:'Куліш',source:'https://source.example/',license:'Public Domain'}}};
 function fixture(overrides={}) {
   let isCurrent=true, locked=0, failed=0, reads=0, checked=0;
   const button={disabled:false}, status={textContent:''}, result={innerHTML:'',replaceChildren(){this.innerHTML='';}};
@@ -17,7 +17,7 @@ function fixture(overrides={}) {
   mountParallelReader(panel,options);
   return {panel,form,status,result,button,run:()=>form.onsubmit({preventDefault(){}}),move:()=>{isCurrent=false;},reads:()=>reads,checked:()=>checked,locked:()=>locked,failed:()=>failed};
 }
-async function withForm(callback){const original=globalThis.FormData;globalThis.FormData=class{get(){return edition.id;}};try{return await callback();}finally{globalThis.FormData=original;}}
+async function withForm(callback, selected=edition.id){const original=globalThis.FormData;globalThis.FormData=class{get(){return selected;}};try{return await callback();}finally{globalThis.FormData=original;}}
 
 test('comparison is a labelled native form with escaped edition names',()=>{
   const html=parallelControls([{id:'x"',title:'<img>'}],'uk',esc);
@@ -49,7 +49,37 @@ test('failed second-edition load leaves the original reader intact and allows re
 }));
 
 test('untrusted metadata is escaped and non-HTTPS links are not rendered',()=>withForm(async()=>{
-  const f=fixture({catalog:{translations:{},editions:{uk:{title:'<img>',source:'javascript:alert(1)',license:'<script>',attribution:'<svg>'}}}});
+  const f=fixture({catalog:{translations:{},editions:{uk:{id:'UKRPAN',title:'<img>',source:'javascript:alert(1)',license:'<script>',attribution:'<svg>'}}}});
   await f.run();assert.ok(!f.result.innerHTML.includes('<img>'));assert.ok(!f.result.innerHTML.includes('<svg>'));
   assert.ok(!f.result.innerHTML.includes('javascript:'));assert.ok(f.result.innerHTML.includes('&lt;img&gt;'));
 }));
+
+test('missing translation provenance does not borrow a different edition license',()=>withForm(async()=>{
+  const ohiienko={id:'uk-ohiienko',title:'Огієнко',local:true};
+  const f=fixture({editions:[ohiienko],catalog});
+  await f.run();
+  assert.equal(f.checked(),1);
+  assert.equal(f.reads(),1);
+  assert.equal(f.result.innerHTML,'');
+  assert.match(f.status.textContent,/Не вдалося/);
+  assert.ok(!f.result.innerHTML.includes('Public Domain'));
+},'uk-ohiienko'));
+
+test('a mismatched translation metadata ID fails closed instead of showing wrong rights',()=>withForm(async()=>{
+  const ohiienko={id:'uk-ohiienko',title:'Огієнко',local:true};
+  const bad={translations:{'uk-ohiienko':{id:'uk-kulish',title:'WRONG EDITION',license:'Public Domain'}},editions:catalog.editions};
+  const f=fixture({editions:[ohiienko],catalog:bad});
+  await f.run();
+  assert.equal(f.result.innerHTML,'');
+  assert.match(f.status.textContent,/Не вдалося/);
+},'uk-ohiienko'));
+
+test('exact translation metadata keeps the actual edition title and license',()=>withForm(async()=>{
+  const ohiienko={id:'uk-ohiienko',title:'Огієнко',local:true};
+  const exact={translations:{'uk-ohiienko':{id:'uk-ohiienko',title:'Огієнко',license:'CC BY-SA 4.0',source:'https://source.example/ohienko'}},editions:catalog.editions};
+  const f=fixture({editions:[ohiienko],catalog:exact});
+  await f.run();
+  assert.match(f.result.innerHTML,/Огієнко — Буття 1/);
+  assert.match(f.result.innerHTML,/CC BY-SA 4\.0/);
+  assert.ok(!f.result.innerHTML.includes('Public Domain'));
+},'uk-ohiienko'));

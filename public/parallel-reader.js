@@ -29,6 +29,13 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
       if (guard.invalidated) { lock(); return; }
       const data=await getBook(book,edition);
       if (!panel.isConnected || !current()) return;
+      // The preceding check may predate a new assessment in another tab.
+      let finalGuard;
+      try { finalGuard=await check(book,chapter); }
+      catch { if(panel.isConnected && current()) failClosed(); return; }
+      if (!panel.isConnected || !current()) return;
+      if (!finalGuard || typeof finalGuard.invalidated !== 'boolean') { failClosed(); return; }
+      if (finalGuard.invalidated) { lock(); return; }
       const verses=data.chapters[chapter-1];
       if (!Array.isArray(verses)) { status.textContent=copy.unavailable; return; }
       // A language default is not provenance for every translation in that language.

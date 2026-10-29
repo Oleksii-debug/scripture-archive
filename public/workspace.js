@@ -41,6 +41,24 @@ export function missionHistoryMarkup(history, lang, esc) {
   return `<section class="card resume-card"><h2>${w.title}</h2>${pending}${content}</section>`;
 }
 
+const EDITION_ABOUT = {
+  uk: {title:'Біблійні видання',intro:'Видання збережено окремо. Назва перекладу залишається поруч із текстом.',local:'Видання для читання на платформі',external:'Інші видання',externalText:'Хоменка, Турконяка та інші видання можна відкрити на сайтах їхніх видавців із читальні.',source:'Джерело',license:'Умови використання',missing:'Відомості про це видання недоступні.'},
+  ru: {title:'Библейские издания',intro:'Издания хранятся отдельно. Название перевода остаётся рядом с текстом.',local:'Издания для чтения на платформе',external:'Другие издания',externalText:'Переводы Хоменко, Турконяка и другие издания можно открыть на сайтах их издателей из читальни.',source:'Источник',license:'Условия использования',missing:'Сведения об этом издании недоступны.'},
+  en: {title:'Bible editions',intro:'Editions are stored separately. The translation name stays beside the text.',local:'Editions available on the platform',external:'Other editions',externalText:'Khomenko, Turkoniak and other editions can be opened on their publishers’ websites from the reader.',source:'Source',license:'Terms of use',missing:'Details for this edition are unavailable.'},
+};
+const httpsUrl=value=>{try {const url=new URL(value);return url.protocol==='https:'?url.href:'';} catch {return '';}};
+
+export function editionAboutMarkup(catalog,lang,esc) {
+  const w=EDITION_ABOUT[lang]||EDITION_ABOUT.uk;
+  const editions=[catalog?.translations?.['uk-ohiienko'],catalog?.editions?.uk,catalog?.editions?.ru,catalog?.editions?.en];
+  const entries=editions.map(edition=>{
+    if(!edition||typeof edition.title!=='string')return `<li>${w.missing}</li>`;
+    const source=httpsUrl(edition.source),license=httpsUrl(edition.licenseUrl);
+    return `<li><strong>${esc(edition.title)}</strong> — ${esc(edition.license||'—')}${source?` · <a href="${esc(source)}" rel="noreferrer">${w.source}</a>`:''}${license?` · <a href="${esc(license)}" rel="noreferrer">${w.license}</a>`:''}${edition.attribution?`<p>${esc(edition.attribution)}</p>`:''}${edition.formatting?`<p>${esc(edition.formatting)}</p>`:''}</li>`;
+  }).join('');
+  return `<h2>${w.title}</h2><p>${w.intro}</p><h3>${w.local}</h3><ul>${entries}</ul><h3>${w.external}</h3><p>${w.externalText}</p>`;
+}
+
 async function request(path, options) {
   const response=await fetch(path,options), data=await response.json();
   if(!response.ok) throw Error(data.error || response.status);
@@ -51,8 +69,8 @@ export async function renderWorkspace(name,c) {
   const {state,t,esc,shell,getMission,setActiveNav}=c, w=workspaceCopy(state.lang);
   setActiveNav(name);
   if(name==='about') {
-    const labels={uk:['Біблійні видання','Повні видання збережено окремо. Назва обраного перекладу завжди залишається поруч із текстом.','Видання для читання на платформі','Інші видання','Джерела'],ru:['Библейские издания','Полные издания хранятся отдельно. Название выбранного перевода всегда остаётся рядом с текстом.','Издания для чтения на платформе','Другие издания','Источники'],en:['Bible editions','Complete editions stay separate. The selected translation’s name always appears beside the text.','Editions available on the platform','Other editions','Sources']}[state.lang];
-    shell(`<article class="prose"><p class="eyebrow">Scripture Archive</p><h1>${t('aboutTitle')}</h1><p class="lead">${t('aboutBody')}</p><h2>${labels[0]}</h2><p>${labels[1]}</p><h3>${labels[2]}</h3><ul><li>Куліш, Пулюй і Нечуй-Левицький. Public Domain. <a href="https://ebible.org/find/details.php?id=ukr1871">eBible.org</a></li><li>Синодальный перевод. Public Domain. <a href="https://ebible.org/find/details.php?id=russyn">eBible.org</a></li><li>World English Bible Updated. Public Domain. <a href="https://ebible.org/find/details.php?id=engwebu">eBible.org</a></li></ul><h3>${labels[3]}</h3><p>${{uk:'Огієнка, Хоменка, Турконяка та інші захищені видання можна відкрити на сайтах видавців із читальні.',ru:'Переводы Огиенко, Хоменко, Турконяка и другие защищённые издания можно открыть на сайтах издателей из читальни.',en:'Ohiienko, Khomenko, Turkoniak, and other protected editions open on the publishers’ websites from the reader.'}[state.lang]}</p><h2>${t('accessTitle')}</h2><p>${t('accessBody')}</p></article>`);
+    const catalog=await c.getCatalog();
+    shell(`<article class="prose"><p class="eyebrow">Scripture Archive</p><h1>${t('aboutTitle')}</h1><p class="lead">${t('aboutBody')}</p>${editionAboutMarkup(catalog,state.lang,esc)}<h2>${t('accessTitle')}</h2><p>${t('accessBody')}</p></article>`);
     return;
   }
   if(name==='campaigns') {

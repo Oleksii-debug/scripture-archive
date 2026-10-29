@@ -29,9 +29,19 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
       if (guard.invalidated) { lock(); return; }
       const data=await getBook(book,edition);
       if (!panel.isConnected || !current()) return;
+      // Another tab or device may start an attempt while the second text loads.
+      // Revalidate after that await and before exposing the comparison text.
+      let finalGuard;
+      try { finalGuard=await check(book,chapter); }
+      catch { if (panel.isConnected && current()) failClosed(); return; }
+      if (!panel.isConnected || !current()) return;
+      if (!finalGuard || typeof finalGuard.invalidated !== 'boolean') { failClosed(); return; }
+      if (finalGuard.invalidated) { lock(); return; }
       const verses=data.chapters[chapter-1];
       if (!Array.isArray(verses)) { status.textContent=copy.unavailable; return; }
-      const metadata=catalog.translations?.[edition.id] || catalog.editions[lang];
+      // Never attribute a new/unrecognized local edition to the primary one.
+      const fallback=catalog.editions?.[lang];
+      const metadata=catalog.translations?.[edition.id] || (edition.contentId && fallback?.id === edition.contentId ? fallback : null);
       if (!metadata || typeof metadata.title!=='string') throw Error('missing edition metadata');
       const source=https(metadata.source), license=https(metadata.licenseUrl);
       result.innerHTML=`<section aria-labelledby="parallel-title"><h3 id="parallel-title">${esc(metadata.title)} — ${esc(bookTitle)} ${chapter}</h3><p>${copy.note}</p><p>${copy.license}: ${esc(metadata.license || '—')}</p>${metadata.attribution?`<p>${esc(metadata.attribution)}</p>`:''}${source?`<p><a href="${esc(source)}" target="_blank" rel="noreferrer">${copy.source}</a></p>`:''}${license?`<p><a href="${esc(license)}" target="_blank" rel="noreferrer">${copy.license}</a></p>`:''}<ol>${verses.map(verse=>`<li>${esc(verse)}</li>`).join('')}</ol></section>`;

@@ -308,7 +308,7 @@ for (const [lang, title] of [
   ['en', 'The page could not open'],
 ]) {
   test(`${lang} startup dependency evaluation errors expose existing recovery`, () => {
-    for (const path of ['/workspace.js', '/support.js', '/home.js', '/editions.js']) {
+    for (const path of ['/workspace.js', '/parallel-reader.js', '/support.js', '/home.js', '/editions.js']) {
       const page = boot(lang);
       page.dispatchError(`https://sa06.test${path}`);
       page.scripts.at(-1).onload();
@@ -433,7 +433,7 @@ for (const [lang, reloadText] of [
   ['ru','Перезагрузить страницу'],
   ['en','Reload the page'],
 ]) {
-  for (const modulePath of ['/app.js','/workspace.js']) {
+  for (const modulePath of ['/app.js','/workspace.js','/parallel-reader.js']) {
     test(`${lang}: ${modulePath} evaluation failure uses document reload, not duplicate bootstrap`, () => {
       const page = boot(lang);
       page.dispatchError(`https://sa06.test${modulePath}`);

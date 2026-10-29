@@ -1961,6 +1961,7 @@ const state = {
     correct: [],
     complete: false,
   }),
+  progressSyncStatus: null,
   studyTimer: loadJSON("sa.studyTimer", {
     durationMinutes: 0,
     remainingSeconds: 0,
@@ -3407,19 +3408,27 @@ async function authRequest(action, body = {}) {
 }
 async function syncProgress() {
   if (!state.user) return;
+  state.progressSyncStatus = "unavailable";
   try {
     const readingData=await accountRequest('reading');
     const localReading=loadJSON('sa.readingHistory',[]),mergedReading=[...new Map([...(readingData.reading||[]),...localReading].map(r=>[r.book+':'+r.chapter,r])).values()];
     localStorage.setItem('sa.readingHistory',JSON.stringify(mergedReading));
     if(mergedReading.length)await accountRequest('reading','PUT',{reading:mergedReading});
     const data = await accountRequest("progress");
-    if (data.progress) {
-      state.missionProgress = data.progress;
-      localStorage.setItem("sa.mission.OTAB01", JSON.stringify(data.progress));
-    }
-  } catch {}
+    if (!data.progress) throw Error("missing_progress");
+    state.missionProgress = data.progress;
+    localStorage.setItem("sa.mission.OTAB01", JSON.stringify(data.progress));
+    // The server may have recovered some valid results alongside a damaged
+    // legacy row; never quietly present those totals as definitive.
+    state.progressSyncStatus = data.warning === "partial_progress_history" ? "partial" : null;
+  } catch {
+    // Preserve cached evidence and show a localized nonvisual warning on the
+    // canonical progress page instead of silently claiming it is current.
+    state.progressSyncStatus = "unavailable";
+  }
 }
 function clearPersonalProgress() {
+  state.progressSyncStatus=null;
   state.missionProgress={index:0,correct:[],complete:false};
   localStorage.setItem("sa.mission.OTAB01",JSON.stringify(state.missionProgress));
   localStorage.setItem("sa.readingHistory","[]");

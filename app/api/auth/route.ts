@@ -232,6 +232,7 @@ export async function POST(request: Request) {
       env.DB.prepare("DELETE FROM support_attachments WHERE request_id IN (SELECT id FROM support_requests WHERE user_id=?)").bind(identity.userId),
       env.DB.prepare("DELETE FROM support_requests WHERE user_id=?").bind(identity.userId),
       env.DB.prepare("DELETE FROM auth_tokens WHERE user_id=?").bind(identity.userId),
+      env.DB.prepare("DELETE FROM editorial_roles WHERE user_id=?").bind(identity.userId),
       env.DB.prepare("DELETE FROM home_group_members WHERE user_id=?").bind(identity.userId),
       env.DB.prepare("DELETE FROM study_materials WHERE owner_user_id=?").bind(identity.userId),
       env.DB.prepare("DELETE FROM home_groups WHERE owner_user_id=?").bind(identity.userId),

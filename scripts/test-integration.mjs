@@ -56,7 +56,9 @@ try {
     await new Promise(resolve => setTimeout(resolve, 300));
   }
   if (!ready) throw Error(`Local worker did not become ready. ${logs}`);
-  await run(["--test", "tests/api-flow.test.mjs", "tests/community.test.mjs", "tests/community-runner.test.mjs", "tests/community-smoke.test.mjs", "tests/community-runner-identity.test.mjs", "tests/security-contract.test.mjs"],
+  // All suites target one disposable Worker/D1 and should not compete for its
+  // runtime lifecycle. Preserve per-suite concurrent-request/race assertions.
+  await run(["--test", "--test-concurrency=1", "tests/api-flow.test.mjs", "tests/community.test.mjs", "tests/community-runner.test.mjs", "tests/community-smoke.test.mjs", "tests/community-runner-identity.test.mjs", "tests/security-contract.test.mjs"],
     { env: { ...options.env, SCRIPTURE_TEST_URL: base } });
   await run(["--experimental-strip-types", "scripts/test-learning-agent.mjs", "--local-test", "--smoke"],
     { env: { ...options.env, COMMUNITY_ORIGIN: base } });

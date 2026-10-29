@@ -70,3 +70,23 @@ export async function loadReviewData(isEditor) {
   const [mine, queue, history] = await Promise.all([api('/api/material-review?view=mine'), isEditor ? api('/api/material-review?view=queue') : Promise.resolve({items:[]}), isEditor ? api('/api/material-review?view=history') : Promise.resolve({items:[]})]);
   return { mine: mine.items, queue: queue.items, history: history.items };
 }
+const ROLE_TEXT = {
+  uk:{title:'Редактори',help:'Додайте підтверджений акаунт за адресою електронної пошти.',email:'Електронна пошта редактора',grant:'Надати доступ',revoke:'Відкликати доступ',empty:'Додаткових редакторів немає.',saved:'Доступ оновлено.',error:'Не вдалося змінити доступ. Перевірте адресу або спробуйте ще раз.'},
+  ru:{title:'Редакторы',help:'Добавьте подтверждённый аккаунт по адресу электронной почты.',email:'Электронная почта редактора',grant:'Предоставить доступ',revoke:'Отозвать доступ',empty:'Дополнительных редакторов нет.',saved:'Доступ обновлён.',error:'Не удалось изменить доступ. Проверьте адрес или повторите попытку.'},
+  en:{title:'Editors',help:'Add a verified account by email address.',email:'Editor email',grant:'Grant access',revoke:'Revoke access',empty:'There are no additional editors.',saved:'Access updated.',error:'Could not update access. Check the address or try again.'},
+};
+export function editorRolesMarkup(items,lang,esc) {
+  const w=ROLE_TEXT[lang]||ROLE_TEXT.uk;
+  return `<section class="card"><h2>${w.title}</h2><p>${w.help}</p><form id="editor-role-form"><label class="account-field"><span>${w.email}</span><input type="email" name="email" maxlength="254" required></label><button class="button">${w.grant}</button></form>${items.length?`<ul>${items.map(item=>`<li>${esc(item.email)} <button class="button editor-revoke" type="button" data-id="${esc(item.id)}">${w.revoke}</button></li>`).join('')}</ul>`:`<p>${w.empty}</p>`}<p id="editor-role-status" role="status"></p></section>`;
+}
+export function attachEditorRoles(root,lang,refresh,announce) {
+  const w=ROLE_TEXT[lang]||ROLE_TEXT.uk, status=root.querySelector('#editor-role-status');
+  async function change(body,buttons) {
+    buttons.forEach(b=>b.disabled=true);
+    try { await api('/api/editor-roles',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); await refresh(); announce(w.saved); }
+    catch { status.textContent=w.error; buttons.forEach(b=>b.disabled=false); }
+  }
+  const form=root.querySelector('#editor-role-form');
+  form.onsubmit=event=>{event.preventDefault();void change({action:'grant',email:new FormData(form).get('email')},[form.querySelector('button')]);};
+  root.querySelectorAll('.editor-revoke').forEach(button=>button.onclick=()=>change({action:'revoke',userId:button.dataset.id},[button]));
+}

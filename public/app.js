@@ -3411,11 +3411,21 @@ async function syncProgress() {
   state.progressSyncStatus = "unavailable";
   try {
     const readingData=await accountRequest('reading');
-    const localReading=loadJSON('sa.readingHistory',[]),mergedReading=[...new Map([...(readingData.reading||[]),...localReading].map(r=>[r.book+':'+r.chapter,r])).values()];
-    localStorage.setItem('sa.readingHistory',JSON.stringify(mergedReading));
+    // A successful-looking HTTP reply with no reading array is not evidence
+    // of empty reading history; never overwrite the local cache on that basis.
+    if(!Array.isArray(readingData.reading))throw Error("missing_reading_history");
+    const localReading=loadJSON('sa.readingHistory',[]);
+    if(!Array.isArray(localReading))throw Error("invalid_local_reading_history");
+    const mergedReading=[...new Map([...readingData.reading,...localReading].map(r=>[r.book+':'+r.chapter,r])).values()];
     if(mergedReading.length)await accountRequest('reading','PUT',{reading:mergedReading});
     const data = await accountRequest("progress");
-    if (!data.progress) throw Error("missing_progress");
+    if (!data.progress || !Number.isSafeInteger(data.progress.index) ||
+      data.progress.index<0 || !Array.isArray(data.progress.correct) ||
+      typeof data.progress.complete!=="boolean")throw Error("invalid_progress_receipt");
+    // Persist only after complete server acknowledgement; a failed refresh
+    // leaves the user's last local snapshot intact and triggers the existing
+    // localized unavailable warning.
+    localStorage.setItem('sa.readingHistory',JSON.stringify(mergedReading));
     state.missionProgress = data.progress;
     localStorage.setItem("sa.mission.OTAB01", JSON.stringify(data.progress));
     // The server may have recovered some valid results alongside a damaged

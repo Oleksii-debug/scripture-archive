@@ -8,7 +8,12 @@ const DELETE_TEXT = {
   ru: {remove:'Удалить материал',confirm:'Удалить материал и все его версии? Опубликованные версии тоже исчезнут.',removed:'Материал и его версии удалены.',audit:'Журнал редакционных решений',author:'Автор',reviewer:'Редактор'},
   en: {remove:'Delete material',confirm:'Delete this material and all its versions? Published versions will also disappear.',removed:'Material and its versions deleted.',audit:'Editorial history',author:'Author',reviewer:'Editor'},
 };
-export function reviewText(lang) { return { ...(TEXT[lang] || TEXT.uk), ...(DELETE_TEXT[lang] || DELETE_TEXT.uk) }; }
+const SELF_REVIEW_TEXT = {
+  uk: 'Власний матеріал має перевірити інший редактор.',
+  ru: 'Собственный материал должен проверить другой редактор.',
+  en: 'Your own material must be reviewed by another editor.',
+};
+export function reviewText(lang) { return { ...(TEXT[lang] || TEXT.uk), ...(DELETE_TEXT[lang] || DELETE_TEXT.uk), selfReview: SELF_REVIEW_TEXT[lang] || SELF_REVIEW_TEXT.uk }; }
 async function api(path, options) {
   const response = await fetch(path, options);
   const data = await response.json().catch(() => ({}));
@@ -45,7 +50,7 @@ export function attachReviewControls(root, w, refresh, announce) {
     if ((decision === 'approve' && (!f.has('source') || !f.has('rights'))) || (decision === 'reject' && !String(f.get('note') || '').trim())) { status.textContent = w.error; return; }
     const buttons = form.querySelectorAll('button'); buttons.forEach(item => { item.disabled = true; });
     try { await post({action:'review',id:form.dataset.id,decision,note:f.get('note'),sourceChecked:f.has('source'),rightsChecked:f.has('rights')}); await refresh(); announce(w.reviewed); }
-    catch { status.textContent = w.error; buttons.forEach(item => { item.disabled = false; }); }
+    catch (error) { status.textContent = error?.message === 'self_review_forbidden' ? w.selfReview : w.error; buttons.forEach(item => { item.disabled = false; }); }
   }));
 }
 export async function renderPublicMaterials(root, w, esc) {

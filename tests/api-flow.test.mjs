@@ -400,6 +400,9 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal(result.data.groupRecorded, true);
   result = await request("/api/attempts?action=finalize", {method:"POST",body:{attemptId:groupAttemptId}});
   assert.equal(result.data.groupRecorded, true);
+  result = await request("/api/attempts?action=history");
+  assert.equal(result.data.attempts.find(item=>item.id===groupAttemptId).mode,"group");
+  assert.equal(result.data.attempts.find(item=>item.id===attemptId).mode,"personal");
   result = await request(`/api/groups?groupId=${encodeURIComponent(groupId)}`);
   assert.equal(result.data.sessions.length, 1);
   assert.equal(result.data.sessions[0].answers_correct, chapter12.length);

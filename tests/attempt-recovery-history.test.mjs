@@ -142,7 +142,8 @@ test('history is private, omits answers, and is hidden while an attempt is activ
     f.seed('a');f.seed('b',{user:'bob'});
     await f.post('finalize',{attemptId:'a'});await f.post('finalize',{attemptId:'b'},'bob');
     const result=await f.get('history');assert.equal(result.status,200);assert.deepEqual(result.data.attempts.map(x=>x.id),['a']);
-    assert.deepEqual(Object.keys(result.data.attempts[0]).sort(),['book','chapter','completedAt','id','score','total']);
+    assert.deepEqual(Object.keys(result.data.attempts[0]).sort(),['book','chapter','completedAt','id','mode','score','total']);
+    assert.equal(result.data.attempts[0].mode,'personal');
     assert.deepEqual((await f.get('history','','bob')).data.attempts.map(x=>x.id),['b']);
     assert.equal((await f.get('history','','')).status,401);assert.equal((await f.get('history','','agent')).status,401);
     f.seed('pending');assert.deepEqual((await f.get('history')).data.pending.map(x=>x.id),['pending']);

@@ -24,9 +24,9 @@ const COPY = {
 export function workspaceCopy(lang) { return COPY[lang] || COPY.uk; }
 
 const HISTORY = {
-  uk: { title:'Історія спроб', login:'Увійдіть, щоб бачити збережену історію спроб на інших пристроях.', empty:'Завершених спроб поки немає.', locked:'Історія прихована під час активної спроби.', error:'Не вдалося завантажити історію спроб.', retry:'Спробувати ще раз', details:'Переглянути результат', reread:'Перечитати й повторити', limit:'Показано останні 100 завершених спроб.', score:'Правильних відповідей', pending:'Є відповідь, збереження результату якої потрібно завершити.', resume:'Завершити збереження результату' },
-  ru: { title:'История попыток', login:'Войдите, чтобы видеть сохранённую историю попыток на других устройствах.', empty:'Завершённых попыток пока нет.', locked:'История скрыта во время активной попытки.', error:'Не удалось загрузить историю попыток.', retry:'Попробовать снова', details:'Посмотреть результат', reread:'Перечитать и повторить', limit:'Показаны последние 100 завершённых попыток.', score:'Правильных ответов', pending:'Для сохранённого ответа нужно завершить запись результата.', resume:'Завершить сохранение результата' },
-  en: { title:'Attempt history', login:'Sign in to see saved attempt history on other devices.', empty:'There are no completed attempts yet.', locked:'History is hidden during an active attempt.', error:'Could not load attempt history.', retry:'Try again', details:'View result', reread:'Read and try again', limit:'Showing the latest 100 completed attempts.', score:'Correct answers', pending:'An answer was saved, but its result still needs to be finalized.', resume:'Finish saving the result' },
+  uk: { title:'Історія спроб', login:'Увійдіть, щоб бачити збережену історію спроб на інших пристроях.', empty:'Завершених спроб поки немає.', locked:'Історія прихована під час активної спроби.', error:'Не вдалося завантажити історію спроб.', retry:'Спробувати ще раз', details:'Переглянути результат', reread:'Перечитати й повторити', limit:'Показано останні 100 завершених спроб.', score:'Правильних відповідей', pending:'Є відповідь, збереження результату якої потрібно завершити.', resume:'Завершити збереження результату', personal:'Особиста спроба', group:'Групова спроба' },
+  ru: { title:'История попыток', login:'Войдите, чтобы видеть сохранённую историю попыток на других устройствах.', empty:'Завершённых попыток пока нет.', locked:'История скрыта во время активной попытки.', error:'Не удалось загрузить историю попыток.', retry:'Попробовать снова', details:'Посмотреть результат', reread:'Перечитать и повторить', limit:'Показаны последние 100 завершённых попыток.', score:'Правильных ответов', pending:'Для сохранённого ответа нужно завершить запись результата.', resume:'Завершить сохранение результата', personal:'Личная попытка', group:'Групповая попытка' },
+  en: { title:'Attempt history', login:'Sign in to see saved attempt history on other devices.', empty:'There are no completed attempts yet.', locked:'History is hidden during an active attempt.', error:'Could not load attempt history.', retry:'Try again', details:'View result', reread:'Read and try again', limit:'Showing the latest 100 completed attempts.', score:'Correct answers', pending:'An answer was saved, but its result still needs to be finalized.', resume:'Finish saving the result', personal:'Personal attempt', group:'Group attempt' },
 };
 
 export function missionHistoryMarkup(history, lang, esc) {
@@ -36,9 +36,40 @@ export function missionHistoryMarkup(history, lang, esc) {
   else if(history.error) content=`<p role="status">${w.error}</p><button class="button" id="retry-mission-history">${w.retry}</button>`;
   else if(history.locked) content=`<p>${w.locked}</p>`;
   else if(!history.attempts?.length) content=`<p>${w.empty}</p>`;
-  else content=`<p>${w.limit}</p><ol>${history.attempts.map(item=>`<li><p>${esc(item.book)} ${Number(item.chapter)} — ${w.score}: ${Number(item.score)} / ${Number(item.total)}; ${esc(item.completedAt || '')} UTC</p><div class="action-row"><a class="button" href="/mission/attempt/${encodeURIComponent(item.id)}">${w.details}: ${esc(item.book)} ${Number(item.chapter)} — ${esc(item.completedAt || '')} UTC</a>${Number(item.score)<Number(item.total)?`<a class="button" href="/reader/${encodeURIComponent(item.book)}/${Number(item.chapter)}">${w.reread}: ${esc(item.book)} ${Number(item.chapter)}</a>`:''}</div></li>`).join('')}</ol>`;
+  else content=`<p>${w.limit}</p><ol>${history.attempts.map(item=>`<li><p>${esc(item.book)} ${Number(item.chapter)} — ${item.mode==='group'?w.group:w.personal}; ${w.score}: ${Number(item.score)} / ${Number(item.total)}; ${esc(item.completedAt || '')} UTC</p><div class="action-row"><a class="button" href="/mission/attempt/${encodeURIComponent(item.id)}">${w.details}: ${esc(item.book)} ${Number(item.chapter)} — ${esc(item.completedAt || '')} UTC</a>${Number(item.score)<Number(item.total)?`<a class="button" href="/reader/${encodeURIComponent(item.book)}/${Number(item.chapter)}">${w.reread}: ${esc(item.book)} ${Number(item.chapter)}</a>`:''}</div></li>`).join('')}</ol>`;
   const pending=!history.guest&&!history.error&&!history.locked&&history.pending?.length?`<p>${w.pending}</p><ul>${history.pending.map(item=>`<li><a class="button" href="/mission/attempt/${encodeURIComponent(item.id)}">${w.resume}: ${esc(item.book)} ${Number(item.chapter)} — ${esc(item.startedAt || '')} UTC</a></li>`).join('')}</ul>`:'';
   return `<section class="card resume-card"><h2>${w.title}</h2>${pending}${content}</section>`;
+}
+
+// A small, deterministic reading suggestion, not an estimate of mastery.
+// History is supplied newest-started-first by the server and capped at 100.
+export function reviewSuggestions(attempts, now=new Date()) {
+  if(!Array.isArray(attempts)||!(now instanceof Date)||!Number.isFinite(now.getTime()))return [];
+  const passages=new Map(),invalid=new Set(),intervals=[1,3,7,14];
+  for(const item of [...attempts].reverse()) {
+    if(item?.mode!=='personal'||typeof item.book!=='string'||!/^([1-3])?[A-Z]{2,3}$/.test(item.book)||!Number.isInteger(item.chapter)||item.chapter<1||item.chapter>151)continue;
+    const key=`${item.book}:${item.chapter}`;
+    if(!Number.isInteger(item.score)||!Number.isInteger(item.total)||item.total<1||item.score<0||item.score>item.total||typeof item.completedAt!=='string'||!/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/.test(item.completedAt)) {invalid.add(key);continue;}
+    const completed=new Date(item.completedAt.replace(' ','T')+'Z');
+    if(!Number.isFinite(completed.getTime())||completed.toISOString().slice(0,10)!==item.completedAt.slice(0,10)){invalid.add(key);continue;}
+    const previous=passages.get(key),streak=item.score===item.total?(previous?.streak||0)+1:0;
+    const interval=intervals[Math.max(0,Math.min(streak-1,intervals.length-1))];
+    const dueAt=new Date(Date.parse(item.completedAt.slice(0,10)+'T00:00:00Z')+interval*86400000).toISOString().slice(0,10);
+    passages.set(key,{book:item.book,chapter:item.chapter,streak,dueAt});
+  }
+  const today=now.toISOString().slice(0,10);
+  return [...passages.entries()].filter(([key])=>!invalid.has(key)).map(([,item])=>({...item,due:item.dueAt<=today})).sort((a,b)=>a.dueAt<b.dueAt?-1:a.dueAt>b.dueAt?1:a.book<b.book?-1:a.book>b.book?1:a.chapter-b.chapter);
+}
+
+const REVIEW_COPY={
+  uk:{title:'Пропозиції для повторення',description:'На основі останніх 100 завершених спроб. Враховуються лише особисті спроби; це нагадування, а не оцінка засвоєння.',empty:'Завершіть особисту спробу, щоб отримати пропозиції.',due:'Можна повторити зараз',later:'Заплановано з',open:'Перечитати главу'},
+  ru:{title:'Предложения для повторения',description:'На основе последних 100 завершённых попыток. Учитываются только личные попытки; это напоминание, а не оценка усвоения.',empty:'Завершите личную попытку, чтобы получить предложения.',due:'Можно повторить сейчас',later:'Запланировано с',open:'Перечитать главу'},
+  en:{title:'Suggested review',description:'Based on the latest 100 completed attempts. Only personal attempts count; these are reminders, not a measure of mastery.',empty:'Complete a personal attempt to receive suggestions.',due:'Ready to review',later:'Suggested from',open:'Read the chapter again'},
+};
+export function reviewScheduleMarkup(history,lang,esc,now=new Date()) {
+  if(history.guest||history.error||history.locked)return '';
+  const w=REVIEW_COPY[lang]||REVIEW_COPY.uk,suggestions=reviewSuggestions(history.attempts,now);
+  return `<section class="card resume-card"><h2>${w.title}</h2><p>${w.description}</p>${suggestions.length?`<ol>${suggestions.map(item=>`<li><p>${esc(item.book)} ${item.chapter} — ${item.due?w.due:w.later} <time datetime="${item.dueAt}">${item.dueAt}</time> UTC</p><a class="button" href="/reader/${encodeURIComponent(item.book)}/${item.chapter}">${w.open}: ${esc(item.book)} ${item.chapter}</a></li>`).join('')}</ol>`:`<p>${w.empty}</p>`}</section>`;
 }
 
 const EDITION_ABOUT = {
@@ -91,7 +122,7 @@ export async function renderWorkspace(name,c) {
     const taskCount=Number(mission.taskCount||0);
     let history={guest:true};
     if(state.user) try { history=await request('/api/attempts?action=history'); } catch { history={error:true}; }
-    shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${w.progress}</h1></div><p>${w.progressLead}</p></div><div class="card-grid"><article class="card progress-stat"><strong>${p.correct.length} / ${taskCount}</strong><p>${w.tasks}</p></article><article class="card progress-stat"><strong>${read.length}</strong><p>${w.chapters}</p></article><article class="card progress-stat"><strong>${p.complete?w.finished:p.index?w.inProgress:w.notStarted}</strong><p>${w.status}</p></article></div><section class="card resume-card"><h2>${esc((mission.title?.[state.lang]||t("missionTitle")))}</h2><progress aria-label="${w.tasks}" max="${taskCount||1}" value="${p.correct.length}"></progress><div class="action-row"><a class="button primary" href="/mission/abraham">${w.continue}</a><a class="button" href="/groups">${t('myGroups')}</a></div></section>${missionHistoryMarkup(history,state.lang,esc)}<section class="card resume-card"><h2>${w.readingHistory}</h2>${read.length?`<div class="reading-links">${read.slice().reverse().map(r=>`<a class="button" href="/reader/${encodeURIComponent(r.book)}/${Number(r.chapter)}">${esc(r.title)} ${Number(r.chapter)}</a>`).join('')}</div>`:`<p>${w.nothingRead}</p>`}</section>`);
+    shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${w.progress}</h1></div><p>${w.progressLead}</p></div><div class="card-grid"><article class="card progress-stat"><strong>${p.correct.length} / ${taskCount}</strong><p>${w.tasks}</p></article><article class="card progress-stat"><strong>${read.length}</strong><p>${w.chapters}</p></article><article class="card progress-stat"><strong>${p.complete?w.finished:p.index?w.inProgress:w.notStarted}</strong><p>${w.status}</p></article></div><section class="card resume-card"><h2>${esc((mission.title?.[state.lang]||t("missionTitle")))}</h2><progress aria-label="${w.tasks}" max="${taskCount||1}" value="${p.correct.length}"></progress><div class="action-row"><a class="button primary" href="/mission/abraham">${w.continue}</a><a class="button" href="/groups">${t('myGroups')}</a></div></section>${reviewScheduleMarkup(history,state.lang,esc)}${missionHistoryMarkup(history,state.lang,esc)}<section class="card resume-card"><h2>${w.readingHistory}</h2>${read.length?`<div class="reading-links">${read.slice().reverse().map(r=>`<a class="button" href="/reader/${encodeURIComponent(r.book)}/${Number(r.chapter)}">${esc(r.title)} ${Number(r.chapter)}</a>`).join('')}</div>`:`<p>${w.nothingRead}</p>`}</section>`);
     document.querySelector('#retry-mission-history')?.addEventListener('click',()=>renderWorkspace('progress',c));
     return;
   }

@@ -170,12 +170,12 @@ export async function GET(request: Request) {
     try {
       const [active, history, pending] = await env.DB.batch([
         env.DB.prepare("SELECT id FROM mission_attempts WHERE actor_id=? AND status='active' AND expires_at>CURRENT_TIMESTAMP LIMIT 1").bind(currentActor.id),
-        env.DB.prepare("SELECT id,book_id,chapter,score,total,completed_at FROM mission_attempts WHERE actor_id=? AND status='completed' ORDER BY completed_at DESC,id DESC LIMIT 100").bind(currentActor.id),
+        env.DB.prepare("SELECT id,book_id,chapter,group_id,score,total,completed_at FROM mission_attempts WHERE actor_id=? AND status='completed' ORDER BY rowid DESC LIMIT 100").bind(currentActor.id),
         env.DB.prepare("SELECT id,book_id,chapter,started_at FROM mission_attempts WHERE actor_id=? AND status='grading' ORDER BY started_at DESC,id DESC LIMIT 20").bind(currentActor.id),
       ]);
       if (!active.success || !history.success || !pending.success || !Array.isArray(active.results) || !Array.isArray(history.results) || !Array.isArray(pending.results)) return json({ error: "database_unavailable" }, 503);
       if (active.results.length) return json({ locked: true, attempts: [] });
-      return json({ attempts: (history.results as Array<Record<string, unknown>>).map(row => ({ id: row.id, book: row.book_id, chapter: row.chapter, score: row.score, total: row.total, completedAt: row.completed_at })), pending: (pending.results as Array<Record<string, unknown>>).map(row => ({id:row.id,book:row.book_id,chapter:row.chapter,startedAt:row.started_at})) });
+      return json({ attempts: (history.results as Array<Record<string, unknown>>).map(row => ({ id: row.id, book: row.book_id, chapter: row.chapter, mode: row.group_id ? "group" : "personal", score: row.score, total: row.total, completedAt: row.completed_at })), pending: (pending.results as Array<Record<string, unknown>>).map(row => ({id:row.id,book:row.book_id,chapter:row.chapter,startedAt:row.started_at})) });
     } catch { return json({ error: "database_unavailable" }, 503); }
   }
   const attemptId = clean(url.searchParams.get("attemptId"), 80);

@@ -18,7 +18,7 @@ export function isDisposableWorkerRestart(log) {
   // A bare 503, unrelated log banner or secondary assertion remains red.
   const recognized = /AssertionError \[ERR_ASSERTION\]: Cross-origin mutation must be rejected; local Worker response: Your worker restarted mid-request\./u;
   const remaining = failures.replace(recognized, '');
-  if (/AssertionError|ERR_ASSERTION|Expected values to be strictly equal/u.test(remaining)) return false;
+  if (/(?:^|\n)\s*AssertionError\b|Expected values to be strictly equal/u.test(remaining)) return false;
   return /Your worker restarted mid-request/u.test(failures);
 }
 

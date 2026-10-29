@@ -1,0 +1,11 @@
+# SA-EXT-04 — facilitator roles and invitation replacement
+
+Owners can promote an existing ordinary member to facilitator and demote a facilitator back to member. Facilitators can record meetings and take group missions. A role edit includes the expected previous role, so an older page cannot silently overwrite a concurrent change. The owner role is changed only by the separate ownership-transfer operation. Every role mutation checks both the authoritative group owner and owner membership in SQL.
+
+Demotion consumes group reading receipts and invalidates active group attempts within the same transaction as the role change. Completed personal results and recoverable grading attempts remain; existing finalization guards prevent recording a group result without facilitator authority. Membership and private discussion access remain. Reading receipts and mission starts now recheck facilitator authority at the write itself. Marathon activation also rechecks authoritative ownership at mutation time.
+
+Owners can replace the invitation code after confirmation. Newly created and replaced codes use a full random UUID without separators (32 hexadecimal characters), rather than its former eight-character prefix. Existing eight-character codes remain accepted until replaced. The join form accepts both lengths. Replacement uses the expected current code to reject stale double submissions. It does not remove current members; a join already in flight rechecks the code in its membership INSERT. Codes remain available to existing group members, who may share them: this is a shared invitation model, not an approval queue or a ban mechanism.
+
+Tests execute real handlers against the full migrated SQLite schema, including revoked permissions between lookup and mutation, concurrent role edits, injected transaction rollback, old-code rejection, legacy-code compatibility and unchanged personal results. The disposable local Worker integration additionally performs promote/record/demote/refuse, rotate/leave/old-code-reject/new-code-join with two accounts.
+
+No new language, migration, notification, release or production deployment is introduced. Physical browser/NVDA acceptance remains outstanding. Group settings editing, marathon scheduling acceptance and broader section work are not claimed complete by this change.

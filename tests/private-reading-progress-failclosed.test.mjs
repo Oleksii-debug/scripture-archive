@@ -101,3 +101,35 @@ test("SA-EXT-01: missing reading record is legitimately empty", async () => {
   assert.equal(outcome.status, 200);
   assert.deepEqual(Array.from(outcome.data.reading), []);
 });
+
+test("SA-EXT-02: corrupt saved mission evidence never becomes a false zero-progress result", async () => {
+  for(const corrupted of [
+    "not-json",
+    "{}",
+    "null",
+    JSON.stringify({details:{}}),
+    JSON.stringify({details:[null]}),
+    JSON.stringify({details:[{taskId:"T-1"}]}),
+    JSON.stringify({details:[{taskId:"T-1",correct:"true"}]}),
+  ]) {
+    const api=worker({all:async()=>({success:true,results:[{data:corrupted}]})});
+    const outcome=await read(api,"progress");
+    assert.equal(outcome.status,503,"failed saved row: "+corrupted);
+    assert.equal(outcome.data.error,"progress_state_unavailable");
+    assert.equal("progress" in outcome.data,false);
+    assert.match(outcome.cacheControl,/no-store/);
+  }
+});
+
+test("SA-EXT-02: valid persisted mission result remains readable after integrity validation",async()=>{
+  const api=worker({all:async()=>({success:true,results:[
+    {data:JSON.stringify({score:1,total:2,details:[
+      {taskId:"T-1",correct:true},{taskId:"T-2",correct:false}
+    ]})},
+  ]})});
+  const outcome=await read(api,"progress");
+  assert.equal(outcome.status,200);
+  assert.equal(outcome.data.progress.index,2);
+  assert.equal(outcome.data.progress.complete,true);
+  assert.deepEqual(Array.from(outcome.data.progress.correct),["T-1"]);
+});

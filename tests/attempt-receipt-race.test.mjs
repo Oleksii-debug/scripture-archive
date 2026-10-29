@@ -54,3 +54,24 @@ test('chapter opening and start serialize safely in either order across contexts
     } finally { db.close(); }
   }
 });
+
+test('a failed receipt consumption rolls back the entire start transaction', () => {
+  const source = readFileSync(new URL('../app/api/attempts/route.ts', import.meta.url), 'utf8');
+  const block = source.slice(source.indexOf('const started = await env.DB.batch(['), source.indexOf('if (!started[0].meta.changes)'));
+  const sql = [...block.matchAll(/env\.DB\.prepare\("([^"]+)"\)/g)].map(m => m[1]);
+  const db = new DatabaseSync(':memory:');
+  try {
+    db.exec(`CREATE TABLE chapter_read_receipts (id TEXT PRIMARY KEY, actor_id TEXT, consumed_at TEXT);
+      CREATE TABLE mission_attempts (id TEXT PRIMARY KEY, actor_id TEXT, mission_id TEXT, book_id TEXT, chapter INTEGER, group_id TEXT, locale TEXT, task_limit INTEGER, expires_at TEXT, status TEXT DEFAULT 'active', invalidated_at TEXT, invalidation_reason TEXT);
+      INSERT INTO chapter_read_receipts VALUES ('receipt','actor',NULL);
+      INSERT INTO mission_attempts (id,actor_id,status) VALUES ('existing','actor','active');
+      CREATE TRIGGER fail_consumption BEFORE UPDATE ON chapter_read_receipts BEGIN SELECT RAISE(ABORT,'test failure'); END;`);
+    db.exec('BEGIN');
+    db.prepare(sql[0]).run('new','actor','mission','GEN',12,null,'en',1,'receipt','actor');
+    db.prepare(sql[1]).run('actor','new','new');
+    assert.throws(() => db.prepare(sql[2]).run('receipt','new'), /test failure/);
+    db.exec('ROLLBACK');
+    assert.deepEqual(db.prepare('SELECT id,status FROM mission_attempts').all().map(row => ({...row})), [{id:'existing',status:'active'}]);
+    assert.equal(db.prepare('SELECT consumed_at FROM chapter_read_receipts').get().consumed_at,null);
+  } finally { db.close(); }
+});

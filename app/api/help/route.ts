@@ -206,7 +206,15 @@ export async function POST(request: Request) {
       (id,request_id,filename,content_type,size_bytes,content_base64)
       VALUES (?,?,?,?,?,?)`)
     .bind(file.id, requestId, file.filename, file.contentType, file.size, file.content));
-  await env.DB.batch(statements);
+  // Do not send or acknowledge an email for a request that D1 did not commit.
+  // The batch must have one successful result for the request and each attachment.
+  try {
+    const saved = await env.DB.batch(statements);
+    if (!Array.isArray(saved) || saved.length !== statements.length || saved.some(result => result?.success !== true))
+      return json({ error: "support_save_failed" }, 503);
+  } catch {
+    return json({ error: "support_save_failed" }, 503);
+  }
 
   const delivery = await sendSupportRequestEmail({
     requestId,

@@ -82,3 +82,11 @@ test('ordinary success runs only once',async()=>{
   assert.deepEqual(result,{attempts:1,recovered:false});
   assert.equal(runs,1);
 });
+
+// Node includes the standard ERR_ASSERTION code after a recognized custom
+// failure message; that metadata alone is not an independent test failure.
+test('standard Node assertion metadata does not defeat an explicitly proven proxy restart',()=>{
+  const actual=deniedOriginRestart+"\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: 503,\n    expected: 403,\n    operator: 'strictEqual'";
+  assert.equal(isDisposableWorkerRestart(actual),true);
+  assert.equal(isDisposableWorkerRestart(actual+"\n  AssertionError: a second, unrelated failure"),false);
+});

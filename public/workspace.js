@@ -1,4 +1,5 @@
 import { reviewText, submissionForm, historyMarkup, queueMarkup, auditMarkup, attachReviewControls, renderPublicMaterials, loadReviewData, editorRolesMarkup, attachEditorRoles } from './material-review.js';
+import { dossierMarkup } from './scripture-dossiers.js';
 
 const COPY = {
   uk: {
@@ -131,7 +132,9 @@ export async function renderWorkspace(name,c) {
     return;
   }
   if(name==='dossiers') {
-    shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${w.dossiers}</h1></div><p>${w.dossierLead}</p></div><div class="dossier-layout"><aside class="card dossier-index"><span class="status live">${t('available')}</span><h2>${w.dossierTitle}</h2><p>Буття / Genesis 12, 15</p></aside><article class="card dossier-article"><h2>${w.dossierTitle}</h2><p class="lead">${w.dossierText}</p><div class="action-row"><a class="button" href="/reader/GEN/12">${w.read} · 12</a><a class="button" href="/reader/GEN/15">${w.read} · 15</a></div><h3>${w.guiding}</h3><ol>${w.dossierQuestions.map(q=>`<li>${q}</li>`).join('')}</ol><a class="button primary" href="/mission/abraham">${w.mission}</a></article></div>`);
+    const catalog=await c.getCatalog();
+    const selectedId=new URLSearchParams(globalThis.location?.search || '').get('id');
+    shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${esc(w.dossiers)}</h1></div><p>${esc(w.dossierLead)}</p></div>${dossierMarkup(catalog,state.lang,selectedId,esc)}`);
     return;
   }
   if(name==='live') {

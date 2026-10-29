@@ -1,8 +1,7 @@
 import { env } from "cloudflare:workers";
-import { authenticateRequest, sameOrigin } from "../../../lib/auth";
+import { authenticateRequest, isVerifiedOwner, sameOrigin } from "../../../lib/auth";
 
 export const dynamic = "force-dynamic";
-const OWNER_EMAIL = "dordiaioleksii1@gmail.com";
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { "Cache-Control": "private, no-store" } });
 const validId = (v: unknown): v is string => typeof v === "string" && v.length > 0 && v.length <= 100;
 type Snapshot = { title: string; locale: string; data: { prompt: string; reference: string; options: string[]; answer: string; explanation: string } };
@@ -18,7 +17,7 @@ function readSnapshot(raw: string): Snapshot | null {
   } catch { return null; }
 }
 function owner(identity: Awaited<ReturnType<typeof authenticateRequest>>) {
-  return Boolean(identity && identity.provider !== "agent" && identity.emailVerified && identity.email.toLowerCase() === OWNER_EMAIL);
+  return isVerifiedOwner(identity);
 }
 async function editor(identity: Awaited<ReturnType<typeof authenticateRequest>>) {
   if (!identity || identity.provider === "agent" || !identity.emailVerified) return false;

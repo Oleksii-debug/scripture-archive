@@ -262,16 +262,20 @@ test('reader chapter hash and saved checkpoint normalize to server-safe integers
   const readerAt = source.indexOf('async function renderReader(parts) {');
   const groupAt = source.indexOf('  const groupId', readerAt);
   assert.ok(readerAt >= 0 && groupAt > readerAt, 'canonical reader boundaries');
-  const chapterAssignment = source.slice(readerAt, groupAt).match(/  const chapter = Math\.min\([\s\S]*?\n  \);/);
+  const helperAt = source.indexOf('function readerChapterNumber(');
+  const helperEnd = source.indexOf('\nasync function renderReader(', helperAt);
+  assert.ok(helperAt >= 0 && helperEnd > helperAt, 'canonical production chapter validator');
+  const chapterAssignment = source.slice(readerAt, groupAt).match(/  const chapter = readerChapterNumber\(parts\[2\] \|\| state\.reader\.chapter \|\| 1, meta\.chapters\);/);
   assert.ok(chapterAssignment, 'canonical renderReader chapter selection');
-  const calculate = vm.runInNewContext('(parts, state, meta) => { ' + chapterAssignment[0] + '; return chapter; }');
+  const calculate = vm.runInNewContext(source.slice(helperAt, helperEnd) + '\n(parts, state, meta) => { ' + chapterAssignment[0] + '; return chapter; }');
   const scenarios = [
-    { hash: '2.9', saved: 12, expected: 2 },
-    { hash: '', saved: 3.4, expected: 3 },
+    { hash: '2.9', saved: 12, expected: 1 },
+    { hash: '', saved: 3.4, expected: 1 },
     { hash: '0.9', saved: 12, expected: 1 },
-    { hash: '999.4', saved: 12, expected: 50 },
+    { hash: '999.4', saved: 12, expected: 1 },
     { hash: 'not-a-number', saved: 12, expected: 1 },
     { hash: '4', saved: 12, expected: 4 },
+    { hash: '999', saved: 12, expected: 50 },
   ];
   for (const lang of ['uk','ru','en'])
     for (const { hash, saved, expected } of scenarios) {

@@ -91,7 +91,8 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const roleAction = (action, principal = ownerCookie, origin = base) => fetch(`${base}/api/editor-roles`, {method:'POST',headers:{Origin:origin,Cookie:principal,'Content-Type':'application/json'},body:JSON.stringify({action,userId:ownAccount.user.id})});
   assert.equal((await roleAction('grant',cookie)).status,403);
   assert.equal((await roleAction('grant',ownerCookie,'https://attacker.invalid')).status,403);
-  assert.equal((await roleAction('grant')).status,200);
+  const emailGrant = await fetch(`${base}/api/editor-roles`,{method:'POST',headers:{Origin:base,Cookie:ownerCookie,'Content-Type':'application/json'},body:JSON.stringify({action:'grant',email:ownAccount.user.email.toUpperCase()})});
+  assert.equal(emailGrant.status,200);
   assert.equal((await (await fetch(`${base}/api/editor-roles?view=me`,{headers:{Cookie:cookie}})).json()).editor,true);
   assert.equal((await fetch(`${base}/api/material-review?view=queue`,{headers:{Cookie:cookie}})).status,200);
   assert.equal((await roleAction('revoke')).status,200);

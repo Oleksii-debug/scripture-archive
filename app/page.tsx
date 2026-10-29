@@ -5,7 +5,7 @@ import ScriptLoader from "./script-loader";
 export default function Home() {
   return (
     <>
-      <a className="skip-link" href="#main">Skip to content</a>
+      <a className="skip-link" href="#main" data-i18n="skipContent">Перейти до основного вмісту</a>
       <header className="site-header">
         <a className="brand" href="/" aria-label="Scripture Archive — головна / главная / home">
           <img className="brand-symbol" src="/scripture-archive-logo.svg" alt="" width="54" height="54" />
@@ -29,7 +29,7 @@ export default function Home() {
         </nav>
         <div className="header-tools">
           <label className="sr-only" htmlFor="language" data-i18n="language">Мова</label>
-          <select id="language" aria-label="Language" defaultValue="uk">
+          <select id="language" defaultValue="uk">
             <option value="uk">Українська</option><option value="ru">Русский</option><option value="en">English</option>
           </select>
         </div>

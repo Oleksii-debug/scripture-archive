@@ -56,7 +56,7 @@ test('account deletion clears personal records while preserving other users', as
   // Fail after shared-session redaction to prove the entire batch rolls back.
   failAfter = 11;
   await assert.rejects(exports.POST(request('correct')), /simulated database failure/);
-  assert.deepEqual(db.prepare("SELECT created_by,reflection FROM group_sessions WHERE id='alice-meeting'").get(), {created_by:'alice',reflection:'Alice private reflection'});
+  assert.deepEqual({...db.prepare("SELECT created_by,reflection FROM group_sessions WHERE id='alice-meeting'").get()}, {created_by:'alice',reflection:'Alice private reflection'});
   assert.equal(db.prepare("SELECT count(*) AS n FROM home_group_members WHERE group_id='bob-group'").get().n, 2);
   failAfter = -1;
   assert.equal((await exports.POST(request('correct'))).status, 200);
@@ -70,8 +70,8 @@ test('account deletion clears personal records while preserving other users', as
   assert.equal(db.prepare("SELECT count(*) n FROM support_attachments WHERE request_id='request-alice'").get().n, 0);
   assert.equal(db.prepare("SELECT count(*) n FROM support_attachments WHERE request_id='request-bob'").get().n, 1);
   const shared = db.prepare("SELECT created_by,reflection,answers_correct,answers_total,meeting_date FROM group_sessions WHERE id='alice-meeting'").get();
-  assert.deepEqual(shared, {created_by:'deleted-account',reflection:null,answers_correct:2,answers_total:3,meeting_date:'2026-10-27'});
-  assert.deepEqual(db.prepare("SELECT created_by,reflection FROM group_sessions WHERE id='bob-meeting'").get(), {created_by:'bob',reflection:'Bob authored text'});
+  assert.deepEqual({...shared}, {created_by:'deleted-account',reflection:null,answers_correct:2,answers_total:3,meeting_date:'2026-10-27'});
+  assert.deepEqual({...db.prepare("SELECT created_by,reflection FROM group_sessions WHERE id='bob-meeting'").get()}, {created_by:'bob',reflection:'Bob authored text'});
   assert.equal(db.prepare("SELECT count(*) AS n FROM home_groups WHERE id='bob-group'").get().n, 1);
   assert.equal(db.prepare("SELECT count(*) AS n FROM home_group_members WHERE group_id='bob-group' AND user_id='alice'").get().n, 0);
   assert.equal(db.prepare("SELECT count(*) AS n FROM home_group_members WHERE group_id='bob-group' AND user_id='bob'").get().n, 1);

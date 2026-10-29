@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { access, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { access, cp, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
@@ -8,9 +8,15 @@ import { waitForStableWorker } from "./integration-ready.mjs";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
-const builtConfig = path.join(root, "dist/server/wrangler.json");
-await access(builtConfig).catch(() => { throw Error("Run npm run build before npm run test:integration."); });
+const builtOutput = path.join(root, "dist");
+await access(path.join(builtOutput, "server/wrangler.json")).catch(() => { throw Error("Run npm run build before npm run test:integration."); });
 const temporary = await mkdtemp(path.join(tmpdir(), "scripture-integration-"));
+// Wrangler dev can restart the Worker while watching a mutable build tree.
+// Qualify the exact immutable build snapshot and keep disposable D1 outside it.
+const frozenOutput = path.join(temporary, "frozen-dist");
+try { await cp(builtOutput, frozenOutput, { recursive: true }); }
+catch (error) { await rm(temporary, { recursive: true, force: true }); throw error; }
+const builtConfig = path.join(frozenOutput, "server/wrangler.json");
 const state = path.join(temporary, "state");
 const config = JSON.parse(await readFile(builtConfig, "utf8"));
 const migrationConfig = path.join(temporary, "migrations.json");
@@ -25,6 +31,7 @@ await new Promise(resolve => server.close(resolve));
 const base = `http://127.0.0.1:${port}`;
 const wrangler = ["--import", "./scripts/sites-env.mjs", "./node_modules/wrangler/bin/wrangler.js"];
 const options = { cwd: root, env: { ...process.env, WRANGLER_SEND_METRICS: "false",
+  WRANGLER_CI_DISABLE_CONFIG_WATCHING: "true",
   WRANGLER_REGISTRY_PATH: path.join(temporary,"registry"),
   MINIFLARE_REGISTRY_PATH: path.join(temporary,"miniflare"),
   WRANGLER_LOG_PATH: path.join(temporary,"logs"),

@@ -213,8 +213,9 @@ integration("account, progress, attempts, groups, marathon limit and password re
 
   result = await request("/api/attempts?action=read", { method: "POST", body: { book: "GEN", chapter: 12 } });
   assert.equal(result.response.status, 201, JSON.stringify(result.data));
-  result = await request("/api/attempts?action=start", { method: "POST", body: { missionId: "OT-AB-01", book: "GEN", chapter: 12, locale: "en" } });
-  assert.equal(result.response.status, 201, JSON.stringify(result.data));
+  const attemptStarts = await Promise.all([0, 1].map(() => request("/api/attempts?action=start", { method: "POST", body: { missionId: "OT-AB-01", book: "GEN", chapter: 12, locale: "en" } })));
+  assert.deepEqual(attemptStarts.map(item => item.response.status).sort(), [201, 409]);
+  result = attemptStarts.find(item => item.response.status === 201);
   const attemptId = result.data.attemptId;
   for (const forbidden of ["book", "chapter", "verses", "reference", "correct", "success", "hint", "id"])
     assert.equal(forbidden in result.data.task, false, forbidden);
@@ -246,6 +247,13 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const learningExport = await (await fetch(`${base}/api/reading-export`, { headers: { Cookie: cookie } })).json();
   assert.ok(learningExport.progress.some(item => item.mission.startsWith("OT-AB-01:")));
 
+  result = await request("/api/attempts?action=read", { method: "POST", body: { book: "GEN", chapter: 12 } });
+  assert.equal(result.response.status, 201);
+  result = await request("/api/attempts?action=chapter", { method: "POST", body: { book: "GEN", chapter: 12 } });
+  assert.equal(result.response.status, 200);
+  result = await request("/api/attempts?action=start", { method: "POST", body: { missionId: "OT-AB-01", book: "GEN", chapter: 12, locale: "en" } });
+  assert.equal(result.response.status, 409);
+  assert.equal(result.data.error, "chapter_must_be_read");
   await request("/api/attempts?action=read", { method: "POST", body: { book: "GEN", chapter: 12 } });
   result = await request("/api/attempts?action=start", { method: "POST", body: { missionId: "OT-AB-01", book: "GEN", chapter: 12, locale: "en" } });
   const invalidatedId = result.data.attemptId;

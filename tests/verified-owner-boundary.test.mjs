@@ -49,7 +49,7 @@ test("all owner-only entrypoints use the verified owner predicate", async () => 
   assert.equal((content.match(/!isVerifiedOwner\(identity\)/g) || []).length, 3);
   // Drafts are never published by a direct legacy toggle, even by the owner.
   // Ownership only authorizes the independent editorial review workflow.
-  assert.match(materials, /!isVerifiedOwner\\(identity\\)/);
+  assert.match(materials, /!isVerifiedOwner\(identity\)/);
   assert.match(materials, /editorial_review_required/);
   assert.match(materials, /const visibility = "private"/);
   for (const [path, source] of [

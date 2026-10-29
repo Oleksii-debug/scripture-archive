@@ -38,8 +38,8 @@ function harness(batchResult) {
     };
     throw Error("Unexpected import " + id);
   };
-  const module = { exports: {} };
-  new Function("require", "module", "exports", compiled)(requireFake, module, module.exports);
+  const fixtureModule = { exports: {} };
+  new Function("require", "module", "exports", compiled)(requireFake, fixtureModule, fixtureModule.exports);
   const form = new FormData();
   form.set("email", "private@example.invalid");
   form.set("subject", "Durability test");
@@ -48,7 +48,7 @@ function harness(batchResult) {
   const request = new Request("https://scripture.invalid/api/help", {
     method: "POST", headers: { Origin: "https://scripture.invalid" }, body: form,
   });
-  return { state, response: module.exports.POST(request) };
+  return { state, response: fixtureModule.exports.POST(request) };
 }
 
 for (const mode of ["throws", "missing", "short", "failed"]) {

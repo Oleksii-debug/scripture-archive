@@ -6,21 +6,21 @@ import ts from 'typescript';
 // Execute the actual TypeScript API handler, replacing only Cloudflare/D1/email
 // integrations with disposable local fakes. Never sends a network request.
 const routeFile = new URL('../app/api/help/route.ts', import.meta.url);
-async function fixture() {
+async function fixture({ identity = null } = {}) {
   const source = await readFile(routeFile, 'utf8');
   const transpiled = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
     fileName: 'app/api/help/route.ts', reportDiagnostics: true,
   });
   assert.equal(transpiled.diagnostics?.length || 0, 0, 'real route transpiles');
-  const state = { batches: [], emails: [], reads: 0 };
+  const state = { batches: [], emails: [], reads: 0, failRead: false, throwRead: false };
   const DB = {
     prepare(sql) {
       state.reads += /SELECT/i.test(sql) ? 1 : 0;
       return {
         sql, args: [],
         bind(...args) { this.args = args; return this; },
-        async all() { return { results: [] }; },
+        async all() { if (state.throwRead) throw Error('disposable read outage'); return state.failRead ? { success: false, results: [] } : { success: true, results: [] }; },
         async run() { state.batches.push([{ sql: this.sql, args: this.args }]); return { success: true }; },
       };
     },
@@ -32,7 +32,7 @@ async function fixture() {
   const requireFake = id => {
     if (id === 'cloudflare:workers') return { env: { DB } };
     if (id.endsWith('lib/auth')) return {
-      authenticateRequest: async () => null,
+      authenticateRequest: async () => identity,
       rateLimit: async () => true,
       requestAddress: () => 'synthetic-local-test',
       sameOrigin: request => request.headers.get('origin') === new URL(request.url).origin,
@@ -284,4 +284,45 @@ test('WebP frame with corrupt VP8 start code is refused', async () => {
   assert.deepEqual(await response.json(), { error: 'invalid_attachment' });
   assert.equal(state.batches.length, 0);
   assert.equal(state.emails.length, 0);
+});
+
+test('support inbox is readable only with a verified non-agent owner identity', async () => {
+  const ownerEmail = 'dordiaioleksii1@gmail.com';
+  const identity = (email, emailVerified, provider = 'password') =>
+    ({ userId: 'disposable', email, emailVerified, provider });
+  for (const rejected of [
+    null,
+    identity(ownerEmail, false),
+    identity(ownerEmail, true, 'agent'),
+    identity('other@example.invalid', true),
+    identity('other@example.invalid', false, 'chatgpt'),
+  ]) {
+    const { route, state } = await fixture({ identity: rejected });
+    const response = await route.GET(new Request('https://sa.invalid/api/help'));
+    assert.equal(response.status, 403);
+    assert.equal(state.reads, 0, 'unauthorized identities never query the private inbox');
+    assert.equal((await response.json()).error, 'forbidden');
+    assert.match(response.headers.get('Cache-Control'), /no-store/);
+  }
+  for (const provider of ['password', 'chatgpt']) {
+    const { route, state } = await fixture({ identity: identity(ownerEmail.toUpperCase(), true, provider) });
+    const response = await route.GET(new Request('https://sa.invalid/api/help'));
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { items: [] });
+    assert.equal(state.reads, 1);
+  }
+});
+
+test('verified owner gets an explicit 503, never a success response, when inbox storage fails', async () => {
+  for (const failure of ['failRead', 'throwRead']) {
+    const { route, state } = await fixture({ identity: {
+      userId: 'owner', email: 'dordiaioleksii1@gmail.com', emailVerified: true, provider: 'password',
+    } });
+    state[failure] = true;
+    const response = await route.GET(new Request('https://sa.invalid/api/help'));
+    assert.equal(response.status, 503);
+    assert.equal((await response.json()).error, 'support_unavailable');
+    assert.match(response.headers.get('Cache-Control'), /no-store/);
+    assert.equal(state.reads, 1);
+  }
 });

@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   if (new URL(request.url).searchParams.get("view") === "me") {
     const identity = await authenticateRequest(request);
     if (!identity || identity.provider === "agent" || !identity.emailVerified) return json({editor:false});
-    if (isVerifiedOwner(identity)) return json({editor:true,owner:true});
+    if (Boolean(isVerifiedOwner(identity))) return json({editor:true,owner:true});
     if (identity.provider !== "password") return json({editor:false});
     try {
       const row = await env.DB.prepare("SELECT r.user_id FROM editorial_roles r JOIN accounts a ON a.id=r.user_id WHERE r.user_id=? AND a.deleted_at IS NULL AND a.email_verified_at IS NOT NULL").bind(identity.userId).first();

@@ -65,6 +65,22 @@ test('the dossier catalogue fails closed when edition provenance/metadata cannot
   assert.doesNotMatch(markup,/href="\/reader\//);
   assert.doesNotMatch(markup,/href="\/dossiers\?/);
   assert.equal(validateDossierGraph(null),false);
+  for(const corrupt of [
+    bad=>{bad.books.en='unexpected string';},
+    bad=>{bad.books.ru={};},
+    bad=>{bad.books.uk[0].chapters=0;},
+    bad=>{bad.books.uk[0].title='';},
+    bad=>{bad.books.en.push({...bad.books.en[0]});},
+  ]){
+    const damaged=structuredClone(catalog);
+    corrupt(damaged);
+    assert.equal(validateDossierGraph(damaged),false,'malformed/ambiguous edition catalogue must fail closed');
+    const safeMarkup=dossierMarkup(damaged,'uk','abraham',esc);
+    assert.match(safeMarkup,/role="alert"/);
+    assert.doesNotMatch(safeMarkup,/href="\\/reader\\//);
+    assert.doesNotMatch(safeMarkup,/href="\\/dossiers\\?/);
+  }
+
   const weird=dossierMarkup(catalog,'en','"><script>alert(1)</script>',esc);
   assert.doesNotMatch(weird,/<script>/);
   assert.ok(weird.includes('Abraham'));

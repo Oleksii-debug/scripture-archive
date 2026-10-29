@@ -15,6 +15,7 @@ const I18N = {
     help: "Служба підтримки",
     about: "Про проєкт",
     language: "Мова",
+    skipContent: "Перейти до основного вмісту",
     footerLine: "Читання, доказ і відповідальний висновок.",
     sources: "Джерела й права",
     heroEye: "Міжнародна навчально-дослідницька платформа",
@@ -143,6 +144,7 @@ const I18N = {
     help: "Служба поддержки",
     about: "О проекте",
     language: "Язык",
+    skipContent: "Перейти к основному содержимому",
     footerLine: "Чтение, доказательство и ответственный вывод.",
     sources: "Источники и права",
     heroEye: "Международная учебно-исследовательская платформа",
@@ -271,6 +273,7 @@ const I18N = {
     help: "Help centre",
     about: "About",
     language: "Language",
+    skipContent: "Skip to main content",
     footerLine: "Reading, evidence, and responsible conclusions.",
     sources: "Sources and rights",
     heroEye: "An international learning and research platform",
@@ -3614,12 +3617,17 @@ async function route() {
 }
 
 langSelect.addEventListener("change", () => {
+  const restorePickerFocus = document.activeElement === langSelect;
   state.lang = langSelect.value;
   localStorage.setItem("sa.lang", state.lang);
   state.mission = null;
   setStaticI18n();
   play("nav");
-  route();
+  void route().then(() => {
+    if (restorePickerFocus && document.activeElement === main && document.contains(langSelect)) {
+      langSelect.focus({ preventScroll: true });
+    }
+  });
 });
 document.querySelector("#menu-toggle").addEventListener("click", (e) => {
   const open = nav.classList.toggle("open");

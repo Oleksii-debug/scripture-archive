@@ -13,7 +13,7 @@ export async function GET(request: Request) {
   if (new URL(request.url).searchParams.get("view") === "me") {
     const identity = await authenticateRequest(request);
     if (!identity || identity.provider === "agent" || !identity.emailVerified) return json({editor:false});
-    if (identity.email.toLowerCase() === ownerEmail) return json({editor:true});
+    if (identity.email.toLowerCase() === ownerEmail) return json({editor:true,owner:true});
     if (identity.provider !== "password") return json({editor:false});
     try {
       const row = await env.DB.prepare("SELECT r.user_id FROM editorial_roles r JOIN accounts a ON a.id=r.user_id WHERE r.user_id=? AND a.deleted_at IS NULL AND a.email_verified_at IS NOT NULL").bind(identity.userId).first();
@@ -22,6 +22,11 @@ export async function GET(request: Request) {
   }
   if (!await owner(request)) return json({error:"forbidden"},403);
   try {
+    if (new URL(request.url).searchParams.get("view") === "audit") {
+      const events = await env.DB.prepare("SELECT e.id,e.subject_user_id,e.actor_user_id,e.action,e.created_at,a.email AS subject_email FROM editorial_role_events e LEFT JOIN accounts a ON a.id=e.subject_user_id AND a.deleted_at IS NULL ORDER BY e.id DESC LIMIT 200").all();
+      if (!events.success || !Array.isArray(events.results)) throw Error("read failed");
+      return json({events:events.results});
+    }
     const rows = await env.DB.prepare("SELECT a.id,a.email,r.granted_at FROM editorial_roles r JOIN accounts a ON a.id=r.user_id WHERE a.deleted_at IS NULL ORDER BY a.email").all();
     if (!rows.success || !Array.isArray(rows.results)) throw Error("read failed");
     return json({editors:rows.results});
@@ -44,8 +49,11 @@ export async function POST(request: Request) {
         ON CONFLICT(user_id) DO NOTHING RETURNING user_id`).bind(id.userId,userId,email,email,ownerEmail).first();
       return row ? json({ok:true}) : json({error:"not_eligible_or_granted"},409);
     }
-    const result = await env.DB.prepare("DELETE FROM editorial_roles WHERE user_id=?").bind(userId).run();
-    if (!result.success) throw Error("write failed");
-    return result.meta.changes ? json({ok:true}) : json({error:"not_found"},404);
+    const results = await env.DB.batch([
+      env.DB.prepare("UPDATE editorial_roles SET revoked_by=? WHERE user_id=?").bind(id.userId,userId),
+      env.DB.prepare("DELETE FROM editorial_roles WHERE user_id=? AND revoked_by=?").bind(userId,id.userId),
+    ]);
+    if (results.some(result => !result.success)) throw Error("write failed");
+    return results[1].meta.changes ? json({ok:true}) : json({error:"not_found"},404);
   } catch { return json({error:"database_unavailable"},503); }
 }

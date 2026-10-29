@@ -414,6 +414,7 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const lifecycleId = result.data.groupId;
   result = await request(`/api/groups?groupId=${lifecycleId}`);
   const lifecycleInvite = result.data.group.inviteCode;
+  assert.match(lifecycleInvite,/^[A-F0-9]{32}$/);
   async function managerGroup(action, body) {
     return fetch(`${base}/api/groups?action=${action}`, {method:'POST',headers:{Cookie:ownerCookie,Origin:base,'Content-Type':'application/json'},body:JSON.stringify(body)});
   }
@@ -421,6 +422,18 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const memberView = await (await fetch(`${base}/api/groups?groupId=${lifecycleId}`,{headers:{Cookie:ownerCookie}})).json();
   assert.deepEqual(memberView.managementMembers,[]);
   assert.equal((await managerGroup('delete',{groupId:lifecycleId,confirm:true})).status,403);
+  result = await request('/api/groups?action=role',{method:'POST',body:{groupId:lifecycleId,targetUserId:managerMe.user.id,expectedRole:'member',role:'facilitator'}});
+  assert.equal(result.response.status,200);
+  assert.equal((await managerGroup('session',{groupId:lifecycleId,bookId:'GEN',chapter:12,answersTotal:0,answersCorrect:0,meetingDate:'2026-10-28'})).status,200);
+  result = await request('/api/groups?action=role',{method:'POST',body:{groupId:lifecycleId,targetUserId:managerMe.user.id,expectedRole:'facilitator',role:'member'}});
+  assert.equal(result.response.status,200);
+  assert.equal((await managerGroup('session',{groupId:lifecycleId,bookId:'GEN',chapter:12,answersTotal:0,answersCorrect:0,meetingDate:'2026-10-28'})).status,403);
+  result = await request('/api/groups?action=rotate-invite',{method:'POST',body:{groupId:lifecycleId,expectedInviteCode:lifecycleInvite,confirm:true}});
+  assert.equal(result.response.status,200);assert.notEqual(result.data.inviteCode,lifecycleInvite);
+  const replacementInvite=result.data.inviteCode;
+  assert.equal((await managerGroup('leave',{groupId:lifecycleId})).status,200);
+  assert.equal((await managerGroup('join',{inviteCode:lifecycleInvite})).status,404);
+  assert.equal((await managerGroup('join',{inviteCode:replacementInvite})).status,200);
   result = await request('/api/groups?action=leave',{method:'POST',body:{groupId:lifecycleId}});
   assert.equal(result.response.status,409);
   result = await request('/api/groups?action=transfer',{method:'POST',body:{groupId:lifecycleId,targetUserId:managerMe.user.id}});

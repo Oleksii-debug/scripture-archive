@@ -95,6 +95,36 @@ export async function POST(request: Request) {
   if (!body) return Response.json({ error: "invalid_json" }, { status: 400 });
   const action = new URL(request.url).searchParams.get("action") || "create";
 
+  if (action === "rotate-invite") {
+    const groupId=clean(body.groupId,80), previous=clean(body.expectedInviteCode,32);
+    if(!groupId||!previous||body.confirm!==true)return Response.json({error:"confirmation_required"},{status:400});
+    const inviteCode=crypto.randomUUID().replaceAll('-','').toUpperCase();
+    try {
+      const updated=await env.DB!.prepare("UPDATE home_groups SET invite_code=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND invite_code=? AND owner_user_id=? AND EXISTS (SELECT 1 FROM home_group_members WHERE group_id=? AND user_id=? AND role='owner')").bind(inviteCode,groupId,previous,id.userId,groupId,id.userId).run();
+      if(!updated.success)return Response.json({error:"database_unavailable"},{status:503});
+      if(!updated.meta.changes)return Response.json({error:"invite_changed_or_forbidden"},{status:409});
+      return Response.json({ok:true,inviteCode});
+    } catch {return Response.json({error:"database_unavailable"},{status:503});}
+  }
+
+  if (action === "role") {
+    const groupId=clean(body.groupId,80),target=clean(body.targetUserId,80),role=clean(body.role,20),previous=clean(body.expectedRole,20);
+    if(!groupId||!target||target===id.userId||!['member','facilitator'].includes(role)||!['member','facilitator'].includes(previous)||role===previous)return Response.json({error:"invalid_role_change"},{status:400});
+    // Repeat the same authorization and expected-role predicate in every write.
+    // Revocation precedes the role change inside one atomic batch.
+    const permitted="EXISTS (SELECT 1 FROM home_groups g JOIN home_group_members owner ON owner.group_id=g.id AND owner.user_id=g.owner_user_id AND owner.role='owner' JOIN home_group_members target ON target.group_id=g.id WHERE g.id=? AND g.owner_user_id=? AND target.user_id=? AND target.role=? AND target.user_id<>g.owner_user_id)";
+    try {
+      const saved=await env.DB!.batch([
+        env.DB!.prepare("UPDATE chapter_read_receipts SET consumed_at=CURRENT_TIMESTAMP WHERE group_id=? AND actor_id=? AND consumed_at IS NULL AND ?='member' AND "+permitted).bind(groupId,target,role,groupId,id.userId,target,previous),
+        env.DB!.prepare("UPDATE mission_attempts SET status='invalidated',invalidated_at=CURRENT_TIMESTAMP,invalidation_reason='group_role_revoked' WHERE group_id=? AND actor_id=? AND status='active' AND ?='member' AND "+permitted).bind(groupId,target,role,groupId,id.userId,target,previous),
+        env.DB!.prepare("UPDATE home_group_members SET role=? WHERE group_id=? AND user_id=? AND role=? AND "+permitted).bind(role,groupId,target,previous,groupId,id.userId,target,previous),
+      ]);
+      if(!saved.every(item=>item.success))return Response.json({error:"database_unavailable"},{status:503});
+      if(!saved[2].meta.changes)return Response.json({error:"role_changed_or_forbidden"},{status:409});
+      return Response.json({ok:true});
+    } catch {return Response.json({error:"database_unavailable"},{status:503});}
+  }
+
   if (action === "leave") {
     const groupId=clean(body.groupId,80), member=await membership(groupId,id.userId);
     if(!member)return Response.json({error:"not_found"},{status:404});
@@ -150,16 +180,20 @@ export async function POST(request: Request) {
     if (member?.role !== "owner") return forbidden(403);
     const registration = await env.DB!.prepare("SELECT cohort_key,status FROM group_marathon_registrations WHERE group_id=?").bind(groupId).first<{cohort_key:string;status:string}>();
     if (!registration || registration.status !== "ready") return Response.json({error:"cohort_not_ready"},{status:409});
-    await env.DB!.prepare("UPDATE group_marathon_registrations SET status='active',start_date=date('now') WHERE cohort_key=? AND status='ready'").bind(registration.cohort_key).run();
+    const started=await env.DB!.prepare("UPDATE group_marathon_registrations SET status='active',start_date=date('now') WHERE cohort_key=? AND status='ready' AND EXISTS (SELECT 1 FROM home_groups g JOIN home_group_members owner ON owner.group_id=g.id AND owner.user_id=g.owner_user_id AND owner.role='owner' WHERE g.id=? AND g.owner_user_id=?)").bind(registration.cohort_key,groupId,id.userId).run();
+    if(!started.success)return Response.json({error:"database_unavailable"},{status:503});
+    if(!started.meta.changes)return Response.json({error:"cohort_changed_or_forbidden"},{status:409});
     return Response.json({ok:true});
   }
 
   if (action === "join") {
-    const code = clean(body.inviteCode, 12).toUpperCase();
+    const code = clean(body.inviteCode, 33).toUpperCase();
+    if(!/^(?:[A-F0-9]{8}|[A-F0-9]{32})$/.test(code))return Response.json({error:"invalid_invite"},{status:404});
     const group = await env.DB!.prepare("SELECT id FROM home_groups WHERE invite_code=?").bind(code).first<{ id: string }>();
     if (!group) return Response.json({ error: "invalid_invite" }, { status: 404 });
-    await env.DB!.prepare("INSERT OR IGNORE INTO home_group_members (group_id,user_id,display_name,role,public_name,public_activity) VALUES (?,?,?,'member',?,?)")
-      .bind(group.id, id.userId, `${person.first_name} ${person.last_name}`.trim(), body.publicName === true ? 1 : 0, body.publicActivity === true ? 1 : 0).run();
+    await env.DB!.prepare("INSERT OR IGNORE INTO home_group_members (group_id,user_id,display_name,role,public_name,public_activity) SELECT id,?,?,'member',?,? FROM home_groups WHERE id=? AND invite_code=?")
+      .bind(id.userId, `${person.first_name} ${person.last_name}`.trim(), body.publicName === true ? 1 : 0, body.publicActivity === true ? 1 : 0, group.id, code).run();
+    if(!await membership(group.id,id.userId))return Response.json({error:"invalid_invite"},{status:404});
     return Response.json({ ok: true, groupId: group.id });
   }
 
@@ -219,7 +253,7 @@ export async function POST(request: Request) {
   if (!name || !weeklyGoal || weeklyGoal % 2 === 0 || !["flexible", "steady"].includes(catchupMode) || !["public", "private"].includes(visibility) || !["count", "names", "private"].includes(rosterVisibility)) return Response.json({ error: "invalid_group" }, { status: 400 });
   const groupId = crypto.randomUUID();
   const marathonId = crypto.randomUUID();
-  const inviteCode = crypto.randomUUID().replaceAll("-", "").slice(0, 8).toUpperCase();
+  const inviteCode = crypto.randomUUID().replaceAll("-", "").toUpperCase();
   const openCohort=marathonEnabled?await env.DB!.prepare("SELECT cohort_key FROM group_marathon_registrations WHERE weekly_goal=? AND catchup_mode=? AND status IN ('forming','ready') ORDER BY created_at LIMIT 1").bind(weeklyGoal,catchupMode).first<{cohort_key:string}>():null;
   const cohortKey = openCohort?.cohort_key || `abraham-${weeklyGoal}-${catchupMode}-${crypto.randomUUID().slice(0,8)}`;
   const existing = marathonEnabled ? await env.DB!.prepare("SELECT COUNT(*) AS count FROM group_marathon_registrations WHERE cohort_key=?").bind(cohortKey).first<{ count: number }>() : null;

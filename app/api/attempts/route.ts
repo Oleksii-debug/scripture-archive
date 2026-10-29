@@ -218,8 +218,10 @@ export async function POST(request: Request) {
     const book = clean(body.book, 8).toUpperCase(), chapter = Number(body.chapter), groupId = clean(body.groupId, 80);
     if (!tasksFor(book, chapter).length) return json({ error: "mission_chapter_unavailable" }, 404);
     if (groupId && (!currentActor.identity || !await groupFacilitator(groupId, currentActor.identity.userId))) return json({ error: "group_facilitator_required" }, 403);
-    await env.DB.prepare("INSERT INTO chapter_read_receipts (id,actor_id,book_id,chapter,group_id) VALUES (?,?,?,?,?)")
-      .bind(crypto.randomUUID(), currentActor.id, book, chapter, groupId || null).run();
+    const read=await env.DB.prepare("INSERT INTO chapter_read_receipts (id,actor_id,book_id,chapter,group_id) SELECT ?,?,?,?,? WHERE (?='' OR EXISTS (SELECT 1 FROM home_group_members WHERE group_id=? AND user_id=? AND role IN ('owner','facilitator')))")
+      .bind(crypto.randomUUID(), currentActor.id, book, chapter, groupId || null, groupId, groupId, currentActor.id).run();
+    if(!read.success)return json({error:"database_unavailable"},503);
+    if(!read.meta.changes)return json({error:"group_facilitator_required"},403);
     return json({ ok: true }, 201, currentActor.cookie ? { "Set-Cookie": currentActor.cookie } : {});
   }
 
@@ -255,8 +257,8 @@ export async function POST(request: Request) {
     if (!receipt) return json({ error: "chapter_must_be_read" }, 409);
     const id = crypto.randomUUID(), taskLimit = currentActor.guest ? 1 : available.length;
     const started = await env.DB.batch([
-      env.DB.prepare("INSERT INTO mission_attempts (id,actor_id,mission_id,book_id,chapter,group_id,locale,task_limit,expires_at) SELECT ?,?,?,?,?,?,?,?,datetime('now','+2 hours') WHERE EXISTS (SELECT 1 FROM chapter_read_receipts WHERE id=? AND actor_id=? AND consumed_at IS NULL)")
-        .bind(id, currentActor.id, MISSION_ID, book, chapter, groupId || null, selectedLocale, taskLimit, receipt.id, currentActor.id),
+      env.DB.prepare("INSERT INTO mission_attempts (id,actor_id,mission_id,book_id,chapter,group_id,locale,task_limit,expires_at) SELECT ?,?,?,?,?,?,?,?,datetime('now','+2 hours') WHERE EXISTS (SELECT 1 FROM chapter_read_receipts WHERE id=? AND actor_id=? AND consumed_at IS NULL) AND (?='' OR EXISTS (SELECT 1 FROM home_group_members WHERE group_id=? AND user_id=? AND role IN ('owner','facilitator')))")
+        .bind(id, currentActor.id, MISSION_ID, book, chapter, groupId || null, selectedLocale, taskLimit, receipt.id, currentActor.id, groupId, groupId, currentActor.id),
       env.DB.prepare("UPDATE mission_attempts SET status='invalidated',invalidated_at=CURRENT_TIMESTAMP,invalidation_reason='new_attempt' WHERE actor_id=? AND status='active' AND id<>? AND EXISTS (SELECT 1 FROM mission_attempts WHERE id=?)").bind(currentActor.id, id, id),
       env.DB.prepare("UPDATE chapter_read_receipts SET consumed_at=CURRENT_TIMESTAMP WHERE id=? AND EXISTS (SELECT 1 FROM mission_attempts WHERE id=?)").bind(receipt.id, id),
     ]);

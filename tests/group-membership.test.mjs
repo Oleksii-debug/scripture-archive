@@ -12,14 +12,14 @@ function fixture() {
   const dir = new URL('../drizzle/', import.meta.url);
   for (const file of readdirSync(dir).filter(x=>x.endsWith('.sql')).sort()) db.exec(readFileSync(new URL(file,dir),'utf8'));
   for (const user of ['alice','bob','carol','outsider']) db.prepare("INSERT INTO profiles(user_id,email,first_name,last_name,age_range) VALUES(?,?,?,'Reader','adult')").run(user,user+'@example.invalid',user);
-  db.exec(`INSERT INTO home_groups(id,owner_user_id,name,invite_code,visibility,bible_edition) VALUES('g','alice','Group','invite','private','en-web'),('other','alice','Other','other','private','en-web');
+  db.exec(`INSERT INTO home_groups(id,owner_user_id,name,invite_code,visibility,bible_edition) VALUES('g','alice','Group','AABBCCDD','private','en-web'),('other','alice','Other','other','private','en-web');
     INSERT INTO home_group_members(group_id,user_id,display_name,role) VALUES('g','alice','Alice','owner'),('g','bob','Bob','member'),('g','carol','Carol','facilitator'),('other','alice','Alice','owner');
     INSERT INTO group_sessions(id,group_id,created_by,book_id,chapter,meeting_date,reflection) VALUES('s','g','alice','GEN',12,'2026-10-28','private discussion');`);
-  let failure=-1, beforeBatch=null;
+  let failure=-1, beforeBatch=null, beforeRun=null;
   function statement(sql,args=[]) {return {sql,args,
     first:async()=>db.prepare(sql).get(...args)??null,
     all:async()=>({success:true,results:db.prepare(sql).all(...args)}),
-    run:async()=>({success:true,meta:{changes:Number(db.prepare(sql).run(...args).changes)}}),
+    run:async()=>{if(beforeRun){const hook=beforeRun;beforeRun=null;hook();}return {success:true,meta:{changes:Number(db.prepare(sql).run(...args).changes)}};},
   };}
   const D1={prepare(sql){return {...statement(sql),bind:(...args)=>statement(sql,args)};},async batch(statements){
     if(beforeBatch){const hook=beforeBatch;beforeBatch=null;hook();}
@@ -28,21 +28,26 @@ function fixture() {
       const r=db.prepare(s.sql).run(...s.args);out.push({success:true,meta:{changes:Number(r.changes)}});
     }db.exec('COMMIT');return out;}catch(e){db.exec('ROLLBACK');throw e;}
   }};
-  const source=readFileSync(new URL('../app/api/groups/route.ts',import.meta.url),'utf8');
-  const js=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
-  const exports={};vm.runInNewContext(js,{exports,Request,Response,URL,crypto,require(id){
-    if(id==='cloudflare:workers')return {env:{DB:D1}};
-    if(id.endsWith('catalog.json'))return {default:JSON.parse(readFileSync(new URL('../public/data/catalog.json',import.meta.url),'utf8'))};
-    if(id.endsWith('/auth'))return {sameOrigin:r=>r.headers.get('origin')==='https://local.invalid',authenticateRequest:async r=>{const user=r.headers.get('x-user');return user?{userId:user}:null;}};
-    throw Error('unexpected import '+id);
-  }});
+  function loadRoute(name) {
+    const source=readFileSync(new URL(`../app/api/${name}/route.ts`,import.meta.url),'utf8');
+    const js=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+    const exports={};vm.runInNewContext(js,{exports,Request,Response,URL,crypto,require(id){
+      if(id==='cloudflare:workers')return {env:{DB:D1}};
+      if(id.endsWith('catalog.json'))return {default:JSON.parse(readFileSync(new URL('../public/data/catalog.json',import.meta.url),'utf8'))};
+      if(id.endsWith('mission-abraham.json'))return {default:JSON.parse(readFileSync(new URL('../content/mission-abraham.json',import.meta.url),'utf8'))};
+      if(id.endsWith('/auth'))return {sameOrigin:r=>r.headers.get('origin')==='https://local.invalid',authenticateRequest:async r=>{const user=r.headers.get('x-user');return user?{userId:user,emailVerified:true,provider:'password'}:null;}};
+      throw Error('unexpected import '+id);
+    }});return exports;
+  }
+  const exports=loadRoute('groups'),attempts=loadRoute('attempts');
+  async function attempt(action,body={},user='carol') {const r=await attempts.POST(new Request('https://local.invalid/api/attempts?action='+action,{method:'POST',headers:{origin:'https://local.invalid','content-type':'application/json','x-user':user},body:JSON.stringify({missionId:'OT-AB-01',book:'GEN',chapter:12,groupId:'g',locale:'en',...body})}));return {status:r.status,data:await r.json()};}
   async function get(user='alice',groupId='g'){const r=await exports.GET(new Request('https://local.invalid/api/groups?groupId='+groupId,{headers:user?{'x-user':user}:{}}));return {status:r.status,data:await r.json()};}
   async function post(action,body={},user='alice',origin='https://local.invalid') {const r=await exports.POST(new Request('https://local.invalid/api/groups?action='+action,{method:'POST',headers:{origin,'content-type':'application/json',...(user?{'x-user':user}:{})},body:JSON.stringify({groupId:'g',...body})}));return {status:r.status,data:await r.json()};}
   function seedAttempt(id,user,group,status='active') {
     db.prepare("INSERT INTO mission_attempts(id,actor_id,mission_id,book_id,chapter,group_id,locale,task_limit,status,expires_at) VALUES(?,?,'OT-AB-01','GEN',12,?,'en',5,?,datetime('now','+2 hours'))").run(id,user,group,status);
     db.prepare("INSERT INTO chapter_read_receipts(id,actor_id,book_id,chapter,group_id) VALUES(?,?,'GEN',12,?)").run(id,user,group);
   }
-  return {db,get,post,seedAttempt,setFailure:n=>{failure=n;},beforeBatch:fn=>{beforeBatch=fn;}};
+  return {db,get,post,attempt,seedAttempt,beforeRun:fn=>{beforeRun=fn;},setFailure:n=>{failure=n;},beforeBatch:fn=>{beforeBatch=fn;}};
 }
 const owner=f=>f.db.prepare("SELECT owner_user_id FROM home_groups WHERE id='g'").get().owner_user_id;
 const roles=f=>f.db.prepare("SELECT user_id,role FROM home_group_members WHERE group_id='g' ORDER BY user_id").all().map(x=>[x.user_id,x.role]);
@@ -149,4 +154,89 @@ test('membership controls use labelled native inputs and escape member names and
     assert.ok(owner.includes('value="a&quot;"'));assert.ok(owner.includes('&lt;script&gt;'));assert.ok(!owner.includes('<script>'));assert.ok(!owner.includes('value="owner"'));
     assert.ok(owner.includes('<label'));assert.ok(owner.includes('role="status"'));assert.ok(owner.includes('delete-group'));assert.ok(!owner.includes('leave-group'));
   }
+});
+
+test('only an owner can change facilitator roles and stale edits cannot overwrite current roles',async()=>{
+  const f=fixture();try {
+    const promote={targetUserId:'bob',expectedRole:'member',role:'facilitator'};
+    for(const user of ['bob','carol','outsider'])assert.equal((await f.post('role',promote,user)).status,user==='bob'?400:409);
+    assert.equal((await f.post('role',{...promote,role:'owner'})).status,400);
+    assert.equal((await f.post('role',{targetUserId:'alice',expectedRole:'owner',role:'member'})).status,400);
+    const both=await Promise.all([f.post('role',promote),f.post('role',promote)]);
+    assert.deepEqual(both.map(x=>x.status).sort(),[200,409]);
+    assert.equal((await f.get('bob')).data.membership,'facilitator');
+    assert.equal((await f.attempt('read',{},'bob')).status,201);
+    const attempt=await f.attempt('start',{},'bob');assert.equal(attempt.status,201);
+    assert.equal((await f.post('role',{targetUserId:'bob',expectedRole:'facilitator',role:'member'})).status,200);
+    assert.equal((await f.get('bob')).status,200);
+    assert.equal(f.db.prepare('SELECT status FROM mission_attempts WHERE id=?').get(attempt.data.attemptId).status,'invalidated');
+    assert.equal((await f.attempt('read',{},'bob')).status,403);
+  } finally {f.db.close();}
+});
+
+test('demotion revokes only that group activity and rolls back every write on an outage',async()=>{
+  const f=fixture();try {
+    f.seedAttempt('a','carol','g');f.seedAttempt('p','carol',null);f.seedAttempt('c','carol','g','completed');f.seedAttempt('pending','carol','g','grading');
+    const demote={targetUserId:'carol',expectedRole:'facilitator',role:'member'};
+    for(const failure of [1,2]){
+      f.setFailure(failure);assert.equal((await f.post('role',demote)).status,503);
+      assert.equal((await f.get('carol')).data.membership,'facilitator');
+      assert.equal(f.db.prepare("SELECT status FROM mission_attempts WHERE id='a'").get().status,'active');
+      assert.equal(f.db.prepare("SELECT consumed_at FROM chapter_read_receipts WHERE id='a'").get().consumed_at,null);
+    }
+    f.setFailure(-1);assert.equal((await f.post('role',demote)).status,200);
+    for(const [id,status] of [['a','invalidated'],['p','active'],['c','completed'],['pending','grading']])assert.equal(f.db.prepare('SELECT status FROM mission_attempts WHERE id=?').get(id).status,status);
+    assert.ok(f.db.prepare("SELECT consumed_at FROM chapter_read_receipts WHERE id='a'").get().consumed_at);
+    assert.equal(f.db.prepare("SELECT consumed_at FROM chapter_read_receipts WHERE id='p'").get().consumed_at,null);
+  } finally {f.db.close();}
+});
+
+test('facilitator reads and mission starts recheck the role at mutation time',async()=>{
+  const f=fixture();try {
+    f.beforeRun(()=>f.db.exec("UPDATE home_group_members SET role='member' WHERE group_id='g' AND user_id='carol'"));
+    assert.equal((await f.attempt('read')).status,403);
+    assert.equal(f.db.prepare('SELECT count(*) n FROM chapter_read_receipts').get().n,0);
+    f.db.exec("UPDATE home_group_members SET role='facilitator' WHERE group_id='g' AND user_id='carol'");
+    assert.equal((await f.attempt('read')).status,201);
+    f.beforeBatch(()=>f.db.exec("UPDATE home_group_members SET role='member' WHERE group_id='g' AND user_id='carol'"));
+    assert.equal((await f.attempt('start')).status,409);
+    assert.equal(f.db.prepare('SELECT count(*) n FROM mission_attempts').get().n,0);
+  } finally {f.db.close();}
+});
+
+test('rotation requires current ownership and confirmation, preserves members and invalidates the old code',async()=>{
+  const f=fixture();try {
+    const payload={expectedInviteCode:'AABBCCDD',confirm:true};
+    assert.equal((await f.post('rotate-invite',{expectedInviteCode:'AABBCCDD'})).status,400);
+    for(const user of ['bob','carol','outsider'])assert.equal((await f.post('rotate-invite',payload,user)).status,409);
+    const rotated=await f.post('rotate-invite',payload);assert.equal(rotated.status,200);assert.match(rotated.data.inviteCode,/^[A-F0-9]{32}$/);
+    assert.equal((await f.post('rotate-invite',payload)).status,409);
+    assert.equal((await f.get('bob')).status,200);
+    assert.equal((await f.post('join',{inviteCode:'AABBCCDD'},'outsider')).status,404);
+    assert.equal((await f.post('join',{inviteCode:rotated.data.inviteCode+'A'},'outsider')).status,404);
+    assert.equal((await f.post('join',{inviteCode:rotated.data.inviteCode.toLowerCase()},'outsider')).status,200);
+    assert.equal((await f.get('outsider')).data.membership,'member');
+    assert.equal((await f.post('join',{inviteCode:rotated.data.inviteCode},'outsider')).status,200);
+    assert.equal(roles(f).filter(([id])=>id==='outsider').length,1);
+    f.db.exec("DELETE FROM home_group_members WHERE group_id='g' AND user_id='outsider'; UPDATE home_groups SET invite_code='AABBCCDD' WHERE id='g'");
+    assert.equal((await f.post('join',{inviteCode:'AABBCCDD'},'outsider')).status,200,'legacy eight-character codes remain usable until rotated');
+  } finally {f.db.close();}
+});
+
+test('a join already in flight cannot use a code revoked before insertion',async()=>{
+  const f=fixture();try {
+    f.beforeRun(()=>f.db.exec("UPDATE home_groups SET invite_code='11223344' WHERE id='g'"));
+    assert.equal((await f.post('join',{inviteCode:'AABBCCDD'},'outsider')).status,404);
+    assert.equal((await f.get('outsider')).status,404);
+  } finally {f.db.close();}
+});
+
+test('a former owner cannot start a marathon after ownership changed during the request',async()=>{
+  const f=fixture();try {
+    f.db.exec("INSERT INTO group_marathon_registrations(id,group_id,weekly_goal,catchup_mode,cohort_key,status) VALUES('m','g',3,'flexible','cohort','ready')");
+    f.beforeRun(()=>f.db.exec("UPDATE home_groups SET owner_user_id='bob' WHERE id='g'; UPDATE home_group_members SET role=CASE WHEN user_id='bob' THEN 'owner' ELSE 'member' END WHERE group_id='g' AND user_id IN ('alice','bob')"));
+    assert.equal((await f.post('start')).status,409);
+    assert.equal(f.db.prepare("SELECT status FROM group_marathon_registrations WHERE id='m'").get().status,'ready');
+    assert.equal((await f.post('start',{},'bob')).status,200);
+  } finally {f.db.close();}
 });

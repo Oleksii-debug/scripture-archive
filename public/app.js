@@ -2895,7 +2895,7 @@ async function renderGroups() {
     ? `<section class="groups-cta"><h2>${t("createGroup")}</h2><p>${t("signInGroups")}</p><a class="button primary" href="/account">${t("signIn")}</a></section>`
     : !state.user.profileComplete
       ? `<section class="groups-cta"><h2>${t("createGroup")}</h2><p>${t("profileNeeded")}</p><a class="button primary" href="/account">${t("account")}</a></section>`
-      : `<div class="groups-actions"><section class="card group-form-card"><h2>${t("createGroup")}</h2><form id="group-form" class="account-form account-form-grid">${field("name", t("groupName"), "text", 'required maxlength="100"')}${field("church", `${t("churchName")} · ${t("optional")}`)}${field("country", `${t("country")} · ${t("optional")}`)}${field("city", `${t("city")} · ${t("optional")}`)}<label class="account-field full"><span>${t("description")} · ${t("optional")}</span><textarea name="description" rows="3" maxlength="600"></textarea></label><label class="account-field"><span>${t("visibility")}</span><select name="visibility"><option value="public">${t("publicGroup")}</option><option value="private">${t("privateGroup")}</option></select></label><label class="account-field"><span>${t("roster")}</span><select name="rosterVisibility"><option value="count">${t("countOnly")}</option><option value="names">${t("publicNames")}</option><option value="private">${t("hiddenRoster")}</option></select></label><label class="account-field"><span>${t("weeklyGoal")}</span><select name="weeklyGoal">${paceOptions}</select><small>${t("oddPace")}</small></label><label class="account-field"><span>${t("catchup")}</span><select name="catchupMode"><option value="flexible">${t("flexible")}</option><option value="steady">${t("steady")}</option></select></label><label class="account-check"><input name="publicOwnerName" type="checkbox"><span>${t("publicOwner")}</span></label><p class="privacy-hint">${t("privacyNote")}</p><button class="button primary">${t("saveGroup")}</button><p id="group-form-state" role="status"></p></form></section><section class="card join-card"><h2>${t("joinGroup")}</h2><form id="join-form" class="account-form"><label class="account-field"><span>${t("inviteCode")}</span><input name="inviteCode" required maxlength="12" autocomplete="off"></label><label class="account-check"><input name="publicName" type="checkbox"><span>${t("publicOwner")}</span></label><button class="button">${t("joinGroup")}</button><p id="join-state" role="status"></p></form></section></div>`;
+      : `<div class="groups-actions"><section class="card group-form-card"><h2>${t("createGroup")}</h2><form id="group-form" class="account-form account-form-grid">${field("name", t("groupName"), "text", 'required maxlength="100"')}${field("church", `${t("churchName")} · ${t("optional")}`)}${field("country", `${t("country")} · ${t("optional")}`)}${field("city", `${t("city")} · ${t("optional")}`)}<label class="account-field full"><span>${t("description")} · ${t("optional")}</span><textarea name="description" rows="3" maxlength="600"></textarea></label><label class="account-field"><span>${t("visibility")}</span><select name="visibility"><option value="public">${t("publicGroup")}</option><option value="private">${t("privateGroup")}</option></select></label><label class="account-field"><span>${t("roster")}</span><select name="rosterVisibility"><option value="count">${t("countOnly")}</option><option value="names">${t("publicNames")}</option><option value="private">${t("hiddenRoster")}</option></select></label><label class="account-field"><span>${t("weeklyGoal")}</span><select name="weeklyGoal">${paceOptions}</select><small>${t("oddPace")}</small></label><label class="account-field"><span>${t("catchup")}</span><select name="catchupMode"><option value="flexible">${t("flexible")}</option><option value="steady">${t("steady")}</option></select></label><label class="account-check"><input name="publicOwnerName" type="checkbox"><span>${t("publicOwner")}</span></label><p class="privacy-hint">${t("privacyNote")}</p><button class="button primary">${t("saveGroup")}</button><p id="group-form-state" role="status"></p></form></section><section class="card join-card"><h2>${t("joinGroup")}</h2><form id="join-form" class="account-form"><label class="account-field"><span>${t("inviteCode")}</span><input name="inviteCode" required maxlength="32" autocomplete="off"></label><label class="account-check"><input name="publicName" type="checkbox"><span>${t("publicOwner")}</span></label><button class="button">${t("joinGroup")}</button><p id="join-state" role="status"></p></form></section></div>`;
   shell(
     `<section class="groups-hero"><p class="eyebrow">${t("groupsEye")}</p><h1>${t("groupsTitle")}</h1><p class="lead">${t("groupsLead")}</p><div class="principle-card">${t("groupsPrinciple")}</div></section>${mine.length ? `<section class="groups-section"><div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h2>${t("myGroups")}</h2></div></div><div class="group-grid">${mine.map(groupCard).join("")}</div></section>` : ""}${createPanel}<section class="groups-section"><div class="section-head"><div><p class="eyebrow">${t("cohort")}</p><h2>${t("directory")}</h2></div><p>${t("directoryIntro")}</p></div>${groups.length ? `<div class="group-grid">${groups.map(groupCard).join("")}</div>` : `<div class="notice info">${t("noGroups")}</div>`}</section>`,
   );
@@ -2987,8 +2987,8 @@ async function renderGroup(groupId) {
       await groupRequest(action, 'POST', {groupId:group.id, ...payload});
       // A completed request must not navigate away from a page opened meanwhile.
       if (!button.isConnected) return;
-      if (action === 'transfer') await renderGroup(group.id);
-      else navigateTo('/groups');
+      if (['leave','delete'].includes(action)) navigateTo('/groups');
+      else await renderGroup(group.id);
       announce(successText);
     } catch {
       if (manageStatus?.isConnected) manageStatus.textContent = manageCopy.error;
@@ -3007,6 +3007,17 @@ async function renderGroup(groupId) {
     if (window.confirm(manageCopy.transferConfirm + select.selectedOptions[0].textContent))
       void manageGroup('transfer', {targetUserId:select.value}, transferForm.querySelector('button'), manageCopy.transferred);
   };
+  const rotateButton = document.querySelector('#rotate-group-invite');
+  if (rotateButton) rotateButton.onclick = () => {
+    if (window.confirm(manageCopy.rotateConfirm)) void manageGroup('rotate-invite', {expectedInviteCode:group.inviteCode,confirm:true}, rotateButton, manageCopy.rotated);
+  };
+  document.querySelectorAll('.group-role-button').forEach(button => {
+    button.onclick = () => {
+      const member = data.managementMembers.find(item => item.user_id === button.dataset.userId);
+      if (member && window.confirm(manageCopy.roleConfirm + member.display_name))
+        void manageGroup('role', {targetUserId:member.user_id,expectedRole:member.role,role:member.role==='facilitator'?'member':'facilitator'}, button, manageCopy.roleSaved);
+    };
+  });
   const deleteButton = document.querySelector('#delete-group');
   if (deleteButton) deleteButton.onclick = () => {
     if (window.confirm(manageCopy.deleteConfirm)) void manageGroup('delete', {confirm:true}, deleteButton, manageCopy.deleted);

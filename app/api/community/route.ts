@@ -1,11 +1,10 @@
 import { env } from "cloudflare:workers";
-import { authenticateRequest, rateLimit, requestAddress, sameOrigin } from "../../../lib/auth";
+import { authenticateRequest, isVerifiedOwner, rateLimit, requestAddress, sameOrigin } from "../../../lib/auth";
 import { COMMUNITY_RUN_ID } from "../../../lib/community";
 import { advanceCommunity, communityOwnerState, controlCommunity, leaseCommunityAgents } from "../../../lib/community-engine";
 
 export const dynamic = "force-dynamic";
 
-const OWNER_EMAIL = "dordiaioleksii1@gmail.com";
 const clean = (value: unknown, max = 120) => typeof value === "string" ? value.trim().slice(0, max) : "";
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
 type RealRow = { id: string; display_name: string; locale: string; joined_at: string; last_active_at: string | null; reading_data: string | null; mission_count: number };
@@ -25,7 +24,7 @@ export async function GET(request: Request) {
   const action = new URL(request.url).searchParams.get("action");
   if (action === "owner") {
     const identity = await authenticateRequest(request);
-    if (identity?.email !== OWNER_EMAIL) return json({ error: "forbidden" }, 403);
+    if (!isVerifiedOwner(identity)) return json({ error: "forbidden" }, 403);
     return json(await communityOwnerState());
   }
   await advanceCommunity(now);
@@ -90,7 +89,7 @@ export async function POST(request: Request) {
       .bind(crypto.randomUUID(),COMMUNITY_RUN_ID,JSON.stringify({memberId:identity.userId})).run();
     return json({ok:true});
   }
-  if (identity?.email !== OWNER_EMAIL) return json({ error: "forbidden" }, 403);
+  if (!isVerifiedOwner(identity)) return json({ error: "forbidden" }, 403);
   if (action === "lease") {
     return json(await leaseCommunityAgents(Math.max(1,Math.min(4,Math.trunc(Number(body?.limit)||1)))));
   }

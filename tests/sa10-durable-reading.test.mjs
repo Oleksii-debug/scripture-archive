@@ -36,7 +36,7 @@ function worker(db){const exports={};vm.runInNewContext(compiled.outputText,{exp
     if(id==='../../../content/mission-abraham.json')return {default:{tasks:[{id:'OTAB01-N001'},{id:'OTAB01-N002'},{id:'OTAB01-N003'},{id:'OTAB01-N004'},{id:'OTAB01-N005'}]}};
     if(id==='../../../lib/auth')return {sameOrigin:r=>r.headers.get('origin')==='https://test.invalid',authenticateRequest:async r=>{
       const userId=r.headers.get('x-test-user');return userId?{userId,email:`${userId}@test.invalid`,emailVerified:true,provider:'test',fullName:null}:null;
-    }};
+    },isVerifiedOwner:()=>false};
     throw Error('unexpected isolated import '+id);
   },Request,Response,URL,console});return exports;
 }

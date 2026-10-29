@@ -47,7 +47,8 @@ let worker;
 let logs = "";
 try {
   await run([...wrangler, "d1", "migrations", "apply", "DB", "--local", "--persist-to", state, "--config", migrationConfig]);
-  worker = spawn(process.execPath, [...wrangler, "dev", "--local", "--persist-to", state,
+  // Vinext already emitted production-ready modules: no second Wrangler bundle or watcher.
+  worker = spawn(process.execPath, [...wrangler, "dev", "--no-bundle", "--local", "--persist-to", state,
     "--name", `scripture-integration-${port}`,
     "--config", builtConfig, "--ip", "127.0.0.1", "--port", String(port), "--inspector-port", "0",
     "--var", "AUTH_TEST_MODE:1", "--var", `APP_BASE_URL:${base}`], { ...options, stdio: ["ignore", "pipe", "pipe"] });

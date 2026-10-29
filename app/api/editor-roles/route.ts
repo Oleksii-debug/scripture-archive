@@ -33,8 +33,9 @@ export async function GET(request: Request) {
   } catch { return json({error:"database_unavailable"},503); }
 }
 export async function POST(request: Request) {
-  if (!env.DB) return json({error:"database_unavailable"},503);
+  // Reject a forged origin before touching identity, D1 or readiness state.
   if (!sameOrigin(request)) return json({error:"cross_origin_request"},403);
+  if (!env.DB) return json({error:"database_unavailable"},503);
   const id = await owner(request);
   if (!id) return json({error:"forbidden"},403);
   const body = await request.json().catch(() => null) as {action?: unknown; userId?: unknown; email?: unknown} | null;

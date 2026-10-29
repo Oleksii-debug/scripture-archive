@@ -87,6 +87,23 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const ownerLogin = await fetch(`${base}/api/auth?action=login`, {method:"POST",headers:{Origin:base,"Content-Type":"application/json"},body:JSON.stringify({email:ownerPayload.email,password:ownerPassword})});
   assert.equal(ownerLogin.status, 200);
   const ownerCookie = ownerLogin.headers.get("set-cookie").split(";",1)[0];
+  const ownAccount = await (await fetch(`${base}/api/account?action=me`, {headers:{Cookie:cookie}})).json();
+  const roleAction = (action, principal = ownerCookie, origin = base) => fetch(`${base}/api/editor-roles`, {method:'POST',headers:{Origin:origin,Cookie:principal,'Content-Type':'application/json'},body:JSON.stringify({action,userId:ownAccount.user.id})});
+  assert.equal((await roleAction('grant',cookie)).status,403);
+  assert.equal((await roleAction('grant',ownerCookie,'https://attacker.invalid')).status,403);
+  const emailGrant = await fetch(`${base}/api/editor-roles`,{method:'POST',headers:{Origin:base,Cookie:ownerCookie,'Content-Type':'application/json'},body:JSON.stringify({action:'grant',email:ownAccount.user.email.toUpperCase()})});
+  assert.equal(emailGrant.status,200,(await emailGrant.clone().text()).slice(0,300));
+  assert.equal((await roleAction('grant')).status,409);
+  assert.equal((await fetch(`${base}/api/editor-roles?view=audit`,{headers:{Cookie:cookie}})).status,403);
+  assert.equal((await (await fetch(`${base}/api/editor-roles?view=me`,{headers:{Cookie:cookie}})).json()).editor,true);
+  assert.equal((await fetch(`${base}/api/material-review?view=queue`,{headers:{Cookie:cookie}})).status,200);
+  assert.equal((await roleAction('revoke')).status,200);
+  assert.equal((await roleAction('revoke')).status,404);
+  const roleAudit=await (await fetch(`${base}/api/editor-roles?view=audit`,{headers:{Cookie:ownerCookie}})).json();
+  assert.deepEqual(roleAudit.events.map(event=>event.action),['revoke','grant']);
+  assert.ok(roleAudit.events.every(event=>event.subject_user_id===ownAccount.user.id && event.actor_user_id));
+  assert.equal((await (await fetch(`${base}/api/editor-roles?view=me`,{headers:{Cookie:cookie}})).json()).editor,false);
+  assert.equal((await fetch(`${base}/api/material-review?view=queue`,{headers:{Cookie:cookie}})).status,403);
   const mark = { edition: "en-web", book: "GEN", chapter: 12 };
   const bookmarkWrite = (body, method = "PUT", origin = base) => fetch(`${base}/api/bookmarks`, { method, headers: { Origin: origin, Cookie: cookie, "Content-Type": "application/json" }, body: JSON.stringify(body) });
   assert.equal((await fetch(`${base}/api/bookmarks`)).status, 401);
@@ -181,12 +198,86 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.deepEqual(result.data.reading.map(row => row.chapter).sort((a, b) => a - b), [12, 13]);
 
   const material = { id: `integration-${crypto.randomUUID()}`, title: "Test material", prompt: "Choose an answer", reference: "GEN 12", explanation: "Test explanation", answer: "one", options: ["one", "two"] };
+  result = await request("/api/materials", { method: "POST", body: { ...material, options: ["one", "one"] } });
+  assert.equal(result.response.status, 400, "duplicate answer options are ambiguous");
   result = await request("/api/materials", { method: "POST", body: material });
   assert.equal(result.response.status, 201);
   const forbiddenMaterial = await fetch(`${base}/api/materials`, { method: "POST", headers: { Origin: base, Cookie: ownerCookie, "Content-Type": "application/json" }, body: JSON.stringify({ ...material, title: "Overwrite attempt" }) });
   assert.equal(forbiddenMaterial.status, 403);
   result = await request("/api/materials?mine=1");
   assert.equal(result.data.materials.find(item => item.id === material.id).title, material.title);
+  // Draft -> review -> published immutable snapshot -> replacement -> withdrawal.
+  const submitReview = { action: "submit", materialId: material.id, provenance: "Original exercise; source GEN 12", rightsConfirmed: true };
+  const reviewPost = async (body, principal = cookie, origin = base) => {
+    const response = await fetch(`${base}/api/material-review`, { method: "POST", headers: { Origin: origin, Cookie: principal, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (response.status >= 500) console.error("Local review HTTP failure", response.status, response.headers.get("content-type"), (await response.clone().text()).slice(0, 300));
+    return { response, data: await response.json() };
+  };
+  const ownerMaterial = { ...material, id: `owner-${crypto.randomUUID()}` };
+  const ownerDraft = await fetch(`${base}/api/materials`, { method: 'POST', headers: { Origin: base, Cookie: ownerCookie, 'Content-Type': 'application/json' }, body: JSON.stringify(ownerMaterial) });
+  assert.equal(ownerDraft.status, 201);
+  const ownerSubmission = await reviewPost({ ...submitReview, materialId: ownerMaterial.id }, ownerCookie);
+  assert.equal(ownerSubmission.response.status, 201);
+  for (const decision of ['approve', 'reject']) {
+    const ownDecision = await reviewPost({ action: 'review', id: ownerSubmission.data.id, decision, sourceChecked: true, rightsChecked: true, note: 'Review note' }, ownerCookie);
+    assert.equal(ownDecision.response.status, 403);
+    assert.equal(ownDecision.data.error, 'self_review_forbidden');
+  }
+  const ownerQueue = await (await fetch(`${base}/api/material-review?view=queue`, { headers: { Cookie: ownerCookie } })).json();
+  assert.ok(ownerQueue.items.some(item => item.id === ownerSubmission.data.id), 'self-review keeps the submission pending');
+  const ownerDelete = await fetch(`${base}/api/materials?id=${encodeURIComponent(ownerMaterial.id)}`, { method: 'DELETE', headers: { Origin: base, Cookie: ownerCookie } });
+  assert.equal(ownerDelete.status, 200);
+  assert.equal((await reviewPost(submitReview, cookie, "https://attacker.invalid")).response.status, 403);
+  assert.equal((await reviewPost({ ...submitReview, rightsConfirmed: false })).response.status, 400);
+  assert.equal((await reviewPost(submitReview, ownerCookie)).response.status, 409, "another user cannot submit the author's draft");
+  const submissions = await Promise.all([reviewPost(submitReview), reviewPost(submitReview)]);
+  assert.deepEqual(submissions.map(item => item.response.status).sort(), [201, 409]);
+  const submission = submissions.find(item => item.response.status === 201).data.id;
+  assert.equal((await fetch(`${base}/api/material-review?view=queue`, { headers: { Cookie: cookie } })).status, 403);
+  assert.equal((await reviewPost({ action: "review", id: submission, decision: "approve", sourceChecked: true, rightsChecked: true })).response.status, 403);
+  assert.equal((await reviewPost({ action: "review", id: submission, decision: "approve" }, ownerCookie)).response.status, 400);
+  assert.equal((await reviewPost({ action: "answer", id: submission, choice: 0 })).response.status, 404, "pending answers stay private");
+  const queue = await (await fetch(`${base}/api/material-review?view=queue`, { headers: { Cookie: ownerCookie } })).json();
+  assert.equal(queue.items.find(item => item.id === submission).snapshot.data.answer, "one");
+  assert.equal((await reviewPost({ action: "review", id: submission, decision: "approve", sourceChecked: true, rightsChecked: true }, ownerCookie)).response.status, 200);
+  let publicReviews = await (await fetch(`${base}/api/material-review?view=public`)).json();
+  const published = publicReviews.items.find(item => item.id === submission);
+  assert.equal(published.title, material.title);
+  assert.equal("answer" in published, false); assert.equal("explanation" in published, false);
+  let checked = await reviewPost({ action: "answer", id: submission, choice: 1 });
+  assert.deepEqual(checked.data, { correct: false });
+  checked = await reviewPost({ action: "answer", id: submission, choice: 0 });
+  assert.equal(checked.data.correct, true); assert.equal(checked.data.explanation, material.explanation);
+  result = await request("/api/materials", { method: "POST", body: { ...material, title: "Edited draft" } });
+  assert.equal(result.response.status, 200);
+  publicReviews = await (await fetch(`${base}/api/material-review?view=public`)).json();
+  assert.equal(publicReviews.items.find(item => item.id === submission).title, material.title, "editing a draft cannot change its published snapshot");
+  const nextSubmission = await reviewPost(submitReview);
+  assert.equal(nextSubmission.response.status, 201);
+  assert.equal((await reviewPost({ action: "review", id: nextSubmission.data.id, decision: "reject" }, ownerCookie)).response.status, 400);
+  assert.equal((await reviewPost({ action: "review", id: nextSubmission.data.id, decision: "approve", sourceChecked: true, rightsChecked: true }, ownerCookie)).response.status, 200);
+  publicReviews = await (await fetch(`${base}/api/material-review?view=public`)).json();
+  assert.equal(publicReviews.items.some(item => item.id === submission), false);
+  assert.equal(publicReviews.items.find(item => item.id === nextSubmission.data.id).title, "Edited draft");
+  assert.equal((await reviewPost({ action: "withdraw", id: nextSubmission.data.id }, ownerCookie)).response.status, 409);
+  assert.equal((await reviewPost({ action: "withdraw", id: nextSubmission.data.id })).response.status, 200);
+  assert.equal((await reviewPost({ action: "answer", id: nextSubmission.data.id, choice: 0 })).response.status, 404);
+  const reviewHistory = await (await fetch(`${base}/api/material-review?view=mine`, { headers: { Cookie: cookie } })).json();
+  assert.ok(reviewHistory.items.some(item => item.id === submission && item.status === "superseded"));
+  assert.ok(reviewHistory.items.some(item => item.id === nextSubmission.data.id && item.status === "withdrawn"));
+  assert.equal((await fetch(`${base}/api/materials?mine=1&export=1`)).status, 401);
+  const materialExportResponse = await fetch(`${base}/api/materials?mine=1&export=1`, { headers: { Cookie: cookie } });
+  assert.equal(materialExportResponse.status, 200);
+  assert.match(materialExportResponse.headers.get("cache-control"), /no-store/);
+  assert.match(materialExportResponse.headers.get("content-disposition"), /attachment/);
+  const materialExport = await materialExportResponse.json();
+  assert.equal(materialExport.materials.find(item => item.id === material.id).title, "Edited draft");
+  assert.ok(materialExport.submissions.some(item => item.id === submission && item.status === "superseded"));
+  const otherExport = await (await fetch(`${base}/api/materials?mine=1&export=1`, { headers: { Cookie: ownerCookie } })).json();
+  assert.equal(otherExport.materials.some(item => item.id === material.id), false);
+  const deleteOther = await fetch(`${base}/api/materials?id=${encodeURIComponent(material.id)}`, { method: "DELETE", headers: { Origin: base, Cookie: ownerCookie } });
+  assert.equal(deleteOther.status, 200);
+  assert.ok((await (await fetch(`${base}/api/materials?mine=1`, { headers: { Cookie: cookie } })).json()).materials.some(item => item.id === material.id), "another user cannot delete a draft");
   const analyticsResponse = await fetch(`${base}/api/analytics?days=30`, { headers: { Cookie:ownerCookie } });
   assert.equal(analyticsResponse.status, 200);
   const analytics = await analyticsResponse.json();
@@ -210,6 +301,14 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal("sourceKind" in publicMember, false);
   result = await request("/api/account?action=progress", { method: "PUT", body: { progress: {} }, origin: "https://attacker.invalid" });
   assert.equal(result.response.status, 403);
+
+  // Both existing local Ukrainian editions are available for the guarded comparison.
+  const comparedBooks = await Promise.all(['uk-ohiienko','uk'].map(async folder => {
+    const response = await fetch(`${base}/data/bible/${folder}/GEN.json`);
+    assert.equal(response.status, 200); return response.json();
+  }));
+  assert.deepEqual(comparedBooks.map(book => book.editionId), ['uk-ohiienko','UKRPAN']);
+  assert.ok(comparedBooks.every(book => book.bookCode === 'GEN' && book.chapters[0].length > 0));
 
   result = await request("/api/attempts?action=read", { method: "POST", body: { book: "GEN", chapter: 12 } });
   assert.equal(result.response.status, 201, JSON.stringify(result.data));
@@ -238,6 +337,14 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal(result.data.result.score, chapter12.length);
   assert.equal(result.data.book, "GEN");
   assert.equal(result.data.chapter, 12);
+  result = await request("/api/attempts?action=answer", {method:"POST",body:{attemptId,taskIndex:chapter12.length,selected:chapter12.at(-1).correct}});
+  assert.equal(result.data.completed, true, "the last answer can be retried after a lost response");
+  result = await request("/api/attempts?action=history");
+  assert.equal(result.response.status, 200);
+  assert.equal(result.data.attempts[0].id, attemptId);
+  assert.equal("result" in result.data.attempts[0], false);
+  const ownerHistory = await fetch(`${base}/api/attempts?action=history`, {headers:{Cookie:ownerCookie}});
+  assert.ok(!(await ownerHistory.json()).attempts.some(item=>item.id===attemptId));
   result = await request("/api/account?action=progress");
   assert.equal(result.data.progress.correct.length, chapter12.length);
   const secondBrowserLogin = await fetch(`${base}/api/auth?action=login`, {method:"POST",headers:{Origin:base,"Content-Type":"application/json"},body:JSON.stringify({email,password:firstPassword})});
@@ -246,6 +353,9 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal((await restoredProgress.json()).progress.correct.length, chapter12.length);
   const learningExport = await (await fetch(`${base}/api/reading-export`, { headers: { Cookie: cookie } })).json();
   assert.ok(learningExport.progress.some(item => item.mission.startsWith("OT-AB-01:")));
+  assert.equal(learningExport.attemptHistory.find(item => item.id===attemptId).result.score,chapter12.length);
+  const ownerLearningExport = await (await fetch(`${base}/api/reading-export`, { headers: { Cookie: ownerCookie } })).json();
+  assert.ok(!ownerLearningExport.attemptHistory.some(item=>item.id===attemptId));
 
   result = await request("/api/attempts?action=read", { method: "POST", body: { book: "GEN", chapter: 12 } });
   assert.equal(result.response.status, 201);
@@ -257,6 +367,8 @@ integration("account, progress, attempts, groups, marathon limit and password re
   await request("/api/attempts?action=read", { method: "POST", body: { book: "GEN", chapter: 12 } });
   result = await request("/api/attempts?action=start", { method: "POST", body: { missionId: "OT-AB-01", book: "GEN", chapter: 12, locale: "en" } });
   const invalidatedId = result.data.attemptId;
+  result = await request("/api/attempts?action=history");
+  assert.deepEqual(result.data, {locked:true,attempts:[]});
   result = await request("/api/attempts?action=chapter&book=GEN&chapter=12");
   assert.equal(result.response.status, 405);
   assert.equal(result.response.headers.get("allow"), "POST");
@@ -316,6 +428,12 @@ integration("account, progress, attempts, groups, marathon limit and password re
   for (let index = 0; index < chapter12.length; index += 1)
     result = await request("/api/attempts?action=answer", { method: "POST", body: { attemptId: groupAttemptId, taskIndex: index + 1, selected: chapter12[index].correct } });
   assert.equal(result.data.groupId, groupId);
+  assert.equal(result.data.groupRecorded, true);
+  result = await request("/api/attempts?action=finalize", {method:"POST",body:{attemptId:groupAttemptId}});
+  assert.equal(result.data.groupRecorded, true);
+  result = await request("/api/attempts?action=history");
+  assert.equal(result.data.attempts.find(item=>item.id===groupAttemptId).mode,"group");
+  assert.equal(result.data.attempts.find(item=>item.id===attemptId).mode,"personal");
   result = await request(`/api/groups?groupId=${encodeURIComponent(groupId)}`);
   assert.equal(result.data.sessions.length, 1);
   assert.equal(result.data.sessions[0].answers_correct, chapter12.length);

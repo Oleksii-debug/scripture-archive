@@ -92,10 +92,16 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal((await roleAction('grant',cookie)).status,403);
   assert.equal((await roleAction('grant',ownerCookie,'https://attacker.invalid')).status,403);
   const emailGrant = await fetch(`${base}/api/editor-roles`,{method:'POST',headers:{Origin:base,Cookie:ownerCookie,'Content-Type':'application/json'},body:JSON.stringify({action:'grant',email:ownAccount.user.email.toUpperCase()})});
-  assert.equal(emailGrant.status,200);
+  assert.equal(emailGrant.status,200,(await emailGrant.clone().text()).slice(0,300));
+  assert.equal((await roleAction('grant')).status,409);
+  assert.equal((await fetch(`${base}/api/editor-roles?view=audit`,{headers:{Cookie:cookie}})).status,403);
   assert.equal((await (await fetch(`${base}/api/editor-roles?view=me`,{headers:{Cookie:cookie}})).json()).editor,true);
   assert.equal((await fetch(`${base}/api/material-review?view=queue`,{headers:{Cookie:cookie}})).status,200);
   assert.equal((await roleAction('revoke')).status,200);
+  assert.equal((await roleAction('revoke')).status,404);
+  const roleAudit=await (await fetch(`${base}/api/editor-roles?view=audit`,{headers:{Cookie:ownerCookie}})).json();
+  assert.deepEqual(roleAudit.events.map(event=>event.action),['revoke','grant']);
+  assert.ok(roleAudit.events.every(event=>event.subject_user_id===ownAccount.user.id && event.actor_user_id));
   assert.equal((await (await fetch(`${base}/api/editor-roles?view=me`,{headers:{Cookie:cookie}})).json()).editor,false);
   assert.equal((await fetch(`${base}/api/material-review?view=queue`,{headers:{Cookie:cookie}})).status,403);
   const mark = { edition: "en-web", book: "GEN", chapter: 12 };

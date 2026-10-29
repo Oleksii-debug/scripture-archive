@@ -84,7 +84,10 @@ test("saved material ACK represents a committed owner-conditional write", async 
   const f = fixture();
   try {
     assert.equal((await f.post(valid, "alice", "https://attacker.invalid")).status, 403);
-    const first = await f.post({ ...valid, id: "synthetic-draft", visibility: "public" });
+    // Only a verified owner may even attempt publication, and every publication
+    // still requires independent editorial review; ordinary draft saves are private.
+    assert.equal((await f.post({ ...valid, id: "synthetic-draft", visibility: "public" })).status, 403);
+    const first = await f.post({ ...valid, id: "synthetic-draft" });
     assert.equal(first.status, 201);
     assert.equal(first.body.id, "synthetic-draft");
     const row = f.db.prepare("SELECT owner_user_id,visibility FROM study_materials WHERE id=?").get(first.body.id);

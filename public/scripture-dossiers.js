@@ -12,7 +12,7 @@ const nodes=[
  {id:'abraham',type:'person',names:{uk:'Авраам (Аврам)',ru:'Авраам (Аврам)',en:'Abraham (Abram)'},
   summaries:{uk:'Покликання Аврама та обітниці: зіставте оповідь книги Буття з пізнішими посиланнями.',ru:'Призвание Аврама и обещания: сопоставьте повествование Бытия с позднейшими упоминаниями.',en:'Abram’s call and promises: compare the Genesis narrative with later references.'},
   sources:[ref('GEN',12,1,3),ref('GEN',15,1,6),ref('ROM',4,1,3,'interpretive'),ref('HEB',11,8,12,'interpretive')],
-  related:[{to:'sarah',via:ref('GEN',17,15,19)},{to:'moses',via:ref('ACT',7,2,4,'interpretive')}],
+  related:[{to:'sarah',via:ref('GEN',17,15,19)}],
   prompts:{uk:['Які обітниці наведено в Бутті 12?','Як Послання до євреїв переосмислює приклад Авраама?'],ru:['Какие обещания даны в Бытии 12?','Как Послание к Евреям осмысляет пример Авраама?'],en:['Which promises appear in Genesis 12?','How does Hebrews use Abraham as an example?']}},
  {id:'sarah',type:'person',names:{uk:'Сарра (Сара)',ru:'Сарра (Сара)',en:'Sarah (Sarai)'},
   summaries:{uk:'Оповіді про перейменування, обітницю та очікування народження сина.',ru:'Повествования о переименовании, обещании и ожидании рождения сына.',en:'Accounts of renaming, the promise, and the expectation of a son.'},

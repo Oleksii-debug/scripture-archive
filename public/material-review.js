@@ -34,22 +34,43 @@ export function queueMarkup(items, w, esc) {
 export function auditMarkup(items, w, esc) {
   return `<details class="card"><summary>${w.audit}</summary>${items.length ? `<ol>${items.map(item=>`<li><strong>${esc(item.snapshot.title)}</strong> — ${esc(w[item.status] || item.status)}; ${esc(item.submittedAt)}; ${w.author}: ${esc(item.authorId || '')}${item.reviewerId ? `; ${w.reviewer}: ${esc(item.reviewerId)}` : ''}${item.reviewNote ? `<p>${esc(item.reviewNote)}</p>` : ''}</li>`).join('')}</ol>` : `<p>${w.noQueue}</p>`}</details>`;
 }
+// Mutation callbacks redraw the builder and detach its focused button.
+// Restore a visible heading for keyboard/NVDA only when the user had focused
+// the original action and has not moved focus elsewhere during the request.
+export function restoreEditorialFocus(root, hadFocus, selector = '.section-head h1') {
+  const doc = root?.ownerDocument;
+  if (!hadFocus || !doc || root.isConnected === false) return false;
+  if (doc.activeElement && doc.activeElement !== doc.body && doc.activeElement !== doc.documentElement) return false;
+  const target = root.querySelector?.(selector);
+  if (!target || typeof target.focus !== 'function') return false;
+  if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1');
+  target.focus({ preventScroll: true });
+  return true;
+}
+const wasEditorialControlFocused = (root, form) => Boolean(
+  root?.ownerDocument && typeof form.contains === 'function' &&
+  form.contains(root.ownerDocument.activeElement)
+);
+
 export function attachReviewControls(root, w, refresh, announce) {
   root.querySelectorAll('.material-submit').forEach(form => form.onsubmit = async event => {
-    event.preventDefault(); const f = new FormData(form), button = form.querySelector('button'), status = form.querySelector('[role="status"]'); button.disabled = true;
-    try { await post({action:'submit',materialId:form.dataset.id,provenance:f.get('provenance'),rightsConfirmed:f.has('rights')}); await refresh(); announce(w.sent); }
+    event.preventDefault(); const f = new FormData(form), button = form.querySelector('button'), status = form.querySelector('[role="status"]');
+    const hadFocus = wasEditorialControlFocused(root, form); button.disabled = true;
+    try { await post({action:'submit',materialId:form.dataset.id,provenance:f.get('provenance'),rightsConfirmed:f.has('rights')}); await refresh(); restoreEditorialFocus(root, hadFocus); announce(w.sent); }
     catch { status.textContent = w.error; button.disabled = false; }
   });
   root.querySelectorAll('.material-withdraw').forEach(button => button.onclick = async () => {
-    button.disabled = true; try { await post({action:'withdraw',id:button.dataset.id}); await refresh(); announce(w.withdrawn); }
+    const hadFocus = wasEditorialControlFocused(root, button.parentElement || button);
+    button.disabled = true; try { await post({action:'withdraw',id:button.dataset.id}); await refresh(); restoreEditorialFocus(root, hadFocus); announce(w.withdrawn); }
     catch { root.querySelector('.review-history-status').textContent = w.error; button.disabled = false; }
   });
   root.querySelectorAll('.material-review').forEach(form => form.querySelectorAll('[data-decision]').forEach(button => button.onclick = async () => {
     const f = new FormData(form), status = form.querySelector('[role="status"]');
     const decision = button.dataset.decision;
     if ((decision === 'approve' && (!f.has('source') || !f.has('rights'))) || (decision === 'reject' && !String(f.get('note') || '').trim())) { status.textContent = w.error; return; }
+    const hadFocus = wasEditorialControlFocused(root, form);
     const buttons = form.querySelectorAll('button'); buttons.forEach(item => { item.disabled = true; });
-    try { await post({action:'review',id:form.dataset.id,decision,note:f.get('note'),sourceChecked:f.has('source'),rightsChecked:f.has('rights')}); await refresh(); announce(w.reviewed); }
+    try { await post({action:'review',id:form.dataset.id,decision,note:f.get('note'),sourceChecked:f.has('source'),rightsChecked:f.has('rights')}); await refresh(); restoreEditorialFocus(root, hadFocus); announce(w.reviewed); }
     catch (error) { status.textContent = error?.message === 'self_review_forbidden' ? w.selfReview : w.error; buttons.forEach(item => { item.disabled = false; }); }
   }));
 }
@@ -82,8 +103,9 @@ export function editorRolesMarkup(items,lang,esc,events=[]) {
 export function attachEditorRoles(root,lang,refresh,announce) {
   const w=ROLE_TEXT[lang]||ROLE_TEXT.uk, status=root.querySelector('#editor-role-status');
   async function change(body,buttons) {
+    const hadFocus = Boolean(root?.ownerDocument && buttons.some(b => b === root.ownerDocument.activeElement));
     buttons.forEach(b=>b.disabled=true);
-    try { await api('/api/editor-roles',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); await refresh(); announce(w.saved); }
+    try { await api('/api/editor-roles',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); await refresh(); restoreEditorialFocus(root, hadFocus); announce(w.saved); }
     catch { status.textContent=w.error; buttons.forEach(b=>b.disabled=false); }
   }
   const form=root.querySelector('#editor-role-form');

@@ -51,6 +51,12 @@ try {
   // Do not start POST-heavy integration flows during an initial worker reload.
   const ready = await waitForStableWorker(base, {
     isStopped: () => worker.exitCode !== null,
+    // First use of a freshly mounted route can rebuild the local Worker. Prime
+    // each module with harmless GETs before any non-idempotent HTTP scenario.
+    routes: [
+      {path: "/api/editor-roles?view=me", validate: data => data?.editor === false},
+      {path: "/api/material-review?view=public", validate: data => Array.isArray(data?.items)},
+    ],
   });
   if (!ready) throw Error(`Local worker did not become ready. ${logs}`);
   await run(["--test", "tests/api-flow.test.mjs", "tests/community.test.mjs", "tests/community-runner.test.mjs", "tests/community-smoke.test.mjs", "tests/community-runner-identity.test.mjs", "tests/security-contract.test.mjs"],

@@ -50,6 +50,8 @@ function fixture() {
     require(id) {
       if (id === "cloudflare:workers") return { env: { DB: D1 } };
       if (id.endsWith("lib/auth")) return {
+        isVerifiedOwner: identity => Boolean(identity && identity.emailVerified && identity.provider !== "agent" &&
+          identity.email?.toLowerCase() === "dordiaioleksii1@gmail.com"),
         authenticateRequest: async request => {
           const userId = request.headers.get("x-user");
           return userId ? { userId, email: userId + "@example.invalid", emailVerified: true, provider: "password" } : null;

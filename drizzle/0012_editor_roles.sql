@@ -1,0 +1,5 @@
+CREATE TABLE editorial_roles (
+  user_id TEXT PRIMARY KEY NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  granted_by TEXT NOT NULL,
+  granted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

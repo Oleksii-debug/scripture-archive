@@ -35,18 +35,27 @@ async function write(request: Request, remove: boolean) {
   if (!id) return json({ error: "authentication_required" }, 401);
   const body: unknown = await request.json().catch(() => null);
   if (!valid(body)) return json({ error: "invalid_bookmark" }, 400);
-  if (remove) {
-    const result = await env.DB.prepare("DELETE FROM reader_bookmarks WHERE user_id=? AND edition=? AND book=? AND chapter=?").bind(id, body.edition, body.book, body.chapter).run();
-    if (!result.success) return json({ error: "bookmark_save_failed" }, 503);
+  // D1 may return a failure receipt or throw after the caller is authenticated.
+  // Never claim that a bookmark was saved or deleted unless the write ACK is
+  // well formed; a failed duplicate/limit probe is equally unavailable.
+  try {
+    if (remove) {
+      const result = await env.DB.prepare("DELETE FROM reader_bookmarks WHERE user_id=? AND edition=? AND book=? AND chapter=?").bind(id, body.edition, body.book, body.chapter).run();
+      if (result?.success !== true || !Number.isInteger(result.meta?.changes) || result.meta.changes < 0)
+        return json({ error: "bookmark_save_failed" }, 503);
+      return json({ ok: true });
+    }
+    const result = await env.DB.prepare("INSERT INTO reader_bookmarks(user_id,edition,book,chapter) SELECT ?,?,?,? WHERE (SELECT COUNT(*) FROM reader_bookmarks WHERE user_id=?)<500 ON CONFLICT(user_id,edition,book,chapter) DO NOTHING").bind(id, body.edition, body.book, body.chapter, id).run();
+    if (result?.success !== true || !Number.isInteger(result.meta?.changes) || result.meta.changes < 0)
+      return json({ error: "bookmark_save_failed" }, 503);
+    if (result.meta.changes === 0) {
+      const existing = await env.DB.prepare("SELECT 1 FROM reader_bookmarks WHERE user_id=? AND edition=? AND book=? AND chapter=?").bind(id, body.edition, body.book, body.chapter).first();
+      if (!existing) return json({ error: "bookmark_limit" }, 409);
+    }
     return json({ ok: true });
+  } catch {
+    return json({ error: "bookmark_save_failed" }, 503);
   }
-  const result = await env.DB.prepare("INSERT INTO reader_bookmarks(user_id,edition,book,chapter) SELECT ?,?,?,? WHERE (SELECT COUNT(*) FROM reader_bookmarks WHERE user_id=?)<500 ON CONFLICT(user_id,edition,book,chapter) DO NOTHING").bind(id, body.edition, body.book, body.chapter, id).run();
-  if (!result.success) return json({ error: "bookmark_save_failed" }, 503);
-  if (!result.meta.changes) {
-    const existing = await env.DB.prepare("SELECT 1 FROM reader_bookmarks WHERE user_id=? AND edition=? AND book=? AND chapter=?").bind(id, body.edition, body.book, body.chapter).first();
-    if (!existing) return json({ error: "bookmark_limit" }, 409);
-  }
-  return json({ ok: true });
 }
 
 export async function PUT(request: Request) { return write(request, false); }

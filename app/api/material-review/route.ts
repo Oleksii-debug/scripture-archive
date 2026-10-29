@@ -114,10 +114,10 @@ export async function POST(request: Request) {
     try {
       const results = await env.DB.batch([
         env.DB.prepare(`UPDATE material_submissions SET status='superseded',closed_at=CURRENT_TIMESTAMP
-          WHERE material_id=(SELECT material_id FROM material_submissions WHERE id=? AND status='pending')
-          AND status='approved' AND ?='approve'`).bind(body.id, body.decision),
-        env.DB.prepare("UPDATE material_submissions SET status=?,reviewed_at=CURRENT_TIMESTAMP,reviewed_by=?,review_note=?,source_checked=?,rights_checked=? WHERE id=? AND status='pending'")
-          .bind(body.decision === "approve" ? "approved" : "rejected", identity.userId, note, body.sourceChecked === true ? 1 : 0, body.rightsChecked === true ? 1 : 0, body.id),
+          WHERE material_id=(SELECT material_id FROM material_submissions WHERE id=? AND status='pending' AND author_id<>?)
+          AND status='approved' AND ?='approve'`).bind(body.id, identity.userId, body.decision),
+        env.DB.prepare("UPDATE material_submissions SET status=?,reviewed_at=CURRENT_TIMESTAMP,reviewed_by=?,review_note=?,source_checked=?,rights_checked=? WHERE id=? AND status='pending' AND author_id<>?")
+          .bind(body.decision === "approve" ? "approved" : "rejected", identity.userId, note, body.sourceChecked === true ? 1 : 0, body.rightsChecked === true ? 1 : 0, body.id, identity.userId),
       ]);
       if (results.some(result => !result.success)) return json({ error: "review_failed" }, 503);
       return results[1].meta.changes ? json({ ok: true }) : json({ error: "not_found_or_closed" }, 409);

@@ -1,0 +1,48 @@
+import { env } from "cloudflare:workers";
+import { authenticateRequest, sameOrigin } from "../../../lib/auth";
+
+export const dynamic = "force-dynamic";
+const ownerEmail = "dordiaioleksii1@gmail.com";
+const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "private, no-store" } });
+async function owner(request: Request) {
+  const id = await authenticateRequest(request);
+  return id && id.provider !== "agent" && id.emailVerified && id.email.toLowerCase() === ownerEmail ? id : null;
+}
+export async function GET(request: Request) {
+  if (!env.DB) return json({error:"database_unavailable"},503);
+  if (new URL(request.url).searchParams.get("view") === "me") {
+    const identity = await authenticateRequest(request);
+    if (!identity || identity.provider === "agent" || !identity.emailVerified) return json({editor:false});
+    if (identity.email.toLowerCase() === ownerEmail) return json({editor:true});
+    if (identity.provider !== "password") return json({editor:false});
+    try {
+      const row = await env.DB.prepare("SELECT r.user_id FROM editorial_roles r JOIN accounts a ON a.id=r.user_id WHERE r.user_id=? AND a.deleted_at IS NULL AND a.email_verified_at IS NOT NULL").bind(identity.userId).first();
+      return json({editor:Boolean(row)});
+    } catch { return json({error:"database_unavailable"},503); }
+  }
+  if (!await owner(request)) return json({error:"forbidden"},403);
+  try {
+    const rows = await env.DB.prepare("SELECT a.id,a.email,r.granted_at FROM editorial_roles r JOIN accounts a ON a.id=r.user_id WHERE a.deleted_at IS NULL ORDER BY a.email").all();
+    if (!rows.success || !Array.isArray(rows.results)) throw Error("read failed");
+    return json({editors:rows.results});
+  } catch { return json({error:"database_unavailable"},503); }
+}
+export async function POST(request: Request) {
+  if (!env.DB) return json({error:"database_unavailable"},503);
+  if (!sameOrigin(request)) return json({error:"cross_origin_request"},403);
+  const id = await owner(request);
+  if (!id) return json({error:"forbidden"},403);
+  const body = await request.json().catch(() => null) as {action?: unknown; userId?: unknown} | null;
+  if (!body || (body.action !== "grant" && body.action !== "revoke") || typeof body.userId !== "string" || !body.userId || body.userId.length > 100 || body.userId === id.userId) return json({error:"invalid_request"},400);
+  try {
+    if (body.action === "grant") {
+      const row = await env.DB.prepare(`INSERT INTO editorial_roles(user_id,granted_by)
+        SELECT id,? FROM accounts WHERE id=? AND email_verified_at IS NOT NULL AND deleted_at IS NULL AND lower(email)<>?
+        ON CONFLICT(user_id) DO NOTHING RETURNING user_id`).bind(id.userId,body.userId,ownerEmail).first();
+      return row ? json({ok:true}) : json({error:"not_eligible_or_granted"},409);
+    }
+    const result = await env.DB.prepare("DELETE FROM editorial_roles WHERE user_id=?").bind(body.userId).run();
+    if (!result.success) throw Error("write failed");
+    return result.meta.changes ? json({ok:true}) : json({error:"not_found"},404);
+  } catch { return json({error:"database_unavailable"},503); }
+}

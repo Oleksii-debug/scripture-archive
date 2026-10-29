@@ -224,9 +224,18 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   if (!env.DB) return json({ error: "database_unavailable" }, 503);
   const identity = await authenticateRequest(request);
-  if (identity?.email !== OWNER_EMAIL) return json({ error: "forbidden" }, 403);
-  const rows = await env.DB.prepare(`SELECT id,email,subject,message,locale,status,email_delivered,attachment_count,created_at
-    FROM support_requests ORDER BY created_at DESC LIMIT 100`).all();
-  return json({ items: rows.results });
+  // A matching email string alone is not proof of owner authorization.
+  // Unverified accounts and synthetic agents must not read support messages.
+  if (!identity || identity.provider === "agent" || !identity.emailVerified ||
+      identity.email.toLowerCase() !== OWNER_EMAIL)
+    return json({ error: "forbidden" }, 403);
+  try {
+    const rows = await env.DB.prepare(`SELECT id,email,subject,message,locale,status,email_delivered,attachment_count,created_at
+      FROM support_requests ORDER BY created_at DESC LIMIT 100`).all();
+    if (!rows.success || !Array.isArray(rows.results)) return json({ error: "support_unavailable" }, 503);
+    return json({ items: rows.results });
+  } catch {
+    return json({ error: "support_unavailable" }, 503);
+  }
 }
 

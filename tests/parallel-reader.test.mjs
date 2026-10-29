@@ -26,7 +26,7 @@ test('comparison is a labelled native form with escaped edition names',()=>{
 });
 
 test('comparison rechecks chapter guard, shows named source, and escapes text',()=>withForm(async()=>{
-  const f=fixture();await f.run();assert.equal(f.checked(),1);assert.equal(f.reads(),1);assert.equal(f.locked(),0);
+  const f=fixture();await f.run();assert.equal(f.checked(),2);assert.equal(f.reads(),1);assert.equal(f.locked(),0);
   assert.match(f.result.innerHTML,/Куліш — Буття 1/);assert.match(f.result.innerHTML,/https:\/\/source\.example/);
   assert.ok(f.result.innerHTML.includes('&lt;script&gt;'));assert.ok(!f.result.innerHTML.includes('<script>'));
   assert.equal(f.button.disabled,false);
@@ -58,7 +58,7 @@ test('missing translation provenance does not borrow a different edition license
   const ohiienko={id:'uk-ohiienko',title:'Огієнко',local:true};
   const f=fixture({editions:[ohiienko],catalog});
   await f.run();
-  assert.equal(f.checked(),1);
+  assert.equal(f.checked(),2);
   assert.equal(f.reads(),1);
   assert.equal(f.result.innerHTML,'');
   assert.match(f.status.textContent,/Не вдалося/);
@@ -83,3 +83,33 @@ test('exact translation metadata keeps the actual edition title and license',()=
   assert.match(f.result.innerHTML,/CC BY-SA 4\.0/);
   assert.ok(!f.result.innerHTML.includes('Public Domain'));
 },'uk-ohiienko'));
+
+test('an assessment started during second-edition load locks before exposing verses',()=>withForm(async()=>{
+  let n=0;
+  const f=fixture({check:async()=>({invalidated:++n===2})});
+  await f.run();
+  assert.equal(n,2); assert.equal(f.reads(),1);
+  assert.equal(f.locked(),1); assert.equal(f.result.innerHTML,'');
+}));
+test('malformed and unreachable final second-edition guards fail closed',()=>withForm(async()=>{
+  for (const response of [null,{}, {invalidated:'false'}]) {
+    let n=0;
+    const f=fixture({check:async()=>++n===1?{invalidated:false}:response});
+    await f.run();
+    assert.equal(n,2); assert.equal(f.failed(),1); assert.equal(f.result.innerHTML,'');
+  }
+  let n=0;
+  const f=fixture({check:async()=>{if(++n===2)throw Error('offline');return {invalidated:false};}});
+  await f.run();
+  assert.equal(f.failed(),1); assert.equal(f.result.innerHTML,'');
+}));
+test('a stale final parallel guard never exposes a detached reader',()=>withForm(async()=>{
+  let release;
+  const pending=new Promise(resolve=>{release=resolve;});
+  let n=0;
+  const f=fixture({check:async()=>++n===1?{invalidated:false}:pending});
+  const task=f.run();
+  for(let i=0;i<16;i++)await Promise.resolve();
+  f.move(); release({invalidated:false}); await task;
+  assert.equal(n,2); assert.equal(f.result.innerHTML,'');
+}));

@@ -225,7 +225,18 @@ export async function POST(request: Request) {
     userName: identity?.fullName,
     attachments,
   });
-  if (delivery.delivered) await env.DB.prepare("UPDATE support_requests SET email_delivered=1 WHERE id=?").bind(requestId).run();
+  if (delivery.delivered) {
+    // The request itself is already durably accepted. If recording the mail
+    // receipt fails after mail delivery, returning 5xx would invite the user
+    // to submit and email the same private message a second time.
+    try {
+      const receipt = await env.DB.prepare("UPDATE support_requests SET email_delivered=1 WHERE id=?").bind(requestId).run();
+      if (receipt?.success !== true || receipt.meta?.changes !== 1)
+        return json({ ok: true, requestId, mailStatus: "delivery_record_pending" }, 201);
+    } catch {
+      return json({ ok: true, requestId, mailStatus: "delivery_record_pending" }, 201);
+    }
+  }
   return json({ ok: true, requestId }, 201);
 }
 

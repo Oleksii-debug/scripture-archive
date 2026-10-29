@@ -9,14 +9,16 @@ import { historyMarkup, queueMarkup, submissionForm, reviewText, renderPublicMat
 function fixture() {
   const db = new DatabaseSync(':memory:');
   db.exec('PRAGMA foreign_keys=ON');
+  db.exec('CREATE TABLE accounts (id TEXT PRIMARY KEY,email TEXT NOT NULL,email_verified_at TEXT,deleted_at TEXT)');
+  db.exec(readFileSync(new URL('../drizzle/0012_editor_roles.sql', import.meta.url), 'utf8'));
   db.exec("CREATE TABLE study_materials (id TEXT PRIMARY KEY,owner_user_id TEXT NOT NULL,title TEXT NOT NULL,locale TEXT NOT NULL,data TEXT NOT NULL,visibility TEXT NOT NULL DEFAULT 'private')");
   db.exec(readFileSync(new URL('../drizzle/0011_material_review.sql', import.meta.url), 'utf8'));
   const input = {prompt:'A valid question?',reference:'GEN 12',options:['one','two'],answer:'one',explanation:'Source based explanation'};
   db.prepare('INSERT INTO study_materials(id,owner_user_id,title,locale,data) VALUES (?,?,?,?,?)').run('m1','alice','Original','uk',JSON.stringify(input));
   db.prepare('INSERT INTO study_materials(id,owner_user_id,title,locale,data) VALUES (?,?,?,?,?)').run('m2','bob','Other','en',JSON.stringify(input));
-  let failRead = false, throwRead = false, failBatchAt = -1, afterDraftRead = null;
+  let failRead = false, throwRead = false, failBatchAt = -1, afterDraftRead = null, afterRoleRead = null;
   const D1 = {prepare(sql){return {bind(...args){return {
-    first:async()=>{const row=db.prepare(sql).get(...args)??null;if(sql.startsWith('SELECT title,locale,data') && afterDraftRead) {const hook=afterDraftRead;afterDraftRead=null;hook();}return row;},
+    first:async()=>{const row=db.prepare(sql).get(...args)??null;if(sql.startsWith('SELECT title,locale,data') && afterDraftRead) {const hook=afterDraftRead;afterDraftRead=null;hook();}if(sql.startsWith('SELECT r.user_id') && afterRoleRead) {const hook=afterRoleRead;afterRoleRead=null;hook();}return row;},
     all:async()=>{if(throwRead)throw Error('offline');return failRead ? {success:false,results:[]} : {success:true,results:db.prepare(sql).all(...args)};},
     run:async()=>{const r=db.prepare(sql).run(...args);return {success:true,meta:{changes:Number(r.changes)}};},
   };}, all:async()=>{if(throwRead)throw Error('offline');return failRead ? {success:false,results:[]} : {success:true,results:db.prepare(sql).all()};}};},
@@ -31,7 +33,7 @@ function fixture() {
   }});
   async function post(body,user='alice',origin='https://local.invalid') {const r=await exports.POST(new Request('https://local.invalid/api/material-review',{method:'POST',headers:{origin,'content-type':'application/json',...(user?{'x-user':user}:{})},body:JSON.stringify(body)}));return {status:r.status,data:await r.json()};}
   async function get(view,user='') {const r=await exports.GET(new Request('https://local.invalid/api/material-review?view='+view,{headers:user?{'x-user':user}:{}}));return {status:r.status,data:await r.json()};}
-  return {db,post,get,setReadFailure:value=>{failRead=value;},setReadThrow:value=>{throwRead=value;},setBatchFailure:value=>{failBatchAt=value;},afterDraftRead:hook=>{afterDraftRead=hook;}};
+  return {db,post,get,setReadFailure:value=>{failRead=value;},setReadThrow:value=>{throwRead=value;},setBatchFailure:value=>{failBatchAt=value;},afterDraftRead:hook=>{afterDraftRead=hook;},afterRoleRead:hook=>{afterRoleRead=hook;}};
 }
 const submission={action:'submit',materialId:'m1',provenance:'Original work, GEN 12',rightsConfirmed:true};
 const approve=id=>({action:'review',id,decision:'approve',sourceChecked:true,rightsChecked:true});
@@ -86,6 +88,23 @@ test('revisions are immutable; failed review rolls back and withdrawal revokes a
     assert.equal(f.db.prepare('SELECT count(*) n FROM material_submissions').get().n,0,'material deletion cascades to snapshots');
     f.setReadFailure(true);assert.equal((await f.get('public')).status,503);
     f.setReadFailure(false);f.setReadThrow(true);assert.equal((await f.get('public')).status,503);
+  }finally{f.db.close();}
+});
+
+test('a verified granted editor may review, and revocation immediately removes access',async()=>{
+  const f=fixture();try {
+    f.db.prepare("INSERT INTO accounts(id,email,email_verified_at) VALUES('bob','bob@example.invalid',CURRENT_TIMESTAMP)").run();
+    const first=(await f.post(submission)).data.id;
+    assert.equal((await f.post(approve(first),'bob')).status,403);
+    f.db.prepare("INSERT INTO editorial_roles(user_id,granted_by) VALUES('bob','editor')").run();
+    assert.equal((await f.get('queue','bob')).status,200);
+    assert.equal((await f.post(approve(first),'bob')).status,200);
+    const next=(await f.post(submission)).data.id;
+    f.afterRoleRead(()=>f.db.prepare("DELETE FROM editorial_roles WHERE user_id='bob'").run());
+    assert.equal((await f.post(approve(next),'bob')).status,409,'revocation after authorization cannot publish or supersede');
+    assert.equal((await f.get('queue','bob')).status,403);
+    assert.equal((await f.post(approve(next),'bob')).status,403);
+    assert.equal((await f.get('public')).data.items[0].id,first);
   }finally{f.db.close();}
 });
 

@@ -1,5 +1,5 @@
 import { parallelControls, mountParallelReader } from './parallel-reader.js';
-import {renderWorkspace, workspaceCopy} from './workspace.js';
+import {renderWorkspace, workspaceCopy, groupManagementCopy, groupManagementMarkup} from './workspace.js';
 import {supportSection} from './support.js';
 import {homePage} from './home.js';
 import {EDITIONS, editionCopy, selectedEdition, editionUrl, editionSelect} from './editions.js';
@@ -2976,8 +2976,41 @@ async function renderGroup(groupId) {
     )
     .join("");
   shell(
-    `<article class="group-detail"><header class="group-detail-head">${groupStatus(group)}<p class="eyebrow">${t("groups")}</p><h1>${esc(group.name)}</h1><p class="lead">${esc(group.description || group.church || "")}</p><p>${[group.church, group.city, group.country].filter(Boolean).map(esc).join(" · ")}</p>${group.inviteCode ? `<div class="invite-code"><span>${t("inviteCode")}</span><strong>${esc(group.inviteCode)}</strong></div>` : ""}</header>${groupMetrics(group)}<div class="group-detail-grid"><section class="card reading-target"><p class="eyebrow">${t("readingTarget")}</p><h2 id="reading-preview">${esc(bookTitle(books[0]))} 12</h2><p>${t("discussionRoute")}</p><div class="target-controls"><select id="target-book">${bookOptions}</select><input id="target-chapter" aria-label="${t("chapter")}" type="number" min="1" max="200" value="12"></div><div class="action-row"><a class="button primary" id="chapter-link" href="/reader/${books[0].code}/12/group/${encodeURIComponent(group.id)}">${t("openChapter")}</a></div></section><section class="card cohort-card"><p class="eyebrow">${t("cohort")}</p><h2>${group.weeklyGoal} · ${t("weeklyGoal").toLocaleLowerCase(state.lang)}</h2><p>${group.catchupMode === "steady" ? t("steady") : t("flexible")}</p><p>${t("cohortNeed")}</p></section></div>${names ? `<section class="card member-list"><h2>${t("members")}</h2><ul>${names}</ul></section>` : ""}${record}<section class="groups-section"><div class="section-head"><div><p class="eyebrow">${t("meetings")}</p><h2>${t("recentMeetings")}</h2></div></div>${sessions || `<div class="notice info">${t("noMeetings")}</div>`}</section><section class="groups-section"><div class="section-head"><div><p class="eyebrow">${t("cohort")}</p><h2>${t("cohortPeers")}</h2></div><p>${t("cohortExplain")}</p></div><div class="peer-table">${peers}</div></section></article>`,
+    `<article class="group-detail"><header class="group-detail-head">${groupStatus(group)}<p class="eyebrow">${t("groups")}</p><h1>${esc(group.name)}</h1><p class="lead">${esc(group.description || group.church || "")}</p><p>${[group.church, group.city, group.country].filter(Boolean).map(esc).join(" · ")}</p>${group.inviteCode ? `<div class="invite-code"><span>${t("inviteCode")}</span><strong>${esc(group.inviteCode)}</strong></div>` : ""}</header>${groupMetrics(group)}<div class="group-detail-grid"><section class="card reading-target"><p class="eyebrow">${t("readingTarget")}</p><h2 id="reading-preview">${esc(bookTitle(books[0]))} 12</h2><p>${t("discussionRoute")}</p><div class="target-controls"><select id="target-book">${bookOptions}</select><input id="target-chapter" aria-label="${t("chapter")}" type="number" min="1" max="200" value="12"></div><div class="action-row"><a class="button primary" id="chapter-link" href="/reader/${books[0].code}/12/group/${encodeURIComponent(group.id)}">${t("openChapter")}</a></div></section><section class="card cohort-card"><p class="eyebrow">${t("cohort")}</p><h2>${group.weeklyGoal} · ${t("weeklyGoal").toLocaleLowerCase(state.lang)}</h2><p>${group.catchupMode === "steady" ? t("steady") : t("flexible")}</p><p>${t("cohortNeed")}</p></section></div>${names ? `<section class="card member-list"><h2>${t("members")}</h2><ul>${names}</ul></section>` : ""}${record}${groupManagementMarkup(data,state.lang,esc)}<section class="groups-section"><div class="section-head"><div><p class="eyebrow">${t("meetings")}</p><h2>${t("recentMeetings")}</h2></div></div>${sessions || `<div class="notice info">${t("noMeetings")}</div>`}</section><section class="groups-section"><div class="section-head"><div><p class="eyebrow">${t("cohort")}</p><h2>${t("cohortPeers")}</h2></div><p>${t("cohortExplain")}</p></div><div class="peer-table">${peers}</div></section></article>`,
   );
+  const manageCopy = groupManagementCopy(state.lang);
+  const manageStatus = document.querySelector('#group-manage-status');
+  async function manageGroup(action, payload, button, successText) {
+    button.disabled = true;
+    if (manageStatus) manageStatus.textContent = '';
+    try {
+      await groupRequest(action, 'POST', {groupId:group.id, ...payload});
+      // A completed request must not navigate away from a page opened meanwhile.
+      if (!button.isConnected) return;
+      if (action === 'transfer') await renderGroup(group.id);
+      else navigateTo('/groups');
+      announce(successText);
+    } catch {
+      if (manageStatus?.isConnected) manageStatus.textContent = manageCopy.error;
+    } finally {
+      if (button.isConnected) button.disabled = false;
+    }
+  }
+  const leaveButton = document.querySelector('#leave-group');
+  if (leaveButton) leaveButton.onclick = () => {
+    if (window.confirm(manageCopy.leaveConfirm)) void manageGroup('leave', {}, leaveButton, manageCopy.left);
+  };
+  const transferForm = document.querySelector('#transfer-group');
+  if (transferForm) transferForm.onsubmit = event => {
+    event.preventDefault();
+    const select = transferForm.elements.namedItem('targetUserId');
+    if (window.confirm(manageCopy.transferConfirm + select.selectedOptions[0].textContent))
+      void manageGroup('transfer', {targetUserId:select.value}, transferForm.querySelector('button'), manageCopy.transferred);
+  };
+  const deleteButton = document.querySelector('#delete-group');
+  if (deleteButton) deleteButton.onclick = () => {
+    if (window.confirm(manageCopy.deleteConfirm)) void manageGroup('delete', {confirm:true}, deleteButton, manageCopy.deleted);
+  };
   const targetBook = document.querySelector("#target-book"),
     targetChapter = document.querySelector("#target-chapter"),
     updateTarget = () => {

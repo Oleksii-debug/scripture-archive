@@ -407,6 +407,35 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal(result.data.sessions.length, 1);
   assert.equal(result.data.sessions[0].answers_correct, chapter12.length);
 
+  // Exercise membership lifecycle with two independent authenticated accounts on real D1.
+  const managerMe = await (await fetch(`${base}/api/account?action=me`, {headers:{Cookie:ownerCookie}})).json();
+  result = await request('/api/groups?action=create', {method:'POST',body:{...groupBody,name:'Membership lifecycle'}});
+  assert.equal(result.response.status,201);
+  const lifecycleId = result.data.groupId;
+  result = await request(`/api/groups?groupId=${lifecycleId}`);
+  const lifecycleInvite = result.data.group.inviteCode;
+  async function managerGroup(action, body) {
+    return fetch(`${base}/api/groups?action=${action}`, {method:'POST',headers:{Cookie:ownerCookie,Origin:base,'Content-Type':'application/json'},body:JSON.stringify(body)});
+  }
+  assert.equal((await managerGroup('join',{inviteCode:lifecycleInvite})).status,200);
+  const memberView = await (await fetch(`${base}/api/groups?groupId=${lifecycleId}`,{headers:{Cookie:ownerCookie}})).json();
+  assert.deepEqual(memberView.managementMembers,[]);
+  assert.equal((await managerGroup('delete',{groupId:lifecycleId,confirm:true})).status,403);
+  result = await request('/api/groups?action=leave',{method:'POST',body:{groupId:lifecycleId}});
+  assert.equal(result.response.status,409);
+  result = await request('/api/groups?action=transfer',{method:'POST',body:{groupId:lifecycleId,targetUserId:managerMe.user.id}});
+  assert.equal(result.response.status,200);
+  result = await request(`/api/groups?groupId=${lifecycleId}`);
+  assert.equal(result.data.membership,'member');
+  const managerView = await (await fetch(`${base}/api/groups?groupId=${lifecycleId}`,{headers:{Cookie:ownerCookie}})).json();
+  assert.equal(managerView.membership,'owner');
+  assert.equal(managerView.managementMembers.filter(m=>m.role==='owner').length,1);
+  result = await request('/api/groups?action=leave',{method:'POST',body:{groupId:lifecycleId}});
+  assert.equal(result.response.status,200);
+  result = await request(`/api/groups?groupId=${lifecycleId}`);assert.equal(result.response.status,404);
+  assert.equal((await managerGroup('delete',{groupId:lifecycleId,confirm:true})).status,200);
+  assert.equal((await fetch(`${base}/api/groups?groupId=${lifecycleId}`,{headers:{Cookie:ownerCookie}})).status,404);
+
   const marathon = { ...groupBody, name: "Strict one", visibility: "public", weeklyGoal: 1, catchupMode: "steady", marathonEnabled: true };
   result = await request("/api/groups?action=create", { method: "POST", body: marathon });
   const strictOne = result.data.groupId;

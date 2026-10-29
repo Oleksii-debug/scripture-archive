@@ -1,0 +1,152 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync, readdirSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
+import ts from 'typescript';
+import vm from 'node:vm';
+import { groupManagementMarkup } from '../public/workspace.js';
+
+function fixture() {
+  const db = new DatabaseSync(':memory:');
+  db.exec('PRAGMA foreign_keys=ON');
+  const dir = new URL('../drizzle/', import.meta.url);
+  for (const file of readdirSync(dir).filter(x=>x.endsWith('.sql')).sort()) db.exec(readFileSync(new URL(file,dir),'utf8'));
+  for (const user of ['alice','bob','carol','outsider']) db.prepare("INSERT INTO profiles(user_id,email,first_name,last_name,age_range) VALUES(?,?,?,'Reader','adult')").run(user,user+'@example.invalid',user);
+  db.exec(`INSERT INTO home_groups(id,owner_user_id,name,invite_code,visibility,bible_edition) VALUES('g','alice','Group','invite','private','en-web'),('other','alice','Other','other','private','en-web');
+    INSERT INTO home_group_members(group_id,user_id,display_name,role) VALUES('g','alice','Alice','owner'),('g','bob','Bob','member'),('g','carol','Carol','facilitator'),('other','alice','Alice','owner');
+    INSERT INTO group_sessions(id,group_id,created_by,book_id,chapter,meeting_date,reflection) VALUES('s','g','alice','GEN',12,'2026-10-28','private discussion');`);
+  let failure=-1, beforeBatch=null;
+  function statement(sql,args=[]) {return {sql,args,
+    first:async()=>db.prepare(sql).get(...args)??null,
+    all:async()=>({success:true,results:db.prepare(sql).all(...args)}),
+    run:async()=>({success:true,meta:{changes:Number(db.prepare(sql).run(...args).changes)}}),
+  };}
+  const D1={prepare(sql){return {...statement(sql),bind:(...args)=>statement(sql,args)};},async batch(statements){
+    if(beforeBatch){const hook=beforeBatch;beforeBatch=null;hook();}
+    db.exec('BEGIN');try{const out=[];for(const [i,s] of statements.entries()) {
+      if(i===failure)throw Error('injected storage outage');
+      const r=db.prepare(s.sql).run(...s.args);out.push({success:true,meta:{changes:Number(r.changes)}});
+    }db.exec('COMMIT');return out;}catch(e){db.exec('ROLLBACK');throw e;}
+  }};
+  const source=readFileSync(new URL('../app/api/groups/route.ts',import.meta.url),'utf8');
+  const js=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+  const exports={};vm.runInNewContext(js,{exports,Request,Response,URL,crypto,require(id){
+    if(id==='cloudflare:workers')return {env:{DB:D1}};
+    if(id.endsWith('catalog.json'))return {default:JSON.parse(readFileSync(new URL('../public/data/catalog.json',import.meta.url),'utf8'))};
+    if(id.endsWith('/auth'))return {sameOrigin:r=>r.headers.get('origin')==='https://local.invalid',authenticateRequest:async r=>{const user=r.headers.get('x-user');return user?{userId:user}:null;}};
+    throw Error('unexpected import '+id);
+  }});
+  async function get(user='alice',groupId='g'){const r=await exports.GET(new Request('https://local.invalid/api/groups?groupId='+groupId,{headers:user?{'x-user':user}:{}}));return {status:r.status,data:await r.json()};}
+  async function post(action,body={},user='alice',origin='https://local.invalid') {const r=await exports.POST(new Request('https://local.invalid/api/groups?action='+action,{method:'POST',headers:{origin,'content-type':'application/json',...(user?{'x-user':user}:{})},body:JSON.stringify({groupId:'g',...body})}));return {status:r.status,data:await r.json()};}
+  function seedAttempt(id,user,group,status='active') {
+    db.prepare("INSERT INTO mission_attempts(id,actor_id,mission_id,book_id,chapter,group_id,locale,task_limit,status,expires_at) VALUES(?,?,'OT-AB-01','GEN',12,?,'en',5,?,datetime('now','+2 hours'))").run(id,user,group,status);
+    db.prepare("INSERT INTO chapter_read_receipts(id,actor_id,book_id,chapter,group_id) VALUES(?,?,'GEN',12,?)").run(id,user,group);
+  }
+  return {db,get,post,seedAttempt,setFailure:n=>{failure=n;},beforeBatch:fn=>{beforeBatch=fn;}};
+}
+const owner=f=>f.db.prepare("SELECT owner_user_id FROM home_groups WHERE id='g'").get().owner_user_id;
+const roles=f=>f.db.prepare("SELECT user_id,role FROM home_group_members WHERE group_id='g' ORDER BY user_id").all().map(x=>[x.user_id,x.role]);
+
+test('private transfer roster is visible only to owner; ownership cannot be abandoned',async()=>{
+  const f=fixture();try {
+    assert.deepEqual((await f.get()).data.managementMembers.map(m=>m.user_id),['alice','bob','carol']);
+    for(const user of ['bob','carol'])assert.deepEqual((await f.get(user)).data.managementMembers,[]);
+    assert.equal((await f.get('outsider')).status,404);assert.equal((await f.get('')).status,404);
+    assert.equal((await f.post('leave')).data.error,'owner_transfer_required');
+    assert.equal(owner(f),'alice');
+    for(const action of ['leave','transfer','delete']) {
+      assert.equal((await f.post(action,{targetUserId:'bob',confirm:true},'')).status,401);
+      assert.equal((await f.post(action,{targetUserId:'bob',confirm:true},'alice','https://evil.invalid')).status,403);
+    }
+    f.db.exec("UPDATE home_groups SET visibility='public' WHERE id='g'");
+    const publicView=await f.get('outsider');assert.equal(publicView.status,200);
+    assert.deepEqual(publicView.data.managementMembers,[]);assert.equal(publicView.data.sessions[0].reflection,null);assert.equal(publicView.data.group.inviteCode,undefined);
+  } finally {f.db.close();}
+});
+
+test('transfer changes both roles atomically, and rejected or concurrent requests cannot steal ownership',async()=>{
+  const f=fixture();try {
+    for(const user of ['bob','carol','outsider'])assert.equal((await f.post('transfer',{targetUserId:'bob'},user)).status,user==='bob'?400:409);
+    assert.equal((await f.post('transfer',{targetUserId:'outsider'})).status,409);
+    assert.equal((await f.post('transfer',{targetUserId:'alice'})).status,400);
+    f.setFailure(1);assert.equal((await f.post('transfer',{targetUserId:'bob'})).status,503);
+    assert.equal(owner(f),'alice');assert.deepEqual(roles(f),[['alice','owner'],['bob','member'],['carol','facilitator']]);
+    f.setFailure(-1);
+    const both=await Promise.all([f.post('transfer',{targetUserId:'bob'}),f.post('transfer',{targetUserId:'carol'})]);
+    assert.deepEqual(both.map(x=>x.status).sort(),[200,409]);assert.equal(owner(f),'bob');
+    assert.deepEqual(roles(f),[['alice','member'],['bob','owner'],['carol','facilitator']]);
+    assert.equal((await f.post('delete',{confirm:true})).status,403);
+    assert.equal((await f.post('transfer',{targetUserId:'bob'})).status,409);
+    assert.equal((await f.post('leave')).status,200);assert.equal((await f.get('alice')).status,404);
+    assert.equal((await f.get('bob')).data.membership,'owner');
+  } finally {f.db.close();}
+});
+
+test('transfer cannot promote a member who left before the transaction',async()=>{
+  const f=fixture();try {
+    f.beforeBatch(()=>f.db.exec("DELETE FROM home_group_members WHERE group_id='g' AND user_id='bob'"));
+    assert.equal((await f.post('transfer',{targetUserId:'bob'})).status,409);
+    assert.equal(owner(f),'alice');assert.deepEqual(roles(f),[['alice','owner'],['carol','facilitator']]);
+  } finally {f.db.close();}
+});
+
+test('leaving revokes group access and active work, keeps personal history and rolls back on failure',async()=>{
+  const f=fixture();try {
+    f.seedAttempt('active','bob','g');f.seedAttempt('personal','bob',null);f.seedAttempt('complete','bob','g','completed');f.seedAttempt('pending','bob','g','grading');f.seedAttempt('other','carol','g');
+    for(const failure of [1,2]){
+      f.setFailure(failure);assert.equal((await f.post('leave',{},'bob')).status,503);
+      assert.equal((await f.get('bob')).status,200);assert.equal(f.db.prepare("SELECT status FROM mission_attempts WHERE id='active'").get().status,'active');
+      assert.equal(f.db.prepare("SELECT consumed_at FROM chapter_read_receipts WHERE id='active'").get().consumed_at,null);
+    }
+    f.setFailure(-1);f.db.exec("DELETE FROM profiles WHERE user_id='bob'");
+    assert.equal((await f.post('leave',{},'bob')).status,200);
+    assert.equal((await f.get('bob')).status,404);assert.equal((await f.post('leave',{},'bob')).status,404);
+    assert.equal(f.db.prepare("SELECT status FROM mission_attempts WHERE id='active'").get().status,'invalidated');
+    for(const [id,status] of [['personal','active'],['complete','completed'],['pending','grading'],['other','active']])assert.equal(f.db.prepare('SELECT status FROM mission_attempts WHERE id=?').get(id).status,status);
+    assert.ok(f.db.prepare("SELECT consumed_at FROM chapter_read_receipts WHERE id='active'").get().consumed_at);
+    assert.equal(f.db.prepare("SELECT consumed_at FROM chapter_read_receipts WHERE id='personal'").get().consumed_at,null);
+    assert.equal(f.db.prepare("SELECT count(*) n FROM group_sessions WHERE group_id='g'").get().n,1);
+  } finally {f.db.close();}
+});
+
+test('stale facilitator session permission is checked again inside the transaction',async()=>{
+  const f=fixture();try {
+    const payload={bookId:'GEN',chapter:12,answersCorrect:0,answersTotal:0,meetingDate:'2026-10-28'};
+    f.setFailure(1);assert.equal((await f.post('session',payload,'carol')).status,503);
+    assert.equal(f.db.prepare('SELECT count(*) n FROM group_sessions').get().n,1);f.setFailure(-1);
+    f.beforeBatch(()=>f.db.exec("DELETE FROM home_group_members WHERE group_id='g' AND user_id='carol'"));
+    assert.equal((await f.post('session',payload,'carol')).status,403);
+    assert.equal(f.db.prepare('SELECT count(*) n FROM group_sessions').get().n,1);
+  } finally {f.db.close();}
+});
+
+test('confirmed owner deletion cascades group records, preserves personal results, and rolls back on outage',async()=>{
+  const f=fixture();try {
+    f.db.exec("INSERT INTO group_answers(group_id,task_id,solved,first_correct) VALUES('g','task',1,1); INSERT INTO group_marathon_registrations(id,group_id,weekly_goal,catchup_mode,cohort_key) VALUES('m','g',3,'flexible','cohort')");
+    f.seedAttempt('a','bob','g');f.seedAttempt('c','bob','g','completed');f.seedAttempt('p','bob',null);
+    assert.equal((await f.post('delete')).status,400);
+    for(const user of ['bob','carol','outsider'])assert.equal((await f.post('delete',{confirm:true},user)).status,403);
+    for(const failure of [1,2]) {
+      f.setFailure(failure);assert.equal((await f.post('delete',{confirm:true})).status,503);
+      assert.equal(owner(f),'alice');assert.equal(f.db.prepare("SELECT status FROM mission_attempts WHERE id='a'").get().status,'active');
+    }
+    f.setFailure(-1);assert.equal((await f.post('delete',{confirm:true})).status,200);
+    assert.equal((await f.get()).status,404);
+    for(const table of ['home_group_members','group_sessions','group_answers','group_marathon_registrations'])assert.equal(f.db.prepare(`SELECT count(*) n FROM ${table} WHERE group_id='g'`).get().n,0);
+    assert.equal(f.db.prepare("SELECT status FROM mission_attempts WHERE id='a'").get().status,'invalidated');
+    assert.equal(f.db.prepare("SELECT status FROM mission_attempts WHERE id='c'").get().status,'completed');
+    assert.equal(f.db.prepare("SELECT status FROM mission_attempts WHERE id='p'").get().status,'active');
+    assert.equal((await f.get('alice','other')).status,200);
+  } finally {f.db.close();}
+});
+
+test('membership controls use labelled native inputs and escape member names and identifiers',()=>{
+  const esc=s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
+  for(const lang of ['uk','ru','en']) {
+    assert.equal(groupManagementMarkup({},lang,esc),'');
+    const member=groupManagementMarkup({membership:'member'},lang,esc);assert.ok(member.includes('leave-group'));assert.ok(!member.includes('delete-group'));
+    const owner=groupManagementMarkup({membership:'owner',managementMembers:[{user_id:'a"',display_name:'<script>',role:'member'},{user_id:'owner',display_name:'Owner',role:'owner'}]},lang,esc);
+    assert.ok(owner.includes('value="a&quot;"'));assert.ok(owner.includes('&lt;script&gt;'));assert.ok(!owner.includes('<script>'));assert.ok(!owner.includes('value="owner"'));
+    assert.ok(owner.includes('<label'));assert.ok(owner.includes('role="status"'));assert.ok(owner.includes('delete-group'));assert.ok(!owner.includes('leave-group'));
+  }
+});

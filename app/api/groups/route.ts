@@ -73,7 +73,10 @@ export async function GET(request: Request) {
     const sessions = (await env.DB!.prepare("SELECT id,book_id,chapter,answers_correct,answers_total,participant_count,meeting_date,CASE WHEN ?=1 THEN reflection ELSE NULL END AS reflection FROM group_sessions WHERE group_id=? ORDER BY meeting_date DESC,created_at DESC LIMIT 12").bind(member ? 1 : 0, groupId).all()).results;
     const peers = row.cohort_key ? (await env.DB!.prepare(`${groupSelect} WHERE g.visibility='public' AND m.cohort_key=? ORDER BY chapters_completed DESC,g.name LIMIT 50`).bind(row.cohort_key).all<Row>()).results.map(value => publicGroup(value)) : [];
     const answers=member?(await env.DB!.prepare("SELECT task_id,solved,first_correct FROM group_answers WHERE group_id=?").bind(groupId).all()).results:[];
-    return Response.json({ group: publicGroup(row, Boolean(member)), members: names, sessions, peers, answers, membership: member?.role ?? null }, { headers: { "Cache-Control": "no-store" } });
+    // The owner needs the private membership list to transfer responsibility.
+    // Check ownership again in the query, not only in the earlier lookup.
+    const managementMembers = member?.role === "owner" && id ? (await env.DB!.prepare("SELECT hm.user_id,hm.display_name,hm.role FROM home_group_members hm WHERE hm.group_id=? AND EXISTS (SELECT 1 FROM home_groups g JOIN home_group_members owner ON owner.group_id=g.id AND owner.user_id=g.owner_user_id AND owner.role='owner' WHERE g.id=hm.group_id AND g.owner_user_id=?) ORDER BY hm.joined_at,hm.user_id").bind(groupId,id.userId).all()).results : [];
+    return Response.json({ group: publicGroup(row, Boolean(member)), members: names, managementMembers, sessions, peers, answers, membership: member?.role ?? null }, { headers: { "Cache-Control": "no-store" } });
   }
   if (url.searchParams.get("mine") === "1") {
     if (!id) return forbidden();
@@ -88,11 +91,59 @@ export async function POST(request: Request) {
   if (!sameOrigin(request)) return Response.json({ error: "cross_origin_request" }, { status: 403 });
   const id = await authenticateRequest(request);
   if (!id) return forbidden();
-  const person = await profile(id);
-  if (!person) return Response.json({ error: "profile_required" }, { status: 409 });
   const body = await request.json().catch(() => null) as Row | null;
   if (!body) return Response.json({ error: "invalid_json" }, { status: 400 });
   const action = new URL(request.url).searchParams.get("action") || "create";
+
+  if (action === "leave") {
+    const groupId=clean(body.groupId,80), member=await membership(groupId,id.userId);
+    if(!member)return Response.json({error:"not_found"},{status:404});
+    if(member.role==='owner')return Response.json({error:"owner_transfer_required"},{status:409});
+    try {
+      const result=await env.DB!.batch([
+        env.DB!.prepare("DELETE FROM home_group_members WHERE group_id=? AND user_id=? AND role IN ('member','facilitator') AND EXISTS (SELECT 1 FROM home_groups WHERE id=? AND owner_user_id<>?)").bind(groupId,id.userId,groupId,id.userId),
+        env.DB!.prepare("UPDATE mission_attempts SET status='invalidated',invalidated_at=CURRENT_TIMESTAMP,invalidation_reason='group_left' WHERE actor_id=? AND group_id=? AND status='active' AND NOT EXISTS (SELECT 1 FROM home_group_members WHERE group_id=? AND user_id=?)").bind(id.userId,groupId,groupId,id.userId),
+        env.DB!.prepare("UPDATE chapter_read_receipts SET consumed_at=CURRENT_TIMESTAMP WHERE actor_id=? AND group_id=? AND consumed_at IS NULL AND NOT EXISTS (SELECT 1 FROM home_group_members WHERE group_id=? AND user_id=?)").bind(id.userId,groupId,groupId,id.userId),
+      ]);
+      if(!result.every(item=>item.success))return Response.json({error:"database_unavailable"},{status:503});
+      if(!result[0].meta.changes)return Response.json({error:"membership_changed"},{status:409});
+      return Response.json({ok:true});
+    } catch {return Response.json({error:"database_unavailable"},{status:503});}
+  }
+
+  if (action === "transfer") {
+    const groupId=clean(body.groupId,80), target=clean(body.targetUserId,80);
+    if(!groupId||!target||target===id.userId)return Response.json({error:"invalid_transfer"},{status:400});
+    try {
+      const result=await env.DB!.batch([
+        env.DB!.prepare("UPDATE home_groups SET owner_user_id=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND owner_user_id=? AND EXISTS (SELECT 1 FROM home_group_members WHERE group_id=? AND user_id=? AND role='owner') AND EXISTS (SELECT 1 FROM home_group_members WHERE group_id=? AND user_id=? AND role IN ('member','facilitator'))").bind(target,groupId,id.userId,groupId,id.userId,groupId,target),
+        // changes() is from the immediately preceding ownership update in this transaction.
+        // One statement changes both roles; a stale/unauthorized transfer changes neither.
+        env.DB!.prepare("UPDATE home_group_members SET role=CASE WHEN user_id=? THEN 'owner' ELSE 'member' END WHERE group_id=? AND user_id IN (?,?) AND changes()=1").bind(target,groupId,id.userId,target),
+      ]);
+      if(!result.every(item=>item.success))return Response.json({error:"database_unavailable"},{status:503});
+      if(!result[0].meta.changes)return Response.json({error:"transfer_unavailable"},{status:409});
+      return Response.json({ok:true});
+    } catch {return Response.json({error:"database_unavailable"},{status:503});}
+  }
+
+  if (action === "delete") {
+    const groupId=clean(body.groupId,80);
+    if(!groupId||body.confirm!==true)return Response.json({error:"confirmation_required"},{status:400});
+    try {
+      const result=await env.DB!.batch([
+        env.DB!.prepare("UPDATE mission_attempts SET status='invalidated',invalidated_at=CURRENT_TIMESTAMP,invalidation_reason='group_deleted' WHERE group_id=? AND status='active' AND EXISTS (SELECT 1 FROM home_groups g JOIN home_group_members owner ON owner.group_id=g.id AND owner.user_id=g.owner_user_id AND owner.role='owner' WHERE g.id=? AND g.owner_user_id=?)").bind(groupId,groupId,id.userId),
+        env.DB!.prepare("UPDATE chapter_read_receipts SET consumed_at=CURRENT_TIMESTAMP WHERE group_id=? AND consumed_at IS NULL AND EXISTS (SELECT 1 FROM home_groups g JOIN home_group_members owner ON owner.group_id=g.id AND owner.user_id=g.owner_user_id AND owner.role='owner' WHERE g.id=? AND g.owner_user_id=?)").bind(groupId,groupId,id.userId),
+        env.DB!.prepare("DELETE FROM home_groups WHERE id=? AND owner_user_id=? AND EXISTS (SELECT 1 FROM home_group_members WHERE group_id=? AND user_id=? AND role='owner')").bind(groupId,id.userId,groupId,id.userId),
+      ]);
+      if(!result.every(item=>item.success))return Response.json({error:"database_unavailable"},{status:503});
+      if(!result[2].meta.changes)return forbidden(403);
+      return Response.json({ok:true});
+    } catch {return Response.json({error:"database_unavailable"},{status:503});}
+  }
+
+  const person = await profile(id);
+  if (!person) return Response.json({ error: "profile_required" }, { status: 409 });
 
   if (action === "start") {
     const groupId = clean(body.groupId, 80), member = await membership(groupId, id.userId);
@@ -143,9 +194,16 @@ export async function POST(request: Request) {
       const repeated = await env.DB!.prepare("SELECT id FROM group_sessions WHERE group_id=? AND book_id=? AND chapter=? LIMIT 1").bind(groupId,bookId,chapter).first();
       if (!repeated && Number(used?.count||0)>=allowed) return Response.json({error:"weekly_limit_reached"},{status:409});
     }
-    await env.DB!.prepare("INSERT INTO group_sessions (id,group_id,created_by,book_id,chapter,chapters_completed,answers_correct,answers_total,reflection,participant_count,meeting_date) VALUES (?,?,?,?,?,1,?,?,?,?,?)")
-      .bind(crypto.randomUUID(), groupId, id.userId, bookId, chapter, answersCorrect, answersTotal, clean(body.reflection, 1200) || null, participantCount, meetingDate).run();
-    await env.DB!.prepare("UPDATE home_groups SET updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(groupId).run();
+    const sessionId=crypto.randomUUID();
+    try {
+    const saved=await env.DB!.batch([
+      env.DB!.prepare("INSERT INTO group_sessions (id,group_id,created_by,book_id,chapter,chapters_completed,answers_correct,answers_total,reflection,participant_count,meeting_date) SELECT ?,?,?,?,?,1,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM home_group_members WHERE group_id=? AND user_id=? AND role IN ('owner','facilitator'))")
+        .bind(sessionId, groupId, id.userId, bookId, chapter, answersCorrect, answersTotal, clean(body.reflection, 1200) || null, participantCount, meetingDate, groupId, id.userId),
+      env.DB!.prepare("UPDATE home_groups SET updated_at=CURRENT_TIMESTAMP WHERE id=? AND EXISTS (SELECT 1 FROM group_sessions WHERE id=?)").bind(groupId,sessionId),
+    ]);
+    if(!saved.every(item=>item.success))return Response.json({error:"database_unavailable"},{status:503});
+    if(!saved[0].meta.changes)return forbidden(403);
+    } catch {return Response.json({error:"database_unavailable"},{status:503});}
     return Response.json({ ok: true });
   }
 

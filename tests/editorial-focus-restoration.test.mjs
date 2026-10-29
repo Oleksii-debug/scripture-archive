@@ -47,7 +47,7 @@ test('successful real editorial submission returns focus to builder heading afte
     querySelector: selector => selector === 'button' ? button : status,
   };
   const previousFetch = globalThis.fetch, previousData = globalThis.FormData;
-  globalThis.FormData = class { get: key => key === 'provenance' ? 'Synthetic original text' : ''; has: () => true; };
+  globalThis.FormData = class { get(key) { return key === 'provenance' ? 'Synthetic original text' : ''; } has() { return true; } };
   const calls = [];
   globalThis.fetch = async (url, options) => {
     calls.push({url, options}); return Response.json({ ok: true });

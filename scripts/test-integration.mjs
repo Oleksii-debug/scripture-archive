@@ -4,6 +4,7 @@ import { createServer } from "node:net";
 import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { waitForStableWorker } from "./integration-ready.mjs";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
@@ -46,15 +47,11 @@ try {
   worker.stdout.on("data", data => { logs = (logs + data).slice(-12000); });
   worker.stderr.on("data", data => { logs = (logs + data).slice(-12000); });
   worker.on("error", error => { logs += error.message; });
-  let ready = false;
-  for (let count = 0; count < 100; count += 1) {
-    if (worker.exitCode !== null) break;
-    try {
-      const response = await fetch(`${base}/api/account?action=me`, { signal: AbortSignal.timeout(1000) });
-      if (response.ok && (await response.json()).user === null) { ready = true; break; }
-    } catch {}
-    await new Promise(resolve => setTimeout(resolve, 300));
-  }
+  // Wrangler may report its first 200 before its local module graph settles.
+  // Do not start POST-heavy integration flows during an initial worker reload.
+  const ready = await waitForStableWorker(base, {
+    isStopped: () => worker.exitCode !== null,
+  });
   if (!ready) throw Error(`Local worker did not become ready. ${logs}`);
   await run(["--test", "tests/api-flow.test.mjs", "tests/community.test.mjs", "tests/community-runner.test.mjs", "tests/community-smoke.test.mjs", "tests/community-runner-identity.test.mjs", "tests/security-contract.test.mjs"],
     { env: { ...options.env, SCRIPTURE_TEST_URL: base } });

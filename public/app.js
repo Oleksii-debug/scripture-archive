@@ -2645,10 +2645,22 @@ function readerVerseUrl(code, chapter, verse) {
   return `/reader/${encodeURIComponent(code)}/${chapter}?verse=${verse}`;
 }
 function readerVerseFromUrl(url, availableVerses) {
-  const raw = new URL(url).searchParams.get("verse");
-  if (!raw || !/^[1-9][0-9]*$/.test(raw)) return null;
-  const value = Number(raw);
+  if (!Number.isSafeInteger(availableVerses) || availableVerses < 1) return null;
+  const values = new URL(url).searchParams.getAll("verse");
+  if (values.length !== 1 || !/^[1-9][0-9]*$/.test(values[0])) return null;
+  const value = Number(values[0]);
   return Number.isSafeInteger(value) && value <= availableVerses ? value : null;
+}
+
+// Reject fractional, scientific, hexadecimal and unsafe chapter coordinates;
+// leave valid numbers above the edition-specific limit clamped to its last chapter.
+function readerChapterNumber(value, maxChapters) {
+  if (!Number.isSafeInteger(maxChapters) || maxChapters < 1) return 1;
+  const parsed = typeof value === "number"
+    ? value
+    : typeof value === "string" && /^[1-9][0-9]*$/.test(value) ? Number(value) : NaN;
+  if (!Number.isSafeInteger(parsed) || parsed < 1) return 1;
+  return Math.min(parsed, maxChapters);
 }
 
 async function renderReader(parts) {
@@ -2658,10 +2670,7 @@ async function renderReader(parts) {
   const books = catalog.editionBooks?.[chosenEdition.id] || catalog.books[state.lang];
   const code = (parts[1] || state.reader.book || "GEN").toUpperCase();
   const meta = books.find((b) => b.code === code) || books[0];
-  const chapter = Math.min(
-    Math.max(Math.trunc(Number(parts[2] || state.reader.chapter || 1)) || 1, 1),
-    meta.chapters,
-  );
+  const chapter = readerChapterNumber(parts[2] || state.reader.chapter || 1, meta.chapters);
   const groupId = parts[3] === "group" ? parts[4] || "" : "";
   state.currentReader = { book: meta.code, chapter };
   const readerContext = state.currentReader;
@@ -2706,7 +2715,9 @@ async function renderReader(parts) {
     return;
   }
   const verses = book.chapters[chapter - 1];
-  const selectedVerse = readerVerseFromUrl(location.href, verses.length);
+  // Never focus a verse in a different book/chapter from the URL.
+  const verseCoordinateMatches = parts[1] === meta.code && parts[2] === String(chapter);
+  const selectedVerse = verseCoordinateMatches ? readerVerseFromUrl(location.href, verses.length) : null;
   // Do not replace the last readable bookmark when book loading fails.
   state.reader = { book: meta.code, chapter };
   localStorage.setItem("sa.reader", JSON.stringify(state.reader));

@@ -31,7 +31,12 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
       if (!panel.isConnected || !current()) return;
       const verses=data.chapters[chapter-1];
       if (!Array.isArray(verses)) { status.textContent=copy.unavailable; return; }
-      const metadata=catalog.translations?.[edition.id] || catalog.editions[lang];
+      // A language default is not provenance for every translation in that language.
+      // In particular, missing Ohiienko metadata must never borrow Kulish's licence.
+      const translated=catalog.translations?.[edition.id];
+      const regional=catalog.editions?.[lang];
+      const metadata=translated?.id===edition.id ? translated
+        : edition.contentId && regional?.id===edition.contentId ? regional : null;
       if (!metadata || typeof metadata.title!=='string') throw Error('missing edition metadata');
       const source=https(metadata.source), license=https(metadata.licenseUrl);
       result.innerHTML=`<section aria-labelledby="parallel-title"><h3 id="parallel-title">${esc(metadata.title)} — ${esc(bookTitle)} ${chapter}</h3><p>${copy.note}</p><p>${copy.license}: ${esc(metadata.license || '—')}</p>${metadata.attribution?`<p>${esc(metadata.attribution)}</p>`:''}${source?`<p><a href="${esc(source)}" target="_blank" rel="noreferrer">${copy.source}</a></p>`:''}${license?`<p><a href="${esc(license)}" target="_blank" rel="noreferrer">${copy.license}</a></p>`:''}<ol>${verses.map(verse=>`<li>${esc(verse)}</li>`).join('')}</ol></section>`;

@@ -45,8 +45,15 @@ export const scriptureDossiers=nodes;
 export function validateDossierGraph(catalog) {
   const known = new Map(nodes.map(item=>[item.id,item]));
   if(known.size !== nodes.length) return false;
-  if(!catalog?.books) return false;
-  const bookMaps = LANGS.map(lang=>new Map((catalog.books[lang]||[]).map(book=>[book.code,book.chapters])));
+  if(!catalog?.books || LANGS.some(lang=>!Array.isArray(catalog.books[lang]))) return false;
+  // A malformed or ambiguous edition catalogue must show the accessible
+  // source-unavailable state, not throw while assembling the dossier.
+  const catalogs = LANGS.map(lang=>catalog.books[lang]);
+  if(catalogs.some(books=>books.some(book=>!book || typeof book.code!=='string' || !book.code ||
+      typeof book.title!=='string' || !book.title.trim() ||
+      !Number.isSafeInteger(book.chapters) || book.chapters<1) ||
+      new Set(books.map(book=>book.code)).size!==books.length)) return false;
+  const bookMaps = catalogs.map(books=>new Map(books.map(book=>[book.code,book.chapters])));
   const validRef = source => source && Number.isInteger(source.first) && source.first>0 &&
     Number.isInteger(source.last) && source.last>=source.first &&
     Number.isInteger(source.chapter) && source.chapter>0 &&

@@ -60,8 +60,8 @@ try {
     { env: { ...options.env, SCRIPTURE_TEST_URL: base } });
   await run(["--experimental-strip-types", "scripts/test-learning-agent.mjs", "--local-test", "--smoke"],
     { env: { ...options.env, COMMUNITY_ORIGIN: base } });
-  // The HTTP test deletes the only user who saved a bookmark. Inspect the
-  // actual disposable D1 backing database to verify deletion removed its rows.
+  // The HTTP test deletes the user who created bookmarks and submissions.
+  // Inspect the disposable D1 database to verify both were removed.
   const directory = path.join(state, "v3", "d1", "miniflare-D1DatabaseObject");
   const databases = (await readdir(directory)).filter(name => name.endsWith(".sqlite"));
   let inspected = 0;
@@ -72,6 +72,10 @@ try {
       inspected++;
       const row = db.prepare("SELECT COUNT(*) AS count FROM reader_bookmarks").get();
       if (Number(row.count) !== 0) throw Error("Deleted account retained reader bookmarks");
+      const submissions = db.prepare("SELECT COUNT(*) AS count FROM material_submissions").get();
+      if (Number(submissions.count) !== 0) throw Error("Deleted account retained material submissions");
+      const roleEvents = db.prepare("SELECT COUNT(*) AS count FROM editorial_role_events").get();
+      if (Number(roleEvents.count) !== 0) throw Error("Deleted account retained editorial role events");
     } finally { db.close(); }
   }
   if (inspected !== 1) throw Error(`Expected one bookmark database, found ${inspected}`);

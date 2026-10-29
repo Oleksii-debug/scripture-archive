@@ -1,3 +1,4 @@
+import { parallelControls, mountParallelReader } from './parallel-reader.js';
 import {renderWorkspace, workspaceCopy} from './workspace.js';
 import {supportSection} from './support.js';
 import {homePage} from './home.js';
@@ -2240,9 +2241,10 @@ async function getSession() {
   if(state.user)localStorage.setItem('sa.progressOwner',state.user.id);else localStorage.removeItem('sa.progressOwner');
   return state.user;
 }
-async function getBook(code) {
+async function getBook(code, explicitEdition = null) {
   const requestLocale = state.lang;
-  const selected = selectedEdition(requestLocale);
+  const selected = explicitEdition || selectedEdition(requestLocale);
+  if (explicitEdition && (!explicitEdition.local || !EDITIONS[requestLocale].includes(explicitEdition))) throw Error("Invalid local edition");
   const edition = selected.local ? selected : EDITIONS[requestLocale].find(e => e.local);
   const folder = edition.folder || requestLocale;
   const key = `${folder}:${code}`;
@@ -2507,6 +2509,8 @@ const ATTEMPT_COPY = {
     noMistakes: "Усі відповіді правильні.",
     reopen: "Знову відкрити текст",
     readRequired: "Спочатку завершіть читання цієї глави.",
+    retryLoad: "Повторити завантаження",
+    groupNotRecorded: "Результат збережено особисто, але не збережено для групи. Перевірте членство або наявність групи.",
   },
   ru: {
     finishReading: "Я завершил чтение",
@@ -2528,6 +2532,8 @@ const ATTEMPT_COPY = {
     noMistakes: "Все ответы правильные.",
     reopen: "Снова открыть текст",
     readRequired: "Сначала завершите чтение этой главы.",
+    retryLoad: "Повторить загрузку",
+    groupNotRecorded: "Результат сохранён лично, но не сохранён для группы. Проверьте членство или наличие группы.",
   },
   en: {
     finishReading: "I have finished reading",
@@ -2549,6 +2555,8 @@ const ATTEMPT_COPY = {
     noMistakes: "Every answer was correct.",
     reopen: "Open the text again",
     readRequired: "Finish reading this chapter first.",
+    retryLoad: "Retry loading",
+    groupNotRecorded: "The result was saved personally, but not for the group. Check your membership and whether the group still exists.",
   },
 };
 
@@ -2680,6 +2688,18 @@ async function renderReader(parts) {
   activateTimer();
   document.querySelector(".reader-aside")?.insertAdjacentHTML("beforeend", '<section class="card" id="reader-bookmarks" aria-live="polite"></section>');
   void mountReaderBookmarks(meta, chapter, chosenEdition, books);
+  const parallelEditions = chosenEdition.local ? EDITIONS[state.lang].filter(item => item.local && item.id !== chosenEdition.id) : [];
+  if (parallelEditions.length) {
+    const aside = document.querySelector('.reader-aside');
+    aside.insertAdjacentHTML('beforeend', parallelControls(parallelEditions, state.lang, esc));
+    const panel = aside.querySelector('.parallel-reader'), reader = state.currentReader;
+    mountParallelReader(panel, { editions: parallelEditions, catalog, lang: state.lang, book: meta.code, bookTitle: bookTitle(meta), chapter, getBook, esc,
+      check: (code, number) => attemptRequest('chapter', 'POST', { book: code, chapter: number }),
+      current: () => state.currentReader === reader,
+      lock: () => { sessionStorage.removeItem('sa.activeAttempt'); state.mission=null; state.currentReader=null; renderLockedChapter(meta.code,chapter); },
+      failClosed: () => { state.currentReader=null; shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1></section>`); },
+    });
+  }
   const editionText=editionCopy[state.lang];
   if(editionInfo.attribution) document.querySelector('.edition-card').insertAdjacentHTML('beforeend', `<p class="edition-attribution">${esc(editionInfo.attribution)}</p>`);
   if(editionInfo.licenseUrl) document.querySelector('.edition-card').insertAdjacentHTML('beforeend', `<a href="${esc(editionInfo.licenseUrl)}" target="_blank" rel="noreferrer">${esc(editionInfo.license)} ↗</a>`);
@@ -2994,14 +3014,14 @@ async function renderGroup(groupId) {
     };
 }
 
-function renderAttemptResult(result, book, chapter, groupId = "") {
+function renderAttemptResult(result, book, chapter, groupId = "", groupRecorded) {
   if(state.user)void syncProgress();
   const copy = ATTEMPT_COPY[state.lang];
   const mastered = result.mastered?.length ? `<ul>${result.mastered.map(item => `<li>${esc(item)}</li>`).join("")}</ul>` : `<p>—</p>`;
   const mistakes = result.mistakes?.length
     ? result.mistakes.map(item => `<article class="result-review"><h3>${esc(item.reference)}</h3><p>${esc(item.explanation)}</p><p><strong>${state.lang === "uk" ? "Правильна відповідь" : state.lang === "ru" ? "Правильный ответ" : "Correct answer"}:</strong> ${item.correctAnswers.map(esc).join("; ")}</p></article>`).join("")
     : `<div class="notice success">${copy.noMistakes}</div>`;
-  shell(`<article class="prose attempt-results"><p class="eyebrow">Scripture Archive</p><h1>${copy.completed}</h1><p class="score-line"><strong>${result.score}</strong> ${copy.score} ${result.total}</p><h2>${copy.mastered}</h2>${mastered}<h2>${copy.mistakes}</h2>${mistakes}<div class="action-row"><a class="button primary" href="/reader/${book}/${chapter}">${copy.reopen}</a>${groupId?`<a class="button" href="/groups/${encodeURIComponent(groupId)}">${t("groups")}</a>`:""}</div></article>`);
+  shell(`<article class="prose attempt-results"><p class="eyebrow">Scripture Archive</p><h1>${copy.completed}</h1><p class="score-line"><strong>${result.score}</strong> ${copy.score} ${result.total}</p>${groupRecorded===false?`<p class="notice info">${copy.groupNotRecorded}</p>`:''}<h2>${copy.mastered}</h2>${mastered}<h2>${copy.mistakes}</h2>${mistakes}<div class="action-row"><a class="button primary" href="/reader/${book}/${chapter}">${copy.reopen}</a>${groupId&&groupRecorded!==false?`<a class="button" href="/groups/${encodeURIComponent(groupId)}">${t("groups")}</a>`:""}</div></article>`);
   window.saAnalytics?.track("quiz_complete",{score:Number(result.score),total:Number(result.total),language:state.lang,mode:groupId?"group":"personal"});
   play("done");
 }
@@ -3015,14 +3035,22 @@ async function renderMission(parts = []) {
     return;
   }
   let data;
-  try { data = await attemptRequest("current", "GET", undefined, `attemptId=${encodeURIComponent(attemptId)}`); }
+  try {
+    data = await attemptRequest("current", "GET", undefined, `attemptId=${encodeURIComponent(attemptId)}`);
+    if (data.grading) data = await attemptRequest("finalize", "POST", { attemptId });
+  }
   catch (error) {
-    sessionStorage.removeItem("sa.activeAttempt");
-    if (["attempt_invalidated", "attempt_expired", "attempt_closed"].includes(error.message)) { renderLockedChapter("GEN", 12); return; }
-    throw error;
+    if (["attempt_invalidated", "attempt_expired", "attempt_closed"].includes(error.message)) {
+      if(sessionStorage.getItem("sa.activeAttempt")===attemptId)sessionStorage.removeItem("sa.activeAttempt");
+      renderLockedChapter("GEN", 12); return;
+    }
+    shell(`<section class="gate-panel"><h1>${copy.prepareTitle}</h1><p role="status">${t("errorLoad")}</p><button class="button primary" id="retry-attempt">${copy.retryLoad}</button></section>`);
+    document.querySelector("#retry-attempt").onclick=()=>renderMission(["mission","attempt",attemptId]);
+    return;
   }
   if (data.completed) {
-    renderAttemptResult(data.result, data.book, data.chapter, data.groupId);
+    if(sessionStorage.getItem("sa.activeAttempt")===attemptId)sessionStorage.removeItem("sa.activeAttempt");
+    renderAttemptResult(data.result, data.book, data.chapter, data.groupId, data.groupRecorded);
     return;
   }
   const task = data.task, type = task.type === "multi" ? "checkbox" : "radio";
@@ -3039,9 +3067,10 @@ async function renderMission(parts = []) {
       if (response.completed) {
         sessionStorage.removeItem("sa.activeAttempt");
         attemptChannel?.postMessage({ type: "attempt-completed", attemptId });
-        renderAttemptResult(response.result, response.book, response.chapter, response.groupId);
+        renderAttemptResult(response.result, response.book, response.chapter, response.groupId, response.groupRecorded);
       } else await renderMission(["mission", "attempt", attemptId]);
     } catch (error) {
+      if (["attempt_changed", "answer_already_submitted", "attempt_closed"].includes(error.message)) { await renderMission(["mission", "attempt", attemptId]); return; }
       status.textContent = error.message === "attempt_invalidated" ? copy.lockedText : t("errorLoad");
       button.disabled = false;
     }
@@ -3306,9 +3335,9 @@ function field(name, label, type = "text", extra = "") {
 function renderAccount() {
   setActiveNav("account");
   const copy = {
-    uk: { title:"Обліковий запис",intro:"Підтверджена пошта захищає доступ, а серверне збереження повертає ваш прогрес на іншому пристрої.",login:"Увійти",register:"Створити обліковий запис",forgot:"Забули пароль?",reset:"Встановити новий пароль",change:"Змінити пароль",currentPassword:"Поточний пароль",newPassword:"Новий пароль",email:"Електронна пошта",password:"Пароль",passwordRule:"Щонайменше 12 символів",age:"Вік",denomination:"Деномінація або назва церкви",children:"Чи є діти",yes:"Так",no:"Ні",send:"Надіслати посилання",verification:"Перевірте пошту та відкрийте одноразове посилання підтвердження.",verified:"Електронну адресу підтверджено. Тепер увійдіть.",resetSent:"Якщо обліковий запис існує, лист уже надіслано.",resetDone:"Пароль змінено. Інші активні сесії завершено. Увійдіть з новим паролем.",saved:"Профіль і прогрес синхронізуються між пристроями.",edit:"Редагувати сайт",visibility:"Публічна видимість",visibilityHelp:"Усі чутливі поля залишаються приватними. Окремо можна дозволити лише наведені поля.",publicFirst:"Показувати ім’я",publicLast:"Показувати прізвище",publicChurch:"Показувати назву церкви",publicProgress:"Показувати навчальний поступ",save:"Зберегти",delete:"Видалити обліковий запис",deleteHelp:"Буде видалено профіль, особистий прогрес і групи, якими ви володієте. У чужих групах залишаться лише знеособлені підсумкові числа й дата зустрічі, без вашого ідентифікатора та написаного вами підсумку. Надіслані листи й резервні копії не видаляються цією дією.",confirmDelete:"Я розумію, що дані буде видалено",logout:"Вийти",error:"Не вдалося виконати дію. Перевірте дані та спробуйте ще раз." },
-    ru: { title:"Учётная запись",intro:"Подтверждённая почта защищает доступ, а серверное сохранение возвращает прогресс на другом устройстве.",login:"Войти",register:"Создать учётную запись",forgot:"Забыли пароль?",reset:"Установить новый пароль",change:"Изменить пароль",currentPassword:"Текущий пароль",newPassword:"Новый пароль",email:"Электронная почта",password:"Пароль",passwordRule:"Не менее 12 символов",age:"Возраст",denomination:"Деноминация или название церкви",children:"Есть ли дети",yes:"Да",no:"Нет",send:"Отправить ссылку",verification:"Проверьте почту и откройте одноразовую ссылку подтверждения.",verified:"Электронный адрес подтверждён. Теперь войдите.",resetSent:"Если учётная запись существует, письмо уже отправлено.",resetDone:"Пароль изменён. Другие активные сессии завершены. Войдите с новым паролем.",saved:"Профиль и прогресс синхронизируются между устройствами.",edit:"Редактировать сайт",visibility:"Публичная видимость",visibilityHelp:"Все чувствительные поля остаются приватными. Отдельно можно разрешить только перечисленные поля.",publicFirst:"Показывать имя",publicLast:"Показывать фамилию",publicChurch:"Показывать название церкви",publicProgress:"Показывать учебный прогресс",save:"Сохранить",delete:"Удалить учётную запись",deleteHelp:"Будут удалены профиль, личный прогресс и группы, которыми вы владеете. В чужих группах сохранятся только обезличенные результаты и дата встречи, без вашего идентификатора и написанного вами итога. Отправленные письма и резервные копии этой операцией не удаляются.",confirmDelete:"Я понимаю, что данные будут удалены",logout:"Выйти",error:"Не удалось выполнить действие. Проверьте данные и попробуйте снова." },
-    en: { title:"Account",intro:"Verified email protects access, and server-side storage restores your progress on another device.",login:"Sign in",register:"Create account",forgot:"Forgot your password?",reset:"Create a new password",change:"Change password",currentPassword:"Current password",newPassword:"New password",email:"Email",password:"Password",passwordRule:"At least 12 characters",age:"Age",denomination:"Denomination or church name",children:"Do you have children?",yes:"Yes",no:"No",send:"Send one-time link",verification:"Check your inbox and open the one-time verification link.",verified:"Your email is verified. You can now sign in.",resetSent:"If the account exists, the message has been sent.",resetDone:"Password changed. Other active sessions have been ended. Sign in with the new password.",saved:"Your profile and progress synchronize across devices.",edit:"Edit site",visibility:"Public visibility",visibilityHelp:"Sensitive fields remain private. You may separately allow only the fields listed below.",publicFirst:"Show first name",publicLast:"Show last name",publicChurch:"Show church name",publicProgress:"Show learning progress",save:"Save",delete:"Delete account",deleteHelp:"This removes your profile, personal progress and groups you own. Meetings you authored in other groups retain only de-identified totals and dates, without your account ID or written reflection. Previously sent emails and backups are not erased by this action.",confirmDelete:"I understand that the data will be deleted",logout:"Sign out",error:"The action could not be completed. Check the details and try again." },
+    uk: { title:"Обліковий запис",intro:"Підтверджена пошта захищає доступ, а серверне збереження повертає ваш прогрес на іншому пристрої.",login:"Увійти",register:"Створити обліковий запис",forgot:"Забули пароль?",reset:"Встановити новий пароль",change:"Змінити пароль",currentPassword:"Поточний пароль",newPassword:"Новий пароль",email:"Електронна пошта",password:"Пароль",passwordRule:"Щонайменше 12 символів",age:"Вік",denomination:"Деномінація або назва церкви",children:"Чи є діти",yes:"Так",no:"Ні",send:"Надіслати посилання",verification:"Перевірте пошту та відкрийте одноразове посилання підтвердження.",verified:"Електронну адресу підтверджено. Тепер увійдіть.",resetSent:"Якщо обліковий запис існує, лист уже надіслано.",resetDone:"Пароль змінено. Інші активні сесії завершено. Увійдіть з новим паролем.",saved:"Профіль і прогрес синхронізуються між пристроями.",edit:"Редагувати сайт",visibility:"Публічна видимість",visibilityHelp:"Усі чутливі поля залишаються приватними. Окремо можна дозволити лише наведені поля.",publicFirst:"Показувати ім’я",publicLast:"Показувати прізвище",publicChurch:"Показувати назву церкви",publicProgress:"Показувати навчальний поступ",save:"Зберегти",delete:"Видалити обліковий запис",deleteHelp:"Ця дія видалить профіль, особистий прогрес і ваші групи.",confirmDelete:"Я розумію, що дані буде видалено",logout:"Вийти",error:"Не вдалося виконати дію. Перевірте дані та спробуйте ще раз." },
+    ru: { title:"Учётная запись",intro:"Подтверждённая почта защищает доступ, а серверное сохранение возвращает прогресс на другом устройстве.",login:"Войти",register:"Создать учётную запись",forgot:"Забыли пароль?",reset:"Установить новый пароль",change:"Изменить пароль",currentPassword:"Текущий пароль",newPassword:"Новый пароль",email:"Электронная почта",password:"Пароль",passwordRule:"Не менее 12 символов",age:"Возраст",denomination:"Деноминация или название церкви",children:"Есть ли дети",yes:"Да",no:"Нет",send:"Отправить ссылку",verification:"Проверьте почту и откройте одноразовую ссылку подтверждения.",verified:"Электронный адрес подтверждён. Теперь войдите.",resetSent:"Если учётная запись существует, письмо уже отправлено.",resetDone:"Пароль изменён. Другие активные сессии завершены. Войдите с новым паролем.",saved:"Профиль и прогресс синхронизируются между устройствами.",edit:"Редактировать сайт",visibility:"Публичная видимость",visibilityHelp:"Все чувствительные поля остаются приватными. Отдельно можно разрешить только перечисленные поля.",publicFirst:"Показывать имя",publicLast:"Показывать фамилию",publicChurch:"Показывать название церкви",publicProgress:"Показывать учебный прогресс",save:"Сохранить",delete:"Удалить учётную запись",deleteHelp:"Будут удалены профиль, личный прогресс и ваши группы.",confirmDelete:"Я понимаю, что данные будут удалены",logout:"Выйти",error:"Не удалось выполнить действие. Проверьте данные и попробуйте снова." },
+    en: { title:"Account",intro:"Verified email protects access, and server-side storage restores your progress on another device.",login:"Sign in",register:"Create account",forgot:"Forgot your password?",reset:"Create a new password",change:"Change password",currentPassword:"Current password",newPassword:"New password",email:"Email",password:"Password",passwordRule:"At least 12 characters",age:"Age",denomination:"Denomination or church name",children:"Do you have children?",yes:"Yes",no:"No",send:"Send one-time link",verification:"Check your inbox and open the one-time verification link.",verified:"Your email is verified. You can now sign in.",resetSent:"If the account exists, the message has been sent.",resetDone:"Password changed. Other active sessions have been ended. Sign in with the new password.",saved:"Your profile and progress synchronize across devices.",edit:"Edit site",visibility:"Public visibility",visibilityHelp:"Sensitive fields remain private. You may separately allow only the fields listed below.",publicFirst:"Show first name",publicLast:"Show last name",publicChurch:"Show church name",publicProgress:"Show learning progress",save:"Save",delete:"Delete account",deleteHelp:"This removes your profile, personal progress, and groups you own.",confirmDelete:"I understand that the data will be deleted",logout:"Sign out",error:"The action could not be completed. Check the details and try again." },
   }[state.lang];
   Object.assign(copy, {
     uk: {mailDelayed:"Обліковий запис створено, але лист підтвердження поки не вдалося надіслати. Спробуйте надіслати його повторно.",resend:"Надіслати лист повторно",requested:"Запит прийнято. Перевірте пошту.",emailInUse:"Цю адресу вже зареєстровано. Увійдіть або скористайтеся відновленням пароля.",rateLimited:"Забагато спроб. Зачекайте й повторіть пізніше.",resetSent:"Якщо ця адреса належить підтвердженому обліковому запису, ви отримаєте лист для відновлення доступу."},
@@ -3585,7 +3614,7 @@ async function route() {
     else if (name === "community") await renderCommunity(Number(new URLSearchParams(location.search).get("page"))||1,new URLSearchParams(location.search).get("q")||"",new URLSearchParams(location.search).get("sort")||"recent");
     else if (["home-groups", "live", "campaigns", "dossiers", "builder", "progress", "about"].includes(name)) {
       if(name==="progress"&&state.user)await syncProgress();
-      await renderWorkspace(name==='home-groups'?'live':name,{state,t,esc,shell,getMission,setActiveNav,loadJSON,announce,play});
+      await renderWorkspace(name==='home-groups'?'live':name,{state,t,esc,shell,getMission,getCatalog,setActiveNav,loadJSON,announce,play});
     }
     else if (name === "atlas") renderAtlas();
     else if (name === "support") renderSupport();

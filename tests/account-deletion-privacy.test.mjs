@@ -8,7 +8,7 @@ import vm from 'node:vm';
 test('account deletion clears personal records while preserving other users', async () => {
   const db = new DatabaseSync(':memory:');
   db.exec('PRAGMA foreign_keys=ON');
-  for (const name of readdirSync(new URL('../drizzle/', import.meta.url)).filter(n => /^000[0-9]_.*\.sql$/.test(n)).sort())
+  for (const name of readdirSync(new URL('../drizzle/', import.meta.url)).filter(n => /^00(?:0[0-9]|1[0-2])_.*\.sql$/.test(n)).sort())
     db.exec(readFileSync(new URL('../drizzle/' + name, import.meta.url), 'utf8'));
   for (const id of ['alice', 'bob']) {
     db.prepare("INSERT INTO accounts (id,email,password_hash,password_salt,password_iterations,first_name,last_name) VALUES (?,?,?,?,?,?,?)").run(id, `${id}@example.invalid`, 'hash', 'salt', 1, 'First', 'Last');
@@ -16,12 +16,15 @@ test('account deletion clears personal records while preserving other users', as
     db.prepare("INSERT INTO reader_bookmarks(user_id,edition,book,chapter) VALUES (?,'en-web','GEN',1)").run(id);
     db.prepare("INSERT INTO auth_tokens(token_hash,user_id,purpose,expires_at) VALUES (?,?,'reset','2099-01-01')").run('token-'+id,id);
     db.prepare("INSERT INTO auth_sessions(token_hash,user_id,session_version,user_agent_hash,expires_at) VALUES (?,?,1,'agent','2099-01-01')").run('session-'+id,id);
+    db.prepare("INSERT INTO editorial_roles(user_id,granted_by) VALUES (?, 'owner')").run(id);
     db.prepare("INSERT INTO mission_attempts(id,actor_id,mission_id,book_id,chapter,locale,task_limit,expires_at) VALUES (?,?,'M','GEN',1,'uk',1,'2099-01-01')").run('attempt-'+id,id);
     db.prepare("INSERT INTO mission_attempt_answers(attempt_id,task_id,selected_json,is_correct) VALUES (?,'task','[]',0)").run('attempt-'+id);
     db.prepare("INSERT INTO chapter_read_receipts(id,actor_id,book_id,chapter) VALUES (?,?,'GEN',1)").run('receipt-'+id,id);
     db.prepare("INSERT INTO support_requests(id,user_id,email,subject,message) VALUES (?,?,?,'Subject','Synthetic message')").run('request-'+id,id,`${id}@example.invalid`);
     db.prepare("INSERT INTO support_attachments(id,request_id,filename,content_type,size_bytes,content_base64) VALUES (?,?,'a.txt','text/plain',1,'YQ==')").run('attachment-'+id,'request-'+id);
   }
+  db.prepare("INSERT INTO accounts (id,email,password_hash,password_salt,password_iterations,first_name,last_name) VALUES ('carol','carol@example.invalid','hash','salt',1,'First','Last')").run();
+  db.prepare("INSERT INTO editorial_roles(user_id,granted_by) VALUES ('carol','alice')").run();
   // Alice facilitated one meeting in Bob's group and owns another group.
   // Deletion must not erase Bob's independent records or retain Alice's
   // identifier or free-text reflection in a surviving shared group.
@@ -51,7 +54,7 @@ test('account deletion clears personal records while preserving other users', as
   assert.equal(db.prepare("SELECT count(*) n FROM progress WHERE user_id='alice'").get().n, 1, 'failed batch rolls back earlier deletions');
   assert.equal(db.prepare("SELECT deleted_at FROM accounts WHERE id='alice'").get().deleted_at, null);
   // Fail after shared-session redaction to prove the entire batch rolls back.
-  failAfter = 9;
+  failAfter = 11;
   await assert.rejects(exports.POST(request('correct')), /simulated database failure/);
   assert.deepEqual(db.prepare("SELECT created_by,reflection FROM group_sessions WHERE id='alice-meeting'").get(), {created_by:'alice',reflection:'Alice private reflection'});
   assert.equal(db.prepare("SELECT count(*) AS n FROM home_group_members WHERE group_id='bob-group'").get().n, 2);
@@ -59,7 +62,7 @@ test('account deletion clears personal records while preserving other users', as
   assert.equal((await exports.POST(request('correct'))).status, 200);
   const alice = db.prepare("SELECT email,first_name,last_name,password_hash,password_salt,deleted_at FROM accounts WHERE id='alice'").get();
   assert.equal(alice.first_name, ''); assert.equal(alice.last_name, ''); assert.equal(alice.password_hash, ''); assert.equal(alice.password_salt, ''); assert.ok(alice.deleted_at); assert.equal(alice.email, 'deleted-alice@invalid.local');
-  for (const [table,column] of [['progress','user_id'],['reader_bookmarks','user_id'],['auth_tokens','user_id'],['auth_sessions','user_id'],['mission_attempts','actor_id'],['chapter_read_receipts','actor_id'],['support_requests','user_id']]) {
+  for (const [table,column] of [['progress','user_id'],['reader_bookmarks','user_id'],['auth_tokens','user_id'],['auth_sessions','user_id'],['editorial_roles','user_id'],['mission_attempts','actor_id'],['chapter_read_receipts','actor_id'],['support_requests','user_id']]) {
     assert.equal(db.prepare(`SELECT count(*) n FROM ${table} WHERE ${column}=?`).get('alice').n, 0, table);
     assert.equal(db.prepare(`SELECT count(*) n FROM ${table} WHERE ${column}=?`).get('bob').n, 1, table);
   }
@@ -74,5 +77,8 @@ test('account deletion clears personal records while preserving other users', as
   assert.equal(db.prepare("SELECT count(*) AS n FROM home_group_members WHERE group_id='bob-group' AND user_id='bob'").get().n, 1);
   assert.equal(db.prepare("SELECT count(*) AS n FROM home_groups WHERE id='alice-group'").get().n, 0);
   assert.equal(db.prepare("SELECT count(*) AS n FROM group_sessions WHERE group_id='alice-group'").get().n, 0);
+  assert.equal(db.prepare("SELECT count(*) n FROM editorial_role_events WHERE subject_user_id='alice' OR actor_user_id='alice'").get().n, 0);
+  assert.equal(db.prepare("SELECT count(*) n FROM editorial_role_events WHERE subject_user_id='bob'").get().n, 1);
+  assert.equal(db.prepare("SELECT count(*) n FROM editorial_roles WHERE user_id='carol'").get().n, 0, 'deleting grantor revokes delegated roles');
   db.close();
 });

@@ -50,12 +50,13 @@ function fixture() {
     require(id) {
       if (id === "cloudflare:workers") return { env: { DB: D1 } };
       if (id.endsWith("lib/auth")) return {
+        isVerifiedOwner: identity => Boolean(identity && identity.emailVerified && identity.provider !== "agent" &&
+          identity.email?.toLowerCase() === "dordiaioleksii1@gmail.com"),
         authenticateRequest: async request => {
           const userId = request.headers.get("x-user");
           return userId ? { userId, email: userId + "@example.invalid", emailVerified: true, provider: "password" } : null;
         },
         sameOrigin: request => request.headers.get("origin") === new URL(request.url).origin,
-        isVerifiedOwner: id => Boolean(id && id.provider !== "agent" && id.emailVerified && id.email.toLowerCase() === "dordiaioleksii1@gmail.com"),
       };
       throw Error("unexpected module " + id);
     },
@@ -83,8 +84,9 @@ test("saved material ACK represents a committed owner-conditional write", async 
   const f = fixture();
   try {
     assert.equal((await f.post(valid, "alice", "https://attacker.invalid")).status, 403);
-    const directPublic = await f.post({ ...valid, id: "synthetic-draft", visibility: "public" });
-    assert.equal(directPublic.status, 403, "unverified non-owner cannot bypass review");
+    // Only a verified owner may even attempt publication, and every publication
+    // still requires independent editorial review; ordinary draft saves are private.
+    assert.equal((await f.post({ ...valid, id: "synthetic-draft", visibility: "public" })).status, 403);
     const first = await f.post({ ...valid, id: "synthetic-draft" });
     assert.equal(first.status, 201);
     assert.equal(first.body.id, "synthetic-draft");

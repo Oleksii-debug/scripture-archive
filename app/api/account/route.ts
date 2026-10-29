@@ -122,12 +122,19 @@ async function write(request:Request){
     if(typeof body.acceptSensitive!=="boolean")return privateJson({error:"invalid_consent"},{status:400});
     const accepted=body.acceptSensitive, tradition=clean(body.tradition,40), denomination=clean(body.denomination,160), church=clean(body.church,160);
     if(accepted&&tradition&&!TRADITIONS.has(tradition))return privateJson({error:"invalid_profile_option"},{status:400});
-    const saved=await env.DB!.prepare(`UPDATE profiles SET sensitive_consent=?,sensitive_consent_version=?,tradition=?,denomination=?,church=?,
-      public_church=CASE WHEN ?=0 OR sensitive_consent_version<>1 THEN 0 ELSE public_church END,updated_at=CURRENT_TIMESTAMP WHERE user_id=? RETURNING user_id`)
-       .bind(accepted?1:0,accepted?1:0,accepted&&tradition!=="prefer_not"?tradition||null:null,accepted?denomination||null:null,accepted?church||null:null,accepted?1:0,id.userId).first<{user_id:string}>();
-    if(!saved)return privateJson({error:"profile_not_found"},{status:409});
-    const row=await env.DB!.prepare("SELECT * FROM profiles WHERE user_id=?").bind(id.userId).first<Record<string,unknown>>();
-    return privateJson({user:publicUser(id,row)});
+    try {
+      // A privacy-consent change is a mutation, not a SELECT. Never ACK a
+      // missing/failed D1 receipt or mistake an uncertain write for absence.
+      const saved=await env.DB!.prepare(`UPDATE profiles SET sensitive_consent=?,sensitive_consent_version=?,tradition=?,denomination=?,church=?,
+        public_church=CASE WHEN ?=0 OR sensitive_consent_version<>1 THEN 0 ELSE public_church END,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`)
+        .bind(accepted?1:0,accepted?1:0,accepted&&tradition!=="prefer_not"?tradition||null:null,accepted?denomination||null:null,accepted?church||null:null,accepted?1:0,id.userId).run();
+      const changes=Number(saved.meta?.changes);
+      if(!saved.success||!Number.isSafeInteger(changes)||changes<0)return privateJson({error:"consent_save_failed"},{status:503});
+      if(changes===0)return privateJson({error:"profile_not_found"},{status:409});
+      const row=await env.DB!.prepare("SELECT * FROM profiles WHERE user_id=?").bind(id.userId).first<Record<string,unknown>>();
+      if(!row)return privateJson({error:"consent_read_failed"},{status:503});
+      return privateJson({user:publicUser(id,row)});
+    }catch{return privateJson({error:"consent_save_failed"},{status:503});}
   }
   if(action==="visibility"){const visibilityWrite=await env.DB!.prepare("UPDATE profiles SET public_first_name=?,public_last_name=?,public_church=CASE WHEN sensitive_consent=1 AND sensitive_consent_version=1 THEN ? ELSE 0 END,public_progress=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?").bind(body.firstName===true?1:0,body.lastName===true?1:0,body.church===true?1:0,body.progress===true?1:0,id.userId).run();if(!visibilityWrite.success)return privateJson({error:"visibility_save_failed"},{status:503});const row=await env.DB!.prepare("SELECT * FROM profiles WHERE user_id=?").bind(id.userId).first<Record<string,unknown>>();if(visibilityWrite.meta?.changes===0||!row)return privateJson({error:"profile_not_found"},{status:409});return privateJson({user:publicUser(id,row)})}
   if(action!=="profile")return privateJson({error:"unknown_action"},{status:400});

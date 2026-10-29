@@ -1,0 +1,79 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import test from 'node:test';
+import { dossierMarkup, scriptureDossiers, validateDossierGraph } from '../public/scripture-dossiers.js';
+
+const catalog=JSON.parse(readFileSync(new URL('../public/data/catalog.json',import.meta.url),'utf8'));
+const esc=value=>String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
+
+test('the source-linked dossier graph validates against the canonical 3-language edition catalog',()=>{
+  assert.equal(validateDossierGraph(catalog),true);
+  assert.ok(scriptureDossiers.length>=6);
+  const ids=scriptureDossiers.map(d=>d.id);
+  assert.equal(new Set(ids).size,ids.length,'stable unique dossier IDs');
+  assert.ok(scriptureDossiers.some(x=>x.type==='person'));
+  assert.ok(scriptureDossiers.some(x=>x.type==='place'));
+  assert.ok(scriptureDossiers.some(x=>x.type==='event'));
+  assert.ok(scriptureDossiers.every(d=>d.sources.length>=3));
+  assert.ok(scriptureDossiers.every(d=>d.related.length>=1));
+  assert.ok(scriptureDossiers.every(d=>d.prompts.uk.length>=2&&d.prompts.ru.length>=2&&d.prompts.en.length>=2));
+  const allSources=scriptureDossiers.flatMap(d=>[...d.sources,...d.related.map(r=>r.via)]);
+  assert.ok(allSources.some(r=>r.kind==='interpretive'),'thematic parallels are explicitly differentiated');
+  assert.ok(allSources.some(r=>r.kind==='narrative'),'biblical narrative sources are explicitly differentiated');
+  assert.ok(allSources.some(r=>catalog.books.en.find(b=>b.code===r.book)?.testament==='NT'));
+  assert.ok(allSources.some(r=>catalog.books.en.find(b=>b.code===r.book)?.testament==='OT'));
+});
+
+test('each dossier is reachable via real internal navigation, has labeled evidence and source links',()=>{
+  for(const language of ['uk','ru','en']){
+    for(const item of scriptureDossiers){
+      const markup=dossierMarkup(catalog,language,item.id,esc);
+      assert.ok(markup.includes(esc(item.names[language])),item.id);
+      assert.ok(markup.includes('aria-current="page"'),item.id);
+      assert.ok(markup.includes('aria-labelledby="dossier-heading"'),item.id);
+      assert.ok(markup.includes('tabindex="-1"'),item.id);
+      assert.ok(markup.includes('href="/dossiers?id='+item.id+'" aria-current="page"'),item.id);
+      assert.ok(markup.includes('<ol>'),item.id);
+      assert.ok(markup.includes('href="/reader/'),item.id);
+      assert.ok(markup.includes(esc(item.prompts[language][0])),item.id);
+      for(const reference of item.sources){
+        assert.ok(markup.includes('href="/reader/'+reference.book+'/'+reference.chapter+'"'),item.id);
+      }
+      for(const relation of item.related){
+        assert.ok(markup.includes('href="/dossiers?id='+relation.to+'"'),item.id);
+      }
+      assert.ok(!markup.includes('href="http://'),'references never leave canonical reader');
+      assert.ok(!markup.includes('<iframe'));
+      assert.ok(!markup.includes('onclick='));
+    }
+  }
+});
+
+test('the existing Abraham mission remains linked without making other dossiers fake missions',()=>{
+  const abraham=dossierMarkup(catalog,'uk','abraham',esc);
+  const moses=dossierMarkup(catalog,'uk','moses',esc);
+  assert.match(abraham,/href="\/mission\/abraham"/);
+  assert.doesNotMatch(moses,/href="\/mission\/abraham"/);
+});
+
+test('the dossier catalogue fails closed when edition provenance/metadata cannot be resolved',()=>{
+  const broken=structuredClone(catalog);
+  broken.books.en=broken.books.en.filter(b=>b.code!=='GEN');
+  assert.equal(validateDossierGraph(broken),false);
+  const markup=dossierMarkup(broken,'en','abraham',esc);
+  assert.match(markup,/role="alert"/);
+  assert.doesNotMatch(markup,/href="\/reader\//);
+  assert.doesNotMatch(markup,/href="\/dossiers\?/);
+  assert.equal(validateDossierGraph(null),false);
+  const weird=dossierMarkup(catalog,'en','"><script>alert(1)</script>',esc);
+  assert.doesNotMatch(weird,/<script>/);
+  assert.ok(weird.includes('Abraham'));
+});
+
+test('the public dossier workspace uses the shared catalog and actual source-graph module',()=>{
+  const source=readFileSync(new URL('../public/workspace.js',import.meta.url),'utf8');
+  assert.match(source,/import \{ dossierMarkup \} from '\.\/scripture-dossiers\.js'/);
+  assert.match(source,/if\(name==='dossiers'\)/);
+  assert.match(source,/const catalog=await c\.getCatalog\(\)/);
+  assert.match(source,/dossierMarkup\(catalog,state\.lang,selectedId,esc\)/);
+});

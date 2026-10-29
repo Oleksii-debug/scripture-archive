@@ -90,3 +90,10 @@ test('standard Node assertion metadata does not defeat an explicitly proven prox
   assert.equal(isDisposableWorkerRestart(actual),true);
   assert.equal(isDisposableWorkerRestart(actual+"\n  AssertionError: a second, unrelated failure"),false);
 });
+
+test('exact proxy body used as a status assertion message also qualifies one disposable replay',async()=>{
+  const direct=failedRun("AssertionError [ERR_ASSERTION]: Your worker restarted mid-request. Please try sending the request again. Only GET or HEAD requests are retried automatically.\n  503 !== 400\n    code: 'ERR_ASSERTION'");
+  assert.equal(isDisposableWorkerRestart(direct),true);
+  assert.equal(isDisposableWorkerRestart(direct+"\n  AssertionError: wrong ownership persisted"),false);
+  assert.equal(isDisposableWorkerRestart(failedRun("AssertionError [ERR_ASSERTION]: Your worker restarted mid-request but context unknown")),false);
+});

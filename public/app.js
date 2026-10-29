@@ -1961,6 +1961,7 @@ const state = {
     correct: [],
     complete: false,
   }),
+  progressSyncUnavailable: false,
   studyTimer: loadJSON("sa.studyTimer", {
     durationMinutes: 0,
     remainingSeconds: 0,
@@ -3409,17 +3410,27 @@ async function syncProgress() {
   if (!state.user) return;
   try {
     const readingData=await accountRequest('reading');
-    const localReading=loadJSON('sa.readingHistory',[]),mergedReading=[...new Map([...(readingData.reading||[]),...localReading].map(r=>[r.book+':'+r.chapter,r])).values()];
-    localStorage.setItem('sa.readingHistory',JSON.stringify(mergedReading));
+    if(!Array.isArray(readingData.reading))throw Error('reading history not confirmed');
+    const localReading=loadJSON('sa.readingHistory',[]);
+    if(!Array.isArray(localReading))throw Error('local reading history invalid');
+    const mergedReading=[...new Map([...readingData.reading,...localReading].map(r=>[r.book+':'+r.chapter,r])).values()];
     if(mergedReading.length)await accountRequest('reading','PUT',{reading:mergedReading});
-    const data = await accountRequest("progress");
-    if (data.progress) {
-      state.missionProgress = data.progress;
-      localStorage.setItem("sa.mission.OTAB01", JSON.stringify(data.progress));
-    }
-  } catch {}
+    const data=await accountRequest('progress');
+    if(!data.progress||!Array.isArray(data.progress.correct)||
+      !Number.isSafeInteger(data.progress.index)||data.progress.index<0||
+      typeof data.progress.complete!=='boolean')throw Error('progress not confirmed');
+    localStorage.setItem('sa.readingHistory',JSON.stringify(mergedReading));
+    state.missionProgress=data.progress;
+    localStorage.setItem('sa.mission.OTAB01',JSON.stringify(data.progress));
+    state.progressSyncUnavailable=false;
+  } catch {
+    // Show cached values only with an explicit visible warning, not as
+    // server-confirmed empty or up-to-date private account history.
+    state.progressSyncUnavailable=true;
+  }
 }
 function clearPersonalProgress() {
+  state.progressSyncUnavailable=false;
   state.missionProgress={index:0,correct:[],complete:false};
   localStorage.setItem("sa.mission.OTAB01",JSON.stringify(state.missionProgress));
   localStorage.setItem("sa.readingHistory","[]");

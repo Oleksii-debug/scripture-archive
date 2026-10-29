@@ -83,6 +83,67 @@ function resultFor(tasks: MissionTask[], answers: Array<Record<string, unknown>>
   };
 }
 
+// A result may be read repeatedly after a network failure. For results made by
+// this version, report whether the group record still exists; older results do
+// not carry a link to their randomly generated group-session IDs.
+async function completedResponse(attempt: Attempt, accepted = false) {
+  try {
+    if (!attempt.result_json) return json({ error: "attempt_state_invalid" }, 503);
+    const result = JSON.parse(attempt.result_json);
+    let groupRecorded: boolean | undefined;
+    if (attempt.group_id && result.completionVersion === 1) {
+      const session = await env.DB!.prepare("SELECT id FROM group_sessions WHERE id=? AND group_id=?")
+        .bind(`attempt:${attempt.id}`, attempt.group_id).first();
+      groupRecorded = Boolean(session);
+    }
+    return json({ ...(accepted ? { accepted: true } : {}), completed: true, book: attempt.book_id, chapter: attempt.chapter, groupId: attempt.group_id, result, ...(groupRecorded === undefined ? {} : { groupRecorded }) });
+  } catch { return json({ error: "database_unavailable" }, 503); }
+}
+
+// The final answer is accepted before grading so a temporary failure must be
+// recoverable. All side effects are conditional on the same grading state and
+// committed as one D1 batch; retries cannot add a second group session.
+async function finishAttempt(attempt: Attempt, actorId: string, guest: boolean, accepted = false) {
+  if (attempt.status === "completed") return completedResponse(attempt, accepted);
+  if (attempt.status !== "grading") return json({ error: "attempt_changed" }, 409);
+  try {
+    const tasks = tasksFor(attempt.book_id, attempt.chapter).slice(0, attempt.task_limit);
+    if (!tasks.length || tasks.length !== attempt.task_limit || attempt.current_index !== tasks.length)
+      return json({ error: "attempt_state_invalid" }, 503);
+    const response = await env.DB!.prepare("SELECT task_id,selected_json,is_correct FROM mission_attempt_answers WHERE attempt_id=?").bind(attempt.id).all();
+    if (!response.success || !Array.isArray(response.results) || response.results.length !== tasks.length)
+      return json({ error: "attempt_state_invalid" }, 503);
+    const rows = response.results as Array<Record<string, unknown>>;
+    const byId = new Map(rows.map(row => [row.task_id, row]));
+    for (const task of tasks) {
+      const row = byId.get(task.id);
+      if (!row || (row.is_correct !== 0 && row.is_correct !== 1)) return json({ error: "attempt_state_invalid" }, 503);
+      const selected: unknown = JSON.parse(String(row.selected_json));
+      if (!Array.isArray(selected) || !selected.length || selected.some(i => !Number.isInteger(i) || i < 0 || i >= task.options[attempt.locale].length) || new Set(selected).size !== selected.length)
+        return json({ error: "attempt_state_invalid" }, 503);
+      const expected = [...task.correct].sort((a, b) => a - b);
+      const actual = [...selected].sort((a, b) => a - b);
+      if (Number(JSON.stringify(actual) === JSON.stringify(expected)) !== row.is_correct) return json({ error: "attempt_state_invalid" }, 503);
+    }
+    const result = { ...resultFor(tasks, rows, attempt.locale), completionVersion: 1 }, encoded = JSON.stringify(result);
+    const statements = [];
+    // An older stalled attempt can be recovered after a newer one has already
+    // completed. Do not let that recovery replace the newer saved progress.
+    if (!guest) statements.push(env.DB!.prepare("INSERT INTO progress (user_id,mission_id,data,updated_at) SELECT ?,?,?,CURRENT_TIMESTAMP WHERE EXISTS (SELECT 1 FROM mission_attempts a WHERE a.id=? AND a.actor_id=? AND a.status='grading' AND NOT EXISTS (SELECT 1 FROM mission_attempts newer WHERE newer.actor_id=a.actor_id AND newer.mission_id=a.mission_id AND newer.book_id=a.book_id AND newer.chapter=a.chapter AND newer.status='completed' AND newer.rowid>a.rowid)) ON CONFLICT(user_id,mission_id) DO UPDATE SET data=excluded.data,updated_at=CURRENT_TIMESTAMP")
+      .bind(actorId, `${MISSION_ID}:${attempt.book_id}:${attempt.chapter}`, encoded, attempt.id, actorId));
+    if (attempt.group_id) statements.push(env.DB!.prepare("INSERT INTO group_sessions (id,group_id,created_by,book_id,chapter,chapters_completed,answers_correct,answers_total,meeting_date) SELECT ?,?,?,?,?,1,?,?,date('now') WHERE EXISTS (SELECT 1 FROM mission_attempts a JOIN home_group_members m ON m.group_id=a.group_id AND m.user_id=a.actor_id AND m.role IN ('owner','facilitator') WHERE a.id=? AND a.actor_id=? AND a.status='grading')")
+      .bind(`attempt:${attempt.id}`, attempt.group_id, actorId, attempt.book_id, attempt.chapter, result.score, result.total, attempt.id, actorId));
+    statements.push(env.DB!.prepare("UPDATE mission_attempts SET status='completed',completed_at=CURRENT_TIMESTAMP,score=?,total=?,result_json=? WHERE id=? AND actor_id=? AND status='grading'")
+      .bind(result.score, result.total, encoded, attempt.id, actorId));
+    const saved = await env.DB!.batch(statements);
+    if (!saved.every(item => item.success)) return json({ error: "database_unavailable" }, 503);
+    // A concurrent finalizer may already have committed. Always return the
+    // stored result rather than a locally calculated potentially stale one.
+    const stored = await env.DB!.prepare("SELECT * FROM mission_attempts WHERE id=? AND actor_id=?").bind(attempt.id, actorId).first<Attempt>();
+    return stored?.status === "completed" ? completedResponse(stored, accepted) : json({ error: "attempt_changed" }, 409);
+  } catch { return json({ error: "database_unavailable" }, 503); }
+}
+
 export async function GET(request: Request) {
   if (!env.DB) return json({ error: "database_unavailable" }, 503);
   const url = new URL(request.url), action = url.searchParams.get("action") || "current";
@@ -103,11 +164,26 @@ export async function GET(request: Request) {
   if (action === "chapter") {
     return json({ error: "method_not_allowed" }, 405, { Allow: "POST" });
   }
+  if (action === "history") {
+    const currentActor = await actor(request);
+    if (!currentActor?.identity || currentActor.identity.provider === "agent") return json({ error: "authentication_required" }, 401);
+    try {
+      const [active, history, pending] = await env.DB.batch([
+        env.DB.prepare("SELECT id FROM mission_attempts WHERE actor_id=? AND status='active' AND expires_at>CURRENT_TIMESTAMP LIMIT 1").bind(currentActor.id),
+        env.DB.prepare("SELECT id,book_id,chapter,score,total,completed_at FROM mission_attempts WHERE actor_id=? AND status='completed' ORDER BY completed_at DESC,id DESC LIMIT 100").bind(currentActor.id),
+        env.DB.prepare("SELECT id,book_id,chapter,started_at FROM mission_attempts WHERE actor_id=? AND status='grading' ORDER BY started_at DESC,id DESC LIMIT 20").bind(currentActor.id),
+      ]);
+      if (!active.success || !history.success || !pending.success || !Array.isArray(active.results) || !Array.isArray(history.results) || !Array.isArray(pending.results)) return json({ error: "database_unavailable" }, 503);
+      if (active.results.length) return json({ locked: true, attempts: [] });
+      return json({ attempts: (history.results as Array<Record<string, unknown>>).map(row => ({ id: row.id, book: row.book_id, chapter: row.chapter, score: row.score, total: row.total, completedAt: row.completed_at })), pending: (pending.results as Array<Record<string, unknown>>).map(row => ({id:row.id,book:row.book_id,chapter:row.chapter,startedAt:row.started_at})) });
+    } catch { return json({ error: "database_unavailable" }, 503); }
+  }
   const attemptId = clean(url.searchParams.get("attemptId"), 80);
   const { attempt } = await ownedAttempt(request, attemptId);
   if (!attempt) return json({ error: "attempt_not_found" }, 404);
   if (attempt.status === "invalidated") return json({ error: "attempt_invalidated" }, 409);
-  if (attempt.status === "completed") return json({ completed: true, book: attempt.book_id, chapter: attempt.chapter, groupId: attempt.group_id, result: attempt.result_json ? JSON.parse(attempt.result_json) : null });
+  if (attempt.status === "completed") return completedResponse(attempt);
+  if (attempt.status === "grading") return json({ grading: true });
   if (Date.parse(attempt.expires_at) <= Date.now()) return json({ error: "attempt_expired" }, 410);
   const tasks = tasksFor(attempt.book_id, attempt.chapter).slice(0, attempt.task_limit), task = tasks[attempt.current_index];
   if (!task) return json({ error: "attempt_state_invalid" }, 409);
@@ -192,17 +268,25 @@ export async function POST(request: Request) {
     const attemptId = clean(body.attemptId, 80), { attempt } = await ownedAttempt(request, attemptId);
     if (!attempt) return json({ error: "attempt_not_found" }, 404);
     if (attempt.status === "active")
-      await env.DB.prepare("UPDATE mission_attempts SET status='invalidated',invalidated_at=CURRENT_TIMESTAMP,invalidation_reason=? WHERE id=?")
+      await env.DB.prepare("UPDATE mission_attempts SET status='invalidated',invalidated_at=CURRENT_TIMESTAMP,invalidation_reason=? WHERE id=? AND status='active'")
         .bind(clean(body.reason, 80) || "chapter_opened", attempt.id).run();
     return json({ ok: true });
+  }
+
+  if (action === "finalize") {
+    const { currentActor, attempt } = await ownedAttempt(request, clean(body.attemptId, 80));
+    if (!currentActor || !attempt) return json({ error: "attempt_not_found" }, 404);
+    return finishAttempt(attempt, currentActor.id, currentActor.guest);
   }
 
   if (action === "answer") {
     const attemptId = clean(body.attemptId, 80), { currentActor, attempt } = await ownedAttempt(request, attemptId);
     if (!currentActor || !attempt) return json({ error: "attempt_not_found" }, 404);
+    if ((attempt.status === "grading" || attempt.status === "completed") && Number(body.taskIndex) === attempt.task_limit)
+      return finishAttempt(attempt, currentActor.id, currentActor.guest, true);
     if (attempt.status !== "active") return json({ error: attempt.status === "invalidated" ? "attempt_invalidated" : "attempt_closed" }, 409);
     if (Date.parse(attempt.expires_at) <= Date.now()) {
-      await env.DB.prepare("UPDATE mission_attempts SET status='invalidated',invalidated_at=CURRENT_TIMESTAMP,invalidation_reason='expired' WHERE id=?").bind(attempt.id).run();
+      await env.DB.prepare("UPDATE mission_attempts SET status='invalidated',invalidated_at=CURRENT_TIMESTAMP,invalidation_reason='expired' WHERE id=? AND status='active'").bind(attempt.id).run();
       return json({ error: "attempt_expired" }, 410);
     }
     const tasks = tasksFor(attempt.book_id, attempt.chapter).slice(0, attempt.task_limit), task = tasks[attempt.current_index];
@@ -213,27 +297,15 @@ export async function POST(request: Request) {
     const expected = [...task.correct].sort((a, b) => a - b), correct = JSON.stringify(selected) === JSON.stringify(expected);
     const nextIndex = attempt.current_index + 1;
     const accepted = await env.DB.batch([
-      env.DB.prepare("INSERT OR IGNORE INTO mission_attempt_answers (attempt_id,task_id,selected_json,is_correct) SELECT ?,?,?,? WHERE EXISTS (SELECT 1 FROM mission_attempts WHERE id=? AND status='active' AND current_index=?)")
+      env.DB.prepare("INSERT OR IGNORE INTO mission_attempt_answers (attempt_id,task_id,selected_json,is_correct) SELECT ?,?,?,? WHERE EXISTS (SELECT 1 FROM mission_attempts WHERE id=? AND status='active' AND expires_at>CURRENT_TIMESTAMP AND current_index=?)")
         .bind(attempt.id, task.id, JSON.stringify(selected), correct ? 1 : 0, attempt.id, attempt.current_index),
-      env.DB.prepare("UPDATE mission_attempts SET current_index=?,status=? WHERE id=? AND current_index=? AND status='active'")
+      env.DB.prepare("UPDATE mission_attempts SET current_index=?,status=? WHERE id=? AND current_index=? AND status='active' AND expires_at>CURRENT_TIMESTAMP")
         .bind(nextIndex, nextIndex === tasks.length ? "grading" : "active", attempt.id, attempt.current_index),
     ]);
+    if (!accepted.every(item => item.success)) return json({ error: "database_unavailable" }, 503);
     if (!accepted[1].meta.changes) return json({ error: "attempt_changed" }, 409);
     if (nextIndex < tasks.length) return json({ accepted: true, task: publicTask(tasks[nextIndex], attempt.locale, nextIndex + 1, tasks.length) });
-    const rows = (await env.DB.prepare("SELECT task_id,selected_json,is_correct FROM mission_attempt_answers WHERE attempt_id=? ORDER BY answered_at").bind(attempt.id).all()).results as Array<Record<string, unknown>>;
-    const result = resultFor(tasks, rows, attempt.locale), encoded = JSON.stringify(result);
-    const statements = [
-      env.DB.prepare("UPDATE mission_attempts SET status='completed',completed_at=CURRENT_TIMESTAMP,score=?,total=?,result_json=? WHERE id=?")
-        .bind(result.score, result.total, encoded, attempt.id),
-    ];
-    if (!currentActor.guest)
-      statements.push(env.DB.prepare("INSERT INTO progress (user_id,mission_id,data,updated_at) VALUES (?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id,mission_id) DO UPDATE SET data=excluded.data,updated_at=CURRENT_TIMESTAMP")
-        .bind(currentActor.id, `${MISSION_ID}:${attempt.book_id}:${attempt.chapter}`, encoded));
-    if (attempt.group_id)
-      statements.push(env.DB.prepare("INSERT INTO group_sessions (id,group_id,created_by,book_id,chapter,chapters_completed,answers_correct,answers_total,meeting_date) VALUES (?,?,?,?,?,1,?,?,date('now'))")
-        .bind(crypto.randomUUID(), attempt.group_id, currentActor.id, attempt.book_id, attempt.chapter, result.score, result.total));
-    await env.DB.batch(statements);
-    return json({ accepted: true, completed: true, book: attempt.book_id, chapter: attempt.chapter, groupId: attempt.group_id, result });
+    return finishAttempt({ ...attempt, status: "grading", current_index: nextIndex }, currentActor.id, currentActor.guest, true);
   }
 
   return json({ error: "unknown_action" }, 400);

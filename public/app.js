@@ -2509,6 +2509,8 @@ const ATTEMPT_COPY = {
     noMistakes: "Усі відповіді правильні.",
     reopen: "Знову відкрити текст",
     readRequired: "Спочатку завершіть читання цієї глави.",
+    retryLoad: "Повторити завантаження",
+    groupNotRecorded: "Результат збережено особисто, але не збережено для групи. Перевірте членство або наявність групи.",
   },
   ru: {
     finishReading: "Я завершил чтение",
@@ -2530,6 +2532,8 @@ const ATTEMPT_COPY = {
     noMistakes: "Все ответы правильные.",
     reopen: "Снова открыть текст",
     readRequired: "Сначала завершите чтение этой главы.",
+    retryLoad: "Повторить загрузку",
+    groupNotRecorded: "Результат сохранён лично, но не сохранён для группы. Проверьте членство или наличие группы.",
   },
   en: {
     finishReading: "I have finished reading",
@@ -2551,6 +2555,8 @@ const ATTEMPT_COPY = {
     noMistakes: "Every answer was correct.",
     reopen: "Open the text again",
     readRequired: "Finish reading this chapter first.",
+    retryLoad: "Retry loading",
+    groupNotRecorded: "The result was saved personally, but not for the group. Check your membership and whether the group still exists.",
   },
 };
 
@@ -3008,14 +3014,14 @@ async function renderGroup(groupId) {
     };
 }
 
-function renderAttemptResult(result, book, chapter, groupId = "") {
+function renderAttemptResult(result, book, chapter, groupId = "", groupRecorded) {
   if(state.user)void syncProgress();
   const copy = ATTEMPT_COPY[state.lang];
   const mastered = result.mastered?.length ? `<ul>${result.mastered.map(item => `<li>${esc(item)}</li>`).join("")}</ul>` : `<p>—</p>`;
   const mistakes = result.mistakes?.length
     ? result.mistakes.map(item => `<article class="result-review"><h3>${esc(item.reference)}</h3><p>${esc(item.explanation)}</p><p><strong>${state.lang === "uk" ? "Правильна відповідь" : state.lang === "ru" ? "Правильный ответ" : "Correct answer"}:</strong> ${item.correctAnswers.map(esc).join("; ")}</p></article>`).join("")
     : `<div class="notice success">${copy.noMistakes}</div>`;
-  shell(`<article class="prose attempt-results"><p class="eyebrow">Scripture Archive</p><h1>${copy.completed}</h1><p class="score-line"><strong>${result.score}</strong> ${copy.score} ${result.total}</p><h2>${copy.mastered}</h2>${mastered}<h2>${copy.mistakes}</h2>${mistakes}<div class="action-row"><a class="button primary" href="/reader/${book}/${chapter}">${copy.reopen}</a>${groupId?`<a class="button" href="/groups/${encodeURIComponent(groupId)}">${t("groups")}</a>`:""}</div></article>`);
+  shell(`<article class="prose attempt-results"><p class="eyebrow">Scripture Archive</p><h1>${copy.completed}</h1><p class="score-line"><strong>${result.score}</strong> ${copy.score} ${result.total}</p>${groupRecorded===false?`<p class="notice info">${copy.groupNotRecorded}</p>`:''}<h2>${copy.mastered}</h2>${mastered}<h2>${copy.mistakes}</h2>${mistakes}<div class="action-row"><a class="button primary" href="/reader/${book}/${chapter}">${copy.reopen}</a>${groupId&&groupRecorded!==false?`<a class="button" href="/groups/${encodeURIComponent(groupId)}">${t("groups")}</a>`:""}</div></article>`);
   window.saAnalytics?.track("quiz_complete",{score:Number(result.score),total:Number(result.total),language:state.lang,mode:groupId?"group":"personal"});
   play("done");
 }
@@ -3029,14 +3035,22 @@ async function renderMission(parts = []) {
     return;
   }
   let data;
-  try { data = await attemptRequest("current", "GET", undefined, `attemptId=${encodeURIComponent(attemptId)}`); }
+  try {
+    data = await attemptRequest("current", "GET", undefined, `attemptId=${encodeURIComponent(attemptId)}`);
+    if (data.grading) data = await attemptRequest("finalize", "POST", { attemptId });
+  }
   catch (error) {
-    sessionStorage.removeItem("sa.activeAttempt");
-    if (["attempt_invalidated", "attempt_expired", "attempt_closed"].includes(error.message)) { renderLockedChapter("GEN", 12); return; }
-    throw error;
+    if (["attempt_invalidated", "attempt_expired", "attempt_closed"].includes(error.message)) {
+      if(sessionStorage.getItem("sa.activeAttempt")===attemptId)sessionStorage.removeItem("sa.activeAttempt");
+      renderLockedChapter("GEN", 12); return;
+    }
+    shell(`<section class="gate-panel"><h1>${copy.prepareTitle}</h1><p role="status">${t("errorLoad")}</p><button class="button primary" id="retry-attempt">${copy.retryLoad}</button></section>`);
+    document.querySelector("#retry-attempt").onclick=()=>renderMission(["mission","attempt",attemptId]);
+    return;
   }
   if (data.completed) {
-    renderAttemptResult(data.result, data.book, data.chapter, data.groupId);
+    if(sessionStorage.getItem("sa.activeAttempt")===attemptId)sessionStorage.removeItem("sa.activeAttempt");
+    renderAttemptResult(data.result, data.book, data.chapter, data.groupId, data.groupRecorded);
     return;
   }
   const task = data.task, type = task.type === "multi" ? "checkbox" : "radio";
@@ -3053,9 +3067,10 @@ async function renderMission(parts = []) {
       if (response.completed) {
         sessionStorage.removeItem("sa.activeAttempt");
         attemptChannel?.postMessage({ type: "attempt-completed", attemptId });
-        renderAttemptResult(response.result, response.book, response.chapter, response.groupId);
+        renderAttemptResult(response.result, response.book, response.chapter, response.groupId, response.groupRecorded);
       } else await renderMission(["mission", "attempt", attemptId]);
     } catch (error) {
+      if (["attempt_changed", "answer_already_submitted", "attempt_closed"].includes(error.message)) { await renderMission(["mission", "attempt", attemptId]); return; }
       status.textContent = error.message === "attempt_invalidated" ? copy.lockedText : t("errorLoad");
       button.disabled = false;
     }

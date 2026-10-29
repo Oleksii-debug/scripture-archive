@@ -306,6 +306,14 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal(result.data.result.score, chapter12.length);
   assert.equal(result.data.book, "GEN");
   assert.equal(result.data.chapter, 12);
+  result = await request("/api/attempts?action=answer", {method:"POST",body:{attemptId,taskIndex:chapter12.length,selected:chapter12.at(-1).correct}});
+  assert.equal(result.data.completed, true, "the last answer can be retried after a lost response");
+  result = await request("/api/attempts?action=history");
+  assert.equal(result.response.status, 200);
+  assert.equal(result.data.attempts[0].id, attemptId);
+  assert.equal("result" in result.data.attempts[0], false);
+  const ownerHistory = await fetch(`${base}/api/attempts?action=history`, {headers:{Cookie:ownerCookie}});
+  assert.ok(!(await ownerHistory.json()).attempts.some(item=>item.id===attemptId));
   result = await request("/api/account?action=progress");
   assert.equal(result.data.progress.correct.length, chapter12.length);
   const secondBrowserLogin = await fetch(`${base}/api/auth?action=login`, {method:"POST",headers:{Origin:base,"Content-Type":"application/json"},body:JSON.stringify({email,password:firstPassword})});
@@ -314,6 +322,9 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal((await restoredProgress.json()).progress.correct.length, chapter12.length);
   const learningExport = await (await fetch(`${base}/api/reading-export`, { headers: { Cookie: cookie } })).json();
   assert.ok(learningExport.progress.some(item => item.mission.startsWith("OT-AB-01:")));
+  assert.equal(learningExport.attemptHistory.find(item => item.id===attemptId).result.score,chapter12.length);
+  const ownerLearningExport = await (await fetch(`${base}/api/reading-export`, { headers: { Cookie: ownerCookie } })).json();
+  assert.ok(!ownerLearningExport.attemptHistory.some(item=>item.id===attemptId));
 
   result = await request("/api/attempts?action=read", { method: "POST", body: { book: "GEN", chapter: 12 } });
   assert.equal(result.response.status, 201);
@@ -325,6 +336,8 @@ integration("account, progress, attempts, groups, marathon limit and password re
   await request("/api/attempts?action=read", { method: "POST", body: { book: "GEN", chapter: 12 } });
   result = await request("/api/attempts?action=start", { method: "POST", body: { missionId: "OT-AB-01", book: "GEN", chapter: 12, locale: "en" } });
   const invalidatedId = result.data.attemptId;
+  result = await request("/api/attempts?action=history");
+  assert.deepEqual(result.data, {locked:true,attempts:[]});
   result = await request("/api/attempts?action=chapter&book=GEN&chapter=12");
   assert.equal(result.response.status, 405);
   assert.equal(result.response.headers.get("allow"), "POST");
@@ -384,6 +397,9 @@ integration("account, progress, attempts, groups, marathon limit and password re
   for (let index = 0; index < chapter12.length; index += 1)
     result = await request("/api/attempts?action=answer", { method: "POST", body: { attemptId: groupAttemptId, taskIndex: index + 1, selected: chapter12[index].correct } });
   assert.equal(result.data.groupId, groupId);
+  assert.equal(result.data.groupRecorded, true);
+  result = await request("/api/attempts?action=finalize", {method:"POST",body:{attemptId:groupAttemptId}});
+  assert.equal(result.data.groupRecorded, true);
   result = await request(`/api/groups?groupId=${encodeURIComponent(groupId)}`);
   assert.equal(result.data.sessions.length, 1);
   assert.equal(result.data.sessions[0].answers_correct, chapter12.length);

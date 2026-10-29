@@ -23,6 +23,24 @@ const COPY = {
 
 export function workspaceCopy(lang) { return COPY[lang] || COPY.uk; }
 
+const HISTORY = {
+  uk: { title:'Історія спроб', login:'Увійдіть, щоб бачити збережену історію спроб на інших пристроях.', empty:'Завершених спроб поки немає.', locked:'Історія прихована під час активної спроби.', error:'Не вдалося завантажити історію спроб.', retry:'Спробувати ще раз', details:'Переглянути результат', reread:'Перечитати й повторити', limit:'Показано останні 100 завершених спроб.', score:'Правильних відповідей', pending:'Є відповідь, збереження результату якої потрібно завершити.', resume:'Завершити збереження результату' },
+  ru: { title:'История попыток', login:'Войдите, чтобы видеть сохранённую историю попыток на других устройствах.', empty:'Завершённых попыток пока нет.', locked:'История скрыта во время активной попытки.', error:'Не удалось загрузить историю попыток.', retry:'Попробовать снова', details:'Посмотреть результат', reread:'Перечитать и повторить', limit:'Показаны последние 100 завершённых попыток.', score:'Правильных ответов', pending:'Для сохранённого ответа нужно завершить запись результата.', resume:'Завершить сохранение результата' },
+  en: { title:'Attempt history', login:'Sign in to see saved attempt history on other devices.', empty:'There are no completed attempts yet.', locked:'History is hidden during an active attempt.', error:'Could not load attempt history.', retry:'Try again', details:'View result', reread:'Read and try again', limit:'Showing the latest 100 completed attempts.', score:'Correct answers', pending:'An answer was saved, but its result still needs to be finalized.', resume:'Finish saving the result' },
+};
+
+export function missionHistoryMarkup(history, lang, esc) {
+  const w=HISTORY[lang] || HISTORY.uk;
+  let content;
+  if(history.guest) content=`<p>${w.login}</p>`;
+  else if(history.error) content=`<p role="status">${w.error}</p><button class="button" id="retry-mission-history">${w.retry}</button>`;
+  else if(history.locked) content=`<p>${w.locked}</p>`;
+  else if(!history.attempts?.length) content=`<p>${w.empty}</p>`;
+  else content=`<p>${w.limit}</p><ol>${history.attempts.map(item=>`<li><p>${esc(item.book)} ${Number(item.chapter)} — ${w.score}: ${Number(item.score)} / ${Number(item.total)}; ${esc(item.completedAt || '')} UTC</p><div class="action-row"><a class="button" href="/mission/attempt/${encodeURIComponent(item.id)}">${w.details}: ${esc(item.book)} ${Number(item.chapter)} — ${esc(item.completedAt || '')} UTC</a>${Number(item.score)<Number(item.total)?`<a class="button" href="/reader/${encodeURIComponent(item.book)}/${Number(item.chapter)}">${w.reread}: ${esc(item.book)} ${Number(item.chapter)}</a>`:''}</div></li>`).join('')}</ol>`;
+  const pending=!history.guest&&!history.error&&!history.locked&&history.pending?.length?`<p>${w.pending}</p><ul>${history.pending.map(item=>`<li><a class="button" href="/mission/attempt/${encodeURIComponent(item.id)}">${w.resume}: ${esc(item.book)} ${Number(item.chapter)} — ${esc(item.startedAt || '')} UTC</a></li>`).join('')}</ul>`:'';
+  return `<section class="card resume-card"><h2>${w.title}</h2>${pending}${content}</section>`;
+}
+
 async function request(path, options) {
   const response=await fetch(path,options), data=await response.json();
   if(!response.ok) throw Error(data.error || response.status);
@@ -53,7 +71,10 @@ export async function renderWorkspace(name,c) {
   if(name==='progress') {
     const p=state.missionProgress,read=c.loadJSON('sa.readingHistory',[]),mission=await getMission();
     const taskCount=Number(mission.taskCount||0);
-    shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${w.progress}</h1></div><p>${w.progressLead}</p></div><div class="card-grid"><article class="card progress-stat"><strong>${p.correct.length} / ${taskCount}</strong><p>${w.tasks}</p></article><article class="card progress-stat"><strong>${read.length}</strong><p>${w.chapters}</p></article><article class="card progress-stat"><strong>${p.complete?w.finished:p.index?w.inProgress:w.notStarted}</strong><p>${w.status}</p></article></div><section class="card resume-card"><h2>${esc((mission.title?.[state.lang]||t("missionTitle")))}</h2><progress aria-label="${w.tasks}" max="${taskCount||1}" value="${p.correct.length}"></progress><div class="action-row"><a class="button primary" href="/mission/abraham">${w.continue}</a><a class="button" href="/groups">${t('myGroups')}</a></div></section><section class="card resume-card"><h2>${w.readingHistory}</h2>${read.length?`<div class="reading-links">${read.slice().reverse().map(r=>`<a class="button" href="/reader/${encodeURIComponent(r.book)}/${Number(r.chapter)}">${esc(r.title)} ${Number(r.chapter)}</a>`).join('')}</div>`:`<p>${w.nothingRead}</p>`}</section>`);
+    let history={guest:true};
+    if(state.user) try { history=await request('/api/attempts?action=history'); } catch { history={error:true}; }
+    shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${w.progress}</h1></div><p>${w.progressLead}</p></div><div class="card-grid"><article class="card progress-stat"><strong>${p.correct.length} / ${taskCount}</strong><p>${w.tasks}</p></article><article class="card progress-stat"><strong>${read.length}</strong><p>${w.chapters}</p></article><article class="card progress-stat"><strong>${p.complete?w.finished:p.index?w.inProgress:w.notStarted}</strong><p>${w.status}</p></article></div><section class="card resume-card"><h2>${esc((mission.title?.[state.lang]||t("missionTitle")))}</h2><progress aria-label="${w.tasks}" max="${taskCount||1}" value="${p.correct.length}"></progress><div class="action-row"><a class="button primary" href="/mission/abraham">${w.continue}</a><a class="button" href="/groups">${t('myGroups')}</a></div></section>${missionHistoryMarkup(history,state.lang,esc)}<section class="card resume-card"><h2>${w.readingHistory}</h2>${read.length?`<div class="reading-links">${read.slice().reverse().map(r=>`<a class="button" href="/reader/${encodeURIComponent(r.book)}/${Number(r.chapter)}">${esc(r.title)} ${Number(r.chapter)}</a>`).join('')}</div>`:`<p>${w.nothingRead}</p>`}</section>`);
+    document.querySelector('#retry-mission-history')?.addEventListener('click',()=>renderWorkspace('progress',c));
     return;
   }
   if(name==='builder') {

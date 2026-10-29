@@ -128,9 +128,12 @@ export async function POST(request: Request) {
     if (!currentActor) return json({ invalidated: false });
     // Invalidate before reporting a match: a read-only lookup would reveal the
     // active passage through enumeration. Group context must not bypass this.
-    const result = await env.DB.prepare("UPDATE mission_attempts SET status='invalidated',invalidated_at=CURRENT_TIMESTAMP,invalidation_reason='chapter_opened' WHERE actor_id=? AND book_id=? AND chapter=? AND status='active' AND expires_at>CURRENT_TIMESTAMP")
-      .bind(currentActor.id, book, chapter).run();
-    return json({ invalidated: result.meta.changes > 0 });
+    const result = await env.DB.batch([
+      env.DB.prepare("UPDATE mission_attempts SET status='invalidated',invalidated_at=CURRENT_TIMESTAMP,invalidation_reason='chapter_opened' WHERE actor_id=? AND book_id=? AND chapter=? AND status='active' AND expires_at>CURRENT_TIMESTAMP").bind(currentActor.id, book, chapter),
+      env.DB.prepare("UPDATE chapter_read_receipts SET consumed_at=CURRENT_TIMESTAMP WHERE actor_id=? AND book_id=? AND chapter=? AND consumed_at IS NULL").bind(currentActor.id, book, chapter),
+    ]);
+    if (!result.every(item => item.success)) return json({ error: "database_unavailable" }, 503);
+    return json({ invalidated: result[0].meta.changes > 0 });
   }
 
   if (action === "read") {

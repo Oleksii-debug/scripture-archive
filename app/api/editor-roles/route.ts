@@ -59,5 +59,10 @@ export async function POST(request: Request) {
     ]);
     if (results.some(result => !result.success)) throw Error("write failed");
     return results[1].meta.changes ? json({ok:true}) : json({error:"not_found"},404);
-  } catch { return json({error:"database_unavailable"},503); }
+  } catch (error) {
+    // Temporary diagnostic on an isolated CI branch; do not publish data or deploy.
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("editor_role_mutation_d1_failure", message.slice(0, 600));
+    return json({error:"database_unavailable"},503);
+  }
 }

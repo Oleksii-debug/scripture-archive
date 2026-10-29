@@ -1,4 +1,5 @@
-import {renderWorkspace, workspaceCopy} from './workspace.js';
+import { parallelControls, mountParallelReader } from './parallel-reader.js';
+import {renderWorkspace, workspaceCopy, groupManagementCopy, groupManagementMarkup} from './workspace.js';
 import {supportSection} from './support.js';
 import {homePage} from './home.js';
 import {EDITIONS, editionCopy, selectedEdition, editionUrl, editionSelect} from './editions.js';
@@ -2243,9 +2244,10 @@ async function getSession() {
   if(state.user)localStorage.setItem('sa.progressOwner',state.user.id);else localStorage.removeItem('sa.progressOwner');
   return state.user;
 }
-async function getBook(code) {
+async function getBook(code, explicitEdition = null) {
   const requestLocale = state.lang;
-  const selected = selectedEdition(requestLocale);
+  const selected = explicitEdition || selectedEdition(requestLocale);
+  if (explicitEdition && (!explicitEdition.local || !EDITIONS[requestLocale].includes(explicitEdition))) throw Error("Invalid local edition");
   const edition = selected.local ? selected : EDITIONS[requestLocale].find(e => e.local);
   const folder = edition.folder || requestLocale;
   const key = `${folder}:${code}`;
@@ -2276,8 +2278,23 @@ async function getBook(code) {
 }
 function localEditionMetadata(catalog) {
   const chosen = selectedEdition(state.lang);
-  const local = chosen.local ? chosen : EDITIONS[state.lang].find(e => e.local);
-  return catalog.translations?.[local.id] || catalog.editions[state.lang];
+  const local = chosen.local ? chosen : EDITIONS[state.lang]?.find(e => e.local);
+  if (!local) throw Error("local_edition_unavailable");
+  // Locale defaults must not be used as attribution for a distinct edition.
+  const translated = catalog.translations?.[local.id];
+  const regional = catalog.editions?.[state.lang];
+  const metadata = translated?.id === local.id ? translated
+    : local.contentId && regional?.id === local.contentId ? regional : null;
+  if (!metadata || typeof metadata.title !== "string" || !metadata.title.trim() ||
+      typeof metadata.license !== "string" || !metadata.license.trim() ||
+      typeof metadata.source !== "string") throw Error("local_edition_provenance_unavailable");
+  // Retain only HTTPS, verified-shaped citation links in the rendered reader.
+  try {
+    if (new URL(metadata.source).protocol !== "https:" ||
+        (metadata.licenseUrl && new URL(metadata.licenseUrl).protocol !== "https:"))
+      throw Error("unsafe_edition_source");
+  } catch { throw Error("unsafe_edition_source"); }
+  return metadata;
 }
 async function getMission() {
   state.mission ??= await fetch("/api/attempts?action=manifest", { cache: "no-store" }).then((r) => {
@@ -2510,6 +2527,8 @@ const ATTEMPT_COPY = {
     noMistakes: "Усі відповіді правильні.",
     reopen: "Знову відкрити текст",
     readRequired: "Спочатку завершіть читання цієї глави.",
+    retryLoad: "Повторити завантаження",
+    groupNotRecorded: "Результат збережено особисто, але не збережено для групи. Перевірте членство або наявність групи.",
   },
   ru: {
     finishReading: "Я завершил чтение",
@@ -2531,6 +2550,8 @@ const ATTEMPT_COPY = {
     noMistakes: "Все ответы правильные.",
     reopen: "Снова открыть текст",
     readRequired: "Сначала завершите чтение этой главы.",
+    retryLoad: "Повторить загрузку",
+    groupNotRecorded: "Результат сохранён лично, но не сохранён для группы. Проверьте членство или наличие группы.",
   },
   en: {
     finishReading: "I have finished reading",
@@ -2552,6 +2573,8 @@ const ATTEMPT_COPY = {
     noMistakes: "Every answer was correct.",
     reopen: "Open the text again",
     readRequired: "Finish reading this chapter first.",
+    retryLoad: "Retry loading",
+    groupNotRecorded: "The result was saved personally, but not for the group. Check your membership and whether the group still exists.",
   },
 };
 
@@ -2641,6 +2664,7 @@ async function renderReader(parts) {
   );
   const groupId = parts[3] === "group" ? parts[4] || "" : "";
   state.currentReader = { book: meta.code, chapter };
+  const readerContext = state.currentReader;
   try {
     const attemptState = await attemptRequest("chapter", "POST", { book: meta.code, chapter });
     if (!attemptState || typeof attemptState.invalidated !== "boolean") {
@@ -2659,6 +2683,26 @@ async function renderReader(parts) {
     return;
   }
   const book = await getBook(meta.code);
+  // A different device may start a new attempt while the Bible JSON loads.
+  // Prevent the async reader from undoing an invalidation in another tab.
+  if (state.currentReader !== readerContext) return;
+  try {
+    const finalState = await attemptRequest("chapter", "POST", { book: meta.code, chapter });
+    if (state.currentReader !== readerContext) return;
+    if (!finalState || typeof finalState.invalidated !== "boolean") throw Error("invalid_attempt_guard_response");
+    if (finalState.invalidated) {
+      sessionStorage.removeItem("sa.activeAttempt");
+      state.mission = null;
+      state.currentReader = null;
+      renderLockedChapter(meta.code, chapter);
+      return;
+    }
+  } catch {
+    if (state.currentReader !== readerContext) return;
+    state.currentReader = null;
+    shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1></section>`);
+    return;
+  }
   const verses = book.chapters[chapter - 1];
   const selectedVerse = readerVerseFromUrl(location.href, verses.length);
   // Do not replace the last readable bookmark when book loading fails.
@@ -2678,11 +2722,23 @@ async function renderReader(parts) {
       `<option value="${i + 1}" ${i + 1 === chapter ? "selected" : ""}>${i + 1}</option>`,
   ).join("");
   shell(
-    `<div class="section-head reader-heading"><div><p class="eyebrow">${t("reader")}</p><h1>${t("readerTitle")}</h1></div><p>${t("readerIntro")}</p></div><div class="toolbar"><div class="field grow"><label for="book-select">${t("book")}</label><select id="book-select">${options}</select></div><div class="field"><label for="chapter-select">${t("chapter")}</label><select id="chapter-select">${chapters}</select></div><div class="field"><label for="verse-select">${t("verse")}</label><select id="verse-select"><option value="" ${selectedVerse === null ? "selected" : ""}>—</option>${verses.map((_, i) => `<option value="${i + 1}" ${selectedVerse === i + 1 ? "selected" : ""}>${i + 1}</option>`).join("")}</select></div><form id="book-search" class="field grow"><label for="search-input">${t("searchBook")}</label><div style="display:flex;gap:.4rem"><input id="search-input" type="search" placeholder="${t("searchPlaceholder")}"><button class="button" type="submit">${t("search")}</button></div></form></div><div class="reader-layout"><article class="reading-pane"><p class="eyebrow">${meta.testament === "OT" ? t("oldTestament") : t("newTestament")}</p><h1>${esc(bookTitle(meta))} ${chapter}</h1><p class="chapter-meta">${esc(editionInfo.title)}</p><div class="verses">${verses.map((v, i) => `<p class="verse" id="v${i + 1}" ${selectedVerse === i + 1 ? 'data-selected-verse tabindex="-1"' : ''}><a class="verse-number" href="${readerVerseUrl(meta.code, chapter, i + 1)}" aria-label="${esc(bookTitle(meta))} ${chapter}:${i + 1}">${i + 1}</a> ${esc(bibleText(v))}</p>`).join("")}</div><div class="chapter-nav">${chapter > 1 ? `<a class="button" href="/reader/${meta.code}/${chapter - 1}">← ${t("previous")}</a>` : "<span></span>"}${chapter < meta.chapters ? `<a class="button" href="/reader/${meta.code}/${chapter + 1}">${t("next")} →</a>` : "<span></span>"}</div></article><aside class="reader-aside"><div class="card edition-card"><h2>${t("edition")}</h2><p><strong>${esc(editionInfo.title)}</strong></p>${editionInfo.note ? `<p>${esc(editionInfo.note)}</p>` : ""}<p>${t("license")}: ${esc(editionInfo.license)}</p><a href="${editionInfo.source}" target="_blank" rel="noreferrer">${t("sourceLink")} ↗</a></div>${editionToggle(meta.code)}${timerCard()}<div class="card" id="search-panel" hidden><h2>${t("search")}</h2><ol class="search-results" id="search-results" tabindex="-1"></ol></div></aside></div>`,
+    `<div class="section-head reader-heading"><div><p class="eyebrow">${t("reader")}</p><h1>${t("readerTitle")}</h1></div><p>${t("readerIntro")}</p></div><div class="toolbar"><div class="field grow"><label for="book-select">${t("book")}</label><select id="book-select">${options}</select></div><div class="field"><label for="chapter-select">${t("chapter")}</label><select id="chapter-select">${chapters}</select></div><div class="field"><label for="verse-select">${t("verse")}</label><select id="verse-select"><option value="" ${selectedVerse === null ? "selected" : ""}>—</option>${verses.map((_, i) => `<option value="${i + 1}" ${selectedVerse === i + 1 ? "selected" : ""}>${i + 1}</option>`).join("")}</select></div><form id="book-search" class="field grow"><label for="search-input">${t("searchBook")}</label><div style="display:flex;gap:.4rem"><input id="search-input" type="search" placeholder="${t("searchPlaceholder")}"><button class="button" type="submit">${t("search")}</button></div></form></div><div class="reader-layout"><article class="reading-pane"><p class="eyebrow">${meta.testament === "OT" ? t("oldTestament") : t("newTestament")}</p><h1>${esc(bookTitle(meta))} ${chapter}</h1><p class="chapter-meta">${esc(editionInfo.title)}</p><div class="verses">${verses.map((v, i) => `<p class="verse" id="v${i + 1}" ${selectedVerse === i + 1 ? 'data-selected-verse tabindex="-1"' : ''}><a class="verse-number" href="${readerVerseUrl(meta.code, chapter, i + 1)}" aria-label="${esc(bookTitle(meta))} ${chapter}:${i + 1}">${i + 1}</a> ${esc(bibleText(v))}</p>`).join("")}</div><div class="chapter-nav">${chapter > 1 ? `<a class="button" href="/reader/${meta.code}/${chapter - 1}">← ${t("previous")}</a>` : "<span></span>"}${chapter < meta.chapters ? `<a class="button" href="/reader/${meta.code}/${chapter + 1}">${t("next")} →</a>` : "<span></span>"}</div></article><aside class="reader-aside"><div class="card edition-card"><h2>${t("edition")}</h2><p><strong>${esc(editionInfo.title)}</strong></p>${editionInfo.note ? `<p>${esc(editionInfo.note)}</p>` : ""}<p>${t("license")}: ${esc(editionInfo.license)}</p><a href="${esc(editionInfo.source)}" target="_blank" rel="noreferrer">${t("sourceLink")} ↗</a></div>${editionToggle(meta.code)}${timerCard()}<div class="card" id="search-panel" hidden><h2>${t("search")}</h2><ol class="search-results" id="search-results" tabindex="-1"></ol></div></aside></div>`,
   );
   activateTimer();
   document.querySelector(".reader-aside")?.insertAdjacentHTML("beforeend", '<section class="card" id="reader-bookmarks" aria-live="polite"></section>');
   void mountReaderBookmarks(meta, chapter, chosenEdition, books);
+  const parallelEditions = chosenEdition.local ? EDITIONS[state.lang].filter(item => item.local && item.id !== chosenEdition.id) : [];
+  if (parallelEditions.length) {
+    const aside = document.querySelector('.reader-aside');
+    aside.insertAdjacentHTML('beforeend', parallelControls(parallelEditions, state.lang, esc));
+    const panel = aside.querySelector('.parallel-reader'), reader = state.currentReader;
+    mountParallelReader(panel, { editions: parallelEditions, catalog, lang: state.lang, book: meta.code, bookTitle: bookTitle(meta), chapter, getBook, esc,
+      check: (code, number) => attemptRequest('chapter', 'POST', { book: code, chapter: number }),
+      current: () => state.currentReader === reader,
+      lock: () => { sessionStorage.removeItem('sa.activeAttempt'); state.mission=null; state.currentReader=null; renderLockedChapter(meta.code,chapter); },
+      failClosed: () => { state.currentReader=null; shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1></section>`); },
+    });
+  }
   const editionText=editionCopy[state.lang];
   if(editionInfo.attribution) document.querySelector('.edition-card').insertAdjacentHTML('beforeend', `<p class="edition-attribution">${esc(editionInfo.attribution)}</p>`);
   if(editionInfo.licenseUrl) document.querySelector('.edition-card').insertAdjacentHTML('beforeend', `<a href="${esc(editionInfo.licenseUrl)}" target="_blank" rel="noreferrer">${esc(editionInfo.license)} ↗</a>`);
@@ -2878,7 +2934,7 @@ async function renderGroups() {
     ? `<section class="groups-cta"><h2>${t("createGroup")}</h2><p>${t("signInGroups")}</p><a class="button primary" href="/account">${t("signIn")}</a></section>`
     : !state.user.profileComplete
       ? `<section class="groups-cta"><h2>${t("createGroup")}</h2><p>${t("profileNeeded")}</p><a class="button primary" href="/account">${t("account")}</a></section>`
-      : `<div class="groups-actions"><section class="card group-form-card"><h2>${t("createGroup")}</h2><form id="group-form" class="account-form account-form-grid">${field("name", t("groupName"), "text", 'required maxlength="100"')}${field("church", `${t("churchName")} · ${t("optional")}`)}${field("country", `${t("country")} · ${t("optional")}`)}${field("city", `${t("city")} · ${t("optional")}`)}<label class="account-field full"><span>${t("description")} · ${t("optional")}</span><textarea name="description" rows="3" maxlength="600"></textarea></label><label class="account-field"><span>${t("visibility")}</span><select name="visibility"><option value="public">${t("publicGroup")}</option><option value="private">${t("privateGroup")}</option></select></label><label class="account-field"><span>${t("roster")}</span><select name="rosterVisibility"><option value="count">${t("countOnly")}</option><option value="names">${t("publicNames")}</option><option value="private">${t("hiddenRoster")}</option></select></label><label class="account-field"><span>${t("weeklyGoal")}</span><select name="weeklyGoal">${paceOptions}</select><small>${t("oddPace")}</small></label><label class="account-field"><span>${t("catchup")}</span><select name="catchupMode"><option value="flexible">${t("flexible")}</option><option value="steady">${t("steady")}</option></select></label><label class="account-check"><input name="publicOwnerName" type="checkbox"><span>${t("publicOwner")}</span></label><p class="privacy-hint">${t("privacyNote")}</p><button class="button primary">${t("saveGroup")}</button><p id="group-form-state" role="status"></p></form></section><section class="card join-card"><h2>${t("joinGroup")}</h2><form id="join-form" class="account-form"><label class="account-field"><span>${t("inviteCode")}</span><input name="inviteCode" required maxlength="12" autocomplete="off"></label><label class="account-check"><input name="publicName" type="checkbox"><span>${t("publicOwner")}</span></label><button class="button">${t("joinGroup")}</button><p id="join-state" role="status"></p></form></section></div>`;
+      : `<div class="groups-actions"><section class="card group-form-card"><h2>${t("createGroup")}</h2><form id="group-form" class="account-form account-form-grid">${field("name", t("groupName"), "text", 'required maxlength="100"')}${field("church", `${t("churchName")} · ${t("optional")}`)}${field("country", `${t("country")} · ${t("optional")}`)}${field("city", `${t("city")} · ${t("optional")}`)}<label class="account-field full"><span>${t("description")} · ${t("optional")}</span><textarea name="description" rows="3" maxlength="600"></textarea></label><label class="account-field"><span>${t("visibility")}</span><select name="visibility"><option value="public">${t("publicGroup")}</option><option value="private">${t("privateGroup")}</option></select></label><label class="account-field"><span>${t("roster")}</span><select name="rosterVisibility"><option value="count">${t("countOnly")}</option><option value="names">${t("publicNames")}</option><option value="private">${t("hiddenRoster")}</option></select></label><label class="account-field"><span>${t("weeklyGoal")}</span><select name="weeklyGoal">${paceOptions}</select><small>${t("oddPace")}</small></label><label class="account-field"><span>${t("catchup")}</span><select name="catchupMode"><option value="flexible">${t("flexible")}</option><option value="steady">${t("steady")}</option></select></label><label class="account-check"><input name="publicOwnerName" type="checkbox"><span>${t("publicOwner")}</span></label><p class="privacy-hint">${t("privacyNote")}</p><button class="button primary">${t("saveGroup")}</button><p id="group-form-state" role="status"></p></form></section><section class="card join-card"><h2>${t("joinGroup")}</h2><form id="join-form" class="account-form"><label class="account-field"><span>${t("inviteCode")}</span><input name="inviteCode" required maxlength="32" autocomplete="off"></label><label class="account-check"><input name="publicName" type="checkbox"><span>${t("publicOwner")}</span></label><button class="button">${t("joinGroup")}</button><p id="join-state" role="status"></p></form></section></div>`;
   shell(
     `<section class="groups-hero"><p class="eyebrow">${t("groupsEye")}</p><h1>${t("groupsTitle")}</h1><p class="lead">${t("groupsLead")}</p><div class="principle-card">${t("groupsPrinciple")}</div></section>${mine.length ? `<section class="groups-section"><div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h2>${t("myGroups")}</h2></div></div><div class="group-grid">${mine.map(groupCard).join("")}</div></section>` : ""}${createPanel}<section class="groups-section"><div class="section-head"><div><p class="eyebrow">${t("cohort")}</p><h2>${t("directory")}</h2></div><p>${t("directoryIntro")}</p></div>${groups.length ? `<div class="group-grid">${groups.map(groupCard).join("")}</div>` : `<div class="notice info">${t("noGroups")}</div>`}</section>`,
   );
@@ -2959,8 +3015,52 @@ async function renderGroup(groupId) {
     )
     .join("");
   shell(
-    `<article class="group-detail"><header class="group-detail-head">${groupStatus(group)}<p class="eyebrow">${t("groups")}</p><h1>${esc(group.name)}</h1><p class="lead">${esc(group.description || group.church || "")}</p><p>${[group.church, group.city, group.country].filter(Boolean).map(esc).join(" · ")}</p>${group.inviteCode ? `<div class="invite-code"><span>${t("inviteCode")}</span><strong>${esc(group.inviteCode)}</strong></div>` : ""}</header>${groupMetrics(group)}<div class="group-detail-grid"><section class="card reading-target"><p class="eyebrow">${t("readingTarget")}</p><h2 id="reading-preview">${esc(bookTitle(books[0]))} 12</h2><p>${t("discussionRoute")}</p><div class="target-controls"><select id="target-book">${bookOptions}</select><input id="target-chapter" aria-label="${t("chapter")}" type="number" min="1" max="200" value="12"></div><div class="action-row"><a class="button primary" id="chapter-link" href="/reader/${books[0].code}/12/group/${encodeURIComponent(group.id)}">${t("openChapter")}</a></div></section><section class="card cohort-card"><p class="eyebrow">${t("cohort")}</p><h2>${group.weeklyGoal} · ${t("weeklyGoal").toLocaleLowerCase(state.lang)}</h2><p>${group.catchupMode === "steady" ? t("steady") : t("flexible")}</p><p>${t("cohortNeed")}</p></section></div>${names ? `<section class="card member-list"><h2>${t("members")}</h2><ul>${names}</ul></section>` : ""}${record}<section class="groups-section"><div class="section-head"><div><p class="eyebrow">${t("meetings")}</p><h2>${t("recentMeetings")}</h2></div></div>${sessions || `<div class="notice info">${t("noMeetings")}</div>`}</section><section class="groups-section"><div class="section-head"><div><p class="eyebrow">${t("cohort")}</p><h2>${t("cohortPeers")}</h2></div><p>${t("cohortExplain")}</p></div><div class="peer-table">${peers}</div></section></article>`,
+    `<article class="group-detail"><header class="group-detail-head">${groupStatus(group)}<p class="eyebrow">${t("groups")}</p><h1>${esc(group.name)}</h1><p class="lead">${esc(group.description || group.church || "")}</p><p>${[group.church, group.city, group.country].filter(Boolean).map(esc).join(" · ")}</p>${group.inviteCode ? `<div class="invite-code"><span>${t("inviteCode")}</span><strong>${esc(group.inviteCode)}</strong></div>` : ""}</header>${groupMetrics(group)}<div class="group-detail-grid"><section class="card reading-target"><p class="eyebrow">${t("readingTarget")}</p><h2 id="reading-preview">${esc(bookTitle(books[0]))} 12</h2><p>${t("discussionRoute")}</p><div class="target-controls"><select id="target-book">${bookOptions}</select><input id="target-chapter" aria-label="${t("chapter")}" type="number" min="1" max="200" value="12"></div><div class="action-row"><a class="button primary" id="chapter-link" href="/reader/${books[0].code}/12/group/${encodeURIComponent(group.id)}">${t("openChapter")}</a></div></section><section class="card cohort-card"><p class="eyebrow">${t("cohort")}</p><h2>${group.weeklyGoal} · ${t("weeklyGoal").toLocaleLowerCase(state.lang)}</h2><p>${group.catchupMode === "steady" ? t("steady") : t("flexible")}</p><p>${t("cohortNeed")}</p></section></div>${names ? `<section class="card member-list"><h2>${t("members")}</h2><ul>${names}</ul></section>` : ""}${record}${groupManagementMarkup(data,state.lang,esc)}<section class="groups-section"><div class="section-head"><div><p class="eyebrow">${t("meetings")}</p><h2>${t("recentMeetings")}</h2></div></div>${sessions || `<div class="notice info">${t("noMeetings")}</div>`}</section><section class="groups-section"><div class="section-head"><div><p class="eyebrow">${t("cohort")}</p><h2>${t("cohortPeers")}</h2></div><p>${t("cohortExplain")}</p></div><div class="peer-table">${peers}</div></section></article>`,
   );
+  const manageCopy = groupManagementCopy(state.lang);
+  const manageStatus = document.querySelector('#group-manage-status');
+  async function manageGroup(action, payload, button, successText) {
+    button.disabled = true;
+    if (manageStatus) manageStatus.textContent = '';
+    try {
+      await groupRequest(action, 'POST', {groupId:group.id, ...payload});
+      // A completed request must not navigate away from a page opened meanwhile.
+      if (!button.isConnected) return;
+      if (['leave','delete'].includes(action)) navigateTo('/groups');
+      else await renderGroup(group.id);
+      announce(successText);
+    } catch {
+      if (manageStatus?.isConnected) manageStatus.textContent = manageCopy.error;
+    } finally {
+      if (button.isConnected) button.disabled = false;
+    }
+  }
+  const leaveButton = document.querySelector('#leave-group');
+  if (leaveButton) leaveButton.onclick = () => {
+    if (window.confirm(manageCopy.leaveConfirm)) void manageGroup('leave', {}, leaveButton, manageCopy.left);
+  };
+  const transferForm = document.querySelector('#transfer-group');
+  if (transferForm) transferForm.onsubmit = event => {
+    event.preventDefault();
+    const select = transferForm.elements.namedItem('targetUserId');
+    if (window.confirm(manageCopy.transferConfirm + select.selectedOptions[0].textContent))
+      void manageGroup('transfer', {targetUserId:select.value}, transferForm.querySelector('button'), manageCopy.transferred);
+  };
+  const rotateButton = document.querySelector('#rotate-group-invite');
+  if (rotateButton) rotateButton.onclick = () => {
+    if (window.confirm(manageCopy.rotateConfirm)) void manageGroup('rotate-invite', {expectedInviteCode:group.inviteCode,confirm:true}, rotateButton, manageCopy.rotated);
+  };
+  document.querySelectorAll('.group-role-button').forEach(button => {
+    button.onclick = () => {
+      const member = data.managementMembers.find(item => item.user_id === button.dataset.userId);
+      if (member && window.confirm(manageCopy.roleConfirm + member.display_name))
+        void manageGroup('role', {targetUserId:member.user_id,expectedRole:member.role,role:member.role==='facilitator'?'member':'facilitator'}, button, manageCopy.roleSaved);
+    };
+  });
+  const deleteButton = document.querySelector('#delete-group');
+  if (deleteButton) deleteButton.onclick = () => {
+    if (window.confirm(manageCopy.deleteConfirm)) void manageGroup('delete', {confirm:true}, deleteButton, manageCopy.deleted);
+  };
   const targetBook = document.querySelector("#target-book"),
     targetChapter = document.querySelector("#target-chapter"),
     updateTarget = () => {
@@ -2997,14 +3097,14 @@ async function renderGroup(groupId) {
     };
 }
 
-function renderAttemptResult(result, book, chapter, groupId = "") {
+function renderAttemptResult(result, book, chapter, groupId = "", groupRecorded) {
   if(state.user)void syncProgress();
   const copy = ATTEMPT_COPY[state.lang];
   const mastered = result.mastered?.length ? `<ul>${result.mastered.map(item => `<li>${esc(item)}</li>`).join("")}</ul>` : `<p>—</p>`;
   const mistakes = result.mistakes?.length
     ? result.mistakes.map(item => `<article class="result-review"><h3>${esc(item.reference)}</h3><p>${esc(item.explanation)}</p><p><strong>${state.lang === "uk" ? "Правильна відповідь" : state.lang === "ru" ? "Правильный ответ" : "Correct answer"}:</strong> ${item.correctAnswers.map(esc).join("; ")}</p></article>`).join("")
     : `<div class="notice success">${copy.noMistakes}</div>`;
-  shell(`<article class="prose attempt-results"><p class="eyebrow">Scripture Archive</p><h1>${copy.completed}</h1><p class="score-line"><strong>${result.score}</strong> ${copy.score} ${result.total}</p><h2>${copy.mastered}</h2>${mastered}<h2>${copy.mistakes}</h2>${mistakes}<div class="action-row"><a class="button primary" href="/reader/${book}/${chapter}">${copy.reopen}</a>${groupId?`<a class="button" href="/groups/${encodeURIComponent(groupId)}">${t("groups")}</a>`:""}</div></article>`);
+  shell(`<article class="prose attempt-results"><p class="eyebrow">Scripture Archive</p><h1>${copy.completed}</h1><p class="score-line"><strong>${result.score}</strong> ${copy.score} ${result.total}</p>${groupRecorded===false?`<p class="notice info">${copy.groupNotRecorded}</p>`:''}<h2>${copy.mastered}</h2>${mastered}<h2>${copy.mistakes}</h2>${mistakes}<div class="action-row"><a class="button primary" href="/reader/${book}/${chapter}">${copy.reopen}</a>${groupId&&groupRecorded!==false?`<a class="button" href="/groups/${encodeURIComponent(groupId)}">${t("groups")}</a>`:""}</div></article>`);
   window.saAnalytics?.track("quiz_complete",{score:Number(result.score),total:Number(result.total),language:state.lang,mode:groupId?"group":"personal"});
   play("done");
 }
@@ -3018,14 +3118,22 @@ async function renderMission(parts = []) {
     return;
   }
   let data;
-  try { data = await attemptRequest("current", "GET", undefined, `attemptId=${encodeURIComponent(attemptId)}`); }
+  try {
+    data = await attemptRequest("current", "GET", undefined, `attemptId=${encodeURIComponent(attemptId)}`);
+    if (data.grading) data = await attemptRequest("finalize", "POST", { attemptId });
+  }
   catch (error) {
-    sessionStorage.removeItem("sa.activeAttempt");
-    if (["attempt_invalidated", "attempt_expired", "attempt_closed"].includes(error.message)) { renderLockedChapter("GEN", 12); return; }
-    throw error;
+    if (["attempt_invalidated", "attempt_expired", "attempt_closed"].includes(error.message)) {
+      if(sessionStorage.getItem("sa.activeAttempt")===attemptId)sessionStorage.removeItem("sa.activeAttempt");
+      renderLockedChapter("GEN", 12); return;
+    }
+    shell(`<section class="gate-panel"><h1>${copy.prepareTitle}</h1><p role="status">${t("errorLoad")}</p><button class="button primary" id="retry-attempt">${copy.retryLoad}</button></section>`);
+    document.querySelector("#retry-attempt").onclick=()=>renderMission(["mission","attempt",attemptId]);
+    return;
   }
   if (data.completed) {
-    renderAttemptResult(data.result, data.book, data.chapter, data.groupId);
+    if(sessionStorage.getItem("sa.activeAttempt")===attemptId)sessionStorage.removeItem("sa.activeAttempt");
+    renderAttemptResult(data.result, data.book, data.chapter, data.groupId, data.groupRecorded);
     return;
   }
   const task = data.task, type = task.type === "multi" ? "checkbox" : "radio";
@@ -3042,9 +3150,10 @@ async function renderMission(parts = []) {
       if (response.completed) {
         sessionStorage.removeItem("sa.activeAttempt");
         attemptChannel?.postMessage({ type: "attempt-completed", attemptId });
-        renderAttemptResult(response.result, response.book, response.chapter, response.groupId);
+        renderAttemptResult(response.result, response.book, response.chapter, response.groupId, response.groupRecorded);
       } else await renderMission(["mission", "attempt", attemptId]);
     } catch (error) {
+      if (["attempt_changed", "answer_already_submitted", "attempt_closed"].includes(error.message)) { await renderMission(["mission", "attempt", attemptId]); return; }
       status.textContent = error.message === "attempt_invalidated" ? copy.lockedText : t("errorLoad");
       button.disabled = false;
     }
@@ -3588,7 +3697,7 @@ async function route() {
     else if (name === "community") await renderCommunity(Number(new URLSearchParams(location.search).get("page"))||1,new URLSearchParams(location.search).get("q")||"",new URLSearchParams(location.search).get("sort")||"recent");
     else if (["home-groups", "live", "campaigns", "dossiers", "builder", "progress", "about"].includes(name)) {
       if(name==="progress"&&state.user)await syncProgress();
-      await renderWorkspace(name==='home-groups'?'live':name,{state,t,esc,shell,getMission,setActiveNav,loadJSON,announce,play});
+      await renderWorkspace(name==='home-groups'?'live':name,{state,t,esc,shell,getMission,getCatalog,setActiveNav,loadJSON,announce,play});
     }
     else if (name === "atlas") renderAtlas();
     else if (name === "support") renderSupport();

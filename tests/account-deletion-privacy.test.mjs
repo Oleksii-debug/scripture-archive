@@ -23,6 +23,8 @@ test('account deletion clears personal records while preserving other users', as
     db.prepare("INSERT INTO support_requests(id,user_id,email,subject,message) VALUES (?,?,?,'Subject','Synthetic message')").run('request-'+id,id,`${id}@example.invalid`);
     db.prepare("INSERT INTO support_attachments(id,request_id,filename,content_type,size_bytes,content_base64) VALUES (?,?,'a.txt','text/plain',1,'YQ==')").run('attachment-'+id,'request-'+id);
   }
+  db.prepare("INSERT INTO accounts (id,email,password_hash,password_salt,password_iterations,first_name,last_name) VALUES ('carol','carol@example.invalid','hash','salt',1,'First','Last')").run();
+  db.prepare("INSERT INTO editorial_roles(user_id,granted_by) VALUES ('carol','alice')").run();
   let failAfter = -1;
   const D1 = {prepare(sql) {return {bind(...args) {return {first: async () => db.prepare(sql).get(...args), run: async () => db.prepare(sql).run(...args)};}};}, async batch(statements) {db.exec('BEGIN');try {for (const [index, statement] of statements.entries()) {if(index === failAfter) throw Error('simulated database failure'); await statement.run();}db.exec('COMMIT');} catch(error) {db.exec('ROLLBACK');throw error;}}};
   const source = readFileSync(new URL('../app/api/auth/route.ts', import.meta.url), 'utf8');
@@ -52,5 +54,8 @@ test('account deletion clears personal records while preserving other users', as
   assert.equal(db.prepare("SELECT count(*) n FROM mission_attempt_answers WHERE attempt_id='attempt-alice'").get().n, 0);
   assert.equal(db.prepare("SELECT count(*) n FROM support_attachments WHERE request_id='request-alice'").get().n, 0);
   assert.equal(db.prepare("SELECT count(*) n FROM support_attachments WHERE request_id='request-bob'").get().n, 1);
+  assert.equal(db.prepare("SELECT count(*) n FROM editorial_role_events WHERE subject_user_id='alice' OR actor_user_id='alice'").get().n, 0);
+  assert.equal(db.prepare("SELECT count(*) n FROM editorial_role_events WHERE subject_user_id='bob'").get().n, 1);
+  assert.equal(db.prepare("SELECT count(*) n FROM editorial_roles WHERE user_id='carol'").get().n, 0, 'deleting grantor revokes delegated roles');
   db.close();
 });

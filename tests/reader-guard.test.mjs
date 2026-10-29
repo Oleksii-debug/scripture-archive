@@ -5,6 +5,10 @@ import vm from "node:vm";
 
 const source = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
 const reader = source.slice(source.indexOf("async function renderReader("), source.indexOf("async function renderMissions("));
+const helperStart = source.indexOf("function readerChapterNumber(");
+const helperEnd = source.indexOf("\nasync function renderReader(", helperStart);
+assert.ok(helperStart >= 0 && helperEnd > helperStart, "production reader chapter validator exists");
+const helper = source.slice(helperStart, helperEnd);
 
 function harness(reply, loadBook) {
   const events = [];
@@ -21,7 +25,7 @@ function harness(reply, loadBook) {
     shell: html => events.push(["render", html]),
     t: key => key,
   });
-  vm.runInContext(reader, context);
+  vm.runInContext(helper + "\n" + reader, context);
   return { context, events, run: () => context.renderReader(["reader", "GEN", "12"]) };
 }
 

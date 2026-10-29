@@ -18,9 +18,9 @@ assert.ok(sqlTable('progress')&&sqlTable('profiles'),'canonical schema required'
 const compiled=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS},reportDiagnostics:true});
 assert.equal(compiled.diagnostics?.length??0,0);
 class D1Test {
-  constructor(file){this.db=new DatabaseSync(file);this.failNext=false;}
+  constructor(file){this.db=new DatabaseSync(file);this.failNext=false;this.loseAckNext=false;}
   prepare(sql){return {bind:(...args)=>({
-    run:async()=>{if(this.failNext){this.failNext=false;return {success:false};}const v=this.db.prepare(sql).run(...args);return {success:true,meta:{changes:Number(v.changes)}};},
+    run:async()=>{if(this.failNext){this.failNext=false;return {success:false};}const v=this.db.prepare(sql).run(...args);if(this.loseAckNext){this.loseAckNext=false;return {success:false};}return {success:true,meta:{changes:Number(v.changes)}};},
     first:async()=>this.db.prepare(sql).get(...args)??null,
     all:async()=>({results:this.db.prepare(sql).all(...args)})
   })};}
@@ -236,5 +236,39 @@ for (const mode of ['DELETE', 'WAL']) {
       assert.equal(restarted.db.prepare("SELECT count(*) AS n FROM profiles WHERE user_id='reader-a'").get().n,0);
       restarted.close();
     } finally {f.dispose()}
+  });
+}
+
+for(const mode of ['DELETE','WAL']){
+  test(`${mode}: sensitive-consent write never acknowledges a lost or failed D1 receipt`,async()=>{
+    const f=fixture(mode);try{
+      const db=new D1Test(f.file),api=worker(db);
+      assert.equal((await call(api,'profile','PUT',{firstName:'Synthetic',lastName:'Reader',ageRange:'25-34',acceptPrivacy:true,locale:'uk'})).status,200);
+      const consent={acceptSensitive:true,tradition:'other',denomination:'Synthetic local consent',church:'Synthetic church'};
+      db.failNext=true;
+      const refused=await call(api,'sensitive-consent','PUT',consent);
+      assert.equal(refused.status,503);
+      assert.equal(refused.body.error,'consent_save_failed');
+      assert.equal(db.db.prepare("SELECT sensitive_consent FROM profiles WHERE user_id='reader-a'").get().sensitive_consent,0);
+      db.loseAckNext=true;
+      const uncertain=await call(api,'sensitive-consent','PUT',consent);
+      assert.equal(uncertain.status,503,'a committed-but-unacknowledged change cannot be reported as success');
+      assert.equal(db.db.prepare("SELECT sensitive_consent FROM profiles WHERE user_id='reader-a'").get().sensitive_consent,1,
+        'the database may contain the write even though the response failed');
+      const repeated=await call(api,'sensitive-consent','PUT',consent);
+      assert.equal(repeated.status,200);
+      assert.equal(repeated.body.user.sensitiveConsent,true);
+      assert.equal(repeated.body.user.visibility.church,false,'renewed consent never auto-publishes sensitive church information');
+      const revoke=await call(api,'sensitive-consent','PUT',{acceptSensitive:false});
+      assert.equal(revoke.status,200);
+      assert.equal(revoke.body.user.sensitiveConsent,false);
+      const row=db.db.prepare("SELECT sensitive_consent,sensitive_consent_version,church,denomination,public_church FROM profiles WHERE user_id='reader-a'").get();
+      assert.equal(row.sensitive_consent,0);
+      assert.equal(row.sensitive_consent_version,0);
+      assert.equal(row.church,null);
+      assert.equal(row.denomination,null);
+      assert.equal(row.public_church,0);
+      db.close();
+    }finally{f.dispose()}
   });
 }

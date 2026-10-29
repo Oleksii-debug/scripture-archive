@@ -24,6 +24,19 @@ test('the source-linked dossier graph validates against the canonical 3-language
   assert.ok(allSources.some(r=>catalog.books.en.find(b=>b.code===r.book)?.testament==='OT'));
 });
 
+test('every cited verse range exists in all four bundled editions',()=>{
+  for(const dossier of scriptureDossiers){
+    for(const ref of [...dossier.sources,...dossier.related.map(link=>link.via)]){
+      for(const edition of ['uk','ru','en','uk-ohiienko']){
+        const book=JSON.parse(readFileSync(new URL(`../public/data/bible/${edition}/${ref.book}.json`,import.meta.url),'utf8'));
+        const verses=book.chapters[ref.chapter-1];
+        assert.ok(Array.isArray(verses) && ref.first>=1 && ref.last<=verses.length,
+          `${dossier.id}: ${edition} ${ref.book} ${ref.chapter}:${ref.first}-${ref.last}`);
+      }
+    }
+  }
+});
+
 test('each dossier is reachable via real internal navigation, has labeled evidence and source links',()=>{
   for(const language of ['uk','ru','en']){
     for(const item of scriptureDossiers){
@@ -37,16 +50,29 @@ test('each dossier is reachable via real internal navigation, has labeled eviden
       assert.ok(markup.includes('href="/reader/'),item.id);
       assert.ok(markup.includes(esc(item.prompts[language][0])),item.id);
       for(const reference of item.sources){
-        assert.ok(markup.includes('href="/reader/'+reference.book+'/'+reference.chapter+'"'),item.id);
+        assert.ok(markup.includes('href="/reader/'+reference.book+'/'+reference.chapter+'?verse='+reference.first+'"'),item.id);
       }
       for(const relation of item.related){
         assert.ok(markup.includes('href="/dossiers?id='+relation.to+'"'),item.id);
+        assert.ok(markup.includes('href="/reader/'+relation.via.book+'/'+relation.via.chapter+'?verse='+relation.via.first+'"'),item.id);
       }
       assert.ok(!markup.includes('href="http://'),'references never leave canonical reader');
+      assert.doesNotMatch(markup,/href="\/reader\/[^"?]+"/,'every cited dossier source must deep-link to its first verse');
       assert.ok(!markup.includes('<iframe'));
       assert.ok(!markup.includes('onclick='));
     }
   }
+});
+
+test('every navigable dossier reference opens the canonical reader at the cited first verse',()=>{
+  const abraham=dossierMarkup(catalog,'uk','abraham',esc);
+  assert.match(abraham,/href="\/reader\/GEN\/12\?verse=1"/);
+  assert.match(abraham,/href="\/reader\/GEN\/15\?verse=1"/);
+  assert.match(abraham,/href="\/reader\/ROM\/4\?verse=1"/);
+  assert.match(abraham,/href="\/reader\/GEN\/17\?verse=15"/);
+  const result=dossierMarkup(catalog,'en','jerusalem',esc);
+  assert.match(result,/href="\/reader\/LUK\/19\?verse=41"/);
+  assert.doesNotMatch(abraham,/href="\/reader\/GEN\/12"/);
 });
 
 test('the existing Abraham mission remains linked without making other dossiers fake missions',()=>{
@@ -65,6 +91,22 @@ test('the dossier catalogue fails closed when edition provenance/metadata cannot
   assert.doesNotMatch(markup,/href="\/reader\//);
   assert.doesNotMatch(markup,/href="\/dossiers\?/);
   assert.equal(validateDossierGraph(null),false);
+  for(const corrupt of [
+    bad=>{bad.books.en='unexpected string';},
+    bad=>{bad.books.ru={};},
+    bad=>{bad.books.uk[0].chapters=0;},
+    bad=>{bad.books.uk[0].title='';},
+    bad=>{bad.books.en.push({...bad.books.en[0]});},
+  ]){
+    const damaged=structuredClone(catalog);
+    corrupt(damaged);
+    assert.equal(validateDossierGraph(damaged),false,'malformed/ambiguous edition catalogue must fail closed');
+    const safeMarkup=dossierMarkup(damaged,'uk','abraham',esc);
+    assert.match(safeMarkup,/role="alert"/);
+    assert.equal(safeMarkup.includes('href="/reader/'),false);
+    assert.equal(safeMarkup.includes('href="/dossiers?'),false);
+  }
+
   const weird=dossierMarkup(catalog,'en','"><script>alert(1)</script>',esc);
   assert.doesNotMatch(weird,/<script>/);
   assert.ok(weird.includes('Abraham'));

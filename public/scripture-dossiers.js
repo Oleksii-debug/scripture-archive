@@ -21,7 +21,7 @@ const nodes=[
   prompts:{uk:['Які зміни імен названо в Бутті 17?','Як Буття 18 передає реакцію Сарри?'],ru:['Какие изменения имён названы в Бытии 17?','Как Бытие 18 описывает реакцию Сарры?'],en:['Which name changes occur in Genesis 17?','How does Genesis 18 portray Sarah’s reaction?']}},
  {id:'moses',type:'person',names:{uk:'Мойсей',ru:'Моисей',en:'Moses'},
   summaries:{uk:'Покликання Мойсея, розповідь про вихід і пізніші згадки про ці події.',ru:'Призвание Моисея, повествование об исходе и позднейшие упоминания.',en:'Moses’ call, the Exodus account, and later references to these events.'},
-  sources:[ref('EXO',3,1,12),ref('DEU',34,1,12),ref('ACT',7,30,37,'interpretive'),ref('HEB',11,23,29,'interpretive')],
+  sources:[ref('EXO',3,1,12),ref('DEU',34,1,11),ref('ACT',7,30,37,'interpretive'),ref('HEB',11,23,29,'interpretive')],
   related:[{to:'exodus',via:ref('EXO',12,29,42)}],
   prompts:{uk:['Що Мойсей запитує під час покликання?','Які події згадано в Посланні до євреїв 11?'],ru:['О чём спрашивает Моисей при призвании?','Какие события упомянуты в Евреям 11?'],en:['What does Moses ask at his calling?','Which events are recalled in Hebrews 11?']}},
  {id:'exodus',type:'event',names:{uk:'Вихід з Єгипту',ru:'Исход из Египта',en:'Exodus from Egypt'},
@@ -45,8 +45,15 @@ export const scriptureDossiers=nodes;
 export function validateDossierGraph(catalog) {
   const known = new Map(nodes.map(item=>[item.id,item]));
   if(known.size !== nodes.length) return false;
-  if(!catalog?.books) return false;
-  const bookMaps = LANGS.map(lang=>new Map((catalog.books[lang]||[]).map(book=>[book.code,book.chapters])));
+  if(!catalog?.books || LANGS.some(lang=>!Array.isArray(catalog.books[lang]))) return false;
+  // A malformed or ambiguous edition catalogue must show the accessible
+  // source-unavailable state, not throw while assembling the dossier.
+  const catalogs = LANGS.map(lang=>catalog.books[lang]);
+  if(catalogs.some(books=>books.some(book=>!book || typeof book.code!=='string' || !book.code ||
+      typeof book.title!=='string' || !book.title.trim() ||
+      !Number.isSafeInteger(book.chapters) || book.chapters<1) ||
+      new Set(books.map(book=>book.code)).size!==books.length)) return false;
+  const bookMaps = catalogs.map(books=>new Map(books.map(book=>[book.code,book.chapters])));
   const validRef = source => source && Number.isInteger(source.first) && source.first>0 &&
     Number.isInteger(source.last) && source.last>=source.first &&
     Number.isInteger(source.chapter) && source.chapter>0 &&
@@ -64,7 +71,7 @@ export function dossierMarkup(catalog,language,requestedId,esc) {
   const bookNames=new Map(catalog.books[lang].map(book=>[book.code,book.title]));
   const cite=source=>{
     const label=`${bookNames.get(source.book)} ${source.chapter}:${source.first}–${source.last}`;
-    return `<a href="/reader/${source.book}/${source.chapter}" aria-label="${esc(w.read)}: ${esc(label)}">${esc(label)}</a>`;
+    return `<a href="/reader/${source.book}/${source.chapter}?verse=${source.first}" aria-label="${esc(w.read)}: ${esc(label)}">${esc(label)}</a>`;
   };
   const index=`<nav aria-label="${esc(w.index)}"><h2>${esc(w.index)}</h2><ol>${nodes.map(item=>`<li><a href="/dossiers?id=${item.id}"${item.id===selected.id?' aria-current="page"':''}>${esc(item.names[lang])}</a> — ${esc(w[item.type])}</li>`).join('')}</ol></nav>`;
   const references=`<ol>${selected.sources.map(source=>`<li>${cite(source)} — ${esc(w[source.kind])}</li>`).join('')}</ol>`;

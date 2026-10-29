@@ -1961,6 +1961,7 @@ const state = {
     correct: [],
     complete: false,
   }),
+  progressSyncStatus: null,
   studyTimer: loadJSON("sa.studyTimer", {
     durationMinutes: 0,
     remainingSeconds: 0,
@@ -3407,19 +3408,37 @@ async function authRequest(action, body = {}) {
 }
 async function syncProgress() {
   if (!state.user) return;
+  state.progressSyncStatus = "unavailable";
   try {
     const readingData=await accountRequest('reading');
-    const localReading=loadJSON('sa.readingHistory',[]),mergedReading=[...new Map([...(readingData.reading||[]),...localReading].map(r=>[r.book+':'+r.chapter,r])).values()];
-    localStorage.setItem('sa.readingHistory',JSON.stringify(mergedReading));
+    // A successful-looking HTTP reply with no reading array is not evidence
+    // of empty reading history; never overwrite the local cache on that basis.
+    if(!Array.isArray(readingData.reading))throw Error("missing_reading_history");
+    const localReading=loadJSON('sa.readingHistory',[]);
+    if(!Array.isArray(localReading))throw Error("invalid_local_reading_history");
+    const mergedReading=[...new Map([...readingData.reading,...localReading].map(r=>[r.book+':'+r.chapter,r])).values()];
     if(mergedReading.length)await accountRequest('reading','PUT',{reading:mergedReading});
     const data = await accountRequest("progress");
-    if (data.progress) {
-      state.missionProgress = data.progress;
-      localStorage.setItem("sa.mission.OTAB01", JSON.stringify(data.progress));
-    }
-  } catch {}
+    if (!data.progress || !Number.isSafeInteger(data.progress.index) ||
+      data.progress.index<0 || !Array.isArray(data.progress.correct) ||
+      typeof data.progress.complete!=="boolean")throw Error("invalid_progress_receipt");
+    // Persist only after complete server acknowledgement; a failed refresh
+    // leaves the user's last local snapshot intact and triggers the existing
+    // localized unavailable warning.
+    localStorage.setItem('sa.readingHistory',JSON.stringify(mergedReading));
+    state.missionProgress = data.progress;
+    localStorage.setItem("sa.mission.OTAB01", JSON.stringify(data.progress));
+    // The server may have recovered some valid results alongside a damaged
+    // legacy row; never quietly present those totals as definitive.
+    state.progressSyncStatus = data.warning === "partial_progress_history" ? "partial" : null;
+  } catch {
+    // Preserve cached evidence and show a localized nonvisual warning on the
+    // canonical progress page instead of silently claiming it is current.
+    state.progressSyncStatus = "unavailable";
+  }
 }
 function clearPersonalProgress() {
+  state.progressSyncStatus=null;
   state.missionProgress={index:0,correct:[],complete:false};
   localStorage.setItem("sa.mission.OTAB01",JSON.stringify(state.missionProgress));
   localStorage.setItem("sa.readingHistory","[]");

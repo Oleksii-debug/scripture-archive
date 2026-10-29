@@ -66,8 +66,7 @@ try {
     ],
   });
   if (!ready) throw Error(`Local worker did not become ready. ${logs}`);
-  // Keep only a public safe GET active while the test process boots and runs.
-  // No state-changing request is retried, and no production HTTP client is touched.
+  // Keep the disposable local proxy active using only a non-mutating GET.
   stopReadOnlyHeartbeat = startReadOnlyHeartbeat(base);
   await run(["--test", "--test-concurrency=1", "tests/api-flow.test.mjs", "tests/community.test.mjs", "tests/community-runner.test.mjs", "tests/community-smoke.test.mjs", "tests/community-runner-identity.test.mjs", "tests/security-contract.test.mjs"],
     { env: { ...options.env, SCRIPTURE_TEST_URL: base } });

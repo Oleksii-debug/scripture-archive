@@ -14,16 +14,14 @@ export function isDisposableWorkerRestart(log) {
   const failures = log.slice(marker).split(/\n(?:\[wrangler:|file:\/\/\/[^\n]*\/scripts\/test-integration\.mjs)/u)[0];
   const cases = failures.match(/(?:^|\n)\s*✖ (?!failing tests:)[^\n]+/gu) || [];
   if (cases.length !== 1) return false;
-  const errors = failures.match(/(?:^|\n)\s*(?:AssertionError(?: \[ERR_ASSERTION\])?|SyntaxError(?: \[Error\])?):[^\n]+/gu) || [];
-  if (errors.length !== 1) return false;
-  const error = errors[0].trim();
-  // Node's strictEqual may raise an assertion with the *exact response body*
-  // from Wrangler. This is restart evidence only when the status is 503 and
-  // there are no other failures or assertion errors in the same test report.
-  if (error.startsWith('AssertionError [ERR_ASSERTION]: Your worker restarted mid-request. Please try sending the request again. Only GET or HEAD requests are retried automatically.')) {
-    return /\b503 !== (?:200|201|202|204|400|401|403|404|409)\b/u.test(failures);
-  }
-  return /^SyntaxError(?: \[Error\])?: Unexpected token 'Y', "Your worker restarted mid-request[^"\n]*" is not valid JSON/u.test(error);
+  // Strictly one failed security assertion with a literal local-proxy body.
+  // A bare 503, unrelated log banner or secondary assertion remains red.
+  const recognized = /AssertionError \[ERR_ASSERTION\]: (?:Cross-origin mutation must be rejected; local Worker response: Your worker restarted mid-request\.|Your worker restarted mid-request\. Please try sending the request again\. Only GET or HEAD requests are retried automatically\.)/u;
+  const remaining = failures.replace(recognized, '');
+  if (/(?:^|\n)\s*AssertionError\b|Expected values to be strictly equal/u.test(remaining)) return false;
+  if (/(?:^|\n)\s*AssertionError \[ERR_ASSERTION\]:/u.test(failures) &&
+      !/\b503 !== (?:200|201|202|204|400|401|403|404|409)\b/u.test(failures)) return false;
+  return /Your worker restarted mid-request/u.test(failures);
 }
 
 export async function runWithFreshState(execute, report = () => {}) {

@@ -54,9 +54,9 @@ test('account deletion clears personal records while preserving other users', as
   assert.equal(db.prepare("SELECT deleted_at FROM accounts WHERE id='alice'").get().deleted_at, null);
   // Fail after shared-session redaction to prove the entire batch rolls back.
   failAfter = 9;
-  const refused = await exports.POST(request('correct'));
-  assert.equal(refused.status, 503);
-  assert.equal((await refused.json()).error, 'deletion_failed');
+  const refusedAfterRedaction = await exports.POST(request('correct'));
+  assert.equal(refusedAfterRedaction.status, 503);
+  assert.equal((await refusedAfterRedaction.json()).error, 'deletion_failed');
   assert.deepEqual({...db.prepare("SELECT created_by,reflection FROM group_sessions WHERE id='alice-meeting'").get()}, {created_by:'alice',reflection:'Alice private reflection'});
   assert.equal(db.prepare("SELECT count(*) AS n FROM home_group_members WHERE group_id='bob-group'").get().n, 2);
   failAfter = -1;

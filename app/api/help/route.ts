@@ -206,7 +206,15 @@ export async function POST(request: Request) {
       (id,request_id,filename,content_type,size_bytes,content_base64)
       VALUES (?,?,?,?,?,?)`)
     .bind(file.id, requestId, file.filename, file.contentType, file.size, file.content));
-  await env.DB.batch(statements);
+  // Do not send or acknowledge an email for a request that D1 did not commit.
+  // The batch must have one successful result for the request and each attachment.
+  try {
+    const saved = await env.DB.batch(statements);
+    if (!Array.isArray(saved) || saved.length !== statements.length || saved.some(result => result?.success !== true))
+      return json({ error: "support_save_failed" }, 503);
+  } catch {
+    return json({ error: "support_save_failed" }, 503);
+  }
 
   const delivery = await sendSupportRequestEmail({
     requestId,
@@ -217,16 +225,36 @@ export async function POST(request: Request) {
     userName: identity?.fullName,
     attachments,
   });
-  if (delivery.delivered) await env.DB.prepare("UPDATE support_requests SET email_delivered=1 WHERE id=?").bind(requestId).run();
+  if (delivery.delivered) {
+    // The request itself is already durably accepted. If recording the mail
+    // receipt fails after mail delivery, returning 5xx would invite the user
+    // to submit and email the same private message a second time.
+    try {
+      const receipt = await env.DB.prepare("UPDATE support_requests SET email_delivered=1 WHERE id=?").bind(requestId).run();
+      if (receipt?.success !== true || receipt.meta?.changes !== 1)
+        return json({ ok: true, requestId, mailStatus: "delivery_record_pending" }, 201);
+    } catch {
+      return json({ ok: true, requestId, mailStatus: "delivery_record_pending" }, 201);
+    }
+  }
   return json({ ok: true, requestId }, 201);
 }
 
 export async function GET(request: Request) {
   if (!env.DB) return json({ error: "database_unavailable" }, 503);
   const identity = await authenticateRequest(request);
-  if (identity?.email !== OWNER_EMAIL) return json({ error: "forbidden" }, 403);
-  const rows = await env.DB.prepare(`SELECT id,email,subject,message,locale,status,email_delivered,attachment_count,created_at
-    FROM support_requests ORDER BY created_at DESC LIMIT 100`).all();
-  return json({ items: rows.results });
+  // A matching email string alone is not proof of owner authorization.
+  // Unverified accounts and synthetic agents must not read support messages.
+  if (!identity || identity.provider === "agent" || !identity.emailVerified ||
+      identity.email.toLowerCase() !== OWNER_EMAIL)
+    return json({ error: "forbidden" }, 403);
+  try {
+    const rows = await env.DB.prepare(`SELECT id,email,subject,message,locale,status,email_delivered,attachment_count,created_at
+      FROM support_requests ORDER BY created_at DESC LIMIT 100`).all();
+    if (!rows.success || !Array.isArray(rows.results)) return json({ error: "support_unavailable" }, 503);
+    return json({ items: rows.results });
+  } catch {
+    return json({ error: "support_unavailable" }, 503);
+  }
 }
 

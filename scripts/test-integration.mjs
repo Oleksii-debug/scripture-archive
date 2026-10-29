@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { access, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { access, cp, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
@@ -10,6 +10,11 @@ const root = fileURLToPath(new URL("../", import.meta.url));
 const builtConfig = path.join(root, "dist/server/wrangler.json");
 await access(builtConfig).catch(() => { throw Error("Run npm run build before npm run test:integration."); });
 const temporary = await mkdtemp(path.join(tmpdir(), "scripture-integration-"));
+// Serve an immutable snapshot outside the working tree. In developer mode,
+// file watchers must not reload a Worker while an HTTP mutation is in flight.
+const isolatedDist = path.join(temporary, "dist");
+await cp(path.join(root, "dist"), isolatedDist, { recursive: true });
+const isolatedConfig = path.join(isolatedDist, "server", "wrangler.json");
 const state = path.join(temporary, "state");
 const config = JSON.parse(await readFile(builtConfig, "utf8"));
 const migrationConfig = path.join(temporary, "migrations.json");
@@ -44,7 +49,7 @@ try {
   await run([...wrangler, "d1", "migrations", "apply", "DB", "--local", "--persist-to", state, "--config", migrationConfig]);
   worker = spawn(process.execPath, [...wrangler, "dev", "--local", "--persist-to", state,
     "--name", `scripture-integration-${port}`,
-    "--config", builtConfig, "--ip", "127.0.0.1", "--port", String(port), "--inspector-port", "0",
+    "--config", isolatedConfig, "--ip", "127.0.0.1", "--port", String(port), "--inspector-port", "0",
     "--var", "AUTH_TEST_MODE:1", "--var", `APP_BASE_URL:${base}`], { ...options, stdio: ["ignore", "pipe", "pipe"] });
   worker.stdout.on("data", data => { logs = (logs + data).slice(-12000); });
   worker.stderr.on("data", data => { logs = (logs + data).slice(-12000); });

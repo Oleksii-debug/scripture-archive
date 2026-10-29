@@ -2667,6 +2667,7 @@ async function renderReader(parts) {
   const readerContext = state.currentReader;
   try {
     const attemptState = await attemptRequest("chapter", "POST", { book: meta.code, chapter });
+    if (state.currentReader !== readerContext) return;
     if (!attemptState || typeof attemptState.invalidated !== "boolean") {
       throw new Error("invalid_attempt_guard_response");
     }
@@ -2678,6 +2679,7 @@ async function renderReader(parts) {
       return;
     }
   } catch {
+    if (state.currentReader !== readerContext) return;
     state.currentReader = null;
     shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1></section>`);
     return;

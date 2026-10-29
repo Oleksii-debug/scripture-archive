@@ -51,7 +51,9 @@ export async function POST(request: Request) {
         SELECT id,? FROM accounts WHERE (id=? OR (?!='' AND lower(email)=?)) AND email_verified_at IS NOT NULL AND deleted_at IS NULL AND lower(email)<>?`)
         .bind(id.userId,userId,email,email,ownerEmail).run();
       if (!result.success) throw Error("write failed");
-      return result.meta.changes === 1 ? json({ok:true}) : json({error:"not_eligible_or_granted"},409);
+      // D1 may count the audit INSERT trigger alongside the role INSERT (2 changes).
+      // Zero means no eligible new role; any positive acknowledged count is a grant.
+      return Number(result.meta.changes) > 0 ? json({ok:true}) : json({error:"not_eligible_or_granted"},409);
     }
     const results = await env.DB.batch([
       env.DB.prepare("UPDATE editorial_roles SET revoked_by=? WHERE user_id=?").bind(id.userId,userId),

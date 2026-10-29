@@ -29,7 +29,7 @@ test("grant atomically writes one role and exactly one audit event despite dupli
     assert.equal(grant("alice").changes,0);
     assert.equal(grant("","alice@example.invalid").changes,0);
     assert.equal(db.prepare("SELECT count(*) n FROM editorial_roles").get().n,1);
-    assert.deepEqual(db.prepare("SELECT subject_user_id,actor_user_id,action FROM editorial_role_events").get(),
+    assert.deepEqual({...db.prepare("SELECT subject_user_id,actor_user_id,action FROM editorial_role_events").get()},
       {subject_user_id:"alice",actor_user_id:"owner",action:"grant"});
   } finally {db.close();}
 });

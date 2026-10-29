@@ -32,16 +32,19 @@ export async function POST(request: Request) {
   if (!sameOrigin(request)) return json({error:"cross_origin_request"},403);
   const id = await owner(request);
   if (!id) return json({error:"forbidden"},403);
-  const body = await request.json().catch(() => null) as {action?: unknown; userId?: unknown} | null;
-  if (!body || (body.action !== "grant" && body.action !== "revoke") || typeof body.userId !== "string" || !body.userId || body.userId.length > 100 || body.userId === id.userId) return json({error:"invalid_request"},400);
+  const body = await request.json().catch(() => null) as {action?: unknown; userId?: unknown; email?: unknown} | null;
+  if (!body || (body.action !== "grant" && body.action !== "revoke")) return json({error:"invalid_request"},400);
+  const userId = typeof body.userId === "string" && body.userId.length <= 100 ? body.userId : "";
+  const email = typeof body.email === "string" && body.email.length <= 254 ? body.email.trim().toLowerCase() : "";
+  if ((body.action === "revoke" && !userId) || (body.action === "grant" && Boolean(userId) === Boolean(email)) || userId === id.userId) return json({error:"invalid_request"},400);
   try {
     if (body.action === "grant") {
       const row = await env.DB.prepare(`INSERT INTO editorial_roles(user_id,granted_by)
-        SELECT id,? FROM accounts WHERE id=? AND email_verified_at IS NOT NULL AND deleted_at IS NULL AND lower(email)<>?
-        ON CONFLICT(user_id) DO NOTHING RETURNING user_id`).bind(id.userId,body.userId,ownerEmail).first();
+        SELECT id,? FROM accounts WHERE (id=? OR (?!='' AND lower(email)=?)) AND email_verified_at IS NOT NULL AND deleted_at IS NULL AND lower(email)<>?
+        ON CONFLICT(user_id) DO NOTHING RETURNING user_id`).bind(id.userId,userId,email,email,ownerEmail).first();
       return row ? json({ok:true}) : json({error:"not_eligible_or_granted"},409);
     }
-    const result = await env.DB.prepare("DELETE FROM editorial_roles WHERE user_id=?").bind(body.userId).run();
+    const result = await env.DB.prepare("DELETE FROM editorial_roles WHERE user_id=?").bind(userId).run();
     if (!result.success) throw Error("write failed");
     return result.meta.changes ? json({ok:true}) : json({error:"not_found"},404);
   } catch { return json({error:"database_unavailable"},503); }

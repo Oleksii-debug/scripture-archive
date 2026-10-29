@@ -1,3 +1,4 @@
+import { parallelControls, mountParallelReader } from './parallel-reader.js';
 import {renderWorkspace, workspaceCopy} from './workspace.js';
 import {supportSection} from './support.js';
 import {homePage} from './home.js';
@@ -2240,9 +2241,10 @@ async function getSession() {
   if(state.user)localStorage.setItem('sa.progressOwner',state.user.id);else localStorage.removeItem('sa.progressOwner');
   return state.user;
 }
-async function getBook(code) {
+async function getBook(code, explicitEdition = null) {
   const requestLocale = state.lang;
-  const selected = selectedEdition(requestLocale);
+  const selected = explicitEdition || selectedEdition(requestLocale);
+  if (explicitEdition && (!explicitEdition.local || !EDITIONS[requestLocale].includes(explicitEdition))) throw Error("Invalid local edition");
   const edition = selected.local ? selected : EDITIONS[requestLocale].find(e => e.local);
   const folder = edition.folder || requestLocale;
   const key = `${folder}:${code}`;
@@ -2680,6 +2682,18 @@ async function renderReader(parts) {
   activateTimer();
   document.querySelector(".reader-aside")?.insertAdjacentHTML("beforeend", '<section class="card" id="reader-bookmarks" aria-live="polite"></section>');
   void mountReaderBookmarks(meta, chapter, chosenEdition, books);
+  const parallelEditions = chosenEdition.local ? EDITIONS[state.lang].filter(item => item.local && item.id !== chosenEdition.id) : [];
+  if (parallelEditions.length) {
+    const aside = document.querySelector('.reader-aside');
+    aside.insertAdjacentHTML('beforeend', parallelControls(parallelEditions, state.lang, esc));
+    const panel = aside.querySelector('.parallel-reader'), reader = state.currentReader;
+    mountParallelReader(panel, { editions: parallelEditions, catalog, lang: state.lang, book: meta.code, bookTitle: bookTitle(meta), chapter, getBook, esc,
+      check: (code, number) => attemptRequest('chapter', 'POST', { book: code, chapter: number }),
+      current: () => state.currentReader === reader,
+      lock: () => { sessionStorage.removeItem('sa.activeAttempt'); state.mission=null; state.currentReader=null; renderLockedChapter(meta.code,chapter); },
+      failClosed: () => { state.currentReader=null; shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1></section>`); },
+    });
+  }
   const editionText=editionCopy[state.lang];
   if(editionInfo.attribution) document.querySelector('.edition-card').insertAdjacentHTML('beforeend', `<p class="edition-attribution">${esc(editionInfo.attribution)}</p>`);
   if(editionInfo.licenseUrl) document.querySelector('.edition-card').insertAdjacentHTML('beforeend', `<a href="${esc(editionInfo.licenseUrl)}" target="_blank" rel="noreferrer">${esc(editionInfo.license)} ↗</a>`);

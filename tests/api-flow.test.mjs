@@ -271,6 +271,14 @@ integration("account, progress, attempts, groups, marathon limit and password re
   result = await request("/api/account?action=progress", { method: "PUT", body: { progress: {} }, origin: "https://attacker.invalid" });
   assert.equal(result.response.status, 403);
 
+  // Both existing local Ukrainian editions are available for the guarded comparison.
+  const comparedBooks = await Promise.all(['uk-ohiienko','uk'].map(async folder => {
+    const response = await fetch(`${base}/data/bible/${folder}/GEN.json`);
+    assert.equal(response.status, 200); return response.json();
+  }));
+  assert.deepEqual(comparedBooks.map(book => book.editionId), ['uk-ohiienko','UKRPAN']);
+  assert.ok(comparedBooks.every(book => book.bookCode === 'GEN' && book.chapters[0].length > 0));
+
   result = await request("/api/attempts?action=read", { method: "POST", body: { book: "GEN", chapter: 12 } });
   assert.equal(result.response.status, 201, JSON.stringify(result.data));
   const attemptStarts = await Promise.all([0, 1].map(() => request("/api/attempts?action=start", { method: "POST", body: { missionId: "OT-AB-01", book: "GEN", chapter: 12, locale: "en" } })));

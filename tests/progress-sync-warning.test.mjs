@@ -37,7 +37,7 @@ test('canonical progress screen exposes accessible localized warnings and no fal
         await renderWorkspace('progress',{
           state,t:key=>key,esc,shell:value=>{html=value;},
           setActiveNav:()=>{},
-          getMission:async()=>{missionReads++;return {taskCount:2,title:{[lang]:'Synthetic'}};,
+          getMission:async()=>{missionReads++;return {taskCount:2,title:{[lang]:'Synthetic'}};},
           loadJSON:()=>[],
         });
         assert.equal(missionReads,1);

@@ -42,3 +42,41 @@ export async function waitForStableWorker(base, {
   }
   return false;
 }
+
+
+// Keep the *local dev proxy's* idle connection fresh during long integration
+// scenarios (Cloudflare's local proxy may drop a connection at its 5s idle
+// boundary and report a misleading Worker restart on the next POST).
+// This probes only the existing public-safe GET, never replays a write.
+export function startReadOnlyHeartbeat(base, {
+  fetcher = fetch,
+  intervalMs = 1100,
+  schedule = (callback, ms) => setInterval(callback, ms),
+  cancel = handle => clearInterval(handle),
+} = {}) {
+  if (typeof base !== "string" || !/^https?:\/\/[^/]+$/.test(base)
+      || typeof fetcher !== "function" || typeof schedule !== "function"
+      || typeof cancel !== "function" || !Number.isFinite(intervalMs)
+      || intervalMs < 100 || intervalMs > 4500)
+    throw new RangeError("Invalid local Worker heartbeat configuration.");
+  let active = true, inFlight = false, pending = Promise.resolve();
+  const metrics = { probes: 0, failures: 0 };
+  const pulse = () => {
+    if (!active || inFlight) return;
+    inFlight = true;
+    metrics.probes++;
+    pending = Promise.resolve().then(() => fetcher(base + "/api/account?action=me", {
+      method: "GET", signal: AbortSignal.timeout(900),
+    })).then(async response => {
+      if (response?.status !== 200 || (await response.json())?.user !== null)
+        metrics.failures++;
+    }).catch(() => { metrics.failures++; }).finally(() => { inFlight = false; });
+  };
+  const handle = schedule(pulse, intervalMs);
+  return async () => {
+    active = false;
+    cancel(handle);
+    await pending;
+    return { ...metrics };
+  };
+}

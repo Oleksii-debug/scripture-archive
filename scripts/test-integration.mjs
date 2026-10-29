@@ -74,6 +74,8 @@ try {
       if (Number(row.count) !== 0) throw Error("Deleted account retained reader bookmarks");
       const submissions = db.prepare("SELECT COUNT(*) AS count FROM material_submissions").get();
       if (Number(submissions.count) !== 0) throw Error("Deleted account retained material submissions");
+      const roleEvents = db.prepare("SELECT COUNT(*) AS count FROM editorial_role_events").get();
+      if (Number(roleEvents.count) !== 0) throw Error("Deleted account retained editorial role events");
     } finally { db.close(); }
   }
   if (inspected !== 1) throw Error(`Expected one bookmark database, found ${inspected}`);

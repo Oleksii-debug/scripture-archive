@@ -46,17 +46,22 @@ try {
   worker.stdout.on("data", data => { logs = (logs + data).slice(-12000); });
   worker.stderr.on("data", data => { logs = (logs + data).slice(-12000); });
   worker.on("error", error => { logs += error.message; });
-  let ready = false;
-  for (let count = 0; count < 100; count += 1) {
+  // Wrangler can announce "Ready" before its watched worker settles;
+  // wait for a continuous safe GET health window, never replay a mutating POST.
+  let ready = false, stableSince = 0;
+  for (let count = 0; count < 110; count += 1) {
     if (worker.exitCode !== null) break;
     try {
       const response = await fetch(`${base}/api/account?action=me`, { signal: AbortSignal.timeout(1000) });
-      if (response.ok && (await response.json()).user === null) { ready = true; break; }
-    } catch {}
+      if (response.ok && (await response.json()).user === null) {
+        if (!stableSince) stableSince = Date.now();
+        if (Date.now() - stableSince >= 2000) { ready = true; break; }
+      } else stableSince = 0;
+    } catch { stableSince = 0; }
     await new Promise(resolve => setTimeout(resolve, 300));
   }
   if (!ready) throw Error(`Local worker did not become ready. ${logs}`);
-  await run(["--test", "tests/api-flow.test.mjs", "tests/community.test.mjs", "tests/community-runner.test.mjs", "tests/community-smoke.test.mjs", "tests/community-runner-identity.test.mjs", "tests/security-contract.test.mjs"],
+  await run(["--test", "--test-concurrency=1", "tests/api-flow.test.mjs", "tests/community.test.mjs", "tests/community-runner.test.mjs", "tests/community-smoke.test.mjs", "tests/community-runner-identity.test.mjs", "tests/security-contract.test.mjs"],
     { env: { ...options.env, SCRIPTURE_TEST_URL: base } });
   await run(["--experimental-strip-types", "scripts/test-learning-agent.mjs", "--local-test", "--smoke"],
     { env: { ...options.env, COMMUNITY_ORIGIN: base } });

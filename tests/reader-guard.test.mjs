@@ -104,3 +104,34 @@ test("reader never overwrites a newer screen after slow book load",async()=>{
   assert.equal(h.events.filter(e=>e[0]==="request").length,1);
   assert.equal(h.events.some(e=>e[0]==="render"||e[0]==="locked"),false);
 });
+
+// The initial network authorization may settle after another route took over.
+test("late initial invalidation never locks a different newly opened reader",async()=>{
+  let release;
+  const pending = new Promise(resolve=>{release=resolve;});
+  const h = harness(()=>pending);
+  const loading = h.run();
+  for(let i=0;i<12;i++) await Promise.resolve();
+  const next = {book:"EXO",chapter:1};
+  h.context.state.currentReader=next;
+  release({invalidated:true});
+  await loading;
+  assert.equal(h.context.state.currentReader,next);
+  assert.equal(h.events.some(e=>e[0]==="locked"||e[0]==="render"||e[0]==="remove"),false);
+  assert.equal(h.events.some(e=>e[0]==="load-text"),false);
+});
+
+test("failed initial guard after route replacement cannot erase another screen",async()=>{
+  let reject;
+  const pending = new Promise((_,failure)=>{reject=failure;});
+  const h=harness(()=>pending);
+  const loading=h.run();
+  for(let i=0;i<12;i++) await Promise.resolve();
+  const next={book:"MAT",chapter:2};
+  h.context.state.currentReader=next;
+  reject(Error("offline"));
+  await loading;
+  assert.equal(h.context.state.currentReader,next);
+  assert.equal(h.events.some(e=>e[0]==="render"||e[0]==="locked"),false);
+  assert.equal(h.events.some(e=>e[0]==="load-text"),false);
+});

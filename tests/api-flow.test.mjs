@@ -90,7 +90,13 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const ownAccount = await (await fetch(`${base}/api/account?action=me`, {headers:{Cookie:cookie}})).json();
   const roleAction = (action, principal = ownerCookie, origin = base) => fetch(`${base}/api/editor-roles`, {method:'POST',headers:{Origin:origin,Cookie:principal,'Content-Type':'application/json'},body:JSON.stringify({action,userId:ownAccount.user.id})});
   assert.equal((await roleAction('grant',cookie)).status,403);
-  assert.equal((await roleAction('grant',ownerCookie,'https://attacker.invalid')).status,403);
+  const rejectedOriginRoleGrant = await roleAction('grant',ownerCookie,'https://attacker.invalid');
+  assert.equal(
+    rejectedOriginRoleGrant.status, 403,
+    'forged-origin editor role grant: HTTP ' + rejectedOriginRoleGrant.status
+      + ', content type ' + rejectedOriginRoleGrant.headers.get('content-type')
+      + ', body ' + (await rejectedOriginRoleGrant.clone().text()).slice(0, 240)
+  );
   const emailGrant = await fetch(`${base}/api/editor-roles`,{method:'POST',headers:{Origin:base,Cookie:ownerCookie,'Content-Type':'application/json'},body:JSON.stringify({action:'grant',email:ownAccount.user.email.toUpperCase()})});
   assert.equal(emailGrant.status,200,(await emailGrant.clone().text()).slice(0,300));
   assert.equal((await roleAction('grant')).status,409);

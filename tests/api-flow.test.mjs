@@ -108,6 +108,7 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal(ownExport.profile.first_name, "Test");
   assert.equal(ownExport.profile.tradition, "other");
   assert.equal(ownExport.profile.sensitive_consent, 1);
+  assert.equal(ownExport.profile.sensitive_consent_version, 1);
   assert.equal(ownExport.bookmarks.length, 1);
   assert.equal(JSON.stringify(ownExport).includes(firstPassword), false);
   assert.doesNotMatch(JSON.stringify(ownExport), /password_hash|password_salt|token_hash/);
@@ -115,6 +116,7 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal(ownerExport.bookmarks.length, 0, "another account's bookmarks must never appear in this export");
   assert.equal(ownerExport.profile.tradition, null);
   assert.equal(ownerExport.profile.sensitive_consent, 0);
+  assert.equal(ownerExport.profile.sensitive_consent_version, 0);
   assert.notEqual(ownerExport.account.email, ownExport.account.email);
   const ownerConsent = await fetch(`${base}/api/account?action=sensitive-consent`, { method: "PUT", headers: { Cookie: ownerCookie, Origin: base, "Content-Type": "application/json" }, body: JSON.stringify({ acceptSensitive: true, tradition: "other", denomination: "Owner private" }) });
   assert.equal(ownerConsent.status, 200);
@@ -134,6 +136,7 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal(privacyExport.profile.denomination, null);
   assert.equal(privacyExport.profile.church, null);
   assert.equal(privacyExport.profile.public_church, 0);
+  assert.equal(privacyExport.profile.sensitive_consent_version, 0);
   const visibilityWithoutConsent = await request("/api/account?action=visibility", { method: "PUT", body: { church: true } });
   assert.equal(visibilityWithoutConsent.data.user.visibility.church, false, "publication cannot be enabled before sensitive consent");
   const ownerAfterOtherWithdrawal = await (await fetch(`${base}/api/reading-export`, { headers: { Cookie: ownerCookie } })).json();
@@ -141,6 +144,7 @@ integration("account, progress, attempts, groups, marathon limit and password re
   await request("/api/account?action=sensitive-consent", { method: "PUT", body: { acceptSensitive: true, tradition: "other", denomination: "Example denomination", church: "Example church" } });
   privacyExport = await (await fetch(`${base}/api/reading-export`, { headers: { Cookie: cookie } })).json();
   assert.equal(privacyExport.profile.public_church, 0, "later consent must not automatically publish a church");
+  assert.equal(privacyExport.profile.sensitive_consent_version, 1);
   await request("/api/account?action=profile", { method: "PUT", body: { firstName: "Test", lastName: "Reader", ageRange: "25-34", acceptPrivacy: true, acceptSensitive: false, locale: "en" } });
   privacyExport = await (await fetch(`${base}/api/reading-export`, { headers: { Cookie: cookie } })).json();
   assert.equal(privacyExport.profile.denomination, null, "legacy profile update must also clear denomination on withdrawal");

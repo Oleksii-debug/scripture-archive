@@ -8,7 +8,8 @@ const ALLOWED_LOCALES = new Set(["uk", "ru", "en"]);
 const TRADITIONS = new Set(["orthodox", "catholic", "protestant", "other", "prefer_not"]);
 const MARITAL_STATUSES = new Set(["married", "married_children", "single", "seeking", "separated", "widowed", "prefer_not"]);
 const GENDERS = new Set(["man", "woman", "prefer_not"]);
-function unauthorized(){return Response.json({error:"authentication_required"},{status:401})}
+function privateJson(data:unknown,init?:{status?:number}){return Response.json(data,{status:init?.status??200,headers:{"Cache-Control":"no-store, private"}})}
+function unauthorized(){return privateJson({error:"authentication_required"},{status:401})}
 function clean(value:unknown,max=120){return typeof value==="string"?value.trim().slice(0,max):""}
 // The reader renders every receipt as a book/chapter/title. Do not ACK damaged arrays.
 function validReadingReceipt(value:unknown):value is {book:string;chapter:number;title:string}{
@@ -18,14 +19,14 @@ function validReadingReceipt(value:unknown):value is {book:string;chapter:number
     &&typeof row.chapter==="number"&&Number.isInteger(row.chapter)&&row.chapter>0&&row.chapter<=151
     &&typeof row.title==="string"&&row.title.length<=100;
 }
-function publicUser(id:Identity,row:Record<string,unknown>|null){return {id:id.userId,email:id.email,emailVerified:id.emailVerified,authProvider:id.provider,fullName:id.fullName,firstName:row?.first_name??"",lastName:row?.last_name??"",ageRange:row?.age_range??"",age:row?.age??null,tradition:row?.tradition??"",denomination:row?.denomination??"",church:row?.church??"",maritalStatus:row?.marital_status??"",gender:row?.gender??"",hasChildren:row?.has_children==null?null:Boolean(row.has_children),locale:row?.locale??"uk",sensitiveConsent:Boolean(row?.sensitive_consent),visibility:{firstName:Boolean(row?.public_first_name),lastName:Boolean(row?.public_last_name),church:Boolean(row?.public_church),progress:Boolean(row?.public_progress)},profileComplete:Boolean(row),isOwner:id.email===OWNER_EMAIL}}
+function publicUser(id:Identity,row:Record<string,unknown>|null){return {id:id.userId,email:id.email,emailVerified:id.emailVerified,authProvider:id.provider,fullName:id.fullName,firstName:row?.first_name??"",lastName:row?.last_name??"",ageRange:row?.age_range??"",age:row?.age??null,tradition:row?.tradition??"",denomination:row?.denomination??"",church:row?.church??"",maritalStatus:row?.marital_status??"",gender:row?.gender??"",hasChildren:row?.has_children==null?null:Boolean(row.has_children),locale:row?.locale??"uk",sensitiveConsent:Boolean(row?.sensitive_consent && row?.sensitive_consent_version===1),visibility:{firstName:Boolean(row?.public_first_name),lastName:Boolean(row?.public_last_name),church:Boolean(row?.public_church && row?.sensitive_consent && row?.sensitive_consent_version===1),progress:Boolean(row?.public_progress)},profileComplete:Boolean(row),isOwner:id.email===OWNER_EMAIL}}
 export async function GET(request:Request){
-  const action=new URL(request.url).searchParams.get("action")??"me"; const id=await authenticateRequest(request); if(!id)return action==="me"?Response.json({user:null}):unauthorized();
+  const action=new URL(request.url).searchParams.get("action")??"me"; const id=await authenticateRequest(request); if(!id)return action==="me"?privateJson({user:null}):unauthorized();
   if(action==="reading"){
     const row=await env.DB!.prepare("SELECT data FROM progress WHERE user_id=? AND mission_id='READING'").bind(id.userId).first<{data:string}>();
-    if(!row)return Response.json({reading:[]});
-    try{const reading=JSON.parse(row.data);if(Array.isArray(reading)&&reading.every(validReadingReceipt))return Response.json({reading})}catch{}
-    return Response.json({error:"reading_state_unavailable"},{status:503});
+    if(!row)return privateJson({reading:[]});
+    try{const reading=JSON.parse(row.data);if(Array.isArray(reading)&&reading.every(validReadingReceipt))return privateJson({reading})}catch{}
+    return privateJson({error:"reading_state_unavailable"},{status:503});
   }
   if(action==="progress"){
     const rows=await env.DB!.prepare("SELECT data FROM progress WHERE user_id=? AND mission_id LIKE 'OT-AB-01:%'").bind(id.userId).all<{data:string}>();
@@ -41,22 +42,22 @@ export async function GET(request:Request){
         }
       }catch{}
     }
-    return Response.json({progress:{index:answered.size,correct:[...correct],complete:answered.size===validTasks.size}})
+    return privateJson({progress:{index:answered.size,correct:[...correct],complete:answered.size===validTasks.size}})
   }
-  if(action==="users"){if(id.email!==OWNER_EMAIL)return Response.json({error:"forbidden"},{status:403});const rows=await env.DB!.prepare("SELECT email,first_name,last_name,age_range,locale,created_at,updated_at FROM profiles ORDER BY created_at DESC LIMIT 250").all();return Response.json({users:rows.results})}
-  const row=await env.DB!.prepare("SELECT * FROM profiles WHERE user_id=?").bind(id.userId).first<Record<string,unknown>>(); return Response.json({user:publicUser(id,row)});
+  if(action==="users"){if(id.email!==OWNER_EMAIL)return privateJson({error:"forbidden"},{status:403});const rows=await env.DB!.prepare("SELECT email,first_name,last_name,age_range,locale,created_at,updated_at FROM profiles ORDER BY created_at DESC LIMIT 250").all();return privateJson({users:rows.results})}
+  const row=await env.DB!.prepare("SELECT * FROM profiles WHERE user_id=?").bind(id.userId).first<Record<string,unknown>>(); return privateJson({user:publicUser(id,row)});
 }
 export async function POST(request:Request){return write(request)} export async function PUT(request:Request){return write(request)}
 async function write(request:Request){
-  if(!sameOrigin(request))return Response.json({error:"cross_origin_request"},{status:403});
-  const id=await authenticateRequest(request);if(!id)return unauthorized();const action=new URL(request.url).searchParams.get("action")??"profile";const body=await request.json().catch(()=>null) as Record<string,unknown>|null;if(!body)return Response.json({error:"invalid_json"},{status:400});
+  if(!sameOrigin(request))return privateJson({error:"cross_origin_request"},{status:403});
+  const id=await authenticateRequest(request);if(!id)return unauthorized();const action=new URL(request.url).searchParams.get("action")??"profile";const body=await request.json().catch(()=>null) as Record<string,unknown>|null;if(!body)return privateJson({error:"invalid_json"},{status:400});
   if(action==="reading"){
-    if(!Array.isArray(body.reading)||body.reading.length>2000)return Response.json({error:"invalid_reading"},{status:400});
+    if(!Array.isArray(body.reading)||body.reading.length>2000)return privateJson({error:"invalid_reading"},{status:400});
     // Reject the entire invalid request: silently filtering all entries used to return a false 200 ACK.
     if(!body.reading.every(r=>r&&typeof r==="object"&&!Array.isArray(r)&&typeof r.title==="string"))
-      return Response.json({error:"invalid_reading"},{status:400});
+      return privateJson({error:"invalid_reading"},{status:400});
     const reading=body.reading.map(r=>({book:clean(r.book,4),chapter:Number(r.chapter),title:clean(r.title,100)}));
-    if(!reading.every(validReadingReceipt))return Response.json({error:"invalid_reading"},{status:400});
+    if(!reading.every(validReadingReceipt))return privateJson({error:"invalid_reading"},{status:400});
     const unique=[...new Map(reading.map(r=>[`${r.book}:${r.chapter}`,r])).values()];
     // Serialize the merge in one canonical D1 statement. Never replace a newer read receipt with a stale snapshot.
     // Invalid stored JSON fails the transaction rather than overwriting evidence of corruption.
@@ -112,28 +113,28 @@ async function write(request:Request){
         ),
         updated_at=CURRENT_TIMESTAMP
     `).bind(id.userId,JSON.stringify(unique)).run();
-    if(!result.success)return Response.json({error:"reading_save_failed"},{status:503});
-    return Response.json({ok:true});
-    }catch{return Response.json({error:"reading_state_unavailable"},{status:503});}
+    if(!result.success)return privateJson({error:"reading_save_failed"},{status:503});
+    return privateJson({ok:true});
+    }catch{return privateJson({error:"reading_state_unavailable"},{status:503});}
   }
-  if(action==="progress")return Response.json({error:"progress_is_server_managed"},{status:403});
+  if(action==="progress")return privateJson({error:"progress_is_server_managed"},{status:403});
   if(action==="sensitive-consent"){
-    if(id.provider==="agent")return Response.json({error:"forbidden"},{status:403});
-    if(typeof body.acceptSensitive!=="boolean")return Response.json({error:"invalid_consent"},{status:400});
+    if(id.provider==="agent")return privateJson({error:"forbidden"},{status:403});
+    if(typeof body.acceptSensitive!=="boolean")return privateJson({error:"invalid_consent"},{status:400});
     const accepted=body.acceptSensitive, tradition=clean(body.tradition,40), denomination=clean(body.denomination,160), church=clean(body.church,160);
-    if(accepted&&tradition&&!TRADITIONS.has(tradition))return Response.json({error:"invalid_profile_option"},{status:400});
-    const saved=await env.DB!.prepare(`UPDATE profiles SET sensitive_consent=?,tradition=?,denomination=?,church=?,
-      public_church=CASE WHEN ?=0 THEN 0 ELSE public_church END,updated_at=CURRENT_TIMESTAMP WHERE user_id=? RETURNING user_id`)
-      .bind(accepted?1:0,accepted&&tradition!=="prefer_not"?tradition||null:null,accepted?denomination||null:null,accepted?church||null:null,accepted?1:0,id.userId).first<{user_id:string}>();
-    if(!saved)return Response.json({error:"profile_not_found"},{status:409});
+    if(accepted&&tradition&&!TRADITIONS.has(tradition))return privateJson({error:"invalid_profile_option"},{status:400});
+    const saved=await env.DB!.prepare(`UPDATE profiles SET sensitive_consent=?,sensitive_consent_version=?,tradition=?,denomination=?,church=?,
+      public_church=CASE WHEN ?=0 OR sensitive_consent_version<>1 THEN 0 ELSE public_church END,updated_at=CURRENT_TIMESTAMP WHERE user_id=? RETURNING user_id`)
+       .bind(accepted?1:0,accepted?1:0,accepted&&tradition!=="prefer_not"?tradition||null:null,accepted?denomination||null:null,accepted?church||null:null,accepted?1:0,id.userId).first<{user_id:string}>();
+    if(!saved)return privateJson({error:"profile_not_found"},{status:409});
     const row=await env.DB!.prepare("SELECT * FROM profiles WHERE user_id=?").bind(id.userId).first<Record<string,unknown>>();
-    return Response.json({user:publicUser(id,row)});
+    return privateJson({user:publicUser(id,row)});
   }
-  if(action==="visibility"){const visibilityWrite=await env.DB!.prepare("UPDATE profiles SET public_first_name=?,public_last_name=?,public_church=CASE WHEN sensitive_consent=1 THEN ? ELSE 0 END,public_progress=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?").bind(body.firstName===true?1:0,body.lastName===true?1:0,body.church===true?1:0,body.progress===true?1:0,id.userId).run();if(!visibilityWrite.success)return Response.json({error:"visibility_save_failed"},{status:503});const row=await env.DB!.prepare("SELECT * FROM profiles WHERE user_id=?").bind(id.userId).first<Record<string,unknown>>();if(visibilityWrite.meta?.changes===0||!row)return Response.json({error:"profile_not_found"},{status:409});return Response.json({user:publicUser(id,row)})}
-  if(action!=="profile")return Response.json({error:"unknown_action"},{status:400});
-  const firstName=clean(body.firstName,80),lastName=clean(body.lastName,80),ageRange=clean(body.ageRange,10),rawTradition=clean(body.tradition,40),maritalStatus=clean(body.maritalStatus,40),gender=clean(body.gender,30);if(!firstName||!lastName||!AGE_RANGES.has(ageRange)||body.acceptPrivacy!==true)return Response.json({error:"required_fields"},{status:400});
-  if((rawTradition&&!TRADITIONS.has(rawTradition))||(maritalStatus&&!MARITAL_STATUSES.has(maritalStatus))||(gender&&!GENDERS.has(gender)))return Response.json({error:"invalid_profile_option"},{status:400});
+  if(action==="visibility"){const visibilityWrite=await env.DB!.prepare("UPDATE profiles SET public_first_name=?,public_last_name=?,public_church=CASE WHEN sensitive_consent=1 AND sensitive_consent_version=1 THEN ? ELSE 0 END,public_progress=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?").bind(body.firstName===true?1:0,body.lastName===true?1:0,body.church===true?1:0,body.progress===true?1:0,id.userId).run();if(!visibilityWrite.success)return privateJson({error:"visibility_save_failed"},{status:503});const row=await env.DB!.prepare("SELECT * FROM profiles WHERE user_id=?").bind(id.userId).first<Record<string,unknown>>();if(visibilityWrite.meta?.changes===0||!row)return privateJson({error:"profile_not_found"},{status:409});return privateJson({user:publicUser(id,row)})}
+  if(action!=="profile")return privateJson({error:"unknown_action"},{status:400});
+  const firstName=clean(body.firstName,80),lastName=clean(body.lastName,80),ageRange=clean(body.ageRange,10),rawTradition=clean(body.tradition,40),maritalStatus=clean(body.maritalStatus,40),gender=clean(body.gender,30);if(!firstName||!lastName||!AGE_RANGES.has(ageRange)||body.acceptPrivacy!==true)return privateJson({error:"required_fields"},{status:400});
+  if((rawTradition&&!TRADITIONS.has(rawTradition))||(maritalStatus&&!MARITAL_STATUSES.has(maritalStatus))||(gender&&!GENDERS.has(gender)))return privateJson({error:"invalid_profile_option"},{status:400});
   const consent=body.acceptSensitive===true, locale=ALLOWED_LOCALES.has(clean(body.locale,2))?clean(body.locale,2):"uk",tradition=consent?rawTradition||null:null,church=consent?clean(body.church,160)||null:null;
-  const profileWrite=await env.DB!.prepare("INSERT INTO profiles (user_id,email,first_name,last_name,age_range,tradition,church,marital_status,gender,locale,sensitive_consent,privacy_accepted_at,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET email=excluded.email,first_name=excluded.first_name,last_name=excluded.last_name,age_range=excluded.age_range,tradition=excluded.tradition,church=excluded.church,denomination=CASE WHEN excluded.sensitive_consent=0 THEN NULL ELSE profiles.denomination END,public_church=CASE WHEN excluded.sensitive_consent=0 THEN 0 ELSE profiles.public_church END,marital_status=excluded.marital_status,gender=excluded.gender,locale=excluded.locale,sensitive_consent=excluded.sensitive_consent,privacy_accepted_at=COALESCE(profiles.privacy_accepted_at,CURRENT_TIMESTAMP),updated_at=CURRENT_TIMESTAMP").bind(id.userId,id.email,firstName,lastName,ageRange,tradition,church,maritalStatus||null,gender||null,locale,consent?1:0).run();if(!profileWrite.success)return Response.json({error:"profile_save_failed"},{status:503});
-  const row=await env.DB!.prepare("SELECT * FROM profiles WHERE user_id=?").bind(id.userId).first<Record<string,unknown>>();return Response.json({user:publicUser(id,row)});
+  const profileWrite=await env.DB!.prepare("INSERT INTO profiles (user_id,email,first_name,last_name,age_range,tradition,church,marital_status,gender,locale,sensitive_consent,sensitive_consent_version,privacy_accepted_at,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET email=excluded.email,first_name=excluded.first_name,last_name=excluded.last_name,age_range=excluded.age_range,tradition=excluded.tradition,church=excluded.church,denomination=CASE WHEN excluded.sensitive_consent=0 THEN NULL ELSE profiles.denomination END,public_church=CASE WHEN excluded.sensitive_consent=0 OR profiles.sensitive_consent_version<>1 THEN 0 ELSE profiles.public_church END,marital_status=excluded.marital_status,gender=excluded.gender,locale=excluded.locale,sensitive_consent=excluded.sensitive_consent,sensitive_consent_version=excluded.sensitive_consent_version,privacy_accepted_at=COALESCE(profiles.privacy_accepted_at,CURRENT_TIMESTAMP),updated_at=CURRENT_TIMESTAMP").bind(id.userId,id.email,firstName,lastName,ageRange,tradition,church,maritalStatus||null,gender||null,locale,consent?1:0,consent?1:0).run();if(!profileWrite.success)return privateJson({error:"profile_save_failed"},{status:503});
+  const row=await env.DB!.prepare("SELECT * FROM profiles WHERE user_id=?").bind(id.userId).first<Record<string,unknown>>();return privateJson({user:publicUser(id,row)});
 }

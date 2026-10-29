@@ -28,7 +28,7 @@ class D1Test {
 }
 function fixture(mode){const dir=mkdtempSync(join(tmpdir(),'sa10-canonical-'));const file=join(dir,'test.sqlite');const db=new D1Test(file);
   db.db.exec(`PRAGMA journal_mode=${mode}`);db.db.exec(sqlTable('progress'));db.db.exec(sqlTable('profiles'));
-  for(const col of ['privacy_accepted_at text','public_first_name integer','public_last_name integer','public_church integer','public_progress integer','denomination text'])db.db.exec(`ALTER TABLE profiles ADD COLUMN ${col}`);
+  for(const col of ['privacy_accepted_at text','public_first_name integer','public_last_name integer','public_church integer','public_progress integer','denomination text','sensitive_consent_version integer NOT NULL DEFAULT 0'])db.db.exec(`ALTER TABLE profiles ADD COLUMN ${col}`);
   db.close();return {file,dispose:()=>rmSync(dir,{recursive:true,force:true})};
 }
 function worker(db){const exports={};vm.runInNewContext(compiled.outputText,{exports,require(id){
@@ -46,6 +46,24 @@ async function call(api,action,method='GET',data,who='reader-a'){
 }
 const chapter=(n)=>({book:'GEN',chapter:n,title:'Synthetic Genesis'});
 for(const mode of ['DELETE','WAL']){
+  test(`${mode}: historical consent requires renewed opt-in before public church visibility`,async()=>{
+    const f=fixture(mode);try{const db=new D1Test(f.file),api=worker(db);
+      assert.equal((await call(api,'profile','PUT',{firstName:'Synthetic',lastName:'Reader',ageRange:'25-34',acceptPrivacy:true,locale:'en'})).status,200);
+      db.db.prepare("UPDATE profiles SET sensitive_consent=1,sensitive_consent_version=0,tradition='other',denomination='Legacy',church='Legacy church',public_church=1 WHERE user_id='reader-a'").run();
+      let me=await call(api,'me');
+      assert.equal(me.body.user.sensitiveConsent,false);
+      assert.equal(me.body.user.visibility.church,false);
+      assert.equal(db.db.prepare("SELECT church FROM profiles WHERE user_id='reader-a'").get().church,'Legacy church','migration must preserve historical data');
+      let visibility=await call(api,'visibility','PUT',{church:true});
+      assert.equal(visibility.body.user.visibility.church,false);
+      const renewed=await call(api,'sensitive-consent','PUT',{acceptSensitive:true,tradition:'other',denomination:'Legacy',church:'Legacy church'});
+      assert.equal(renewed.body.user.sensitiveConsent,true);
+      assert.equal(renewed.body.user.visibility.church,false,'renewed consent alone must not publish');
+      visibility=await call(api,'visibility','PUT',{church:true});
+      assert.equal(visibility.body.user.visibility.church,true);
+      db.close();
+    }finally{f.dispose()}
+  });
   test(`${mode}: reading commit/reopen/stale retry/duplicate and independent user`,async()=>{
     const f=fixture(mode);try{const a=new D1Test(f.file),api=worker(a);
       for(const n of [12,13,12])assert.equal((await call(api,'reading','PUT',{reading:[chapter(n)]})).status,200);

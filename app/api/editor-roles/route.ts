@@ -52,8 +52,10 @@ export async function POST(request: Request) {
         .bind(id.userId,userId,email,email,ownerEmail).run();
       if (!result.success) throw Error("write failed");
       // D1 may count the audit INSERT trigger alongside the role INSERT (2 changes).
-      // Zero means no eligible new role; any positive acknowledged count is a grant.
-      return Number(result.meta.changes) > 0 ? json({ok:true}) : json({error:"not_eligible_or_granted"},409);
+      // Require usable metadata; never call an unacknowledged insert a duplicate.
+      const changed = Number(result.meta?.changes);
+      if (!Number.isSafeInteger(changed) || changed < 0) throw Error("write acknowledgement unavailable");
+      return changed > 0 ? json({ok:true}) : json({error:"not_eligible_or_granted"},409);
     }
     const results = await env.DB.batch([
       env.DB.prepare("UPDATE editorial_roles SET revoked_by=? WHERE user_id=?").bind(id.userId,userId),

@@ -37,12 +37,14 @@ test('each dossier is reachable via real internal navigation, has labeled eviden
       assert.ok(markup.includes('href="/reader/'),item.id);
       assert.ok(markup.includes(esc(item.prompts[language][0])),item.id);
       for(const reference of item.sources){
-        assert.ok(markup.includes('href="/reader/'+reference.book+'/'+reference.chapter+'"'),item.id);
+        assert.ok(markup.includes('href="/reader/'+reference.book+'/'+reference.chapter+'?verse='+reference.first+'"'),item.id);
       }
       for(const relation of item.related){
         assert.ok(markup.includes('href="/dossiers?id='+relation.to+'"'),item.id);
+        assert.ok(markup.includes('href="/reader/'+relation.via.book+'/'+relation.via.chapter+'?verse='+relation.via.first+'"'),item.id);
       }
       assert.ok(!markup.includes('href="http://'),'references never leave canonical reader');
+      assert.doesNotMatch(markup,/href="\/reader\/[^"?]+"/,'every cited dossier source must deep-link to its first verse');
       assert.ok(!markup.includes('<iframe'));
       assert.ok(!markup.includes('onclick='));
     }

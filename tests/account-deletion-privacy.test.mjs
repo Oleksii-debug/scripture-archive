@@ -55,8 +55,9 @@ test('account deletion clears personal records while preserving other users', as
   assert.equal((await refused.json()).error, 'deletion_failed');
   assert.equal(db.prepare("SELECT count(*) n FROM progress WHERE user_id='alice'").get().n, 1, 'failed batch rolls back earlier deletions');
   assert.equal(db.prepare("SELECT deleted_at FROM accounts WHERE id='alice'").get().deleted_at, null);
-  // Fail after shared-session redaction to prove the entire batch rolls back.
-  failAfter = 9;
+  // New editorial-role and event cleanup precede shared-session redaction;
+  // fail at the following membership deletion to test rollback of redaction too.
+  failAfter = 11;
   const refusedAfterRedaction = await exports.POST(request('correct'));
   assert.equal(refusedAfterRedaction.status, 503);
   assert.equal((await refusedAfterRedaction.json()).error, 'deletion_failed');

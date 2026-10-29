@@ -77,8 +77,8 @@ test('the dossier catalogue fails closed when edition provenance/metadata cannot
     assert.equal(validateDossierGraph(damaged),false,'malformed/ambiguous edition catalogue must fail closed');
     const safeMarkup=dossierMarkup(damaged,'uk','abraham',esc);
     assert.match(safeMarkup,/role="alert"/);
-    assert.doesNotMatch(safeMarkup,/href="\\/reader\\//);
-    assert.doesNotMatch(safeMarkup,/href="\\/dossiers\\?/);
+    assert.equal(safeMarkup.includes('href="/reader/'),false);
+    assert.equal(safeMarkup.includes('href="/dossiers?'),false);
   }
 
   const weird=dossierMarkup(catalog,'en','"><script>alert(1)</script>',esc);

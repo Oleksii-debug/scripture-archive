@@ -16,7 +16,11 @@ export async function GET(request: Request) {
       env.DB.prepare("SELECT edition,book,chapter,created_at FROM reader_bookmarks WHERE user_id=? ORDER BY created_at,book,chapter").bind(identity.userId),
       env.DB.prepare("SELECT id,mission_id,book_id,chapter,group_id,locale,started_at,completed_at,result_json FROM mission_attempts WHERE actor_id=? AND status='completed' ORDER BY completed_at,id").bind(identity.userId),
     ]);
-    if (!profile.success || !progress.success || !bookmarks.success || !attempts.success || !Array.isArray(attempts.results)) return error("export_unavailable", 503);
+    // Every D1 batch result must have an acknowledged success and a real row array.
+    // A malformed bookmarks response formerly produced a successful export with
+    // null/missing bookmarks, incorrectly presenting lost data as a complete backup.
+    if ([profile, progress, bookmarks, attempts].some(result => result?.success !== true || !Array.isArray(result.results)))
+      return error("export_unavailable", 503);
     const records = (progress.results as Array<{ mission_id: string; data: string; updated_at: string }>).map(row => ({
       mission: row.mission_id, data: JSON.parse(row.data), updatedAt: row.updated_at,
     }));

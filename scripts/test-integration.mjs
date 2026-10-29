@@ -4,7 +4,7 @@ import { createServer } from "node:net";
 import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { waitForStableWorker } from "./integration-ready.mjs";
+import { waitForStableWorker, startReadOnlyHeartbeat } from "./integration-ready.mjs";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
@@ -45,6 +45,7 @@ function run(args, extra = {}) {
 }
 let worker;
 let logs = "";
+let stopReadOnlyHeartbeat;
 try {
   await run([...wrangler, "d1", "migrations", "apply", "DB", "--local", "--persist-to", state, "--config", migrationConfig]);
   // Vinext already emitted production-ready modules: no second Wrangler bundle or watcher.
@@ -65,10 +66,15 @@ try {
     ],
   });
   if (!ready) throw Error(`Local worker did not become ready. ${logs}`);
+  // Keep only a public safe GET active while the test process boots and runs.
+  // No state-changing request is retried, and no production HTTP client is touched.
+  stopReadOnlyHeartbeat = startReadOnlyHeartbeat(base);
   await run(["--test", "--test-concurrency=1", "tests/api-flow.test.mjs", "tests/community.test.mjs", "tests/community-runner.test.mjs", "tests/community-smoke.test.mjs", "tests/community-runner-identity.test.mjs", "tests/security-contract.test.mjs"],
     { env: { ...options.env, SCRIPTURE_TEST_URL: base } });
   await run(["--experimental-strip-types", "scripts/test-learning-agent.mjs", "--local-test", "--smoke"],
     { env: { ...options.env, COMMUNITY_ORIGIN: base } });
+  await stopReadOnlyHeartbeat();
+  stopReadOnlyHeartbeat = undefined;
   // The HTTP test deletes the user who created bookmarks and submissions.
   // Inspect the disposable D1 database to verify both were removed.
   const directory = path.join(state, "v3", "d1", "miniflare-D1DatabaseObject");
@@ -92,6 +98,7 @@ try {
   console.error(logs.replace(/([?&](?:token|reset)=)[^&\s]+/g,"$1[redacted]").replace(/(sa_(?:agent|session)=)[^;\s]+/g,"$1[redacted]"));
   throw error;
 } finally {
+  if (stopReadOnlyHeartbeat) await stopReadOnlyHeartbeat();
   if (worker && worker.exitCode === null) {
     worker.kill("SIGTERM");
     await new Promise(resolve => worker.once("exit", resolve));

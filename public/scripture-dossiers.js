@@ -21,7 +21,7 @@ const nodes=[
   prompts:{uk:['Які зміни імен названо в Бутті 17?','Як Буття 18 передає реакцію Сарри?'],ru:['Какие изменения имён названы в Бытии 17?','Как Бытие 18 описывает реакцию Сарры?'],en:['Which name changes occur in Genesis 17?','How does Genesis 18 portray Sarah’s reaction?']}},
  {id:'moses',type:'person',names:{uk:'Мойсей',ru:'Моисей',en:'Moses'},
   summaries:{uk:'Покликання Мойсея, розповідь про вихід і пізніші згадки про ці події.',ru:'Призвание Моисея, повествование об исходе и позднейшие упоминания.',en:'Moses’ call, the Exodus account, and later references to these events.'},
-  sources:[ref('EXO',3,1,12),ref('DEU',34,1,12),ref('ACT',7,30,37,'interpretive'),ref('HEB',11,23,29,'interpretive')],
+  sources:[ref('EXO',3,1,12),ref('DEU',34,1,11),ref('ACT',7,30,37,'interpretive'),ref('HEB',11,23,29,'interpretive')],
   related:[{to:'exodus',via:ref('EXO',12,29,42)}],
   prompts:{uk:['Що Мойсей запитує під час покликання?','Які події згадано в Посланні до євреїв 11?'],ru:['О чём спрашивает Моисей при призвании?','Какие события упомянуты в Евреям 11?'],en:['What does Moses ask at his calling?','Which events are recalled in Hebrews 11?']}},
  {id:'exodus',type:'event',names:{uk:'Вихід з Єгипту',ru:'Исход из Египта',en:'Exodus from Egypt'},
@@ -71,7 +71,7 @@ export function dossierMarkup(catalog,language,requestedId,esc) {
   const bookNames=new Map(catalog.books[lang].map(book=>[book.code,book.title]));
   const cite=source=>{
     const label=`${bookNames.get(source.book)} ${source.chapter}:${source.first}–${source.last}`;
-    return `<a href="/reader/${source.book}/${source.chapter}" aria-label="${esc(w.read)}: ${esc(label)}">${esc(label)}</a>`;
+    return `<a href="/reader/${source.book}/${source.chapter}?verse=${source.first}" aria-label="${esc(w.read)}: ${esc(label)}">${esc(label)}</a>`;
   };
   const index=`<nav aria-label="${esc(w.index)}"><h2>${esc(w.index)}</h2><ol>${nodes.map(item=>`<li><a href="/dossiers?id=${item.id}"${item.id===selected.id?' aria-current="page"':''}>${esc(item.names[lang])}</a> — ${esc(w[item.type])}</li>`).join('')}</ol></nav>`;
   const references=`<ol>${selected.sources.map(source=>`<li>${cite(source)} — ${esc(w[source.kind])}</li>`).join('')}</ol>`;

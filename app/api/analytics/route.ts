@@ -1,10 +1,9 @@
 import { env } from "cloudflare:workers";
-import { authenticateRequest, rateLimit, requestAddress, sameOrigin } from "../../../lib/auth";
+import { authenticateRequest, isVerifiedOwner, rateLimit, requestAddress, sameOrigin } from "../../../lib/auth";
 import { ownerCommunityState } from "../community/route";
 
 export const dynamic = "force-dynamic";
 
-const OWNER_EMAIL = "dordiaioleksii1@gmail.com";
 const EVENTS = new Set(["page_view", "sign_up", "sign_up_error", "login", "login_error", "quiz_start", "quiz_complete", "navigation_click", "support_click", "client_error"]);
 const VALUE_KEYS = new Set(["destination", "error", "language", "method", "mode", "score", "total"]);
 const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -64,7 +63,7 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   if (!env.DB) return json({ error: "database_unavailable" }, 503);
   const identity = await authenticateRequest(request);
-  if (identity?.email !== OWNER_EMAIL) return json({ error: "forbidden" }, 403);
+  if (!isVerifiedOwner(identity)) return json({ error: "forbidden" }, 403);
   const requested = Number(new URL(request.url).searchParams.get("days")), days = [7, 30, 90].includes(requested) ? requested : 30;
   const since = `-${days - 1} days`;
   const [accounts, summary, daily, countries, devices, browsers, pages, events, recentUsers] = await env.DB.batch([

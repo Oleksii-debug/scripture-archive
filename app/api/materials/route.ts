@@ -1,7 +1,6 @@
 import { env } from "cloudflare:workers";
-import { authenticateRequest, sameOrigin } from "../../../lib/auth";
+import { authenticateRequest, isVerifiedOwner, sameOrigin } from "../../../lib/auth";
 export const dynamic = "force-dynamic";
-const OWNER = "dordiaioleksii1@gmail.com";
 const clean = (v: unknown, max: number) => typeof v === "string" ? v.trim().slice(0, max) : "";
 
 export async function GET(request: Request) {
@@ -27,8 +26,7 @@ export async function POST(request: Request) {
   if (title.length < 3 || prompt.length < 8 || reference.length < 3 || !answer || explanation.length < 8 || options.length < 2 || !options.includes(answer))
     return Response.json({ error: "invalid_material" }, { status: 400 });
   const locale = ["uk", "ru", "en"].includes(String(body.locale)) ? String(body.locale) : "uk";
-  const email = identity?.email;
-  const visibility = email === OWNER && body.visibility === "public" ? "public" : "private";
+  const visibility = isVerifiedOwner(identity) && body.visibility === "public" ? "public" : "private";
   const id = clean(body.id, 80) || crypto.randomUUID();
   const existing = await env.DB!.prepare("SELECT owner_user_id FROM study_materials WHERE id=?").bind(id).first<{ owner_user_id: string }>();
   if (existing && existing.owner_user_id !== userId) return Response.json({ error: "forbidden" }, { status: 403 });

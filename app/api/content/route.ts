@@ -1,8 +1,7 @@
 import { env } from "cloudflare:workers";
-import { authenticateRequest, sameOrigin } from "../../../lib/auth";
+import { authenticateRequest, isVerifiedOwner, sameOrigin } from "../../../lib/auth";
 
 export const dynamic = "force-dynamic";
-const OWNER_EMAIL = "dordiaioleksii1@gmail.com";
 const EMPTY = { updates: [], text: {}, liveNote: { uk: "", ru: "", en: "" } };
 
 const KINDS = new Set(["book", "chapter", "translation", "mission", "question", "route", "marathon", "ui_text"]);
@@ -14,7 +13,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   if (url.searchParams.get("admin") === "1") {
     const identity = await authenticateRequest(request);
-    if (identity?.email !== OWNER_EMAIL) return Response.json({ error: "forbidden" }, { status: 403 });
+    if (!isVerifiedOwner(identity)) return Response.json({ error: "forbidden" }, { status: 403 });
     const items = (await env.DB!.prepare("SELECT id,kind,locale,title,status,data,created_at,updated_at FROM managed_content ORDER BY updated_at DESC LIMIT 500").all()).results;
     const revisions = (await env.DB!.prepare("SELECT id,content_key,created_at,created_by FROM content_revisions ORDER BY created_at DESC LIMIT 200").all()).results;
     return Response.json({ items: items.map(item => ({ ...item, data: JSON.parse(String(item.data)) })), revisions }, { headers: { "Cache-Control": "no-store" } });
@@ -25,8 +24,8 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   if (!sameOrigin(request)) return Response.json({ error: "cross_origin_request" }, { status: 403 });
-  const identity = await authenticateRequest(request), email = identity?.email, userId = identity?.userId;
-  if (!userId || email !== OWNER_EMAIL) return Response.json({ error: "forbidden" }, { status: 403 });
+  const identity = await authenticateRequest(request), userId = identity?.userId;
+  if (!userId || !isVerifiedOwner(identity)) return Response.json({ error: "forbidden" }, { status: 403 });
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   if (!body) return Response.json({ error: "invalid_json" }, { status: 400 });
   if (body.action === "upsert-item") {
@@ -60,7 +59,7 @@ export async function PUT(request: Request) {
 export async function DELETE(request: Request) {
   if (!sameOrigin(request)) return Response.json({ error: "cross_origin_request" }, { status: 403 });
   const identity = await authenticateRequest(request);
-  if (identity?.email !== OWNER_EMAIL) return Response.json({ error: "forbidden" }, { status: 403 });
+  if (!isVerifiedOwner(identity)) return Response.json({ error: "forbidden" }, { status: 403 });
   const id = clean(new URL(request.url).searchParams.get("id"), 100);
   const existing = await env.DB!.prepare("SELECT kind,title,locale,data FROM managed_content WHERE id=?").bind(id).first<Record<string, unknown>>();
   if (!existing) return Response.json({ error: "not_found" }, { status: 404 });

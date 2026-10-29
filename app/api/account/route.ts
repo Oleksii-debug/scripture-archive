@@ -1,8 +1,7 @@
 import { env } from "cloudflare:workers";
-import { authenticateRequest, sameOrigin, type Identity } from "../../../lib/auth";
+import { authenticateRequest, isVerifiedOwner, sameOrigin, type Identity } from "../../../lib/auth";
 import mission from "../../../content/mission-abraham.json";
 export const dynamic = "force-dynamic";
-const OWNER_EMAIL = "dordiaioleksii1@gmail.com";
 const AGE_RANGES = new Set(["13-17", "18-24", "25-34", "35-44", "45-54", "55-64", "65+"]);
 const ALLOWED_LOCALES = new Set(["uk", "ru", "en"]);
 const TRADITIONS = new Set(["orthodox", "catholic", "protestant", "other", "prefer_not"]);
@@ -19,7 +18,7 @@ function validReadingReceipt(value:unknown):value is {book:string;chapter:number
     &&typeof row.chapter==="number"&&Number.isInteger(row.chapter)&&row.chapter>0&&row.chapter<=151
     &&typeof row.title==="string"&&row.title.length<=100;
 }
-function publicUser(id:Identity,row:Record<string,unknown>|null){return {id:id.userId,email:id.email,emailVerified:id.emailVerified,authProvider:id.provider,fullName:id.fullName,firstName:row?.first_name??"",lastName:row?.last_name??"",ageRange:row?.age_range??"",age:row?.age??null,tradition:row?.tradition??"",denomination:row?.denomination??"",church:row?.church??"",maritalStatus:row?.marital_status??"",gender:row?.gender??"",hasChildren:row?.has_children==null?null:Boolean(row.has_children),locale:row?.locale??"uk",sensitiveConsent:Boolean(row?.sensitive_consent && row?.sensitive_consent_version===1),visibility:{firstName:Boolean(row?.public_first_name),lastName:Boolean(row?.public_last_name),church:Boolean(row?.public_church && row?.sensitive_consent && row?.sensitive_consent_version===1),progress:Boolean(row?.public_progress)},profileComplete:Boolean(row),isOwner:id.email===OWNER_EMAIL}}
+function publicUser(id:Identity,row:Record<string,unknown>|null){return {id:id.userId,email:id.email,emailVerified:id.emailVerified,authProvider:id.provider,fullName:id.fullName,firstName:row?.first_name??"",lastName:row?.last_name??"",ageRange:row?.age_range??"",age:row?.age??null,tradition:row?.tradition??"",denomination:row?.denomination??"",church:row?.church??"",maritalStatus:row?.marital_status??"",gender:row?.gender??"",hasChildren:row?.has_children==null?null:Boolean(row.has_children),locale:row?.locale??"uk",sensitiveConsent:Boolean(row?.sensitive_consent && row?.sensitive_consent_version===1),visibility:{firstName:Boolean(row?.public_first_name),lastName:Boolean(row?.public_last_name),church:Boolean(row?.public_church && row?.sensitive_consent && row?.sensitive_consent_version===1),progress:Boolean(row?.public_progress)},profileComplete:Boolean(row),isOwner:isVerifiedOwner(id)}}
 export async function GET(request:Request){
   const action=new URL(request.url).searchParams.get("action")??"me"; const id=await authenticateRequest(request); if(!id)return action==="me"?privateJson({user:null}):unauthorized();
   if(action==="reading"){
@@ -44,7 +43,7 @@ export async function GET(request:Request){
     }
     return privateJson({progress:{index:answered.size,correct:[...correct],complete:answered.size===validTasks.size}})
   }
-  if(action==="users"){if(id.email!==OWNER_EMAIL)return privateJson({error:"forbidden"},{status:403});const rows=await env.DB!.prepare("SELECT email,first_name,last_name,age_range,locale,created_at,updated_at FROM profiles ORDER BY created_at DESC LIMIT 250").all();return privateJson({users:rows.results})}
+  if(action==="users"){if(!isVerifiedOwner(id))return privateJson({error:"forbidden"},{status:403});const rows=await env.DB!.prepare("SELECT email,first_name,last_name,age_range,locale,created_at,updated_at FROM profiles ORDER BY created_at DESC LIMIT 250").all();return privateJson({users:rows.results})}
   const row=await env.DB!.prepare("SELECT * FROM profiles WHERE user_id=?").bind(id.userId).first<Record<string,unknown>>(); return privateJson({user:publicUser(id,row)});
 }
 export async function POST(request:Request){return write(request)} export async function PUT(request:Request){return write(request)}

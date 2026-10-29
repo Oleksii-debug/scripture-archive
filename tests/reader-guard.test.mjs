@@ -6,7 +6,7 @@ import vm from "node:vm";
 const source = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
 const reader = source.slice(source.indexOf("async function renderReader("), source.indexOf("async function renderMissions("));
 
-function harness(reply) {
+function harness(reply, loadBook) {
   const events = [];
   const context = vm.createContext({
     state: { lang: "uk", reader: {}, mission: { cached: true } },
@@ -16,7 +16,7 @@ function harness(reply) {
     localStorage: { setItem() {} },
     sessionStorage: { removeItem: key => events.push(["remove", key]) },
     attemptRequest: async (...args) => { events.push(["request", ...args]); return reply(); },
-    getBook: async () => { events.push(["load-text"]); throw Error("text boundary"); },
+    getBook: async () => { events.push(["load-text"]); if (loadBook) return loadBook(); throw Error("text boundary"); },
     renderLockedChapter: (...args) => events.push(["locked", ...args]),
     shell: html => events.push(["render", html]),
     t: key => key,
@@ -70,4 +70,37 @@ test("locked mission navigation renders in every language without passage metada
     assert.match(html, /href="\/mission\/attempt\/opaque-attempt-id"/);
     assert.doesNotMatch(html, /OT-AB-01|GEN|Abraham|Авраам|Буття|Бытие|Genesis/);
   }
+});
+
+test("reader rechecks after its async book fetch and invalidates an attempt started during loading",async()=>{
+  let checks=0;
+  const h=harness(()=>({invalidated:++checks===2}),()=>({get chapters(){throw Error("must not expose text");}}));
+  await h.run();
+  assert.equal(checks,2);
+  assert.deepEqual(h.events.filter(e=>e[0]==="request").map(e=>e[1]),["chapter","chapter"]);
+  assert.equal(h.events.filter(e=>e[0]==="load-text").length,1);
+  assert.deepEqual(h.events.find(e=>e[0]==="locked"),["locked","GEN",12]);
+  assert.equal(h.context.state.currentReader,null);
+});
+
+test("reader refuses a malformed second guard without reading JSON verses",async()=>{
+  let checks=0;
+  const h=harness(()=>++checks===1?{invalidated:false}:{},()=>({get chapters(){throw Error("must not expose text");}}));
+  await h.run();
+  assert.equal(checks,2);
+  assert.match(h.events.find(e=>e[0]==="render")[1],/role="alert"/);
+  assert.equal(h.context.state.currentReader,null);
+});
+
+test("reader never overwrites a newer screen after slow book load",async()=>{
+  let release;
+  const pending=new Promise(resolve=>{release=resolve;});
+  const h=harness(()=>({invalidated:false}),()=>pending);
+  const run=h.run();
+  for(let i=0;i<12;i++) await Promise.resolve();
+  h.context.state.currentReader=null;
+  release({get chapters(){throw Error("stale result must not be used");}});
+  await run;
+  assert.equal(h.events.filter(e=>e[0]==="request").length,1);
+  assert.equal(h.events.some(e=>e[0]==="render"||e[0]==="locked"),false);
 });

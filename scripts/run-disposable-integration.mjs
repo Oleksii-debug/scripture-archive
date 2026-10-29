@@ -13,7 +13,12 @@ export function isDisposableWorkerRestart(log) {
   if (marker < 0) return false;
   const failures = log.slice(marker).split(/\n(?:\[wrangler:|file:\/\/\/[^\n]*\/scripts\/test-integration\.mjs)/u)[0];
   const cases = failures.match(/(?:^|\n)\s*✖ (?!failing tests:)[^\n]+/gu) || [];
-  if (cases.length !== 1 || /AssertionError|ERR_ASSERTION|Expected values to be strictly equal/u.test(failures)) return false;
+  if (cases.length !== 1) return false;
+  // Strictly one failed security assertion with a literal local-proxy body.
+  // A bare 503, unrelated log banner or secondary assertion remains red.
+  const recognized = /AssertionError \[ERR_ASSERTION\]: (?:Cross-origin mutation must be rejected; local Worker response: Your worker restarted mid-request\.|Your worker restarted mid-request\. Please try sending the request again\. Only GET or HEAD requests are retried automatically\.)/u;
+  const remaining = failures.replace(recognized, '');
+  if (/(?:^|\n)\s*AssertionError\b|Expected values to be strictly equal/u.test(remaining)) return false;
   return /Your worker restarted mid-request/u.test(failures);
 }
 

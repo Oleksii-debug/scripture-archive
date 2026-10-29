@@ -19,6 +19,24 @@ const provenRestart = failedRun(
   'SyntaxError: Unexpected token \'Y\', "Your worker restarted mid-request" is not valid JSON'
 );
 
+const deniedOriginRestart = failedRun(
+  'AssertionError [ERR_ASSERTION]: Cross-origin mutation must be rejected; local Worker response: Your worker restarted mid-request. Please try sending the request again. Only GET or HEAD requests are retried automatically.\n  503 !== 403'
+);
+
+test('explicit sole Worker restart in a forged-origin 403 assertion may retry a fresh full suite', async () => {
+  assert.equal(isDisposableWorkerRestart(deniedOriginRestart),true);
+  let runs=0;
+  const result=await runWithFreshState(async()=>++runs===1
+    ? {code:1,log:deniedOriginRestart} : {code:0,log:'22/22 passed'});
+  assert.deepEqual(result,{attempts:2,recovered:true});
+  assert.equal(runs,2);
+});
+
+test('mixed assertions or app-generated failures with an origin label never qualify',()=>{
+  assert.equal(isDisposableWorkerRestart(deniedOriginRestart+'\n  AssertionError: actual persistence mismatch'),false);
+  assert.equal(isDisposableWorkerRestart(failedRun('AssertionError [ERR_ASSERTION]: Cross-origin mutation must be rejected; local Worker response: database_unavailable')),false);
+});
+
 test('one positively identified disposable restart permits one full fresh-D1 run',async()=>{
   assert.equal(isDisposableWorkerRestart(provenRestart),true);
   let runs=0;const reports=[];
@@ -63,4 +81,19 @@ test('ordinary success runs only once',async()=>{
   const result=await runWithFreshState(async()=>{runs++;return {code:0,log:'ok'};});
   assert.deepEqual(result,{attempts:1,recovered:false});
   assert.equal(runs,1);
+});
+
+// Node includes the standard ERR_ASSERTION code after a recognized custom
+// failure message; that metadata alone is not an independent test failure.
+test('standard Node assertion metadata does not defeat an explicitly proven proxy restart',()=>{
+  const actual=deniedOriginRestart+"\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: 503,\n    expected: 403,\n    operator: 'strictEqual'";
+  assert.equal(isDisposableWorkerRestart(actual),true);
+  assert.equal(isDisposableWorkerRestart(actual+"\n  AssertionError: a second, unrelated failure"),false);
+});
+
+test('exact proxy body used as a status assertion message also qualifies one disposable replay',async()=>{
+  const direct=failedRun("AssertionError [ERR_ASSERTION]: Your worker restarted mid-request. Please try sending the request again. Only GET or HEAD requests are retried automatically.\n  503 !== 400\n    code: 'ERR_ASSERTION'");
+  assert.equal(isDisposableWorkerRestart(direct),true);
+  assert.equal(isDisposableWorkerRestart(direct+"\n  AssertionError: wrong ownership persisted"),false);
+  assert.equal(isDisposableWorkerRestart(failedRun("AssertionError [ERR_ASSERTION]: Your worker restarted mid-request but context unknown")),false);
 });

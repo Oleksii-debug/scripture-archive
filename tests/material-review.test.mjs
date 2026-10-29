@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import ts from 'typescript';
 import vm from 'node:vm';
-import { historyMarkup, queueMarkup, submissionForm, reviewText, renderPublicMaterials } from '../public/material-review.js';
+import { historyMarkup, queueMarkup, submissionForm, reviewText, renderPublicMaterials, attachReviewControls } from '../public/material-review.js';
 
 function fixture() {
   const db = new DatabaseSync(':memory:');
@@ -96,11 +96,31 @@ test('an editor cannot review their own submission or supersede its published ve
     // An already published snapshot represents a past independent review.
     f.db.prepare("UPDATE material_submissions SET status='approved',reviewed_by='other-editor',reviewed_at=CURRENT_TIMESTAMP,source_checked=1,rights_checked=1 WHERE id=?").run(first);
     const second=(await f.post(submission,'editor')).data.id;
-    assert.equal((await f.post(approve(second),'editor')).status,409);
-    assert.equal((await f.post({action:'review',id:second,decision:'reject',note:'Needs work'},'editor')).status,409);
+    const ownApproval = await f.post(approve(second),'editor');
+    assert.equal(ownApproval.status,403); assert.equal(ownApproval.data.error,'self_review_forbidden');
+    const ownRejection = await f.post({action:'review',id:second,decision:'reject',note:'Needs work'},'editor');
+    assert.equal(ownRejection.status,403); assert.equal(ownRejection.data.error,'self_review_forbidden');
     assert.equal((await f.get('public')).data.items[0].id,first);
     assert.equal(f.db.prepare('SELECT status FROM material_submissions WHERE id=?').get(second).status,'pending');
   }finally{f.db.close();}
+});
+
+test('self-review refusal is announced and the review controls remain usable',async()=>{
+  const oldFetch=globalThis.fetch, oldFormData=globalThis.FormData;
+  try {
+    globalThis.fetch=async()=>new Response(JSON.stringify({error:'self_review_forbidden'}),{status:403,headers:{'content-type':'application/json'}});
+    globalThis.FormData=class { has(){return true;} get(){return ''; } };
+    for (const lang of ['uk','ru','en']) {
+      const status={textContent:''}, button={dataset:{decision:'approve'},disabled:false};
+      const form={dataset:{id:'own'},querySelector:()=>status,querySelectorAll:()=>[button]};
+      const root={querySelectorAll:selector=>selector==='.material-review'?[form]:[]};
+      const words=reviewText(lang); let refreshed=false;
+      attachReviewControls(root,words,async()=>{refreshed=true;},()=>{});
+      await button.onclick();
+      assert.equal(status.textContent,words.selfReview);
+      assert.equal(button.disabled,false); assert.equal(refreshed,false);
+    }
+  } finally { globalThis.fetch=oldFetch; globalThis.FormData=oldFormData; }
 });
 
 test('a concurrent draft edit cannot silently change the version sent for review',async()=>{

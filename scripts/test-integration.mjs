@@ -1,15 +1,22 @@
 import { spawn } from "node:child_process";
-import { access, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { access, cp, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { waitForStableWorker } from "./integration-ready.mjs";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
-const builtConfig = path.join(root, "dist/server/wrangler.json");
-await access(builtConfig).catch(() => { throw Error("Run npm run build before npm run test:integration."); });
+const builtOutput = path.join(root, "dist");
+await access(path.join(builtOutput, "server/wrangler.json")).catch(() => { throw Error("Run npm run build before npm run test:integration."); });
 const temporary = await mkdtemp(path.join(tmpdir(), "scripture-integration-"));
+// Wrangler dev can restart the Worker while watching a mutable build tree.
+// Qualify the exact immutable build snapshot and keep disposable D1 outside it.
+const frozenOutput = path.join(temporary, "frozen-dist");
+try { await cp(builtOutput, frozenOutput, { recursive: true }); }
+catch (error) { await rm(temporary, { recursive: true, force: true }); throw error; }
+const builtConfig = path.join(frozenOutput, "server/wrangler.json");
 const state = path.join(temporary, "state");
 const config = JSON.parse(await readFile(builtConfig, "utf8"));
 const migrationConfig = path.join(temporary, "migrations.json");
@@ -24,6 +31,7 @@ await new Promise(resolve => server.close(resolve));
 const base = `http://127.0.0.1:${port}`;
 const wrangler = ["--import", "./scripts/sites-env.mjs", "./node_modules/wrangler/bin/wrangler.js"];
 const options = { cwd: root, env: { ...process.env, WRANGLER_SEND_METRICS: "false",
+  WRANGLER_CI_DISABLE_CONFIG_WATCHING: "true",
   WRANGLER_REGISTRY_PATH: path.join(temporary,"registry"),
   MINIFLARE_REGISTRY_PATH: path.join(temporary,"miniflare"),
   WRANGLER_LOG_PATH: path.join(temporary,"logs"),
@@ -46,22 +54,24 @@ try {
   worker.stdout.on("data", data => { logs = (logs + data).slice(-12000); });
   worker.stderr.on("data", data => { logs = (logs + data).slice(-12000); });
   worker.on("error", error => { logs += error.message; });
-  let ready = false;
-  for (let count = 0; count < 100; count += 1) {
-    if (worker.exitCode !== null) break;
-    try {
-      const response = await fetch(`${base}/api/account?action=me`, { signal: AbortSignal.timeout(1000) });
-      if (response.ok && (await response.json()).user === null) { ready = true; break; }
-    } catch {}
-    await new Promise(resolve => setTimeout(resolve, 300));
-  }
+  // Wrangler may report its first 200 before its local module graph settles.
+  // Do not start POST-heavy integration flows during an initial worker reload.
+  const ready = await waitForStableWorker(base, {
+    isStopped: () => worker.exitCode !== null,
+    // First use of a freshly mounted route can rebuild the local Worker. Prime
+    // each module with harmless GETs before any non-idempotent HTTP scenario.
+    routes: [
+      {path: "/api/editor-roles?view=me", validate: data => data?.editor === false},
+      {path: "/api/material-review?view=public", validate: data => Array.isArray(data?.items)},
+    ],
+  });
   if (!ready) throw Error(`Local worker did not become ready. ${logs}`);
-  await run(["--test", "tests/api-flow.test.mjs", "tests/community.test.mjs", "tests/community-runner.test.mjs", "tests/community-smoke.test.mjs", "tests/community-runner-identity.test.mjs", "tests/security-contract.test.mjs"],
+  await run(["--test", "--test-concurrency=1", "tests/api-flow.test.mjs", "tests/community.test.mjs", "tests/community-runner.test.mjs", "tests/community-smoke.test.mjs", "tests/community-runner-identity.test.mjs", "tests/security-contract.test.mjs"],
     { env: { ...options.env, SCRIPTURE_TEST_URL: base } });
   await run(["--experimental-strip-types", "scripts/test-learning-agent.mjs", "--local-test", "--smoke"],
     { env: { ...options.env, COMMUNITY_ORIGIN: base } });
-  // The HTTP test deletes the only user who saved a bookmark. Inspect the
-  // actual disposable D1 backing database to verify deletion removed its rows.
+  // The HTTP test deletes the user who created bookmarks and submissions.
+  // Inspect the disposable D1 database to verify both were removed.
   const directory = path.join(state, "v3", "d1", "miniflare-D1DatabaseObject");
   const databases = (await readdir(directory)).filter(name => name.endsWith(".sqlite"));
   let inspected = 0;
@@ -72,6 +82,10 @@ try {
       inspected++;
       const row = db.prepare("SELECT COUNT(*) AS count FROM reader_bookmarks").get();
       if (Number(row.count) !== 0) throw Error("Deleted account retained reader bookmarks");
+      const submissions = db.prepare("SELECT COUNT(*) AS count FROM material_submissions").get();
+      if (Number(submissions.count) !== 0) throw Error("Deleted account retained material submissions");
+      const roleEvents = db.prepare("SELECT COUNT(*) AS count FROM editorial_role_events").get();
+      if (Number(roleEvents.count) !== 0) throw Error("Deleted account retained editorial role events");
     } finally { db.close(); }
   }
   if (inspected !== 1) throw Error(`Expected one bookmark database, found ${inspected}`);

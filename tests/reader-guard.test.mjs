@@ -6,7 +6,7 @@ import vm from "node:vm";
 const source = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
 const reader = source.slice(source.indexOf("async function renderReader("), source.indexOf("async function renderMissions("));
 
-function harness(reply) {
+function harness(reply, loadBook) {
   const events = [];
   const context = vm.createContext({
     state: { lang: "uk", reader: {}, mission: { cached: true } },
@@ -16,7 +16,7 @@ function harness(reply) {
     localStorage: { setItem() {} },
     sessionStorage: { removeItem: key => events.push(["remove", key]) },
     attemptRequest: async (...args) => { events.push(["request", ...args]); return reply(); },
-    getBook: async () => { events.push(["load-text"]); throw Error("text boundary"); },
+    getBook: async () => { events.push(["load-text"]); if (loadBook) return loadBook(); throw Error("text boundary"); },
     renderLockedChapter: (...args) => events.push(["locked", ...args]),
     shell: html => events.push(["render", html]),
     t: key => key,
@@ -70,4 +70,33 @@ test("locked mission navigation renders in every language without passage metada
     assert.match(html, /href="\/mission\/attempt\/opaque-attempt-id"/);
     assert.doesNotMatch(html, /OT-AB-01|GEN|Abraham|Авраам|Буття|Бытие|Genesis/);
   }
+});
+
+test("a new attempt during the primary chapter fetch prevents verse disclosure",async()=>{
+  let n=0;
+  const h=harness(()=>({invalidated:++n===2}),()=>({get chapters(){throw Error("verse disclosure");}}));
+  await h.run();
+  assert.equal(n,2);
+  assert.deepEqual(h.events.find(e=>e[0]==="locked"),["locked","GEN",12]);
+  assert.equal(h.context.state.currentReader,null);
+});
+test("a malformed final chapter guard denies post-fetch access",async()=>{
+  let n=0;
+  const h=harness(()=>++n===1?{invalidated:false}:{},()=>({get chapters(){throw Error("verse disclosure");}}));
+  await h.run();
+  assert.equal(n,2);
+  assert.match(h.events.find(e=>e[0]==="render")[1],/role="alert"/);
+});
+test("late Bible JSON does not repopulate a changed reader",async()=>{
+  let release;
+  const pending=new Promise(resolve=>{release=resolve;});
+  let n=0;
+  const h=harness(()=>{n++;return {invalidated:false};},()=>pending);
+  const run=h.run();
+  for(let i=0;i<16;i++)await Promise.resolve();
+  h.context.state.currentReader=null;
+  release({get chapters(){throw Error("stale verse disclosure");}});
+  await run;
+  assert.equal(n,1);
+  assert.equal(h.events.some(e=>e[0]==="locked"||e[0]==="render"),false);
 });

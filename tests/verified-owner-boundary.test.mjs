@@ -34,7 +34,7 @@ test("owner identity must be independently verified, never merely name-matched",
   assert.equal(exported.isVerifiedOwner(identity(ownerEmail.toUpperCase(), true, "chatgpt")), true);
 });
 
-test("all owner-only entrypoints use the verified owner predicate", async () => {
+test("owner-only endpoints require verified identity and drafts cannot self-publish", async () => {
   const [account, analytics, community, content, materials] = await Promise.all([
     read("app/api/account/route.ts"),
     read("app/api/analytics/route.ts"),
@@ -47,7 +47,10 @@ test("all owner-only entrypoints use the verified owner predicate", async () => 
   assert.match(analytics, /if \(!isVerifiedOwner\(identity\)\)/);
   assert.equal((community.match(/if \(!isVerifiedOwner\(identity\)\)/g) || []).length, 2);
   assert.equal((content.match(/!isVerifiedOwner\(identity\)/g) || []).length, 3);
-  assert.match(materials, /visibility = isVerifiedOwner\(identity\) && body.visibility === "public"/);
+  // Editorial approval is the sole path to newly public material; an owner
+  // may not publish an unreviewed mutable draft by supplying visibility=public.
+  assert.match(materials, /const visibility = "private"/);
+  assert.doesNotMatch(materials, /body\.visibility\s*===\s*"public"/);
   for (const [path, source] of [
     ["account", account], ["analytics", analytics], ["community", community], ["content", content], ["materials", materials],
   ]) {

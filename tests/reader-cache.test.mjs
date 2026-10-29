@@ -5,7 +5,7 @@ import vm from 'node:vm';
 
 // Exercise the reader's actual getBook implementation, not a cache rewrite.
 const source = (await readFile(new URL('../public/app.js', import.meta.url), 'utf8')).replaceAll('\r\n', '\n');
-const match = source.match(/(async function getBook\(code\) \{[\s\S]*?\n\})\nfunction localEditionMetadata\(/);
+const match = source.match(/(async function getBook\(code, explicitEdition = null\) \{[\s\S]*?\n\})\nfunction localEditionMetadata\(/);
 assert.ok(match, 'canonical getBook must exist');
 const functionSource = match[1];
 
@@ -41,6 +41,21 @@ test('every shipped local edition can load its actual catalog books', async () =
       }
     }
   }
+});
+
+test('parallel reader loads a second authorized edition without changing the selected edition', async () => {
+  const { EDITIONS } = await import('../public/editions.js');
+  const catalog = JSON.parse(await readFile(new URL('../public/data/catalog.json', import.meta.url), 'utf8'));
+  const selected = EDITIONS.uk[0], other = EDITIONS.uk[1], state = { lang:'uk', bookCache:new Map(), catalog };
+  const getBook = vm.runInNewContext('(' + functionSource + ')', {
+    state, EDITIONS, selectedEdition:()=>selected, Error,
+    fetch:async path=>({ok:true,json:async()=>JSON.parse(await readFile(new URL('../public'+path,import.meta.url),'utf8'))}),
+  });
+  const first=await getBook('GEN'), second=await getBook('GEN',other);
+  assert.equal(first.editionId,'uk-ohiienko');assert.equal(second.editionId,'UKRPAN');
+  assert.equal(state.bookCache.size,2);assert.equal((await getBook('GEN')).editionId,'uk-ohiienko');
+  await assert.rejects(getBook('GEN',{...other}),/Invalid local edition/);
+  await assert.rejects(getBook('GEN',EDITIONS.uk[2]),/Invalid local edition/);
 });
 
 test('reader retries transient HTTP failure without page reload', async () => {

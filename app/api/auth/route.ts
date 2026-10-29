@@ -233,6 +233,8 @@ export async function POST(request: Request) {
       env.DB.prepare("DELETE FROM support_attachments WHERE request_id IN (SELECT id FROM support_requests WHERE user_id=?)").bind(identity.userId),
       env.DB.prepare("DELETE FROM support_requests WHERE user_id=?").bind(identity.userId),
       env.DB.prepare("DELETE FROM auth_tokens WHERE user_id=?").bind(identity.userId),
+      env.DB.prepare("DELETE FROM editorial_roles WHERE user_id=? OR granted_by=?").bind(identity.userId, identity.userId),
+      env.DB.prepare("DELETE FROM editorial_role_events WHERE subject_user_id=? OR actor_user_id=?").bind(identity.userId, identity.userId),
       // Preserve other members' numeric meeting history, but erase the departing
       // facilitator's stable identifier and free-text contribution in shared groups.
       // Owned groups are deleted below and cascade their sessions.
@@ -248,7 +250,7 @@ export async function POST(request: Request) {
       env.DB.prepare("DELETE FROM auth_sessions WHERE user_id=?").bind(identity.userId),
     ]);
     } catch {
-      // D1 batch rejects atomically; do not pretend the account was erased.
+      // D1 rejects the whole transaction; a failed deletion is not acknowledged.
       return json({ error: "deletion_failed" }, 503);
     }
     return json({ ok: true }, 200, { "Set-Cookie": clearSessionCookie(request) });

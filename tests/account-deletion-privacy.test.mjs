@@ -50,12 +50,16 @@ test('account deletion clears personal records while preserving other users', as
   assert.equal((await exports.POST(request('wrong'))).status, 401);
   assert.equal(db.prepare('SELECT count(*) n FROM mission_attempts').get().n, 2);
   failAfter = 3;
-  await assert.rejects(exports.POST(request('correct')), /simulated database failure/);
+  const refused = await exports.POST(request('correct'));
+  assert.equal(refused.status, 503);
+  assert.equal((await refused.json()).error, 'deletion_failed');
   assert.equal(db.prepare("SELECT count(*) n FROM progress WHERE user_id='alice'").get().n, 1, 'failed batch rolls back earlier deletions');
   assert.equal(db.prepare("SELECT deleted_at FROM accounts WHERE id='alice'").get().deleted_at, null);
   // Fail after shared-session redaction to prove the entire batch rolls back.
   failAfter = 11;
-  await assert.rejects(exports.POST(request('correct')), /simulated database failure/);
+  const refusedAfterRedaction = await exports.POST(request('correct'));
+  assert.equal(refusedAfterRedaction.status, 503);
+  assert.equal((await refusedAfterRedaction.json()).error, 'deletion_failed');
   assert.deepEqual({...db.prepare("SELECT created_by,reflection FROM group_sessions WHERE id='alice-meeting'").get()}, {created_by:'alice',reflection:'Alice private reflection'});
   assert.equal(db.prepare("SELECT count(*) AS n FROM home_group_members WHERE group_id='bob-group'").get().n, 2);
   failAfter = -1;

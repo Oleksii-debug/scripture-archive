@@ -120,7 +120,11 @@ export async function POST(request: Request) {
           .bind(body.decision === "approve" ? "approved" : "rejected", identity.userId, note, body.sourceChecked === true ? 1 : 0, body.rightsChecked === true ? 1 : 0, body.id, identity.userId),
       ]);
       if (results.some(result => !result.success)) return json({ error: "review_failed" }, 503);
-      return results[1].meta.changes ? json({ ok: true }) : json({ error: "not_found_or_closed" }, 409);
+      if (results[1].meta.changes) return json({ ok: true });
+      // The write predicates remain authoritative even if this explanatory read races.
+      const own = await env.DB.prepare("SELECT id FROM material_submissions WHERE id=? AND status='pending' AND author_id=?")
+        .bind(body.id, identity.userId).first<{id:string}>();
+      return own ? json({ error: "self_review_forbidden" }, 403) : json({ error: "not_found_or_closed" }, 409);
     } catch { return json({ error: "review_failed" }, 503); }
   }
   return json({ error: "unknown_action" }, 400);

@@ -2555,8 +2555,12 @@ function activateTimer() {
   };
   paint();
   timerInterval = setInterval(() => {
+    // normalizeTimer() changes running to false at the deadline. Remember
+    // whether this tick crossed that boundary so completion is announced.
+    const wasRunning = Boolean(state.studyTimer?.running);
     const timer = normalizeTimer();
-    if (timer.running && timer.durationMinutes > 0) {
+    if (timer.durationMinutes > 0 &&
+        (timer.running || (wasRunning && timer.remainingSeconds === 0))) {
       paint();
       if (!timer.running) clearInterval(timerInterval);
     }

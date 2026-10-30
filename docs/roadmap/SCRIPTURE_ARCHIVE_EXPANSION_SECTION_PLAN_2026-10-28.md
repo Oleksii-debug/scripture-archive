@@ -1,5 +1,16 @@
 # SCRIPTURE ARCHIVE — каталог розділів і план реалізації розширень
 
+## 2026-10-30 — SA-EXT-07 / ACADEMY_UNCONFIRMED_LOCAL_SAVE_COPY — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
+
+**Рішення:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` тільки для неправдивого повідомлення про незмінність прогресу після непідтвердженого запису Академії. **Батьківський SA-EXT-07 та всі SA-EXT-01…20 залишаються OPEN.** Повторне розроблення цієї конкретної поведінки — лише за нової вимоги або відтвореного дефекту.
+
+- **Проблема:** `public/scripture-academy.js` повідомляв, що прогрес точно «не змінено», навіть якщо `localStorage.setItem` змінив дані, а наступний контрольний `getItem` повернув інший запис або помилку. Відсутність підтвердження не доводить відсутність фактичного запису.
+- **Реальна інтеграція:** [PR #534](https://github.com/Oleksii-debug/scripture-archive/pull/534) **squash MERGED**, exact `main@5ed91a9a0831f64c76eeae7b5a509e2b18fc4968`, source blob `public/scripture-academy.js@cd0c2a11770c624e9cd34aabcbc28c05791035e6`; new regression `tests/academy-save-uncertainty.test.mjs@b7ddfe3c62a3185a7acd79e9b4c4fb9e4454b15d`, existing `tests/scripture-academy-course.test.mjs@95ec0f874dfdf6ca6d131011934a33b1032c6af2`. Повідомлення uk/ru/en тепер чесно каже «не вдалося підтвердити збереження» й пропонує повторно відкрити сторінку; ніякого скидання/запису/повторної небезпечної мутації не додано.
+- **Тести:** вихідний JS із exact PR source blob виконано в ізольованому V8 mock-DOM: 4/4 поведінкових випадки PASS. [Actions #41019274047](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41019274047) для exact feature head `16a6cd814932b197560cc757ee7ecc37c0cc3780`: **1134 Node PASS, 0 FAIL, 1 SKIP**, TypeScript PASS, ESLint PASS (попередження без errors), production source build PASS, Python validators **2 PASS**.
+- **Окреме обмеження:** повний CI **FAIL**, disposable local Worker/D1 обидві свіжі спроби **21/22**, зовнішній restart HTTP 503 в `tests/api-flow.test.mjs:103` і відома задача [#361](https://github.com/Oleksii-debug/scripture-archive/pull/361). Це не збій виконання нового UI тесту й не дозвіл маскувати security assertions. Cloudflare Sites installed SHA, browser, Windows/NVDA та повний SA-EXT-07 **не перевірено**.
+- **Залишок саме цього дефекту:** `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. Джерело `main` readback перевірено після merge; ніяких deployment, облікових даних, прав, реальних користувачів або додаткових мов не змінено.
+
+
 ## 2026-10-30 — SA-EXT-08 / REVIEWED_STUDY_LIBRARY_ROUTE — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузька функція)
 
 **Статус:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` для **окремого** опублікованого каталогу вже затверджених редактором навчальних матеріалів; `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. Увесь батьківський **SA-EXT-08 залишається OPEN**, як і всі інші незакриті батьківські розділи. Не називати це завершеною електронною бібліотекою, платним каталогом чи production-релізом.

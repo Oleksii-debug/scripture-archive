@@ -1,4 +1,5 @@
 import { parallelControls, mountParallelReader } from './parallel-reader.js';
+import {routeSourceFromLocation, legacyRouteHashChanged} from './route-location.js';
 import {renderWorkspace, workspaceCopy, groupManagementCopy, groupManagementMarkup} from './workspace.js';
 import {supportSection} from './support.js';
 import {homePage} from './home.js';
@@ -4370,7 +4371,7 @@ async function route() {
   clearInterval(communityRefreshInterval);
   clearInterval(communityOwnerRefreshInterval);
   try {
-    const sourceRoute = location.hash.startsWith("#/") ? location.hash.replace(/^#\/?/, "") : location.pathname.replace(/^\/?/, "");
+    const sourceRoute = routeSourceFromLocation(location);
     const parts = sourceRoute.split("/").filter(Boolean);
     const name = parts[0] || "home";
     if (name !== "reader") state.currentReader = null;
@@ -4453,8 +4454,8 @@ document.addEventListener("click", event => {
   window.saAnalytics?.track("navigation_click", { destination });
   navigateTo(`${url.pathname}${url.search}${url.hash.startsWith("#/") ? url.hash : ""}`);
 }, true);
-window.addEventListener("hashchange", () => {
-  if (location.hash && !location.hash.startsWith("#/")) return;
+window.addEventListener("hashchange", (event) => {
+  if (!legacyRouteHashChanged(event.oldURL, event.newURL)) return;
   route();
 });
 window.addEventListener("popstate", route);

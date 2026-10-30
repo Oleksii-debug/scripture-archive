@@ -117,7 +117,11 @@ async function write(request:Request){
   if(action==="reading"){
     if(!Array.isArray(body.reading)||body.reading.length>2000)return privateJson({error:"invalid_reading"},{status:400});
     // Reject the entire invalid request: silently filtering all entries used to return a false 200 ACK.
-    if(!body.reading.every(r=>r&&typeof r==="object"&&!Array.isArray(r)&&typeof r.title==="string"))
+    // Do not acknowledge a different title from the one the reader sent.
+    // The canonical title limit is 100; trimming whitespace is intentional,
+    // silently slicing a longer authored title before persistence is not.
+    if(!body.reading.every(r=>r&&typeof r==="object"&&!Array.isArray(r)&&
+        typeof r.title==="string"&&r.title.trim().length<=100))
       return privateJson({error:"invalid_reading"},{status:400});
     const reading=body.reading.map(r=>({book:clean(r.book,4),chapter:r.chapter,title:clean(r.title,100)}));
     if(!reading.every(validReadingReceipt))return privateJson({error:"invalid_reading"},{status:400});

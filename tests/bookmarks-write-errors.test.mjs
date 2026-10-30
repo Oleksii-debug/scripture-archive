@@ -168,3 +168,19 @@ test("bookmark PUT preserves translation-specific chapter boundaries", async () 
   assert.equal((await outOfRange.call("PUT", { edition: "uk-ohiienko", book: "JOL", chapter: 5 })).status, 400);
   assert.equal(outOfRange.calls.length, 0);
 });
+
+
+// A single-row primary-key bookmark mutation cannot legitimately report two
+// changed rows (or an integer outside JS's safe range). Reject corrupt D1
+// acknowledgements instead of telling the reader that the mutation succeeded.
+test("bookmark PUT and DELETE reject multi-row and unsafe D1 ACKs", async () => {
+  for (const method of ["PUT", "DELETE"]) {
+    for (const changes of [2, 3, 500, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER + 1]) {
+      const f = fixture({ outcome: { success: true, meta: { changes } } });
+      await expectResponse(f, 503, "bookmark_save_failed", method);
+      assert.equal(f.calls.length, 1, method + " must not read or modify after invalid ACK");
+    }
+    // Preserve the actual one-row success path in both directions.
+    await expectResponse(fixture({ outcome: { success: true, meta: { changes: 1 } } }), 200, null, method);
+  }
+});

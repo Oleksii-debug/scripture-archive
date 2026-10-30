@@ -2259,6 +2259,9 @@ async function getCMS() {
   return state.cms;
 }
 async function getSession() {
+  // Preserve the last live principal even when the browser's owner marker
+  // vanished; changing account must never promote the prior in-tab cache.
+  const priorAccountId = state.user?.id ?? null;
   let authenticatedUser;
   try {
     const response = await fetch("/api/account?action=me", { cache: "no-store" });
@@ -2287,7 +2290,9 @@ async function getSession() {
   let localCacheTrusted = false;
   try {
     const previousOwner = localStorage.getItem('sa.progressOwner');
-    const cleared = previousOwner && previousOwner !== state.user?.id
+    const ownerChanged = (previousOwner && previousOwner !== state.user?.id)
+      || (priorAccountId && priorAccountId !== state.user?.id);
+    const cleared = ownerChanged || state.localReadingCacheTrusted === false
       ? clearPersonalProgress() : true;
     if (cleared) {
       if (state.user) localStorage.setItem('sa.progressOwner', state.user.id);

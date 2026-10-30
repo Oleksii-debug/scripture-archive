@@ -1,3 +1,14 @@
+## 2026-10-30 — SA-EXT-01/16 / READING_ACCOUNT_TITLE_NONBLANK_ACK — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
+
+**Виключно цей підпункт:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`; `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. Усі батьківські SA-EXT-01…20, повний реліз і приймання залишаються **OPEN**.
+
+- **Доведений дефект:** справжній `PUT /api/account?action=reading` визнавав пробільні заголовки глав за валідну історію (`title.length<=100`), повертав успішне підтвердження запису, але сторінка `/progress` та канонічний приватний експорт такі записи відкидали як нечитабельні.
+- **Готова реалізація:** [PR #600](https://github.com/Oleksii-debug/scripture-archive/pull/600) **SQUASH MERGED** у `main@d325fb397c35960001f6f90b2a0a790afb1ce8bc`. Реальний маршрут `app/api/account/route.ts@3364cf32e3c1a19b86db540aa927ff54a7831462` додає `row.title.trim().length>0` у канонічний `validReadingReceipt` перед D1 записом, без нової бази/моделі/сервера; зберігає вже чинне обрізання пробілів і ліміт 100 символів.
+- **Тести і readback:** `tests/account-reading-canonical-chapters.test.mjs@fd50ca2ecaf24dd15019abfbed2f25938d2407d0` перевіряє три нечитабельні заголовки без D1 write та коректне збереження нормальної назви після штатного trim. Перший точний CI запуск [#41032178248](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41032178248) виявив помилкове очікування **тестової fixture**, ніби сервер зберігає пробіли; тест виправлено без змін production-коду. Повторний [Actions #41032348161](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41032348161) exact head `c64f80a1c7554300925daf9c556f17a4f2a166d9` — **workflow SUCCESS**: native Node, TS, ESLint, build, disposable Worker/D1, Python — усі SUCCESS. Merge SHA та production/test blobs прочитано з main.
+- **Поза підпунктом:** live Cloudflare Sites SHA, фізичний NVDA, production D1, email/DNS, повний SA-EXT-01/16 та інші SA-EXT залишаються неперевірені. Повторна розробка цієї функції лише за новим відтвореним дефектом або вимогою. Координація [#297](https://github.com/Oleksii-debug/scripture-archive/issues/297).
+
+---
+
 ## 2026-10-30 — SA-EXT-02 / ATTEMPT_HISTORY_CANONICAL_CHAPTER_TRUST — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
 
 **Термінальний статус лише цього підпункту:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`; `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. Повний розділ SA-EXT-02 і всі двадцять батьківських розділів **залишаються OPEN**.

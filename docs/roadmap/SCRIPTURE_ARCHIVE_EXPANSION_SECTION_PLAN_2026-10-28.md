@@ -9,6 +9,15 @@
 - **Окремо не підтверджено:** реальний browser/keyboard E2E, фізичний NVDA, production deploy/version SHA, незалежні біблійні/видавничі права для всього SA-EXT-05. Вони не входять у статус закритої вузької функції та не змінюються цим записом.
 - **Governance:** повторне розроблення саме цього пошуку лише за новою вимогою або відтвореним дефектом, без перезапуску S/SA-EXT батьківського розділу.
 
+## 2026-10-30 — SA-EXT-06 / NARRATIVE_ATLAS_ALL_SOURCES — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузька функція)
+
+**Статус:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` для повного виведення наявних перевірених джерел у таблиці орієнтовної послідовності оповідей. **Батьківський SA-EXT-06 залишається OPEN; археологічні карти, реальні маршрути, ширша хронологія та live/NVDA не визнані завершеними.**
+
+- **Готова функція:** у канонічному `/dossiers` таблиця `dossierAtlasMarkup` для 7 наявних історій більше не приховує другу й наступні вже схвалені біблійні цитати; для кожної оповіді відображає всі `item.sources` як доступний нумерований список з реальними посиланнями на читальню та чесною локалізованою позначкою `narrative/interpretive` (uk/ru/en). Слова про непідтверджену історичну датировку збережені. Жодної вигаданої археології, географічних координат, другого каталогу чи API.
+- **GitHub:** [PR #524](https://github.com/Oleksii-debug/scripture-archive/pull/524) **SQUASH MERGED**, перевірений `main@75a44e5bf461e94ed2791017c11cec2962b0f404`; змінено лише `public/scripture-dossiers.js` та `tests/atlas-history-sources.test.mjs`. Перевірено GitHub PR.merged, main SHA і обидва blob-contents. Попередній пошук досьє [#518](https://github.com/Oleksii-debug/scripture-archive/pull/518) збережений.
+- **Фактичні тести:** 162/162 ізольованих V8 graph/citation assertions PASS; [Actions #41014982903](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41014982903) exact-head `b9904d460125f0608f4a8c37fdcfb3c54c7039a9`: **1124 native Node PASS / 0 FAIL / 1 SKIP**, TypeScript PASS, lint 0 errors / 12 warnings, source build PASS, Python validators 2 PASS. Загальний CI **FAIL**: відомий незалежний disposable Worker/D1 restart HTTP503, 21/22 двічі; окремий [#361](https://github.com/Oleksii-debug/scripture-archive/pull/361).
+- **Не доведено:** реальний Chrome/NVDA, production реліз/SHA, фактичні зовнішні географічні права/археологічні джерела, весь SA-EXT-06. Повторна доробка саме цієї вузької функції — лише за новим дефектом або вимогою.
+
 **Дата:** 2026-10-28 | **Статус:** OWNER_APPROVED_PLANNING_SCOPE
 **Мета:** не зупинити випуск чинного продукту, а зареєструвати повний майбутній зміст і критерії готовності.
 **Обов'язкова класифікація:** EXISTING_SOURCE / INCOMPLETE_RELEASE / PLANNED_NEW / SEPARATE_PRODUCT. Це НЕ відсоток готовності.

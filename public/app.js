@@ -2516,7 +2516,12 @@ function activateTimer() {
       status.textContent = t("timerDone");
       play("done");
     }
-    if (!saveTimer() && !status.textContent)
+    // A successful retry must retract the old temporary-only notice; no
+    // other status (including a completion announcement) is overwritten.
+    const saved = saveTimer();
+    if (saved && Object.values(TIMER_EPHEMERAL_COPY).includes(status.textContent))
+      status.textContent = "";
+    else if (!saved && !status.textContent)
       status.textContent = TIMER_EPHEMERAL_COPY[state.lang] || TIMER_EPHEMERAL_COPY.uk;
   };
   input.onchange = () => {

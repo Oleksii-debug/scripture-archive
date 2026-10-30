@@ -4220,7 +4220,7 @@ async function route() {
     else if (name === "groups" && parts[1]) await renderGroup(parts[1]);
     else if (name === "groups") await renderGroups();
     else if (name === "community") await renderCommunity(Number(new URLSearchParams(location.search).get("page"))||1,new URLSearchParams(location.search).get("q")||"",new URLSearchParams(location.search).get("sort")||"recent");
-    else if (["home-groups", "live", "campaigns", "dossiers", "builder", "progress", "about"].includes(name)) {
+    else if (["home-groups", "live", "campaigns", "dossiers", "library", "builder", "progress", "about"].includes(name)) {
       if(name==="progress"&&state.user)await syncProgress();
       await renderWorkspace(name==='home-groups'?'live':name,{state,t,esc,shell,getMission,getCatalog,setActiveNav,loadJSON,announce,play});
     }

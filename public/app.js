@@ -132,6 +132,7 @@ const I18N = {
     retryLoad: "Повторити спробу",
     readingSyncPending: "Прочитане збережено на цьому пристрої, але сервер не підтвердив збереження. Повторіть спробу.",
     readingSyncRetry: "Повторити збереження",
+    readerStorageUnavailable: "Браузер заборонив зберегти прогрес на пристрої. Читати можна, але завершення не зараховане. Дозвольте збереження й повторіть спробу.",
     readerMissionUnavailable: "Завдання тимчасово недоступні. Читання та пошук доступні.",
   },
   ru: {
@@ -261,6 +262,7 @@ const I18N = {
     retryLoad: "Повторить попытку",
     readingSyncPending: "Прочитанное сохранено на этом устройстве, но сервер не подтвердил сохранение. Повторите попытку.",
     readingSyncRetry: "Повторить сохранение",
+    readerStorageUnavailable: "Браузер запретил сохранять прогресс на устройстве. Читать можно, но завершение не засчитано. Разрешите сохранение и повторите попытку.",
     readerMissionUnavailable: "Задания временно недоступны. Чтение и поиск доступны.",
   },
   en: {
@@ -390,6 +392,7 @@ const I18N = {
     retryLoad: "Try again",
     readingSyncPending: "Your reading is saved on this device, but the server did not confirm the save. Please retry.",
     readingSyncRetry: "Retry saving",
+    readerStorageUnavailable: "Browser storage is unavailable. Reading remains available, but completion has not been saved. Enable storage and retry.",
     readerMissionUnavailable: "Exercises are temporarily unavailable. Reading and search are still available.",
   },
 };
@@ -2890,7 +2893,55 @@ async function renderReader(parts) {
       `<p class="notice" role="status">${t("readerMissionUnavailable")}</p>`,
     );
   }
-  document.querySelector('#mark-read').onclick=async()=>{const readButton=document.querySelector('#mark-read');if(!readButton||!readerStillCurrent()||readButton.dataset.saSaving==='1')return;readButton.dataset.saSaving='1';readButton.setAttribute('aria-busy','true');try{const latestHistory=loadJSON('sa.readingHistory',[]),readingHistory=Array.isArray(latestHistory)?latestHistory:[];if(!readingHistory.some(r=>r.book===meta.code&&r.chapter===chapter))readingHistory.push({book:meta.code,chapter,title:bookTitle(meta)});localStorage.setItem('sa.readingHistory',JSON.stringify(readingHistory));if(state.user)try{await accountRequest('reading','PUT',{reading:readingHistory})}catch{if(readerStillCurrent()&&document.querySelector('#mark-read')===readButton){readButton.textContent=t('readingSyncRetry');announce(t('readingSyncPending'))}return}if(!readerStillCurrent()||document.querySelector('#mark-read')!==readButton)return;try{if(hasTasks)await attemptRequest('read','POST',{book:meta.code,chapter,groupId:groupId||undefined});if(!readerStillCurrent()||document.querySelector('#mark-read')!==readButton)return;document.querySelector('#start-questions')?.removeAttribute('disabled');const restoreFocus=document.activeElement===readButton;readButton.disabled=true;readButton.textContent=w.readMarked;if(restoreFocus)(document.querySelector('#start-questions')||document.querySelector('.read-completion a'))?.focus({preventScroll:true});announce(w.readMarked)}catch{if(readerStillCurrent()&&document.querySelector('#mark-read')===readButton)announce(t('errorLoad'))}}finally{delete readButton.dataset.saSaving;readButton.removeAttribute('aria-busy')}};
+  document.querySelector('#mark-read').onclick=async()=>{
+    const readButton=document.querySelector('#mark-read');
+    if(!readButton||!readerStillCurrent()||readButton.dataset.saSaving==='1')return;
+    readButton.dataset.saSaving='1';
+    readButton.setAttribute('aria-busy','true');
+    try {
+      const latestHistory=loadJSON('sa.readingHistory',[]);
+      const readingHistory=Array.isArray(latestHistory)?latestHistory:[];
+      if(!readingHistory.some(r=>r.book===meta.code&&r.chapter===chapter))
+        readingHistory.push({book:meta.code,chapter,title:bookTitle(meta)});
+      const storedLocally=storeReaderPreference('sa.readingHistory',JSON.stringify(readingHistory));
+      // A guest has no server account: do not claim completion or unlock tasks
+      // when their only durable store refused the history write.
+      if(!storedLocally&&!state.user){
+        if(readerStillCurrent()&&document.querySelector('#mark-read')===readButton){
+          readButton.textContent=t('readingSyncRetry');
+          announce(t('readerStorageUnavailable'));
+        }
+        return;
+      }
+      if(state.user){
+        try { await accountRequest('reading','PUT',{reading:readingHistory}); }
+        catch {
+          if(readerStillCurrent()&&document.querySelector('#mark-read')===readButton){
+            readButton.textContent=t('readingSyncRetry');
+            announce(t(storedLocally?'readingSyncPending':'readerStorageUnavailable'));
+          }
+          return;
+        }
+      }
+      if(!readerStillCurrent()||document.querySelector('#mark-read')!==readButton)return;
+      try {
+        if(hasTasks)await attemptRequest('read','POST',{book:meta.code,chapter,groupId:groupId||undefined});
+        if(!readerStillCurrent()||document.querySelector('#mark-read')!==readButton)return;
+        document.querySelector('#start-questions')?.removeAttribute('disabled');
+        const restoreFocus=document.activeElement===readButton;
+        readButton.disabled=true;
+        readButton.textContent=w.readMarked;
+        if(restoreFocus)(document.querySelector('#start-questions')||document.querySelector('.read-completion a'))?.focus({preventScroll:true});
+        announce(w.readMarked);
+      } catch {
+        if(readerStillCurrent()&&document.querySelector('#mark-read')===readButton)
+          announce(t('errorLoad'));
+      }
+    } finally {
+      delete readButton.dataset.saSaving;
+      readButton.removeAttribute('aria-busy');
+    }
+  };
   document.querySelector('#start-questions')?.addEventListener('click', () => {
     if (readerStillCurrent()) document.querySelector('#attempt-dialog')?.showModal();
   });

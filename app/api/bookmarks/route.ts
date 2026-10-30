@@ -61,16 +61,18 @@ async function write(request: Request, remove: boolean) {
     return json({ error: "invalid_bookmark" }, 400);
   // D1 may return a failure receipt or throw after the caller is authenticated.
   // Never claim that a bookmark was saved or deleted unless the write ACK is
-  // well formed; a failed duplicate/limit probe is equally unavailable.
+  // well formed. Each keyed INSERT/DELETE can change at most one row; a multi-row
+  // or unsafe D1 change count is not authoritative. A failed duplicate/limit
+  // probe is equally unavailable.
   try {
     if (remove) {
       const result = await env.DB.prepare("DELETE FROM reader_bookmarks WHERE user_id=? AND edition=? AND book=? AND chapter=?").bind(id, body.edition, body.book, body.chapter).run();
-      if (result?.success !== true || !Number.isInteger(result.meta?.changes) || result.meta.changes < 0)
+      if (result?.success !== true || !Number.isSafeInteger(result.meta?.changes) || result.meta.changes < 0 || result.meta.changes > 1)
         return json({ error: "bookmark_save_failed" }, 503);
       return json({ ok: true });
     }
     const result = await env.DB.prepare("INSERT INTO reader_bookmarks(user_id,edition,book,chapter) SELECT ?,?,?,? WHERE (SELECT COUNT(*) FROM reader_bookmarks WHERE user_id=?)<500 ON CONFLICT(user_id,edition,book,chapter) DO NOTHING").bind(id, body.edition, body.book, body.chapter, id).run();
-    if (result?.success !== true || !Number.isInteger(result.meta?.changes) || result.meta.changes < 0)
+    if (result?.success !== true || !Number.isSafeInteger(result.meta?.changes) || result.meta.changes < 0 || result.meta.changes > 1)
       return json({ error: "bookmark_save_failed" }, 503);
     if (result.meta.changes === 0) {
       // A zero-change INSERT is ambiguous: a genuine duplicate or the 500-bookmark cap.

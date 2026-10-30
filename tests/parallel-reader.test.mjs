@@ -159,3 +159,23 @@ test('comparison refuses a declared wrong translation identity instead of misatt
   assert.match(fallbackOnly.result.innerHTML,/Куліш/);
   assert.match(fallbackOnly.result.innerHTML,/На початку/);
 }));
+
+test('corrupt, sparse or empty comparison verse records are never labelled as Scripture',()=>withForm(async()=>{
+  const malformed=[
+    [], [null], [0], [{}], [''], ['   '], ['Valid text',null],
+    Array(1), ['Valid text',, 'Other text'],
+  ];
+  for(const verses of malformed){
+    const f=fixture({getBook:async()=>({chapters:[verses]})});
+    await f.run();
+    assert.equal(f.result.innerHTML,'','no untrusted verse records or empty chapter disclosed');
+    assert.match(f.status.textContent,/Не вдалося/);
+    assert.equal(f.checked(),2,'both chapter safety checks remain mandatory');
+    assert.equal(f.button.disabled,false,'the retry control remains usable');
+  }
+  const good=fixture({getBook:async()=>({chapters:[['Вірш перший', 'Вірш другий']]})});
+  await good.run();
+  assert.match(good.result.innerHTML,/Вірш перший/);
+  assert.match(good.result.innerHTML,/Вірш другий/);
+  assert.match(good.status.textContent,/завантажено/);
+}));

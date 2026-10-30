@@ -19,6 +19,11 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
     event.preventDefault();
     const button=form.querySelector('button'), id=String(new FormData(form).get('edition') || ''), edition=editions.find(item=>item.id===id && item.local);
     if (!edition || button.disabled || !current() || !panel.isConnected) return;
+    // Disabling a focused submit button moves keyboard focus to BODY in
+    // Chromium. Restore only after this same reader finishes and only when
+    // nobody has focused another control in the meantime.
+    const hadSubmitFocus = typeof document !== 'undefined' &&
+      document.activeElement === button;
     button.disabled=true; status.textContent=copy.loading; result.replaceChildren();
     try {
       let guard;
@@ -66,6 +71,13 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
       result.innerHTML=`<section aria-labelledby="parallel-title"><h3 id="parallel-title">${esc(metadata.title)} — ${esc(bookTitle)} ${chapter}</h3><p>${copy.note}</p><p>${copy.license}: ${esc(metadata.license || '—')}</p>${metadata.attribution?`<p>${esc(metadata.attribution)}</p>`:''}${source?`<p><a href="${esc(source)}" target="_blank" rel="noreferrer">${copy.source}</a></p>`:''}${license?`<p><a href="${esc(license)}" target="_blank" rel="noreferrer">${copy.license}</a></p>`:''}<ol>${verses.map(verse=>`<li>${esc(verse)}</li>`).join('')}</ol></section>`;
       status.textContent=copy.ready;
     } catch { if (panel.isConnected && current()) status.textContent=copy.fail; }
-    finally { button.disabled=false; }
+    finally {
+      button.disabled=false;
+      if (hadSubmitFocus && panel.isConnected && typeof document !== 'undefined' &&
+          document.activeElement === document.body && typeof button.focus === 'function') {
+        try { if (current()) button.focus({preventScroll:true}); }
+        catch { /* A torn-down reader must never steal focus on recovery. */ }
+      }
+    }
   };
 }

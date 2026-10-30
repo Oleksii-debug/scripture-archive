@@ -43,11 +43,11 @@ function handler({ dbAvailable = true, authFailure = false, anonymous = false } 
       throw Error("unexpected dependency " + specifier);
     },
   });
-  async function invoke(method, origin = "https://archive.invalid") {
-    const request = new Request("https://archive.invalid/api/account?action=progress", {
+  async function invoke(method, origin = "https://archive.invalid", action = "progress", payload = "{}") {
+    const request = new Request("https://archive.invalid/api/account?action=" + action, {
       method,
       headers: { Origin: origin, "Content-Type": "application/json" },
-      body: "{}",
+      body: payload,
     });
     const response = await exports[method](request);
     return {
@@ -103,3 +103,16 @@ for (const method of ["POST", "PUT"]) {
     assert.deepEqual(h.calls, { auth: 0, writes: 0 });
   });
 }
+
+test("sensitive-consent PUT rejects a genuine nonempty cross-origin JSON body before D1 or auth", async () => {
+  const h = handler({ dbAvailable: false });
+  const payload = JSON.stringify({
+    acceptSensitive: true, tradition: "other",
+    denomination: "Attacker attempt", church: "Unverified",
+  });
+  const outcome = await h.invoke("PUT", "https://attacker.invalid", "sensitive-consent", payload);
+  assert.equal(outcome.status, 403);
+  assert.equal(outcome.body.error, "cross_origin_request");
+  assert.match(outcome.cache, /no-store, private/);
+  assert.deepEqual(h.calls, { auth: 0, writes: 0 });
+});

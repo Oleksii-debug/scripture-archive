@@ -17,7 +17,8 @@ const sourceUnderTest = [
 ].join("\n");
 
 function fixture({ user = { id: "alice" }, prior = null, marker = null,
-                   denyRead = false, denyWrites = false, denyDelete = false,
+                   denyRead = false, denyFirstReadingRead = false,
+                   denyWrites = false, denyDelete = false,
                    serverReading = [], oldReading = [] } = {}) {
   const initial = [
     ["sa.progressOwner", marker],
@@ -26,10 +27,15 @@ function fixture({ user = { id: "alice" }, prior = null, marker = null,
   ].filter(([,v]) => v !== null);
   const entries = new Map(initial);
   const storageCalls = [], apiCalls = [];
+  let firstReadingReadDenied = false;
   const storage = {
     getItem(key) {
       storageCalls.push(["get", key]);
       if (denyRead) throw Error("SecurityError");
+      if (denyFirstReadingRead && key === "sa.readingHistory" && !firstReadingReadDenied) {
+        firstReadingReadDenied = true;
+        throw Error("SecurityError");
+      }
       return entries.has(key) ? entries.get(key) : null;
     },
     setItem(key, value) {
@@ -280,6 +286,30 @@ test("genuinely empty first-login reading does not create a misleading orphan ar
   const f=fixture({user:{id:"bob"},marker:null,oldReading:[]});
   await f.session();
   assert.equal(f.entries.has("sa.unownedReadingHistory.v1"),false);
+  assert.equal(f.entries.get("sa.progressOwner"),"bob");
+  assert.equal(f.state.unownedReadingPendingRecovery,false);
+});
+
+
+test("transient first ownerless-history read error never certifies or uploads foreign history", async () => {
+  const oldReading=[{book:"GEN",chapter:12,title:"private orphan"}];
+  const f=fixture({user:{id:"bob"},marker:null,oldReading,denyFirstReadingRead:true});
+  await f.session();
+  assert.equal(f.state.unownedReadingPendingRecovery,true);
+  assert.equal(f.state.localReadingStorageUntrusted,true);
+  assert.equal(f.state.missionProgress.index,0);
+  assert.equal(f.entries.has("sa.progressOwner"),false,
+    "a transient history read error cannot prove this browser history belongs to bob");
+  assert.equal(f.entries.get("sa.readingHistory"),JSON.stringify(oldReading),
+    "do not silently delete or mutate ambiguous user history");
+  await f.sync();
+  assert.equal(f.apiCalls.length,0,"never merge orphan history into the account");
+
+  // After the transient error is gone, an explicit fresh session may safely
+  // quarantine original bytes before clearing the active ownerless cache.
+  await f.session();
+  assert.equal(f.entries.get("sa.unownedReadingHistory.v1"),JSON.stringify(oldReading));
+  assert.equal(f.entries.get("sa.readingHistory"),"[]");
   assert.equal(f.entries.get("sa.progressOwner"),"bob");
   assert.equal(f.state.unownedReadingPendingRecovery,false);
 });

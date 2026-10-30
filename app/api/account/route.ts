@@ -193,8 +193,10 @@ async function write(request:Request){
       const saved=await env.DB!.prepare(`UPDATE profiles SET sensitive_consent=?,sensitive_consent_version=?,tradition=?,denomination=?,church=?,
         public_church=CASE WHEN ?=0 OR sensitive_consent_version<>1 THEN 0 ELSE public_church END,updated_at=CURRENT_TIMESTAMP WHERE user_id=?`)
         .bind(accepted?1:0,accepted?1:0,accepted&&tradition!=="prefer_not"?tradition||null:null,accepted?denomination||null:null,accepted?church||null:null,accepted?1:0,id.userId).run();
-      const changes=Number(saved.meta?.changes);
-      if(!saved.success||!Number.isSafeInteger(changes)||changes<0)return privateJson({error:"consent_save_failed"},{status:503});
+      // A coercible JSON value is not a verified D1 mutation receipt.
+      // Use the same strict acknowledgement boundary as profile/visibility.
+      const changes=confirmedD1Changes(saved);
+      if(changes===null)return privateJson({error:"consent_save_failed"},{status:503});
       if(changes===0)return privateJson({error:"profile_not_found"},{status:409});
       const row=await env.DB!.prepare("SELECT * FROM profiles WHERE user_id=?").bind(id.userId).first<Record<string,unknown>>();
       if(!row)return privateJson({error:"consent_read_failed"},{status:503});

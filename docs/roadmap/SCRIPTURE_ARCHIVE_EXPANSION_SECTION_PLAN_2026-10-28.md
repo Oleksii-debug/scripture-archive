@@ -1,3 +1,13 @@
+## 2026-10-30 — SA-EXT-03 / DRAFT_CHOICE_ARRAY_REFUSAL — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
+
+**Статус:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` лише для канонічного збереження варіантів відповіді авторської вправи, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Увесь SA-EXT-03 та всі двадцять батьківських розділів OPEN**: це не закриття конструктора/редакційного процесу, не реліз і не браузерне/NVDA-приймання.
+
+- **Відтворена невідповідність:** `POST /api/materials` застосовував `body.options.slice(0,8).map(clean).filter(Boolean)`. Некоректне `['first','second',null]` або дев'ятий варіант тихо відкидалися, надмірно довгий текст обрізався. Сервер повертав успіх, хоча зберігав змінений без відома автора набір відповідей.
+- **Реальна інтеграція:** [PR #587](https://github.com/Oleksii-debug/scripture-archive/pull/587) SQUASH MERGED у точний `main@bd1a062c65a57f01e96ae877578b12a6fb1e2eef`; production blob `app/api/materials/route.ts@ca27f930fa5558ec1c9480198adfb915def1f093`, test blob `tests/materials-d1-ack.test.mjs@c3b3be1ef7e00a5aa7a2ab9973349ecc76fe7d54`. Обидва файли прочитані з main після злиття. Крок відхиляє неправильні/надмірні масиви 400 до SQLite/D1 save, дозволений набір 2–8 зберігає порядок, той самий account/private owner UPSERT і ACK без нової authority.
+- **CI:** [exact-head Actions #41027470937](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41027470937): Node **1315 PASS / 0 FAIL / 1 SKIP**, TypeScript/lint/build/Python PASS; **загальний CI FAIL** через відому незалежну disposable Worker/D1 503 (21/22 двічі), [#361](https://github.com/Oleksii-debug/scripture-archive/pull/361). Немає production/Chrome/NVDA чи повного SA-EXT-03 acceptance. Повторна розробка лише за нової затвердженої вимоги або відтвореного дефекту.
+
+---
+
 ## 2026-10-30 — SA-EXT-16 / RATE_LIMIT_D1_ACK_AND_COUNTER_TRUTH — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
 
 **Остаточний статус тільки цього підпункту:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`; `remaining_scoped_implementation=0`, `necessary_unmerged_feature_PRs=0`. **Батьківський SA-EXT-16 і всі 20 батьківських SA-EXT-01…20 залишаються OPEN.** Не повторювати виправлений підпункт без конкретної відтвореної регресії або нової затвердженої вимоги.

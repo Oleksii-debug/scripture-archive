@@ -285,7 +285,12 @@ export async function POST(request: Request) {
       const passageIndex=chapter-12,firstUnlocked=registration.catchup_mode==='steady'?week*registration.weekly_goal:0,lastUnlocked=(week+1)*registration.weekly_goal;
       if(bookId!=='GEN'||passageIndex<firstUnlocked||passageIndex>=lastUnlocked)return Response.json({error:"passage_not_in_current_plan"},{status:409});
       const repeated = await env.DB!.prepare("SELECT id FROM group_sessions WHERE group_id=? AND book_id=? AND chapter=? LIMIT 1").bind(groupId,bookId,chapter).first();
-      if (!repeated && Number(used?.count||0)>=allowed) return Response.json({error:"weekly_limit_reached"},{status:409});
+      // A SQL COUNT query must return one well-formed, nonnegative integer.
+      // Missing/corrupt D1 read evidence is not an empty marathon week:
+      // treating it as zero silently unlocks an extra group session.
+      if (!Number.isSafeInteger(used?.count) || used.count < 0)
+        return unavailableWrite();
+      if (!repeated && used.count >= allowed) return Response.json({error:"weekly_limit_reached"},{status:409});
     }
     const sessionId=crypto.randomUUID();
     try {

@@ -163,7 +163,8 @@ test("concurrent removal returning zero changes is conflict, not success", async
 
 test("implausible multi-delete or unsafe ACK fails without claiming record deletion", async () => {
   for (const changes of [2,-1,1.5,NaN,undefined]) {
-    const f=fixture({changes});
+    const f=fixture({changes:1});
+    f.setChanges(changes);
     const token=(await f.send("GET")).body.invalid_bookmarks[0].reference;
     const result=await f.send("DELETE",{recovery_ref:token});
     assert.equal(result.status,503,String(changes));

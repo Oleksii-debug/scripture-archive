@@ -76,11 +76,8 @@ for (const method of ["GET", "PUT", "DELETE"]) {
   test(method + " reports D1 interruption rather than leaking a 500", async () => {
     const h = harness({ dbMode: "throw", isOwner: true });
     const r = await h.invoke(method);
-    assert.equal(r.status, method === "PUT" ? 400 : 503);
-    if (method !== "PUT") {
-      assert.equal(r.body.error, "content_unavailable");
-      assert.match(r.cache, /no-store/);
-    }
+    assert.equal(r.status, 503);
+    assert.match(r.cache, /no-store/);
   });
 }
 

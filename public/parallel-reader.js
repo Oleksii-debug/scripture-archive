@@ -120,7 +120,7 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
       `${bookTitle} ${chapter}:${verseNumber}. ${record.verses[verseNumber-1]}`,
       `${record.title} · ${record.license}`,
       record.attribution, record.source, record.licenseUrl,
-    ].filter(Boolean).join('\\n');
+    ].filter(Boolean).join('\n');
     try {
       await copyText(citationText);
       if (panel.isConnected && current() && citation===record && selected())

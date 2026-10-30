@@ -187,25 +187,25 @@ export async function renderWorkspace(name,c) {
       attachReviewControls(document.querySelector('main'),review,refresh,announce,current,samePrincipalRoute);
       if(role.owner) attachEditorRoles(document.querySelector('main'),state.lang,refresh,announce,current,samePrincipalRoute);
       void renderPublicMaterials(document.querySelector('#public-materials'),review,esc);
-      document.querySelector('#new-material').onclick=()=>{editing=null;draw()};
-      document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{editing=data.materials.find(m=>m.id===b.dataset.edit);draw()});
-      document.querySelectorAll('[data-test]').forEach(b=>b.onclick=()=>test(data.materials.find(m=>m.id===b.dataset.test)));
+      document.querySelector('#new-material').onclick=()=>{if(!current())return;editing=null;draw()};
+      document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{if(!current())return;editing=data.materials.find(m=>m.id===b.dataset.edit);draw()});
+      document.querySelectorAll('[data-test]').forEach(b=>b.onclick=()=>{if(!current())return;test(data.materials.find(m=>m.id===b.dataset.test))});
       document.querySelectorAll('[data-delete]').forEach(button=>button.onclick=async()=>{
-        if(!window.confirm(review.confirm))return; button.disabled=true;
-        try{await request(`/api/materials?id=${encodeURIComponent(button.dataset.delete)}`,{method:'DELETE'});await renderWorkspace('builder',c);c.announce(review.removed)}
-        catch{document.querySelector('#material-status').textContent=review.error;button.disabled=false}
+        if(!current()||!window.confirm(review.confirm))return; button.disabled=true;
+        try{await request(`/api/materials?id=${encodeURIComponent(button.dataset.delete)}`,{method:'DELETE'});if(!current())return;c.announce(review.removed);await renderWorkspace('builder',c)}
+        catch{if(!current())return;document.querySelector('#material-status').textContent=review.error;button.disabled=false}
       });
       document.querySelector('#material-form').onsubmit=async e=>{
-        e.preventDefault();const f=new FormData(e.currentTarget),payload=Object.fromEntries(f);
+        e.preventDefault();if(!current())return;const f=new FormData(e.currentTarget),payload=Object.fromEntries(f);
         payload.options=payload.options.split(/\r?\n/).map(v=>v.trim()).filter(Boolean);payload.locale=state.lang;if(editing)payload.id=editing.id;
-        try{await request('/api/materials',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});await renderWorkspace('builder',c);c.announce(w.saved)}catch{document.querySelector('#material-status').textContent=w.error}
+        try{await request('/api/materials',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(!current())return;c.announce(w.saved);await renderWorkspace('builder',c)}catch{if(!current())return;document.querySelector('#material-status').textContent=w.error}
       };
     }
     function test(m) {
       if(!current())return;
       shell(`<article class="card practice-card"><p class="eyebrow">${esc(m.data.reference)}</p><h1>${esc(m.title)}</h1><form id="practice-form"><fieldset class="options"><legend class="question">${esc(m.data.prompt)}</legend>${m.data.options.map((v,i)=>`<label class="option"><input type="radio" name="answer" value="${i}" required><span>${esc(v)}</span></label>`).join('')}</fieldset><button class="button primary">${w.check}</button></form><div id="practice-feedback" role="status"></div><button class="button" id="practice-back">${w.back}</button></article>`);
       document.querySelector('#practice-back').onclick=draw;
-      document.querySelector('#practice-form').onsubmit=e=>{e.preventDefault();const index=Number(new FormData(e.currentTarget).get('answer')),ok=m.data.options[index]===m.data.answer;document.querySelector('#practice-feedback').innerHTML=`<div class="notice ${ok?'success':'info'}"><h2>${ok?w.correct:w.retry}</h2>${ok?`<p>${esc(m.data.explanation)}</p>`:''}</div>`;c.play(ok?'ok':'bad')};
+      document.querySelector('#practice-form').onsubmit=e=>{e.preventDefault();if(!current())return;const index=Number(new FormData(e.currentTarget).get('answer')),ok=m.data.options[index]===m.data.answer;document.querySelector('#practice-feedback').innerHTML=`<div class="notice ${ok?'success':'info'}"><h2>${ok?w.correct:w.retry}</h2>${ok?`<p>${esc(m.data.explanation)}</p>`:''}</div>`;c.play(ok?'ok':'bad')};
     }
     draw();
   }

@@ -104,3 +104,36 @@ test("exact-length consent details are accepted without truncation", async () =>
   assert.ok(h.writes[0].args.includes(denomination));
   assert.ok(h.writes[0].args.includes(church));
 });
+
+  
+// Execute the canonical profile route and D1 bind path. Unsupported explicit
+// locale input must not be rewritten to Ukrainian with a success receipt.
+for (const [label, value] of [
+  ['slovak code','sk'], ['unknown code','zz'], ['wrong case','UK'],
+  ['array',['en']], ['boolean',true], ['number',42], ['object',{code:'en'}],
+]) {
+  test('explicitly selected profile locale is never silently changed: '+label,async()=>{
+    const h=harness();
+    const result=await h.post('profile',{...profile,locale:value});
+    assert.equal(result.status,400,label+' '+JSON.stringify(result.body));
+    assert.equal(result.body.error,'invalid_profile_field');
+    assert.equal(h.writes.length,0,'refused locale must never mutate D1');
+  });
+}
+
+for (const [label,value,expected] of [
+  ['Ukrainian','uk','uk'], ['Russian','ru','ru'], ['English','en','en'],
+  ['trimmed English','  en  ','en'], ['null default',null,'uk'],
+  ['blank default','  ','uk'], ['omitted default',undefined,'uk'],
+]) {
+  test('supported or legacy default profile locale retains exact choice: '+label,async()=>{
+    const h=harness();
+    const payload={...profile};
+    if(value===undefined)delete payload.locale;
+    else payload.locale=value;
+    const result=await h.post('profile',payload);
+    assert.equal(result.status,200,label+' '+JSON.stringify(result.body));
+    assert.equal(h.writes.length,1,'valid locale should be persisted');
+    assert.equal(h.writes[0].args[9],expected,'persist the chosen canonical locale');
+  });
+}

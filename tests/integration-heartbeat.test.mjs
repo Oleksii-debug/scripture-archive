@@ -58,3 +58,24 @@ test('invalid heartbeat destinations and unsafe timing are refused before schedu
   assert.throws(() => startReadOnlyHeartbeat('http://localhost',{intervalMs:0}),RangeError);
   assert.throws(() => startReadOnlyHeartbeat('http://localhost',{intervalMs:5000}),RangeError);
 });
+
+
+test('heartbeat sends its first safe GET without waiting for the interval', async () => {
+  const calls = [];
+  let tick;
+  const stop = startReadOnlyHeartbeat('http://127.0.0.1:8787', {
+    schedule: callback => { tick = callback; return 4; },
+    cancel: () => {},
+    fetcher: async (url, init) => {
+      calls.push([url, init.method]);
+      return Response.json({user:null});
+    },
+  });
+  assert.equal(typeof tick, 'function');
+  // No timer callback is fired: the old implementation sent zero probes here.
+  await Promise.resolve();
+  assert.deepEqual(calls, [['http://127.0.0.1:8787/api/account?action=me', 'GET']]);
+  assert.deepEqual(await stop(), {probes:1, failures:0});
+  tick();
+  assert.equal(calls.length, 1, 'stopped heartbeat cannot send delayed requests');
+});

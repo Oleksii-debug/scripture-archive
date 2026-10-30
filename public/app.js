@@ -2305,6 +2305,11 @@ function forgetActiveAttemptIf(attemptId) {
 }
 
 async function getSession() {
+  // A startup read may finish after login or another session refresh. Only
+  // the newest request for the still-current in-tab principal may publish.
+  const requestEpoch=(getSession._epoch=(getSession._epoch||0)+1);
+  const initialPrincipal=state.user,initialSessionEpoch=state.sessionEpoch||0;
+  const current=()=>getSession._epoch===requestEpoch&&state.user===initialPrincipal&&(state.sessionEpoch||0)===initialSessionEpoch;
   let authenticatedUser;
   try {
     const response = await fetch("/api/account?action=me", { cache: "no-store" });
@@ -2318,6 +2323,7 @@ async function getSession() {
           typeof data.user.id !== "string" || !data.user.id))) throw Error("account_unavailable");
     authenticatedUser = data.user;
   } catch {
+    if(!current())return state.user;
     // Prevent uncertain server identity from granting access to private UI;
     // retain the device cache and ownership marker for a later verified retry.
     state.user = null;
@@ -2325,6 +2331,7 @@ async function getSession() {
     state.progressSyncStatus = "unavailable";
     throw Error("account_unavailable");
   }
+  if(!current())return state.user;
   // The server response, not browser storage availability, decides identity.
   // If the old owner's local progress cannot be safely read/cleared, discard
   // in-tab personal state and prohibit sending stale local reading to the server.
@@ -3982,6 +3989,9 @@ async function syncProgress() {
 }
 function clearPersonalProgress() {
   state.progressSyncStatus=null;
+  // Also retire in-flight identity reads, even for null→null transitions
+  // such as a password reset while a startup session request is pending.
+  state.sessionEpoch=(state.sessionEpoch||0)+1;
   syncProgress._epoch=(syncProgress._epoch||0)+1;
   forgetActiveAttempt();
   state.missionProgress={index:0,correct:[],complete:false};

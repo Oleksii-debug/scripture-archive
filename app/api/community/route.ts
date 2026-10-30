@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { authenticateRequest, isVerifiedOwner, rateLimit, requestAddress, sameOrigin } from "../../../lib/auth";
+import { authenticateRequest, isVerifiedOwner, parseCookies, rateLimit, requestAddress, sameOrigin, sha256 } from "../../../lib/auth";
 import { COMMUNITY_RUN_ID } from "../../../lib/community";
 import { advanceCommunity, communityOwnerState, controlCommunity, leaseCommunityAgents } from "../../../lib/community-engine";
 
@@ -108,18 +108,63 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   if (!env.DB) return json({ error: "database_unavailable" }, 503);
   if (!sameOrigin(request)) return json({ error: "cross_origin_request" }, 403);
-  const identity = await authenticateRequest(request);
+  let identity: Awaited<ReturnType<typeof authenticateRequest>>;
+  try { identity = await authenticateRequest(request); }
+  catch { return json({ error: "community_unavailable" }, 503); }
   const body = await request.json().catch(() => null) as { action?: string; limit?: number } | null;
   const action = clean(body?.action, 20);
   if (action === "finish" && identity?.provider === "agent") {
-    await env.DB.prepare("UPDATE community_agent_sessions SET revoked_at=CURRENT_TIMESTAMP WHERE member_id=? AND revoked_at IS NULL").bind(identity.userId).run();
-    const member = await env.DB.prepare("SELECT persona,seed FROM community_members WHERE id=?").bind(identity.userId).first<{persona:string;seed:number}>();
-    const hours = ({rare:48,moderate:24,regular:12,active:6} as Record<string,number>)[member?.persona||""]||24;
-    await env.DB.prepare("UPDATE community_members SET next_action_at=datetime('now',?) WHERE id=?")
-      .bind(`+${hours*3600+Number(member?.seed||0)%3600} seconds`,identity.userId).run();
-    await env.DB.prepare("INSERT INTO community_run_log (id,run_id,event_type,details_json) VALUES (?,?,'agent_session_completed',?)")
-      .bind(crypto.randomUUID(),COMMUNITY_RUN_ID,JSON.stringify({memberId:identity.userId})).run();
-    return json({ok:true});
+    try {
+      // The same authenticated agent token is the only authority for finishing
+      // this lease. Never revoke all sibling sessions by member ID.
+      const token = parseCookies(request).get("sa_agent");
+      if (!token) return json({ error: "forbidden" }, 403);
+      const tokenHash = await sha256(token);
+      const member = await env.DB.prepare("SELECT persona,seed FROM community_members WHERE id=? AND run_id=?")
+        .bind(identity.userId, COMMUNITY_RUN_ID).first<{persona:string;seed:number}>();
+      if (!member || !Number.isSafeInteger(member.seed) || member.seed < 0)
+        return json({ error: "community_state_invalid" }, 409);
+      const hours = ({rare:48,moderate:24,regular:12,active:6} as Record<string,number>)[member.persona] || 24;
+      const delay = hours * 3600 + member.seed % 3600;
+      const logId = await sha256("community-agent-finish:" + tokenHash);
+      // D1.batch executes sequentially in one transaction. SQLite changes()
+      // gates each successor on the immediately previous actual mutation.
+      // Therefore failed, stale, cancelled and duplicate finishes cannot
+      // schedule an agent or append a fake completion event.
+      const receipts = await env.DB.batch([
+        env.DB.prepare(`UPDATE community_agent_sessions SET revoked_at=CURRENT_TIMESTAMP
+          WHERE token_hash=? AND member_id=? AND revoked_at IS NULL AND expires_at>CURRENT_TIMESTAMP
+          AND EXISTS(SELECT 1 FROM community_members m JOIN community_runs r ON r.id=m.run_id
+            WHERE m.id=community_agent_sessions.member_id AND r.id=? AND r.status='running'
+              AND r.control_version=community_agent_sessions.control_version)`)
+          .bind(tokenHash, identity.userId, COMMUNITY_RUN_ID),
+        env.DB.prepare(`UPDATE community_members SET next_action_at=datetime('now',?)
+          WHERE id=? AND run_id=? AND changes()=1
+          AND EXISTS(SELECT 1 FROM community_agent_sessions s JOIN community_runs r
+            ON r.id=community_members.run_id WHERE s.member_id=community_members.id
+              AND s.token_hash=? AND s.revoked_at IS NOT NULL AND s.control_version=r.control_version
+              AND r.status='running')`)
+          .bind("+" + delay + " seconds", identity.userId, COMMUNITY_RUN_ID, tokenHash),
+        env.DB.prepare(`INSERT OR IGNORE INTO community_run_log(id,run_id,event_type,details_json)
+          SELECT ?,?,'agent_session_completed',? WHERE changes()=1
+            AND EXISTS(SELECT 1 FROM community_agent_sessions s JOIN community_members m ON m.id=s.member_id
+              JOIN community_runs r ON r.id=m.run_id WHERE s.token_hash=? AND s.member_id=?
+                AND s.revoked_at IS NOT NULL AND s.control_version=r.control_version
+                AND r.status='running' AND r.id=?)`)
+          .bind(logId, COMMUNITY_RUN_ID, JSON.stringify({memberId:identity.userId}),
+            tokenHash, identity.userId, COMMUNITY_RUN_ID),
+      ]);
+      if (!Array.isArray(receipts) || receipts.length !== 3 ||
+          receipts.some(row => row?.success !== true || !Number.isSafeInteger(row.meta?.changes) ||
+            row.meta.changes < 0 || row.meta.changes > 1))
+        return json({ error: "community_unavailable" }, 503);
+      if (receipts[0].meta.changes === 0 &&
+          receipts[1].meta.changes === 0 && receipts[2].meta.changes === 0)
+        return json({ error: "agent_session_not_active" }, 409);
+      if (receipts.some(row => row.meta.changes !== 1))
+        return json({ error: "community_unavailable" }, 503);
+      return json({ ok: true });
+    } catch { return json({ error: "community_unavailable" }, 503); }
   }
   if (!isVerifiedOwner(identity)) return json({ error: "forbidden" }, 403);
   if (action === "lease") {

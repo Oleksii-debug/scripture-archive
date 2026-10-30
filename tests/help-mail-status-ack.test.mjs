@@ -45,6 +45,7 @@ function harness({ sent = true, receipt = { success: true, meta: { changes: 1 } 
     if (name.endsWith("/lib/email")) return {
       sendSupportRequestEmail: async () => {
         state.emails++;
+        if (sent === "throws") throw Error("provider boundary interruption");
         return { delivered: sent };
       },
     };
@@ -94,6 +95,19 @@ test("a post-email D1 status failure must not invite a duplicate submission", as
     assert.deepEqual({ b: h.state.batches, m: h.state.emails, u: h.state.updates }, { b: 1, m: 1, u: 1 });
     assert.match(response.headers.get("cache-control"), /no-store/);
   }
+});
+
+test("unexpected mail exception after storage cannot turn accepted support into a retryable 5xx", async () => {
+  const h = harness({ sent: "throws" });
+  const response = await h.submit();
+  assert.equal(response.status, 201);
+  assert.match(response.headers.get("cache-control"), /no-store/);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.mailStatus, "delivery_unknown");
+  assert.equal(body.requestId, h.state.ids[0]);
+  assert.deepEqual({ b: h.state.batches, m: h.state.emails, u: h.state.updates },
+    { b: 1, m: 1, u: 0 });
 });
 
 test("mail failure preserves accepted request without a false delivery receipt", async () => {

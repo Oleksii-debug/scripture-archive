@@ -116,7 +116,7 @@ test("zero-change PUT confirms a real own-user duplicate, not just a truthy obje
   assert.equal(result.status, 200);
   assert.deepEqual(result.body, { ok: true });
   assert.equal(f.statements.length, 2);
-  assert.match(f.statements[1], /SELECT 1 AS present FROM reader_bookmarks WHERE user_id=\\?/);
+  assert.match(f.statements[1], /SELECT 1 AS present FROM reader_bookmarks WHERE user_id=\?/);
   assert.equal(JSON.stringify(f.bindings[1]), JSON.stringify(["reader", "en-web", "GEN", 1]));
 });
 

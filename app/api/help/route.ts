@@ -19,6 +19,13 @@ const ALLOWED_TYPES = new Set([
 ]);
 
 const clean = (value: FormDataEntryValue | null, max: number) => typeof value === "string" ? value.trim().slice(0, max) : "";
+// Contact details and user-authored reports must not be silently rewritten.
+// Returning null (rather than slicing) rejects oversized inputs before D1/mail.
+const exactField = (value: FormDataEntryValue | string | null, max: number): string | null => {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length <= max ? trimmed : null;
+};
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
 const unavailable = () => Response.json({ error: "support_unavailable" }, { status: 503, headers: { "Cache-Control": "no-store, private" } });
 
@@ -191,11 +198,16 @@ export async function POST(request: Request) {
   catch { return unavailable(); }
   const form = await request.formData().catch(() => null);
   if (!form) return json({ error: "invalid_form" }, 400);
-  const email = (identity?.email || clean(form.get("email"), 254)).toLowerCase();
-  const subject = clean(form.get("subject"), 160);
-  const message = clean(form.get("message"), 6000);
+  const rawEmail = exactField(identity?.email || form.get("email"), 254);
+  const subject = exactField(form.get("subject"), 160);
+  const message = exactField(form.get("message"), 6000);
   const locale = ["uk", "ru", "en"].includes(clean(form.get("locale"), 2)) ? clean(form.get("locale"), 2) : "uk";
-  if (!EMAIL.test(email) || subject.length < 3 || message.length < 10 || form.get("acceptPrivacy") !== "yes")
+  // Do not let a long address become a different recipient after clipping,
+  // nor silently omit part of a support message or its subject.
+  if (rawEmail === null || subject === null || message === null)
+    return json({ error: "invalid_request" }, 400);
+  const email = rawEmail.toLowerCase();
+  if (email.length > 254 || !EMAIL.test(email) || subject.length < 3 || message.length < 10 || form.get("acceptPrivacy") !== "yes")
     return json({ error: "invalid_request" }, 400);
 
   // An empty browser file-input placeholder (filename="") means no upload.

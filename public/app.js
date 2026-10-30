@@ -3407,18 +3407,29 @@ async function authRequest(action, body = {}) {
   return data;
 }
 async function syncProgress() {
-  if (!state.user) return;
+  const principal=state.user;
+  if (!principal) return;
+  const requestEpoch=(syncProgress._epoch=(syncProgress._epoch||0)+1);
+  // A previous login or superseded refresh must never publish private data
+  // into a later account's cache or UI.
+  const current=()=>syncProgress._epoch===requestEpoch&&state.user===principal;
   state.progressSyncStatus = "unavailable";
   try {
     const readingData=await accountRequest('reading');
+    if(!current())return;
     // A successful-looking HTTP reply with no reading array is not evidence
     // of empty reading history; never overwrite the local cache on that basis.
     if(!Array.isArray(readingData.reading))throw Error("missing_reading_history");
     const localReading=loadJSON('sa.readingHistory',[]);
     if(!Array.isArray(localReading))throw Error("invalid_local_reading_history");
     const mergedReading=[...new Map([...readingData.reading,...localReading].map(r=>[r.book+':'+r.chapter,r])).values()];
-    if(mergedReading.length)await accountRequest('reading','PUT',{reading:mergedReading});
+    if(!current())return;
+    if(mergedReading.length){
+      await accountRequest('reading','PUT',{reading:mergedReading});
+      if(!current())return;
+    }
     const data = await accountRequest("progress");
+    if(!current())return;
     if (!data.progress || !Number.isSafeInteger(data.progress.index) ||
       data.progress.index<0 || !Array.isArray(data.progress.correct) ||
       typeof data.progress.complete!=="boolean")throw Error("invalid_progress_receipt");
@@ -3432,6 +3443,7 @@ async function syncProgress() {
     // legacy row; never quietly present those totals as definitive.
     state.progressSyncStatus = data.warning === "partial_progress_history" ? "partial" : null;
   } catch {
+    if(!current())return;
     // Preserve cached evidence and show a localized nonvisual warning on the
     // canonical progress page instead of silently claiming it is current.
     state.progressSyncStatus = "unavailable";
@@ -3439,6 +3451,7 @@ async function syncProgress() {
 }
 function clearPersonalProgress() {
   state.progressSyncStatus=null;
+  syncProgress._epoch=(syncProgress._epoch||0)+1;
   state.missionProgress={index:0,correct:[],complete:false};
   localStorage.setItem("sa.mission.OTAB01",JSON.stringify(state.missionProgress));
   localStorage.setItem("sa.readingHistory","[]");

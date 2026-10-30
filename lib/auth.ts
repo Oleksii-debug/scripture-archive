@@ -172,11 +172,19 @@ export async function rateLimit(key: string, limit: number, seconds: number) {
   if (!env.DB) throw new Error("database_unavailable");
   const bucket = Math.floor(Date.now() / (seconds * 1000));
   const storedKey = await sha256(`${key}:${bucket}`);
-  await env.DB.prepare(
+  // An unresolved or rejected D1 write must not allow a request through.
+  // The INSERT/UPSERT always changes exactly one counter row on success.
+  const receipt = await env.DB.prepare(
     "INSERT INTO auth_rate_limits (key,window_start,count) VALUES (?,CURRENT_TIMESTAMP,1) ON CONFLICT(key) DO UPDATE SET count=count+1",
   ).bind(storedKey).run();
+  if (receipt?.success !== true || !Number.isSafeInteger(receipt.meta?.changes) || receipt.meta.changes !== 1)
+    throw new Error("rate_limit_write_unavailable");
   const row = await env.DB.prepare("SELECT count FROM auth_rate_limits WHERE key=?").bind(storedKey).first<{ count: number }>();
-  return Number(row?.count || 0) <= limit;
+  // Missing/malformed counter evidence is not a count of zero. Fail closed;
+  // callers already distinguish an unavailable limiter from a real 429 quota.
+  if (!row || typeof row.count !== "number" || !Number.isSafeInteger(row.count) || row.count < 1)
+    throw new Error("rate_limit_read_unavailable");
+  return row.count <= limit;
 }
 
 export function requestAddress(request: Request) {

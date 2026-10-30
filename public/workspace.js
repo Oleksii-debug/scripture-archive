@@ -95,7 +95,7 @@ function validAttemptHistoryPayload(history) {
   };
   const safeChapter = row =>
     row && typeof row === 'object' && !Array.isArray(row) &&
-    typeof row.book === 'string' && row.book.length > 0 && row.book.length <= 32 &&
+    typeof row.book === 'string' && /^([1-3])?[A-Z]{2,3}$/.test(row.book) &&
     Number.isInteger(row.chapter) && row.chapter >= 1 && row.chapter <= 151 &&
     safeId(row.id);
   return history.attempts.every(row =>

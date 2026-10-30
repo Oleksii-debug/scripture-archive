@@ -1,3 +1,4 @@
+import { validBookmarkTimestamp } from "../lib/bookmark-timestamp.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -46,6 +47,7 @@ function harness(authMode = "ok", dbMode = "ok", databasePresent = true) {
   vm.runInNewContext(transpiled.outputText, {
     exports, Request, Response, URL,
     require(specifier) {
+      if (specifier.endsWith("lib/bookmark-timestamp.js")) return { validBookmarkTimestamp };
       if (specifier === "cloudflare:workers") return { env: { DB: databasePresent ? db : undefined } };
       if (specifier.endsWith("public/data/catalog.json")) return { default: catalog };
       if (specifier.endsWith("public/editions.js")) return { EDITIONS };

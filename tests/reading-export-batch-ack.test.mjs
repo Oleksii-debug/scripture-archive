@@ -1,3 +1,4 @@
+import { validBookmarkTimestamp } from "../lib/bookmark-timestamp.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -44,6 +45,7 @@ function fixture({ results = standardRows(), dbPresent = true, identity = {
   vm.runInNewContext(compiled.outputText, {
     exports, Response, Request, Date,
     require(moduleName) {
+      if (moduleName.endsWith("lib/bookmark-timestamp.js")) return { validBookmarkTimestamp };
       if (moduleName === "cloudflare:workers") return { env: { DB: dbPresent ? db : null } };
       if (moduleName === "../../../public/data/catalog.json") return { default: catalog };
       if (moduleName === "../../../public/editions.js") return { EDITIONS };
@@ -481,5 +483,34 @@ for(const [name, reading] of [
     assert.equal(response.headers.get("content-disposition"),null);
     assert.equal(f.batches,1);
     assert.equal(f.statements.every(statement=>statement.params[0]==="reader-a"),true);
+  });
+}
+
+for (const created_at of [
+  "2026-02-30", "2026-04-31", "2026-10-30 25:00:00",
+  "2026-10-30T12:00:00+03:00", "yesterday", " ",
+]) {
+  test("owner reading export refuses a damaged bookmark date rather than offering a false backup: "+created_at,async()=>{
+    const rows=standardRows();
+    rows[2].results[0].created_at=created_at;
+    const f=fixture({results:rows});
+    const {response,body}=await outcome(f);
+    assert.equal(response.status,503);
+    assert.equal(body.error,"export_unavailable");
+    assert.equal(response.headers.get("content-disposition"),null);
+    assert.equal(f.batches,1);
+  });
+}
+for (const created_at of [
+  "2024-02-29", "2026-10-30", "2026-10-30 13:45:59",
+  "2026-10-30T13:45:59Z", "2026-10-30T13:45:59.123Z",
+]) {
+  test("owner export retains genuine canonical bookmark dates: "+created_at,async()=>{
+    const rows=standardRows();
+    rows[2].results[0].created_at=created_at;
+    const {response,body}=await outcome(fixture({results:rows}));
+    assert.equal(response.status,200);
+    assert.equal(body.bookmarks[0].created_at,created_at);
+    assert.match(response.headers.get("content-disposition"),/attachment/);
   });
 }

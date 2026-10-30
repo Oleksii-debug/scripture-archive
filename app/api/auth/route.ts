@@ -190,7 +190,8 @@ export async function POST(request: Request) {
   }
 
   if (action === "logout") {
-    await revokeCurrentSession(request);
+    try { await revokeCurrentSession(request); }
+    catch { return json({ error: "logout_unavailable" }, 503); }
     return json({ ok: true }, 200, { "Set-Cookie": clearSessionCookie(request) });
   }
 

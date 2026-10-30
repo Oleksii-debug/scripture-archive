@@ -43,7 +43,7 @@ type RecoveryRow = { recovery_rowid?: unknown; edition?: unknown; book?: unknown
 // explicit recovery UI rather than advertising them as healthy bookmarks.
 function validBookmarkTimestamp(value: unknown): value is string {
   if (typeof value !== "string") return false;
-  const match = /^(\\d{4})-(\\d{2})-(\\d{2})(?:[ T](\\d{2}):(\\d{2}):(\\d{2})(?:\\.(\\d{1,3}))?(Z)?)?$/.exec(value);
+  const match = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z)?)?$/.exec(value);
   if (!match) return false;
   const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
   if (year < 1000 || month < 1 || month > 12 || day < 1 || day > 31) return false;

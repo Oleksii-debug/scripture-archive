@@ -46,22 +46,22 @@ test('malformed pending rows never break the whole progress workspace',()=>{
 });
 
 test('malformed history book codes never create a fabricated reader route',()=>{
-  // A bounded text value is not a canonical Scripture book identifier.
-  // Check both historical completions and resumable attempts.
-  const invalidBooks=['NOT/A/BOOK','GEN?chapter=1','<script>','GEN ','ABCD','A','1A','4CO','gen','\\uD800'];
+  // Bounded strings are not necessarily real Scripture book identifiers.
+  const invalidBooks=['NOT/A/BOOK','GEN?chapter=1','<script>','GEN ','ABCD','A','1A','4CO','gen','\uD800'];
   for(const book of invalidBooks){
-    const completed=missionHistoryMarkup(history({attempts:[{...valid,book}],pending:[]}), 'en',esc);
+    const payload=history({attempts:[{...valid,book}],pending:[]});
+    const completed=missionHistoryMarkup(payload,'en',esc);
     assert.match(completed,/retry-mission-history/,book);
-    assert.doesNotMatch(completed,/href="\\/reader\\//,book);
-    assert.doesNotMatch(completed,/href="\\/mission\\/attempt\\//,book);
-    assert.equal(reviewScheduleMarkup(history({attempts:[{...valid,book}],pending:[]}), 'en',esc),'');
+    assert.doesNotMatch(completed,/href="\/reader\//,book);
+    assert.doesNotMatch(completed,/href="\/mission\/attempt\//,book);
+    assert.equal(reviewScheduleMarkup(payload,'en',esc),'');
     const resumed=missionHistoryMarkup(history({attempts:[],pending:[{...pending,book}]}),'en',esc);
     assert.match(resumed,/retry-mission-history/,book);
     assert.doesNotMatch(resumed,/href="/,book);
   }
   const canonical={...valid,book:'1CO',chapter:10};
   const html=missionHistoryMarkup(history({attempts:[canonical],pending:[]}), 'en',esc);
-  assert.match(html,/href="\\/reader\\/1CO\\/10"/);
+  assert.match(html,/href="\/reader\/1CO\/10"/);
   assert.doesNotMatch(html,/retry-mission-history/);
 });
 

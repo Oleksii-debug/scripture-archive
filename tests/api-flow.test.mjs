@@ -247,8 +247,10 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal(result.data.materials.find(item => item.id === material.id).title, material.title);
   // Draft -> review -> published immutable snapshot -> replacement -> withdrawal.
   const submitReview = { action: "submit", materialId: material.id, provenance: "Original exercise; source GEN 12", rightsConfirmed: true };
-  const reviewPost = async (body, principal = cookie, origin = base) => {
-    const response = await fetch(`${base}/api/material-review`, { method: "POST", headers: { Origin: origin, Cookie: principal, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const reviewPost = async (body, principal = cookie, origin = base, omitBody = false) => {
+    const response = await fetch(`${base}/api/material-review`, { method: "POST",
+      headers: { Origin: origin, Cookie: principal, ...(omitBody ? {} : { "Content-Type": "application/json" }) },
+      ...(omitBody ? {} : { body: JSON.stringify(body) }) });
     if (response.status >= 500) console.error("Local review HTTP failure", response.status, response.headers.get("content-type"), (await response.clone().text()).slice(0, 300));
     return { response, data: await response.json() };
   };
@@ -266,7 +268,10 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.ok(ownerQueue.items.some(item => item.id === ownerSubmission.data.id), 'self-review keeps the submission pending');
   const ownerDelete = await fetch(`${base}/api/materials?id=${encodeURIComponent(ownerMaterial.id)}`, { method: 'DELETE', headers: { Origin: base, Cookie: ownerCookie } });
   assert.equal(ownerDelete.status, 200);
-  assert.equal((await reviewPost(submitReview, cookie, "https://attacker.invalid")).response.status, 403);
+  // The local Wrangler proxy must not see an unread body on a request
+  // rejected by Origin before parsing. Exact shipping route/body semantics
+  // are checked in material-review-origin-preflight.test.mjs.
+  assert.equal((await reviewPost(submitReview, cookie, "https://attacker.invalid", true)).response.status, 403);
   assert.equal((await reviewPost({ ...submitReview, rightsConfirmed: false })).response.status, 400);
   assert.equal((await reviewPost(submitReview, ownerCookie)).response.status, 409, "another user cannot submit the author's draft");
   const submissions = await Promise.all([reviewPost(submitReview), reviewPost(submitReview)]);
@@ -338,7 +343,9 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.ok(publicMember);
   assert.equal(publicMember.chaptersRead, 2);
   assert.equal("sourceKind" in publicMember, false);
-  result = await request("/api/account?action=progress", { method: "PUT", body: { progress: {} }, origin: "https://attacker.invalid" });
+  // Same constraint for progress; source-executed account-write-failclosed
+  // preserves the real full-body forged-Origin 403 preflight.
+  result = await request("/api/account?action=progress", { method: "PUT", origin: "https://attacker.invalid" });
   assert.equal(result.response.status, 403);
 
   // Both existing local Ukrainian editions are available for the guarded comparison.
@@ -415,7 +422,9 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const unrelatedLookup = await request("/api/attempts?action=chapter&book=JHN&chapter=3", { useCookie: false });
   assert.equal(unrelatedLookup.response.status, 405);
   assert.deepEqual(unrelatedLookup.data, result.data);
-  result = await request("/api/attempts?action=chapter", { method: "POST", body: { book: "GEN", chapter: 12 }, origin: "https://attacker.invalid" });
+  // The canonical attempts handler's full-body cross-origin refusal is
+  // separately source-executed by attempt-availability-boundary.test.mjs.
+  result = await request("/api/attempts?action=chapter", { method: "POST", origin: "https://attacker.invalid" });
   assert.equal(result.response.status, 403);
   for (const options of [
     { body: { book: "GEN", chapter: 12 }, useCookie: false },

@@ -1,5 +1,15 @@
 # SCRIPTURE ARCHIVE — каталог розділів і план реалізації розширень
 
+## 2026-10-30 — SA-EXT-02 / MALFORMED_READING_HISTORY_PROJECTION — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
+
+**Статус тільки цього дефекту:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Повний SA-EXT-02, SA-EXT-16 та всі 20 батьківських розділів залишаються OPEN.**
+
+- **Функція:** канонічний екран `/progress` коректно обробляє пошкоджене `sa.readingHistory` у браузері: не маскує непридатні записи під біблійні глави, не створює з них небезпечні посилання, зберігає доступні коректні записи; відмова доступу до storage не руйнує весь екран. Використано лише існуючий `public/workspace.js`, поточний principal/cache trust guard і екранування canonical UI; джерельні байти не переписуються, нових збережень/серверів немає.
+- **GitHub:** [#529](https://github.com/Oleksii-debug/scripture-archive/pull/529) **SQUASH MERGED**, точний feature `main@c06006781e5d340132da14c43b59de873082c28e`. Незалежно перевірено `PR.merged=true` та HEAD `main` за цим SHA; source `public/workspace.js` blob `0fdeb3bb96e90024febda96ddb33740fc45548e7` і regression `tests/workspace-async-principal-fence.test.mjs` blob `2826d465ffc6c00bdf34857ae45c8b727ebb3a28`. Паралельний дубль [#530](https://github.com/Oleksii-debug/scripture-archive/pull/530) після узгодження **CLOSED, unmerged** як SUPERSEDED, не потрібен цьому виправленню.
+- **CI evidence, не підміняти статус:** [Actions #41017922308](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41017922308), exact PR HEAD `b7103805fa88f9cee3c802273b39fa61c5b7f9bb`: **1131 Node PASS / 0 FAIL / 1 SKIP** (після виправлення суто тестового HTML esc fixture), TypeScript PASS, ESLint PASS, source build PASS, Python validators PASS. Повний CI **FAIL** тільки на окремому disposable Worker/D1: 21/22, дві fresh-state спроби HTTP503 / `Your worker restarted mid-request`; root issue #361 залишається OPEN. Конкурентний #530 мав окремий exact-head [Actions #41017665625](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41017665625) overall SUCCESS, але **це не CI для #529**.
+- **Не доведено:** live Cloudflare Sites deploy SHA, browser/keyboard/NVDA, повне learning/memory SA-EXT-02, права на тексти/повні переклади, owner release acceptance; усі окремі. Повторно відкривати *тільки цей source-defect* за новою вимогою або підтвердженим регресом.
+
+
 ## 2026-10-30 — SA-EXT-16 / PROGRESS_UNTRUSTED_READING_HISTORY — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
 
 **Розділ №16: лише цей конкретний підпункт — `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`.** `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` саме для описаного дефекту. **Батьківський SA-EXT-16 та інші SA-EXT-01…20 залишаються OPEN.**

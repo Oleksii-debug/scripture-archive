@@ -159,6 +159,53 @@ test("explicit complete three-language note preserves existing authoring contrac
   assert.equal(h.calls.batch, 1);
 });
 
+// Exercise the real transpiled owner CMS route: the persisted note must equal
+// the explicitly authorized text, never a silent 600-character prefix.
+for (const locale of ["uk", "ru", "en"]) {
+  test("owner CMS refuses oversized " + locale + " public note before D1", async () => {
+    const h = harness("ok");
+    const response = await h.invoke("public-note", "https://scripture.invalid", {
+      liveNote: { ...completedNote, [locale]: "Ж".repeat(601) },
+    });
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).error, "invalid_content_note");
+    assert.equal(h.calls.batch, 0);
+    assert.equal(h.calls.prepare, 0);
+  });
+}
+
+test("public note accepts full 600-character Unicode boundary without clipping", async () => {
+  const h = harness("ok");
+  const full = "Ж".repeat(600);
+  const response = await h.invoke("public-note", "https://scripture.invalid", {
+    liveNote: { uk: full, ru: "Сохранено", en: "Saved" },
+  });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).liveNote.uk, full);
+  assert.equal(h.calls.batch, 1);
+});
+
+test("public note trims surrounding whitespace before enforcing limit", async () => {
+  const h = harness("ok");
+  const full = "Ж".repeat(600);
+  const response = await h.invoke("public-note", "https://scripture.invalid", {
+    liveNote: { uk: "  " + full + "  ", ru: "Сохранено", en: "Saved" },
+  });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).liveNote.uk, full);
+  assert.equal(h.calls.batch, 1);
+});
+
+test("public note refuses normalized overlimit without rewriting any language", async () => {
+  const h = harness("ok");
+  const response = await h.invoke("public-note", "https://scripture.invalid", {
+    liveNote: { uk: "Збережено", ru: "  " + "А".repeat(601) + "  ", en: "Saved" },
+  });
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error, "invalid_content_note");
+  assert.equal(h.calls.batch, 0);
+});
+
 const existingIdentity = "k".repeat(100);
 const upsertWithIdentity = id => ({
   action:"upsert-item", id, kind:"book", locale:"uk",

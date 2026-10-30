@@ -15,9 +15,14 @@ const RESET_COPY={
   en:{title:'Clear this course’s markers',detail:'All course markers for the current user will be removed only from this browser. Other devices will not change. Close other course tabs to prevent them from saving markers again.',confirm:'I want to remove these markers from this browser',action:'Clear markers',confirmFirst:'Confirm removal first.',done:'Markers removed from this browser. Reload the page to continue.',uncertain:'Could not confirm removal. Reload the page and check the markers.'}
 };
 const EXPORT_COPY={
-  uk:{button:'Завантажити позначки курсу',detail:'Файл містить лише локальні позначки цього курсу. Це самостійна оцінка, а не сертифікат; імпорт поки недоступний.',requested:'Завантаження запитано. Перевірте файл у браузері.',error:'Не вдалося підготувати файл із перевірених локальних позначок.'},
-  ru:{button:'Скачать отметки курса',detail:'Файл содержит только локальные отметки этого курса. Это самооценка, а не сертификат; импорт пока недоступен.',requested:'Загрузка запрошена. Проверьте файл в браузере.',error:'Не удалось подготовить файл из проверенных локальных отметок.'},
-  en:{button:'Download course markers',detail:'The file contains only this course’s local markers. These are self-reported, not a certificate; importing is not yet available.',requested:'Download requested. Check your browser for the file.',error:'Could not prepare a file from verified local markers.'}
+  uk:{button:'Завантажити позначки курсу',detail:'Файл містить лише локальні позначки цього курсу. Це самостійна оцінка, а не сертифікат; його можна додати до локальних позначок нижче.',requested:'Завантаження запитано. Перевірте файл у браузері.',error:'Не вдалося підготувати файл із перевірених локальних позначок.'},
+  ru:{button:'Скачать отметки курса',detail:'Файл содержит только локальные отметки этого курса. Это самооценка, а не сертификат; его можно добавить к локальным отметкам ниже.',requested:'Загрузка запрошена. Проверьте файл в браузере.',error:'Не удалось подготовить файл из проверенных локальных отметок.'},
+  en:{button:'Download course markers',detail:'The file contains only this course’s local markers. These are self-reported, not a certificate; you can add them to local markers below.',requested:'Download requested. Check your browser for the file.',error:'Could not prepare a file from verified local markers.'}
+};
+const IMPORT_COPY={
+  uk:{label:'Файл позначок курсу',action:'Додати позначки з файлу',detail:'Імпорт додає позначки до наявних лише в цьому браузері та для поточного користувача; нічого не видаляє і не перевіряє знання.',done:'Позначки з файлу додано до цього браузера.',invalid:'Файл не розпізнано або не вдалося прочитати. Позначки не змінено.',uncertain:'Не вдалося підтвердити збереження. Оновіть сторінку та перевірте позначки.',lock:'Безпечне збереження між вкладками недоступне. Позначки не змінено.'},
+  ru:{label:'Файл отметок курса',action:'Добавить отметки из файла',detail:'Импорт добавляет отметки к имеющимся только в этом браузере и для текущего пользователя; ничего не удаляет и не проверяет знания.',done:'Отметки из файла добавлены в этот браузер.',invalid:'Файл не распознан или не прочитан. Отметки не изменены.',uncertain:'Не удалось подтвердить сохранение. Обновите страницу и проверьте отметки.',lock:'Безопасное сохранение между вкладками недоступно. Отметки не изменены.'},
+  en:{label:'Course markers file',action:'Add markers from file',detail:'Import adds markers to existing ones only in this browser for the current user; it does not delete markers or verify knowledge.',done:'Markers from the file were added in this browser.',invalid:'The file is invalid or could not be read. Markers were not changed.',uncertain:'Could not confirm the save. Reload the page and check the markers.',lock:'Safe cross-tab saving is unavailable. Markers were not changed.'}
 };
 const SYNC_ERROR={
   uk:'Не вдалося прочитати оновлені позначки з іншої вкладки. Оновіть сторінку й перевірте їх.',
@@ -51,7 +56,7 @@ export function readAcademyProgress(storage,key){
 }
 
 export function academyMarkup(catalog,language,esc,progress) {
-  const lang=languageOf(language),w=COPY[lang],reset=RESET_COPY[lang],exportCopy=EXPORT_COPY[lang];
+  const lang=languageOf(language),w=COPY[lang],reset=RESET_COPY[lang],exportCopy=EXPORT_COPY[lang],importCopy=IMPORT_COPY[lang];
   // A private progress read can be unavailable without making public lessons
   // inaccessible. Show source-verified lessons read-only, never guessed marks.
   const readOnly = progress?.available === false;
@@ -74,7 +79,7 @@ export function academyMarkup(catalog,language,esc,progress) {
     return '<li><article class="card"><h3>'+String(index+1)+'. <a href="/dossiers?id='+id+'">'+name+'</a></h3><p>'+esc(node.summaries[lang])+'</p><ul>'+passages+'</ul><h4>'+esc(w.question)+'</h4><ol>'+questions+'</ol>'+(readOnly?'':'<button type="button" class="button" data-academy-lesson="'+id+'" aria-pressed="'+studied+'">'+esc(studied?w.unmark:w.mark)+'</button>')+'</article></li>';
   }).join('');
   const total=academyLessonIds.length,count=selected.size;
-  return '<section class="academy-reading" data-academy-root aria-labelledby="academy-reading-title"><h2 id="academy-reading-title">'+esc(w.title)+'</h2><p>'+esc(w.intro)+'</p><p>'+esc(w.privacy)+'</p><p>'+esc(w.honesty)+'</p>'+(readOnly?'<p id="academy-reading-unavailable" role="alert">'+esc(w.unavailable)+'</p>':'<label for="academy-reading-progress">'+esc(w.progress)+'</label> <progress id="academy-reading-progress" max="'+total+'" value="'+count+'"></progress> <span id="academy-reading-status" role="status" aria-live="polite">'+esc(w.progress)+': '+count+'/'+total+'</span><p id="academy-reading-badge" role="status">'+(count===total?esc(w.badge):'')+'</p><p id="academy-reading-error" role="alert"></p>')+(readOnly?'':'<p>'+esc(exportCopy.detail)+'</p><button type="button" class="button" id="academy-export">'+esc(exportCopy.button)+'</button><p id="academy-export-status" role="status" aria-live="polite"></p>')+'<details><summary>'+esc(reset.title)+'</summary><p>'+esc(reset.detail)+'</p><label><input type="checkbox" id="academy-reset-confirm"> '+esc(reset.confirm)+'</label> <button type="button" class="button" id="academy-reset">'+esc(reset.action)+'</button><p id="academy-reset-status" role="status" aria-live="polite"></p></details><ol>'+lessons+'</ol></section>';
+  return '<section class="academy-reading" data-academy-root aria-labelledby="academy-reading-title"><h2 id="academy-reading-title">'+esc(w.title)+'</h2><p>'+esc(w.intro)+'</p><p>'+esc(w.privacy)+'</p><p>'+esc(w.honesty)+'</p>'+(readOnly?'<p id="academy-reading-unavailable" role="alert">'+esc(w.unavailable)+'</p>':'<label for="academy-reading-progress">'+esc(w.progress)+'</label> <progress id="academy-reading-progress" max="'+total+'" value="'+count+'"></progress> <span id="academy-reading-status" role="status" aria-live="polite">'+esc(w.progress)+': '+count+'/'+total+'</span><p id="academy-reading-badge" role="status">'+(count===total?esc(w.badge):'')+'</p><p id="academy-reading-error" role="alert"></p>')+(readOnly?'':'<p>'+esc(exportCopy.detail)+'</p><button type="button" class="button" id="academy-export">'+esc(exportCopy.button)+'</button><p id="academy-export-status" role="status" aria-live="polite"></p><p>'+esc(importCopy.detail)+'</p><label for="academy-import-file">'+esc(importCopy.label)+'</label> <input id="academy-import-file" type="file" accept="application/json,.json"> <button type="button" class="button" id="academy-import">'+esc(importCopy.action)+'</button><p id="academy-import-status" role="status" aria-live="polite"></p>')+'<details><summary>'+esc(reset.title)+'</summary><p>'+esc(reset.detail)+'</p><label><input type="checkbox" id="academy-reset-confirm"> '+esc(reset.confirm)+'</label> <button type="button" class="button" id="academy-reset">'+esc(reset.action)+'</button><p id="academy-reset-status" role="status" aria-live="polite"></p></details><ol>'+lessons+'</ol></section>';
 }
 
 let detachAcademyStorageListener=()=>{};
@@ -121,6 +126,65 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
         link.click();
         if(currentView()&&exportStatus)exportStatus.textContent=exportCopy.requested;
       } catch { if(currentView()&&exportStatus)exportStatus.textContent=exportCopy.error; }
+    });
+  }
+  const importButton=root.querySelector('#academy-import');
+  const importFile=root.querySelector('#academy-import-file');
+  const importStatus=root.querySelector('#academy-import-status');
+  const importCopy=IMPORT_COPY[languageOf(language)];
+  let importing=false;
+  if(importButton && importFile && typeof importButton.addEventListener==='function') {
+    importButton.addEventListener('click',async()=>{
+      if(!currentView() || importing)return;
+      const file=importFile.files?.[0];
+      if(!file || !Number.isSafeInteger(file.size) || file.size<0 || file.size>4096 || typeof file.text!=='function'){
+        if(importStatus)importStatus.textContent=importCopy.invalid;return;
+      }
+      if(typeof key!=='string' || !locks || typeof locks.request!=='function'){
+        if(importStatus)importStatus.textContent=importCopy.lock;return;
+      }
+      importing=true;importButton.disabled=true;
+      try {
+        const text=await file.text();
+        if(!currentView() || importFile.files?.[0]!==file)return;
+        let record;
+        try {
+          if(typeof text!=='string' || text.length>4096)throw Error('invalid size');
+          record=JSON.parse(text);
+          if(!record || typeof record!=='object' || Array.isArray(record) ||
+             Object.keys(record).sort().join(',')!=='completed,format,version' ||
+             record.format!=='scripture-archive-academy-markers' || record.version!==1 ||
+             !Array.isArray(record.completed) || record.completed.length>academyLessonIds.length ||
+             record.completed.some(id=>typeof id!=='string'||!academyLessonIds.includes(id)) ||
+             new Set(record.completed).size!==record.completed.length)throw Error('invalid markers');
+        } catch {if(importStatus)importStatus.textContent=importCopy.invalid;return;}
+        await locks.request('sa-academy-progress:'+key,{mode:'exclusive'},()=>{
+          if(!currentView() || importFile.files?.[0]!==file)return;
+          const existing=readAcademyProgress(storage,key);
+          if(!existing.available){if(importStatus)importStatus.textContent=importCopy.uncertain;return;}
+          const merged=new Set([...existing.completed,...record.completed]);
+          const completed=academyLessonIds.filter(id=>merged.has(id));
+          try {
+            const saved=JSON.stringify({version:1,completed});
+            storage.setItem(key,saved);
+            if(storage.getItem(key)!==saved)throw Error('unconfirmed save');
+          } catch {if(currentView()&&importStatus)importStatus.textContent=importCopy.uncertain;return;}
+          if(!currentView())return;
+          for(const button of buttons){
+            const id=button.getAttribute('data-academy-lesson');
+            if(!academyLessonIds.includes(id))continue;
+            button.setAttribute('aria-pressed',String(merged.has(id)));
+            button.textContent=merged.has(id)?w.unmark:w.mark;
+          }
+          if(meter)meter.value=completed.length;
+          if(status)status.textContent=w.progress+': '+completed.length+'/'+academyLessonIds.length;
+          if(badge)badge.textContent=completed.length===academyLessonIds.length?w.badge:'';
+          if(error)error.textContent='';
+          if(importStatus)importStatus.textContent=importCopy.done;
+          importFile.value='';
+        });
+      } catch {if(currentView()&&importStatus)importStatus.textContent=importCopy.uncertain;}
+      finally {importing=false;importButton.disabled=false;}
     });
   }
   if(resetButton && typeof resetButton.addEventListener==='function' && resetConfirm){

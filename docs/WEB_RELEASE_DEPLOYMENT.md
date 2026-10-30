@@ -136,3 +136,25 @@ not reach GA4. Link the verified Search Console property from GA4 Admin after
 both properties exist. The first-party `/editor` report remains available even
 without GA4 and measures active foreground time with a bounded heartbeat; GA4
 provides the independent Google acquisition, geography and engagement reports.
+
+## Read-only declared-origin and direct-route preflight (SA-EXT-16)
+
+Before any separately authorized release, run the source-quality suite (which
+includes `tests/public-route-release-contract.test.mjs` and
+`tests/release-origin-declarations.test.mjs`) and validate that the release
+environment's two *declared* public URLs match the selected HTTPS origin:
+
+```sh
+NEXT_PUBLIC_SITE_URL=https://scripture-archive.com \
+APP_BASE_URL=https://scripture-archive.com \
+node scripts/check-web-release-origin.mjs --expected-origin https://scripture-archive.com
+```
+
+The command fails closed on absent, mismatched, insecure or credential-bearing
+origins and yields `DECLARED_ORIGIN_MATCH_ONLY`, **never** a production or
+ownership approval. The route contract checks current canonical sitemap, public
+and private catch-all routes, native skip-link/navigation and `robots.txt`
+prefix exclusion. These are executable source checks, not browser/HTTPS proof.
+Preserve the existing production migration, privacy, permission, backup and
+owner-approval gates above. To certify a release separately verify the actual
+deployed SHA, DNS/TLS, authenticated journeys, email and physical NVDA.

@@ -3406,14 +3406,13 @@ async function authRequest(action, body = {}) {
   if (!response.ok) throw Error(data.error || response.status);
   return data;
 }
-let progressSyncEpoch=0;
 async function syncProgress() {
   const principal=state.user;
   if (!principal) return;
-  const requestEpoch=++progressSyncEpoch;
+  const requestEpoch=(syncProgress._epoch=(syncProgress._epoch||0)+1);
   // A previous login or superseded refresh must never publish private data
   // into a later account's cache or UI.
-  const current=()=>progressSyncEpoch===requestEpoch&&state.user===principal;
+  const current=()=>syncProgress._epoch===requestEpoch&&state.user===principal;
   state.progressSyncStatus = "unavailable";
   try {
     const readingData=await accountRequest('reading');
@@ -3451,8 +3450,8 @@ async function syncProgress() {
   }
 }
 function clearPersonalProgress() {
-  ++progressSyncEpoch;
   state.progressSyncStatus=null;
+  syncProgress._epoch=(syncProgress._epoch||0)+1;
   state.missionProgress={index:0,correct:[],complete:false};
   localStorage.setItem("sa.mission.OTAB01",JSON.stringify(state.missionProgress));
   localStorage.setItem("sa.readingHistory","[]");

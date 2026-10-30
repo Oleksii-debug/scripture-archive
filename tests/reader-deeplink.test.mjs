@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
+import {routeSourceFromLocation, legacyRouteHashChanged} from '../public/route-location.js';
 
 // Exercise the existing production URL helpers and actual search link template,
 // with the repository's three licensed local John 3 corpora.
@@ -120,6 +121,7 @@ test('reader entry route resumes the last book and chapter for uk/ru/en', async 
   const catalog = JSON.parse(await readFile(new URL('../public/data/catalog.json', import.meta.url), 'utf8'));
   for (const lang of ['uk', 'ru', 'en']) {
     const context = {
+      routeSourceFromLocation,
       state: {lang, reader: {book:'GEN', chapter:12}, currentReader:null},
       location: {hash:'', pathname:'/reader/GEN/12', href:'https://sa.test/reader/GEN/12'},
       setActiveNav() {},
@@ -166,6 +168,7 @@ test('native fragment anchors remain inside the reader instead of navigating hom
   const visited = [];
   const location = {pathname:'/reader/JHN/3', hash:'#v16'};
   const {route} = vm.runInNewContext(actualRoute + '\n({route})', {
+    routeSourceFromLocation,
     location, state:{lang:'uk'}, timerInterval:null, communityRefreshInterval:null, communityOwnerRefreshInterval:null,
     clearInterval() {},
     async renderReader(parts) {visited.push('reader:' + parts.join('/'));},
@@ -186,6 +189,7 @@ test('native fragment anchors remain inside the reader instead of navigating hom
   for (const [fragment, expectedCount] of [['#v16',0], ['#reading',0], ['#/reader/JHN/3',1]]) {
     let callback, invocations = 0;
     vm.runInNewContext(handlerSource, {
+      legacyRouteHashChanged,
       location:{hash:fragment},
       route() {invocations++;},
       window:{addEventListener(name, handler) {
@@ -194,7 +198,7 @@ test('native fragment anchors remain inside the reader instead of navigating hom
       }},
     });
     assert.equal(typeof callback, 'function', fragment);
-    callback();
+    callback({oldURL:'https://sa.test/reader/JHN/3',newURL:'https://sa.test/reader/JHN/3'+fragment});
     assert.equal(invocations, expectedCount, fragment);
   }
 });

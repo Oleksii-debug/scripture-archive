@@ -19,7 +19,7 @@ function fixture({throwAuth=false,ackDamage=false,failedBatch=-1}={}) {
   const db=new DatabaseSync(':memory:');
   db.exec('PRAGMA foreign_keys=ON');
   const root=new URL('../drizzle/',import.meta.url);
-  for(const file of readdirSync(root).filter(n=>/^\\d{4}_.+\\.sql$/.test(n)).sort())
+  for(const file of readdirSync(root).filter(n=>/^\d{4}_.+\.sql$/.test(n)).sort())
     db.exec(readFileSync(new URL(file,root),'utf8'));
   db.prepare("INSERT INTO community_runs(id,status,control_version) VALUES(?,'running',4)").run(RUN_ID);
   db.prepare("INSERT INTO community_waves(id,run_id,label,starts_at,next_at,target_count,interval_pattern) VALUES(?,?,?,'2026-10-28','2026-10-28',1,'[120]')")
@@ -102,7 +102,7 @@ test('one agent finish revokes only its token and atomically schedules plus logs
     assert.ok(f.session().revoked_at);
     assert.equal(f.session('hash-sibling').revoked_at,null,'other valid lease remains independent');
     const date=f.schedule();
-    assert.match(date,/^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}$/);
+    assert.match(date,/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
     const hours=(Date.parse(date.replace(' ','T')+'Z')-Date.now())/3_600_000;
     assert.ok(hours>6 && hours<6.1,'schedule must honor active persona 6h and 17-second seed');
     assert.equal(f.logs().length,1);

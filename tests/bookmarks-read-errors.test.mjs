@@ -1,3 +1,4 @@
+import { validBookmarkTimestamp } from "../lib/bookmark-timestamp.js";
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -10,6 +11,7 @@ function handler(result) {
   const catalog = JSON.parse(readFileSync(new URL('../public/data/catalog.json', import.meta.url),'utf8'));
   const exports = {};
   vm.runInNewContext(compiled,{exports,Response,require(id) {
+      if (id.endsWith("lib/bookmark-timestamp.js")) return { validBookmarkTimestamp };
     if (id === 'cloudflare:workers') return {env:{DB:{prepare:()=>({bind:()=>({all:async()=>{if(result instanceof Error)throw result;return result}})})}}};
     if (id.endsWith('public/data/catalog.json')) return { default: catalog };
     if (id.endsWith('public/editions.js')) return { EDITIONS };

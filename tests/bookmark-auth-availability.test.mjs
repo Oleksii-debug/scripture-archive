@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
+import { EDITIONS } from "../public/editions.js";
 
 // Execute the real production TypeScript route with stubbed infrastructure,
 // rather than duplicating its authentication/error behavior in the test.
@@ -47,6 +48,7 @@ function harness(authMode = "ok", dbMode = "ok", databasePresent = true) {
     require(specifier) {
       if (specifier === "cloudflare:workers") return { env: { DB: databasePresent ? db : undefined } };
       if (specifier.endsWith("public/data/catalog.json")) return { default: catalog };
+      if (specifier.endsWith("public/editions.js")) return { EDITIONS };
       if (specifier === "../../../lib/auth") return {
         authenticateRequest: async () => {
           calls.auth++;
@@ -65,7 +67,7 @@ function harness(authMode = "ok", dbMode = "ok", databasePresent = true) {
       method,
       headers: { Origin: origin, "Content-Type": "application/json" },
       ...(method === "GET" ? {} : {
-        body: JSON.stringify({ edition: "en", book: "GEN", chapter: 1 }),
+        body: JSON.stringify({ edition: "en-web", book: "GEN", chapter: 1 }),
       }),
     });
     const response = await exports[method](request);

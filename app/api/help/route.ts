@@ -30,7 +30,7 @@ const json = (data: unknown, status = 200) => Response.json(data, { status, head
 const unavailable = () => Response.json({ error: "support_unavailable" }, { status: 503, headers: { "Cache-Control": "no-store, private" } });
 
 function safeFilename(value: string) {
-  const normalized = value.normalize("NFKC").replace(/[\\/:*?"<>|\u0000-\u001f]/g, "-").trim();
+  const normalized = value.normalize("NFKC").replace(/[\\/:*?"<>|\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/gu, "-").trim();
   return (normalized || "attachment").slice(0, 120);
 }
 

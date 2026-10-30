@@ -326,3 +326,47 @@ test('verified owner gets an explicit 503, never a success response, when inbox 
     assert.equal(state.reads, 1);
   }
 });
+
+
+// SA-EXT-16: do not let an attacker disguise a support attachment name with
+// Unicode direction controls, invisible formatting, or line-break characters.
+// The original file bytes, MIME allowlist, D1 receipt, and mail path are intact.
+for (const [label, name, expected] of [
+  ['RTL override', 'evidence\u202Efdp.txt', 'evidence-fdp.txt'],
+  ['bidi isolates', 'report\u2066spoof\u2069.txt', 'report-spoof-.txt'],
+  ['zero-width space', 'proof\u200B.txt', 'proof-.txt'],
+  ['zero-width joiner', 'proof\u200D.txt', 'proof-.txt'],
+  ['C1 control', 'chapter\u009Btitle.txt', 'chapter-title.txt'],
+  ['line separator', 'tests\u2028line.txt', 'tests-line.txt'],
+  ['paragraph separator', 'tests\u2029para.txt', 'tests-para.txt'],
+  ['byte order mark', 'notes\uFEFF.txt', 'notes-.txt'],
+  ['Mongolian vowel separator', 'notes\u180E.txt', 'notes-.txt'],
+  ['normal Ukrainian', 'Український документ.txt', 'Український документ.txt'],
+  ['normal Arabic', 'ملاحظات.txt', 'ملاحظات.txt'],
+]) {
+  test('support attachment display filename is safe: ' + label, async () => {
+    const { route, state } = await fixture();
+    const response = await route.POST(submission({
+      attachments: [file('Real authored UTF-8 support text.', name, 'text/plain')],
+    }));
+    assert.equal(response.status, 201);
+    assert.equal(state.batches.length, 1);
+    assert.equal(state.batches[0].length, 2);
+    const stored = state.batches[0][1].args[2];
+    assert.equal(stored, expected);
+    assert.doesNotMatch(stored, /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/u);
+    assert.equal(state.emails.length, 1);
+    assert.equal(state.emails[0].attachments[0].filename, expected);
+    assert.equal(state.emails[0].attachments[0].contentType, 'text/plain');
+  });
+}
+
+test('support filename sanitizer does not turn rejected source MIME into an accepted attachment', async () => {
+  const { route, state } = await fixture();
+  const response = await route.POST(submission({
+    attachments: [file('Still not a PDF', 'report\u202Efdp.pdf', 'application/pdf')],
+  }));
+  assert.equal(response.status, 400);
+  assert.equal(state.batches.length, 0);
+  assert.equal(state.emails.length, 0);
+});

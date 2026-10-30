@@ -214,3 +214,35 @@ test("unauthenticated and agent identities cannot access private export", async 
     assert.equal(f.batches, 0);
   }
 });
+
+for (const malformed of [
+  '{}', '{"reading":[]}', '{"book":"GEN","chapter":1,"title":"Genesis"}',
+  '[null]', '[1]', '["GEN"]', '[[]]',
+  '[{}]', '[{"book":"GEN","chapter":"1","title":"Genesis"}]',
+  '[{"book":"GEN","chapter":0,"title":"Genesis"}]',
+  '[{"book":"GEN","chapter":1,"title":null}]',
+]) {
+  test("private export refuses structurally non-restorable READING receipt: " + malformed, async () => {
+    const rows = standardRows();
+    rows[1].results[0].data = malformed;
+    const f = fixture({ results: rows });
+    const { response, body } = await outcome(f);
+    assert.equal(response.status, 503);
+    assert.equal(body.error, "export_unavailable");
+    assert.equal(Object.hasOwn(body, "progress"), false);
+    assert.equal(response.headers.get("content-disposition"), null);
+    assert.match(response.headers.get("cache-control"), /no-store, private/);
+    assert.equal(f.batches, 1);
+  });
+}
+
+test("valid empty READING archive remains exportable, preserving legitimate nonreading array snapshots",async()=>{
+  const rows=standardRows();
+  rows[1].results[0].data='[]';
+  rows[1].results.push({mission_id:'LEGACY-ARRAY',data:'[{"event":"known"}]',updated_at:'2026-10-30'});
+  const {response,body}=await outcome(fixture({results:rows}));
+  assert.equal(response.status,200);
+  assert.deepEqual(Array.from(body.progress[0].data),[]);
+  assert.equal(body.progress[1].mission,'LEGACY-ARRAY');
+  assert.equal(body.progress[1].data[0].event,'known');
+});

@@ -21,12 +21,12 @@ export async function GET(request: Request) {
       return new Response(JSON.stringify({ format: "scripture-archive-materials-export", version: 1, exportedAt: new Date().toISOString(), materials: items, submissions: history }, null, 2), { headers: { "Content-Type": "application/json; charset=utf-8", "Content-Disposition": 'attachment; filename="scripture-archive-materials.json"', "Cache-Control": "no-store, private", "X-Content-Type-Options": "nosniff" } });
     } catch { return Response.json({ error: "export_unavailable" }, { status: 503, headers: { "Cache-Control": "no-store, private" } }); }
   }
-  const query = mine
-    ? env.DB!.prepare("SELECT id,title,locale,data,visibility,updated_at FROM study_materials WHERE owner_user_id=? ORDER BY updated_at DESC LIMIT 100").bind(userId)
-    : env.DB!.prepare("SELECT id,title,locale,data,visibility,updated_at FROM study_materials WHERE visibility='public' ORDER BY updated_at DESC LIMIT 100");
-  // Corrupt legacy JSON and D1 read failures must not become an uncaught 500
-  // or accidentally expose partial private/public study-material results.
+  // Corrupt legacy JSON, D1 prepare/bind/read errors and invalid receipts
+  // fail closed before any private or public study-material data is returned.
   try {
+    const query = mine
+      ? env.DB!.prepare("SELECT id,title,locale,data,visibility,updated_at FROM study_materials WHERE owner_user_id=? ORDER BY updated_at DESC LIMIT 100").bind(userId)
+      : env.DB!.prepare("SELECT id,title,locale,data,visibility,updated_at FROM study_materials WHERE visibility='public' ORDER BY updated_at DESC LIMIT 100");
     const result = await query.all<{ id: string; data: string }>();
     if (!result.success || !Array.isArray(result.results)) throw Error("materials read failed");
     const materials = result.results.map(row => {
@@ -66,7 +66,14 @@ export async function POST(request: Request) {
   }
   const visibility = "private";
   const id = clean(body.id, 80) || crypto.randomUUID();
-  const existing = await env.DB!.prepare("SELECT owner_user_id FROM study_materials WHERE id=?").bind(id).first<{ owner_user_id: string }>();
+  // The preflight is not authoritative for ownership (the UPSERT still checks
+  // it atomically), but a failed D1 read must never escape as an uncaught 500.
+  let existing: { owner_user_id: string } | null;
+  try {
+    existing = await env.DB!.prepare("SELECT owner_user_id FROM study_materials WHERE id=?").bind(id).first<{ owner_user_id: string }>();
+  } catch {
+    return Response.json({ error: "material_save_failed" }, { status: 503, headers: { "Cache-Control": "no-store, private" } });
+  }
   if (existing && existing.owner_user_id !== userId) return Response.json({ error: "forbidden" }, { status: 403 });
   const data = JSON.stringify({ prompt, reference, explanation, answer, options });
   // The owner constraint must be enforced by the write itself: another user can
@@ -93,7 +100,17 @@ export async function DELETE(request: Request) {
   if (!userId) return Response.json({ error: "authentication_required" }, { status: 401 });
   const id = new URL(request.url).searchParams.get("id") || "";
   if (!id || id.length > 80) return Response.json({ error: "invalid_material" }, { status: 400 });
-  const result = await env.DB.prepare("DELETE FROM study_materials WHERE id=? AND owner_user_id=?").bind(id, userId).run();
-  if (!result.success) return Response.json({ error: "delete_failed" }, { status: 503 });
-  return Response.json({ ok: true });
+  try {
+    const result = await env.DB.prepare("DELETE FROM study_materials WHERE id=? AND owner_user_id=?").bind(id, userId).run();
+    const changes = Number(result.meta?.changes);
+    // A successful-looking D1 reply without an authoritative write receipt
+    // cannot claim deletion, including when the service lost its ACK.
+    if (!result.success || !Number.isSafeInteger(changes) || changes < 0)
+      return Response.json({ error: "delete_failed" }, { status: 503, headers: { "Cache-Control": "no-store, private" } });
+    // Zero affected rows is an idempotent no-op: do not disclose whether a
+    // private draft exists or belongs to another user.
+    return Response.json({ ok: true });
+  } catch {
+    return Response.json({ error: "delete_failed" }, { status: 503, headers: { "Cache-Control": "no-store, private" } });
+  }
 }

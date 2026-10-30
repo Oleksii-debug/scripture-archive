@@ -236,3 +236,60 @@ test("valid decimal public directory pagination remains bounded and coherent", a
   assert.equal(f.calls.batch, 3);
   assert.equal(f.calls.advance, 0);
 });
+
+
+test("valid chapter receipts yield exact public reading counts without any writes", async () => {
+  const receipts = validReceipts();
+  receipts[2].results[0].reading_data = JSON.stringify([
+    { book: "GEN", chapter: 1, title: "Буття, 1" },
+    { book: "1CO", chapter: 2, title: "1 Коринтян, 2" },
+  ]);
+  receipts[2].results[0].mission_count = 3;
+  const f = fixture({ receipts });
+  const response = await f.get();
+  assert.equal(response.status, 200);
+  assert.equal(response.body.members[0].chaptersRead, 2);
+  assert.equal(response.body.members[0].missionsCompleted, 3);
+  assert.deepEqual(f.calls, { advance: 0, batch: 1, auth: 0 });
+});
+
+for (const [name, history] of [
+  ["malformed JSON", "{broken"],
+  ["nonarray object", '{"book":"GEN"}'],
+  ["null JSON", "null"],
+  ["scalar", "42"],
+  ["invalid entry", "[null]"],
+  ["invented code shape", '[{"book":"FAKE","chapter":1,"title":"not real"}]'],
+  ["zero chapter", '[{"book":"GEN","chapter":0,"title":"Genesis"}]'],
+  ["fractional chapter", '[{"book":"GEN","chapter":1.5,"title":"Genesis"}]'],
+  ["missing title", '[{"book":"GEN","chapter":1}]'],
+  ["blank title", '[{"book":"GEN","chapter":1,"title":"  "}]'],
+  ["duplicate chapter", '[{"book":"GEN","chapter":1,"title":"Genesis"},{"book":"GEN","chapter":1,"title":"Again"}]'],
+  ["too many entries", JSON.stringify(Array.from({length:2001}, (_, index) => ({book:"GEN",chapter:index+1,title:"Genesis"})))],
+]) {
+  test("damaged public reading history " + name + " fails closed without a fake counter", async () => {
+    const receipts = validReceipts();
+    receipts[2].results[0].reading_data = history;
+    const f = fixture({ receipts });
+    const response = await f.get();
+    assert.equal(response.status, 503);
+    assert.equal(response.body.error, "community_unavailable");
+    assert.equal(Object.hasOwn(response.body, "members"), false);
+    assert.equal(Object.hasOwn(response.body, "summary"), false);
+    assert.deepEqual(f.calls, { advance:0, batch:1, auth:0 });
+  });
+}
+
+for (const [name, count] of [
+  ["missing", undefined], ["null", null], ["text", "2"], ["negative", -1],
+  ["fractional", 1.5], ["NaN", NaN], ["unsafe", Number.MAX_SAFE_INTEGER+1],
+]) {
+  test("damaged community mission count " + name + " is not published", async () => {
+    const receipts = validReceipts();
+    receipts[2].results[0].mission_count = count;
+    const response = await fixture({ receipts }).get();
+    assert.equal(response.status, 503);
+    assert.equal(response.body.error, "community_unavailable");
+    assert.equal(Object.hasOwn(response.body, "members"), false);
+  });
+}

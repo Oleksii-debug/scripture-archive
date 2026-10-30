@@ -24,17 +24,25 @@ export async function GET(request: Request) {
   const query = mine
     ? env.DB!.prepare("SELECT id,title,locale,data,visibility,updated_at FROM study_materials WHERE owner_user_id=? ORDER BY updated_at DESC LIMIT 100").bind(userId)
     : env.DB!.prepare("SELECT id,title,locale,data,visibility,updated_at FROM study_materials WHERE visibility='public' ORDER BY updated_at DESC LIMIT 100");
-  const result = await query.all<{ id: string; data: string }>();
-  if (!result.success || !Array.isArray(result.results)) return Response.json({ error: "materials_unavailable" }, { status: 503, headers: { "Cache-Control": "no-store, private" } });
-  const rows = result.results;
-  return Response.json({ materials: rows.map(row => {
-    const data = JSON.parse(row.data);
-    if (mine) return { ...row, data };
-    // Older owner-published rows remain visible, but cannot reveal answers.
-    const { answer: _answer, explanation: _explanation, ...publicData } = data;
-    void _answer; void _explanation;
-    return { ...row, data: publicData };
-  }) }, { headers: { "Cache-Control": "no-store" } });
+  // Corrupt legacy JSON and D1 read failures must not become an uncaught 500
+  // or accidentally expose partial private/public study-material results.
+  try {
+    const result = await query.all<{ id: string; data: string }>();
+    if (!result.success || !Array.isArray(result.results)) throw Error("materials read failed");
+    const materials = result.results.map(row => {
+      const data: unknown = JSON.parse(row.data);
+      if (!data || typeof data !== "object" || Array.isArray(data))
+        throw Error("invalid material payload");
+      if (mine) return { ...row, data };
+      // Older owner-published rows remain visible, but cannot reveal answers.
+      const { answer: _answer, explanation: _explanation, ...publicData } = data;
+      void _answer; void _explanation;
+      return { ...row, data: publicData };
+    });
+    return Response.json({ materials }, { headers: { "Cache-Control": "no-store" } });
+  } catch {
+    return Response.json({ error: "materials_unavailable" }, { status: 503, headers: { "Cache-Control": "no-store, private" } });
+  }
 }
 
 export async function POST(request: Request) {

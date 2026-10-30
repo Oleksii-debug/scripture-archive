@@ -1,3 +1,14 @@
+## 2026-10-30 — SA-EXT-01/16 / PRIVATE_BOOKMARK_EXPORT_EDITION_INTEGRITY — ЗАКРИТО ВУЗЬКИЙ ПІДПУНКТ
+
+**`CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`**, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. Тільки ця верифікована функція, **не всі SA-EXT-01…20**; усі батьківські розділи залишаються **OPEN**.
+
+- **Справжній дефект:** приватний `GET /api/reading-export` після позитивного D1 batch ACK віддавав недійсні bookmark rows як успішний download: вигадані/нелокальні видання, неіснуючі книги, некоректні глави, зокрема `en-web:JOL:4`, а також зіпсовану дату. Це не відповідало канонічному `PUT /api/bookmarks`.
+- **Функціонал у канонічному main:** [PR #623](https://github.com/Oleksii-debug/scripture-archive/pull/623) SQUASH MERGED `main@7a1e1fbd48858131d8bb0c1a110dd11114613452`. `app/api/reading-export/route.ts` blob `174562ec66e74030dace7cfc9dda4e64c7adfb09`, existing `tests/reading-export-batch-ack.test.mjs` blob `44b3109efae2fc5f8d04a4889bb94ba33d68e9d6` read back from main. Спільний `public/editions.js` та `catalog.json` обмежують тільки локальні видання і глави *свого* видання; коректний `uk-ohiienko:JOL:4` зберігається, `en-web:JOL:4` відхиляється. На некоректну відповідь D1 повертається приватний 503 без фальшивого downloadable backup; жодних міграцій/другого сервера/зміни прав/деплою.
+- **Тестування:** [Actions #41038187087](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41038187087), exact source PR head `dfbf63efa9c003ed6370f937f31f54f7be442b1a`: **1434 native Node PASS, 0 FAIL, 1 SKIP**, включно з новими 14 malformed bookmark scenarios та позитивним багатовиданням. TypeScript, lint, source build, Python 2/2 PASS. **Загальний workflow FAIL** виключно через незалежний disposable Worker/D1 `tests/api-flow.test.mjs:100/120`, двічі HTTP 503 `Your worker restarted mid-request` замість 403/400. Повний браузерний E2E, фактичний Sites SHA, фізичний NVDA й production D1 **NOT VERIFIED**.
+- **Остаточне рішення лише для дефекту:** розробка цього scoped підпункту завершена, нові джерельні задачі = 0. Суміжні #619/#621 completed-attempt export already separately closed. Повні розділи, release і операційні acceptance-гейти лишаються OPEN; без конкретного нового дефекту цей scoped код не розробляти повторно. Зв'язок [#297](https://github.com/Oleksii-debug/scripture-archive/issues/297).
+
+---
+
 ## 2026-10-30 — SA-EXT-03/14 / MATERIAL_LOCALE_TYPED_BOUNDARY — РОЗРОБКУ ВУЗЬКОЇ ФУНКЦІЇ ЗАКРИТО
 
 **Лише цей конкретний integrity-fix:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`; `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Повні SA-EXT-03/14 та інші SA-EXT-01…20 залишаються OPEN.**

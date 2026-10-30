@@ -91,7 +91,14 @@ export async function POST(request: Request) {
       ? body.options.map(value => value.trim()) : [];
   if (title.length < 3 || prompt.length < 8 || reference.length < 3 || !answer || explanation.length < 8 || options.length < 2 || new Set(options).size !== options.length || !options.includes(answer))
     return Response.json({ error: "invalid_material" }, { status: 400 });
-  const locale = ["uk", "ru", "en"].includes(String(body.locale)) ? String(body.locale) : "uk";
+  // A supplied locale is an authorship and source-review boundary. Never
+  // coerce arrays/objects to a language, or silently relabel an explicitly
+  // unsupported translation as Ukrainian. An omitted/blank picker uses uk.
+  const locale = body.locale === undefined || body.locale === null || body.locale === ""
+    ? "uk"
+    : typeof body.locale === "string" && ["uk", "ru", "en"].includes(body.locale)
+      ? body.locale : null;
+  if (!locale) return Response.json({ error: "invalid_material" }, { status: 400 });
   // Publication requires an immutable independent editorial approval, never a
   // direct owner toggle or an unverified matching email identity.
   if (body.visibility === "public") {

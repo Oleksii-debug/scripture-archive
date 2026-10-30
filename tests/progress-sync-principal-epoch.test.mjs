@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 
 const source=readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
-const start=source.indexOf('let progressSyncEpoch=0;');
+const start=source.indexOf('async function syncProgress() {');
 const end=source.indexOf('\nfunction field(',start);
 assert.ok(start>=0 && end>start,'canonical progress sync and reset functions must be present');
 const fragment=source.slice(start,end);

@@ -77,7 +77,12 @@ for (const method of ["GET", "PUT", "DELETE"]) {
     const h = harness({ dbMode: "throw", isOwner: true });
     const r = await h.invoke(method);
     assert.equal(r.status, 503);
-    assert.match(r.cache, /no-store/);
+    if (method !== "PUT") {
+      assert.equal(r.body.error, "content_unavailable");
+      assert.match(r.cache, /no-store, private/);
+    } else {
+      assert.equal(r.body.error, "content_save_unconfirmed");
+    }
   });
 }
 

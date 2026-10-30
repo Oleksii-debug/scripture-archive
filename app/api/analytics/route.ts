@@ -96,6 +96,19 @@ export async function POST(request: Request) {
     "INSERT INTO usage_events (id,session_id,user_id,event_type,page_name,value_json) SELECT ?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM usage_sessions WHERE session_id=? AND user_id IS ?)",
   ).bind(crypto.randomUUID(), sessionId, identity?.userId || null, eventType, pageName, JSON.stringify(safeValue(body.value)), sessionId, identity?.userId || null));
   const saved = await env.DB.batch(statements);
+  // A zero-row upsert can mean this tab's old session belongs to another
+  // principal. Verify the actual row before distinguishing it from a D1 error.
+  if (Array.isArray(saved) && saved.length === statements.length &&
+      saved.every(row => row?.success === true && Number.isSafeInteger(row?.meta?.changes)) &&
+      saved[0].meta.changes === 0 && saved.slice(1).every(row => row.meta.changes === 0)) {
+    const owner = await env.DB.prepare("SELECT user_id FROM usage_sessions WHERE session_id=?")
+      .bind(sessionId).first<{user_id:string|null}>();
+    if (owner && typeof owner === "object" &&
+        Object.prototype.hasOwnProperty.call(owner,"user_id") &&
+        (owner.user_id === null || typeof owner.user_id === "string") &&
+        owner.user_id !== null && owner.user_id !== (identity?.userId || null))
+      return json({ error: "analytics_session_conflict" }, 409);
+  }
   // An HTTP 202 must follow an acknowledged D1 write, not a resolved promise.
   if (!Array.isArray(saved) || saved.length !== statements.length ||
       saved.some(row => row?.success !== true || !Number.isSafeInteger(row?.meta?.changes) || row.meta.changes !== 1))

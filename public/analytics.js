@@ -5,6 +5,7 @@
   // Restricted storage must not break browsing or imply analytics consent.
   // Only these two persisted values are meaningful; corrupt values re-prompt.
   let consent = null;
+  let consentEpoch = 0;
   try {
     const saved = localStorage.getItem(consentKey);
     if (saved === "granted" || saved === "denied") consent = saved;
@@ -64,7 +65,7 @@
     }
     return safe;
   };
-  const sessionId = (() => {
+  let sessionId = (() => {
     let stored = null;
     try { stored = sessionStorage.getItem(sessionKey); } catch {}
     if (/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(stored || "")) return stored;
@@ -115,12 +116,27 @@
 
   function sendFirstParty(payload, beacon = false) {
     if (consent !== "granted") return;
-    const body = JSON.stringify({ sessionId, source: trafficSource(), pageName: safeRouteName(), ...payload });
+    const currentSession = sessionId, currentConsent = consentEpoch;
+    const data = { sessionId: currentSession, source: trafficSource(), pageName: safeRouteName(), ...payload };
+    const body = JSON.stringify(data);
     if (beacon && navigator.sendBeacon) {
       navigator.sendBeacon("/api/analytics", new Blob([body], { type: "application/json" }));
       return;
     }
-    fetch("/api/analytics", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", keepalive: true, body }).catch(() => {});
+    const send = value => fetch("/api/analytics", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", keepalive: true, body: JSON.stringify(value) });
+    send(data).then(async response => {
+      if (response.status !== 409 || consent !== "granted" || consentEpoch !== currentConsent) return;
+      const result = await response.json();
+      if (result?.error !== "analytics_session_conflict" || consent !== "granted" || consentEpoch !== currentConsent) return;
+      // Several old requests may fail together; only the first rotates the ID.
+      // A fresh identifier prevents a later principal inheriting earlier data.
+      if (sessionId === currentSession) {
+        sessionId = crypto.randomUUID();
+        try { sessionStorage.setItem(sessionKey, sessionId); } catch {}
+      }
+      // Do not replay this event: authentication may have changed again while
+      // the request was in flight. Future events use the new identifier.
+    }).catch(() => {});
   }
 
   function heartbeat(beacon = false) {
@@ -162,6 +178,7 @@
       try { localStorage.setItem(consentKey, "denied"); } catch {}
       // Never retain a stale grant when durable consent cannot be verified.
       consent = "denied";
+      consentEpoch++;
       if (heartbeatTimer) { window.clearInterval(heartbeatTimer); heartbeatTimer = 0; }
       window.gtag?.("consent", "update", { analytics_storage: "denied" });
       return false;
@@ -180,6 +197,7 @@
   // A verified denial also informs other tabs through the storage event.
   function withdrawConsent() {
     consent = "denied";
+    consentEpoch++;
     if (heartbeatTimer) { window.clearInterval(heartbeatTimer); heartbeatTimer = 0; }
     window.gtag?.("consent", "update", { analytics_storage: "denied" });
     banner?.remove();
@@ -201,6 +219,7 @@
     if (event.key !== consentKey && event.key !== null) return;
     if (event.newValue === "granted" || consent !== "granted") return;
     consent = "denied";
+    consentEpoch++;
     if (heartbeatTimer) { window.clearInterval(heartbeatTimer); heartbeatTimer = 0; }
     window.gtag?.("consent", "update", { analytics_storage: "denied" });
   });

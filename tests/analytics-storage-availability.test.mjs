@@ -65,11 +65,12 @@ function boot(options = {}) {
   };
   runInNewContext(script, {
     document, window, localStorage, sessionStorage, location,
-    crypto: { randomUUID: () => 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' },
+    crypto: { randomUUID: () => behavior.randomUUID ? behavior.randomUUID() : 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' },
     navigator: {}, Blob, URL, URLSearchParams, Date,
     fetch: async (url, options) => {
-      posts.push({ url, body: JSON.parse(options.body) });
-      return { ok: true };
+      const request = { url, body: JSON.parse(options.body) };
+      posts.push(request);
+      return behavior.fetchOverride ? behavior.fetchOverride(request) : { ok: true };
     },
   }, { filename: 'public/analytics.js' });
   const click = action => {
@@ -343,4 +344,51 @@ test('failed consent readback attempts to undo a possibly successful grant write
   assert.deepEqual(a.writes.slice(-2), [['sa.analyticsConsent', 'granted'], ['sa.analyticsConsent', 'denied']]);
   a.window.saAnalytics.pageView();
   assert.equal(a.posts.length, 0);
+});
+
+const tick=()=>new Promise(resolve=>setImmediate(resolve));
+test('verified session conflict rotates for future events without replaying the old event', async () => {
+  let count=0;
+  const ids=['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'];
+  const a=boot({storedConsent:'granted',randomUUID:()=>ids.shift(),fetchOverride:async()=>++count===1
+    ? {status:409,json:async()=>({error:'analytics_session_conflict'})} : {status:202}});
+  a.window.saAnalytics.pageView();await tick();
+  assert.equal(a.posts.length,1);
+  assert.equal(a.posts[0].body.sessionId,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+  assert.equal(a.persisted.session,'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+  a.window.saAnalytics.pageView();
+  assert.equal(a.posts[1].body.sessionId,a.persisted.session);
+});
+test('generic failures and unrelated conflicts never rotate or retry analytics', async () => {
+  for(const response of [{status:503},{status:409,json:async()=>({error:'other'})}]) {
+    const a=boot({storedConsent:'granted',fetchOverride:async()=>response});
+    a.window.saAnalytics.pageView();await tick();assert.equal(a.posts.length,1);
+  }
+});
+test('withdrawal while the conflict response is pending prevents retry', async () => {
+  let finish;const pending=new Promise(resolve=>{finish=resolve;});
+  const a=boot({storedConsent:'granted',fetchOverride:()=>pending});
+  a.window.saAnalytics.pageView();a.window.saAnalytics.withdrawConsent();
+  finish({status:409,json:async()=>({error:'analytics_session_conflict'})});await tick();
+  assert.equal(a.posts.length,1);
+});
+test('simultaneous conflicting requests share one replacement identifier', async () => {
+  let issued=0, calls=0;
+  const ids=['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'];
+  const a=boot({storedConsent:'granted',randomUUID:()=>{issued++;return ids.shift()},fetchOverride:async()=>++calls<=2
+    ? {status:409,json:async()=>({error:'analytics_session_conflict'})} : {status:202}});
+  a.window.saAnalytics.pageView();a.window.saAnalytics.pageView();await tick();
+  assert.equal(issued,2);assert.equal(a.posts.length,2);
+  a.window.saAnalytics.pageView();
+  assert.equal(a.posts[2].body.sessionId,'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+});
+
+test('old conflicting request is not retried after withdrawal and a new grant', async () => {
+  let finish, count=0;
+  const pending=new Promise(resolve=>{finish=resolve;});
+  const a=boot({storedConsent:'granted',fetchOverride:()=>++count===1?pending:Promise.resolve({status:202})});
+  a.window.saAnalytics.pageView();a.window.saAnalytics.withdrawConsent();a.window.saAnalytics.grantConsent();
+  const before=a.posts.length;
+  finish({status:409,json:async()=>({error:'analytics_session_conflict'})});await tick();
+  assert.equal(a.posts.length,before);
 });

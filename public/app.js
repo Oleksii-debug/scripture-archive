@@ -3613,7 +3613,15 @@ function renderAccount() {
   document.querySelector("#profile-form").onsubmit=async event=>{event.preventDefault();const form=new FormData(event.currentTarget),data=Object.fromEntries(form);data.acceptSensitive=form.has("acceptSensitive");data.acceptPrivacy=form.has("acceptPrivacy");data.locale=state.lang;try{state.user=(await accountRequest("profile","POST",data)).user;await syncProgress();renderAccount()}catch{document.querySelector("#profile-state").textContent=copy.error}};
 }
 
+let editorViewEpoch = 0;
 async function renderEditor() {
+  const principal = state.user, epoch = ++editorViewEpoch;
+  const isCurrent = () => {
+    const path = location.hash.startsWith("#/")
+      ? location.hash.slice(2) : location.pathname.replace(/^\/+/, "");
+    return state.user === principal && Boolean(principal?.isOwner) &&
+      editorViewEpoch === epoch && path.replace(/\/+$/, "") === "editor";
+  };
   clearInterval(communityOwnerRefreshInterval);
   setActiveNav("account");
   if (!state.user?.isOwner) {
@@ -3648,14 +3656,17 @@ async function renderEditor() {
   try {
     users = (await accountRequest("users")).users || [];
   } catch {}
+  if (!isCurrent()) return;
   try {
     const response = await fetch("/api/content?admin=1", { cache: "no-store" });
     if (response.ok) managed = await response.json();
   } catch {}
+  if (!isCurrent()) return;
   try {
     const response = await fetch("/api/analytics?days=30", { cache: "no-store" });
     if (response.ok) analytics = await response.json();
   } catch {}
+  if (!isCurrent()) return;
   const note = state.cms?.liveNote || {};
   shell(
     `<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${copy[0]}</h1></div><p>${esc(state.user.email)}</p></div><div class="editor-grid"><section class="card"><h2>${copy[1]}</h2><form id="content-form" class="account-form"><label class="account-field"><span>Українська</span><textarea name="uk" rows="4">${esc(note.uk || "")}</textarea></label><label class="account-field"><span>Русский</span><textarea name="ru" rows="4">${esc(note.ru || "")}</textarea></label><label class="account-field"><span>English</span><textarea name="en" rows="4">${esc(note.en || "")}</textarea></label><button class="button primary">${copy[2]}</button><p id="content-state" role="status"></p></form></section><section class="card"><h2>${copy[3]} · ${users.length}</h2><div class="user-list">${users.length ? users.map((u) => `<p><strong>${esc(u.first_name)} ${esc(u.last_name)}</strong><br><span>${esc(u.email)} · ${esc(u.locale)} · ${esc(u.age_range)}</span></p>`).join("") : "<p>—</p>"}</div></section></div>`,
@@ -3682,10 +3693,10 @@ async function renderEditor() {
   document.querySelector(".analytics-dashboard").insertAdjacentHTML("afterend",`<section class="card full community-admin"><div class="section-head compact"><div><p class="eyebrow">Scripture Archive</p><h2>${communityAdmin.title}</h2></div><p>${communityAdmin.status}: <strong data-community-run-status>${esc(stateNames[runStatus]||runStatus)}</strong></p></div><div class="analytics-metrics"><article><strong>${formatNumber(analytics.accounts.total)}</strong><span>${communityAdmin.real}</span></article><article><strong>${formatNumber(communityState.synthetic?.total)}</strong><span>${communityAdmin.automatic}</span></article></div><h3>${communityAdmin.schedule}</h3><div class="community-wave-list">${(communityState.waves||[]).map(wave=>`<p><strong>${esc(wave.label)}</strong><span>${formatNumber(wave.created_count)} ${communityAdmin.of} ${formatNumber(wave.target_count)} ${communityAdmin.created} · ${communityAdmin.next}: ${esc(localTime(wave.next_at))} · ${esc(wave.status)}</span></p>`).join("")||"<p>—</p>"}</div><div class="action-row"><button class="button" data-community-control="pause" ${!["waiting","running"].includes(runStatus)?"disabled":""}>${communityAdmin.pause}</button><button class="button" data-community-control="resume" ${runStatus!=="paused"?"disabled":""}>${communityAdmin.resume}</button></div><p id="community-control-state" role="status"></p><details><summary>${communityAdmin.log}</summary><ol>${(communityState.log||[]).map(event=>`<li>${esc(localTime(event.created_at))} · ${esc(event.event_type)}</li>`).join("")}</ol></details></section>`);
   document.querySelectorAll("[data-community-control]").forEach(button=>button.onclick=async()=>{button.disabled=true;const status=document.querySelector("#community-control-state");try{const response=await fetch("/api/community",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:button.dataset.communityControl})});if(!response.ok)throw Error(String(response.status));const result=await response.json();await renderEditor();announce(stateNames[result.status]||result.status)}catch{status.textContent=t("registerError")}});
   communityOwnerRefreshInterval=setInterval(async()=>{
-    if(document.hidden)return;
+    if(document.hidden || !isCurrent())return;
     try{
-      const response=await fetch("/api/community?action=owner",{cache:"no-store"});if(!response.ok)return;
-      const current=await response.json(),panel=main.querySelector(".community-admin");if(!panel)return;
+      const response=await fetch("/api/community?action=owner",{cache:"no-store"});if(!response.ok || !isCurrent())return;
+      const current=await response.json(),panel=main.querySelector(".community-admin");if(!panel || !isCurrent())return;
       const status=current.run?.status||"waiting";
       panel.querySelector("[data-community-run-status]").textContent=stateNames[status]||status;
       panel.querySelector('[data-community-control="pause"]').disabled=!["waiting","running"].includes(status);
@@ -3698,30 +3709,36 @@ async function renderEditor() {
   document.querySelector(".editor-grid").insertAdjacentHTML("beforeend", `<section class="card full"><h2>${adminLabels.heading}</h2><p>${adminLabels.lead}</p><form id="managed-content-form" class="account-form account-form-grid"><label class="account-field"><span>ID</span><input name="id" maxlength="100"></label><label class="account-field"><span>${adminLabels.kind}</span><select name="kind"><option value="book">book</option><option value="chapter">chapter</option><option value="translation">translation</option><option value="mission">mission</option><option value="question">question</option><option value="route">route</option><option value="marathon">marathon</option><option value="ui_text">ui_text</option></select></label><label class="account-field"><span>${adminLabels.locale}</span><select name="locale"><option>uk</option><option>ru</option><option>en</option><option>all</option></select></label><label class="account-field"><span>${adminLabels.status}</span><select name="status"><option value="draft">${adminLabels.draft}</option><option value="published">${adminLabels.published}</option><option value="hidden">${adminLabels.hidden}</option></select></label>${field("title",adminLabels.title,"text",'required maxlength="200"')}<label class="account-field full"><span>${adminLabels.data}</span><textarea name="data" rows="8" required>{}</textarea></label><button class="button primary">${adminLabels.save}</button><p id="managed-content-state" role="status"></p></form><div class="managed-list">${managed.items.length?managed.items.map(item=>`<article><strong>${esc(item.title)}</strong><span>${esc(item.kind)} · ${esc(item.locale)} · ${esc(item.status)}</span></article>`).join(""):`<p>—</p>`}</div><details><summary>${adminLabels.history} · ${managed.revisions.length}</summary><ol>${managed.revisions.slice(0,30).map(revision=>`<li>${esc(revision.content_key)} · ${esc(revision.created_at)}</li>`).join("")}</ol></details></section>`);
   document.querySelector("#content-form").onsubmit = async (e) => {
     e.preventDefault();
+    if (!isCurrent()) return;
     const data = Object.fromEntries(new FormData(e.currentTarget));
     const response = await fetch("/api/content", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ liveNote: data }),
     });
+    if (!isCurrent()) return;
     if (response.ok) {
-      state.cms = await response.json();
+      const savedCMS = await response.json();
+      if (!isCurrent()) return;
+      state.cms = savedCMS;
       document.querySelector("#content-state").textContent = t("progressSaved");
     } else
       document.querySelector("#content-state").textContent = t("registerError");
   };
   document.querySelector("#managed-content-form").onsubmit = async event => {
     event.preventDefault();
+    if (!isCurrent()) return;
     const form = new FormData(event.currentTarget), status = document.querySelector("#managed-content-state");
     let data;
     try { data = JSON.parse(String(form.get("data"))); }
     catch { status.textContent = "JSON"; return; }
     try {
       const response = await fetch("/api/content", { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ action:"upsert-item", id:form.get("id"), kind:form.get("kind"), locale:form.get("locale"), status:form.get("status"), title:form.get("title"), data }) });
+      if (!isCurrent()) return;
       if (!response.ok) throw Error(String(response.status));
       status.textContent = t("progressSaved");
       await renderEditor();
-    } catch { status.textContent = t("registerError"); }
+    } catch { if (isCurrent()) status.textContent = t("registerError"); }
   };
 }
 

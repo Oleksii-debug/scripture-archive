@@ -39,6 +39,22 @@ page query string. The owner can review 30-day totals and recent registrations
 on `/editor`; account deletion removes the account link from retained aggregate
 analytics.
 
+### Read-only origin-declaration preflight (no deployment)
+
+Before any staging or production cutover, validate the two explicitly supplied
+canonical origin declarations using the existing checked-in Node CLI. From an
+operator shell with the approved values, run:
+
+```sh
+NEXT_PUBLIC_SITE_URL=https://scripture-archive.com APP_BASE_URL=https://scripture-archive.com node scripts/check-web-release-origin.mjs --expected-origin https://scripture-archive.com
+```
+
+A successful result is `DECLARED_ORIGIN_MATCH_ONLY`: it proves only that the
+three *declared* origins are syntactically secure and agree. It **does not**
+verify DNS, TLS, host ownership, which source SHA is deployed, the actual D1
+binding, provider permissions, production backups or migrations. Never treat
+this local check as release authorization or bypass the gates below.
+
 ## Release checks
 
 Before changing production:

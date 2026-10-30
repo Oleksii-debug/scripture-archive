@@ -135,7 +135,12 @@ export async function POST(request: Request) {
     try { if (!await editor(identity)) return json({ error: "forbidden" }, 403); }
     catch { return json({ error: "review_failed" }, 503); }
     if (!validId(body.id) || (body.decision !== "approve" && body.decision !== "reject") || (body.note !== undefined && typeof body.note !== "string")) return json({ error: "invalid_review" }, 400);
-    const note = typeof body.note === "string" ? body.note.trim().slice(0, 2000) : "";
+    // Editorial decisions must preserve the full authored rationale. An
+    // oversized note cannot be silently truncated into a different audit
+    // record while acknowledging the review as successfully saved.
+    if (typeof body.note === "string" && body.note.trim().length > 2000)
+      return json({ error: "invalid_review" }, 400);
+    const note = typeof body.note === "string" ? body.note.trim() : "";
     if (body.decision === "reject" && !note) return json({ error: "review_note_required" }, 400);
     if (body.decision === "approve" && (body.sourceChecked !== true || body.rightsChecked !== true)) return json({ error: "review_checks_required" }, 400);
     try {

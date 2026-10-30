@@ -100,7 +100,7 @@ const EDITION_ABOUT = {
   ru: {title:'Библейские издания',intro:'Издания хранятся отдельно. Название перевода остаётся рядом с текстом.',local:'Издания для чтения на платформе',external:'Другие издания',externalText:'Переводы Хоменко, Турконяка и другие издания можно открыть на сайтах их издателей из читальни.',source:'Источник',license:'Условия использования',missing:'Сведения об этом издании недоступны.'},
   en: {title:'Bible editions',intro:'Editions are stored separately. The translation name stays beside the text.',local:'Editions available on the platform',external:'Other editions',externalText:'Khomenko, Turkoniak and other editions can be opened on their publishers’ websites from the reader.',source:'Source',license:'Terms of use',missing:'Details for this edition are unavailable.'},
 };
-const httpsUrl=value=>{try {const url=new URL(value);return url.protocol==='https:'?url.href:'';} catch {return '';}};
+const httpsUrl=value=>{try {const url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password?url.href:'';} catch {return '';}};
 
 export function editionAboutMarkup(catalog,lang,esc) {
   const w=EDITION_ABOUT[lang]||EDITION_ABOUT.uk;

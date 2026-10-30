@@ -48,7 +48,17 @@ test("reader uses the invalidating POST and clears stale mission metadata", asyn
   assert.equal(h.events.some(event => event[0] === "load-text"), false);
   assert.equal(h.context.state.mission, null);
   assert.equal(h.context.state.currentReader, null);
-  assert.deepEqual(h.events.find(event => event[0] === "locked"), ["locked", "GEN", 12]);
+  assert.deepEqual(h.events.find(event => event[0] === "locked"), ["locked", "GEN", 12, ""]);
+});
+
+test("group reader passes its group context to the pre-text chapter guard and locked reread", async () => {
+  const h = harness(() => ({ invalidated: true }));
+  await h.context.renderReader(["reader", "GEN", "12", "group", "group-one"]);
+  assert.deepEqual(JSON.parse(JSON.stringify(h.events[0])), ["request", "chapter", "POST", {
+    book: "GEN", chapter: 12, groupId: "group-one",
+  }]);
+  assert.equal(h.events.some(event => event[0] === "load-text"), false);
+  assert.deepEqual(h.events.find(event => event[0] === "locked"), ["locked", "GEN", 12, "group-one"]);
 });
 
 test("reader refuses malformed guard responses instead of opening the chapter", async () => {

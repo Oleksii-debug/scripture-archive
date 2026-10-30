@@ -133,6 +133,7 @@ const I18N = {
     readingSyncPending: "Прочитане збережено на цьому пристрої, але сервер не підтвердив збереження. Повторіть спробу.",
     readingSyncRetry: "Повторити збереження",
     readerStorageUnavailable: "Браузер заборонив зберегти прогрес на пристрої. Читати можна, але завершення не зараховане. Дозвольте збереження й повторіть спробу.",
+    readerHistoryNeedsRecovery: "Не вдалося перевірити збережену історію читання. Старі записи не змінено; відновіть історію перед новим збереженням.",
     readerMissionUnavailable: "Завдання тимчасово недоступні. Читання та пошук доступні.",
   },
   ru: {
@@ -263,6 +264,7 @@ const I18N = {
     readingSyncPending: "Прочитанное сохранено на этом устройстве, но сервер не подтвердил сохранение. Повторите попытку.",
     readingSyncRetry: "Повторить сохранение",
     readerStorageUnavailable: "Браузер запретил сохранять прогресс на устройстве. Читать можно, но завершение не засчитано. Разрешите сохранение и повторите попытку.",
+    readerHistoryNeedsRecovery: "Не удалось проверить сохранённую историю чтения. Старые записи не изменены; восстановите историю перед новым сохранением.",
     readerMissionUnavailable: "Задания временно недоступны. Чтение и поиск доступны.",
   },
   en: {
@@ -393,6 +395,7 @@ const I18N = {
     readingSyncPending: "Your reading is saved on this device, but the server did not confirm the save. Please retry.",
     readingSyncRetry: "Retry saving",
     readerStorageUnavailable: "Browser storage is unavailable. Reading remains available, but completion has not been saved. Enable storage and retry.",
+    readerHistoryNeedsRecovery: "Saved reading history could not be verified. Earlier records were left unchanged; recover the history before saving again.",
     readerMissionUnavailable: "Exercises are temporarily unavailable. Reading and search are still available.",
   },
 };
@@ -3057,7 +3060,21 @@ async function renderReader(parts) {
         return;
       }
       const latestHistory=state.localReadingStorageUntrusted ? [] : loadJSON('sa.readingHistory',[]);
-      const readingHistory=Array.isArray(latestHistory)?latestHistory:[];
+      // A decoded legacy row can be null, a primitive, or have forged chapter
+      // coordinates. Never dereference it or overwrite the original cache with
+      // an apparent fresh history; preserve it for explicit recovery instead.
+      const validReadingRow=r=>r && typeof r==='object' && !Array.isArray(r) &&
+        typeof r.book==='string' && /^[1-3]?[A-Z]{2,4}$/.test(r.book) &&
+        Number.isSafeInteger(r.chapter) && r.chapter>=1 && r.chapter<=150 &&
+        typeof r.title==='string' && r.title.trim().length>0 && r.title.length<=200;
+      if(!Array.isArray(latestHistory) || !latestHistory.every(validReadingRow)) {
+        if(readerStillCurrent()&&document.querySelector('#mark-read')===readButton){
+          readButton.textContent=t('readingSyncRetry');
+          announce(t('readerHistoryNeedsRecovery'));
+        }
+        return;
+      }
+      const readingHistory=latestHistory;
       if(!readingHistory.some(r=>r.book===meta.code&&r.chapter===chapter))
         readingHistory.push({book:meta.code,chapter,title:bookTitle(meta)});
       const storedLocally=storeReaderPreference('sa.readingHistory',JSON.stringify(readingHistory));

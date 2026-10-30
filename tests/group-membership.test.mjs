@@ -358,3 +358,22 @@ test('joining on a D1 write exception fails closed without creating membership',
     assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM home_group_members WHERE group_id='g' AND user_id='outsider'").get().n,1);
   }finally{f.db.close();}
 });
+
+test('group creation and marathon cohort transition are one atomic D1 transaction',async()=>{
+  const f=fixture();try {
+    f.db.prepare("INSERT INTO group_marathon_registrations(id,group_id,weekly_goal,catchup_mode,cohort_key,status) VALUES('existing','g',3,'flexible','shared','forming')").run();
+    const payload={name:'Cohort group',weeklyGoal:3,catchupMode:'flexible',visibility:'private',rosterVisibility:'count',bibleEdition:'en-web',marathonEnabled:true};
+    const before=f.db.prepare("SELECT COUNT(*) AS n FROM home_groups").get().n;
+    // The final statement is the cohort promotion; a D1 failure must roll back
+    // the group and membership, not leave a group without its planned cohort.
+    f.setFailure(3);
+    const failed=await f.post('create',payload);
+    assert.equal(failed.status,503);assert.equal(failed.data.error,'group_creation_unconfirmed');
+    assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM home_groups").get().n,before);
+    assert.equal(f.db.prepare("SELECT status FROM group_marathon_registrations WHERE id='existing'").get().status,'forming');
+    f.setFailure(-1);
+    const success=await f.post('create',payload);
+    assert.equal(success.status,201);assert.equal(success.data.cohortStatus,'ready');
+    assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM group_marathon_registrations WHERE cohort_key='shared' AND status='ready'").get().n,2);
+  }finally{f.db.close();}
+});

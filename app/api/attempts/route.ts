@@ -199,6 +199,9 @@ export async function GET(request: Request) {
   if (attempt.status === "invalidated") return json({ error: "attempt_invalidated" }, 409);
   if (attempt.status === "completed") return completedResponse(attempt);
   if (attempt.status === "grading") return json({ grading: true });
+  // Unknown/corrupt lifecycle states must never fall through to live task
+  // disclosure. Only an explicitly active attempt can expose its next task.
+  if (attempt.status !== "active") return json({ error: "attempt_state_invalid" }, 409);
   if (Date.parse(attempt.expires_at) <= Date.now()) return json({ error: "attempt_expired" }, 410);
   const tasks = tasksFor(attempt.book_id, attempt.chapter).slice(0, attempt.task_limit), task = tasks[attempt.current_index];
   if (!task) return json({ error: "attempt_state_invalid" }, 409);

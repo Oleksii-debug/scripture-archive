@@ -15,7 +15,7 @@ const compiled = ts.transpileModule(source, {
 assert.equal(compiled.diagnostics?.length || 0, 0);
 
 function fixture({ identity = { userId: "reader", provider: "password" },
-  receipt = { success: true, meta: { changes: 0 } } } = {}) {
+  receipt = { success: true, meta: { changes: 1 } } } = {}) {
   const statements = [];
   const exports = {};
   const database = {
@@ -88,6 +88,9 @@ test("ordinary saved bookmark semantics and legacy deletion idempotency are unch
   assert.equal((await f.send("DELETE", { ...bookmark, chapter: 50 })).status, 200);
   assert.equal((await f.send("DELETE", { ...bookmark, chapter: 151 })).status, 200);
   assert.equal(f.statements.length, 3);
+  const idempotent = fixture({ receipt: { success: true, meta: { changes: 0 } } });
+  assert.equal((await idempotent.send("DELETE", { ...bookmark, chapter: 999 })).status, 200);
+  assert.equal(idempotent.statements.length, 1);
 });
 
 test("cleanup cannot bypass the same-origin and principal boundaries", async () => {

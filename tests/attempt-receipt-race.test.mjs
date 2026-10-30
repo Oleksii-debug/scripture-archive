@@ -78,3 +78,36 @@ test('a failed receipt consumption rolls back the entire start transaction', () 
     assert.equal(db.prepare('SELECT consumed_at FROM chapter_read_receipts').get().consumed_at,null);
   } finally { db.close(); }
 });
+
+
+test('a new group attempt cannot invalidate another context even on the same chapter', () => {
+  const source = readFileSync(new URL('../app/api/attempts/route.ts', import.meta.url), 'utf8');
+  const block = source.slice(source.indexOf('const started = await env.DB.batch(['), source.indexOf('const startChanges = confirmedBatch(started, 3)'));
+  const sql = [...block.matchAll(/env\\.DB\\.prepare\\("([^"]+)"\\)/g)].map(match => match[1]);
+  assert.equal(sql.length, 3);
+  assert.match(sql[1], /COALESCE\\(group_id,''\\)=\\?/);
+  const db = new DatabaseSync(':memory:');
+  try {
+    db.exec(`CREATE TABLE home_group_members (group_id TEXT, user_id TEXT, role TEXT);
+      INSERT INTO home_group_members VALUES ('group-a','actor','facilitator');
+      CREATE TABLE chapter_read_receipts (id TEXT PRIMARY KEY, actor_id TEXT, consumed_at TEXT);
+      CREATE TABLE mission_attempts (id TEXT PRIMARY KEY, actor_id TEXT, mission_id TEXT, book_id TEXT, chapter INTEGER, group_id TEXT, locale TEXT, task_limit INTEGER, expires_at TEXT, status TEXT DEFAULT 'active', invalidated_at TEXT, invalidation_reason TEXT);
+      INSERT INTO chapter_read_receipts VALUES ('receipt','actor',NULL);
+      INSERT INTO mission_attempts (id,actor_id,book_id,chapter,group_id,status) VALUES
+        ('personal','actor','GEN',12,NULL,'active'),
+        ('same-group','actor','GEN',12,'group-a','active'),
+        ('other-group','actor','GEN',12,'group-b','active'),
+        ('another-user','other','GEN',12,'group-a','active');`);
+    db.exec('BEGIN');
+    try {
+      assert.equal(db.prepare(sql[0]).run('new','actor','mission','GEN',12,'group-a','en',1,'receipt','actor','group-a','group-a','actor').changes,1);
+      assert.equal(db.prepare(sql[1]).run('actor','new','group-a','new').changes,1);
+      assert.equal(db.prepare(sql[2]).run('receipt','new').changes,1);
+      db.exec('COMMIT');
+    } catch (error) { db.exec('ROLLBACK'); throw error; }
+    const statuses = Object.fromEntries(db.prepare('SELECT id,status FROM mission_attempts').all().map(row => [row.id,row.status]));
+    assert.deepEqual(statuses,{
+      personal:'active','same-group':'invalidated','other-group':'active','another-user':'active',new:'active'
+    });
+  } finally { db.close(); }
+});

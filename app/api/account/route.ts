@@ -235,11 +235,10 @@ async function write(request:Request){
     }catch{return privateJson({error:"visibility_save_failed"},{status:503});}
   }
   if(action!=="profile")return privateJson({error:"unknown_action"},{status:400});
-  // Explicitly selected profile languages must never be silently changed to
-  // Ukrainian by a fallback for an unsupported code or malformed JSON type.
-  // Keep legacy absent/null/blank form submissions on the Ukrainian default.
-  if(body.locale!=null && (typeof body.locale!=="string" ||
-      (body.locale.trim()!=="" && !ALLOWED_LOCALES.has(body.locale.trim()))))
+  // Keep the established fallback for absent/blank/unsupported language
+  // strings. An explicit non-string JSON locale is NOT a language selection,
+  // and must not be silently rewritten into that valid-looking default.
+  if(body.locale!=null && typeof body.locale!=="string")
     return privateJson({error:"invalid_profile_field"},{status:400});
   if(oversized(body.firstName,80)||oversized(body.lastName,80)||oversized(body.ageRange,10)||
      oversized(body.tradition,40)||oversized(body.maritalStatus,40)||oversized(body.gender,30)||

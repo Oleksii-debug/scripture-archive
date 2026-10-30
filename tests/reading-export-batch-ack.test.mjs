@@ -407,3 +407,45 @@ test("private bookmark export accepts the real Ohiienko fourth Joel chapter but 
     ["uk-ohiienko:JOL:4","en-web:GEN:50"]);
   assert.equal(body.attemptHistory[0].chapter,1);
 });
+
+
+test("private export refuses corrupt progress identity and updated-at metadata", async () => {
+  // The canonical progress table uses (user_id, mission_id) as a key and
+  // updated_at NOT NULL. A malformed D1 result is not a valid backup merely
+  // because its JSON snapshot parses.
+  const invalid = [
+    null,
+    { mission_id: null }, { mission_id: 12 }, { mission_id: "" },
+    { mission_id: "   " }, { mission_id: undefined },
+    { updated_at: null }, { updated_at: 0 }, { updated_at: "" },
+    { updated_at: " \n\t " }, { updated_at: undefined },
+  ];
+  for (const mutation of invalid) {
+    const results = standardRows();
+    results[1].results[0] = mutation === null
+      ? null
+      : { ...results[1].results[0], ...mutation };
+    const f = fixture({ results });
+    const { response, body } = await outcome(f);
+    assert.equal(response.status, 503, JSON.stringify(mutation));
+    assert.deepEqual(body, { error: "export_unavailable" });
+    assert.equal(response.headers.get("content-disposition"), null);
+    assert.match(response.headers.get("cache-control"), /no-store, private/);
+    assert.equal(f.batches, 1);
+    assert.equal(f.statements.length, 4);
+  }
+});
+
+test("private export preserves valid non-READING mission keys and update time", async () => {
+  const rows = standardRows();
+  rows[1].results.push({
+    mission_id: "OT-AB-01:lesson/2",
+    data: '{"completed":true}',
+    updated_at: "2026-10-30 12:55:00",
+  });
+  const { response, body } = await outcome(fixture({ results: rows }));
+  assert.equal(response.status, 200);
+  assert.equal(body.progress[1].mission, "OT-AB-01:lesson/2");
+  assert.equal(body.progress[1].updatedAt, "2026-10-30 12:55:00");
+  assert.equal(body.progress[1].data.completed, true);
+});

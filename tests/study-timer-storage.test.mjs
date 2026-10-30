@@ -50,6 +50,7 @@ function fixture({ lang = "uk", denied = false, quota = false, duration = 2, rem
     state, controls, writes, sounds, intervals,
     mount: () => context.activateTimer(),
     save: () => context.saveTimer(),
+    setDenied: value => { denied = value; },
   };
 }
 
@@ -132,4 +133,37 @@ test("countdown still updates on a scheduled tick with unavailable storage", () 
   assert.notEqual(f.controls["#timer-display"].textContent, prior);
   assert.equal(f.controls["#timer-display"].textContent, "99");
   assert.match(f.controls["#timer-status"].textContent, /лише в цій вкладці/);
+});
+
+test("permission recovery during an active tick removes only the temporary-only storage warning", () => {
+  for (const lang of ["uk", "ru", "en"]) {
+    const f = fixture({ lang, denied: true });
+    f.mount();
+    f.controls["#timer-start"].onclick();
+    assert.notEqual(f.controls["#timer-status"].textContent, "");
+    f.setDenied(false);
+    f.intervals[0]();
+    assert.equal(f.controls["#timer-status"].textContent, "");
+    assert.equal(f.state.studyTimer.running, true);
+    assert.equal(f.writes.length, 1);
+    assert.equal(JSON.parse(f.writes[0][1]).running, true);
+  }
+});
+
+test("continued storage denial preserves a truthful warning on every active timer tick", () => {
+  const f = fixture({ denied: true });
+  f.mount();
+  f.controls["#timer-start"].onclick();
+  const warning = f.controls["#timer-status"].textContent;
+  f.intervals[0]();
+  assert.equal(f.controls["#timer-status"].textContent, warning);
+  assert.equal(f.writes.length, 0);
+});
+
+test("successful storage must never clear the completed-timer announcement", () => {
+  const f = fixture({ denied: false, duration: 1, remaining: 0 });
+  f.mount();
+  assert.equal(f.controls["#timer-status"].textContent, "timerDone");
+  assert.deepEqual(f.sounds, ["done"]);
+  assert.equal(f.writes.length, 1);
 });

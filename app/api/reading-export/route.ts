@@ -64,6 +64,9 @@ export async function GET(request: Request) {
       // Match the reader's actual canonical book/chapter bounds (including
       // edition-specific chapter numbering), not just a plausible code shape.
       // Read from the same source catalogue; do not invent a second registry.
+      // Account GET and PUT both cap reading titles at 100 characters. A
+      // 101..200-character legacy title is not a restorable reader receipt,
+      // even though the old export accepted it as a successful backup.
       if (row.mission_id === "READING" &&
           (!Array.isArray(data) || data.some(entry => !entry || typeof entry !== "object" ||
             Array.isArray(entry) || typeof entry.book !== "string" ||
@@ -71,7 +74,7 @@ export async function GET(request: Request) {
             !Number.isSafeInteger(entry.chapter) || entry.chapter < 1 ||
             entry.chapter > (READING_CHAPTERS.get(entry.book) ?? 0) ||
             typeof entry.title !== "string" || entry.title.trim().length === 0 ||
-            entry.title.length > 200)))
+            entry.title.length > 100)))
         throw Error("invalid_reading_receipt");
       return { mission: row.mission_id, data, updatedAt: row.updated_at };
     });

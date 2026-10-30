@@ -13,10 +13,11 @@ const transpiled = ts.transpileModule(source, {
 assert.equal(transpiled.diagnostics?.length ?? 0, 0);
 
 function harness(mode) {
-  const calls = { batch: 0 };
+  const calls = { batch: 0, prepare: 0 };
   const ok = { success: true, meta: { changes: 1 } };
   const DB = {
     prepare(sql) {
+      calls.prepare++;
       return {
         bind(...values) {
           return {
@@ -51,9 +52,9 @@ function harness(mode) {
   new Function("require", "module", "exports", "crypto", transpiled.outputText)(
     dependency, fixtureModule, fixtureModule.exports, { randomUUID: () => "test-generated-id" }
   );
-  async function invoke(operation, origin = "https://scripture.invalid", payloadOverride = undefined) {
+  async function invoke(operation, origin = "https://scripture.invalid", payloadOverride = undefined, deleteId = "record") {
     const method = operation === "delete" ? "DELETE" : "PUT";
-    const url = "https://scripture.invalid/api/content" + (operation === "delete" ? "?id=record" : "");
+    const url = "https://scripture.invalid/api/content" + (operation === "delete" ? "?id=" + encodeURIComponent(deleteId) : "");
     const payload = operation === "upsert" ?
       { action: "upsert-item", id: "record", kind: "book", locale: "uk",
         title: "Example", status: "draft", data: { text: "Local test" } } :
@@ -155,5 +156,66 @@ test("explicit complete three-language note preserves existing authoring contrac
   const response = await h.invoke("public-note", "https://scripture.invalid", {liveNote:completedNote});
   assert.equal(response.status, 200);
   assert.deepEqual((await response.json()).liveNote, completedNote);
+  assert.equal(h.calls.batch, 1);
+});
+
+const existingIdentity = "k".repeat(100);
+const upsertWithIdentity = id => ({
+  action:"upsert-item", id, kind:"book", locale:"uk",
+  title:"Canonical entry", status:"draft", data:{text:"existing source"}
+});
+for (const [label, identity] of [
+  ["101-character key", existingIdentity+"x"],
+  ["101-character spaced key", " "+existingIdentity+"x "],
+  ["numeric key", 42],
+  ["array key", ["record"]],
+  ["object key", {key:"record"}],
+  ["boolean key", false],
+]) {
+  test("explicit malformed upsert identity cannot alias a saved content key: "+label, async () => {
+    const h = harness("ok");
+    const response = await h.invoke("upsert", "https://scripture.invalid", upsertWithIdentity(identity));
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).error, "invalid_content_item");
+    assert.equal(h.calls.batch, 0);
+    assert.equal(h.calls.prepare, 0);
+  });
+}
+
+for (const [label, identity] of [
+  ["101-character key", existingIdentity+"x"],
+  ["101-character spaced key", " "+existingIdentity+"x "],
+  ["empty identity", ""],
+  ["whitespace identity", "  "],
+]) {
+  test("invalid delete URL cannot hide an unrelated prefix-matching item: "+label, async () => {
+    const h = harness("ok");
+    const response = await h.invoke("delete", "https://scripture.invalid", undefined, identity);
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).error, "invalid_content_id");
+    assert.equal(h.calls.batch, 0);
+    assert.equal(h.calls.prepare, 0, "reject before looking up a possibly different record");
+  });
+}
+
+test("exactly 100-character upsert identity remains a valid existing CMS key", async () => {
+  const h = harness("ok");
+  const response = await h.invoke("upsert","https://scripture.invalid",upsertWithIdentity(existingIdentity));
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).id, existingIdentity);
+  assert.equal(h.calls.batch, 1);
+});
+test("exactly 100-character deletion still hides only the requested key", async () => {
+  const h = harness("ok");
+  const response = await h.invoke("delete","https://scripture.invalid",undefined,existingIdentity);
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).ok, true);
+  assert.equal(h.calls.batch, 1);
+});
+test("omitted upsert identity still creates a canonical UUID-backed item", async () => {
+  const h = harness("ok");
+  const response = await h.invoke("upsert","https://scripture.invalid",upsertWithIdentity(undefined));
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).id, "test-generated-id");
   assert.equal(h.calls.batch, 1);
 });

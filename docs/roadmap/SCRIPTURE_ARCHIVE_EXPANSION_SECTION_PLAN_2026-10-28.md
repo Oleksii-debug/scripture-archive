@@ -1,5 +1,14 @@
 # SCRIPTURE ARCHIVE — каталог розділів і план реалізації розширень
 
+## 2026-10-30 — SA-EXT-01 / PARALLEL_READER_KEYBOARD_SUBMIT_FOCUS — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
+
+**Статус:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` лише для відновлення фокуса клавіатурної кнопки порівняння видань; `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Увесь батьківський SA-EXT-01 та решта 20 розділів залишаються OPEN.** Нові переклади, редакційні права, фізичний NVDA й deployed Sites SHA не вважаються прийнятими.
+
+- **Відтворений дефект:** у наявній канонічній читальні `public/parallel-reader.js` кнопка порівняння тимчасово вимикається на час подвійної перевірки доступу до глави та завантаження тексту. Chromium при вимкненні сфокусованої кнопки переносить фокус до BODY, а старий код не повертав його після відповіді. Це порушує клавіатурний сценарій без створення нового рідера.
+- **Інтегровано:** [PR #543](https://github.com/Oleksii-debug/scripture-archive/pull/543) **SQUASH MERGED** у підтверджений `main@517fc83057a078755c94c3e3d7bfd8bd3b5b141c`. JS production blob `c9030e086a0ee4d8d93fe8cb4478dbc424d50047`; regression blob `0ee7a70b89ab9f0fe741a40695ba6c96de5441bd`. Після операції лише для того самого підключеного principal/reader повертається фокус на кнопку, якщо він не перемістився на інший елемент; перехід зі сторінки, новий principal та заблокована глава не отримують старого фокуса. Всі наявні pre/post chapter guards, переклади UK/RU/EN і provenance збережено.
+- **Реальні тести точного PR HEAD `0ecf0caabbb67138d321653c34ba067ad4e19b06`:** [Actions #41020851542](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41020851542) **SUCCESS**; нативний Node 1156 PASS / 0 FAIL / 1 SKIP (1157 tests), disposable Worker/D1 **22/22 PASS**, TypeScript/lint/source build PASS, Python validators **2/2 PASS**. Власні 8 кейсів також 8/8 PASS у незалежній ізольованій V8 перевірці. Це не тест фізичного NVDA чи реального production.
+- **Відомі межі:** активний сайт/Sites deployed SHA, Windows/WebView2, реальна клавіатурна сесія NVDA, редакційні права й повний SA-EXT-01 лишаються `NOT_VERIFIED`. Публікацію не виконували. Не починати повторну розробку цього scoped дефекту без конкретного відтворення чи нової вимоги.
+
 ## 2026-10-30 — SA-EXT-01 / BOOKMARK_SAME_PRINCIPAL_CHAPTER_LEASE — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
 
 **Рішення:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` **лише** для випадку, коли відповідь закладок попередньої глави того самого користувача помилково з'являється в новій главі. `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. Батьківський **SA-EXT-01** і всі 20 повних батьківських розділів **залишаються OPEN**: вичерпний паралельний читач, ліцензійно перевірені переклади, зовнішні джерела, повноцінне NVDA/browser та production приймання ще не підтверджені.

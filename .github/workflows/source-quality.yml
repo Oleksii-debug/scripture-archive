@@ -16,6 +16,11 @@ on:
       - 'tests/**'
       - 'tools/**'
       - 'package*.json'
+      - '*.config.*'
+      - 'tsconfig.json'
+      - 'cloudflare-env.d.ts'
+      - '.npmrc'
+      - 'pytest.ini'
       - 'requirements-test.txt'
       - '.github/workflows/source-quality.yml'
   push:
@@ -32,6 +37,11 @@ on:
       - 'tests/**'
       - 'tools/**'
       - 'package*.json'
+      - '*.config.*'
+      - 'tsconfig.json'
+      - 'cloudflare-env.d.ts'
+      - '.npmrc'
+      - 'pytest.ini'
       - 'requirements-test.txt'
       - '.github/workflows/source-quality.yml'
 

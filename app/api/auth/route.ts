@@ -1,7 +1,6 @@
 import { env } from "cloudflare:workers";
 import {
   authenticateRequest,
-  clearSessionCookie,
   createSession,
   hashPassword,
   isAuthTestRequest,
@@ -189,10 +188,15 @@ export async function POST(request: Request) {
     }
   }
 
+  // Do not clear the shared HttpOnly session cookie in an asynchronous old-
+  // session response. A new login may have already set a newer cookie in this
+  // browser; the late old response would otherwise erase that new session.
+  // Security is enforced by durable D1 session revocation/version invalidation,
+  // not by the browser's receipt order of Set-Cookie headers.
   if (action === "logout") {
     try { await revokeCurrentSession(request); }
     catch { return json({ error: "logout_unavailable" }, 503); }
-    return json({ ok: true }, 200, { "Set-Cookie": clearSessionCookie(request) });
+    return json({ ok: true });
   }
 
   if (action === "resend-verification") {
@@ -252,7 +256,7 @@ export async function POST(request: Request) {
     if (!batchAcknowledged(result, 3)) return json({ error: "password_reset_unavailable" }, 503);
     if (result[0].meta.changes !== 1 || result[2].meta.changes !== 1)
       return json({ error: "invalid_or_expired_token" }, 400);
-    return json({ ok: true }, 200, { "Set-Cookie": clearSessionCookie(request) });
+    return json({ ok: true });
     } catch {
       // Transient D1/clock/crypto failure is not an invalid reset token.
       // Never acknowledge a partially applied password/session change.
@@ -277,7 +281,7 @@ export async function POST(request: Request) {
     ]);
     if (!batchAcknowledged(receipts, 2) || receipts[0].meta.changes !== 1)
       return json({ error: "password_change_unavailable" }, 503);
-    return json({ ok: true, signedOut: true }, 200, { "Set-Cookie": clearSessionCookie(request) });
+    return json({ ok: true, signedOut: true });
   }
 
   if (action === "delete-account") {
@@ -321,7 +325,7 @@ export async function POST(request: Request) {
       // D1 batch rejects atomically; do not pretend the account was erased.
       return json({ error: "deletion_failed" }, 503);
     }
-    return json({ ok: true }, 200, { "Set-Cookie": clearSessionCookie(request) });
+    return json({ ok: true });
   }
 
   return json({ error: "unknown_action" }, 400);

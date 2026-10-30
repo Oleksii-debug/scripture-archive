@@ -15,24 +15,24 @@ function scenario(pathname = '/builder') {
     lang: 'en', user: { id: 'alice' }, sessionUnavailable: false,
     missionProgress: { correct: [], complete: false, index: 0 },
   };
-  const shells = [];
+  const shells = [], announcements = [];
   globalThis.location = { pathname, search: '', hash: '' };
   const main = { querySelectorAll: () => [] };
   const publicMaterials = { isConnected: false };
-  const newMaterial = {}, form = {};
+  const newMaterial = {}, form = {}, deleteButton = { dataset: { delete: 'owned' }, disabled: false };
   globalThis.document = {
     querySelector(selector) {
       return ({ main, '#public-materials': publicMaterials, '#new-material': newMaterial, '#material-form': form })[selector] ?? null;
     },
-    querySelectorAll: () => [],
+    querySelectorAll: selector => selector === '[data-delete]' ? [deleteButton] : [],
   };
   const context = {
     state, t: key => key, esc: String, shell: html => shells.push(html),
     setActiveNav() {}, getMission: async () => ({ taskCount: 2, title: { en: 'Mission' } }),
-    loadJSON: () => [], announce() {}, play() {}, getCatalog: async () => ({}),
+    loadJSON: () => [], announce(message) {announcements.push(message);}, play() {}, getCatalog: async () => ({}),
   };
   return {
-    state, context, shells,
+    state, context, shells, announcements, form, deleteButton,
     restore() {
       globalThis.fetch = original.fetch;
       if (original.location === undefined) delete globalThis.location;
@@ -123,4 +123,84 @@ test('same-account builder still renders its existing canonical private interfac
     assert.match(f.shells[0], /My draft/);
     assert.match(f.shells[0], /builder-layout/);
   } finally { f.restore(); }
+});
+
+function builderFetchForNativeMutation(mutate, started) {
+  return async (url, options={}) => {
+    if (url === '/api/editor-roles?view=me') return answer({editor: false, owner: false});
+    if (url === '/api/materials?mine=1') return answer({materials: [{
+      id: 'owned', title: 'My draft', visibility: 'private', data: { reference: 'GEN 1' },
+    }]});
+    if (url === '/api/material-review?view=mine' || url === '/api/material-review?view=public')
+      return answer({items: []});
+    if (url.startsWith('/api/materials') && ['POST','DELETE'].includes(options.method)) {
+      started.resolve();
+      return mutate.promise;
+    }
+    throw Error('unexpected native builder API ' + url);
+  };
+}
+test('late native builder save never redraws or announces into another account', async () => {
+  const f=scenario(), response=deferred(), started=deferred();
+  const savedFormData=globalThis.FormData;
+  try {
+    globalThis.fetch=builderFetchForNativeMutation(response,started);
+    await renderWorkspace('builder',f.context);
+    assert.equal(f.shells.length,1);
+    globalThis.FormData=class {
+      constructor() {}
+      *[Symbol.iterator]() {
+        yield ['title','My draft']; yield ['prompt','Question'];
+        yield ['reference','GEN 1']; yield ['options','Yes\\nNo'];
+        yield ['answer','Yes']; yield ['explanation','Source-based explanation'];
+      }
+    };
+    const action=f.form.onsubmit({preventDefault(){},currentTarget:f.form});
+    await started.promise;
+    f.state.user={id:'other'};
+    response.resolve(answer({saved:true}));
+    await action;
+    assert.equal(f.shells.length,1,'old builder must not redraw after account swap');
+    assert.deepEqual(f.announcements,[],'old submit must not announce into another session');
+  } finally {globalThis.FormData=savedFormData;f.restore();}
+});
+test('late native builder delete never redraws or announces into another account', async () => {
+  const f=scenario(), response=deferred(), started=deferred();
+  const previousWindow=globalThis.window;
+  try {
+    globalThis.window={confirm:()=>true};
+    globalThis.fetch=builderFetchForNativeMutation(response,started);
+    await renderWorkspace('builder',f.context);
+    assert.equal(typeof f.deleteButton.onclick,'function');
+    const action=f.deleteButton.onclick();
+    await started.promise;
+    f.state.user={id:'other'};
+    response.resolve(answer({deleted:true}));
+    await action;
+    assert.equal(f.shells.length,1,'old builder must not redraw after account swap');
+    assert.deepEqual(f.announcements,[],'old deletion must not announce into another session');
+  } finally {
+    if(previousWindow===undefined)delete globalThis.window;else globalThis.window=previousWindow;
+    f.restore();
+  }
+});
+test('native builder still announces acknowledged save for its original current account', async () => {
+  const f=scenario(), response=deferred(), started=deferred();
+  const savedFormData=globalThis.FormData;
+  try {
+    globalThis.fetch=builderFetchForNativeMutation(response,started);
+    await renderWorkspace('builder',f.context);
+    globalThis.FormData=class {
+      *[Symbol.iterator]() {
+        yield ['title','My draft'];yield ['prompt','Question'];yield ['reference','GEN 1'];
+        yield ['options','Yes\\nNo'];yield ['answer','Yes'];yield ['explanation','Explanation'];
+      }
+    };
+    const action=f.form.onsubmit({preventDefault(){},currentTarget:f.form});
+    await started.promise;
+    response.resolve(answer({saved:true}));
+    await action;
+    assert.equal(f.shells.length,2,'valid save still redraws canonical builder');
+    assert.deepEqual(f.announcements,['Material saved.']);
+  } finally {globalThis.FormData=savedFormData;f.restore();}
 });

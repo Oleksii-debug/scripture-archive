@@ -70,9 +70,25 @@ function requestedLocale(value: unknown): Locale | null {
 // D1 is not an enum/date constraint: legacy or corrupt rows can contain invalid
 // deadlines. Date.parse(NaN) is never <= now, so such rows must fail closed.
 function attemptDeadline(raw: unknown): number | null {
-  if (typeof raw !== "string" || !raw || raw !== raw.trim()) return null;
-  const parsed = Date.parse(raw);
-  return Number.isFinite(parsed) ? parsed : null;
+  if (typeof raw !== "string" || raw !== raw.trim()) return null;
+  // D1 emits UTC "YYYY-MM-DD HH:MM:SS"; accept historical date-only and
+  // explicit ISO-Z deadlines, never Date.parse's normalized invalid calendar
+  // dates, regional timezone interpretations, or ambiguous short strings.
+  const match = /^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2}):(\d{2})|T(\d{2}):(\d{2}):(\d{2})Z)?$/.exec(raw);
+  if (!match) return null;
+  const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
+  const hour = Number(match[4] ?? match[7] ?? "0");
+  const minute = Number(match[5] ?? match[8] ?? "0");
+  const second = Number(match[6] ?? match[9] ?? "0");
+  if (year < 1000 || month < 1 || month > 12 || day < 1 || day > 31 ||
+      hour > 23 || minute > 59 || second > 59) return null;
+  const timestamp = Date.UTC(year, month - 1, day, hour, minute, second);
+  const canonical = new Date(timestamp);
+  if (!Number.isFinite(timestamp) || canonical.getUTCFullYear() !== year ||
+      canonical.getUTCMonth() + 1 !== month || canonical.getUTCDate() !== day ||
+      canonical.getUTCHours() !== hour || canonical.getUTCMinutes() !== minute ||
+      canonical.getUTCSeconds() !== second) return null;
+  return timestamp;
 }
 // A successful SQLite read still can contain forged or legacy malformed
 // timestamp text. Date.parse('1') and overflow days accept false history;

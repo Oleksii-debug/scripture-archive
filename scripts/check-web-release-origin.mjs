@@ -5,6 +5,11 @@ import path from 'node:path';
 
 export function normalizeSecureOrigin(value, label = 'origin') {
   if (typeof value !== 'string' || !value.trim()) throw new Error(`${label}: explicit URL required`);
+  // WHATWG URL silently strips TAB, CR and LF (even inside the hostname).
+  // An operator-selected release origin must not normalize hidden controls
+  // or whitespace into a seemingly approved public host.
+  if (value !== value.trim() || /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\s]/u.test(value))
+    throw new Error(`${label}: invalid URL whitespace or controls`);
   let url;
   try { url = new URL(value); }
   catch { throw new Error(`${label}: invalid URL`); }

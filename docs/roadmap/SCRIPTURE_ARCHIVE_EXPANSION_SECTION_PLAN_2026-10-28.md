@@ -1,3 +1,14 @@
+## 2026-10-30 — SA-EXT-03 / PUBLIC_REVIEW_ANSWER_SELECTION_RACE — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
+
+**Статус цього конкретного дефекту:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. Батьківський SA-EXT-03 і решта SA-EXT-01…20 **залишаються OPEN**.
+
+- **Відтворення на реальному попередньому `main`:** під час незавершеного POST перевірки опублікованого завдання вибір варіанта A змінювався на B, але асинхронна відповідь для A відображала «Правильно» та пояснення A під уже вибраним B. Стандартна клавіатурна доступність залишалась, проте голосове статус-повідомлення могло вводити в оману.
+- **Реалізовано:** [PR #601](https://github.com/Oleksii-debug/scripture-archive/pull/601) **SQUASH MERGED** у `main@59b55e241309ddb2963c22e266ce91eb294ccc6a`. Справжній `public/material-review.js@91c1f0752978fddd216c1d0ab4add06adf7f3bb1` повторно читає вибір після запиту й не показує стару оцінку/пояснення, якщо радіовибір змінився; дає чіткий статус `uk/ru/en`, лишає дію доступною, не краде фокус, не змінює права і серверне оцінювання.
+- **Підтвердження:** `tests/public-review-answer-focus.test.mjs@82ad413aa0d0c3c8a8d08426df8d50087a861dc6` містить нові негативні та позитивні перевірки реального асинхронного сценарію. V8 source-executed 6/6 PASS. [Exact head CI #41032398721](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41032398721) — **Node 1389 PASS / 0 FAIL / 1 SKIP**, TypeScript/lint/build/Python PASS; **Worker/D1 двічі 21/22** з незалежним `Your worker restarted mid-request` / 503 для інших POST/PUT, розслідування [#361](https://github.com/Oleksii-debug/scripture-archive/pull/361). Отже повний CI **НЕ зелений** на цьому SHA.
+- **Межі:** жодної нової системи зберігання, API, редакційного статусу, змін прав або Sites deployment. Застосування на реальному сайті й фізичний NVDA не підтверджено; батьківський розділ не закривати.
+
+---
+
 ## 2026-10-30 — SA-EXT-02 / ATTEMPT_HISTORY_CANONICAL_CHAPTER_TRUST — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
 
 **Термінальний статус лише цього підпункту:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`; `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. Повний розділ SA-EXT-02 і всі двадцять батьківських розділів **залишаються OPEN**.

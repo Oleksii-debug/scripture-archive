@@ -5,9 +5,9 @@ import { scriptureDossiers, validateDossierGraph } from './scripture-dossiers.js
 export const academyLessonIds=Object.freeze(['abraham','sarah','joseph','moses','exodus','david','nativity']);
 const LANGS=['uk','ru','en'];
 const COPY={
-  uk:{title:'Академія: читання біблійних першоджерел',intro:'Сім послідовних занять за вже перевіреними біблійними досьє. Відкрийте уривки в читальні, дослідіть запитання і самостійно позначте опрацьовані теми.',privacy:'Позначки зберігаються лише у цьому браузері, окремо для кожного облікового запису. Вони не синхронізуються із сервером.',honesty:'Це самостійний читацький маршрут, а не іспит, диплом чи церковна або державна акредитація.',progress:'Опрацьовано',badge:'Особистий читацький маршрут завершено (самооцінка, без сертифіката).',read:'Відкрити уривок у читальні',question:'Запитання для роздумів',mark:'Позначити як опрацьоване',unmark:'Прибрати позначку',unavailable:'Не вдалося прочитати або підтвердити локальні позначки занять. Прогрес не змінено.',saveError:'Не вдалося підтвердити збереження позначки на цьому пристрої. Перевірте її стан після повторного відкриття сторінки.',invalid:'Джерела цього курсу наразі не перевірені.'},
-  ru:{title:'Академия: чтение библейских первоисточников',intro:'Семь последовательных занятий по уже проверенным библейским досье. Откройте отрывки в читальне, изучите вопросы и самостоятельно отметьте пройденные темы.',privacy:'Отметки хранятся только в этом браузере, отдельно для каждой учётной записи. Они не синхронизируются с сервером.',honesty:'Это самостоятельный читательский маршрут, а не экзамен, диплом или церковная либо государственная аккредитация.',progress:'Пройдено',badge:'Личный читательский маршрут завершён (самооценка, без сертификата).',read:'Открыть отрывок в читальне',question:'Вопросы для размышления',mark:'Отметить как пройденное',unmark:'Убрать отметку',unavailable:'Не удалось прочитать или подтвердить локальные отметки занятий. Прогресс не изменён.',saveError:'Не удалось подтвердить сохранение отметки на этом устройстве. Проверьте её состояние после повторного открытия страницы.',invalid:'Источники курса пока не проверены.'},
-  en:{title:'Academy: read the primary Scripture sources',intro:'Seven sequential lessons from the already verified biblical dossiers. Read the source passages, reflect on the questions, and mark lessons studied yourself.',privacy:'Markers are saved only in this browser, separately for each account. They do not synchronize with the server.',honesty:'This is a self-directed reading path, not a graded exam, diploma, or religious/government accreditation.',progress:'Studied',badge:'Personal reading path completed (self-report only; no certificate).',read:'Open passage in reader',question:'Reflection questions',mark:'Mark studied',unmark:'Unmark studied',unavailable:'Local lesson markers could not be read or verified. Progress has not been changed.',saveError:'Could not verify that the marker was saved on this device. Reopen the page to check its current state.',invalid:'Course source references are not currently verified.'}
+  uk:{title:'Академія: читання біблійних першоджерел',intro:'Сім послідовних занять за вже перевіреними біблійними досьє. Відкрийте уривки в читальні, дослідіть запитання і самостійно позначте опрацьовані теми.',privacy:'Позначки зберігаються лише у цьому браузері, окремо для кожного облікового запису. Вони не синхронізуються із сервером.',honesty:'Це самостійний читацький маршрут, а не іспит, диплом чи церковна або державна акредитація.',progress:'Опрацьовано',badge:'Особистий читацький маршрут завершено (самооцінка, без сертифіката).',read:'Відкрити уривок у читальні',question:'Запитання для роздумів',mark:'Позначити як опрацьоване',unmark:'Прибрати позначку',unavailable:'Не вдалося прочитати або підтвердити локальні позначки занять. Прогрес не змінено.',saveError:'Не вдалося підтвердити збереження позначки на цьому пристрої. Перевірте її стан після повторного відкриття сторінки.',lockUnavailable:'Безпечне збереження між вкладками недоступне в цьому браузері. Позначку не змінено.',invalid:'Джерела цього курсу наразі не перевірені.'},
+  ru:{title:'Академия: чтение библейских первоисточников',intro:'Семь последовательных занятий по уже проверенным библейским досье. Откройте отрывки в читальне, изучите вопросы и самостоятельно отметьте пройденные темы.',privacy:'Отметки хранятся только в этом браузере, отдельно для каждой учётной записи. Они не синхронизируются с сервером.',honesty:'Это самостоятельный читательский маршрут, а не экзамен, диплом или церковная либо государственная аккредитация.',progress:'Пройдено',badge:'Личный читательский маршрут завершён (самооценка, без сертификата).',read:'Открыть отрывок в читальне',question:'Вопросы для размышления',mark:'Отметить как пройденное',unmark:'Убрать отметку',unavailable:'Не удалось прочитать или подтвердить локальные отметки занятий. Прогресс не изменён.',saveError:'Не удалось подтвердить сохранение отметки на этом устройстве. Проверьте её состояние после повторного открытия страницы.',lockUnavailable:'Безопасное сохранение между вкладками недоступно в этом браузере. Отметка не изменена.',invalid:'Источники курса пока не проверены.'},
+  en:{title:'Academy: read the primary Scripture sources',intro:'Seven sequential lessons from the already verified biblical dossiers. Read the source passages, reflect on the questions, and mark lessons studied yourself.',privacy:'Markers are saved only in this browser, separately for each account. They do not synchronize with the server.',honesty:'This is a self-directed reading path, not a graded exam, diploma, or religious/government accreditation.',progress:'Studied',badge:'Personal reading path completed (self-report only; no certificate).',read:'Open passage in reader',question:'Reflection questions',mark:'Mark studied',unmark:'Unmark studied',unavailable:'Local lesson markers could not be read or verified. Progress has not been changed.',saveError:'Could not verify that the marker was saved on this device. Reopen the page to check its current state.',lockUnavailable:'Safe cross-tab saving is unavailable in this browser. The marker was not changed.',invalid:'Course source references are not currently verified.'}
 };
 const languageOf=value=>LANGS.includes(value)?value:'uk';
 
@@ -62,11 +62,18 @@ export function academyMarkup(catalog,language,esc,progress) {
   return '<section class="academy-reading" data-academy-root aria-labelledby="academy-reading-title"><h2 id="academy-reading-title">'+esc(w.title)+'</h2><p>'+esc(w.intro)+'</p><p>'+esc(w.privacy)+'</p><p>'+esc(w.honesty)+'</p>'+(readOnly?'<p role="alert">'+esc(w.unavailable)+'</p>':'<label for="academy-reading-progress">'+esc(w.progress)+'</label> <progress id="academy-reading-progress" max="'+total+'" value="'+count+'"></progress> <span id="academy-reading-status" role="status" aria-live="polite">'+esc(w.progress)+': '+count+'/'+total+'</span><p id="academy-reading-badge" role="status">'+(count===total?esc(w.badge):'')+'</p><p id="academy-reading-error" role="alert"></p>')+'<ol>'+lessons+'</ol></section>';
 }
 
-export function attachAcademy(document,storage,language,user,progress,isCurrent=()=>true){
+export function attachAcademy(document,storage,language,user,progress,isCurrent=()=>true,lockManager=undefined){
   if(!progress?.available)return;
   const root=document?.querySelector('[data-academy-root]');
   if(!root)return;
   const w=COPY[languageOf(language)],key=academyProgressKey(user);
+  // localStorage has no atomic CAS; use an origin-wide Web Lock in browsers.
+  const locks=lockManager===undefined
+    ? (typeof window==='undefined'?null:globalThis.navigator?.locks)
+    : lockManager;
+  // Existing single-context Node fixtures do not emulate browser tabs.
+  // The shortcut never applies on a browser page.
+  const nonBrowserFixture=typeof window==='undefined'&&lockManager===undefined;
   const buttons=[...root.querySelectorAll('button[data-academy-lesson]')];
   const status=root.querySelector('#academy-reading-status');
   const meter=root.querySelector('#academy-reading-progress');
@@ -75,7 +82,7 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
   for(const button of buttons){
     const id=button.getAttribute('data-academy-lesson');
     if(!academyLessonIds.includes(id))continue;
-    button.addEventListener('click',()=>{
+    const update=()=>{
       // An account switch, session outage, or route replacement must retire
       // stale controls before they can mutate a prior principal's device data.
       let active=false;
@@ -116,6 +123,26 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
       if(meter)meter.value=completed.length;
       if(status)status.textContent=w.progress+': '+completed.length+'/'+academyLessonIds.length;
       if(badge)badge.textContent=completed.length===academyLessonIds.length?w.badge:'';
+    };
+    button.addEventListener('click',()=>{
+      // Recheck before and after lock acquisition (inside update()).
+      let active=false;
+      try{active=Boolean(isCurrent())&&document?.querySelector('[data-academy-root]')===root;}catch{}
+      if(!active)return;
+      if(nonBrowserFixture){update();return;}
+      if(typeof key!=='string'||!locks||typeof locks.request!=='function'){
+        if(error)error.textContent=w.lockUnavailable;
+        return;
+      }
+      try{
+        Promise.resolve(locks.request('sa-academy-progress:'+key,{mode:'exclusive'},()=>update())).catch(()=>{
+          let stillCurrent=false;
+          try{stillCurrent=Boolean(isCurrent())&&document?.querySelector('[data-academy-root]')===root;}catch{}
+          if(stillCurrent&&error)error.textContent=w.lockUnavailable;
+        });
+      }catch{
+        if(error)error.textContent=w.lockUnavailable;
+      }
     });
   }
 }

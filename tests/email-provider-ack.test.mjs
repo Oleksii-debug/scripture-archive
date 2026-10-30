@@ -19,7 +19,7 @@ function harness(reply, configured = true) {
     if (reply instanceof Error) throw reply;
     return reply;
   };
-  const module = { exports: {} };
+  const fixtureModule = { exports: {} };
   const fakeRequire = name => {
     if (name !== "cloudflare:workers") throw Error("Unexpected import: " + name);
     return { env: {
@@ -29,9 +29,9 @@ function harness(reply, configured = true) {
     } };
   };
   new Function("require", "module", "exports", "fetch", compiled.outputText)(
-    fakeRequire, module, module.exports, fakeFetch
+    fakeRequire, fixtureModule, fixtureModule.exports, fakeFetch
   );
-  return { email: module.exports, calls };
+  return { email: fixtureModule.exports, calls };
 }
 
 const accepted = payload => ({ ok: true, json: async () => payload });

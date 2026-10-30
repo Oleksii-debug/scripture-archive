@@ -209,3 +209,44 @@ test('every lesson retains every approved source-linked reflection question in a
     }
   }
 });
+
+
+test('silent successful storage writes cannot fabricate academy completion',()=>{
+  const storage={getItem:()=>null,setItem(){}};
+  const ui=view();
+  attachAcademy(ui.document,storage,'en',{id:'alice'},{available:true,completed:[]});
+  ui.buttons[0].click();
+  assert.equal(ui.buttons[0].attrs['aria-pressed'],'false');
+  assert.equal(ui.meter.value,0);
+  assert.equal(ui.badge.textContent,'');
+  assert.match(ui.error.textContent,/Could not save the marker/);
+  assert.equal(readAcademyProgress(storage,academyProgressKey({id:'alice'})).completed.length,0);
+});
+
+test('rewritten academy storage values are rejected instead of reported as studied',()=>{
+  let saved=null;
+  const storage={getItem:()=>saved,setItem(){saved=JSON.stringify({version:1,completed:[]});}};
+  const ui=view(),user={id:'alice'};
+  attachAcademy(ui.document,storage,'uk',user,{available:true,completed:[]});
+  ui.buttons[0].click();
+  assert.equal(ui.buttons[0].attrs['aria-pressed'],'false');
+  assert.equal(ui.meter.value,0);
+  assert.match(ui.error.textContent,/Не вдалося зберегти позначку/);
+  assert.deepEqual(readAcademyProgress(storage,academyProgressKey(user)).completed,[]);
+});
+
+test('unreadable academy post-write confirmation never updates displayed progress',()=>{
+  let reads=0,saved=null;
+  const storage={
+    getItem(){if(++reads>1)throw Error('readback blocked');return null;},
+    setItem(_key,value){saved=value;}
+  };
+  const ui=view();
+  attachAcademy(ui.document,storage,'ru',{id:'alice'},{available:true,completed:[]});
+  ui.buttons[0].click();
+  assert.ok(saved,'the write was attempted but is not independently confirmed');
+  assert.equal(ui.buttons[0].attrs['aria-pressed'],'false');
+  assert.equal(ui.meter.value,0);
+  assert.equal(ui.badge.textContent,'');
+  assert.match(ui.error.textContent,/Не удалось сохранить отметку/);
+});

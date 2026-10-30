@@ -96,7 +96,12 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
       const completed=academyLessonIds.filter(x=>next.has(x));
       try{
         if(!storage || typeof storage.setItem!=='function')throw Error('no storage');
-        storage.setItem(key,JSON.stringify({version:1,completed}));
+        const saved=JSON.stringify({version:1,completed});
+        storage.setItem(key,saved);
+        // Storage may silently ignore or alter writes (privacy mode, quota,
+        // broken adapters). Do not claim progress until the exact value can
+        // be read back under the same verified principal.
+        if (storage.getItem(key)!==saved) throw Error('unconfirmed academy progress write');
       }catch{
         if(error)error.textContent=w.saveError;
         return;

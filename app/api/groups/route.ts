@@ -13,7 +13,10 @@ function clean(value: unknown, max = 160) {
 
 // Identifiers must not alias another record when caller input is oversized.
 function boundedIdentifier(value: unknown, max = 80) {
-  return typeof value === "string" && value.length <= max ? value.trim() : "";
+  // IDs and invite codes are exact database keys, not display text.
+  // Trimming a caller's input would silently authorize a different record.
+  return typeof value === "string" && value.length <= max &&
+    value.length > 0 && value.trim() === value ? value : "";
 }
 
 function integer(value: unknown, min: number, max: number) {
@@ -122,6 +125,9 @@ export async function GET(request: Request) {
   if (requestedGroupId !== null && requestedGroupId.length > 80)
     return Response.json({ error: "invalid_group_id" }, { status: 400 });
   const groupId = boundedIdentifier(requestedGroupId);
+  // An explicit malformed ID must not silently fall through to group discovery.
+  if (requestedGroupId !== null && !groupId)
+    return Response.json({ error: "invalid_group_id" }, { status: 400 });
   // Public group discovery includes no private membership or invite data.
   // Do not make that public endpoint depend on a failing/corrupt session;
   // details and mine remain fully authenticated and fail closed on auth errors.

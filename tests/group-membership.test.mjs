@@ -567,3 +567,33 @@ test('owner settings have native labelled controls, exact values and escaped des
     assert.ok(!groupManagementMarkup({membership:'member',group},lang,esc).includes('group-settings-form'));
   }
 });
+
+test('group IDs and invite/role targets preserve exact identity rather than trimming to another record',async()=>{
+  const f=fixture();
+  try {
+    assert.equal((await f.get('alice','g')).status,200,'canonical group ID is unchanged');
+    for(const malformed of ['%20g','g%20','%09g','g%0A','']) {
+      const read=await f.get('alice',malformed);
+      assert.equal(read.status,400,'explicit malformed groupId must not alias g: '+malformed);
+      assert.equal(read.data.error,'invalid_group_id');
+    }
+    const initialRoles=roles(f);
+    const initialInvite=f.db.prepare("SELECT invite_code FROM home_groups WHERE id='g'").get().invite_code;
+    for(const malformed of [' g','g ','\tg','g\n']) {
+      assert.equal((await f.post('rotate-invite',{
+        groupId:malformed,expectedInviteCode:initialInvite,confirm:true,
+      })).status,400,'malformed group ID must not rotate the canonical invite');
+    }
+    assert.equal((await f.post('rotate-invite',{
+      expectedInviteCode:' '+initialInvite,confirm:true,
+    })).status,400,'invite precondition must not be silently trimmed');
+    for(const malformed of [' bob','bob ','\tbob']) {
+      assert.equal((await f.post('role',{
+        targetUserId:malformed,role:'facilitator',expectedRole:'member',
+      })).status,400,'noncanonical role target must not change Bob');
+    }
+    assert.deepEqual(roles(f),initialRoles,'group roles are unchanged after rejected aliases');
+    assert.equal(f.db.prepare("SELECT invite_code FROM home_groups WHERE id='g'").get().invite_code,initialInvite);
+    assert.equal((await f.get('alice','g')).status,200,'canonical group remains readable');
+  } finally { f.db.close(); }
+});

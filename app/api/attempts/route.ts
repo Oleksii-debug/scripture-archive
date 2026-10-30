@@ -48,7 +48,14 @@ function requestedChapter(value: unknown): number | null {
   const result = Number(value);
   return Number.isSafeInteger(result) ? result : null;
 }
-function locale(value: unknown): Locale { return value === "ru" || value === "en" ? value : "uk"; }
+// Missing/empty locale retains historical Ukrainian default; explicitly typed
+// non-text JSON is not a language choice and must never silently start a test.
+function requestedLocale(value: unknown): Locale | null {
+  if (value === undefined || value === null || value === "") return "uk";
+  if (typeof value !== "string") return null;
+  // Preserve existing textual fallback until additional locale assets are accepted.
+  return value === "ru" || value === "en" ? value : "uk";
+}
 // D1 is not an enum/date constraint: legacy or corrupt rows can contain invalid
 // deadlines. Date.parse(NaN) is never <= now, so such rows must fail closed.
 function attemptDeadline(raw: unknown): number | null {
@@ -271,8 +278,9 @@ export async function POST(request: Request) {
     const currentActor = await actor(request, true);
     if (!currentActor) return json({ error: "actor_unavailable" }, 401);
     if (currentActor.identity && !currentActor.identity.emailVerified) return json({ error: "email_verification_required" }, 403);
-    const book = clean(body.book, 8).toUpperCase(), chapter = requestedChapter(body.chapter), selectedLocale = locale(body.locale), groupId = clean(body.groupId, 80);
+    const book = clean(body.book, 8).toUpperCase(), chapter = requestedChapter(body.chapter), selectedLocale = requestedLocale(body.locale), groupId = clean(body.groupId, 80);
     if (chapter === null) return json({ error: "invalid_chapter" }, 400);
+    if (selectedLocale === null) return json({ error: "invalid_locale" }, 400);
     const available = tasksFor(book, chapter);
     if (body.missionId !== MISSION_ID || !available.length) return json({ error: "mission_chapter_unavailable" }, 404);
     if (groupId && (!currentActor.identity || !await groupFacilitator(groupId, currentActor.identity.userId))) return json({ error: "group_facilitator_required" }, 403);

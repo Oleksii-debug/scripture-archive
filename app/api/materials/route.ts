@@ -166,7 +166,9 @@ export async function DELETE(request: Request) {
   if (!id || id.length > 80) return Response.json({ error: "invalid_material" }, { status: 400 });
   try {
     const result = await env.DB.prepare("DELETE FROM study_materials WHERE id=? AND owner_user_id=?").bind(id, userId).run();
-    // D1 meta.changes is sqlite3_total_changes(): a one-row DELETE may report\n    // several changes when linked editorial submissions cascade. Accept that\n    // legitimate total while rejecting missing, negative or unsafe receipts.
+    // D1 meta.changes is sqlite3_total_changes(): a one-row DELETE may report
+    // several changes when linked editorial submissions cascade. Accept that
+    // legitimate total while rejecting missing, negative or unsafe receipts.
     const changes = result.meta?.changes;
     // A successful-looking D1 reply without an authoritative write receipt
     // cannot claim deletion, including when the service lost its ACK.

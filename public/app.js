@@ -2304,8 +2304,10 @@ function localEditionMetadata(catalog) {
       typeof metadata.source !== "string") throw Error("local_edition_provenance_unavailable");
   // Retain only HTTPS, verified-shaped citation links in the rendered reader.
   try {
-    if (new URL(metadata.source).protocol !== "https:" ||
-        (metadata.licenseUrl && new URL(metadata.licenseUrl).protocol !== "https:"))
+    const sourceUrl = new URL(metadata.source);
+    const licenseUrl = metadata.licenseUrl ? new URL(metadata.licenseUrl) : null;
+    if (sourceUrl.protocol !== "https:" || sourceUrl.username || sourceUrl.password ||
+        (licenseUrl && (licenseUrl.protocol !== "https:" || licenseUrl.username || licenseUrl.password)))
       throw Error("unsafe_edition_source");
   } catch { throw Error("unsafe_edition_source"); }
   return metadata;

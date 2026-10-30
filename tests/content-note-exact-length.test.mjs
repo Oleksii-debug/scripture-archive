@@ -23,7 +23,7 @@ function harness() {
       return statements.map(() => ({ success: true, meta: { changes: 1 } }));
     },
   };
-  const module = { exports: {} };
+  const fixtureModule = { exports: {} };
   new Function("require", "module", "exports", "crypto", compiled.outputText)(
     id => {
       if (id === "cloudflare:workers") return { env: { DB: database } };
@@ -34,7 +34,7 @@ function harness() {
       };
       throw Error("unexpected dependency: " + id);
     },
-    module, module.exports, { randomUUID: () => "test-revision-id" },
+    fixtureModule, fixtureModule.exports, { randomUUID: () => "test-revision-id" },
   );
   async function save(liveNote) {
     const request = new Request("https://scripture.invalid/api/content", {
@@ -42,7 +42,7 @@ function harness() {
       headers: { Origin: "https://scripture.invalid", "Content-Type": "application/json" },
       body: JSON.stringify({ liveNote }),
     });
-    const response = await module.exports.PUT(request);
+    const response = await fixtureModule.exports.PUT(request);
     return { status: response.status, body: await response.json() };
   }
   return { save, writes };

@@ -1,4 +1,14 @@
 # SCRIPTURE ARCHIVE — каталог розділів і план реалізації розширень
+
+## 2026-10-30 — SA-EXT-16 / PROGRESS_UNTRUSTED_READING_HISTORY — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
+
+**Розділ №16: лише цей конкретний підпункт — `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`.** `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` саме для описаного дефекту. **Батьківський SA-EXT-16 та інші SA-EXT-01…20 залишаються OPEN.**
+
+- **Виправлена функція:** канонічний `public/workspace.js` на сторінці прогресу не читає і не показує локальну історію попереднього користувача, якщо `localReadingStorageUntrusted` або `unownedReadingPendingRecovery` вказують на недоведене володіння даними. Перевірка виконується після асинхронного завантаження історії спроб і охоронного `stillCurrent()`. Для підтвердженого власника історія продовжує відображатися. Кеш не стирається, авторитет облікових записів не дублюється.
+- **GitHub:** [PR #527](https://github.com/Oleksii-debug/scripture-archive/pull/527) **SQUASH MERGED**, перевірений feature `main@2be427f6748b11d6b8312bbf9b36d05fe0e6aaa7`. Після merge GitHub API підтвердив PR `merged=true`, `main` з тим самим SHA та поточні source/test blobs: `public/workspace.js@f8d580545dcafd09103d7c9506e630c7462c1342`; `tests/workspace-async-principal-fence.test.mjs@4b6ffa9057317789e1928f1393f86850c91a2080`.
+- **Фактична перевірка:** [Actions #41016627675](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41016627675), exact PR head `4a68304073de0bdf78b17113dc02320d4613889a`: **1128 Node PASS, 0 FAIL, 1 SKIP**, TypeScript PASS, ESLint PASS, production source build PASS, **2 Python validators PASS**. Disposable Worker/D1 інтеграція **FAIL 21/22** з реальним HTTP 503 / `Your worker restarted mid-request`; повний CI **НЕ GREEN**, відомий незалежний блокер #361. Під час цього запису не запускали окремого native/browser/Windows/NVDA тесту.
+- **Не підтверджено:** повний SA-EXT-16, усі політики приватності, live deployment/Sites SHA, реальна браузерна сесія та фізичний NVDA. Це не заважає термінальному **source closure тільки цього вузького дефекту**, але не дозволяє оголосити весь розділ/продукт готовим. Перероблення цього підпункту — лише за новим відтвореним дефектом чи вимогою.
+
 ## 2026-10-30 — SA-EXT-05 / DOSSIER_SEARCH — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузька функція)
 
 **Статус:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` для пошуку по *наявному каталогу досьє*. **Батьківський SA-EXT-05 і всі SA-EXT-01…20 лишаються OPEN; це НЕ повний реліз чи приймання фізичним NVDA.**

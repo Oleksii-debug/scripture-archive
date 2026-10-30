@@ -198,8 +198,13 @@ async function write(request:Request){
   if(action==="sensitive-consent"){
     if(id.provider==="agent")return privateJson({error:"forbidden"},{status:403});
     if(typeof body.acceptSensitive!=="boolean")return privateJson({error:"invalid_consent"},{status:400});
-    if(oversized(body.tradition,40)||oversized(body.denomination,160)||oversized(body.church,160))
-      return privateJson({error:"invalid_profile_field"},{status:400});
+    // Validate lossless sensitive metadata only when accepting consent.
+    // Stale/malformed optional fields must never prevent a user from
+    // withdrawing consent and clearing sensitive values.
+    if(body.acceptSensitive===true && (
+      oversized(body.tradition,40)||oversized(body.denomination,160)||oversized(body.church,160)||
+      ["tradition","denomination","church"].some(key=>body[key]!=null&&typeof body[key]!=="string")
+    ))return privateJson({error:"invalid_profile_field"},{status:400});
     const accepted=body.acceptSensitive, tradition=clean(body.tradition,40), denomination=clean(body.denomination,160), church=clean(body.church,160);
     if(accepted&&tradition&&!TRADITIONS.has(tradition))return privateJson({error:"invalid_profile_option"},{status:400});
     try {

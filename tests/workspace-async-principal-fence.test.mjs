@@ -43,6 +43,59 @@ test('progress rechecks trust after a delayed history request and keeps trusted 
   }
 });
 
+test('progress treats non-array legacy cache records as empty without crashing', async () => {
+  for (const legacy of [{reading:['untrusted']}, 'broken history', 17, null]) {
+    const f = scenario('/progress');
+    try {
+      f.context.loadJSON = () => legacy;
+      globalThis.fetch = async () => answer({attempts:[]});
+      await renderWorkspace('progress', f.context);
+      assert.equal(f.shells.length, 1);
+      assert.doesNotMatch(f.shells[0], /untrusted|broken history|\\/reader\\//);
+      assert.match(f.shells[0], /reading-links|nothingRead/);
+    } finally { f.restore(); }
+  }
+});
+
+test('progress rejects malformed chapter links and preserves valid localized history', async () => {
+  const f = scenario('/progress');
+  try {
+    f.context.loadJSON = () => [
+      {book:'GEN',chapter:12,title:'Valid Genesis'},
+      {book:'GEN',chapter:'12',title:'Wrong chapter type'},
+      {book:'../../escape',chapter:12,title:'Unsafe book'},
+      {book:'GEN',chapter:0,title:'Zero chapter'},
+      {book:'GEN',chapter:12,title:{en:'Invalid title'}},
+      {book:'GEN',chapter:12,title:'X'.repeat(161)},
+      null,
+      {book:'1CO',chapter:16,title:'Valid Corinthians'}
+    ];
+    globalThis.fetch = async () => answer({attempts:[]});
+    await renderWorkspace('progress', f.context);
+    assert.equal(f.shells.length,1);
+    assert.match(f.shells[0], /Valid Genesis/);
+    assert.match(f.shells[0], /Valid Corinthians/);
+    assert.match(f.shells[0], /\\/reader\\/GEN\\/12/);
+    assert.match(f.shells[0], /\\/reader\\/1CO\\/16/);
+    assert.doesNotMatch(f.shells[0], /Wrong chapter type|Unsafe book|Zero chapter|Invalid title|\\/reader\\/GEN\\/0/);
+  } finally { f.restore(); }
+});
+
+test('progress bounds valid legacy-history projection to the most recent 200 entries', async () => {
+  const f = scenario('/progress');
+  try {
+    f.context.loadJSON = () => Array.from({length: 220}, (_, index) => ({
+      book:'GEN', chapter:12, title:'History entry '+index
+    }));
+    globalThis.fetch = async () => answer({attempts:[]});
+    await renderWorkspace('progress', f.context);
+    const links=f.shells[0].match(/href="\\/reader\\/GEN\\/12"/g) || [];
+    assert.equal(links.length,200);
+    assert.doesNotMatch(f.shells[0], /History entry 0</);
+    assert.match(f.shells[0], /History entry 219/);
+  } finally { f.restore(); }
+});
+
 function scenario(pathname = '/builder') {
   const original = { fetch: globalThis.fetch, location: globalThis.location, document: globalThis.document };
   const state = {

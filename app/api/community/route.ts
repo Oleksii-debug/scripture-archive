@@ -16,12 +16,28 @@ function directoryInteger(raw: string | null, fallback: number, min: number, max
 }
 type RealRow = { id: string; display_name: string; locale: string; joined_at: string; last_active_at: string | null; reading_data: string | null; mission_count: number };
 
-function progressCount(raw: string | null) {
-  if (!raw) return 0;
-  try {
-    const value = JSON.parse(raw);
-    return Array.isArray(value) ? value.length : 0;
-  } catch { return 0; }
+// A public progress badge is derived from a private persisted READING record.
+// Legacy/corrupt data must never be presented as zero or as fabricated chapters.
+// Mirror the canonical reader's bounded receipt shape without writing to D1.
+function progressCount(raw: string | null): number {
+  if (raw === null) return 0;
+  if (typeof raw !== "string") throw Error("invalid_public_reading_history");
+  const value: unknown = JSON.parse(raw);
+  if (!Array.isArray(value) || value.length > 2000) throw Error("invalid_public_reading_history");
+  const visited = new Set<string>();
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw Error("invalid_public_reading_receipt");
+    const receipt = entry as Record<string, unknown>;
+    if (typeof receipt.book !== "string" || !/^[1-3]?[A-Z]{2,3}$/.test(receipt.book) ||
+        typeof receipt.chapter !== "number" || !Number.isSafeInteger(receipt.chapter) ||
+        receipt.chapter < 1 || receipt.chapter > 151 ||
+        typeof receipt.title !== "string" || !receipt.title.trim() || receipt.title.length > 100)
+      throw Error("invalid_public_reading_receipt");
+    const key = receipt.book + ":" + receipt.chapter;
+    if (visited.has(key)) throw Error("duplicate_public_reading_receipt");
+    visited.add(key);
+  }
+  return value.length;
 }
 
 export async function GET(request: Request) {
@@ -75,9 +91,13 @@ export async function GET(request: Request) {
       (receipt.results[0] as {total:number}).total < 0))
     return json({ error: "community_unavailable" }, 503);
   const real = (realRows.results as unknown as RealRow[]).map(row => {
+    // SQL COUNT must be a real nonnegative integer. Never coerce strings,
+    // missing counts or NaN into plausible public progress statistics.
+    if (!row || !Number.isSafeInteger(row.mission_count) || row.mission_count < 0)
+      throw Error("invalid_public_mission_count");
     const online = Boolean(row.last_active_at && new Date(`${row.last_active_at.replace(" ", "T")}Z`).getTime() >= now.getTime() - 300_000);
     return { id: row.id, displayName: row.display_name, locale: row.locale, countryCode: null, joinedAt: row.joined_at, online,
-      activity: online ? "exploring" : "away", chaptersRead: progressCount(row.reading_data), missionsCompleted: Number(row.mission_count||0) };
+      activity: online ? "exploring" : "away", chaptersRead: progressCount(row.reading_data), missionsCompleted: row.mission_count };
   });
   let members = real;
   if (query) members = members.filter(member => member.displayName.toLocaleLowerCase().includes(query));

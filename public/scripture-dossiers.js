@@ -105,8 +105,20 @@ const nodes=[
 export const scriptureDossiers=nodes;
 
 export function validateDossierGraph(catalog) {
+  // Dossier IDs become internal links; authoring damage must never turn them
+  // into markup/URL attributes or present blank text as validated Scripture.
+  const safeId = value => typeof value === 'string' && /^[a-z][a-z0-9-]*$/.test(value);
+  const nonblank = value => typeof value === 'string' && value.trim().length > 0;
+  if (!nodes.every(item => item && safeId(item.id) &&
+      ['person','place','event'].includes(item.type) &&
+      Array.isArray(item.sources) && item.sources.length > 0 &&
+      Array.isArray(item.related) &&
+      LANGS.every(lang => nonblank(item.names?.[lang]) &&
+        nonblank(item.summaries?.[lang]) &&
+        Array.isArray(item.prompts?.[lang]) && item.prompts[lang].length > 0 &&
+        item.prompts[lang].every(nonblank)))) return false;
   const known = new Map(nodes.map(item=>[item.id,item]));
-  if(known.size !== nodes.length) return false;
+  if (known.size !== nodes.length) return false;
   if(!catalog?.books || LANGS.some(lang=>!Array.isArray(catalog.books[lang]))) return false;
   // A malformed or ambiguous edition catalogue must show the accessible
   // source-unavailable state, not throw while assembling the dossier.
@@ -121,9 +133,8 @@ export function validateDossierGraph(catalog) {
     Number.isInteger(source.chapter) && source.chapter>0 &&
     ['narrative','interpretive'].includes(source.kind) &&
     bookMaps.every(books=>books.has(source.book) && source.chapter<=books.get(source.book));
-  return nodes.every(item=>item.sources.length>0 && ['person','place','event'].includes(item.type) &&
-    LANGS.every(lang=>typeof item.names[lang]==='string'&&typeof item.summaries[lang]==='string'&&Array.isArray(item.prompts[lang])) &&
-    item.sources.every(validRef) && item.related.every(link=>known.has(link.to)&&link.to!==item.id&&validRef(link.via)));
+  return nodes.every(item=>item.sources.every(validRef) &&
+    item.related.every(link=>link && known.has(link.to) && link.to!==item.id && validRef(link.via)));
 }
 
 export function dossierMarkup(catalog,language,requestedId,esc) {

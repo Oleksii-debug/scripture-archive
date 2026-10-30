@@ -12,12 +12,12 @@ const compiled = ts.transpileModule(source, {
 assert.equal(compiled.diagnostics?.length ?? 0, 0);
 
 function harness({ dbPresent = true, dbMode = "ok", auth = "owner", limit = "allow", community = "ok" } = {}) {
-  const calls = { auth: 0, rate: 0, prepare: 0, batch: 0, community: 0 };
+  const calls = { auth: 0, rate: 0, prepare: 0, batch: 0, community: 0, bindings: [] };
   const database = {
-    prepare() {
+    prepare(sql) {
       calls.prepare++;
       if (dbMode === "prepare-throw") throw Error("D1 prepare failed");
-      return { bind() { return this; } };
+      return { bind(...args) { calls.bindings.push({ sql, args }); return this; } };
     },
     async batch(statements) {
       calls.batch++;
@@ -65,12 +65,13 @@ function harness({ dbPresent = true, dbMode = "ok", auth = "owner", limit = "all
       throw Error("Unexpected import: " + specifier);
     },
   });
-  async function invoke(method, { origin = "https://scripture.test", action = "heartbeat" } = {}) {
+  async function invoke(method, { origin = "https://scripture.test", action = "heartbeat", overrides = {} } = {}) {
     const body = {
       sessionId: "deadbeef-dead-4eef-8eef-001122334455",
       action,
       pageName: "reading",
       eventType: "page_view",
+      ...overrides,
     };
     const request = new Request("https://scripture.test/api/analytics", {
       method,
@@ -199,4 +200,60 @@ test("GET refuses unavailable linked community aggregation", async () => {
   const r = await h.invoke("GET");
   assert.equal(r.status, 503);
   assert.equal(r.body.error, "analytics_unavailable");
+});
+
+test("POST first-party analytics never persists arbitrary private route or value strings", async () => {
+  const h = harness();
+  const r = await h.invoke("POST", { action: "event", overrides: {
+    pageName: "group_private_email_owner_example_com",
+    value: {
+      destination: "private_group_991",
+      error: "reset_token_owner_private",
+      language: "email_anna_private",
+      method: "password",
+      mode: "personal",
+      score: NaN,
+      total: 12,
+      page_title: "secret owned record",
+    },
+  } });
+  assert.equal(r.status, 202);
+  const event = h.calls.bindings.find(item => item.sql.includes("INSERT INTO usage_events"));
+  assert.ok(event, "real canonical D1 event insert must be exercised");
+  assert.equal(event.args[4], "other");
+  assert.deepEqual(JSON.parse(event.args[5]), {
+    destination: "other", error: "other", language: "other",
+    method: "password", mode: "personal", total: 12,
+  });
+  assert.ok(!JSON.stringify(event.args).includes("private_group_991"));
+  assert.ok(!JSON.stringify(event.args).includes("reset_token_owner_private"));
+});
+
+test("POST preserves canonical public page, approved values and finite bounded scores", async () => {
+  const h = harness();
+  const r = await h.invoke("POST", { action: "event", overrides: {
+    pageName: "reader",
+    value: {
+      destination: "library", error: "email_not_verified", language: "uk",
+      method: "password", mode: "group", score: 47.5, total: 1000000,
+      source_user_id: "private-user",
+    },
+  } });
+  assert.equal(r.status, 202);
+  const event = h.calls.bindings.find(item => item.sql.includes("INSERT INTO usage_events"));
+  assert.ok(event);
+  assert.equal(event.args[4], "reader");
+  assert.deepEqual(JSON.parse(event.args[5]), {
+    destination: "library", error: "email_not_verified", language: "uk",
+    method: "password", mode: "group", score: 47.5, total: 1000000,
+  });
+});
+
+test("POST first-party heartbeat remains available without event-DTO insert", async () => {
+  const h = harness();
+  const r = await h.invoke("POST", { action: "heartbeat", overrides: {
+    pageName: "secret_personal_key", value: { error: "private" },
+  } });
+  assert.equal(r.status, 202);
+  assert.equal(h.calls.bindings.filter(item => item.sql.includes("INSERT INTO usage_events")).length, 0);
 });

@@ -1,4 +1,4 @@
-import { parallelControls, mountParallelReader } from './parallel-reader.js';
+import { parallelControls, mountParallelReader, safeProvenanceHttpsUrl } from './parallel-reader.js';
 import {routeSourceFromLocation, legacyRouteHashChanged} from './route-location.js';
 import {renderWorkspace, workspaceCopy, groupManagementCopy, groupManagementMarkup} from './workspace.js';
 import {supportSection} from './support.js';
@@ -2462,14 +2462,11 @@ function localEditionMetadata(catalog) {
   if (!metadata || typeof metadata.title !== "string" || !metadata.title.trim() ||
       typeof metadata.license !== "string" || !metadata.license.trim() ||
       typeof metadata.source !== "string") throw Error("local_edition_provenance_unavailable");
-  // Retain only HTTPS, verified-shaped citation links in the rendered reader.
-  try {
-    const sourceUrl = new URL(metadata.source);
-    const licenseUrl = metadata.licenseUrl ? new URL(metadata.licenseUrl) : null;
-    if (sourceUrl.protocol !== "https:" || sourceUrl.username || sourceUrl.password ||
-        (licenseUrl && (licenseUrl.protocol !== "https:" || licenseUrl.username || licenseUrl.password)))
-      throw Error("unsafe_edition_source");
-  } catch { throw Error("unsafe_edition_source"); }
+  // Use the single raw-URL rights authority also used by the comparison
+  // and About screens. URL() alone silently strips dangerous source bytes.
+  if (!safeProvenanceHttpsUrl(metadata.source) ||
+      (metadata.licenseUrl && !safeProvenanceHttpsUrl(metadata.licenseUrl)))
+    throw Error("unsafe_edition_source");
   return metadata;
 }
 async function getMission() {

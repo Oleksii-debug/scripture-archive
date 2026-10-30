@@ -39,6 +39,15 @@ function confirmedBatch(results: unknown, expected: number): number[] | null {
   return changes.every(value => value !== null) ? changes as number[] : null;
 }
 function clean(value: unknown, max = 100) { return typeof value === "string" ? value.trim().slice(0, max) : ""; }
+// Group mode is an assessment and durable-progress authority. A malformed
+// explicit group identifier must not silently become a personal attempt, and
+// truncating a long identifier must not alias a real group's ID.
+function requestedGroupId(value: unknown): string | null {
+  if (value === undefined || value === null || value === "") return "";
+  if (typeof value !== "string") return null;
+  const groupId = value.trim();
+  return groupId && groupId.length <= 80 ? groupId : null;
+}
 // Chapter input must be numeric evidence, not JavaScript truthy/coercible text.
 // Decimal form field values remain supported without accepting hex/exponent,
 // whitespace, booleans, arrays or unsafe integers as a Bible passage.
@@ -269,7 +278,8 @@ export async function POST(request: Request) {
   if (action === "read") {
     const currentActor = await actor(request, true);
     if (!currentActor) return json({ error: "actor_unavailable" }, 401);
-    const book = clean(body.book, 8).toUpperCase(), chapter = requestedChapter(body.chapter), groupId = clean(body.groupId, 80);
+    const book = clean(body.book, 8).toUpperCase(), chapter = requestedChapter(body.chapter), groupId = requestedGroupId(body.groupId);
+    if (groupId === null) return json({ error: "invalid_group" }, 400);
     if (chapter === null) return json({ error: "invalid_chapter" }, 400);
     if (!tasksFor(book, chapter).length) return json({ error: "mission_chapter_unavailable" }, 404);
     if (groupId && (!currentActor.identity || !await groupFacilitator(groupId, currentActor.identity.userId))) return json({ error: "group_facilitator_required" }, 403);
@@ -285,7 +295,8 @@ export async function POST(request: Request) {
     const currentActor = await actor(request, true);
     if (!currentActor) return json({ error: "actor_unavailable" }, 401);
     if (currentActor.identity && !currentActor.identity.emailVerified) return json({ error: "email_verification_required" }, 403);
-    const book = clean(body.book, 8).toUpperCase(), chapter = requestedChapter(body.chapter), selectedLocale = requestedLocale(body.locale), groupId = clean(body.groupId, 80);
+    const book = clean(body.book, 8).toUpperCase(), chapter = requestedChapter(body.chapter), selectedLocale = requestedLocale(body.locale), groupId = requestedGroupId(body.groupId);
+    if (groupId === null) return json({ error: "invalid_group" }, 400);
     if (chapter === null) return json({ error: "invalid_chapter" }, 400);
     if (selectedLocale === null) return json({ error: "invalid_locale" }, 400);
     const available = tasksFor(book, chapter);

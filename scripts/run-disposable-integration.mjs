@@ -56,7 +56,7 @@ async function executeOnce() {
     let log='';
     const append=(stream, data)=>{
       stream.write(data);
-      log=(log+String(data)).slice(-20000);
+      log=(log+String(data)).slice(-131072);
     };
     child.stdout.on('data', data => append(process.stdout,data));
     child.stderr.on('data', data => append(process.stderr,data));

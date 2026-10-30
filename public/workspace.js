@@ -129,6 +129,15 @@ const HISTORY = {
   en: { title:'Attempt history', login:'Sign in to see saved attempt history on other devices.', empty:'There are no completed attempts yet.', locked:'History is hidden during an active attempt.', error:'Could not load attempt history.', retry:'Try again', details:'View result', reread:'Read and try again', limit:'Showing the latest 100 completed attempts.', score:'Correct answers', pending:'An answer was saved, but its result still needs to be finalized.', resume:'Finish saving the result', personal:'Personal attempt', group:'Group attempt' },
 };
 
+function canonicalHistoryUtcTimestamp(value) {
+  // SQLite/D1 history timestamps are canonical UTC seconds, never a local
+  // calendar guess. Date parsing alone normalizes impossible dates silently.
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)) return false;
+  const date = new Date(value.replace(' ', 'T') + 'Z');
+  return Number.isFinite(date.getTime()) &&
+    date.toISOString().slice(0, 19).replace('T', ' ') === value;
+}
+
 function validAttemptHistoryPayload(history, chapterBounds) {
   // Source readback may include legacy/corrupt DB rows. With a real catalog,
   // refuse invented books and chapters rather than building false reader links.
@@ -153,9 +162,9 @@ function validAttemptHistoryPayload(history, chapterBounds) {
     safeChapter(row) && Number.isInteger(row.score) && Number.isInteger(row.total) &&
     row.total >= 1 && row.score >= 0 && row.score <= row.total &&
     (row.mode === undefined || row.mode === 'personal' || row.mode === 'group') &&
-    (row.completedAt === undefined || typeof row.completedAt === 'string')) &&
+    (row.completedAt === undefined || canonicalHistoryUtcTimestamp(row.completedAt))) &&
     (history.pending === undefined || history.pending.every(row =>
-      safeChapter(row) && (row.startedAt === undefined || typeof row.startedAt === 'string')));
+      safeChapter(row) && (row.startedAt === undefined || canonicalHistoryUtcTimestamp(row.startedAt))));
 }
 
 export function missionHistoryMarkup(history, lang, esc, chapterBounds) {

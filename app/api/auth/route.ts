@@ -127,7 +127,7 @@ export async function POST(request: Request) {
     if (duplicate) return json({ error: "email_in_use" }, 409);
     const id = crypto.randomUUID(), passwordData = await hashPassword(password);
     try {
-      await env.DB.batch([
+      const registrationReceipts = await env.DB.batch([
         env.DB.prepare("INSERT INTO accounts (id,email,password_hash,password_salt,password_iterations,first_name,last_name) VALUES (?,?,?,?,?,?,?)")
           .bind(id, email, passwordData.hash, passwordData.salt, passwordData.iterations, firstName, lastName),
         env.DB.prepare(`INSERT INTO profiles
@@ -135,7 +135,15 @@ export async function POST(request: Request) {
           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`)
           .bind(id, email, firstName, lastName, ageRange(age), age, sensitiveConsent && tradition !== "prefer_not" ? tradition || null : null, sensitiveConsent ? denomination || null : null, sensitiveConsent ? church || null : null, maritalStatus, gender, hasChildren, selectedLocale, sensitiveConsent ? 1 : 0, sensitiveConsent ? 1 : 0),
       ]);
-    } catch { return json({ error: "email_in_use" }, 409); }
+      // Do not send a verification token for an account/profile transaction
+      // unless both inserted rows have reliable individual D1 receipts.
+      if (!batchAcknowledged(registrationReceipts, 2) ||
+          registrationReceipts[0].meta.changes !== 1 || registrationReceipts[1].meta.changes !== 1)
+        return json({ error: "registration_save_unconfirmed" }, 503);
+    } catch {
+      // A transient database outage is not evidence that the email is taken.
+      return json({ error: "registration_unavailable" }, 503);
+    }
     const token = await createOneTimeToken(id, "verify", 24 * 60);
     const delivery = await sendSecurityEmail(email, selectedLocale, "verify", `${baseUrl(request)}/api/auth?action=verify&token=${encodeURIComponent(token)}`);
     return json({ ok: true, verificationRequired: true, emailDelivered: delivery.delivered, ...(isAuthTestRequest(request) ? { testToken: token } : {}) }, 201);

@@ -1,3 +1,9 @@
+## 2026-10-30 — R0.2 / SA-EXT-16 / AUTH_EMAIL_NO_PREFIX_ALIAS — SCOPED TERMINAL
+
+**ЗАКРИТО ДЛЯ РОЗРОБКИ лише цей дефект, `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`.** У канонічному `/api/auth` наддовга адреса більше не обрізається до чужого ідентифікатора для реєстрації, входу, повторного підтвердження або відновлення пароля. [PR #774](https://github.com/Oleksii-debug/scripture-archive/pull/774) **SQUASH MERGED** у `main@5050cb7f9816f1cdd6f0adbc8e58c941188daf84`, [exact-head CI #41069364724](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41069364724) **SUCCESS**: Node **2213 PASS/0 FAIL/1 SKIP**, Worker/D1 **22/22**, TypeScript/lint/build/Python **2/2 PASS**. [Квитанція](SA_EXT_16_AUTH_EXACT_EMAIL_IDENTITY_TERMINAL_20261030.md). `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` тільки для цього виправлення. **R0.2 production mail, усі 20 батьківських SA-EXT-01…20, Sites/NVDA/release залишаються OPEN/NOT_VERIFIED**. Без деплою.
+
+---
+
 ## 2026-10-30 — SA-EXT-04 / INVITE_ROTATION_EXPECTED_TOKEN_EXACT — SCOPED TERMINAL
 
 **Лише цей підпункт — `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`.** [PR #768](https://github.com/Oleksii-debug/scripture-archive/pull/768) **MERGED** до `main@dcad693792dae4b2fa38bde692e1d0dc3c3b065b`. Owner-only API більше не обрізає хибний наддовгий `expectedInviteCode` до чинного коду запрошення; SQL-умова точного попереднього значення і перевірки прав збережені. Три реальні SQLite route-тести (відмова без запису й законна ротація), [exact-head Actions #41067830702](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41067830702) **SUCCESS** (Node/TS/lint/build/Worker-D1/Python). [Квитанція](SA_EXT_04_INVITE_ROTATION_EXPECTED_TOKEN_TERMINAL_20261030.md). `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` лише для цього дефекту; **всі 20 SA-EXT батьківських розділів OPEN**, Sites/Windows/NVDA не підтверджено, жодного деплою.

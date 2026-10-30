@@ -196,9 +196,11 @@ test('SA-EXT-02: mission chapter mutation actions refuse coercion and preserve a
   const f=fixture();try{
     // Reuse the exact migration's receipt schema, not a hand-written SQLite mock.
     const migration=readFileSync(new URL('../drizzle/0004_accounts_attempts.sql',import.meta.url),'utf8');
-    const receiptDDL=migration.match(/CREATE TABLE `chapter_read_receipts` \\([\\s\\S]*?\\);/)?.[0];
-    assert.ok(receiptDDL,'actual chapter receipt schema required');
-    f.db.exec(receiptDDL);
+    const start=migration.indexOf('CREATE TABLE `chapter_read_receipts`');
+    assert.ok(start>=0,'actual chapter receipt table must exist in migration');
+    const end=migration.indexOf(');',start);
+    assert.ok(end>start,'complete migrated receipt DDL required');
+    f.db.exec(migration.slice(start,end+2));
     f.seed('chapter-type',{status:'active'});
     const bad=[true,false,null,{},[], '0xc','12e0','12.0',' 12 ','012',12.5,Number.MAX_SAFE_INTEGER+1];
     for(const chapterInput of bad) for(const action of ['chapter','read','start']){

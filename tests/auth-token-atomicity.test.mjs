@@ -440,3 +440,73 @@ test("SA-EXT-16 registration ages: accepted decimal form and JSON integer preser
     } finally { f.db.close(); }
   }
 });
+
+
+// R0.2 / SA-EXT-16: A caller must never be able to name a different account
+// using a 254-character valid email followed by an invisible truncated suffix.
+// This executes the actual canonical auth route and real SQLite data paths.
+function maximumLengthEmail() {
+  const email = "a".repeat(63) + "@" + "b".repeat(62) + "." +
+    "c".repeat(62) + "." + "d".repeat(60) + ".org";
+  assert.equal(email.length, 254);
+  return email;
+}
+
+test("R0.2: an overlength registration email never aliases an existing 254-character account", async () => {
+  const f = fixture();
+  try {
+    const exact = maximumLengthEmail(), overlength = exact + "suffix";
+    f.db.prepare("UPDATE accounts SET email=? WHERE id='alice'").run(exact);
+    const result = await f.handler.POST(registrationRequest(overlength));
+    assert.equal(result.status, 400, "reject the actual submitted identity instead of reporting an aliased duplicate");
+    assert.equal((await result.json()).error, "invalid_registration");
+    assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM accounts").get().n, 1);
+    assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM auth_tokens").get().n, 0);
+    assert.equal(f.emails(), 0);
+  } finally { f.db.close(); }
+});
+
+test("R0.2: an overlength login email never becomes a valid authenticated account", async () => {
+  const f = fixture();
+  try {
+    const exact = maximumLengthEmail();
+    f.db.prepare("UPDATE accounts SET email=?,email_verified_at=CURRENT_TIMESTAMP WHERE id='alice'").run(exact);
+    const result = await f.handler.POST(new Request("https://example.invalid/api/auth?action=login", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: exact + "suffix", password: "correct" }),
+    }));
+    assert.equal(result.status, 401);
+    assert.equal((await result.json()).error, "invalid_credentials");
+    assert.equal(result.headers.get("set-cookie"), null);
+  } finally { f.db.close(); }
+});
+
+for (const action of ["resend-verification", "forgot-password"]) {
+  test("R0.2: overlength email cannot trigger " + action + " for a truncated identity", async () => {
+    const f = fixture();
+    try {
+      const exact = maximumLengthEmail();
+      f.db.prepare("UPDATE accounts SET email=?,email_verified_at=? WHERE id='alice'")
+        .run(exact, action === "forgot-password" ? "2026-10-30 00:00:00" : null);
+      const result = await f.handler.POST(new Request("https://example.invalid/api/auth?action=" + action, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: exact + "suffix" }),
+      }));
+      assert.equal(result.status, 200);
+      assert.deepEqual(await result.json(), { ok: true }, "preserve anti-enumeration response");
+      assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM auth_tokens").get().n, 0);
+      assert.equal(f.emails(), 0);
+    } finally { f.db.close(); }
+  });
+}
+
+test("R0.2: the exact legal maximum email remains a valid registration input", async () => {
+  const f = fixture();
+  try {
+    const exact = maximumLengthEmail();
+    const result = await f.handler.POST(registrationRequest(exact));
+    assert.equal(result.status, 201);
+    assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM accounts WHERE email=?").get(exact).n, 1);
+    assert.equal(f.emails(), 1);
+  } finally { f.db.close(); }
+});

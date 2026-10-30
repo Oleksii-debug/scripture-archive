@@ -38,7 +38,13 @@ function json(data: unknown, status = 200, headers: HeadersInit = {}) {
   return Response.json(data, { status, headers: { "Cache-Control": "no-store", ...headers } });
 }
 function clean(value: unknown, max = 160) { return typeof value === "string" ? value.trim().slice(0, max) : ""; }
-function normalizeEmail(value: unknown) { return clean(value, 254).toLowerCase(); }
+// Never truncate an identity. Truncating an overlength address into a valid
+// stored prefix could authenticate, recover or send mail for a different input.
+function normalizeEmail(value: unknown) {
+  if (typeof value !== "string") return "";
+  const normalized = value.trim().toLowerCase();
+  return normalized.length <= 254 ? normalized : "";
+}
 // Registration age is a profile/privacy boundary. Accept JSON integers and
 // ordinary decimal HTML form values, never JavaScript-coercible arrays,
 // hex, exponents, whitespace or fractional values.

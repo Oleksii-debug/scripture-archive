@@ -91,3 +91,24 @@ test('unavailable server identity still fails closed and preserves local cache f
   assert.equal(h.disk.get('sa.progressOwner'),'one');
   assert.equal(JSON.parse(h.disk.get('sa.readingHistory')).length,1);
 });
+
+test('missing owner marker cannot allow previous live account data into a different login',async()=>{
+  const h=harness({oldOwner:null});
+  assert.equal(h.disk.get('sa.progressOwner'),null);
+  await h.getSession();
+  assert.equal(h.state.user.id,'two');
+  assert.equal(h.disk.get('sa.readingHistory'),'[]');
+  assert.equal(h.disk.get('sa.progressOwner'),'two');
+  await h.syncProgress();
+  assert.equal(h.calls.filter(x=>x.action==='reading'&&x.method==='PUT').length,0);
+});
+
+test('a previously untrusted cache is cleared before storage becomes available again',async()=>{
+  const h=harness({oldOwner:'two'});
+  h.state.user={id:'two'};
+  h.state.localReadingCacheTrusted=false;
+  await h.getSession();
+  assert.equal(h.disk.get('sa.readingHistory'),'[]');
+  assert.equal(h.state.localReadingCacheTrusted,true);
+  assert.equal(h.disk.get('sa.progressOwner'),'two');
+});

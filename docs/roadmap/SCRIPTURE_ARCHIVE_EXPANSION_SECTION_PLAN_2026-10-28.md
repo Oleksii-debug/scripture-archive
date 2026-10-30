@@ -1,3 +1,9 @@
+## 2026-10-30 — SA-EXT-03 / ADMIN_CONTENT_READ_D1_ACK — ВУЗЬКЕ ЗАКРИТТЯ
+
+**CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** лише для owner CMS GET read receipt. [PR #683](https://github.com/Oleksii-debug/scripture-archive/pull/683) SQUASH MERGED у exact `main@4eb14c499e11cf5521adf6b2b1088f53beb3b71c`. [CI #41055178927](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41055178927) **SUCCESS**: Node 1749 PASS / 0 FAIL / 1 SKIP; Worker/D1 22/22; TypeScript/lint/build, Python 2/2. Тепер admin GET не маскує failed/malformed D1 SELECT під 200 із порожньою редакторською історією; 10 нових route-testing сценаріїв. [Terminal receipt](SA_EXT_03_ADMIN_CONTENT_READ_ACK_TERMINAL_20261030.md); [handoff першої п'ятірки відкритих parent](SA_EXT_CONVERGENCE_HANDOFF_20261030_3_TERMINALS.md). **Весь SA-EXT-03 і решта 20 великих SA-EXT-01…20 OPEN; live Sites, SMTP, Chrome/NVDA НЕ підтверджено.** Деплой не запускався.
+
+---
+
 ## 2026-10-30 — SA-EXT-02 / STORED_ATTEMPT_LOCALE_FAILCLOSED — ВУЗЬКЕ ЗАКРИТТЯ
 
 **CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** тільки для захисту GET/POST/finalize від пошкодженого persisted locale у D1. [PR #676](https://github.com/Oleksii-debug/scripture-archive/pull/676) SQUASH MERGED, exact `main@f83954934c8b53f6664fa48a57b51c27600c3d9f`. [CI #41054194991](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41054194991) **SUCCESS**: Node 1738 PASS / 0 FAIL / 1 SKIP, Worker/D1 22/22, TS/lint/build, Python 2/2. **48** real-route locale integrity cases: 15 bad stored locale variants × GET/answer/finalize та 3 valid. Результат: HTTP 409 без частково локалізованого task або grading write, valid uk/ru/en збережені. [Остаточний terminal receipt](SA_EXT_02_STORED_ATTEMPT_LOCALE_TERMINAL_20261030.md). **Батьківський SA-EXT-02 і всі 20 повних SA-EXT-01…20 OPEN**, live Sites SMTP browser/NVDA НЕ ВЕРИФІКОВАНІ; жодного деплою.

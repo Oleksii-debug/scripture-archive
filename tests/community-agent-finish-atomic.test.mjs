@@ -8,6 +8,7 @@ import ts from 'typescript';
 // Execute the actual TypeScript community POST and all three production SQL
 // statements, with the complete migration schema in a disposable SQLite DB.
 const source=readFileSync(new URL('../app/api/community/route.ts',import.meta.url),'utf8');
+const catalog=JSON.parse(readFileSync(new URL('../public/data/catalog.json',import.meta.url),'utf8'));
 const compiled=ts.transpileModule(source,{
   compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022},
   reportDiagnostics:true,
@@ -60,6 +61,7 @@ function fixture({throwAuth=false,ackDamage=false,failedBatch=-1}={}) {
     exports,Request,Response,URL,Date,crypto,
     require(path){
       if(path==='cloudflare:workers')return {env:{DB}};
+      if(path==='../../../public/data/catalog.json')return {default:catalog};
       if(path==='../../../lib/auth')return {
         authenticateRequest:async()=>{state.authCalls++;if(throwAuth)throw Error('auth D1 temporarily offline');return {userId:'member-a',provider:'agent',emailVerified:true};},
         isVerifiedOwner:()=>false,

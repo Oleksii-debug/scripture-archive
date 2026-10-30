@@ -41,6 +41,7 @@ function fixture() {
     if (id.endsWith("lib/auth")) return { sameOrigin: () => true, requestAddress: () => "test", rateLimit: async () => true,
       sha256: async value => `hash-${value}`, hashPassword: async () => ({ hash: "newhash", salt: "newsalt", iterations: 99 }),
       clearSessionCookie: () => "sa_session=; Max-Age=0", randomToken: () => "fresh-local-token",
+      createSession: async () => ({ cookie: "sa_session=confirmed; Secure; HttpOnly" }),
       isAuthTestRequest: () => false,
       authenticateRequest: async () => ({ userId: "alice", provider: "password" }),
       verifyPassword: async password => password === "correct" };
@@ -331,5 +332,53 @@ test("R0.2: unknown email still returns the same accepted generic resend/recover
     assert.deepEqual(await response.json(), { ok: true });
   }
   assert.equal(f.emails(), 0);
+  f.db.close();
+});
+
+
+test("R0.2: registration duplicate-email preflight D1 outage is private 503, not 500 or a false 409", async () => {
+  const f = fixture();
+  f.failReadFor("SELECT id FROM accounts WHERE email=");
+  const unavailable = await f.handler.POST(registrationRequest("new-reader@example.invalid"));
+  assert.equal(unavailable.status, 503);
+  assert.equal((await unavailable.json()).error, "registration_unavailable");
+  assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM accounts WHERE email='new-reader@example.invalid'").get().n, 0);
+  assert.equal(f.emails(), 0);
+  f.failReadFor("");
+  const restored = await f.handler.POST(registrationRequest("new-reader@example.invalid"));
+  assert.equal(restored.status, 201);
+  assert.equal(f.emails(), 1);
+  f.db.close();
+});
+
+test("R0.2: login identity D1 outage returns a retryable 503 without set-cookie or false credentials error", async () => {
+  const f = fixture();
+  f.db.prepare("UPDATE accounts SET email_verified_at=CURRENT_TIMESTAMP WHERE id='alice'").run();
+  f.failReadFor("SELECT * FROM accounts WHERE email=");
+  const request = () => new Request("https://example.invalid/api/auth?action=login", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "alice@example.invalid", password: "correct" }),
+  });
+  const unavailable = await f.handler.POST(request());
+  assert.equal(unavailable.status, 503);
+  assert.equal((await unavailable.json()).error, "authentication_unavailable");
+  assert.equal(unavailable.headers.get("set-cookie"), null);
+  f.failReadFor("");
+  const restored = await f.handler.POST(request());
+  assert.equal(restored.status, 200);
+  assert.match(restored.headers.get("set-cookie") || "", /^sa_session=confirmed/);
+  f.db.close();
+});
+
+test("R0.2: wrong password still returns 401 and does not mint a session", async () => {
+  const f = fixture();
+  f.db.prepare("UPDATE accounts SET email_verified_at=CURRENT_TIMESTAMP WHERE id='alice'").run();
+  const bad = await f.handler.POST(new Request("https://example.invalid/api/auth?action=login", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "alice@example.invalid", password: "incorrect" }),
+  }));
+  assert.equal(bad.status, 401);
+  assert.equal((await bad.json()).error, "invalid_credentials");
+  assert.equal(bad.headers.get("set-cookie"), null);
   f.db.close();
 });

@@ -9,6 +9,40 @@ function deferred() {
 }
 const answer = value => ({ ok: true, json: async () => value });
 
+test('progress never displays untrusted or unresolved local reading to a new principal', async () => {
+  for (const flag of ['localReadingStorageUntrusted', 'unownedReadingPendingRecovery']) {
+    const f = scenario('/progress');
+    try {
+      f.state.user = { id: 'bob' };
+      f.state[flag] = true;
+      let localReads = 0;
+      f.context.loadJSON = () => { localReads++; return [{book:'GEN', chapter:12, title:'Prior private reading'}]; };
+      globalThis.fetch = async () => answer({attempts:[]});
+      await renderWorkspace('progress', f.context);
+      assert.equal(localReads, 0, 'unsafe cache must not even be read');
+      assert.equal(f.shells.length, 1);
+      assert.doesNotMatch(f.shells[0], /Prior private reading|\/reader\/GEN\/12/);
+    } finally { f.restore(); }
+  }
+});
+
+test('progress rechecks trust after a delayed history request and keeps trusted history visible', async () => {
+  for (const revoke of [true, false]) {
+    const f = scenario('/progress');
+    try {
+      const history = deferred(), started = deferred();
+      f.context.loadJSON = () => [{book:'GEN', chapter:12, title:'Reading title'}];
+      globalThis.fetch = async () => { started.resolve(); return history.promise; };
+      const active = renderWorkspace('progress', f.context);
+      await started.promise;
+      if (revoke) f.state.localReadingStorageUntrusted = true;
+      history.resolve(answer({attempts:[]}));
+      await active;
+      assert.equal(f.shells[0].includes('Reading title'), !revoke);
+    } finally { f.restore(); }
+  }
+});
+
 function scenario(pathname = '/builder') {
   const original = { fetch: globalThis.fetch, location: globalThis.location, document: globalThis.document };
   const state = {

@@ -170,6 +170,13 @@ export async function renderWorkspace(name,c) {
     return;
   }
   if(name==='builder') {
+    // A successful refresh advances the render epoch. A second check after
+    // that refresh prevents announcing a save on a replaced account or route.
+    const refreshedPrincipal=()=>workspaceRenderEpoch===epoch+1 &&
+      state.user===principal&&!state.sessionUnavailable &&
+      globalThis.location?.pathname===path &&
+      globalThis.location?.search===search &&
+      globalThis.location?.hash===hash;
     const review = reviewText(state.lang);
     if(!state.user) { shell(`<section class="gate-panel"><h1>${w.builder}</h1><p class="lead">${w.accountNeeded}</p><a class="button primary" href="/account">${w.signIn}</a></section><section class="card" id="public-materials" aria-live="polite"></section>`); await renderPublicMaterials(document.querySelector('#public-materials'),review,esc); return; }
     const role=await request('/api/editor-roles?view=me');
@@ -189,13 +196,13 @@ export async function renderWorkspace(name,c) {
       document.querySelectorAll('[data-test]').forEach(b=>b.onclick=()=>{if(stillCurrent())test(data.materials.find(m=>m.id===b.dataset.test));});
       document.querySelectorAll('[data-delete]').forEach(button=>button.onclick=async()=>{
         if(!stillCurrent()||!window.confirm(review.confirm))return; button.disabled=true;
-        try{await request(`/api/materials?id=${encodeURIComponent(button.dataset.delete)}`,{method:'DELETE'});await renderWorkspace('builder',c);c.announce(review.removed)}
-        catch{document.querySelector('#material-status').textContent=review.error;button.disabled=false}
+        try{await request(`/api/materials?id=${encodeURIComponent(button.dataset.delete)}`,{method:'DELETE'});if(!stillCurrent())return;await renderWorkspace('builder',c);if(refreshedPrincipal())c.announce(review.removed)}
+        catch{if(!stillCurrent())return;document.querySelector('#material-status').textContent=review.error;button.disabled=false}
       });
       document.querySelector('#material-form').onsubmit=async e=>{
         e.preventDefault();if(!stillCurrent())return;const f=new FormData(e.currentTarget),payload=Object.fromEntries(f);
         payload.options=payload.options.split(/\r?\n/).map(v=>v.trim()).filter(Boolean);payload.locale=state.lang;if(editing)payload.id=editing.id;
-        try{await request('/api/materials',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});await renderWorkspace('builder',c);c.announce(w.saved)}catch{document.querySelector('#material-status').textContent=w.error}
+        try{await request('/api/materials',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(!stillCurrent())return;await renderWorkspace('builder',c);if(refreshedPrincipal())c.announce(w.saved)}catch{if(!stillCurrent())return;document.querySelector('#material-status').textContent=w.error}
       };
     }
     function test(m) {

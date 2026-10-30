@@ -1,0 +1,11 @@
+# SA-EXT-02 — ATTEMPT_HISTORY_SCORE_FAILCLOSED — terminal source receipt
+
+**2026-10-30** — **CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** for the specific missing private mission-history score integrity check. **Not the full parent section SA-EXT-02.**
+
+- **Proven gap and outcome:** `GET /api/attempts?action=history` could return HTTP 200 with invalid saved scores despite an acknowledged owner-scoped D1 SELECT: missing, text, fractional, negative, greater-than-total or impossible totals. It now refuses that malformed summary with `503 attempt_history_unavailable` rather than exposing a fabricated completion score, zero history, or deleting a saved record.
+- **Canonical runtime integration:** the existing `app/api/attempts/route.ts` (verified blob `2ac4d4125d4e653d4fce9cbeedc92bbd7c25a57d`); preserves real account ownership checks and active-assessment locking. No parallel history API, client-side-only guard or migration.
+- **Actual test:** existing `tests/attempt-recovery-history.test.mjs` (verified blob `96efb9f803546e99eaf7e945db823549b69122ab`) executes the actual canonical handler and in-memory SQLite migration. Ten bad score/total cases assert private 503, absence of false history/side effects, unaffected other principal and valid recovery after canonical data correction.
+- **Code integration:** [PR #694](https://github.com/Oleksii-debug/scripture-archive/pull/694) merged to `main@e9d14c5722c4206201ce81a28c6dd079d98a732d`. Readback from live GitHub `main` confirmed both exact blobs and test presence.
+- **Exact-head CI:** [Actions #41056643516](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41056643516) **SUCCESS** for PR head `2bfe1995af964857076c2547f873f8737afde2f7`: Node regression suite, TS, ESLint, build, disposable Worker/D1 HTTP E2E, Python all **SUCCESS**.
+- **Remaining scoped implementation = 0, required unmerged PRs for this specific fix = 0.** Do not redevelop without a newly demonstrated defect or change request. Continue SA-EXT-02's much broader backlog (additional missions, mastery, curriculum, pedagogical/translation review).
+- **Limits:** full SA-EXT-02 and all SA-EXT-01…20 remain **OPEN**. No proof of live deployed source SHA, real email, actual keyboard/NVDA physical acceptance, full content/rights, expanded languages or total release readiness. No production deploy or user-record mutation.

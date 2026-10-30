@@ -6,6 +6,13 @@ import { EDITIONS } from "../../../public/editions.js";
 export const dynamic = "force-dynamic";
 // Reuse canonical Bible chapter limits; avoid maintaining another book list.
 const BOOK_CHAPTERS = new Map(catalog.books.en.map(book => [book.code, book.chapters]));
+// Editions may retain their own canonical chapter numbering. E.g. the local
+// Ohiienko edition has JOL chapter 4, while the WEB reader has only three.
+const EDITION_BOOK_CHAPTERS = new Map(Object.entries(catalog.editionBooks)
+  .map(([edition, books]) => [edition, new Map(books.map(book => [book.code, book.chapters]))] as const));
+function bookChapterLimit(edition: string, book: string) {
+  return (EDITION_BOOK_CHAPTERS.get(edition) ?? BOOK_CHAPTERS).get(book) ?? 0;
+}
 // Only editions with an actual local reader can have a chapter bookmark.
 // Reuse the edition registry shown by the canonical UI, including Ohiienko.
 const LOCAL_EDITION_IDS = new Set(Object.values(EDITIONS).flat()
@@ -50,7 +57,7 @@ async function write(request: Request, remove: boolean) {
   if (!id) return json({ error: "authentication_required" }, 401);
   const body: unknown = await request.json().catch(() => null);
   // Reject nonexistent chapters on PUT. Keep DELETE able to clean up old invalid entries.
-  if (!valid(body) || (!remove && (!LOCAL_EDITION_IDS.has(body.edition) || body.chapter > (BOOK_CHAPTERS.get(body.book) ?? 0))))
+  if (!valid(body) || (!remove && (!LOCAL_EDITION_IDS.has(body.edition) || body.chapter > bookChapterLimit(body.edition, body.book))))
     return json({ error: "invalid_bookmark" }, 400);
   // D1 may return a failure receipt or throw after the caller is authenticated.
   // Never claim that a bookmark was saved or deleted unless the write ACK is

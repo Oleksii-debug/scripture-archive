@@ -78,10 +78,15 @@ export async function PUT(request: Request) {
   const note = body.liveNote as Record<string, unknown>;
   if (!["uk", "ru", "en"].every(locale => typeof note[locale] === "string"))
     return Response.json({ error: "invalid_content_note" }, { status: 400 });
+  // Refuse oversized owner-authored notes rather than silently saving a
+  // different, truncated teaching/publication message. Trim remains the
+  // existing normalization; valid 600-character notes preserve every unit.
+  if (["uk", "ru", "en"].some(locale => (note[locale] as string).trim().length > 600))
+    return Response.json({ error: "invalid_content_note" }, { status: 400 });
   const liveNote = {
-    uk: typeof note.uk === "string" ? note.uk.trim().slice(0, 600) : "",
-    ru: typeof note.ru === "string" ? note.ru.trim().slice(0, 600) : "",
-    en: typeof note.en === "string" ? note.en.trim().slice(0, 600) : "",
+    uk: (note.uk as string).trim(),
+    ru: (note.ru as string).trim(),
+    en: (note.en as string).trim(),
   };
   const safe = { updates: [], text: {}, liveNote }, data = JSON.stringify(safe);
   const acknowledged = await contentBatchAcknowledged(() => env.DB!.batch([

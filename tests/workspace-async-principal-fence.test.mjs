@@ -124,3 +124,108 @@ test('same-account builder still renders its existing canonical private interfac
     assert.match(f.shells[0], /builder-layout/);
   } finally { f.restore(); }
 });
+
+
+test('builder never refreshes or announces a delayed successful save after switching accounts',async()=>{
+  const f=scenario(), write=deferred(), started=deferred(), urls=[], notices=[];
+  const previousFormData=globalThis.FormData;
+  globalThis.FormData=class {
+    *[Symbol.iterator](){
+      yield ['title','Sample'];
+      yield ['prompt','Who travelled?'];
+      yield ['reference','GEN 12'];
+      yield ['options','Abram\nSarai'];
+      yield ['answer','Abram'];
+      yield ['explanation','As written'];
+    }
+  };
+  try{
+    f.context.announce=message=>notices.push(message);
+    globalThis.fetch=async(url,options)=>{
+      urls.push(url);
+      if(url==='/api/editor-roles?view=me')return answer({editor:false,owner:false});
+      if(url==='/api/materials?mine=1')return answer({materials:[]});
+      if(url==='/api/material-review?view=mine'||url==='/api/material-review?view=public')return answer({items:[]});
+      if(url==='/api/materials'&&options?.method==='POST'){started.resolve();return write.promise;}
+      throw Error('unexpected request: '+url);
+    };
+    await renderWorkspace('builder',f.context);
+    const form=globalThis.document.querySelector('#material-form');
+    const pending=form.onsubmit({preventDefault(){},currentTarget:form});
+    await started.promise;
+    const before=urls.length,painted=f.shells.length;
+    f.state.user={id:'bob'};
+    globalThis.location.pathname='/account';
+    write.resolve(answer({ok:true}));
+    await pending;
+    assert.equal(urls.length,before,'a stale saved receipt must not start a second private builder read');
+    assert.equal(f.shells.length,painted,'Bob must not see Alice’s private builder');
+    assert.deepEqual(notices,[],'a successful former-user save must not appear on Bob’s route');
+  }finally{globalThis.FormData=previousFormData;f.restore();}
+});
+
+test('builder never refreshes, announces or writes stale errors after delayed delete',async()=>{
+  const f=scenario(), write=deferred(),started=deferred(),urls=[],notices=[];
+  const previousWindow=globalThis.window;
+  const button={dataset:{delete:'alice-material'},disabled:false};
+  globalThis.window={confirm:()=>true};
+  globalThis.document.querySelectorAll=selector=>selector==='[data-delete]'?[button]:[];
+  try{
+    f.context.announce=message=>notices.push(message);
+    globalThis.fetch=async(url,options)=>{
+      urls.push(url);
+      if(url==='/api/editor-roles?view=me')return answer({editor:false,owner:false});
+      if(url==='/api/materials?mine=1')return answer({materials:[]});
+      if(url==='/api/material-review?view=mine'||url==='/api/material-review?view=public')return answer({items:[]});
+      if(url==='/api/materials?id=alice-material'&&options?.method==='DELETE'){started.resolve();return write.promise;}
+      throw Error('unexpected request: '+url);
+    };
+    await renderWorkspace('builder',f.context);
+    const work=button.onclick();
+    await started.promise;
+    const before=urls.length,painted=f.shells.length;
+    f.state.user=null;
+    globalThis.location.pathname='/account';
+    write.resolve(answer({ok:true}));
+    await work;
+    assert.equal(urls.length,before);
+    assert.equal(f.shells.length,painted);
+    assert.deepEqual(notices,[]);
+  }finally{
+    if(previousWindow===undefined)delete globalThis.window;
+    else globalThis.window=previousWindow;
+    f.restore();
+  }
+});
+
+test('current builder save still refreshes and emits one successful accessible notice',async()=>{
+  const f=scenario(),urls=[],notices=[];
+  const previousFormData=globalThis.FormData;
+  globalThis.FormData=class{
+    *[Symbol.iterator](){
+      yield ['title','Study'];
+      yield ['prompt','What happened?'];
+      yield ['reference','GEN 12'];
+      yield ['options','First\nSecond'];
+      yield ['answer','First'];
+      yield ['explanation','The passage confirms it'];
+    }
+  };
+  try{
+    f.context.announce=value=>notices.push(value);
+    globalThis.fetch=async(url,options)=>{
+      urls.push(url);
+      if(url==='/api/editor-roles?view=me')return answer({editor:false,owner:false});
+      if(url==='/api/materials?mine=1')return answer({materials:[]});
+      if(url==='/api/material-review?view=mine'||url==='/api/material-review?view=public')return answer({items:[]});
+      if(url==='/api/materials'&&options?.method==='POST')return answer({ok:true});
+      throw Error('unexpected '+url);
+    };
+    await renderWorkspace('builder',f.context);
+    const form=globalThis.document.querySelector('#material-form');
+    await form.onsubmit({preventDefault(){},currentTarget:form});
+    assert.equal(f.shells.length,2,'successful save must redraw the canonical builder');
+    assert.equal(urls.filter(url=>url==='/api/materials').length,1,'POST must never replay');
+    assert.deepEqual(notices,['saved'],'one successful same-account announcement');
+  }finally{globalThis.FormData=previousFormData;f.restore();}
+});

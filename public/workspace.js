@@ -199,8 +199,16 @@ export async function renderWorkspace(name,c) {
     if(state.user) try { history=await request('/api/attempts?action=history'); } catch { history={error:true}; }
     // A late history read belongs to its original route and account only.
     if(!stillCurrent())return;
-    const p=state.missionProgress,read=(state.localReadingStorageUntrusted || state.unownedReadingPendingRecovery)
+    const p=state.missionProgress;
+    const rawReading=(state.localReadingStorageUntrusted || state.unownedReadingPendingRecovery)
       ? [] : c.loadJSON('sa.readingHistory',[]);
+    // A damaged legacy browser cache is neither a valid history nor a source
+    // of trusted chapter routes. Bound the projection; never rewrite the bytes.
+    const read=(Array.isArray(rawReading) ? rawReading.slice(-200) : []).filter(r =>
+      r && typeof r.book==='string' && /^[1-3]?[A-Z]{2,3}$/.test(r.book) &&
+      Number.isInteger(r.chapter) && r.chapter>=1 && r.chapter<=150 &&
+      typeof r.title==='string' && r.title.length<=160
+    );
     shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${w.progress}</h1></div><p>${w.progressLead}</p></div>${syncWarning?`<p role="alert">${esc(syncWarning)}</p>`:''}<div class="card-grid"><article class="card progress-stat"><strong>${p.correct.length} / ${taskCount}</strong><p>${w.tasks}</p></article><article class="card progress-stat"><strong>${read.length}</strong><p>${w.chapters}</p></article><article class="card progress-stat"><strong>${p.complete?w.finished:p.index?w.inProgress:w.notStarted}</strong><p>${w.status}</p></article></div><section class="card resume-card"><h2>${esc((mission.title?.[state.lang]||t("missionTitle")))}</h2><progress aria-label="${w.tasks}" max="${taskCount||1}" value="${p.correct.length}"></progress><div class="action-row"><a class="button primary" href="/mission/abraham">${w.continue}</a><a class="button" href="/groups">${t('myGroups')}</a></div></section>${reviewScheduleMarkup(history,state.lang,esc)}${missionHistoryMarkup(history,state.lang,esc)}<section class="card resume-card"><h2>${w.readingHistory}</h2>${read.length?`<div class="reading-links">${read.slice().reverse().map(r=>`<a class="button" href="/reader/${encodeURIComponent(r.book)}/${Number(r.chapter)}">${esc(r.title)} ${Number(r.chapter)}</a>`).join('')}</div>`:`<p>${w.nothingRead}</p>`}</section>`);
     document.querySelector('#retry-mission-history')?.addEventListener('click',()=>renderWorkspace('progress',c));
     return;

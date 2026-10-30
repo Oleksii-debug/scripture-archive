@@ -1,3 +1,14 @@
+## 2026-10-30 — SA-EXT-01 / LOCAL_READING_CANONICAL_BOOK_CHAPTER_BOUNDS — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
+
+**Остаточний статус лише цього дефекту:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Повний SA-EXT-01 і всі двадцять батьківських SA-EXT-01…20 залишаються OPEN.** Повторна реалізація цього дефекту — лише за новою затвердженою вимогою або конкретною регресією.
+
+- **Відтворено на справжньому коді:** колишній `public/workspace.js::verifiedLocalReadingHistory` відображав вигаданий `FAK:2` і неіснуючий `GEN:51` як прочитані глави, бо перевіряв форму коду та загальну межу 150, а не дійсний біблійний каталог. Це спотворювало лічильник і створювало неправильні `/reader/...`-посилання.
+- **Виправлено та інтегровано:** [PR #594](https://github.com/Oleksii-debug/scripture-archive/pull/594) **SQUASH MERGED** у `main@99e39397447dc432ba2a062fddf349add8142077`; канонічний `public/workspace.js@9ae2fc248a6ad8e84a46cfecaf1564fdb7229842`. Історія користується наявними 66 книгами та підтвердженими editionBooks (збережено чинну четверту главу `JOL` в `uk-ohiienko`), відмовляється від неперевірених кодів/глав і при відсутньому каталозі показує зрозуміле повідомлення трьома мовами, а не помилковий нуль.
+- **Тести на чинній інтеграції:** `tests/reading-history-dedup.test.mjs@4de08a882942146fa1cdc7092f3e4e689c6c36c1`; оновлена реальна фікстура `tests/workspace-async-principal-fence.test.mjs`. [Exact-head CI #41030716017](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41030716017) — **SUCCESS**, Node **1381 PASS / 0 FAIL / 1 SKIP**, TypeScript/lint/build/Python PASS, disposable Worker/D1 **22/22 PASS**. Додатковий точний V8 source-executed preflight: **152/152**.
+- **Межі приймання:** жодної нової бази даних, перекладу, прав на тексти чи альтернативного читача; змінювалася справжня сторінка `/progress`. **Не підтверджено** сьогоднішній live Sites SHA, production D1, фізичний NVDA/браузер і завершення батьківського розділу.
+
+---
+
 ## 2026-10-30 — SA-EXT-07 / ACADEMY_CROSS_TAB_ATOMICITY — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
 
 **РОЗДІЛ SA-EXT-07, тільки підфункція одночасного збереження позначок у вкладках — ЗАКРИТО / CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL**; `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Батьківський SA-EXT-07 і всі двадцять SA-EXT-01…20 залишаються OPEN**, жодного загального приймання не приписано.

@@ -73,6 +73,9 @@ export function startReadOnlyHeartbeat(base, {
     }).catch(() => { metrics.failures++; }).finally(() => { inFlight = false; });
   };
   const handle = schedule(pulse, intervalMs);
+  // The disposable HTTP suite can complete before the first interval tick.
+  // Keep the local proxy alive immediately, using the same safe GET probe.
+  pulse();
   return async () => {
     active = false;
     cancel(handle);

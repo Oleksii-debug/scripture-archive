@@ -319,7 +319,11 @@ export async function POST(request: Request) {
     const tasks = tasksFor(attempt.book_id, attempt.chapter).slice(0, attempt.task_limit), task = tasks[attempt.current_index];
     if (Number(body.taskIndex) < attempt.current_index + 1) return json({ error: "answer_already_submitted" }, 409);
     if (!task || Number(body.taskIndex) !== attempt.current_index + 1 || !Array.isArray(body.selected)) return json({ error: "invalid_answer" }, 400);
-    const selected = [...new Set((body.selected as unknown[]).map(Number))].sort((a, b) => a - b);
+    // Answer option indexes are numeric JSON values, not coercible strings,
+// booleans or null. Reject ambiguous input before any durable grading write.
+if ((body.selected as unknown[]).some(index => typeof index !== "number"))
+  return json({ error: "invalid_answer" }, 400);
+const selected = [...new Set(body.selected as number[])].sort((a, b) => a - b);
     if (!selected.length || selected.some(index => !Number.isInteger(index) || index < 0 || index >= task.options[attempt.locale].length)) return json({ error: "invalid_answer" }, 400);
     const expected = [...task.correct].sort((a, b) => a - b), correct = JSON.stringify(selected) === JSON.stringify(expected);
     const nextIndex = attempt.current_index + 1;

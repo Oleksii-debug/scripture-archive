@@ -100,7 +100,7 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
   };
   // Copy only the validated *second* edition's verses and their own rights
   // metadata; never borrow the primary edition's license or source.
-  result.addEventListener('click', async event => {
+  result.onclick=async event => {
     const button=event.target?.closest?.('button[data-parallel-cite]');
     if (!button || !citation || button.disabled || !panel.isConnected || !current()) return;
     const record=citation, raw=button.dataset.parallelCite;
@@ -129,5 +129,5 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
       if (panel.isConnected && current() && citation===record && selected())
         status.textContent=copy.citeFail;
     }
-  });
+  };
 }

@@ -13,13 +13,14 @@ const transpiled = ts.transpileModule(source, {
 assert.equal(transpiled.diagnostics?.length ?? 0, 0);
 
 function harness(mode) {
-  const calls = { batch: 0, prepare: 0 };
+  const calls = { batch: 0, prepare: 0, bound: [] };
   const ok = { success: true, meta: { changes: 1 } };
   const DB = {
     prepare(sql) {
       calls.prepare++;
       return {
         bind(...values) {
+          calls.bound.push({sql, values});
           return {
             sql, values,
             first: async () => ({ kind: "book", title: "Existing", locale: "uk", data: "{}" }),
@@ -204,6 +205,39 @@ test("public note refuses normalized overlimit without rewriting any language", 
   assert.equal(response.status, 400);
   assert.equal((await response.json()).error, "invalid_content_note");
   assert.equal(h.calls.batch, 0);
+});
+
+// The owner-generated immutable revision and the managed title must never
+// silently differ from the editor's original title.
+for (const [label, title] of [
+  ["201 characters", "Ж".repeat(201)],
+  ["overlimit after trimming", "  "+"Ж".repeat(201)+"  "],
+]) {
+  test("CMS upsert rejects "+label+" title before any D1 mutation",async()=>{
+    const h=harness("ok");
+    const response=await h.invoke("upsert","https://scripture.invalid",{
+      action:"upsert-item",id:"record",kind:"book",locale:"uk",title,
+      status:"draft",data:{text:"Author content"},
+    });
+    assert.equal(response.status,400);
+    assert.equal((await response.json()).error,"invalid_content_item");
+    assert.equal(h.calls.batch,0);
+    assert.equal(h.calls.prepare,0);
+  });
+}
+
+test("CMS upsert preserves the full Unicode 200-character title in D1 bind",async()=>{
+  const h=harness("ok");
+  const full="Ж".repeat(200);
+  const response=await h.invoke("upsert","https://scripture.invalid",{
+    action:"upsert-item",id:"record",kind:"book",locale:"uk",title:"  "+full+"  ",
+    status:"draft",data:{text:"Author content"},
+  });
+  assert.equal(response.status,200);
+  assert.equal(h.calls.batch,1);
+  const write=h.calls.bound.find(x=>x.sql.includes("INSERT INTO managed_content"));
+  assert.ok(write);
+  assert.equal(write.values[3],full,"bound title is the complete authored normalized title");
 });
 
 const existingIdentity = "k".repeat(100);

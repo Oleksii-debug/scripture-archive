@@ -98,6 +98,9 @@ export async function GET(request:Request){
       return privateJson({users:rows.results});
     }catch{return privateJson({error:"account_state_unavailable"},{status:503});}
   }
+  // A mistyped or unsupported account read must never fall through to the
+  // private profile payload. Retain the existing explicit profile read alias.
+  if(action!=="me"&&action!=="profile")return privateJson({error:"unknown_action"},{status:400});
   try{
     const row=await env.DB.prepare("SELECT * FROM profiles WHERE user_id=?").bind(id.userId).first<Record<string,unknown>>();
     return privateJson({user:publicUser(id,row)});

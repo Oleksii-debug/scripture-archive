@@ -2043,11 +2043,13 @@ function updatePageMetadata(name) {
   robots.content = PRIVATE_ROUTES.has(name) ? "noindex, nofollow" : "index, follow";
 }
 
-function loadJSON(key, fallback) {
+function loadJSON(key, fallback, strict = false) {
   try {
-    return JSON.parse(localStorage.getItem(key)) || fallback;
+    const raw = localStorage.getItem(key);
+    if (strict) return raw === null ? fallback : JSON.parse(raw);
+    return JSON.parse(raw) || fallback;
   } catch {
-    return fallback;
+    return strict ? null : fallback;
   }
 }
 function t(key) {
@@ -3059,7 +3061,7 @@ async function renderReader(parts) {
         announce(t('readerStorageUnavailable'));
         return;
       }
-      const latestHistory=state.localReadingStorageUntrusted ? [] : loadJSON('sa.readingHistory',[]);
+      const latestHistory=state.localReadingStorageUntrusted ? [] : loadJSON('sa.readingHistory',[],true);
       // A decoded legacy row can be null, a primitive, or have forged chapter
       // coordinates. Never dereference it or overwrite the original cache with
       // an apparent fresh history; preserve it for explicit recovery instead.

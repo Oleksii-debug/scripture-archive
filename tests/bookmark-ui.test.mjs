@@ -6,8 +6,8 @@ import vm from "node:vm";
 const source = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
 const code = source.slice(source.indexOf("const bookmarkCopy ="), source.indexOf("attemptChannel?.addEventListener"));
 
-function harness({ signedIn = true, fail = false, delayedRead = false } = {}) {
-  let handler, current = [], writes = 0, releaseRead;
+function harness({ signedIn = true, fail = false, delayedRead = false, initialBookmarks = [] } = {}) {
+  let handler, current = initialBookmarks, writes = 0, releaseRead;
   const readGate = delayedRead ? new Promise(resolve => { releaseRead = resolve; }) : null;
   const state = { lang: "en", user: signedIn ? { id: "one" } : null, currentReader: { book: "GEN", chapter: 12 } };
   const button = { disabled: false, focus() {}, addEventListener(_name, fn) { handler = fn; } };
@@ -33,7 +33,7 @@ function harness({ signedIn = true, fail = false, delayedRead = false } = {}) {
     changeAccount: id => { state.user = id ? { id } : null; },
     changeChapter: chapter => { state.currentReader = { book: "GEN", chapter }; },
     finishRead: () => releaseRead?.(),
-    mount: () => context.mountReaderBookmarks({ code: "GEN" }, 12, { id: "en-web" }, [{ code: "GEN", title: "Genesis" }]),
+    mount: () => context.mountReaderBookmarks({ code: "GEN" }, 12, { id: "en-web" }, [{ code: "GEN", title: "Genesis", chapters: 50 }]),
     click: () => handler({ currentTarget: button }),
   };
 }
@@ -122,4 +122,33 @@ test("a bookmark click from an old chapter cannot mutate the next chapter", asyn
   h.changeChapter(13);
   await h.click();
   assert.equal(h.writes(), 0, "old chapter handler must not issue a bookmark write");
+});
+
+
+test("malformed legacy bookmarks do not hide valid same-edition chapters", async () => {
+  const h = harness({ initialBookmarks: [
+    null, 1, "bad", [], { edition: "en-web", book: "GEN", chapter: 12 },
+    { edition: "en-web", book: "GEN", chapter: 51 },
+    { edition: "en-web", book: "GEN", chapter: 1.5 },
+    { edition: "en-web", book: "UNKNOWN", chapter: 1 },
+    { edition: "other", book: "GEN", chapter: 1 },
+  ] });
+  await h.mount();
+  assert.match(h.panel.innerHTML, /Remove this bookmark/);
+  assert.match(h.panel.innerHTML, /\\/reader\\/GEN\\/12/);
+  assert.doesNotMatch(h.panel.innerHTML, /\\/reader\\/GEN\\/51/);
+  assert.doesNotMatch(h.panel.innerHTML, /role="alert"/);
+  assert.equal(h.writes(), 0);
+});
+
+test("out-of-range and malformed bookmark rows leave an accessible empty state", async () => {
+  const h = harness({ initialBookmarks: [
+    null, { edition: "en-web", book: "GEN", chapter: 51 },
+    { edition: "en-web", book: "GEN", chapter: Number.MAX_SAFE_INTEGER + 1 },
+    { edition: "en-web", book: "GEN", chapter: "12" },
+  ] });
+  await h.mount();
+  assert.match(h.panel.innerHTML, /Bookmark this chapter/);
+  assert.match(h.panel.innerHTML, /No bookmarks in this edition yet/);
+  assert.doesNotMatch(h.panel.innerHTML, /role="alert"/);
 });

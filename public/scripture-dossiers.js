@@ -9,9 +9,9 @@ const COPY = {
 };
 // Native GET discovery on the existing /dossiers route; no second data authority.
 const SEARCH_COPY = {
-  uk: { label:'Пошук досьє', submit:'Знайти', clear:'Очистити пошук', empty:'За запитом досьє не знайдено.', results:'Знайдено досьє' },
-  ru: { label:'Поиск досье', submit:'Найти', clear:'Очистить поиск', empty:'По запросу досье не найдены.', results:'Найдено досье' },
-  en: { label:'Search dossiers', submit:'Find', clear:'Clear search', empty:'No dossiers match this search.', results:'Dossiers found' },
+  uk: { label:'Пошук досьє', submit:'Знайти', clear:'Очистити пошук', empty:'За запитом досьє не знайдено.', results:'Знайдено досьє', example:'Доступний також пошук за віршем, наприклад GEN 17:15.' },
+  ru: { label:'Поиск досье', submit:'Найти', clear:'Очистить поиск', empty:'По запросу досье не найдены.', results:'Найдено досье', example:'Доступен также поиск по стиху, например GEN 17:15.' },
+  en: { label:'Search dossiers', submit:'Find', clear:'Clear search', empty:'No dossiers match this search.', results:'Dossiers found', example:'You can also search cited verses, for example GEN 17:15.' },
 };
 const ref=(book,chapter,first,last,kind='narrative')=>({book,chapter,first,last,kind});
 const nodes=[
@@ -156,6 +156,19 @@ export function searchScriptureDossiers(language,value,catalog=null) {
   const bookNames=new Map(books.filter(book=>book && typeof book.code==='string' &&
     typeof book.title==='string').map(book=>[book.code,book.title]));
   const normalize=text=>text.normalize('NFC').toLocaleLowerCase(lang);
+  // Reuse the existing verified book-name/code index, but treat a verse
+  // request as an exact chapter-and-range lookup, not a substring match.
+  // Include a dossier's published relation witnesses: the reader can inspect
+  // those citations in the same public dossier, with no private grading data.
+  const verseQuery=/^(.+?)\s+([1-9][0-9]{0,2}):([1-9][0-9]{0,2})$/u.exec(query);
+  if(verseQuery){
+    const requestedBook=verseQuery[1],chapter=Number(verseQuery[2]),verse=Number(verseQuery[3]);
+    const cited=source=>(normalize(source.book)===requestedBook ||
+      (bookNames.has(source.book) && normalize(bookNames.get(source.book))===requestedBook)) &&
+      source.chapter===chapter && source.first<=verse && verse<=source.last;
+    return nodes.filter(item=>item.sources.some(cited) ||
+      item.related.some(edge=>cited(edge.via)));
+  }
   return nodes.filter(item=>{
     // Study prompts are public material shown within the same dossier.
     const authored=[item.id,item.names[lang],item.summaries[lang],COPY[lang][item.type],
@@ -196,7 +209,7 @@ export function dossierMarkup(catalog,language,requestedId,esc,searchQuery='') {
   const hasQuery=typeof searchQuery==='string' && searchQuery.trim().length>0;
   const searchLabel=SEARCH_COPY[lang];
   const shownQuery=typeof searchQuery==='string'?searchQuery.trim().slice(0,120):'';
-  const searchForm=`<form action="/dossiers" method="get" role="search"><label for="dossier-search">${esc(searchLabel.label)}</label><input id="dossier-search" name="q" type="search" maxlength="120" value="${esc(shownQuery)}"><button type="submit">${esc(searchLabel.submit)}</button></form>`;
+  const searchForm=`<form action="/dossiers" method="get" role="search"><label for="dossier-search">${esc(searchLabel.label)}</label><input id="dossier-search" name="q" type="search" maxlength="120" value="${esc(shownQuery)}" aria-describedby="dossier-search-example"><p id="dossier-search-example">${esc(searchLabel.example)}</p><button type="submit">${esc(searchLabel.submit)}</button></form>`;
   const clearSearch=hasQuery?`<p><a href="/dossiers">${esc(searchLabel.clear)}</a></p><p role="status">${esc(searchLabel.results)}: ${matching.length}</p>`:'';
   // Keep the active GET filter when following a result. URLSearchParams
   // handles Unicode and malformed UTF-16 safely; escape its '&' for HTML.

@@ -330,6 +330,11 @@ export async function POST(request: Request) {
   const visibility = clean(body.visibility, 12);
   const rosterVisibility = clean(body.rosterVisibility, 12);
   const marathonEnabled = body.marathonEnabled === true || body.marathonEnabled === "on" || body.marathonEnabled === "true";
+  // An explicit JSON value with a non-string type must not be silently
+  // replaced with the Ukrainian default and acknowledged as the owner's choice.
+  // Absent/null/blank HTML form values retain the established default.
+  if (body.bibleEdition != null && typeof body.bibleEdition !== "string")
+    return Response.json({error:"invalid_edition"},{status:400});
   const bibleEdition = clean(body.bibleEdition, 40) || "uk-ohiienko";
   if (!["uk-kulish","uk-ohiienko","uk-khomenko","uk-turkoniak","ru-synodal","ru-nrt","ru-rsp","ru-kulakov","en-web","en-kjv","en-niv","en-esv"].includes(bibleEdition)) return Response.json({error:"invalid_edition"},{status:400});
   if (!name || !weeklyGoal || weeklyGoal % 2 === 0 || !["flexible", "steady"].includes(catchupMode) || !["public", "private"].includes(visibility) || !["count", "names", "private"].includes(rosterVisibility)) return Response.json({ error: "invalid_group" }, { status: 400 });

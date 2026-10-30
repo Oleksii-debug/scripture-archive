@@ -173,6 +173,42 @@ for (const [label,optionalFields] of [
   });
 }
 
+// A group must not claim it saved the requested Bible edition after coercing
+// an explicit JSON value into the Ukrainian default. Use the real route+SQLite.
+for (const [label,value] of [
+  ['array',['en-web']],['boolean',true],['number',42],
+  ['object',{id:'en-web'}],['false',false],
+]) {
+  test('reject explicit '+label+' Bible edition before D1 group creation',async()=>{
+    const f=fixture();
+    try {
+      const response=await f.post('create',{...group,bibleEdition:value});
+      assert.equal(response.status,400,JSON.stringify(response.body));
+      assert.equal(response.body.error,'invalid_edition');
+      assert.equal(f.writes,0,'invalid edition cannot write any group record');
+      assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM home_groups').get().n,1);
+    } finally { f.db.close(); }
+  });
+}
+for (const [label,fields,expected] of [
+  ['omitted',{},'uk-ohiienko'],
+  ['explicit null',{bibleEdition:null},'uk-ohiienko'],
+  ['blank HTML selection',{bibleEdition:''},'uk-ohiienko'],
+  ['trimmed named edition',{bibleEdition:'  en-web  '},'en-web'],
+]) {
+  test('preserve '+label+' Bible edition selection',async()=>{
+    const f=fixture();
+    try {
+      const payload={...group,...fields};
+      if(label==='omitted')delete payload.bibleEdition;
+      const response=await f.post('create',payload);
+      assert.equal(response.status,201,JSON.stringify(response.body));
+      assert.equal(f.db.prepare('SELECT bible_edition FROM home_groups WHERE id=?')
+        .get(response.body.groupId).bible_edition,expected);
+    } finally { f.db.close(); }
+  });
+}
+
 test('group creation persists the exact maximum authored fields',async()=>{
   const f=fixture();
   try{

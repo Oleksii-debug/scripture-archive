@@ -109,6 +109,11 @@ export async function renderPublicMaterials(root, w, esc, isCurrent = () => true
       if (button.disabled) return;
       const choice = new FormData(form).get('choice');
       if (choice === null) return;
+      // Chromium drops keyboard focus to BODY when a focused submit control is
+      // disabled. Restore only for the same live answer form, and only if the
+      // reader has not deliberately focused another control while awaiting IO.
+      const doc=root?.ownerDocument;
+      const hadSubmitFocus=Boolean(doc && doc.activeElement===button);
       button.disabled=true;
       try {
         const result=await post({action:'answer',id:form.dataset.id,choice:Number(choice)});
@@ -117,7 +122,13 @@ export async function renderPublicMaterials(root, w, esc, isCurrent = () => true
       } catch {
         if (active() && form.isConnected !== false) status.textContent=w.answerError;
       } finally {
-        if (active() && form.isConnected !== false) button.disabled=false;
+        if (active() && form.isConnected !== false) {
+          button.disabled=false;
+          if (hadSubmitFocus && doc.activeElement===doc.body && typeof button.focus==='function') {
+            try { button.focus({preventScroll:true}); }
+            catch { /* A removed or disabled control must not interrupt feedback. */ }
+          }
+        }
       }
     });
   } catch {

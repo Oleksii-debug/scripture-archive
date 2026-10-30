@@ -154,3 +154,17 @@ test("bookmark PUT accepts only locally readable editions, while legacy deletion
     assert.equal(f.calls.length, 1);
   }
 });
+
+// Catalog editions can have different chapter divisions (Joel / JOL is 4 in
+// Ohiienko but 3 in the default English catalog). Never use English-only bounds.
+test("bookmark PUT preserves translation-specific chapter boundaries", async () => {
+  const local = fixture();
+  assert.equal((await local.call("PUT", { edition: "uk-ohiienko", book: "JOL", chapter: 4 })).status, 200);
+  assert.equal(local.calls.length, 1);
+  const english = fixture();
+  assert.equal((await english.call("PUT", { edition: "en-web", book: "JOL", chapter: 4 })).status, 400);
+  assert.equal(english.calls.length, 0);
+  const outOfRange = fixture();
+  assert.equal((await outOfRange.call("PUT", { edition: "uk-ohiienko", book: "JOL", chapter: 5 })).status, 400);
+  assert.equal(outOfRange.calls.length, 0);
+});

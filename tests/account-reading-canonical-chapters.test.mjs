@@ -96,3 +96,24 @@ test("genuine empty reading update remains a durable acknowledged write", async 
   assert.equal(response.status, 200);
   assert.equal(f.calls.length, 1);
 });
+
+test("blank reading receipt titles must not produce a confirmed private save", async () => {
+  // The actual progress renderer and reading export reject these rows as
+  // unrenderable, so account PUT must not persist them as completed chapters.
+  for (const title of ["", "   ", "\n\t"]) {
+    const f = harness();
+    const result = await f.put([{ book: "GEN", chapter: 1, title }]);
+    assert.equal(result.status, 400, JSON.stringify(title));
+    assert.equal(result.body.error, "invalid_reading");
+    assert.equal(f.calls.length, 0);
+  }
+});
+
+test("a genuine named reading receipt is still acknowledged without rewriting titles", async () => {
+  const f = harness();
+  const receipt = { book:"GEN", chapter:1, title:"  Буття 1  " };
+  const result = await f.put([receipt]);
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body, {ok:true});
+  assert.deepEqual(JSON.parse(f.calls[0].args[1]), [receipt]);
+});

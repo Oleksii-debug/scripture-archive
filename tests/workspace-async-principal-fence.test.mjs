@@ -265,3 +265,55 @@ for(const view of ['about','campaigns','dossiers']) {
     } finally {f.restore();}
   });
 }
+
+
+test('progress ignores damaged reading cache types instead of breaking navigation', async () => {
+  for (const corrupt of [null, {}, 'invalid', 12, true, ['invalid'], [null]]) {
+    const f = scenario('/progress');
+    try {
+      f.context.loadJSON = () => corrupt;
+      globalThis.fetch = async () => answer({ attempts: [] });
+      await renderWorkspace('progress', f.context);
+      assert.equal(f.shells.length, 1, 'progress must render even with a damaged cache');
+      assert.doesNotMatch(f.shells[0], /href="\/reader\//);
+      assert.doesNotMatch(f.shells[0], />undefined<|>NaN</);
+    } finally { f.restore(); }
+  }
+});
+
+test('progress preserves verified chapters but omits malformed local entries and unsafe links', async () => {
+  const f = scenario('/progress');
+  try {
+    f.context.loadJSON = () => [
+      {book:'GEN',chapter:12,title:'Genesis'}, null,
+      {book:'EXO',chapter:3,title:'Exodus'},
+      {book:'GEN',chapter:0,title:'Zero'}, {book:'GEN',chapter:151,title:'Past end'},
+      {book:'GEN',chapter:'1',title:'String chapter'},
+      {book:'https://example.invalid',chapter:1,title:'Unsafe book'},
+      {book:'PSA',chapter:23,title:'<img onerror=alert(1)>'},
+      {book:'REV',chapter:22,title:'   '},
+      {book:'GEN',chapter:1,title:5},
+    ];
+    globalThis.fetch = async () => answer({ attempts: [] });
+    await renderWorkspace('progress', f.context);
+    assert.equal(f.shells.length,1);
+    const html=f.shells[0];
+    assert.match(html,/href="\/reader\/GEN\/12"/);
+    assert.match(html,/href="\/reader\/EXO\/3"/);
+    assert.match(html,/href="\/reader\/PSA\/23"/);
+    assert.match(html,/&lt;img onerror=alert\(1\)&gt;/);
+    assert.doesNotMatch(html,/<img onerror=|Unsafe book|String chapter|Past end|Zero/);
+    assert.doesNotMatch(html,/href="\/reader\/REV\/22"/);
+  } finally { f.restore(); }
+});
+
+test('storage exceptions cannot prevent the mission progress page from rendering', async () => {
+  const f=scenario('/progress');
+  try {
+    f.context.loadJSON=()=>{throw Error('storage denied');};
+    globalThis.fetch=async()=>answer({attempts:[]});
+    await renderWorkspace('progress',f.context);
+    assert.equal(f.shells.length,1);
+    assert.match(f.shells[0],/Reading history/);
+  } finally {f.restore();}
+});

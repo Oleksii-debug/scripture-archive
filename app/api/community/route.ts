@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import catalog from "../../../public/data/catalog.json";
 import { authenticateRequest, isVerifiedOwner, parseCookies, rateLimit, requestAddress, sameOrigin, sha256 } from "../../../lib/auth";
 import { COMMUNITY_RUN_ID } from "../../../lib/community";
 import { advanceCommunity, communityOwnerState, controlCommunity, leaseCommunityAgents } from "../../../lib/community-engine";
@@ -19,6 +20,15 @@ type RealRow = { id: string; display_name: string; locale: string; joined_at: st
 // A public progress badge is derived from a private persisted READING record.
 // Legacy/corrupt data must never be presented as zero or as fabricated chapters.
 // Mirror the canonical reader's bounded receipt shape without writing to D1.
+// Apply the same local-edition authority as the private account reading save:
+// translated chapter numbering differs (e.g. JOL has four chapters in
+// the Ukrainian Ohiienko edition). Never count an invented public chapter.
+const READING_CHAPTERS = new Map<string, number>(catalog.books.en.map(book => [book.code, book.chapters]));
+for (const books of Object.values(catalog.editionBooks)) {
+  for (const book of books) {
+    READING_CHAPTERS.set(book.code, Math.max(READING_CHAPTERS.get(book.code) ?? 0, book.chapters));
+  }
+}
 function progressCount(raw: string | null): number {
   if (raw === null) return 0;
   if (typeof raw !== "string") throw Error("invalid_public_reading_history");
@@ -30,7 +40,7 @@ function progressCount(raw: string | null): number {
     const receipt = entry as Record<string, unknown>;
     if (typeof receipt.book !== "string" || !/^[1-3]?[A-Z]{2,3}$/.test(receipt.book) ||
         typeof receipt.chapter !== "number" || !Number.isSafeInteger(receipt.chapter) ||
-        receipt.chapter < 1 || receipt.chapter > 151 ||
+        receipt.chapter < 1 || receipt.chapter > (READING_CHAPTERS.get(receipt.book as string) ?? 0) ||
         typeof receipt.title !== "string" || !receipt.title.trim() || receipt.title.length > 100)
       throw Error("invalid_public_reading_receipt");
     const key = receipt.book + ":" + receipt.chapter;

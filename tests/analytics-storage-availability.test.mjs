@@ -297,3 +297,50 @@ test('withdrawal stops this tab even if denial cannot be persisted', () => {
     assert.equal(a.window.dataLayer.at(-1)[2].analytics_storage, 'denied');
   }
 });
+
+test('privacy opt-in after denial requires explicit saved consent and may be withdrawn again', () => {
+  const a = boot({ storedConsent: 'denied' });
+  a.window.saAnalytics.pageView();
+  assert.equal(a.posts.length, 0);
+  assert.equal(a.window.saAnalytics.grantConsent(), true);
+  assert.equal(a.persisted.consent, 'granted');
+  assert.equal(a.posts.length, 1);
+  assert.equal(a.window.saAnalytics.withdrawConsent(), true);
+  a.window.saAnalytics.pageView();
+  assert.equal(a.posts.length, 1);
+  assert.equal(a.persisted.consent, 'denied');
+});
+
+test('privacy opt-in cannot enable analytics when consent storage fails or discards writes', () => {
+  for (const behavior of [{ localWriteThrows: true }, { discardLocalWrites: true }, { localReadThrows: true }]) {
+    const a = boot({ storedConsent: 'denied', ...behavior });
+    assert.equal(a.window.saAnalytics.grantConsent(), false);
+    a.window.saAnalytics.pageView();
+    assert.equal(a.posts.length, 0);
+    assert.equal(a.externalScripts.length, 0);
+  }
+});
+
+test('privacy choice removes an outstanding consent prompt', () => {
+  for (const method of ['grantConsent', 'withdrawConsent']) {
+    const a = boot();
+    assert.ok(a.banner);
+    assert.equal(a.window.saAnalytics[method](), true);
+    assert.equal(a.banner.removed, true);
+  }
+});
+
+test('repeating an already granted privacy opt-in does not create a second page view', () => {
+  const a = boot({ storedConsent: 'granted' });
+  assert.equal(a.window.saAnalytics.grantConsent(), true);
+  assert.equal(a.posts.length, 0);
+});
+
+test('failed consent readback attempts to undo a possibly successful grant write', () => {
+  const a = boot({ storedConsent: 'denied', localReadThrows: true });
+  assert.equal(a.window.saAnalytics.grantConsent(), false);
+  assert.equal(a.persisted.consent, 'denied');
+  assert.deepEqual(a.writes.slice(-2), [['sa.analyticsConsent', 'granted'], ['sa.analyticsConsent', 'denied']]);
+  a.window.saAnalytics.pageView();
+  assert.equal(a.posts.length, 0);
+});

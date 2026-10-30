@@ -14,6 +14,11 @@ const RESET_COPY={
   ru:{title:'Очистить отметки этого курса',detail:'Все отметки курса будут удалены только для текущего пользователя в этом браузере. Другие устройства не изменятся. Закройте другие вкладки курса, чтобы они снова не записали отметки.',confirm:'Я хочу удалить эти отметки из этого браузера',action:'Очистить отметки',confirmFirst:'Сначала подтвердите удаление отметок.',done:'Отметки удалены из этого браузера. Обновите страницу, чтобы продолжить.',uncertain:'Не удалось подтвердить удаление. Обновите страницу и проверьте состояние отметок.'},
   en:{title:'Clear this course’s markers',detail:'All course markers for the current user will be removed only from this browser. Other devices will not change. Close other course tabs to prevent them from saving markers again.',confirm:'I want to remove these markers from this browser',action:'Clear markers',confirmFirst:'Confirm removal first.',done:'Markers removed from this browser. Reload the page to continue.',uncertain:'Could not confirm removal. Reload the page and check the markers.'}
 };
+const EXPORT_COPY={
+  uk:{button:'Завантажити позначки курсу',detail:'Файл містить лише локальні позначки цього курсу. Це самостійна оцінка, а не сертифікат; імпорт поки недоступний.',requested:'Завантаження запитано. Перевірте файл у браузері.',error:'Не вдалося підготувати файл із перевірених локальних позначок.'},
+  ru:{button:'Скачать отметки курса',detail:'Файл содержит только локальные отметки этого курса. Это самооценка, а не сертификат; импорт пока недоступен.',requested:'Загрузка запрошена. Проверьте файл в браузере.',error:'Не удалось подготовить файл из проверенных локальных отметок.'},
+  en:{button:'Download course markers',detail:'The file contains only this course’s local markers. These are self-reported, not a certificate; importing is not yet available.',requested:'Download requested. Check your browser for the file.',error:'Could not prepare a file from verified local markers.'}
+};
 const SYNC_ERROR={
   uk:'Не вдалося прочитати оновлені позначки з іншої вкладки. Оновіть сторінку й перевірте їх.',
   ru:'Не удалось прочитать обновлённые отметки из другой вкладки. Обновите страницу и проверьте их.',
@@ -46,7 +51,7 @@ export function readAcademyProgress(storage,key){
 }
 
 export function academyMarkup(catalog,language,esc,progress) {
-  const lang=languageOf(language),w=COPY[lang],reset=RESET_COPY[lang];
+  const lang=languageOf(language),w=COPY[lang],reset=RESET_COPY[lang],exportCopy=EXPORT_COPY[lang];
   // A private progress read can be unavailable without making public lessons
   // inaccessible. Show source-verified lessons read-only, never guessed marks.
   const readOnly = progress?.available === false;
@@ -69,7 +74,7 @@ export function academyMarkup(catalog,language,esc,progress) {
     return '<li><article class="card"><h3>'+String(index+1)+'. <a href="/dossiers?id='+id+'">'+name+'</a></h3><p>'+esc(node.summaries[lang])+'</p><ul>'+passages+'</ul><h4>'+esc(w.question)+'</h4><ol>'+questions+'</ol>'+(readOnly?'':'<button type="button" class="button" data-academy-lesson="'+id+'" aria-pressed="'+studied+'">'+esc(studied?w.unmark:w.mark)+'</button>')+'</article></li>';
   }).join('');
   const total=academyLessonIds.length,count=selected.size;
-  return '<section class="academy-reading" data-academy-root aria-labelledby="academy-reading-title"><h2 id="academy-reading-title">'+esc(w.title)+'</h2><p>'+esc(w.intro)+'</p><p>'+esc(w.privacy)+'</p><p>'+esc(w.honesty)+'</p>'+(readOnly?'<p id="academy-reading-unavailable" role="alert">'+esc(w.unavailable)+'</p>':'<label for="academy-reading-progress">'+esc(w.progress)+'</label> <progress id="academy-reading-progress" max="'+total+'" value="'+count+'"></progress> <span id="academy-reading-status" role="status" aria-live="polite">'+esc(w.progress)+': '+count+'/'+total+'</span><p id="academy-reading-badge" role="status">'+(count===total?esc(w.badge):'')+'</p><p id="academy-reading-error" role="alert"></p>')+'<details><summary>'+esc(reset.title)+'</summary><p>'+esc(reset.detail)+'</p><label><input type="checkbox" id="academy-reset-confirm"> '+esc(reset.confirm)+'</label> <button type="button" class="button" id="academy-reset">'+esc(reset.action)+'</button><p id="academy-reset-status" role="status" aria-live="polite"></p></details><ol>'+lessons+'</ol></section>';
+  return '<section class="academy-reading" data-academy-root aria-labelledby="academy-reading-title"><h2 id="academy-reading-title">'+esc(w.title)+'</h2><p>'+esc(w.intro)+'</p><p>'+esc(w.privacy)+'</p><p>'+esc(w.honesty)+'</p>'+(readOnly?'<p id="academy-reading-unavailable" role="alert">'+esc(w.unavailable)+'</p>':'<label for="academy-reading-progress">'+esc(w.progress)+'</label> <progress id="academy-reading-progress" max="'+total+'" value="'+count+'"></progress> <span id="academy-reading-status" role="status" aria-live="polite">'+esc(w.progress)+': '+count+'/'+total+'</span><p id="academy-reading-badge" role="status">'+(count===total?esc(w.badge):'')+'</p><p id="academy-reading-error" role="alert"></p>')+(readOnly?'':'<p>'+esc(exportCopy.detail)+'</p><button type="button" class="button" id="academy-export">'+esc(exportCopy.button)+'</button><p id="academy-export-status" role="status" aria-live="polite"></p>')+'<details><summary>'+esc(reset.title)+'</summary><p>'+esc(reset.detail)+'</p><label><input type="checkbox" id="academy-reset-confirm"> '+esc(reset.confirm)+'</label> <button type="button" class="button" id="academy-reset">'+esc(reset.action)+'</button><p id="academy-reset-status" role="status" aria-live="polite"></p></details><ol>'+lessons+'</ol></section>';
 }
 
 let detachAcademyStorageListener=()=>{};
@@ -100,6 +105,24 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
     try{return Boolean(isCurrent()) && document?.querySelector('[data-academy-root]')===root;}
     catch{return false;}
   };
+  const exportButton=root.querySelector('#academy-export');
+  const exportStatus=root.querySelector('#academy-export-status');
+  const exportCopy=EXPORT_COPY[languageOf(language)];
+  if(exportButton && typeof exportButton.addEventListener==='function') {
+    exportButton.addEventListener('click',()=>{
+      if(!currentView())return;
+      const current=readAcademyProgress(storage,key);
+      if(!current.available){if(exportStatus)exportStatus.textContent=exportCopy.error;return;}
+      try {
+        const record={format:'scripture-archive-academy-markers',version:1,completed:current.completed};
+        const link=document.createElement('a');
+        link.href='data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(record,null,2));
+        link.download='scripture-archive-academy-markers.json';
+        link.click();
+        if(currentView()&&exportStatus)exportStatus.textContent=exportCopy.requested;
+      } catch { if(currentView()&&exportStatus)exportStatus.textContent=exportCopy.error; }
+    });
+  }
   if(resetButton && typeof resetButton.addEventListener==='function' && resetConfirm){
     resetButton.addEventListener('click',()=>{
       if(!currentView())return;

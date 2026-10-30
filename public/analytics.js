@@ -17,10 +17,21 @@
     const path = privateRoutes.has(route) ? `/${route}` : location.pathname;
     return `${location.origin}${path || "/"}`;
   };
+  // Error messages may contain emails, reset URLs, answers or account data.
+  // Both first-party and GA4 analytics receive only known machine-code labels.
+  const safeErrorCodes = new Set([
+    "email_in_use", "email_not_verified", "too_many_requests",
+    "chapter_must_be_read", "sensitive_consent_required", "script_error",
+  ]);
+  const safeErrorCode = value =>
+    typeof value === "string" && safeErrorCodes.has(value) ? value : "other";
   const safeParameters = parameters => Object.fromEntries(
     Object.entries(parameters || {})
       .filter(([name, value]) => allowedParameters.has(name) && ["string", "number", "boolean"].includes(typeof value))
-      .map(([name, value]) => [name, typeof value === "string" ? value.slice(0, 80) : value]),
+      .map(([name, value]) => [
+        name, name === "error" ? safeErrorCode(value) :
+          typeof value === "string" ? value.slice(0, 80) : value,
+      ]),
   );
   const sessionId = (() => {
     const stored = sessionStorage.getItem(sessionKey);
@@ -113,7 +124,7 @@
     else lastActiveAt = Date.now();
   });
   window.addEventListener("pagehide", () => heartbeat(true));
-  window.addEventListener("error", event => track("client_error", { error: String(event.message || "script_error").slice(0, 80) }));
+  window.addEventListener("error", () => track("client_error", { error: "script_error" }));
 
   if (consent === "granted") {
     loadGoogleAnalytics();

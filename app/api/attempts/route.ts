@@ -74,6 +74,15 @@ function attemptDeadline(raw: unknown): number | null {
   const parsed = Date.parse(raw);
   return Number.isFinite(parsed) ? parsed : null;
 }
+// A successful SQLite read still can contain forged or legacy malformed
+// timestamp text. Date.parse('1') and overflow days accept false history;
+// match the canonical D1 CURRENT_TIMESTAMP UTC seconds (and the reader guard).
+function canonicalHistoryUtcTimestamp(value: unknown): boolean {
+  if (typeof value !== "string" || !/^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}$/.test(value)) return false;
+  const date = new Date(value.replace(" ", "T") + "Z");
+  return Number.isFinite(date.getTime()) &&
+    date.toISOString().slice(0, 19).replace("T", " ") === value;
+}
 // D1 can contain legacy/corrupt locale types despite TypeScript's static Locale.
 // Never emit a task missing its localized question/options or grade against it.
 function storedLocale(value: unknown): value is Locale {
@@ -266,7 +275,7 @@ export async function GET(request: Request) {
         Number.isSafeInteger(row.chapter) && (row.chapter as number) > 0 &&
         typeof row[dateField] === "string" &&
         (row[dateField] as string).trim() === row[dateField] &&
-        Number.isFinite(Date.parse(row[dateField] as string));
+        canonicalHistoryUtcTimestamp(row[dateField]);
       const historyRows = history.results as Array<Record<string, unknown>>;
       const pendingRows = pending.results as Array<Record<string, unknown>>;
       if (historyRows.some(row =>

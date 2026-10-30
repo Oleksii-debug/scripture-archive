@@ -9,6 +9,12 @@ const MARITAL_STATUSES = new Set(["married", "married_children", "single", "seek
 const GENDERS = new Set(["man", "woman", "prefer_not"]);
 function privateJson(data:unknown,init?:{status?:number}){return Response.json(data,{status:init?.status??200,headers:{"Cache-Control":"no-store, private"}})}
 function unauthorized(){return privateJson({error:"authentication_required"},{status:401})}
+// A resolved D1 promise is not a durable mutation acknowledgement.
+function confirmedD1Changes(result:unknown):number|null{
+  const receipt=result as {success?:unknown;meta?:{changes?:unknown}}|null;
+  const changes=receipt?.meta?.changes;
+  return receipt?.success===true&&typeof changes==="number"&&Number.isSafeInteger(changes)&&changes>=0?changes:null;
+}
 function clean(value:unknown,max=120){return typeof value==="string"?value.trim().slice(0,max):""}
 // The reader renders every receipt as a book/chapter/title. Do not ACK damaged arrays.
 function validReadingReceipt(value:unknown):value is {book:string;chapter:number;title:string}{
@@ -156,7 +162,8 @@ async function write(request:Request){
         ),
         updated_at=CURRENT_TIMESTAMP
     `).bind(id.userId,JSON.stringify(unique)).run();
-    if(!result.success)return privateJson({error:"reading_save_failed"},{status:503});
+    const written=confirmedD1Changes(result);
+    if(written===null||written===0)return privateJson({error:"reading_save_failed"},{status:503});
     return privateJson({ok:true});
     }catch{return privateJson({error:"reading_state_unavailable"},{status:503});}
   }
@@ -180,11 +187,23 @@ async function write(request:Request){
       return privateJson({user:publicUser(id,row)});
     }catch{return privateJson({error:"consent_save_failed"},{status:503});}
   }
-  if(action==="visibility"){const visibilityWrite=await env.DB!.prepare("UPDATE profiles SET public_first_name=?,public_last_name=?,public_church=CASE WHEN sensitive_consent=1 AND sensitive_consent_version=1 THEN ? ELSE 0 END,public_progress=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?").bind(body.firstName===true?1:0,body.lastName===true?1:0,body.church===true?1:0,body.progress===true?1:0,id.userId).run();if(!visibilityWrite.success)return privateJson({error:"visibility_save_failed"},{status:503});const row=await env.DB!.prepare("SELECT * FROM profiles WHERE user_id=?").bind(id.userId).first<Record<string,unknown>>();if(visibilityWrite.meta?.changes===0||!row)return privateJson({error:"profile_not_found"},{status:409});return privateJson({user:publicUser(id,row)})}
+  if(action==="visibility"){
+    try{
+      const visibilityWrite=await env.DB!.prepare("UPDATE profiles SET public_first_name=?,public_last_name=?,public_church=CASE WHEN sensitive_consent=1 AND sensitive_consent_version=1 THEN ? ELSE 0 END,public_progress=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?").bind(body.firstName===true?1:0,body.lastName===true?1:0,body.church===true?1:0,body.progress===true?1:0,id.userId).run();
+      const changed=confirmedD1Changes(visibilityWrite);
+      if(changed===null)return privateJson({error:"visibility_save_failed"},{status:503});
+      if(changed===0)return privateJson({error:"profile_not_found"},{status:409});
+      const row=await env.DB!.prepare("SELECT * FROM profiles WHERE user_id=?").bind(id.userId).first<Record<string,unknown>>();
+      if(!row)return privateJson({error:"visibility_state_unavailable"},{status:503});
+      return privateJson({user:publicUser(id,row)});
+    }catch{return privateJson({error:"visibility_save_failed"},{status:503});}
+  }
   if(action!=="profile")return privateJson({error:"unknown_action"},{status:400});
   const firstName=clean(body.firstName,80),lastName=clean(body.lastName,80),ageRange=clean(body.ageRange,10),rawTradition=clean(body.tradition,40),maritalStatus=clean(body.maritalStatus,40),gender=clean(body.gender,30);if(!firstName||!lastName||!AGE_RANGES.has(ageRange)||body.acceptPrivacy!==true)return privateJson({error:"required_fields"},{status:400});
   if((rawTradition&&!TRADITIONS.has(rawTradition))||(maritalStatus&&!MARITAL_STATUSES.has(maritalStatus))||(gender&&!GENDERS.has(gender)))return privateJson({error:"invalid_profile_option"},{status:400});
   const consent=body.acceptSensitive===true, locale=ALLOWED_LOCALES.has(clean(body.locale,2))?clean(body.locale,2):"uk",tradition=consent?rawTradition||null:null,church=consent?clean(body.church,160)||null:null;
-  const profileWrite=await env.DB!.prepare("INSERT INTO profiles (user_id,email,first_name,last_name,age_range,tradition,church,marital_status,gender,locale,sensitive_consent,sensitive_consent_version,privacy_accepted_at,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET email=excluded.email,first_name=excluded.first_name,last_name=excluded.last_name,age_range=excluded.age_range,tradition=excluded.tradition,church=excluded.church,denomination=CASE WHEN excluded.sensitive_consent=0 THEN NULL ELSE profiles.denomination END,public_church=CASE WHEN excluded.sensitive_consent=0 OR profiles.sensitive_consent_version<>1 THEN 0 ELSE profiles.public_church END,marital_status=excluded.marital_status,gender=excluded.gender,locale=excluded.locale,sensitive_consent=excluded.sensitive_consent,sensitive_consent_version=excluded.sensitive_consent_version,privacy_accepted_at=COALESCE(profiles.privacy_accepted_at,CURRENT_TIMESTAMP),updated_at=CURRENT_TIMESTAMP").bind(id.userId,id.email,firstName,lastName,ageRange,tradition,church,maritalStatus||null,gender||null,locale,consent?1:0,consent?1:0).run();if(!profileWrite.success)return privateJson({error:"profile_save_failed"},{status:503});
-  const row=await env.DB!.prepare("SELECT * FROM profiles WHERE user_id=?").bind(id.userId).first<Record<string,unknown>>();return privateJson({user:publicUser(id,row)});
+  try{
+  const profileWrite=await env.DB!.prepare("INSERT INTO profiles (user_id,email,first_name,last_name,age_range,tradition,church,marital_status,gender,locale,sensitive_consent,sensitive_consent_version,privacy_accepted_at,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET email=excluded.email,first_name=excluded.first_name,last_name=excluded.last_name,age_range=excluded.age_range,tradition=excluded.tradition,church=excluded.church,denomination=CASE WHEN excluded.sensitive_consent=0 THEN NULL ELSE profiles.denomination END,public_church=CASE WHEN excluded.sensitive_consent=0 OR profiles.sensitive_consent_version<>1 THEN 0 ELSE profiles.public_church END,marital_status=excluded.marital_status,gender=excluded.gender,locale=excluded.locale,sensitive_consent=excluded.sensitive_consent,sensitive_consent_version=excluded.sensitive_consent_version,privacy_accepted_at=COALESCE(profiles.privacy_accepted_at,CURRENT_TIMESTAMP),updated_at=CURRENT_TIMESTAMP").bind(id.userId,id.email,firstName,lastName,ageRange,tradition,church,maritalStatus||null,gender||null,locale,consent?1:0,consent?1:0).run();const changed=confirmedD1Changes(profileWrite);if(changed===null||changed===0)return privateJson({error:"profile_save_failed"},{status:503});
+  const row=await env.DB!.prepare("SELECT * FROM profiles WHERE user_id=?").bind(id.userId).first<Record<string,unknown>>();if(!row)return privateJson({error:"profile_state_unavailable"},{status:503});return privateJson({user:publicUser(id,row)});
+  }catch{return privateJson({error:"profile_save_failed"},{status:503});}
 }

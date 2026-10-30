@@ -1,3 +1,15 @@
+## 2026-10-30 — SA-EXT-03 / MATERIAL_DRAFT_EXPLICIT_ID_TRUNCATION_ALIAS — РОЗРОБКУ ПІДФУНКЦІЇ ЗАКРИТО
+
+**РІВНО ЦЕЙ ПІДПУНКТ:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`; `remaining_scoped_implementation=0`; `necessary_unmerged_PRs=0`. Повний SA-EXT-03 та всі батьківські SA-EXT-01…20 залишаються **OPEN**.
+
+- **Доведений дефект:** реальний `POST /api/materials` перед власницькою перевіркою та атомарним UPSERT застосовував `clean(body.id, 80)`: користувацький явно заданий ID довший за 80 символів обрізався, міг збігтися із наявним приватним матеріалом того самого автора і непомітно його перезаписати із HTTP 200.
+- **Завершено в канонічній платформі:** [PR #612](https://github.com/Oleksii-debug/scripture-archive/pull/612) **SQUASH MERGED** у `main@6d6e66d7ba5597bc42ca3173b9a2d23ec32a9fb7`. Основний маршрут `app/api/materials/route.ts` blob `9b62b1209e0454a399c8065862d66fd23811d304` перед D1 preflight відмовляє 400 `invalid_material` для явного ID недопустимого типу або довшого за 80 символів. Порожній/відсутній ID як і раніше створює UUID; дійсний ID оновлюється за чинним owner-conditional UPSERT. Немає другого редактора, БД, міграції, зміни прав, автоматичної публікації або релізу.
+- **Негативні/позитивні регресії:** справжній Node/SQLite route harness у `tests/materials-d1-ack.test.mjs` blob `1518b5012427baa2c56b22608c4b584ad113dc2f` підтверджує, що 81+ символів, нестрокові ID/масиви не змінюють вихідний матеріал/лічильник; дійсний 80-символьний ID оновлюється, порожній ID створює запис, пробіли нормалізуються.
+- **CI фактично:** [Actions #41035507711](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41035507711), exact source head `c3c1cc2c43027f51c796ed927a5d58fb0a98aa1c`: **1397 Node PASS / 0 FAIL / 1 SKIP**, TypeScript/lint/build PASS, Python **2/2 PASS**. **Загальний CI FAIL:** disposable Wrangler Worker/D1 двічі **21/22** із незалежним `Your worker restarted mid-request`, HTTP 503 на іншому API flow, відома задача [#361](https://github.com/Oleksii-debug/scripture-archive/pull/361). Це не доказ повного E2E чи production acceptance.
+- **Не верифіковано:** Cloudflare Sites SHA, реальну браузерну сесію/NVDA, повний editorial review та джерельні права, всі 20 повних розділів. Повторне розроблення цього вузького дефекту — лише за конкретною регресією чи новою вимогою. Центральна координація [#297](https://github.com/Oleksii-debug/scripture-archive/issues/297).
+
+---
+
 ## 2026-10-30 — SA-EXT-16 / REGISTER_AGE_TYPED_INPUT — РОЗРОБКУ ВУЗЬКОГО ДЕФЕКТУ ЗАКРИТО
 
 **Лише верифікований підпункт:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`; `remaining_scoped_implementation=0`; `necessary_unmerged_PRs=0`. **Повний SA-EXT-16 і всі батьківські SA-EXT-01…20 залишаються OPEN.**

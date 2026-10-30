@@ -75,3 +75,55 @@ test('unavailable catalog never creates optimistic scheduled reviews',()=>{
     assert.equal(reviewScheduleMarkup({attempts:[row],pending:[]},'en',esc,now,invalid),'');
   }
 });
+
+
+test('SA-EXT-02 duplicate completed attempt ID cannot fabricate extra spaced repetitions',()=>{
+  const saved=attempt(1);
+  const duplicated=[saved,{...saved}];
+  assert.deepEqual(reviewSuggestions(duplicated,now,realChapters),[],
+    'two identical records are not two independent study events');
+  for(const lang of ['uk','ru','en']){
+    const history={attempts:duplicated,pending:[]};
+    assert.equal(reviewScheduleMarkup(history,lang,esc,now,realChapters),'',
+      'no invented due date or study link is exposed');
+    const rendered=missionHistoryMarkup(history,lang,esc,realChapters);
+    assert.ok(rendered.includes('id="retry-mission-history"'),
+      'duplicate receipt is reported as unavailable, not as two completed lessons');
+    assert.ok(!rendered.includes('href="/mission/attempt/fixture-1-personal-12"'),
+      'no duplicate personal attempt rendered');
+  }
+});
+
+test('SA-EXT-02 completion/pending collision is a broken private history receipt',()=>{
+  const completed=attempt(3);
+  const pending={id:completed.id,book:completed.book,chapter:completed.chapter,
+    startedAt:'2026-01-03 17:00:00'};
+  const history={attempts:[completed],pending:[pending]};
+  assert.equal(reviewScheduleMarkup(history,'en',esc,now,realChapters),'');
+  const rendered=missionHistoryMarkup(history,'en',esc,realChapters);
+  assert.match(rendered,/retry-mission-history/);
+  assert.ok(!rendered.includes('href="/mission/attempt/'),
+    'no conflicting same-ID row can leak as a resumable active assessment');
+});
+
+test('SA-EXT-02 conflicting duplicate IDs across passages quarantine both review entries',()=>{
+  const first=attempt(1);
+  const other={...attempt(3),id:first.id,book:'EXO',chapter:2};
+  assert.deepEqual(reviewSuggestions([first,other],now,realChapters),[]);
+  assert.deepEqual(reviewSuggestions([other,first],now,realChapters),[],
+    'reordering a malformed history does not create an apparently trusted suggestion');
+  for(const lang of ['uk','ru','en']){
+    const history={attempts:[first,other],pending:[]};
+    assert.equal(reviewScheduleMarkup(history,lang,esc,now,realChapters),'');
+  }
+});
+
+test('SA-EXT-02 separate attempts on the same canonical passage still form valid repetition streaks',()=>{
+  const first=attempt(1),second=attempt(3),third=attempt(7);
+  const list=reviewSuggestions([third,second,first],now,realChapters);
+  assert.equal(list.length,1);
+  assert.equal(list[0].streak,3);
+  assert.equal(list[0].dueAt,'2026-01-14');
+  const html=reviewScheduleMarkup({attempts:[third,second,first],pending:[]},'en',esc,now,realChapters);
+  assert.ok(html.includes('href="/reader/GEN/12"'));
+});

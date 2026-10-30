@@ -1983,6 +1983,7 @@ const state = {
   mission: null,
   currentReader: null,
   activeAttempt: null,
+  activeAttemptStorageUntrusted: false,
   reader: loadJSON("sa.reader", { book: "GEN", chapter: 12 }),
   missionProgress: loadJSON("sa.mission.OTAB01", {
     index: 0,
@@ -2264,21 +2265,32 @@ function rememberActiveAttempt(attempt) {
   // A server-accepted assessment must still open if the browser refuses
   // sessionStorage. The actual attemptId remains in the canonical route.
   state.activeAttempt = attempt;
-  try { sessionStorage.setItem("sa.activeAttempt", attempt.attemptId); }
-  catch { /* Keep the accepted attempt in this tab; never re-POST start. */ }
+  try {
+    sessionStorage.setItem("sa.activeAttempt", attempt.attemptId);
+    state.activeAttemptStorageUntrusted = false;
+  } catch {
+    state.activeAttemptStorageUntrusted = true;
+    // Keep the accepted attempt in this tab; never re-POST start.
+  }
 }
 function activeAttemptId() {
   if (state.activeAttempt?.attemptId) return state.activeAttempt.attemptId;
   // Browser progress from another/unknown principal must not authorize a
   // cached assessment link; the server always rechecks the real identity.
-  if (state.localReadingStorageUntrusted) return null;
+  if (state.localReadingStorageUntrusted || state.activeAttemptStorageUntrusted) return null;
   try { return sessionStorage.getItem("sa.activeAttempt"); }
-  catch { return null; }
+  catch { state.activeAttemptStorageUntrusted = true; return null; }
 }
 function forgetActiveAttempt() {
   state.activeAttempt = null;
-  try { sessionStorage.removeItem("sa.activeAttempt"); }
-  catch { /* Never mask a completed/invalidated server attempt. */ }
+  try {
+    sessionStorage.removeItem("sa.activeAttempt");
+    state.activeAttemptStorageUntrusted = false;
+  } catch {
+    // Do not revive an old principal's attempt from a readable-but-undeletable
+    // sessionStorage entry on the next missions route.
+    state.activeAttemptStorageUntrusted = true;
+  }
 }
 function forgetActiveAttemptIf(attemptId) {
   if (activeAttemptId() === attemptId) forgetActiveAttempt();

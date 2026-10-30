@@ -74,8 +74,6 @@ function attemptDeadline(raw: unknown): number | null {
   const parsed = Date.parse(raw);
   return Number.isFinite(parsed) ? parsed : null;
 }
-// D1 can contain legacy/corrupt locale types despite TypeScript's static Locale.
-// Never emit a task missing its localized question/options or grade against it.
 // Current D1 writes use UTC CURRENT_TIMESTAMP; imported ISO UTC rows remain valid.
 // Date.parse alone also accepts strings like "0" or calendar-overflow dates,
 // which are not authentic saved learning timestamps.
@@ -93,6 +91,8 @@ function validStoredHistoryTime(value: unknown): boolean {
     instant.getUTCMinutes() === minute && instant.getUTCSeconds() === second;
 }
 
+// D1 can contain legacy/corrupt locale types despite TypeScript's static Locale.
+// Never emit a task missing its localized question/options or grade against it.
 function storedLocale(value: unknown): value is Locale {
   return value === "uk" || value === "ru" || value === "en";
 }

@@ -2260,6 +2260,30 @@ async function getCMS() {
   }
   return state.cms;
 }
+function rememberActiveAttempt(attempt) {
+  // A server-accepted assessment must still open if the browser refuses
+  // sessionStorage. The actual attemptId remains in the canonical route.
+  state.activeAttempt = attempt;
+  try { sessionStorage.setItem("sa.activeAttempt", attempt.attemptId); }
+  catch { /* Keep the accepted attempt in this tab; never re-POST start. */ }
+}
+function activeAttemptId() {
+  if (state.activeAttempt?.attemptId) return state.activeAttempt.attemptId;
+  // Browser progress from another/unknown principal must not authorize a
+  // cached assessment link; the server always rechecks the real identity.
+  if (state.localReadingStorageUntrusted) return null;
+  try { return sessionStorage.getItem("sa.activeAttempt"); }
+  catch { return null; }
+}
+function forgetActiveAttempt() {
+  state.activeAttempt = null;
+  try { sessionStorage.removeItem("sa.activeAttempt"); }
+  catch { /* Never mask a completed/invalidated server attempt. */ }
+}
+function forgetActiveAttemptIf(attemptId) {
+  if (activeAttemptId() === attemptId) forgetActiveAttempt();
+}
+
 async function getSession() {
   let authenticatedUser;
   try {
@@ -2805,7 +2829,7 @@ async function renderReader(parts) {
       throw new Error("invalid_attempt_guard_response");
     }
     if (attemptState.invalidated) {
-      sessionStorage.removeItem("sa.activeAttempt");
+      forgetActiveAttempt();
       state.mission = null;
       state.currentReader = null;
       renderLockedChapter(meta.code, chapter);
@@ -2834,7 +2858,7 @@ async function renderReader(parts) {
     if (!readerStillCurrent()) return;
     if (!finalState || typeof finalState.invalidated !== "boolean") throw Error("invalid_attempt_guard_response");
     if (finalState.invalidated) {
-      sessionStorage.removeItem("sa.activeAttempt");
+      forgetActiveAttempt();
       state.mission = null;
       state.currentReader = null;
       renderLockedChapter(meta.code, chapter);
@@ -2913,7 +2937,7 @@ async function renderReader(parts) {
     mountParallelReader(panel, { editions: parallelEditions, catalog, lang: state.lang, book: meta.code, bookTitle: bookTitle(meta), chapter, getBook, esc,
       check: (code, number) => attemptRequest('chapter', 'POST', { book: code, chapter: number }),
       current: () => state.currentReader === reader,
-      lock: () => { sessionStorage.removeItem('sa.activeAttempt'); state.mission=null; state.currentReader=null; renderLockedChapter(meta.code,chapter); },
+      lock: () => { forgetActiveAttempt(); state.mission=null; state.currentReader=null; renderLockedChapter(meta.code,chapter); },
       failClosed: () => { state.currentReader=null; shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1></section>`); },
     });
   }
@@ -2999,8 +3023,7 @@ async function renderReader(parts) {
       // The server may have started the attempt for the original principal.
       // Never publish its ID, broadcast or navigate a subsequently switched account.
       if (!readerStillCurrent() || document.querySelector('#confirm-attempt') !== trigger) return;
-      sessionStorage.setItem('sa.activeAttempt', attempt.attemptId);
-      state.activeAttempt = attempt;
+      rememberActiveAttempt(attempt);
       state.mission = null;
       window.saAnalytics?.track("quiz_start", { language: state.lang, mode: groupId ? "group" : "personal" });
       attemptChannel?.postMessage({ type: 'attempt-started', attemptId: attempt.attemptId, book: meta.code, chapter });
@@ -3078,7 +3101,7 @@ async function renderMissions() {
   setActiveNav("missions");
   const mission = await getMission();
   if (mission.locked) {
-    const attemptId = sessionStorage.getItem("sa.activeAttempt");
+    const attemptId = activeAttemptId();
     shell(`<section class="gate-panel"><h1>${ATTEMPT_COPY[state.lang].prepareTitle}</h1><p>${ATTEMPT_COPY[state.lang].memory}</p>${attemptId ? `<a class="button primary" href="/mission/attempt/${encodeURIComponent(attemptId)}">${ATTEMPT_COPY[state.lang].transition}</a>` : ""}</section>`);
     return;
   }
@@ -3422,7 +3445,7 @@ async function renderMission(parts = []) {
   const isCurrent = () => state.user === principal && missionViewEpoch === epoch && activeMissionPath() === path;
   setActiveNav("missions");
   state.currentReader = null;
-  const copy = ATTEMPT_COPY[state.lang], attemptId = parts[2] || sessionStorage.getItem("sa.activeAttempt");
+  const copy = ATTEMPT_COPY[state.lang], attemptId = parts[2] || activeAttemptId();
   if (!attemptId) {
     shell(`<section class="gate-panel"><p class="eyebrow">${t("missionTitle")}</p><h1>${copy.prepareTitle}</h1><p class="lead">${copy.readRequired}</p><a class="button primary" href="/reader/GEN/12">${copy.reread}</a></section>`);
     return;
@@ -3437,7 +3460,7 @@ async function renderMission(parts = []) {
   catch (error) {
     if (!isCurrent()) return;
     if (["attempt_invalidated", "attempt_expired", "attempt_closed"].includes(error.message)) {
-      if(sessionStorage.getItem("sa.activeAttempt")===attemptId)sessionStorage.removeItem("sa.activeAttempt");
+      forgetActiveAttemptIf(attemptId);
       renderLockedChapter("GEN", 12); return;
     }
     shell(`<section class="gate-panel"><h1>${copy.prepareTitle}</h1><p role="status">${t("errorLoad")}</p><button class="button primary" id="retry-attempt">${copy.retryLoad}</button></section>`);
@@ -3445,7 +3468,7 @@ async function renderMission(parts = []) {
     return;
   }
   if (data.completed) {
-    if(sessionStorage.getItem("sa.activeAttempt")===attemptId)sessionStorage.removeItem("sa.activeAttempt");
+    forgetActiveAttemptIf(attemptId);
     renderAttemptResult(data.result, data.book, data.chapter, data.groupId, data.groupRecorded);
     return;
   }
@@ -3463,7 +3486,7 @@ async function renderMission(parts = []) {
       const response = await attemptRequest("answer", "POST", { attemptId, taskIndex: task.index, selected });
       if (!isCurrent()) return;
       if (response.completed) {
-        sessionStorage.removeItem("sa.activeAttempt");
+        forgetActiveAttempt();
         attemptChannel?.postMessage({ type: "attempt-completed", attemptId });
         renderAttemptResult(response.result, response.book, response.chapter, response.groupId, response.groupRecorded);
       } else await renderMission(["mission", "attempt", attemptId]);
@@ -3755,6 +3778,7 @@ async function syncProgress() {
 function clearPersonalProgress() {
   state.progressSyncStatus=null;
   syncProgress._epoch=(syncProgress._epoch||0)+1;
+  forgetActiveAttempt();
   state.missionProgress={index:0,correct:[],complete:false};
   // All three cleanup operations must be attempted, even when one storage
   // provider call throws. In-memory private state is always invalidated.

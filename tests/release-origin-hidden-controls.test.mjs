@@ -12,6 +12,8 @@ test('R0 release origin cannot silently normalize hidden URL control bytes',()=>
   'https://scripture-\rarchive.com',
   'https://scripture-archive.com\u2066',
   'https://scripture-archive.com\u2028',
+  'https://@scripture-archive.com',
+  'https://:@scripture-archive.com',
  ];
  for(const value of deceptive){
   assert.throws(()=>normalizeSecureOrigin(value),/invalid URL/,

@@ -266,3 +266,38 @@ test("omitted upsert identity still creates a canonical UUID-backed item", async
   assert.equal((await response.json()).id, "test-generated-id");
   assert.equal(h.calls.batch, 1);
 });
+
+// Execute the canonical owner item upsert rather than trusting a DTO mock.
+// Rejecting long titles is a content-integrity rule: a 200 response must not
+// silently publish a different title than the one the editor entered.
+for (const [label, title] of [
+  ["201 Unicode letters", "Ї".repeat(201)],
+  ["101 emoji / 202 UTF-16 units", "🙂".repeat(101)],
+  ["201 after trimming", "   " + "A".repeat(201) + "   "],
+]) {
+  test("owner CMS refuses oversized item title before D1: " + label, async () => {
+    const h = harness("ok");
+    const response = await h.invoke("upsert", "https://scripture.invalid", {
+      ...upsertWithIdentity("existing-cms-id"), title,
+    });
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).error, "invalid_content_item");
+    assert.equal(h.calls.batch, 0);
+    assert.equal(h.calls.prepare, 0);
+  });
+}
+
+for (const [label, title] of [
+  ["exactly 200 Ukrainian letters", "Ї".repeat(200)],
+  ["exactly 100 emoji / 200 UTF-16 units", "🙂".repeat(100)],
+  ["trimmed exact-boundary title", "  " + "Ї".repeat(200) + "  "],
+]) {
+  test("owner CMS saves valid item title without clipping: " + label, async () => {
+    const h = harness("ok");
+    const response = await h.invoke("upsert", "https://scripture.invalid", {
+      ...upsertWithIdentity("existing-cms-id"), title,
+    });
+    assert.equal(response.status, 200);
+    assert.equal(h.calls.batch, 1);
+  });
+}

@@ -8,11 +8,17 @@ type Snapshot = { title: string; locale: string; data: { prompt: string; referen
 function readSnapshot(raw: string): Snapshot | null {
   try {
     const v = JSON.parse(raw), d = v?.data;
-    if (typeof v?.title !== "string" || v.title.trim().length < 3 || typeof v?.locale !== "string" || !d ||
-      typeof d.prompt !== "string" || d.prompt.trim().length < 8 || typeof d.reference !== "string" || d.reference.trim().length < 3 ||
-      typeof d.answer !== "string" || !d.answer || typeof d.explanation !== "string" || d.explanation.trim().length < 8 ||
+    // Legacy snapshots must satisfy the same bounded, three-locale contract as
+    // the canonical study-material writer before any public/private read.
+    if (typeof v?.title !== "string" || v.title.trim().length < 3 || v.title.length > 160 ||
+      !["uk", "ru", "en"].includes(v?.locale) || !d ||
+      typeof d.prompt !== "string" || d.prompt.trim().length < 8 || d.prompt.length > 3000 ||
+      typeof d.reference !== "string" || d.reference.trim().length < 3 || d.reference.length > 200 ||
+      typeof d.answer !== "string" || !d.answer.trim() || d.answer.length > 500 ||
+      typeof d.explanation !== "string" || d.explanation.trim().length < 8 || d.explanation.length > 2000 ||
       !Array.isArray(d.options) || d.options.length < 2 || d.options.length > 8 ||
-      !d.options.every((x: unknown) => typeof x === "string") || new Set(d.options).size !== d.options.length || !d.options.includes(d.answer)) return null;
+      !d.options.every((x: unknown) => typeof x === "string" && x.trim().length > 0 && x.length <= 500) ||
+      new Set(d.options).size !== d.options.length || !d.options.includes(d.answer)) return null;
     return v as Snapshot;
   } catch { return null; }
 }

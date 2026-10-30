@@ -4074,6 +4074,8 @@ function renderAccount() {
     return;
   }
   if (state.user.profileComplete) {
+    let accountPrincipal=state.user;
+    const accountCurrent=()=>state.user===accountPrincipal&&!state.sessionUnavailable;
     const visibility=state.user.visibility||{};
     shell(`<article class="prose account-dashboard"><p class="eyebrow">${t("account")}</p><h1>${esc(state.user.firstName)} ${esc(state.user.lastName)}</h1><p>${esc(state.user.email)}</p><div class="notice success">${copy.saved}</div><div class="action-row"><a class="button primary" href="/missions">${t("continue")}</a><a class="button" href="/groups">${t("myGroups")}</a>${state.user.isOwner?`<a class="button" href="/editor">${copy.edit}</a>`:""}<button class="button" id="logout-button">${copy.logout}</button></div><section class="profile-controls"><h2>${copy.visibility}</h2><p>${copy.visibilityHelp}</p><form id="visibility-form" class="account-form"><label class="account-check"><input name="firstName" type="checkbox" ${visibility.firstName?"checked":""}><span>${copy.publicFirst}</span></label><label class="account-check"><input name="lastName" type="checkbox" ${visibility.lastName?"checked":""}><span>${copy.publicLast}</span></label><label class="account-check"><input name="church" type="checkbox" ${visibility.church?"checked":""}><span>${copy.publicChurch}</span></label><label class="account-check"><input name="progress" type="checkbox" ${visibility.progress?"checked":""}><span>${copy.publicProgress}</span></label><button class="button">${copy.save}</button><p id="visibility-state" role="status"></p></form></section>${state.user.authProvider==="password"?`<details class="profile-controls"><summary>${copy.change}</summary><form id="password-form" class="account-form">${field("currentPassword",copy.currentPassword,"password",'autocomplete="current-password" required')}${field("newPassword",copy.newPassword,"password",'autocomplete="new-password" minlength="12" maxlength="128" required')}<small>${copy.passwordRule}</small><button class="button">${copy.change}</button><p id="password-state" role="status"></p></form></details><details class="danger-zone"><summary>${copy.delete}</summary><p>${copy.deleteHelp}</p><form id="delete-form" class="account-form">${field("password",copy.password,"password",'autocomplete="current-password" required')}<label class="account-check"><input name="confirm" type="checkbox" required><span>${copy.confirmDelete}</span></label><button class="button">${copy.delete}</button><p id="delete-state" role="status"></p></form></details>`:""}</article>`);
     const exportCopy = {
@@ -4090,17 +4092,57 @@ function renderAccount() {
     const traditionOptions=sets.religion.map(([value,label])=>`<option value="${esc(value)}" ${value===(state.user.tradition||"")?"selected":""}>${esc(label)}</option>`).join("");
     const needsReaffirmation=!state.user.sensitiveConsent&&Boolean(state.user.tradition||state.user.denomination||state.user.church);
     document.querySelector(".profile-controls")?.insertAdjacentHTML("beforebegin", `<section class="profile-controls"><h2>${sensitiveCopy[0]}</h2><p>${sensitiveCopy[1]}</p>${needsReaffirmation?`<p role="status">${sensitiveCopy[5]}</p>`:""}<form id="sensitive-form" class="account-form"><label class="account-field"><span>${t("religion")} · ${t("optional")}</span><select name="tradition">${traditionOptions}</select></label><label class="account-field"><span>${sensitiveCopy[2]} · ${t("optional")}</span><input name="denomination" maxlength="160" value="${esc(state.user.denomination||"")}"></label><label class="account-field"><span>${sensitiveCopy[3]} · ${t("optional")}</span><input name="church" maxlength="160" value="${esc(state.user.church||"")}"></label><label class="account-check"><input name="acceptSensitive" type="checkbox"><span>${t("sensitiveAgree")}</span></label><button class="button" type="submit">${copy.save}</button><p id="sensitive-state" role="status"></p></form></section>`);
-    document.querySelector("#sensitive-form").onsubmit=async event=>{
-      event.preventDefault();const form=event.currentTarget,data=new FormData(form),status=document.querySelector("#sensitive-state"),accepted=data.has("acceptSensitive");
-      try{state.user=(await accountRequest("sensitive-consent","PUT",{acceptSensitive:accepted,tradition:data.get("tradition"),denomination:data.get("denomination"),church:data.get("church")})).user;
+    const sensitiveForm=document.querySelector("#sensitive-form");
+    sensitiveForm.onsubmit=async event=>{
+      event.preventDefault();if(!accountCurrent()||document.querySelector("#sensitive-form")!==sensitiveForm)return;
+      const form=event.currentTarget,data=new FormData(form),status=document.querySelector("#sensitive-state"),accepted=data.has("acceptSensitive"),requestedPrincipal=accountPrincipal;
+      try{
+        const result=await accountRequest("sensitive-consent","PUT",{acceptSensitive:accepted,tradition:data.get("tradition"),denomination:data.get("denomination"),church:data.get("church")});
+        if(!accountCurrent()||accountPrincipal!==requestedPrincipal||document.querySelector("#sensitive-form")!==sensitiveForm)return;
+        if(!result?.user||result.user.id!==requestedPrincipal.id)throw Error("invalid_account_response");
+        state.user=result.user;accountPrincipal=result.user;
         if(!accepted){form.elements.tradition.value="";form.elements.denomination.value="";form.elements.church.value="";const publicChurch=document.querySelector('#visibility-form [name="church"]');if(publicChurch)publicChurch.checked=false;}
-        status.textContent=sensitiveCopy[4];
-      }catch{status.textContent=copy.error}
+        if(status)status.textContent=sensitiveCopy[4];
+      }catch{if(accountCurrent()&&accountPrincipal===requestedPrincipal&&document.querySelector("#sensitive-form")===sensitiveForm&&status)status.textContent=copy.error}
     };
-    document.querySelector("#logout-button").onclick=async()=>{await authRequest("logout");state.user=null;clearPersonalProgress();renderAccount()};
-    document.querySelector("#visibility-form").onsubmit=async event=>{event.preventDefault();const form=new FormData(event.currentTarget),status=document.querySelector("#visibility-state");try{state.user=(await accountRequest("visibility","PUT",{firstName:form.has("firstName"),lastName:form.has("lastName"),church:form.has("church"),progress:form.has("progress")})).user;status.textContent=copy.saved}catch{status.textContent=copy.error}};
-    if(document.querySelector("#password-form"))document.querySelector("#password-form").onsubmit=async event=>{event.preventDefault();const status=document.querySelector("#password-state"),data=Object.fromEntries(new FormData(event.currentTarget));try{await authRequest("change-password",data);state.user=null;clearPersonalProgress();renderAccount()}catch{status.textContent=copy.error}};
-    if(document.querySelector("#delete-form"))document.querySelector("#delete-form").onsubmit=async event=>{event.preventDefault();const status=document.querySelector("#delete-state"),form=new FormData(event.currentTarget);if(!form.has("confirm"))return;try{await authRequest("delete-account",{password:form.get("password")});state.user=null;clearPersonalProgress();renderAccount()}catch{status.textContent=copy.error}};
+    // A response belongs to the account and dashboard that issued it. It
+    // cannot clear a later account's progress or redraw a replaced route.
+    const logoutButton=document.querySelector("#logout-button");
+    const finishAccountExit=()=>{
+      if(!accountCurrent())return;
+      state.user=null;clearPersonalProgress();
+      if(document.querySelector("#logout-button")===logoutButton)renderAccount();
+      else void route();
+    };
+    logoutButton.onclick=async()=>{
+      if(!accountCurrent()||document.querySelector("#logout-button")!==logoutButton)return;
+      await authRequest("logout");finishAccountExit();
+    };
+    const visibilityForm=document.querySelector("#visibility-form");
+    visibilityForm.onsubmit=async event=>{
+      event.preventDefault();if(!accountCurrent()||document.querySelector("#visibility-form")!==visibilityForm)return;
+      const form=new FormData(event.currentTarget),status=document.querySelector("#visibility-state"),requestedPrincipal=accountPrincipal;
+      try{
+        const result=await accountRequest("visibility","PUT",{firstName:form.has("firstName"),lastName:form.has("lastName"),church:form.has("church"),progress:form.has("progress")});
+        if(!accountCurrent()||accountPrincipal!==requestedPrincipal||document.querySelector("#visibility-form")!==visibilityForm)return;
+        if(!result?.user||result.user.id!==requestedPrincipal.id)throw Error("invalid_account_response");
+        state.user=result.user;accountPrincipal=result.user;if(status)status.textContent=copy.saved;
+      }catch{if(accountCurrent()&&accountPrincipal===requestedPrincipal&&document.querySelector("#visibility-form")===visibilityForm&&status)status.textContent=copy.error}
+    };
+    const passwordForm=document.querySelector("#password-form");
+    if(passwordForm)passwordForm.onsubmit=async event=>{
+      event.preventDefault();if(!accountCurrent()||document.querySelector("#password-form")!==passwordForm)return;
+      const status=document.querySelector("#password-state"),data=Object.fromEntries(new FormData(event.currentTarget));
+      try{await authRequest("change-password",data);finishAccountExit()}
+      catch{if(accountCurrent()&&document.querySelector("#password-form")===passwordForm&&status)status.textContent=copy.error}
+    };
+    const deleteForm=document.querySelector("#delete-form");
+    if(deleteForm)deleteForm.onsubmit=async event=>{
+      event.preventDefault();if(!accountCurrent()||document.querySelector("#delete-form")!==deleteForm)return;
+      const status=document.querySelector("#delete-state"),form=new FormData(event.currentTarget);if(!form.has("confirm"))return;
+      try{await authRequest("delete-account",{password:form.get("password")});finishAccountExit()}
+      catch{if(accountCurrent()&&document.querySelector("#delete-form")===deleteForm&&status)status.textContent=copy.error}
+    };
     return;
   }
   const ageOptions=["13-17","18-24","25-34","35-44","45-54","55-64","65+"].map(value=>`<option>${value}</option>`).join("");

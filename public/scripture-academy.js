@@ -9,6 +9,11 @@ const COPY={
   ru:{title:'Академия: чтение библейских первоисточников',intro:'Семь последовательных занятий по уже проверенным библейским досье. Откройте отрывки в читальне, изучите вопросы и самостоятельно отметьте пройденные темы.',privacy:'Отметки хранятся только в этом браузере, отдельно для каждой учётной записи. Они не синхронизируются с сервером.',honesty:'Это самостоятельный читательский маршрут, а не экзамен, диплом или церковная либо государственная аккредитация.',progress:'Пройдено',badge:'Личный читательский маршрут завершён (самооценка, без сертификата).',read:'Открыть отрывок в читальне',question:'Вопросы для размышления',mark:'Отметить как пройденное',unmark:'Убрать отметку',unavailable:'Не удалось прочитать или подтвердить локальные отметки занятий. Прогресс не изменён.',saveError:'Не удалось подтвердить сохранение отметки на этом устройстве. Проверьте её состояние после повторного открытия страницы.',lockUnavailable:'Безопасное сохранение между вкладками недоступно в этом браузере. Отметка не изменена.',invalid:'Источники курса пока не проверены.'},
   en:{title:'Academy: read the primary Scripture sources',intro:'Seven sequential lessons from the already verified biblical dossiers. Read the source passages, reflect on the questions, and mark lessons studied yourself.',privacy:'Markers are saved only in this browser, separately for each account. They do not synchronize with the server.',honesty:'This is a self-directed reading path, not a graded exam, diploma, or religious/government accreditation.',progress:'Studied',badge:'Personal reading path completed (self-report only; no certificate).',read:'Open passage in reader',question:'Reflection questions',mark:'Mark studied',unmark:'Unmark studied',unavailable:'Local lesson markers could not be read or verified. Progress has not been changed.',saveError:'Could not verify that the marker was saved on this device. Reopen the page to check its current state.',lockUnavailable:'Safe cross-tab saving is unavailable in this browser. The marker was not changed.',invalid:'Course source references are not currently verified.'}
 };
+const RESET_COPY={
+  uk:{title:'Очистити позначки цього курсу',detail:'Буде видалено всі позначки курсу лише для поточного користувача в цьому браузері. Інші пристрої не зміняться. Закрийте інші вкладки курсу, щоб вони знову не записали позначки.',confirm:'Я хочу видалити ці позначки з цього браузера',action:'Очистити позначки',confirmFirst:'Спершу підтвердьте видалення позначок.',done:'Позначки видалено з цього браузера. Оновіть сторінку, щоб продовжити.',uncertain:'Не вдалося підтвердити видалення. Оновіть сторінку й перевірте стан позначок.'},
+  ru:{title:'Очистить отметки этого курса',detail:'Все отметки курса будут удалены только для текущего пользователя в этом браузере. Другие устройства не изменятся. Закройте другие вкладки курса, чтобы они снова не записали отметки.',confirm:'Я хочу удалить эти отметки из этого браузера',action:'Очистить отметки',confirmFirst:'Сначала подтвердите удаление отметок.',done:'Отметки удалены из этого браузера. Обновите страницу, чтобы продолжить.',uncertain:'Не удалось подтвердить удаление. Обновите страницу и проверьте состояние отметок.'},
+  en:{title:'Clear this course’s markers',detail:'All course markers for the current user will be removed only from this browser. Other devices will not change. Close other course tabs to prevent them from saving markers again.',confirm:'I want to remove these markers from this browser',action:'Clear markers',confirmFirst:'Confirm removal first.',done:'Markers removed from this browser. Reload the page to continue.',uncertain:'Could not confirm removal. Reload the page and check the markers.'}
+};
 const languageOf=value=>LANGS.includes(value)?value:'uk';
 
 export function academyProgressKey(user){
@@ -36,7 +41,7 @@ export function readAcademyProgress(storage,key){
 }
 
 export function academyMarkup(catalog,language,esc,progress) {
-  const lang=languageOf(language),w=COPY[lang];
+  const lang=languageOf(language),w=COPY[lang],reset=RESET_COPY[lang];
   // A private progress read can be unavailable without making public lessons
   // inaccessible. Show source-verified lessons read-only, never guessed marks.
   const readOnly = progress?.available === false;
@@ -59,14 +64,13 @@ export function academyMarkup(catalog,language,esc,progress) {
     return '<li><article class="card"><h3>'+String(index+1)+'. <a href="/dossiers?id='+id+'">'+name+'</a></h3><p>'+esc(node.summaries[lang])+'</p><ul>'+passages+'</ul><h4>'+esc(w.question)+'</h4><ol>'+questions+'</ol>'+(readOnly?'':'<button type="button" class="button" data-academy-lesson="'+id+'" aria-pressed="'+studied+'">'+esc(studied?w.unmark:w.mark)+'</button>')+'</article></li>';
   }).join('');
   const total=academyLessonIds.length,count=selected.size;
-  return '<section class="academy-reading" data-academy-root aria-labelledby="academy-reading-title"><h2 id="academy-reading-title">'+esc(w.title)+'</h2><p>'+esc(w.intro)+'</p><p>'+esc(w.privacy)+'</p><p>'+esc(w.honesty)+'</p>'+(readOnly?'<p role="alert">'+esc(w.unavailable)+'</p>':'<label for="academy-reading-progress">'+esc(w.progress)+'</label> <progress id="academy-reading-progress" max="'+total+'" value="'+count+'"></progress> <span id="academy-reading-status" role="status" aria-live="polite">'+esc(w.progress)+': '+count+'/'+total+'</span><p id="academy-reading-badge" role="status">'+(count===total?esc(w.badge):'')+'</p><p id="academy-reading-error" role="alert"></p>')+'<ol>'+lessons+'</ol></section>';
+  return '<section class="academy-reading" data-academy-root aria-labelledby="academy-reading-title"><h2 id="academy-reading-title">'+esc(w.title)+'</h2><p>'+esc(w.intro)+'</p><p>'+esc(w.privacy)+'</p><p>'+esc(w.honesty)+'</p>'+(readOnly?'<p id="academy-reading-unavailable" role="alert">'+esc(w.unavailable)+'</p>':'<label for="academy-reading-progress">'+esc(w.progress)+'</label> <progress id="academy-reading-progress" max="'+total+'" value="'+count+'"></progress> <span id="academy-reading-status" role="status" aria-live="polite">'+esc(w.progress)+': '+count+'/'+total+'</span><p id="academy-reading-badge" role="status">'+(count===total?esc(w.badge):'')+'</p><p id="academy-reading-error" role="alert"></p>')+'<details><summary>'+esc(reset.title)+'</summary><p>'+esc(reset.detail)+'</p><label><input type="checkbox" id="academy-reset-confirm"> '+esc(reset.confirm)+'</label> <button type="button" class="button" id="academy-reset">'+esc(reset.action)+'</button><p id="academy-reset-status" role="status" aria-live="polite"></p></details><ol>'+lessons+'</ol></section>';
 }
 
 export function attachAcademy(document,storage,language,user,progress,isCurrent=()=>true,lockManager=undefined){
-  if(!progress?.available)return;
   const root=document?.querySelector('[data-academy-root]');
   if(!root)return;
-  const w=COPY[languageOf(language)],key=academyProgressKey(user);
+  const w=COPY[languageOf(language)],reset=RESET_COPY[languageOf(language)],key=academyProgressKey(user);
   // localStorage has no atomic CAS; use an origin-wide Web Lock in browsers.
   const locks=lockManager===undefined
     ? (typeof window==='undefined'?null:globalThis.navigator?.locks)
@@ -79,6 +83,61 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
   const meter=root.querySelector('#academy-reading-progress');
   const badge=root.querySelector('#academy-reading-badge');
   const error=root.querySelector('#academy-reading-error');
+  const unavailable=root.querySelector('#academy-reading-unavailable');
+  const resetButton=root.querySelector('#academy-reset');
+  const resetConfirm=root.querySelector('#academy-reset-confirm');
+  const resetStatus=root.querySelector('#academy-reset-status');
+  const currentView=()=>{
+    try{return Boolean(isCurrent()) && document?.querySelector('[data-academy-root]')===root;}
+    catch{return false;}
+  };
+  if(resetButton && typeof resetButton.addEventListener==='function' && resetConfirm){
+    resetButton.addEventListener('click',()=>{
+      if(!currentView())return;
+      if(!resetConfirm.checked){if(resetStatus)resetStatus.textContent=reset.confirmFirst;return;}
+      // This is the same origin-wide principal lock used by lesson updates.
+      // It never clears the guest or another account as a fallback.
+      if(typeof key!=='string'||(!nonBrowserFixture&&(!locks||typeof locks.request!=='function'))){
+        if(resetStatus)resetStatus.textContent=w.lockUnavailable;
+        return;
+      }
+      resetButton.disabled=true;
+      const remove=()=>{
+        if(!currentView() || !resetConfirm.checked)return;
+        try{
+          if(!storage || typeof storage.removeItem!=='function' || typeof storage.getItem!=='function')throw Error('storage unavailable');
+          storage.removeItem(key);
+          if(storage.getItem(key)!==null)throw Error('unconfirmed removal');
+        }catch{
+          if(currentView()&&resetStatus)resetStatus.textContent=reset.uncertain;
+          return;
+        }
+        if(!currentView())return;
+        resetConfirm.checked=false;
+        for(const updatedButton of buttons){
+          updatedButton.setAttribute('aria-pressed','false');
+          updatedButton.textContent=w.mark;
+        }
+        if(meter)meter.value=0;
+        if(status)status.textContent=w.progress+': 0/'+academyLessonIds.length;
+        if(badge)badge.textContent='';
+        if(error)error.textContent='';
+        if(unavailable)unavailable.textContent='';
+        if(resetStatus)resetStatus.textContent=reset.done;
+      };
+      const finish=()=>{resetButton.disabled=false;};
+      if(nonBrowserFixture){try{remove();}finally{finish();}return;}
+      try{
+        Promise.resolve(locks.request('sa-academy-progress:'+key,{mode:'exclusive'},remove))
+          .catch(()=>{if(currentView()&&resetStatus)resetStatus.textContent=w.lockUnavailable;})
+          .finally(finish);
+      }catch{
+        finish();
+        if(currentView()&&resetStatus)resetStatus.textContent=w.lockUnavailable;
+      }
+    });
+  }
+  if(!progress?.available)return;
   for(const button of buttons){
     const id=button.getAttribute('data-academy-lesson');
     if(!academyLessonIds.includes(id))continue;

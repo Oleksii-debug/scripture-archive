@@ -202,3 +202,34 @@ test('SA-EXT-05: chapter matches are exact, not ambiguous numeric prefixes',()=>
   const bad=structuredClone(catalog); bad.books.en=null;
   assert.match(dossierMarkup(bad,'en',null,esc,'GEN 12'),/role="alert"/);
 });
+
+
+test('SA-EXT-05: verse-range lookup reuses validated source and relation citations',()=>{
+  for(const lang of ['uk','ru','en']){
+    const genesis=catalog.books[lang].find(book=>book.code==='GEN');
+    assert.ok(genesis?.title);
+    for(const query of ['GEN 17:15',genesis.title+' 17:15']){
+      const ids=searchScriptureDossiers(lang,query,catalog).map(item=>item.id);
+      assert.deepEqual(ids,['abraham','sarah'],lang+' source and published relation citation');
+      const html=dossierMarkup(catalog,lang,'sarah',esc,query);
+      assert.match(html,/id="dossier-heading"/);
+      assert.ok(html.includes(resultLink('sarah',query)),'GET retains exact verse filter');
+      assert.ok(html.includes('href="/reader/GEN/17?verse=15"'));
+      assert.match(html,/aria-describedby="dossier-search-example"/,'keyboard/NVDA hint');
+      const unrelated=dossierMarkup(catalog,lang,'moses',esc,query);
+      assert.match(unrelated,/role="alert"/);
+      assert.doesNotMatch(unrelated,/href="\/reader\//,'filtered mismatch hides other dossier evidence');
+    }
+  }
+  assert.deepEqual(searchScriptureDossiers('en','1co 10:3',catalog).map(item=>item.id),['exodus','paul']);
+});
+
+test('SA-EXT-05: verse search is exact, bounded and does not shadow chapter search',()=>{
+  for(const query of ['GEN 12:9','GEN 17:14','GEN 17:20','GEN 012:015','GEN 12:0','GEN 12:999']){
+    assert.deepEqual(searchScriptureDossiers('en',query,catalog),[],query+' must not invent a cited witness');
+  }
+  const chapter=searchScriptureDossiers('en','GEN 12',catalog).map(item=>item.id);
+  assert.ok(chapter.includes('abraham')&&chapter.includes('egypt'),'existing exact chapter search stays intact');
+  assert.equal(searchScriptureDossiers('en','Moses')[0]?.id,'moses','existing title discovery stays intact');
+  assert.deepEqual(searchScriptureDossiers('en','GEN 17:15'.repeat(20),catalog),[],'oversized input rejected');
+});

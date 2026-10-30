@@ -447,3 +447,46 @@ test('SA-EXT-04 public group discovery survives session storage outage without p
     assert.equal(member.data.managementMembers.length,3);
   }finally{f.db.close();}
 });
+
+test('valid stored marathon registration retains a real facilitator session and mission start',async()=>{
+  const f=fixture();
+  try {
+    f.db.prepare("INSERT INTO group_marathon_registrations(id,group_id,weekly_goal,catchup_mode,cohort_key,status,start_date) VALUES('m','g',3,'steady','cohort','active','2026-10-27')").run();
+    const session=await f.post('session',{bookId:'GEN',chapter:12,meetingDate:'2026-10-28',answersCorrect:1,answersTotal:2},'carol');
+    assert.equal(session.status,200,JSON.stringify(session.data));
+    const read=await f.attempt('read',{},'carol');
+    assert.equal(read.status,201,JSON.stringify(read.data));
+    const started=await f.attempt('start',{},'carol');
+    assert.equal(started.status,201,JSON.stringify(started.data));
+  } finally {f.db.close();}
+});
+
+for(const defect of [
+  {name:'non-integer weekly goal',goal:'garbage',mode:'steady',start:'2026-10-27'},
+  {name:'zero weekly goal',goal:0,mode:'steady',start:'2026-10-27'},
+  {name:'even weekly goal',goal:2,mode:'steady',start:'2026-10-27'},
+  {name:'oversized weekly goal',goal:33,mode:'steady',start:'2026-10-27'},
+  {name:'unsupported catchup mode',goal:3,mode:'unsafe',start:'2026-10-27'},
+  {name:'malformed start date',goal:3,mode:'steady',start:'not-a-date'},
+  {name:'normalized impossible day',goal:3,mode:'steady',start:'2026-02-31'},
+  {name:'timestamp instead of canonical date',goal:3,mode:'steady',start:'2026-10-27 00:00:00'},
+]) {
+  test('persisted marathon registration cannot disable limits: '+defect.name,async()=>{
+    const f=fixture();
+    try {
+      f.db.prepare("INSERT INTO group_marathon_registrations(id,group_id,weekly_goal,catchup_mode,cohort_key,status,start_date) VALUES('m','g',?,?,'cohort','active',?)").run(defect.goal,defect.mode,defect.start);
+      const before=f.db.prepare("SELECT COUNT(*) AS n FROM group_sessions WHERE group_id='g'").get().n;
+      const session=await f.post('session',{bookId:'GEN',chapter:12,meetingDate:'2026-10-28',answersCorrect:1,answersTotal:2},'carol');
+      assert.equal(session.status,409,JSON.stringify(session.data));
+      assert.equal(session.data.error,'marathon_state_invalid');
+      assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM group_sessions WHERE group_id='g'").get().n,before,'no corrupt-cohort meeting write');
+      const read=await f.attempt('read',{},'carol');
+      assert.equal(read.status,201,JSON.stringify(read.data));
+      const started=await f.attempt('start',{},'carol');
+      assert.equal(started.status,409,JSON.stringify(started.data));
+      assert.equal(started.data.error,'marathon_state_invalid');
+      assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM mission_attempts WHERE group_id='g'").get().n,0,'no corrupt-cohort attempt write');
+      assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM chapter_read_receipts WHERE group_id='g' AND consumed_at IS NULL").get().n,1,'failed start must preserve reading receipt');
+    } finally {f.db.close();}
+  });
+}

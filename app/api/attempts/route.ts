@@ -270,6 +270,16 @@ export async function POST(request: Request) {
         .bind(groupId).first<{ weekly_goal: number; catchup_mode: string; status: string; start_date: string | null }>();
       if (registration) {
         if (registration.status !== "active" || !registration.start_date) return json({ error: "marathon_not_started" }, 409);
+        // Database rows can predate the client validator or have bad SQLite
+        // storage types; never let NaN/unsupported cohort modes unlock tasks.
+        if (!Number.isSafeInteger(registration.weekly_goal) ||
+            registration.weekly_goal < 1 || registration.weekly_goal > 31 ||
+            registration.weekly_goal % 2 !== 1 ||
+            !["steady", "flexible"].includes(registration.catchup_mode) ||
+            !/^\d{4}-\d{2}-\d{2}$/.test(registration.start_date) ||
+            !Number.isFinite(Date.parse(registration.start_date)) ||
+            new Date(registration.start_date).toISOString().slice(0, 10) !== registration.start_date)
+          return json({ error: "marathon_state_invalid" }, 409);
         const week = Math.floor((Date.now() - Date.parse(registration.start_date)) / 604800000);
         const passageIndex = chapter - 12, first = registration.catchup_mode === "steady" ? week * registration.weekly_goal : 0;
         const last = (week + 1) * registration.weekly_goal;

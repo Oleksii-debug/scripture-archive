@@ -172,3 +172,33 @@ test('SA-EXT-05: a question-only filter cannot open unrelated source dossiers',(
   assert.ok(mismatched.includes(resultLink('sarah',query)));
   assert.deepEqual(searchScriptureDossiers('en','which NAME changes').map(item=>item.id),['sarah']);
 });
+
+test('SA-EXT-05: canonical source book and chapter names are searchable without new Bible text',()=>{
+  for(const lang of ['uk','ru','en']){
+    const genesis=catalog.books[lang].find(book=>book.code==='GEN');
+    assert.ok(genesis && genesis.title,lang+' authoritative book label');
+    for(const query of [genesis.title+' 12','GEN 12']){
+      const ids=searchScriptureDossiers(lang,query,catalog).map(item=>item.id);
+      assert.ok(ids.includes('abraham'),lang+' Abraham directly cites GEN 12');
+      assert.ok(ids.includes('egypt'),lang+' Egypt directly cites GEN 12');
+      const html=dossierMarkup(catalog,lang,'egypt',esc,query);
+      assert.match(html,/id="dossier-heading"/);
+      assert.match(html,/aria-current="page"/);
+      assert.ok(html.includes(resultLink('egypt',query)),'source search retains GET filter');
+      assert.ok(html.includes('href="/reader/GEN/12?verse=10"'),'existing real passage link stays intact');
+    }
+  }
+});
+
+test('SA-EXT-05: chapter matches are exact, not ambiguous numeric prefixes',()=>{
+  const chapterOne=searchScriptureDossiers('en','GEN 1',catalog).map(item=>item.id);
+  assert.ok(!chapterOne.includes('egypt'),'GEN 1 must not claim a GEN 12 dossier');
+  assert.ok(!chapterOne.includes('abraham'),'GEN 1 must not claim a GEN 12/15 dossier');
+  const html=dossierMarkup(catalog,'en','egypt',esc,'GEN 1');
+  assert.ok(!html.includes('href="/reader/'),'unrelated Scripture passages stay hidden');
+  assert.doesNotMatch(html,/id="dossier-heading"/);
+  const legacy=searchScriptureDossiers('en','Moses');
+  assert.equal(legacy[0]?.id,'moses','two-argument title search remains compatible');
+  const bad=structuredClone(catalog); bad.books.en=null;
+  assert.match(dossierMarkup(bad,'en',null,esc,'GEN 12'),/role="alert"/);
+});

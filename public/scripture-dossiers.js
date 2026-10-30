@@ -144,18 +144,32 @@ export function validateDossierGraph(catalog) {
 }
 
 // Search only the existing source-validated dossier graph, with no private IO.
-export function searchScriptureDossiers(language,value) {
+export function searchScriptureDossiers(language,value,catalog=null) {
   const lang=LANGS.includes(language)?language:'uk';
   if(typeof value!=='string')return [];
   const query=value.normalize('NFC').trim().toLocaleLowerCase(lang);
   if(query.length>120)return [];
   if(!query)return [...nodes];
-  // Search the authored study questions too: they are already displayed in each
-  // source-validated dossier and contain useful biblical research terms that
-  // may not occur in the dossier title or summary.
-  return nodes.filter(item=>[item.id,item.names[lang],item.summaries[lang],COPY[lang][item.type],
-    ...item.prompts[lang]]
-    .some(text=>text.normalize('NFC').toLocaleLowerCase(lang).includes(query)));
+  // Use the already-validated book catalogue supplied by the native dossier
+  // route. A standalone lookup without it still supports canonical book codes.
+  const books=Array.isArray(catalog?.books?.[lang])?catalog.books[lang]:[];
+  const bookNames=new Map(books.filter(book=>book && typeof book.code==='string' &&
+    typeof book.title==='string').map(book=>[book.code,book.title]));
+  const normalize=text=>text.normalize('NFC').toLocaleLowerCase(lang);
+  return nodes.filter(item=>{
+    // Study prompts are public material shown within the same dossier.
+    const authored=[item.id,item.names[lang],item.summaries[lang],COPY[lang][item.type],
+      ...item.prompts[lang]];
+    if(authored.some(text=>normalize(text).includes(query)))return true;
+    // Match exact book+chapter labels from the actual canonical sources.
+    // Prefix matching would misreport GEN 12 for a query of GEN 1.
+    return item.sources.some(source=>{
+      const title=bookNames.get(source.book);
+      const references=[source.book+' '+source.chapter,
+        ...(title?[title+' '+source.chapter]:[])];
+      return references.some(label=>normalize(label)===query);
+    });
+  });
 }
 
 export function dossierMarkup(catalog,language,requestedId,esc,searchQuery='') {
@@ -163,7 +177,7 @@ export function dossierMarkup(catalog,language,requestedId,esc,searchQuery='') {
   if(!validateDossierGraph(catalog)) return `<p role="alert">${esc(w.invalid)}</p>`;
   // An absent query selects the introduction. An invalid explicit ID must
   // never be silently presented as a different person's source dossier.
-  const matches=searchScriptureDossiers(lang,searchQuery);
+  const matches=searchScriptureDossiers(lang,searchQuery,catalog);
   const activeSearch=typeof searchQuery==='string' && searchQuery.trim().length>0;
   const noMatch=activeSearch && matches.length===0;
   // An explicit ID outside the active result set cannot be presented as if
@@ -178,7 +192,7 @@ export function dossierMarkup(catalog,language,requestedId,esc,searchQuery='') {
     const label=`${bookNames.get(source.book)} ${source.chapter}:${source.first}–${source.last}`;
     return `<a href="/reader/${source.book}/${source.chapter}?verse=${source.first}" aria-label="${esc(w.read)}: ${esc(label)}">${esc(label)}</a>`;
   };
-  const matching=searchScriptureDossiers(lang,searchQuery);
+  const matching=searchScriptureDossiers(lang,searchQuery,catalog);
   const hasQuery=typeof searchQuery==='string' && searchQuery.trim().length>0;
   const searchLabel=SEARCH_COPY[lang];
   const shownQuery=typeof searchQuery==='string'?searchQuery.trim().slice(0,120):'';

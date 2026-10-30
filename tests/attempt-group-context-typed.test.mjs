@@ -25,7 +25,12 @@ function fixture() {
       const query={sql,args:[]};queries.push(query);
       return {
         bind(...args){query.args=args;return this;},
-        async first(){return sql.includes('home_group_members')?{role:'owner'}:{id:'receipt'};},
+        async first(){
+          // A valid group may have no marathon registration; a synthetic
+          // receipt row here incorrectly invents a stopped marathon.
+          if (sql.includes('FROM group_marathon_registrations')) return null;
+          return sql.includes('home_group_members')?{role:'owner'}:{id:'receipt'};
+        },
         async run(){return {success:true,meta:{changes:1}};},
       };
     },

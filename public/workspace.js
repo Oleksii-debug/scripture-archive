@@ -1,5 +1,5 @@
 import { reviewText, submissionForm, historyMarkup, queueMarkup, auditMarkup, attachReviewControls, renderPublicMaterials, loadReviewData, editorRolesMarkup, attachEditorRoles } from './material-review.js';
-import { dossierMarkup } from './scripture-dossiers.js';
+import { dossierMarkup, dossierAtlasMarkup } from './scripture-dossiers.js';
 
 const COPY = {
   uk: {
@@ -134,7 +134,7 @@ export async function renderWorkspace(name,c) {
   if(name==='dossiers') {
     const catalog=await c.getCatalog();
     const selectedId=new URLSearchParams(globalThis.location?.search || '').get('id');
-    shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${esc(w.dossiers)}</h1></div><p>${esc(w.dossierLead)}</p></div>${dossierMarkup(catalog,state.lang,selectedId,esc)}`);
+    shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${esc(w.dossiers)}</h1></div><p>${esc(w.dossierLead)}</p></div>${dossierMarkup(catalog,state.lang,selectedId,esc)}${dossierAtlasMarkup(catalog,state.lang,esc)}`);
     return;
   }
   if(name==='live') {

@@ -121,3 +121,32 @@ export function dossierMarkup(catalog,language,requestedId,esc) {
   const mission=selected.id==='abraham'? `<p><a class="button primary" href="/mission/abraham">${esc(w.mission)}</a></p>` : '';
   return `<div class="dossier-layout"><aside class="card dossier-index">${index}</aside><article class="card dossier-article" aria-labelledby="dossier-heading"><p class="eyebrow">${esc(w.selected)} · ${esc(w[selected.type])}</p><h2 id="dossier-heading" tabindex="-1">${esc(selected.names[lang])}</h2><p class="lead">${esc(selected.summaries[lang])}</p><p>${esc(w.scope)}</p><h3>${esc(w.sources)}</h3>${references}<h3>${esc(w.relations)}</h3>${relations}<h3>${esc(w.questions)}</h3>${questions}${mission}</article></div>`;
 }
+
+
+// SA-EXT-06: accessible text-first passage/place index. Editorial reading
+// order is NOT absolute historical dating or archaeological confirmation.
+export function dossierAtlasMarkup(catalog,language,esc) {
+  const lang=LANGS.includes(language)?language:'uk',w=COPY[lang];
+  if(!validateDossierGraph(catalog))return '<p role="alert">'+esc(w.invalid)+'</p>';
+  const terms={
+    uk:{title:'Біблійний атлас: текстова лабораторія',intro:'Орієнтовна послідовність оповідей для читання. Це не датування історичних подій і не незалежне археологічне підтвердження.',order:'Порядок читання',subject:'Тема',passage:'Біблійний уривок',places:'Згадані місця',uncertainty:'Сучасні координати, маршрути й археологічні локалізації тут не встановлені; використовуйте першоджерела, а не припущення на карті.'},
+    ru:{title:'Библейский атлас: текстовая лаборатория',intro:'Ориентировочная последовательность повествований для чтения. Это не датировка исторических событий и не независимое археологическое подтверждение.',order:'Порядок чтения',subject:'Тема',passage:'Библейский отрывок',places:'Упомянутые места',uncertainty:'Современные координаты, маршруты и археологические локализации здесь не установлены; используйте первоисточники, а не предположения на карте.'},
+    en:{title:'Scripture atlas: text-first research',intro:'An approximate narrative reading sequence, not a historical date assignment or independent archaeological verification.',order:'Reading order',subject:'Subject',passage:'Scripture passage',places:'Places mentioned',uncertainty:'Modern coordinates, routes and archaeological identifications are not established here; use source passages rather than guessed map locations.'}
+  }[lang];
+  const order=['abraham','sarah','joseph','moses','exodus','david','nativity'];
+  const byId=new Map(nodes.map(item=>[item.id,item]));
+  if(order.some(id=>!byId.has(id)))return '<p role="alert">'+esc(w.invalid)+'</p>';
+  const bookNames=new Map(catalog.books[lang].map(book=>[book.code,book.title]));
+  const passage=source=>{
+    const label=bookNames.get(source.book)+' '+source.chapter+':'+source.first+'–'+source.last;
+    return '<a href="/reader/'+source.book+'/'+source.chapter+'?verse='+source.first+'" aria-label="'+esc(w.read)+': '+esc(label)+'">'+esc(label)+'</a>';
+  };
+  const subject=item=>'<a href="/dossiers?id='+item.id+'">'+esc(item.names[lang])+'</a>';
+  const history=order.map((id,i)=>{
+    const item=byId.get(id);
+    return '<tr><th scope="row">'+(i+1)+'</th><td>'+subject(item)+'</td><td>'+passage(item.sources[0])+'</td></tr>';
+  }).join('');
+  const places=nodes.filter(item=>item.type==='place').map(item=>
+    '<tr><th scope="row">'+subject(item)+'</th><td>'+passage(item.sources[0])+'</td></tr>').join('');
+  return '<section class="card dossier-atlas" aria-labelledby="dossier-atlas-heading"><h2 id="dossier-atlas-heading">'+esc(terms.title)+'</h2><p>'+esc(terms.intro)+'</p><table><caption>'+esc(terms.order)+'</caption><thead><tr><th scope="col">№</th><th scope="col">'+esc(terms.subject)+'</th><th scope="col">'+esc(terms.passage)+'</th></tr></thead><tbody>'+history+'</tbody></table><table><caption>'+esc(terms.places)+'</caption><thead><tr><th scope="col">'+esc(terms.subject)+'</th><th scope="col">'+esc(terms.passage)+'</th></tr></thead><tbody>'+places+'</tbody></table><p>'+esc(terms.uncertainty)+'</p></section>';
+}

@@ -114,7 +114,7 @@ test('the dossier catalogue fails closed when edition provenance/metadata cannot
 
 test('the public dossier workspace uses the shared catalog and actual source-graph module',()=>{
   const source=readFileSync(new URL('../public/workspace.js',import.meta.url),'utf8');
-  assert.match(source,/import \{ dossierMarkup \} from '\.\/scripture-dossiers\.js'/);
+  assert.match(source,/import\s*\{[^}]*\bdossierMarkup\b[^}]*\}\s*from\s*['"]\.\/scripture-dossiers\.js['"]/);
   assert.match(source,/if\(name==='dossiers'\)/);
   assert.match(source,/const catalog=await c\.getCatalog\(\)/);
   assert.match(source,/dossierMarkup\(catalog,state\.lang,selectedId,esc\)/);

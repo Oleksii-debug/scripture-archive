@@ -204,3 +204,75 @@ test('canonical comparison wiring reuses the primary principal-aware reader guar
   const contract=source.slice(start,end>start?end:undefined);
   assert.match(contract,/current: readerStillCurrent,/);
 });
+
+
+test('edition selection changes during a pending second-text load cannot misattribute old verses',async()=>{
+  const original=globalThis.FormData;
+  let selected=edition.id, unblock, reached;
+  const pending=new Promise(resolve=>{unblock=resolve;});
+  const entered=new Promise(resolve=>{reached=resolve;});
+  globalThis.FormData=class{get(){return selected;}};
+  try {
+    const f=fixture({
+      editions:[edition,{id:'uk-second',title:'Other edition',local:true}],
+      getBook:async()=>{reached();return pending;},
+    });
+    const request=f.run();
+    await entered;
+    selected='uk-second';
+    unblock({chapters:[['OLD EDITION PRIVATE VERSE']]});
+    await request;
+    assert.equal(f.result.innerHTML,'','old edition text must not appear beneath the new selection');
+    assert.match(f.status.textContent,/Вибране видання змінилося/);
+    assert.equal(f.button.disabled,false,'retry remains available');
+    assert.equal(f.locked(),0,'selection changes are not chapter-attempt invalidation');
+    assert.equal(f.checked(),2,'both security checks still execute');
+  } finally {globalThis.FormData=original;}
+});
+
+test('edition selection changes during the second chapter guard also retire old verses',async()=>{
+  const original=globalThis.FormData;
+  let selected=edition.id, unblock, reached, checks=0;
+  const pending=new Promise(resolve=>{unblock=resolve;});
+  const entered=new Promise(resolve=>{reached=resolve;});
+  globalThis.FormData=class{get(){return selected;}};
+  try {
+    const f=fixture({
+      editions:[edition,{id:'uk-second',title:'Other edition',local:true}],
+      check:async()=>{if(++checks===2){reached();return pending;}return {invalidated:false};},
+      getBook:async()=>({chapters:[['DO NOT SHOW OBSOLETE VERSE']]}),
+    });
+    const request=f.run();
+    await entered;
+    selected='uk-second';
+    unblock({invalidated:false});
+    await request;
+    assert.equal(checks,2);
+    assert.equal(f.result.innerHTML,'');
+    assert.match(f.status.textContent,/Вибране видання змінилося/);
+    assert.equal(f.button.disabled,false);
+  } finally {globalThis.FormData=original;}
+});
+
+test('edition selection changes during the first chapter guard avoid unnecessary edition read',async()=>{
+  const original=globalThis.FormData;
+  let selected=edition.id, unblock, reached;
+  const pending=new Promise(resolve=>{unblock=resolve;});
+  const entered=new Promise(resolve=>{reached=resolve;});
+  globalThis.FormData=class{get(){return selected;}};
+  try {
+    const f=fixture({
+      editions:[edition,{id:'uk-second',title:'Other edition',local:true}],
+      check:async()=>{reached();return pending;},
+    });
+    const request=f.run();
+    await entered;
+    selected='uk-second';
+    unblock({invalidated:false});
+    await request;
+    assert.equal(f.reads(),0,'stale selected edition does not start getBook');
+    assert.equal(f.result.innerHTML,'');
+    assert.match(f.status.textContent,/Вибране видання змінилося/);
+    assert.equal(f.button.disabled,false);
+  } finally {globalThis.FormData=original;}
+});

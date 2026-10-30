@@ -159,3 +159,20 @@ test('history markup escapes stored text and offers rereading only for mistakes'
   assert.ok(missionHistoryMarkup({error:true},'uk',esc).includes('retry-mission-history'));
   assert.ok(missionHistoryMarkup({attempts:[],pending:[{id:'pending',book:'GEN',chapter:12}]},'en',esc).includes('Finish saving the result: GEN 12'));
 });
+
+
+test('SA-EXT-02: nonnumeric answer indexes cannot be coerced into a graded answer',async()=>{
+  const f=fixture();try{
+    f.seed('type-guard',{status:'active'});
+    for(const selected of [['0'],[false],[null],[' '],[{}],[0,'1']]){
+      const reply=await f.post('answer',{attemptId:'type-guard',taskIndex:1,selected});
+      assert.equal(reply.status,400,JSON.stringify(selected));
+      assert.equal(reply.data.error,'invalid_answer');
+      assert.equal(f.db.prepare("SELECT count(*) n FROM mission_attempt_answers WHERE attempt_id='type-guard'").get().n,0);
+      assert.equal(f.db.prepare("SELECT current_index n FROM mission_attempts WHERE id='type-guard'").get().n,0);
+    }
+    const accepted=await f.post('answer',{attemptId:'type-guard',taskIndex:1,selected:[0]});
+    assert.equal(accepted.status,200);
+    assert.equal(f.db.prepare("SELECT count(*) n FROM mission_attempt_answers WHERE attempt_id='type-guard'").get().n,1);
+  }finally{f.db.close();}
+});

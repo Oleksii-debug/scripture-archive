@@ -15,11 +15,11 @@ function fixture() {
   db.exec(`INSERT INTO home_groups(id,owner_user_id,name,invite_code,visibility,bible_edition) VALUES('g','alice','Group','AABBCCDD','private','en-web'),('other','alice','Other','other','private','en-web');
     INSERT INTO home_group_members(group_id,user_id,display_name,role) VALUES('g','alice','Alice','owner'),('g','bob','Bob','member'),('g','carol','Carol','facilitator'),('other','alice','Alice','owner');
     INSERT INTO group_sessions(id,group_id,created_by,book_id,chapter,meeting_date,reflection) VALUES('s','g','alice','GEN',12,'2026-10-28','private discussion');`);
-  let failure=-1, beforeBatch=null, beforeRun=null, corruptCreateReceipt=null;
+  let failure=-1, beforeBatch=null, beforeRun=null, corruptCreateReceipt=null, corruptSingleReceipt=null;
   function statement(sql,args=[]) {return {sql,args,
     first:async()=>db.prepare(sql).get(...args)??null,
     all:async()=>({success:true,results:db.prepare(sql).all(...args)}),
-    run:async()=>{if(beforeRun){const hook=beforeRun;beforeRun=null;hook();}return {success:true,meta:{changes:Number(db.prepare(sql).run(...args).changes)}};},
+    run:async()=>{if(beforeRun){const hook=beforeRun;beforeRun=null;hook();}const changes=Number(db.prepare(sql).run(...args).changes);const mode=corruptSingleReceipt;corruptSingleReceipt=null;if(mode==='missing')return {success:true,meta:{}};if(mode==='failed')return {success:false,meta:{changes}};return {success:true,meta:{changes}};},
   };}
   const D1={prepare(sql){return {...statement(sql),bind:(...args)=>statement(sql,args)};},async batch(statements){
     if(beforeBatch){const hook=beforeBatch;beforeBatch=null;hook();}
@@ -52,7 +52,7 @@ function fixture() {
     db.prepare("INSERT INTO mission_attempts(id,actor_id,mission_id,book_id,chapter,group_id,locale,task_limit,status,expires_at) VALUES(?,?,'OT-AB-01','GEN',12,?,'en',5,?,datetime('now','+2 hours'))").run(id,user,group,status);
     db.prepare("INSERT INTO chapter_read_receipts(id,actor_id,book_id,chapter,group_id) VALUES(?,?,'GEN',12,?)").run(id,user,group);
   }
-  return {db,get,post,attempt,seedAttempt,beforeRun:fn=>{beforeRun=fn;},setFailure:n=>{failure=n;},beforeBatch:fn=>{beforeBatch=fn;},setCreateReceiptMode:mode=>{corruptCreateReceipt=mode;}};
+  return {db,get,post,attempt,seedAttempt,beforeRun:fn=>{beforeRun=fn;},setFailure:n=>{failure=n;},beforeBatch:fn=>{beforeBatch=fn;},setCreateReceiptMode:mode=>{corruptCreateReceipt=mode;},setSingleReceiptMode:mode=>{corruptSingleReceipt=mode;}};
 }
 const owner=f=>f.db.prepare("SELECT owner_user_id FROM home_groups WHERE id='g'").get().owner_user_id;
 const roles=f=>f.db.prepare("SELECT user_id,role FROM home_group_members WHERE group_id='g' ORDER BY user_id").all().map(x=>[x.user_id,x.role]);
@@ -283,4 +283,46 @@ test('group create clean failure is controlled and a successful owner group real
     assert.equal(row.owner_user_id,'alice');
     assert.equal(good.db.prepare("SELECT role FROM home_group_members WHERE group_id=? AND user_id='alice'").get(ok.data.groupId).role,'owner');
   }finally{good.db.close();}
+});
+
+test('missing D1 batch receipt cannot falsely acknowledge role, transfer, leave, delete or session',async()=>{
+  for(const scenario of ['role','transfer','leave','delete','session']){
+    const f=fixture();
+    try{
+      f.setCreateReceiptMode('missing-first');
+      let result;
+      if(scenario==='role')result=await f.post('role',{targetUserId:'bob',role:'facilitator',expectedRole:'member'});
+      if(scenario==='transfer')result=await f.post('transfer',{targetUserId:'bob'});
+      if(scenario==='leave')result=await f.post('leave',{},'bob');
+      if(scenario==='delete')result=await f.post('delete',{confirm:true});
+      if(scenario==='session')result=await f.post('session',{bookId:'GEN',chapter:12,answersCorrect:0,answersTotal:0,meetingDate:'2026-10-28'},'carol');
+      assert.equal(result.status,503,scenario+' must not claim success after losing a batch receipt');
+      assert.equal(result.data.error,'database_unavailable',scenario);
+      // The SQLite transaction committed before receipt corruption, so the
+      // next user action must re-read actual state instead of assuming rollback.
+      if(scenario==='role')assert.equal(f.db.prepare("SELECT role FROM home_group_members WHERE group_id='g' AND user_id='bob'").get().role,'facilitator');
+      if(scenario==='transfer')assert.equal(owner(f),'bob');
+      if(scenario==='leave')assert.equal((await f.get('bob')).status,404);
+      if(scenario==='delete')assert.equal(f.db.prepare("SELECT count(*) n FROM home_groups WHERE id='g'").get().n,0);
+      if(scenario==='session')assert.equal(f.db.prepare("SELECT count(*) n FROM group_sessions WHERE group_id='g'").get().n,2);
+    }finally{f.db.close();}
+  }
+});
+
+test('single-write group invite rotation and marathon start also reject missing D1 ACK',async()=>{
+  const rotate=fixture();try{
+    rotate.setSingleReceiptMode('missing');
+    const response=await rotate.post('rotate-invite',{expectedInviteCode:'AABBCCDD',confirm:true});
+    assert.equal(response.status,503);
+    assert.equal(response.data.error,'database_unavailable');
+    assert.notEqual(rotate.db.prepare("SELECT invite_code FROM home_groups WHERE id='g'").get().invite_code,'AABBCCDD');
+  }finally{rotate.db.close();}
+  const start=fixture();try{
+    start.db.prepare("INSERT INTO group_marathon_registrations(id,group_id,weekly_goal,catchup_mode,cohort_key,status) VALUES('ready','g',3,'flexible','new-cohort','ready')").run();
+    start.setSingleReceiptMode('missing');
+    const response=await start.post('start');
+    assert.equal(response.status,503);
+    assert.equal(response.data.error,'database_unavailable');
+    assert.equal(start.db.prepare("SELECT status FROM group_marathon_registrations WHERE id='ready'").get().status,'active');
+  }finally{start.db.close();}
 });

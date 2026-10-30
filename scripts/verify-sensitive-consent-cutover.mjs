@@ -23,7 +23,9 @@ export function inspectConsentSnapshot(db) {
   const result = db.prepare(`
     SELECT COUNT(*) AS total,
            COALESCE(SUM(CASE
-             WHEN public_church IS NULL OR public_church NOT IN (0,1)
+             WHEN typeof(public_church) <> 'integer' OR public_church NOT IN (0,1)
+               OR typeof(sensitive_consent) <> 'integer' OR sensitive_consent NOT IN (0,1)
+               OR typeof(sensitive_consent_version) <> 'integer' OR sensitive_consent_version NOT IN (0,1)
                OR (public_church = 1 AND
                   (sensitive_consent IS NOT 1 OR sensitive_consent_version IS NOT 1))
              THEN 1 ELSE 0 END),0) AS unsafe

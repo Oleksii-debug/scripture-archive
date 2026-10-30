@@ -98,3 +98,29 @@ test("the snapshot is opened read-only and a missing file fails closed", () => {
     assert.throws(() => verifyConsentFile(join(tmpdir(), "nonexistent-sa-consent-audit.sqlite")));
   } finally { f.close(); }
 });
+
+test("preflight rejects malformed consent flags even when visibility is private", () => {
+  const f = fixture();
+  try {
+    f.db.exec(migration);
+    const scenarios = [
+      ["sensitive_consent", 2],
+      ["sensitive_consent", -1],
+      ["sensitive_consent", "unknown"],
+      ["sensitive_consent_version", 2],
+      ["sensitive_consent_version", -1],
+      ["sensitive_consent_version", "unknown"],
+      ["public_church", "unknown"],
+    ];
+    for (const [field, invalid] of scenarios) {
+      f.db.prepare("UPDATE profiles SET sensitive_consent=0,sensitive_consent_version=0,public_church=0").run();
+      f.db.prepare(`UPDATE profiles SET ${field}=?`).run(invalid);
+      assert.deepEqual(verifyConsentFile(f.path), { total: 1, unsafe: 1, safe: false },
+        `out-of-domain ${field} should block release preflight`);
+    }
+    f.db.prepare("UPDATE profiles SET sensitive_consent=0,sensitive_consent_version=0,public_church=0").run();
+    assert.deepEqual(verifyConsentFile(f.path), { total: 1, unsafe: 0, safe: true });
+    f.db.prepare("UPDATE profiles SET sensitive_consent=1,sensitive_consent_version=1,public_church=0").run();
+    assert.deepEqual(verifyConsentFile(f.path), { total: 1, unsafe: 0, safe: true });
+  } finally { f.close(); }
+});

@@ -129,7 +129,9 @@ export async function POST(request: Request) {
       return json({ error: "invalid_registration" }, 400);
     if (!sensitiveConsent && ((tradition && tradition !== "prefer_not") || denomination || church))
       return json({ error: "sensitive_consent_required" }, 400);
-    const duplicate = await env.DB.prepare("SELECT id FROM accounts WHERE email=? AND deleted_at IS NULL").bind(email).first();
+    let duplicate: unknown;
+    try { duplicate = await env.DB.prepare("SELECT id FROM accounts WHERE email=? AND deleted_at IS NULL").bind(email).first(); }
+    catch { return json({ error: "registration_unavailable" }, 503); }
     if (duplicate) return json({ error: "email_in_use" }, 409);
     const id = crypto.randomUUID(), passwordData = await hashPassword(password);
     try {
@@ -161,6 +163,7 @@ export async function POST(request: Request) {
 
   if (action === "login") {
     const email = normalizeEmail(data.email), password = data.password;
+    try {
     if (!await rateLimit(`login:${address}:${email}`, 10, 900)) return json({ error: "too_many_requests" }, 429);
     if (!EMAIL.test(email) || typeof password !== "string") return json({ error: "invalid_credentials" }, 401);
     const account = await env.DB.prepare("SELECT * FROM accounts WHERE email=? AND deleted_at IS NULL").bind(email).first<Account>();
@@ -171,6 +174,11 @@ export async function POST(request: Request) {
     if (!account.email_verified_at) return json({ error: "email_not_verified" }, 403);
     const session = await createSession(request, account.id, account.session_version);
     return json({ ok: true }, 200, { "Set-Cookie": session.cookie });
+    } catch {
+      // Authentication-store/session outages are not proof of a wrong password.
+      // A signed-in session must only be acknowledged after session persistence.
+      return json({ error: "authentication_unavailable" }, 503);
+    }
   }
 
   if (action === "logout") {

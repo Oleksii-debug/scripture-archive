@@ -18,6 +18,7 @@ const sourceUnderTest = [
 
 function fixture({ user = { id: "alice" }, prior = null, marker = null,
                    denyRead = false, denyFirstReadingRead = false, denyOwnerMarkerRead = false,
+                   denyFirstMissionRead = false, denyMissionArchiveWrites = false,
                    denyWrites = false, denyDelete = false,
                    silentlyIgnoreReadingWrites = false, silentlyIgnoreMissionWrites = false,
                    serverReading = [], oldReading = [] } = {}) {
@@ -29,6 +30,7 @@ function fixture({ user = { id: "alice" }, prior = null, marker = null,
   const entries = new Map(initial);
   const storageCalls = [], apiCalls = [];
   let firstReadingReadDenied = false;
+  let firstMissionReadDenied = false;
   const storage = {
     getItem(key) {
       storageCalls.push(["get", key]);
@@ -37,11 +39,15 @@ function fixture({ user = { id: "alice" }, prior = null, marker = null,
         firstReadingReadDenied = true;
         throw Error("SecurityError");
       }
+      if (denyFirstMissionRead && key === "sa.mission.OTAB01" && !firstMissionReadDenied) {
+        firstMissionReadDenied = true;
+        throw Error("SecurityError");
+      }
       return entries.has(key) ? entries.get(key) : null;
     },
     setItem(key, value) {
       storageCalls.push(["set", key]);
-      if (denyWrites) throw Error("QuotaExceededError");
+      if (denyWrites || (denyMissionArchiveWrites && key === "sa.unownedMissionProgress.v1")) throw Error("QuotaExceededError");
       if (silentlyIgnoreReadingWrites && key === "sa.readingHistory") return;
       if (silentlyIgnoreMissionWrites && key === "sa.mission.OTAB01") return;
       entries.set(key, value);
@@ -495,4 +501,136 @@ test("quota denial while preserving orphan mission leaves its original bytes and
   assert.equal(f.state.missionProgress.index,0);
   await f.sync();
   assert.equal(f.apiCalls.length,0);
+});
+
+
+test("unowned mission progress is quarantined before certifying a new principal", async () => {
+  const f=fixture({user:{id:"bob"},marker:null,oldReading:[]});
+  const orphan=JSON.stringify({index:3,correct:[1],complete:false});
+  await f.session();
+  assert.equal(f.entries.get("sa.unownedMissionProgress.v1"),orphan);
+  assert.equal(f.entries.get("sa.progressOwner"),"bob");
+  assert.equal(JSON.parse(f.entries.get("sa.mission.OTAB01")).index,0);
+  assert.equal(f.state.missionProgress.index,0);
+  f.ctx.accountRequest=async action=>{
+    if(action==="reading")return {reading:[]};
+    throw Error("D1 unavailable");
+  };
+  await f.sync();
+  assert.equal(f.state.missionProgress.index,0);
+  assert.equal(f.state.progressSyncStatus,"unavailable");
+});
+
+
+
+test("malformed ownerless mission state is preserved verbatim before active reset", async () => {
+  const f=fixture({user:{id:"bob"},marker:null,oldReading:[]});
+  f.entries.set("sa.mission.OTAB01",'{"corrupt":');
+  await f.session();
+  assert.equal(f.entries.get("sa.unownedMissionProgress.v1"),'{"corrupt":');
+  assert.equal(f.entries.get("sa.progressOwner"),"bob");
+  assert.equal(JSON.parse(f.entries.get("sa.mission.OTAB01")).index,0);
+});
+
+
+
+test("truly empty mission state is not needlessly quarantined", async () => {
+  const f=fixture({user:{id:"bob"},marker:null,oldReading:[]});
+  f.entries.set("sa.mission.OTAB01",JSON.stringify({index:0,correct:[],complete:false}));
+  await f.session();
+  assert.equal(f.entries.has("sa.unownedMissionProgress.v1"),false);
+  assert.equal(f.entries.get("sa.progressOwner"),"bob");
+});
+
+
+
+test("mission archive write denied retains original private progress and no new marker", async () => {
+  const f=fixture({user:{id:"bob"},marker:null,oldReading:[],
+    denyMissionArchiveWrites:true});
+  const old=f.entries.get("sa.mission.OTAB01");
+  await f.session();
+  assert.equal(f.entries.get("sa.mission.OTAB01"),old);
+  assert.equal(f.entries.has("sa.progressOwner"),false);
+  assert.equal(f.state.missionProgress.index,0);
+  assert.equal(f.state.unownedReadingPendingRecovery,true);
+  await f.sync();
+  assert.equal(f.apiCalls.length,0);
+});
+
+
+
+test("transient mission cache read failure cannot authorize a new account", async () => {
+  const f=fixture({user:{id:"bob"},marker:null,oldReading:[],
+    denyFirstMissionRead:true});
+  const old=f.entries.get("sa.mission.OTAB01");
+  await f.session();
+  assert.equal(f.entries.get("sa.mission.OTAB01"),old);
+  assert.equal(f.entries.has("sa.progressOwner"),false);
+  assert.equal(f.state.unownedReadingPendingRecovery,true);
+  await f.sync();
+  assert.equal(f.apiCalls.length,0);
+  await f.session();
+  assert.equal(f.entries.get("sa.unownedMissionProgress.v1"),old);
+  assert.equal(f.entries.get("sa.progressOwner"),"bob");
+  assert.equal(f.state.unownedReadingPendingRecovery,false);
+});
+
+
+
+test("proved owner can sync its existing mission without creating unowned archive", async () => {
+  const f=fixture({user:{id:"alice"},prior:"alice",marker:"alice",oldReading:[]});
+  await f.session();
+  assert.equal(f.state.missionProgress.index,3);
+  assert.equal(f.entries.has("sa.unownedMissionProgress.v1"),false);
+  assert.equal(f.entries.get("sa.progressOwner"),"alice");
+});
+
+
+
+test("two unowned private caches are quarantined before safe account initialization", async () => {
+  const priorReading=[{book:"GEN",chapter:12}];
+  const f=fixture({user:{id:"bob"},marker:null,oldReading:priorReading});
+  const priorMission=f.entries.get("sa.mission.OTAB01");
+  await f.session();
+  assert.equal(f.entries.get("sa.unownedReadingHistory.v1"),JSON.stringify(priorReading));
+  assert.equal(f.entries.get("sa.unownedMissionProgress.v1"),priorMission);
+  assert.equal(f.entries.get("sa.readingHistory"),"[]");
+  assert.equal(JSON.parse(f.entries.get("sa.mission.OTAB01")).index,0);
+  assert.equal(f.entries.get("sa.progressOwner"),"bob");
+});
+
+
+
+test("known different owner still clears old progress through canonical reset", async () => {
+  const f=fixture({user:{id:"bob"},prior:"alice",marker:"alice",oldReading:[]});
+  await f.session();
+  assert.equal(f.entries.has("sa.unownedMissionProgress.v1"),false);
+  assert.equal(f.entries.get("sa.progressOwner"),"bob");
+  assert.equal(f.state.missionProgress.index,0);
+});
+
+
+
+test("repeating confirmed identical mission quarantine does not overwrite its bytes", async () => {
+  const f=fixture({user:{id:"bob"},marker:null,oldReading:[]});
+  const raw=f.entries.get("sa.mission.OTAB01");
+  f.entries.set("sa.unownedMissionProgress.v1",raw);
+  await f.session();
+  assert.equal(f.entries.get("sa.unownedMissionProgress.v1"),raw);
+  assert.equal(f.entries.get("sa.progressOwner"),"bob");
+});
+
+
+
+test("conflict recovery on a later session preserves the original orphan snapshot", async () => {
+  const f=fixture({user:{id:"bob"},marker:null,oldReading:[]});
+  const raw=f.entries.get("sa.mission.OTAB01");
+  f.entries.set("sa.unownedMissionProgress.v1",'{"else":"blocked"}');
+  await f.session();
+  assert.equal(f.state.unownedReadingPendingRecovery,true);
+  f.entries.delete("sa.unownedMissionProgress.v1");
+  await f.session();
+  assert.equal(f.entries.get("sa.unownedMissionProgress.v1"),raw);
+  assert.equal(f.state.unownedReadingPendingRecovery,false);
+  assert.equal(f.entries.get("sa.progressOwner"),"bob");
 });

@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { missionHistoryMarkup, reviewScheduleMarkup } from '../public/workspace.js';
+import {readFileSync} from 'node:fs';
+import { canonicalReadingChapterBounds, missionHistoryMarkup, reviewScheduleMarkup } from '../public/workspace.js';
+
+const sourceCatalog=JSON.parse(readFileSync(new URL('../public/data/catalog.json',import.meta.url),'utf8'));
+const realChapters=canonicalReadingChapterBounds(sourceCatalog);
 
 const esc = value => String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
 const valid={id:'one',book:'GEN',chapter:12,score:1,total:2,mode:'personal',completedAt:'2026-10-30 06:00:00'};
@@ -89,4 +93,41 @@ test('guest, error and active-attempt panels retain existing safe behavior',()=>
   assert.match(missionHistoryMarkup({locked:true},'ru',esc),/История скрыта/);
   for(const payload of [{guest:true},{error:true},{locked:true}])
     assert.equal(reviewScheduleMarkup(payload,'en',esc),'');
+});
+
+test('real progress history refuses invented books or impossible chapters in completed and pending rows',()=>{
+  assert.equal(realChapters.size,66);
+  const invalid=[
+    {book:'FAK',chapter:2},{book:'GEN',chapter:51},
+    {book:'REV',chapter:23},{book:'JOL',chapter:5},
+    {book:'PSA',chapter:151},{book:'4CO',chapter:1},
+  ];
+  for(const bad of invalid){
+    const badResult=missionHistoryMarkup(history({attempts:[{...valid,...bad}],pending:[]}),
+      'en',esc,realChapters);
+    assert.match(badResult,/retry-mission-history/,JSON.stringify(bad));
+    assert.doesNotMatch(badResult,/href="\/reader\/|href="\/mission\/attempt\//,
+      'no forged result or reader link may be displayed');
+    const badPending=missionHistoryMarkup(history({attempts:[],pending:[{...pending,...bad}]}),
+      'en',esc,realChapters);
+    assert.match(badPending,/retry-mission-history/);
+    assert.doesNotMatch(badPending,/href="/);
+    assert.equal(reviewScheduleMarkup(history({attempts:[{...valid,...bad}],pending:[]}),
+      'en',esc,new Date(),realChapters),'');
+  }
+});
+
+test('real per-edition chapter differences remain navigable and unavailable catalogs fail closed',()=>{
+  const good=[{book:'GEN',chapter:50},{book:'JOL',chapter:4},{book:'PSA',chapter:150}];
+  for(const source of good){
+    const html=missionHistoryMarkup(history({attempts:[{...valid,...source,score:0}],pending:[]}),
+      'en',esc,realChapters);
+    assert.match(html,new RegExp('href="/reader/'+source.book+'/'+source.chapter+'"'));
+    assert.doesNotMatch(html,/retry-mission-history/);
+  }
+  for(const badBounds of [null,new Map(),new Map([['FAK',150]])]){
+    const html=missionHistoryMarkup(history(),'en',esc,badBounds);
+    assert.match(html,/retry-mission-history/);
+    assert.doesNotMatch(html,/href="/);
+  }
 });

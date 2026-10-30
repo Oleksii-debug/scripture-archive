@@ -3,6 +3,15 @@
 **Мета:** не зупинити випуск чинного продукту, а зареєструвати повний майбутній зміст і критерії готовності.
 **Обов'язкова класифікація:** EXISTING_SOURCE / INCOMPLETE_RELEASE / PLANNED_NEW / SEPARATE_PRODUCT. Це НЕ відсоток готовності.
 
+## 2026-10-30 — SA-EXT-04 / GROUP_NUMERIC_COERCION — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
+
+**Стан:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`, `remaining_scoped_implementation=0`; **батьківський SA-EXT-04 залишається OPEN**, а `RELEASE_VERIFIED` та NVDA/production acceptance не підтверджені.
+
+- **Інтеграція:** [PR #507](https://github.com/Oleksii-debug/scripture-archive/pull/507), squash-merged у канонічний `main@000b7cc481f94dc887d1a3a9ec03b57c0c2f5a2c`. Лише `app/api/groups/route.ts` і `tests/groups-numeric-input-boundary.test.mjs`; `necessary_unmerged_PRs=0` для цього дефекту.
+- **Функція:** канонічний API більше не трактує JSON `true`, `false`, масиви, `null`, об'єкти, порожній текст, hex/binary/octal/exponent/decimal-string expressions як допустимі цілі числа глав, відповідей, відвідуваності чи тижневої цілі. Числа JSON та десяткові числові рядки з доступних HTML-форм збережено.
+- **Фактично виконані тести:** [GitHub Actions #41012581184](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41012581184), exact PR head `f12c8ad0cb5ddfd3eecd70c3fd2a67e43bd6e24f`: native Node **1069 PASS / 0 FAIL / 1 SKIP**, з них **54 нові route-executing сценарії**; TypeScript, ESLint, production source build, **22/22 disposable Worker/D1** і наявні Python-валідатори — **PASS**; ці тести не є фізичним NVDA або live-production перевіркою.
+- **Не повторювати:** первісна доробка цього дефекту остаточна, новий PR допустимий тільки за новим відтвореним дефектом. Загальні SA-EXT-01…20, видання, права, DNS/email, браузерний E2E, деплой і фізична доступність залишаються окремими задачами.
+
 ## Поточні передумови й критичний шлях (поза каталогом розширень)
 - R0.1: перевірити live site / точний SHA; поточна історично підтверджена publication v10 `3a04d12`, source main не прирівнювати до live.
 - R0.2: email sender/DNS SPF DKIM DMARC; реєстрація -> підтвердження -> відновлення пароля -> повторний вхід. Статус: INCOMPLETE_RELEASE.

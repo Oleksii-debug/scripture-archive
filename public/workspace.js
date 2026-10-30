@@ -1,5 +1,6 @@
 import { reviewText, submissionForm, historyMarkup, queueMarkup, auditMarkup, attachReviewControls, renderPublicMaterials, loadReviewData, editorRolesMarkup, attachEditorRoles } from './material-review.js';
 import { dossierMarkup, dossierAtlasMarkup } from './scripture-dossiers.js';
+import { academyMarkup, academyProgressKey, readAcademyProgress, attachAcademy } from './scripture-academy.js';
 
 const COPY = {
   uk: {
@@ -127,8 +128,14 @@ export async function renderWorkspace(name,c) {
     return;
   }
   if(name==='campaigns') {
-    const mission=await getMission();
-    shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${w.campaigns}</h1></div><p>${w.campaignLead}</p></div><div class="card-grid campaign-grid">${w.campaignNames.map((title,i)=>`<article class="card campaign-card ${i===2?'featured':''}"><span class="path-number">${String(i+1).padStart(2,'0')}</span><h2>${title}</h2><p>${w.campaignDescriptions[i]}</p>${i===2?`<p>${esc((mission.title?.[state.lang]||t("missionTitle")))}</p><a class="button primary" href="/missions">${t('open')}</a>`:`<span class="status soon">${t('comingSoon')}</span>`}</article>`).join('')}</div>`);
+    const [mission,catalog]=await Promise.all([getMission(),c.getCatalog()]);
+    // Self-reported course markers must remain explicitly device-local and
+    // principal-scoped; never present them as server-confirmed credentials.
+    let storage=null;
+    try { storage=globalThis.localStorage; } catch {}
+    const courseProgress=readAcademyProgress(storage,academyProgressKey(state.user));
+    shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${w.campaigns}</h1></div><p>${w.campaignLead}</p></div><div class="card-grid campaign-grid">${w.campaignNames.map((title,i)=>`<article class="card campaign-card ${i===2?'featured':''}"><span class="path-number">${String(i+1).padStart(2,'0')}</span><h2>${title}</h2><p>${w.campaignDescriptions[i]}</p>${i===2?`<p>${esc((mission.title?.[state.lang]||t("missionTitle")))}</p><a class="button primary" href="/missions">${t('open')}</a>`:`<span class="status soon">${t('comingSoon')}</span>`}</article>`).join('')}</div>${academyMarkup(catalog,state.lang,esc,courseProgress)}`);
+    attachAcademy(globalThis.document,storage,state.lang,state.user,courseProgress);
     return;
   }
   if(name==='dossiers') {

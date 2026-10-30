@@ -26,6 +26,8 @@ function harness(mode, { readFailure = false } = {}) {
           if (mode === "zero") return { success: true, meta: { changes: 0 } };
           if (mode === "negative") return { success: true, meta: { changes: -1 } };
           if (mode === "not-an-integer") return { success: true, meta: { changes: "1" } };
+          if (mode === "null-changes") return { success: true, meta: { changes: null } };
+          if (mode === "boolean-changes") return { success: true, meta: { changes: true } };
           return { success: true, meta: { changes: 1 } };
         },
         async first() {
@@ -59,6 +61,8 @@ function harness(mode, { readFailure = false } = {}) {
       ? { reading: [{ book: "GEN", chapter: 1, title: "Genesis" }] }
       : action === "visibility"
         ? { firstName: true, lastName: false, church: false, progress: true }
+        : action === "sensitive-consent"
+          ? { acceptSensitive: true, tradition: "protestant", denomination: "Test", church: "Fixture" }
         : { firstName: "Ada", lastName: "Reader", ageRange: "18-24",
             acceptPrivacy: true, acceptSensitive: false, locale: "uk" };
     const request = new Request("https://archive.invalid/api/account?action=" + action, {
@@ -72,7 +76,7 @@ function harness(mode, { readFailure = false } = {}) {
   return { invoke, calls };
 }
 
-for (const action of ["reading", "visibility", "profile"]) {
+for (const action of ["reading", "visibility", "profile", "sensitive-consent"]) {
   test(action + ": valid confirmed D1 write and readback retain success", async () => {
     const h = harness("ok");
     const outcome = await h.invoke(action);
@@ -83,22 +87,22 @@ for (const action of ["reading", "visibility", "profile"]) {
     else assert.equal(outcome.body.user.id, "reader-a");
   });
 
-  for (const mode of ["missing", "false", "negative", "not-an-integer", "throw", "zero"]) {
+  for (const mode of ["missing", "false", "negative", "not-an-integer", "null-changes", "boolean-changes", "throw", "zero"]) {
     test(action + ": never acknowledges an unconfirmed D1 write (" + mode + ")", async () => {
       const h = harness(mode);
       const outcome = await h.invoke(action);
-      const expectedStatus = action === "visibility" && mode === "zero" ? 409 : 503;
+      const expectedStatus = (action === "visibility" || action === "sensitive-consent") && mode === "zero" ? 409 : 503;
       assert.equal(outcome.status, expectedStatus);
       assert.equal("ok" in outcome.body, false);
       assert.equal("user" in outcome.body, false);
       assert.match(outcome.cache, /no-store, private/);
       assert.equal(h.calls.run, 1);
-      if (mode !== "zero" || action !== "visibility") assert.equal(h.calls.first, 0);
+      if (mode !== "zero" || (action !== "visibility" && action !== "sensitive-consent")) assert.equal(h.calls.first, 0);
     });
   }
 }
 
-for (const action of ["visibility", "profile"]) {
+for (const action of ["visibility", "profile", "sensitive-consent"]) {
   test(action + ": post-write profile read failure does not claim successful persistence", async () => {
     const h = harness("ok", { readFailure: true });
     const outcome = await h.invoke(action);

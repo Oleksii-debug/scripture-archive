@@ -15,11 +15,11 @@ function fixture() {
   db.exec(`INSERT INTO home_groups(id,owner_user_id,name,invite_code,visibility,bible_edition) VALUES('g','alice','Group','AABBCCDD','private','en-web'),('other','alice','Other','other','private','en-web');
     INSERT INTO home_group_members(group_id,user_id,display_name,role) VALUES('g','alice','Alice','owner'),('g','bob','Bob','member'),('g','carol','Carol','facilitator'),('other','alice','Alice','owner');
     INSERT INTO group_sessions(id,group_id,created_by,book_id,chapter,meeting_date,reflection) VALUES('s','g','alice','GEN',12,'2026-10-28','private discussion');`);
-  let failure=-1, beforeBatch=null, beforeRun=null, corruptCreateReceipt=null;
+  let failure=-1, beforeBatch=null, beforeRun=null, corruptCreateReceipt=null, afterBatch=null, afterRun=null;
   function statement(sql,args=[]) {return {sql,args,
     first:async()=>db.prepare(sql).get(...args)??null,
     all:async()=>({success:true,results:db.prepare(sql).all(...args)}),
-    run:async()=>{if(beforeRun){const hook=beforeRun;beforeRun=null;hook();}return {success:true,meta:{changes:Number(db.prepare(sql).run(...args).changes)}};},
+    run:async()=>{if(beforeRun){const hook=beforeRun;beforeRun=null;hook();}const receipt={success:true,meta:{changes:Number(db.prepare(sql).run(...args).changes)}};if(afterRun){const hook=afterRun;afterRun=null;return hook(receipt);}return receipt;},
   };}
   const D1={prepare(sql){return {...statement(sql),bind:(...args)=>statement(sql,args)};},async batch(statements){
     if(beforeBatch){const hook=beforeBatch;beforeBatch=null;hook();}
@@ -31,7 +31,7 @@ function fixture() {
     if(mode==='missing-first')out[0]={...out[0],meta:{}};
     if(mode==='failed-second')out[1]={...out[1],success:false};
     if(mode==='truncated')out.pop();
-    return out;}catch(e){db.exec('ROLLBACK');throw e;}
+    if(afterBatch){const hook=afterBatch;afterBatch=null;return hook(out);}return out;}catch(e){db.exec('ROLLBACK');throw e;}
   }};
   function loadRoute(name) {
     const source=readFileSync(new URL(`../app/api/${name}/route.ts`,import.meta.url),'utf8');
@@ -52,7 +52,7 @@ function fixture() {
     db.prepare("INSERT INTO mission_attempts(id,actor_id,mission_id,book_id,chapter,group_id,locale,task_limit,status,expires_at) VALUES(?,?,'OT-AB-01','GEN',12,?,'en',5,?,datetime('now','+2 hours'))").run(id,user,group,status);
     db.prepare("INSERT INTO chapter_read_receipts(id,actor_id,book_id,chapter,group_id) VALUES(?,?,'GEN',12,?)").run(id,user,group);
   }
-  return {db,get,post,attempt,seedAttempt,beforeRun:fn=>{beforeRun=fn;},setFailure:n=>{failure=n;},beforeBatch:fn=>{beforeBatch=fn;},setCreateReceiptMode:mode=>{corruptCreateReceipt=mode;}};
+  return {db,get,post,attempt,seedAttempt,beforeRun:fn=>{beforeRun=fn;},setFailure:n=>{failure=n;},beforeBatch:fn=>{beforeBatch=fn;},setCreateReceiptMode:mode=>{corruptCreateReceipt=mode;},afterBatch:fn=>{afterBatch=fn;},afterRun:fn=>{afterRun=fn;}};
 }
 const owner=f=>f.db.prepare("SELECT owner_user_id FROM home_groups WHERE id='g'").get().owner_user_id;
 const roles=f=>f.db.prepare("SELECT user_id,role FROM home_group_members WHERE group_id='g' ORDER BY user_id").all().map(x=>[x.user_id,x.role]);
@@ -283,4 +283,41 @@ test('group create clean failure is controlled and a successful owner group real
     assert.equal(row.owner_user_id,'alice');
     assert.equal(good.db.prepare("SELECT role FROM home_group_members WHERE group_id=? AND user_id='alice'").get(ok.data.groupId).role,'owner');
   }finally{good.db.close();}
+});
+
+test('group joins reject failed D1 receipts and recover idempotently',async()=>{
+  const f=fixture();try{
+    f.beforeRun(()=>{throw Error('D1 unavailable');});
+    assert.equal((await f.post('join',{inviteCode:'AABBCCDD'},'outsider')).status,503);
+    f.afterRun(()=>({success:false,meta:{changes:1}}));
+    assert.equal((await f.post('join',{inviteCode:'AABBCCDD'},'outsider')).status,503);
+    assert.equal((await f.post('join',{inviteCode:'AABBCCDD'},'outsider')).status,200);
+    assert.equal((await f.post('join',{inviteCode:'AABBCCDD'},'outsider')).status,200);
+  }finally{f.db.close();}
+});
+
+test('group meeting requires both complete D1 receipts',async()=>{
+  const f=fixture();try{
+    const meeting={bookId:'GEN',chapter:12,answersCorrect:0,answersTotal:0,meetingDate:'2026-10-28'};
+    f.afterBatch(receipts=>[receipts[0],{success:true,meta:{}}]);
+    assert.equal((await f.post('session',meeting,'carol')).status,503);
+    f.afterBatch(receipts=>receipts.slice(0,1));
+    assert.equal((await f.post('session',meeting,'carol')).status,503);
+    assert.equal((await f.post('session',meeting,'carol')).status,200);
+  }finally{f.db.close();}
+});
+
+test('marathon cohort activation rolls back group creation when the final D1 statement fails',async()=>{
+  const f=fixture();try{
+    f.db.exec("INSERT INTO group_marathon_registrations(id,group_id,weekly_goal,catchup_mode,cohort_key,status) VALUES('prior','g',3,'flexible','shared','forming')");
+    const body={name:'Marathon',weeklyGoal:3,catchupMode:'flexible',visibility:'private',rosterVisibility:'count',bibleEdition:'en-web',marathonEnabled:true};
+    const count=()=>f.db.prepare("SELECT COUNT(*) AS n FROM home_groups").get().n,before=count();
+    f.setFailure(3);assert.equal((await f.post('create',body)).status,503);
+    assert.equal(count(),before,'failed promotion must not publish a half-created group');
+    f.setFailure(-1);
+    f.afterBatch(receipts=>receipts.map((r,i)=>i===3?{success:true,meta:{}}:r));
+    assert.equal((await f.post('create',body)).status,503);
+    const ok=await f.post('create',body);
+    assert.equal(ok.status,201);assert.equal(ok.data.cohortStatus,'ready');
+  }finally{f.db.close();}
 });

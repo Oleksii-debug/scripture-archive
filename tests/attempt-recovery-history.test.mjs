@@ -190,3 +190,24 @@ test('SA-EXT-02: nonnumeric answer indexes cannot be coerced into a graded answe
     assert.equal(f.db.prepare("SELECT count(*) n FROM mission_attempt_answers WHERE attempt_id='type-guard'").get().n,1);
   }finally{f.db.close();}
 });
+
+
+test('SA-EXT-02: mission chapter mutation actions refuse coercion and preserve a live attempt', async()=>{
+  const f=fixture();try{
+    f.seed('chapter-type',{status:'active'});
+    const bad=[true,false,null,{},[], '0xc','12e0','12.0',' 12 ','012',12.5,Number.MAX_SAFE_INTEGER+1];
+    for(const chapterInput of bad) for(const action of ['chapter','read','start']){
+      const result=await f.post(action,{missionId:'OT-AB-01',book:'GEN',chapter:chapterInput});
+      assert.equal(result.status,400,action+' '+JSON.stringify(chapterInput));
+      assert.equal(result.data.error,'invalid_chapter');
+      assert.equal(f.db.prepare("SELECT status FROM mission_attempts WHERE id='chapter-type'").get().status,'active');
+      assert.equal(f.db.prepare('SELECT count(*) n FROM chapter_read_receipts').get().n,0);
+    }
+    // A legitimate numeric-string HTML field is still accepted by the actual
+    // invalidation command, and must invalidate only the matching passage.
+    const valid=await f.post('chapter',{book:'GEN',chapter:'12'});
+    assert.equal(valid.status,200);
+    assert.equal(valid.data.invalidated,true);
+    assert.equal(f.db.prepare("SELECT status FROM mission_attempts WHERE id='chapter-type'").get().status,'invalidated');
+  }finally{f.db.close();}
+});

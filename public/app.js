@@ -2691,7 +2691,7 @@ async function renderReader(parts) {
   const readerPrincipal = state.user;
   setActiveNav("reader");
   const catalog = await getCatalog();
-  if (state.user !== readerPrincipal || (location?.pathname && !location.pathname.startsWith("/reader"))) return;
+  if (state.user !== readerPrincipal || (typeof location !== "undefined" && location.pathname && !location.pathname.startsWith("/reader"))) return;
   const chosenEdition = selectedEdition(state.lang);
   const books = catalog.editionBooks?.[chosenEdition.id] || catalog.books[state.lang];
   const code = (parts[1] || state.reader.book || "GEN").toUpperCase();

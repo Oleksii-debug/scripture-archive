@@ -16,6 +16,8 @@ const https = value => {
     return url.protocol === 'https:' && !url.username && !url.password ? url.href : '';
   } catch { return ''; }
 };
+// Single canonical source/licence URI admission for the reader and edition information.
+export { https as safeProvenanceHttpsUrl };
 
 export function parallelControls(editions, lang, esc) {
   const copy = COPY[lang] || COPY.uk;

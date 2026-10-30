@@ -28,6 +28,36 @@
 
 ---
 
+## 2026-10-30 — SA-EXT-16 / ANALYTICS HEARTBEAT + CROSS-TAB PRIVACY — ДВА ВУЗЬКІ ПІДПУНКТИ ЗАКРИТО
+
+**CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** для двох існуючих аналітичних підфункцій: типізовані секунди heartbeat до D1 (PR #682, main `0a435927dea7d775f9dbbc83d37845dba7e8245c`) та припинення аналітики при відмові/очищенні згоди в іншій вкладці разом зі строгим UUIDv4 (PR #684, main `4f421d55733317240fd6852b8ae57e7fe41242c4`). Обидва exact-head GitHub Actions **SUCCESS** ([#41054897534](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41054897534), [#41055186846](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41055186846)); canonical source/test readback з `main` PASS. Для цих двох scoped-дефектів `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`; нову роботу лише за доведеного дефекту. **Всі 20 батьківських SA-EXT-01…20, включно з SA-EXT-16, залишаються OPEN; live Sites/SMTP/браузерний/фізичний NVDA реліз не перевірений.** [Повний terminal receipt](SA_EXT_16_ANALYTICS_SCOPED_TERMINAL_20261030.md).
+
+---
+
+## 2026-10-30 — SA-EXT-03 / ADMIN_CONTENT_READ_D1_ACK — ВУЗЬКЕ ЗАКРИТТЯ
+
+**CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** лише для owner CMS GET read receipt. [PR #683](https://github.com/Oleksii-debug/scripture-archive/pull/683) SQUASH MERGED у exact `main@4eb14c499e11cf5521adf6b2b1088f53beb3b71c`. [CI #41055178927](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41055178927) **SUCCESS**: Node 1749 PASS / 0 FAIL / 1 SKIP; Worker/D1 22/22; TypeScript/lint/build, Python 2/2. Тепер admin GET не маскує failed/malformed D1 SELECT під 200 із порожньою редакторською історією; 10 нових route-testing сценаріїв. [Terminal receipt](SA_EXT_03_ADMIN_CONTENT_READ_ACK_TERMINAL_20261030.md); [handoff першої п'ятірки відкритих parent](SA_EXT_CONVERGENCE_HANDOFF_20261030_3_TERMINALS.md). **Весь SA-EXT-03 і решта 20 великих SA-EXT-01…20 OPEN; live Sites, SMTP, Chrome/NVDA НЕ підтверджено.** Деплой не запускався.
+
+---
+
+## 2026-10-30 — SA-EXT-02 / STORED_ATTEMPT_LOCALE_FAILCLOSED — ВУЗЬКЕ ЗАКРИТТЯ
+
+**CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** тільки для захисту GET/POST/finalize від пошкодженого persisted locale у D1. [PR #676](https://github.com/Oleksii-debug/scripture-archive/pull/676) SQUASH MERGED, exact `main@f83954934c8b53f6664fa48a57b51c27600c3d9f`. [CI #41054194991](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41054194991) **SUCCESS**: Node 1738 PASS / 0 FAIL / 1 SKIP, Worker/D1 22/22, TS/lint/build, Python 2/2. **48** real-route locale integrity cases: 15 bad stored locale variants × GET/answer/finalize та 3 valid. Результат: HTTP 409 без частково локалізованого task або grading write, valid uk/ru/en збережені. [Остаточний terminal receipt](SA_EXT_02_STORED_ATTEMPT_LOCALE_TERMINAL_20261030.md). **Батьківський SA-EXT-02 і всі 20 повних SA-EXT-01…20 OPEN**, live Sites SMTP browser/NVDA НЕ ВЕРИФІКОВАНІ; жодного деплою.
+
+---
+
+## 2026-10-30 — SA-EXT-03 / MATERIAL_DRAFT_UPSERT_ACK_BOUND — ВУЗЬКЕ ЗАКРИТТЯ
+
+**CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** лише для точного D1 підтвердження чернеткового UPSERT, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. [PR #671](https://github.com/Oleksii-debug/scripture-archive/pull/671) SQUASH MERGED `main@b0b2fbcd04e04461f84846d13b8992d13b64ce4d`, exact-head [Actions #41053959435](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41053959435) **SUCCESS**. Повторний Worker/D1 виявив, що `ON DELETE CASCADE` законно збільшує `total_changes`; кандидат виправлено до merge, strict `changes<=1` діє тільки для UPSERT. **Повний SA-EXT-03 та решта 20 батьківських SA-EXT-01…20 залишаються OPEN**. [Остаточний запис](SA_EXT_03_MATERIAL_UPSERT_ACK_TERMINAL_20261030.md). Сайт/NVDA/продукційна БД не прийняті.
+
+---
+
+## 2026-10-30 — SA-EXT-16 / RESET_MAIL_DELIVERY_COPY — SCOPED TERMINAL
+
+**ЗАКРИТО ДЛЯ ПОВТОРНОЇ РОЗРОБКИ лише вузький дефект повідомлення відновлення пароля**, `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`: після `forgot-password` реальний `renderAccount` у UK/RU/EN більше не обіцяє доставку без підтвердження провайдера. [Feature PR #675](https://github.com/Oleksii-debug/scripture-archive/pull/675) **MERGED** в `main@6ecbf2260d5463a585e77ec8b3b58aa6aa57d3c7`. [Exact-head Actions #41053883269](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41053883269) **SUCCESS**: 1681 Node PASS/0 FAIL/1 SKIP, Worker/D1 22/22, TS/lint/build PASS, pytest 2/2 PASS. [Термінальний запис](SA_EXT_16_PASSWORD_RESET_MAIL_COPY_TERMINAL_20261030.md). **Усі батьківські 20 розділів SA-EXT-01…20 залишаються OPEN**; production, live browser, NVDA і реальна доставка пошти не перевірені. Немає незлитих PR для цієї підфункції.
+
+---
+
 ## 2026-10-30 — SA-EXT-01 / READING_EXPORT_CANONICAL_TITLE_BOUNDARY — ВУЗЬКИЙ ДЕФЕКТ ЗАКРИТО
 
 **CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** лише для експорту збереженої READING-історії: назва понад 100 символів більше не стає фальшивим restorable JSON-архівом. [PR #670](https://github.com/Oleksii-debug/scripture-archive/pull/670) SQUASH MERGED у точний `main@4cb564da6b705b1296e552c20ca8e2b7ade4f78f`. [CI #41053249167](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41053249167) **SUCCESS**: Node 1681 PASS/0 FAIL/1 SKIP, disposable Worker/D1 22/22, TypeScript/lint/build, Python 2/2. Реальна кодова інтеграція та exact-main readback підтверджені. [Повний термінальний запис](SA_EXT_01_READING_EXPORT_TITLE_BOUNDARY_TERMINAL_20261030.md). **Увесь батьківський SA-EXT-01 та всі SA-EXT-01…20 залишаються OPEN**; production Sites/SMTP/браузер/Windows/NVDA — NOT_VERIFIED. Ця документальна позначка не санкціонує деплой.

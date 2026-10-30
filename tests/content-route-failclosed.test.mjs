@@ -27,6 +27,22 @@ function harness({ dbPresent = true, auth = "ok", dbMode = "ok", isOwner = false
         },
         async all() {
           calls.all++;
+          if (dbMode === "failed-items" && calls.all === 1 ||
+              dbMode === "failed-revisions" && calls.all === 2)
+            return { success: false, results: [] };
+          if (dbMode === "missing-items" && calls.all === 1 ||
+              dbMode === "missing-revisions" && calls.all === 2)
+            return { success: true };
+          if (dbMode === "object-items" && calls.all === 1 ||
+              dbMode === "object-revisions" && calls.all === 2)
+            return { success: true, results: { length: 0 } };
+          if (dbMode === "truthy-items" && calls.all === 1 ||
+              dbMode === "truthy-revisions" && calls.all === 2)
+            return { success: "true", results: [] };
+          if (dbMode === "with-items")
+            return calls.all === 1
+              ? { success: true, results: [{ id:"item-1",kind:"book",locale:"uk",title:"Example",status:"draft",data:'{"text":"Saved"}' }] }
+              : { success: true, results: [{ id:"revision-1",content_key:"book:item-1",created_by:"owner" }] };
           return { success: true, results: [] };
         },
       };
@@ -125,6 +141,45 @@ test("non-owner admin GET remains forbidden rather than disclosing editor conten
   assert.equal(r.status, 403);
   assert.equal(r.body.error, "forbidden");
   assert.equal(h.calls.prepare, 0);
+});
+
+
+for (const [dbMode,reads] of [
+  ["failed-items",1],["failed-revisions",2],
+  ["missing-items",1],["missing-revisions",2],
+  ["object-items",1],["object-revisions",2],
+  ["truthy-items",1],["truthy-revisions",2],
+]) {
+  test("owner CMS GET refuses unacknowledged editorial SELECT: "+dbMode,async()=>{
+    const h=harness({dbMode,isOwner:true});
+    const result=await h.invoke("GET",{admin:true});
+    assert.equal(result.status,503);
+    assert.equal(result.body.error,"content_unavailable");
+    assert.ok(!("items" in result.body) && !("revisions" in result.body));
+    assert.match(result.cache,/no-store, private/);
+    assert.equal(h.calls.all,reads);
+    assert.equal(h.calls.prepare,reads);
+  });
+}
+
+test("genuinely empty owner CMS catalog remains a confirmed read",async()=>{
+  const h=harness({isOwner:true});
+  const result=await h.invoke("GET",{admin:true});
+  assert.equal(result.status,200);
+  assert.deepEqual(Array.from(result.body.items),[]);
+  assert.deepEqual(Array.from(result.body.revisions),[]);
+  assert.equal(h.calls.all,2);
+});
+
+test("owner CMS returns acknowledged real items and revision history unchanged",async()=>{
+  const h=harness({dbMode:"with-items",isOwner:true});
+  const result=await h.invoke("GET",{admin:true});
+  assert.equal(result.status,200);
+  assert.equal(result.body.items.length,1);
+  assert.equal(result.body.items[0].data.text,"Saved");
+  assert.equal(result.body.revisions.length,1);
+  assert.equal(result.body.revisions[0].id,"revision-1");
+  assert.equal(h.calls.all,2);
 });
 
 test("public content GET retains its empty fallback and does not require account", async () => {

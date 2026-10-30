@@ -29,9 +29,14 @@ export async function GET(request: Request) {
   if (url.searchParams.get("admin") === "1") {
     const identity = await authenticateRequest(request);
     if (!isVerifiedOwner(identity)) return Response.json({ error: "forbidden" }, { status: 403 });
-    const items = (await env.DB!.prepare("SELECT id,kind,locale,title,status,data,created_at,updated_at FROM managed_content ORDER BY updated_at DESC LIMIT 500").all()).results;
-    const revisions = (await env.DB!.prepare("SELECT id,content_key,created_at,created_by FROM content_revisions ORDER BY created_at DESC LIMIT 200").all()).results;
-    return Response.json({ items: items.map(item => ({ ...item, data: JSON.parse(String(item.data)) })), revisions }, { headers: { "Cache-Control": "no-store" } });
+    // A D1 response with success:false and results:[] is a read outage, not
+    // an empty editorial catalog. Refuse the owner snapshot before any
+    // partial data or false "no revisions" readback can reach the UI.
+    const itemsRead = await env.DB!.prepare("SELECT id,kind,locale,title,status,data,created_at,updated_at FROM managed_content ORDER BY updated_at DESC LIMIT 500").all();
+    if (itemsRead?.success !== true || !Array.isArray(itemsRead.results)) return unavailable();
+    const revisionsRead = await env.DB!.prepare("SELECT id,content_key,created_at,created_by FROM content_revisions ORDER BY created_at DESC LIMIT 200").all();
+    if (revisionsRead?.success !== true || !Array.isArray(revisionsRead.results)) return unavailable();
+    return Response.json({ items: itemsRead.results.map(item => ({ ...item, data: JSON.parse(String(item.data)) })), revisions: revisionsRead.results }, { headers: { "Cache-Control": "no-store" } });
   }
   const row = await env.DB!.prepare("SELECT data,updated_at FROM site_content WHERE key='public'").first<{ data: string; updated_at: string }>();
   return Response.json(row ? { ...JSON.parse(row.data), updatedAt: row.updated_at } : EMPTY, { headers: { "Cache-Control": "no-store" } });

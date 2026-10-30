@@ -98,7 +98,8 @@ test("failed identity cache cleanup never uploads another account's reading", as
   assert.equal(f.state.localReadingStorageUntrusted,true);
   await f.sync();
   assert.equal(f.apiCalls.some(([action,method])=>action==="reading"&&method==="PUT"),false);
-  assert.equal(f.state.missionProgress.index,2);
+  // A denied persistence write must not publish an unsaved progress snapshot.
+  assert.equal(f.state.missionProgress.index,0);
   assert.equal(f.state.progressSyncStatus,"unavailable");
   assert.deepEqual(JSON.parse(f.entries.get("sa.readingHistory")),[{book:"GEN",chapter:12}]);
 });

@@ -254,7 +254,13 @@ export async function POST(request: Request) {
     const participantCount = body.participantCount === "" || body.participantCount == null ? null : integer(body.participantCount, 1, 500);
     const answersTotal = integer(body.answersTotal, 0, 1000);
     const answersCorrect = integer(body.answersCorrect, 0, 1000);
-    const meetingDate = clean(body.meetingDate, 10);
+    // Unlike display labels, recorded meeting dates and private reflections
+    // must not be clipped into different valid data before an actual D1 write.
+    const meetingDate = typeof body.meetingDate === "string" ? body.meetingDate.trim() : "";
+    const reflection = typeof body.reflection === "string" ? body.reflection.trim()
+      : body.reflection == null ? "" : null;
+    if (reflection === null || reflection.length > 1200)
+      return Response.json({error:"invalid_session"},{status:400});
     const groupEdition = await env.DB!.prepare("SELECT bible_edition FROM home_groups WHERE id=?").bind(groupId).first<{bible_edition:string}>();
     const chapterLimit = groupEdition?.bible_edition === 'uk-ohiienko'
       ? catalog.editionBooks['uk-ohiienko'].find(book => book.code === bookId)?.chapters
@@ -296,7 +302,7 @@ export async function POST(request: Request) {
     try {
     const saved=await env.DB!.batch([
       env.DB!.prepare("INSERT INTO group_sessions (id,group_id,created_by,book_id,chapter,chapters_completed,answers_correct,answers_total,reflection,participant_count,meeting_date) SELECT ?,?,?,?,?,1,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM home_group_members WHERE group_id=? AND user_id=? AND role IN ('owner','facilitator'))")
-        .bind(sessionId, groupId, id.userId, bookId, chapter, answersCorrect, answersTotal, clean(body.reflection, 1200) || null, participantCount, meetingDate, groupId, id.userId),
+        .bind(sessionId, groupId, id.userId, bookId, chapter, answersCorrect, answersTotal, reflection || null, participantCount, meetingDate, groupId, id.userId),
       env.DB!.prepare("UPDATE home_groups SET updated_at=CURRENT_TIMESTAMP WHERE id=? AND EXISTS (SELECT 1 FROM group_sessions WHERE id=?)").bind(groupId,sessionId),
     ]);
     if(!acknowledgedBatch(saved,2))return Response.json({error:"database_unavailable"},{status:503});

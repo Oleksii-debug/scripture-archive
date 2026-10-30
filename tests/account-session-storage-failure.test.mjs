@@ -133,7 +133,8 @@ test("logout and account deletion cleanup do not throw on denied storage", () =>
   assert.equal(f.state.missionProgress.index,0);
   assert.equal(f.state.localReadingStorageUntrusted,true);
   assert.ok(f.storageCalls.filter(([action])=>action==="set").length>=2);
-  assert.ok(f.storageCalls.some(([action])=>action==="remove"));
+  assert.equal(f.storageCalls.some(([action])=>action==="remove"),false,
+    "never discard owner marker when prior private cache writes were denied");
 });
 
 test("a failed server account read is still unavailable, not a fabricated login", async () => {

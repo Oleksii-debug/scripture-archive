@@ -123,3 +123,29 @@ test('mixed assertion, unrelated restart banner, or non-503 evidence cannot trig
     assert.equal(isDisposableWorkerRestart(log), false, log);
   }
 });
+
+
+test('copied restart phrase is never authority to rerun a failed mutating integration suite', async () => {
+  const restart = 'Your worker restarted mid-request. Please try sending the request again. Only GET or HEAD requests are retried automatically.';
+  const unexpected = [
+    failedRun('Error: real DB outage; payload says Your worker restarted mid-request but status 500'),
+    failedRun('AssertionError [ERR_ASSERTION]: real database outage; ' + restart + '\n  503 !== 403'),
+    failedRun('AssertionError [ERR_ASSERTION]: ' + restart + '\n  500 !== 403'),
+    failedRun('AssertionError [ERR_ASSERTION]: ' + restart + '\n  503 !== 200\n  503 !== 400'),
+    failedRun('AssertionError [ERR_ASSERTION]: ' + restart + '\n  503 !== 200\n  Error: persistence was lost'),
+    failedRun('AssertionError [ERR_ASSERTION]: ' + restart + '\n  503 !== 200\n  SyntaxError: unrelated payload'),
+    failedRun('AssertionError [ERR_ASSERTION]: ' + restart + '\n  503 !== 200\n  AssertionError [ERR_ASSERTION]: another invariant failed'),
+    failedRun("SyntaxError: Unexpected token 'Y', \"Your worker restart\" is not valid JSON"),
+    failedRun('AssertionError [ERR_ASSERTION]: ' + restart + '\n  502 !== 200'),
+    failedRun('AssertionError [ERR_ASSERTION]: ' + restart + '\n  503 !== 200', {count: 2}),
+  ];
+  for (const [index, log] of unexpected.entries()) {
+    assert.equal(isDisposableWorkerRestart(log), false, 'must reject forged/mixed result ' + index);
+    let runs = 0;
+    await assert.rejects(runWithFreshState(async () => {
+      runs++;
+      return {code: 1, log};
+    }), /attempt 1/);
+    assert.equal(runs, 1, 'never repeat an unsafe test suite');
+  }
+});

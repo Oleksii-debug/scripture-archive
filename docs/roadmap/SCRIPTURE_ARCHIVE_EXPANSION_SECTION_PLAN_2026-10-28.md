@@ -1,3 +1,15 @@
+## 2026-10-30 — SA-EXT-01 / PRIMARY_READER_PROVENANCE_URL_RAW_AUTHORITY — SOURCE SCOPED TERMINAL
+
+**ЗАКРИТО ДЛЯ РОЗРОБКИ лише цей підтверджений підпункт / `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`.** [PR #792](https://github.com/Oleksii-debug/scripture-archive/pull/792) **SQUASH MERGED** у `main@970d66db7b295bfd57155aa3ab96943619abddd6`. Основна читальня в `public/app.js` тепер використовує єдину перевірку сирих HTTPS URL джерела/ліцензії, уже наявну в паралельній читальні. 48 негативних UK/RU/EN сценаріїв і позитивний HTTPS-контроль; exact-head [CI #41075816618](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41075816618) **SUCCESS** (Node/TS/lint/build/Worker-D1/Python). [Квитанція](SA_EXT_01_PRIMARY_SOURCE_URL_INTEGRITY_TERMINAL_20261030.md); `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` саме тут. **Повний SA-EXT-01 і всі 20 батьківських SA-EXT залишаються OPEN**, Sites/NVDA/SMTP/D1 NOT_VERIFIED, без деплою.
+
+---
+
+## 2026-10-30 — SA-EXT-01 / ABOUT_EDITION_PROVENANCE_URL_RAW_AUTHORITY — SOURCE SCOPED TERMINAL
+
+**ЗАКРИТО ДЛЯ РОЗРОБКИ тільки цей окремий дефект / `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`.** [PR #790](https://github.com/Oleksii-debug/scripture-archive/pull/790) **SQUASH MERGED** у `main@e2ae19ee2e2f77b2bc34a0ac062d3007bf3ac546`. Сторінка про біблійні видання використовує той самий канонічний валідатор URLs, що й паралельна читальня, без дублювання реалізації. 48 негативних source/license×3 мови та позитивний контроль; exact-head [CI #41075153406](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41075153406) **SUCCESS** (Node/TS/lint/build/Worker-D1/Python). [Квитанція](SA_EXT_01_ABOUT_SOURCE_URL_INTEGRITY_TERMINAL_20261030.md); `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` саме тут. **SA-EXT-01…20 батьківські розділи OPEN**; live release/Sites/NVDA/SMTP/D1 NOT_VERIFIED. Деплою немає.
+
+---
+
 ## 2026-10-30 — SA-EXT-04 / GROUP_IDENTIFIER_NO_WHITESPACE_ALIAS — SOURCE SCOPED TERMINAL
 
 **ЗАКРИТО ДЛЯ РОЗРОБКИ ТІЛЬКИ ЦЕЙ ПІДПУНКТ / `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`.** Канонічний `GET/POST /api/groups` відхиляє неканонічні ключі груп, учасників і попередні коди запрошення з крайніми пробілами, замість непомітного перенаправлення на інший чинний D1-запис. Реальні route/SQLite регресії перевіряють заборону читання/запису і збереження правильних ключів. [Функціональний PR #791](https://github.com/Oleksii-debug/scripture-archive/pull/791) **SQUASH MERGED** у exact `main@3a09d787f0730b7abc6aa45600310a3e06b5307c`. [Exact-head CI #41075642458](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41075642458): **SUCCESS**, Node/TypeScript/lint/build/disposable Worker-D1/Python. [Постійна квитанція](SA_EXT_04_GROUP_IDENTIFIER_EXACT_WHITESPACE_SCOPED_TERMINAL_20261030.md). `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` **лише для цього виправлення**. **Повний SA-EXT-04 та всі 20 батьківських SA-EXT-01…20 залишаються OPEN.** Опублікований Sites SHA, браузер/Windows/NVDA/пошта — NOT_VERIFIED; деплою не було.

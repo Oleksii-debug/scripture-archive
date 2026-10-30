@@ -74,7 +74,15 @@ const groupSelect = `
   FROM home_groups g LEFT JOIN group_marathon_registrations m ON m.group_id=g.id`;
 
 function publicGroup(row: Row, includePrivate = false) {
-  const total = Number(row.answers_total || 0);
+  // D1 aggregate success does not make damaged stored group scores truthful.
+  // A missing, negative, fractional or over-total answer count must never be
+  // displayed as a public 0%, 100%+, or an invented successful group report.
+  const counters = [row.answers_correct, row.answers_total, row.chapters_completed];
+  if (counters.some(value => typeof value !== "number" ||
+      !Number.isSafeInteger(value) || value < 0) ||
+      (row.answers_correct as number) > (row.answers_total as number))
+    throw Error("invalid_group_study_aggregate");
+  const total = row.answers_total as number;
   return {
     id: row.id, name: row.name, church: row.church, country: row.country, city: row.city,
     description: row.description, visibility: row.visibility, rosterVisibility: row.roster_visibility,

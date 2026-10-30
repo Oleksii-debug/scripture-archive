@@ -187,3 +187,99 @@ test("recovered storage cannot relabel a previously untrusted same-user cache", 
   assert.equal(f.entries.get("sa.progressOwner"),"alice");
   assert.equal(f.state.localReadingStorageUntrusted,false);
 });
+
+
+test("missing owner marker quarantines previous reading before another user can sync", async () => {
+  const oldReading=[{book:"GEN",chapter:12,title:"private legacy history"}];
+  const f=fixture({user:{id:"bob"},marker:null,oldReading});
+  await f.session();
+  assert.equal(f.entries.get("sa.unownedReadingHistory.v1"),JSON.stringify(oldReading));
+  assert.equal(f.entries.get("sa.readingHistory"),"[]");
+  assert.equal(f.entries.get("sa.progressOwner"),"bob");
+  assert.equal(f.state.missionProgress.index,0);
+  await f.sync();
+  assert.equal(f.apiCalls.some(([action,method])=>action==="reading"&&method==="PUT"),false);
+});
+
+test("unowned data is preserved verbatim even if prior reading JSON is malformed", async () => {
+  const f=fixture({user:{id:"bob"},marker:null});
+  f.entries.set("sa.readingHistory",'{"incomplete":');
+  await f.session();
+  assert.equal(f.entries.get("sa.unownedReadingHistory.v1"),'{"incomplete":');
+  assert.equal(f.entries.get("sa.readingHistory"),"[]");
+  assert.equal(f.entries.get("sa.progressOwner"),"bob");
+});
+
+test("conflicting existing unowned archive cannot be overwritten or reattributed", async () => {
+  const old=[{book:"EXO",chapter:2}];
+  const saved='[{"book":"GEN","chapter":1}]';
+  const f=fixture({user:{id:"bob"},marker:null,oldReading:old});
+  f.entries.set("sa.unownedReadingHistory.v1",saved);
+  await f.session();
+  assert.equal(f.entries.get("sa.unownedReadingHistory.v1"),saved);
+  assert.equal(f.entries.get("sa.readingHistory"),JSON.stringify(old));
+  assert.equal(f.entries.has("sa.progressOwner"),false);
+  assert.equal(f.state.unownedReadingPendingRecovery,true);
+  assert.equal(f.state.missionProgress.index,0);
+  await f.sync();
+  assert.equal(f.apiCalls.length,0,"blocked identity must not read/put private progress");
+});
+
+test("quota denial leaves legacy history and ownership marker untouched", async () => {
+  const old=[{book:"GEN",chapter:12}];
+  const f=fixture({user:{id:"bob"},marker:null,oldReading:old,denyWrites:true});
+  await f.session();
+  assert.equal(f.entries.get("sa.readingHistory"),JSON.stringify(old));
+  assert.equal(f.entries.has("sa.progressOwner"),false);
+  assert.equal(f.state.localReadingStorageUntrusted,true);
+  assert.equal(f.state.unownedReadingPendingRecovery,true);
+  await f.sync();
+  assert.equal(f.apiCalls.length,0);
+});
+
+test("same immutable unowned archive is idempotent on another authenticated refresh", async () => {
+  const old=[{book:"GEN",chapter:12}];
+  const f=fixture({user:{id:"bob"},marker:null,oldReading:old});
+  f.entries.set("sa.unownedReadingHistory.v1",JSON.stringify(old));
+  await f.session();
+  assert.equal(f.entries.get("sa.unownedReadingHistory.v1"),JSON.stringify(old));
+  assert.equal(f.entries.get("sa.readingHistory"),"[]");
+  assert.equal(f.entries.get("sa.progressOwner"),"bob");
+  assert.equal(f.state.unownedReadingPendingRecovery,false);
+});
+
+test("unresolved orphan remains isolated after a simulated fresh page load", async () => {
+  const old=[{book:"EXO",chapter:4}];
+  for(let reload=0;reload<2;reload++){
+    const f=fixture({user:{id:"new-user"},marker:null,oldReading:old});
+    f.entries.set("sa.unownedReadingHistory.v1",'[{"book":"GEN","chapter":1}]');
+    await f.session();
+    await f.sync();
+    assert.equal(f.entries.has("sa.progressOwner"),false);
+    assert.equal(f.entries.get("sa.readingHistory"),JSON.stringify(old));
+    assert.equal(f.apiCalls.length,0);
+    assert.equal(f.state.unownedReadingPendingRecovery,true);
+  }
+});
+
+test("after removing conflicting archive the next refresh safely retains orphan and recovers", async () => {
+  const old=[{book:"EXO",chapter:4}];
+  const f=fixture({user:{id:"bob"},marker:null,oldReading:old});
+  f.entries.set("sa.unownedReadingHistory.v1",'[{"book":"GEN","chapter":1}]');
+  await f.session();
+  assert.equal(f.state.unownedReadingPendingRecovery,true);
+  f.entries.delete("sa.unownedReadingHistory.v1");
+  await f.session();
+  assert.equal(f.state.unownedReadingPendingRecovery,false);
+  assert.equal(f.entries.get("sa.unownedReadingHistory.v1"),JSON.stringify(old));
+  assert.equal(f.entries.get("sa.readingHistory"),"[]");
+  assert.equal(f.entries.get("sa.progressOwner"),"bob");
+});
+
+test("genuinely empty first-login reading does not create a misleading orphan archive", async () => {
+  const f=fixture({user:{id:"bob"},marker:null,oldReading:[]});
+  await f.session();
+  assert.equal(f.entries.has("sa.unownedReadingHistory.v1"),false);
+  assert.equal(f.entries.get("sa.progressOwner"),"bob");
+  assert.equal(f.state.unownedReadingPendingRecovery,false);
+});

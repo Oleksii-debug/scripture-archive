@@ -290,3 +290,17 @@ test("POST preserves zero-second legacy heartbeat and ignores event-only activeS
   assert.equal(e.status, 202);
   assert.equal(event.calls.bindings[0].args[2], 0);
 });
+
+test("POST rejects modified session identifiers without aliasing a valid UUID", async () => {
+  const valid="deadbeef-dead-4eef-8eef-001122334455";
+  for (const sessionId of [valid+"suffix", " "+valid, valid+" ", valid+"\n", null, 1, [valid], {}]) {
+    const h=harness();
+    const r=await h.invoke("POST", {overrides:{sessionId}});
+    assert.equal(r.status,400,JSON.stringify(sessionId));
+    assert.equal(h.calls.prepare,0);
+    assert.equal(h.calls.batch,0);
+  }
+  const h=harness();
+  assert.equal((await h.invoke("POST",{overrides:{sessionId:valid}})).status,202);
+  assert.equal(h.calls.bindings[0].args[0],valid);
+});

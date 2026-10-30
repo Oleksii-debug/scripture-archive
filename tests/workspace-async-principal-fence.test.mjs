@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { renderWorkspace, verifiedLocalReadingHistory } from '../public/workspace.js';
 
+// Route scenarios use the same real canonical inventory as the reader.
+const scenarioCatalog=JSON.parse(readFileSync(new URL('../public/data/catalog.json',import.meta.url),'utf8'));
+
 function deferred() {
   let resolve;
   const promise = new Promise(done => { resolve = done; });
@@ -91,7 +94,7 @@ function scenario(pathname = '/builder') {
   const context = {
     state, t: key => key, esc: String, shell: html => shells.push(html),
     setActiveNav() {}, getMission: async () => ({ taskCount: 2, title: { en: 'Mission' } }),
-    loadJSON: () => [], announce(message) {announcements.push(message);}, play() {}, getCatalog: async () => ({}),
+    loadJSON: () => [], announce(message) {announcements.push(message);}, play() {}, getCatalog: async () => scenarioCatalog,
   };
   return {
     state, context, shells, announcements, form, deleteButton,

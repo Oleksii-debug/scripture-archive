@@ -23,6 +23,39 @@ test('bookmark reads report failure without false successful data',async()=>{
     const response=await handler(result); assert.equal(response.status,503); assert.equal((await response.json()).error,'bookmarks_unavailable');
     assert.match(response.headers.get('cache-control'),/no-store/);
   }
-  const response=await handler({success:true,results:[{book:'GEN',chapter:1}]});
+  const response=await handler({success:true,results:[{edition:'en-web',book:'GEN',chapter:1,created_at:'2026-10-30'}]});
   assert.equal(response.status,200); assert.equal((await response.json()).bookmarks[0].book,'GEN');
+});
+
+test('bookmark GET refuses corrupt legacy/nonlocal or impossible stored rows without false navigation success',async()=>{
+  const bad = [
+    null, {}, {edition:'en-web',book:'GEN',chapter:1},
+    {edition:'en-web',book:'GEN',chapter:1,created_at:''},
+    {edition:'en-web',book:'GEN',chapter:1,created_at:null},
+    {edition:'en-niv',book:'GEN',chapter:1,created_at:'2026-10-30'},
+    {edition:'unknown',book:'GEN',chapter:1,created_at:'2026-10-30'},
+    {edition:'en-web',book:'FAK',chapter:1,created_at:'2026-10-30'},
+    {edition:'en-web',book:'GEN',chapter:51,created_at:'2026-10-30'},
+    {edition:'en-web',book:'GEN',chapter:'1',created_at:'2026-10-30'},
+    {edition:'en-web',book:'JOL',chapter:4,created_at:'2026-10-30'},
+    {edition:'uk-ohiienko',book:'JOL',chapter:5,created_at:'2026-10-30'},
+  ];
+  for (const row of bad) {
+    const response=await handler({success:true,results:[{edition:'en-web',book:'GEN',chapter:1,created_at:'2026-10-30'},row]});
+    assert.equal(response.status,503,JSON.stringify(row));
+    const body=await response.json();
+    assert.deepEqual(body,{error:'bookmarks_unavailable'});
+    assert.equal('bookmarks' in body,false);
+    assert.match(response.headers.get('cache-control'),/no-store/);
+  }
+});
+test('bookmark GET preserves real multi-edition records including Ohiienko Joel 4',async()=>{
+  const actual=[
+    {edition:'en-web',book:'GEN',chapter:1,created_at:'2026-10-30'},
+    {edition:'uk-ohiienko',book:'JOL',chapter:4,created_at:'2026-10-30'},
+  ];
+  const response=await handler({success:true,results:actual});
+  assert.equal(response.status,200);
+  const body=await response.json();
+  assert.deepEqual(body.bookmarks,actual);
 });

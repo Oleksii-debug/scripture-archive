@@ -2332,18 +2332,30 @@ async function getSession() {
   // An absent marker cannot establish that cached reading belongs to the
   // newly authenticated account. Retain exact unowned bytes for a separate,
   // explicit recovery/import decision before replacing the active cache.
-  let unownedReading = false, preservedUnownedReading = true;
+  let unownedReading = false, unownedMission = false, preservedUnownedReading = true;
   // An unreadable owner marker is as ambiguous as an absent one: preserve
   // readable cached history before clearing or assigning a new principal.
   if (state.user && (!markerReadable || !previousOwner)) {
     try {
       const legacyReading = localStorage.getItem('sa.readingHistory');
+      const legacyMission = localStorage.getItem('sa.mission.OTAB01');
       if (legacyReading !== null && legacyReading !== '[]' && legacyReading !== '') {
         unownedReading = true;
         const archiveKey = 'sa.unownedReadingHistory.v1';
         const priorArchive = localStorage.getItem(archiveKey);
         if (priorArchive === null) localStorage.setItem(archiveKey, legacyReading);
         preservedUnownedReading = localStorage.getItem(archiveKey) === legacyReading;
+      }
+      // Progress is private even when the reading list happens to be empty.
+      // Do not misattribute guest/legacy mission bytes to the first login.
+      const emptyMission = JSON.stringify({ index: 0, correct: [], complete: false });
+      if (legacyMission !== null && legacyMission !== '' && legacyMission !== emptyMission) {
+        unownedMission = true;
+        const archiveKey = 'sa.unownedMissionProgress.v1';
+        const priorArchive = localStorage.getItem(archiveKey);
+        if (priorArchive === null) localStorage.setItem(archiveKey, legacyMission);
+        preservedUnownedReading = preservedUnownedReading &&
+          localStorage.getItem(archiveKey) === legacyMission;
       }
     } catch { preservedUnownedReading = false; }
   }
@@ -2359,16 +2371,21 @@ async function getSession() {
     return state.user;
   }
   state.unownedReadingPendingRecovery = false;
-  const mustClear = unownedReading || !markerReadable || state.localReadingStorageUntrusted ||
+  const mustClear = unownedReading || unownedMission || (state.user && !previousOwner) ||
+    !markerReadable || state.localReadingStorageUntrusted ||
     (priorPrincipal && priorPrincipal !== state.user?.id) ||
     (previousOwner && previousOwner !== state.user?.id);
   const cleared = mustClear ? clearPersonalProgress() : true;
   // Do not trust a storage shim that silently ignored a write. An orphan must
   // be absent from the active reading key before any new owner is certified.
   let verifiedClear = cleared;
-  if (verifiedClear && unownedReading) {
-    try { verifiedClear = localStorage.getItem('sa.readingHistory') === '[]'; }
-    catch { verifiedClear = false; }
+  if (verifiedClear && (unownedReading || unownedMission)) {
+    try {
+      if (unownedReading) verifiedClear = localStorage.getItem('sa.readingHistory') === '[]';
+      if (verifiedClear && unownedMission) verifiedClear =
+        localStorage.getItem('sa.mission.OTAB01') ===
+          JSON.stringify({ index: 0, correct: [], complete: false });
+    } catch { verifiedClear = false; }
   }
   // An incomplete wipe must NEVER be certified by assigning the old browser
   // reading history to the newly authenticated principal.
@@ -2381,7 +2398,7 @@ async function getSession() {
     }
   } else {
     state.localReadingStorageUntrusted = true;
-    if (unownedReading) state.unownedReadingPendingRecovery = true;
+    if (unownedReading || unownedMission) state.unownedReadingPendingRecovery = true;
   }
   return state.user;
 }

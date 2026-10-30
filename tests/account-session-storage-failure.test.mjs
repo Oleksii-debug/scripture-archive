@@ -19,7 +19,7 @@ const sourceUnderTest = [
 function fixture({ user = { id: "alice" }, prior = null, marker = null,
                    denyRead = false, denyFirstReadingRead = false, denyOwnerMarkerRead = false,
                    denyWrites = false, denyDelete = false,
-                   silentlyIgnoreReadingWrites = false,
+                   silentlyIgnoreReadingWrites = false, silentlyIgnoreMissionWrites = false,
                    serverReading = [], oldReading = [] } = {}) {
   const initial = [
     ["sa.progressOwner", marker],
@@ -43,6 +43,7 @@ function fixture({ user = { id: "alice" }, prior = null, marker = null,
       storageCalls.push(["set", key]);
       if (denyWrites) throw Error("QuotaExceededError");
       if (silentlyIgnoreReadingWrites && key === "sa.readingHistory") return;
+      if (silentlyIgnoreMissionWrites && key === "sa.mission.OTAB01") return;
       entries.set(key, value);
     },
     removeItem(key) {
@@ -387,4 +388,57 @@ test("logout during pending orphan recovery never silently discards the unowned 
   assert.equal(f.entries.get("sa.readingHistory"),JSON.stringify(orphan));
   assert.equal(f.entries.has("sa.progressOwner"),false);
   assert.equal(f.entries.get("sa.unownedReadingHistory.v1"),'[{"book":"GEN","chapter":2}]');
+});
+
+
+test("missing owner marker quarantines nonempty mission even when reading is empty", async () => {
+  const f=fixture({user:{id:"bob"},marker:null,oldReading:[]});
+  const originalMission=f.entries.get("sa.mission.OTAB01");
+  await f.session();
+  assert.equal(f.entries.has("sa.unownedReadingHistory.v1"),false);
+  assert.equal(f.entries.get("sa.unownedMissionProgress.v1"),originalMission);
+  assert.equal(f.entries.get("sa.mission.OTAB01"),JSON.stringify({index:0,correct:[],complete:false}));
+  assert.equal(f.entries.get("sa.progressOwner"),"bob");
+  assert.equal(f.state.missionProgress.index,0,"unowned in-memory progress cannot move to bob");
+  assert.equal(f.state.unownedReadingPendingRecovery,false);
+  await f.sync();
+  assert.equal(f.state.missionProgress.index,2,"only acknowledged server progress may be restored");
+});
+
+test("conflicting stored orphan mission blocks ownership without deleting either copy", async () => {
+  const f=fixture({user:{id:"bob"},marker:null,oldReading:[]});
+  const legacy=f.entries.get("sa.mission.OTAB01");
+  const archive='{"index":9,"correct":[1,3],"complete":true}';
+  f.entries.set("sa.unownedMissionProgress.v1",archive);
+  await f.session();
+  assert.equal(f.entries.get("sa.unownedMissionProgress.v1"),archive);
+  assert.equal(f.entries.get("sa.mission.OTAB01"),legacy);
+  assert.equal(f.entries.has("sa.progressOwner"),false);
+  assert.equal(f.state.localReadingStorageUntrusted,true);
+  assert.equal(f.state.unownedReadingPendingRecovery,true);
+  assert.equal(f.state.missionProgress.index,0);
+  await f.sync();
+  assert.equal(f.apiCalls.length,0);
+});
+
+test("silent mission-progress wipe failure never certifies an unsigned old mission as new account", async () => {
+  const f=fixture({user:{id:"bob"},marker:null,oldReading:[],
+    silentlyIgnoreMissionWrites:true});
+  const legacy=f.entries.get("sa.mission.OTAB01");
+  await f.session();
+  assert.equal(f.entries.get("sa.unownedMissionProgress.v1"),legacy);
+  assert.equal(f.entries.get("sa.mission.OTAB01"),legacy);
+  assert.equal(f.entries.has("sa.progressOwner"),false);
+  assert.equal(f.state.unownedReadingPendingRecovery,true);
+  await f.sync();
+  assert.equal(f.apiCalls.length,0);
+});
+
+test("logged-out guest with unsigned local mission does not lose it on page refresh", async () => {
+  const f=fixture({user:null,marker:null,oldReading:[]});
+  const original=f.entries.get("sa.mission.OTAB01");
+  await f.session();
+  assert.equal(f.entries.get("sa.mission.OTAB01"),original);
+  assert.equal(f.entries.has("sa.unownedMissionProgress.v1"),false);
+  assert.equal(f.entries.has("sa.progressOwner"),false);
 });

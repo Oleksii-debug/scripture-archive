@@ -129,7 +129,7 @@ test('accept genuine numeric JSON and decimal HTML-form numeric strings',async()
     }
     assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM group_sessions').get().n,3);
     const created=await f.post('create',{...group,weeklyGoal:'3'});
-    assert.equal(created.status,200,JSON.stringify(created.body));
+    assert.equal(created.status,201,JSON.stringify(created.body));
     assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM home_groups').get().n,2);
   } finally {f.db.close();}
 });

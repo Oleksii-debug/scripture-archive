@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Home from "../page";
 
-const PUBLIC_ROUTES = new Set(["reader", "campaigns", "missions", "groups", "community", "support", "help", "about", "privacy", "atlas", "dossiers", "builder"]);
+const PUBLIC_ROUTES = new Set(["reader", "campaigns", "missions", "groups", "community", "support", "help", "about", "privacy", "atlas", "dossiers", "library", "builder"]);
 const PRIVATE_ROUTES = new Set(["account", "mission", "progress", "editor"]);
 const ROUTE_METADATA: Record<string, { title: string; description: string }> = {
   reader: { title: "Біблійна читальня", description: "Читайте доступні біблійні тексти з чітким зазначенням видання, джерела та умов використання." },
@@ -16,6 +16,7 @@ const ROUTE_METADATA: Record<string, { title: string; description: string }> = {
   privacy: { title: "Приватність", description: "Як Scripture Archive захищає облікові записи, профіль, прогрес і аналітичні дані." },
   atlas: { title: "Атлас розвитку", description: "Навчальні напрями та поступ у роботі з біблійним текстом." },
   dossiers: { title: "Дослідницькі досьє", description: "Матеріали для зіставлення свідчень, джерел і висновків." },
+  library: { title: "Бібліотека перевірених матеріалів", description: "Публічно затверджені навчальні матеріали для дослідження Святого Писання та самоперевірки." },
   builder: { title: "Конструктор", description: "Інструменти підготовки структурованих навчальних матеріалів." },
 };
 

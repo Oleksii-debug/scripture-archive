@@ -39,6 +39,13 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
       if (finalGuard.invalidated) { lock(); return; }
       const verses=data.chapters[chapter-1];
       if (!Array.isArray(verses)) { status.textContent=copy.unavailable; return; }
+      // A corrupt or empty chapter must never be presented as verified Scripture.
+      // An indexed loop also rejects sparse arrays (Array#every skips their holes).
+      if (verses.length===0) throw Error('empty edition chapter');
+      for (let i=0; i<verses.length; i++) {
+        if (typeof verses[i]!=='string' || !verses[i].trim())
+          throw Error('invalid edition verse record');
+      }
       // Never attribute a new/unrecognized local edition to the primary one.
       const fallback=catalog.editions?.[lang];
       const declared=Object.prototype.hasOwnProperty.call(catalog.translations || {}, edition.id);

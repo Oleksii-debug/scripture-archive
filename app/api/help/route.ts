@@ -198,8 +198,16 @@ export async function POST(request: Request) {
   if (!EMAIL.test(email) || subject.length < 3 || message.length < 10 || form.get("acceptPrivacy") !== "yes")
     return json({ error: "invalid_request" }, 400);
 
-  const files = form.getAll("files").filter((entry): entry is File => entry instanceof File && entry.size > 0);
-  if (files.length > MAX_FILES || files.some(file => file.size > MAX_FILE_BYTES || !ALLOWED_TYPES.has(file.type)) || files.reduce((sum, file) => sum + file.size, 0) > MAX_TOTAL_BYTES)
+  // An empty browser file-input placeholder (filename="") means no upload.
+  // A *named* zero-byte file is a selected attachment, not a placeholder:
+  // rejecting it avoids confirming/sending feedback after silently losing it.
+  const fileFields = form.getAll("files");
+  const files = fileFields.filter((entry): entry is File => entry instanceof File && entry.name.length > 0);
+  if (fileFields.some(entry => (typeof entry === "string" && entry.length > 0) ||
+      (entry instanceof File && entry.name.length === 0 && entry.size > 0)) ||
+      files.length > MAX_FILES ||
+      files.some(file => file.size === 0 || file.size > MAX_FILE_BYTES || !ALLOWED_TYPES.has(file.type)) ||
+      files.reduce((sum, file) => sum + file.size, 0) > MAX_TOTAL_BYTES)
     return json({ error: "invalid_attachment" }, 400);
 
   const attachments: { id: string; filename: string; contentType: string; size: number; content: string }[] = [];

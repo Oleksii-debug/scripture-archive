@@ -1,3 +1,14 @@
+## 2026-10-30 — SA-EXT-02 / ATTEMPT_HISTORY_CANONICAL_CHAPTER_TRUST — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
+
+**Термінальний статус лише цього підпункту:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`; `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. Повний розділ SA-EXT-02 і всі двадцять батьківських розділів **залишаються OPEN**.
+
+- **Факт дефекту:** на справжньому попередньому `main` `missionHistoryMarkup` та персональні пропозиції повторення приймали синтаксично правдоподібні, але неіснуючі `FAK:2` та `GEN:51` із історії старих спроб; створювали фальшиві посилання. Це окремий дефект після перевірки лише форми коду (#576).
+- **Готовий код:** [PR #597](https://github.com/Oleksii-debug/scripture-archive/pull/597) **SQUASH MERGED** у `main@d8eae649a762e9020419685ad6418da67063dfb6`. Реальний `public/workspace.js@ddaf4b2ad995122d78791d943349f57c16349007` тепер на фактичній сторінці `/progress` звіряє завершені та незавершені спроби, посилання й календар повторень із канонічними 66 книгами та дозволеними варіантами глав (зокрема `JOL:4`). Недовірений запис показує існуюче повідомлення повторної спроби, не приховується як вигадана «порожня» історія.
+- **Регресії й тести:** `tests/history-render-failclosed.test.mjs@c134fe431ecfb8051eb51ee88fe9b812b1b1d2d9`, `tests/review-suggestions.test.mjs@a4e2dabc4ce103ce74c4cb1b8009ae7c7f2dd60b`. Точний source-executed V8: **25/25** PASS. [Exact-PR-head Actions #41031571821](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41031571821): Node **1385 PASS / 0 FAIL / 1 SKIP**, TypeScript/lint/build/Python PASS. **Загальний CI НЕ зелений:** тимчасовий Worker/D1 двічі **21/22**, обидва з незалежно відтвореним `Your worker restarted mid-request` / HTTP 503 на інших POST/PUT шляхах; власник цього спільного CI-блокера — [PR #361](https://github.com/Oleksii-debug/scripture-archive/pull/361). Не повідомляти «22/22 PASS» для цього SHA.
+- **Межі:** змін у production Worker, D1-схемі, реальному сайті, текстах видань і ліцензіях немає. Не підтверджено live Sites SHA, фізичний NVDA, браузерний E2E чи завершення всього SA-EXT-02. Повторна розробка цього вузького дефекту — лише після нового конкретного доказу регресії.
+
+---
+
 ## 2026-10-30 — SA-EXT-01/16 / READING_EXPORT_CANONICAL_BOOK_BOUNDS — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
 
 **Остаточний стан лише підфункції приватного експорту читання:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`; `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Повні батьківські розділи SA-EXT-01, SA-EXT-16 та інші SA-EXT-01…20 залишаються OPEN.** Це не реліз, не 82-мовна готовність і не фізичне NVDA-приймання.

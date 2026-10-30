@@ -264,6 +264,17 @@ export async function POST(request: Request) {
     const registration = await env.DB!.prepare("SELECT weekly_goal,catchup_mode,status,start_date FROM group_marathon_registrations WHERE group_id=?").bind(groupId).first<{weekly_goal:number;catchup_mode:string;status:string;start_date:string|null}>();
     if (registration) {
       if (registration.status !== "active" || !registration.start_date) return Response.json({error:"marathon_not_started"},{status:409});
+      // D1 columns are SQLite-affinity only: a legacy/corrupt active cohort can
+      // otherwise turn week/limits into NaN and skip every unlock comparison.
+      // Validate persisted authority with the same bounds used on group creation.
+      if (!Number.isSafeInteger(registration.weekly_goal) ||
+          registration.weekly_goal < 1 || registration.weekly_goal > 31 ||
+          registration.weekly_goal % 2 !== 1 ||
+          !["steady", "flexible"].includes(registration.catchup_mode) ||
+          !/^\\d{4}-\\d{2}-\\d{2}$/.test(registration.start_date) ||
+          !Number.isFinite(Date.parse(registration.start_date)) ||
+          new Date(registration.start_date).toISOString().slice(0, 10) !== registration.start_date)
+        return Response.json({error:"marathon_state_invalid"},{status:409});
       const start = Date.parse(registration.start_date), day = Date.parse(meetingDate), week = Math.floor((day-start)/604800000);
       if (week<0) return Response.json({error:"invalid_meeting_week"},{status:400});
       const weekStart = new Date(start+week*604800000).toISOString().slice(0,10), weekEnd = new Date(start+(week+1)*604800000).toISOString().slice(0,10);

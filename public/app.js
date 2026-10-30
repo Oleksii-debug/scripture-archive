@@ -1950,6 +1950,11 @@ function storeReaderPreference(key, value) {
   try { localStorage.setItem(key, value); return true; }
   catch { return false; }
 }
+const PREFERENCE_TRANSIENT_MESSAGES = Object.freeze({
+  uk: "Браузер не дозволив зберегти налаштування. Вибір діє лише до перезавантаження сторінки.",
+  ru: "Браузер запретил сохранить настройку. Выбор действует только до перезагрузки страницы.",
+  en: "Browser storage is unavailable. This preference lasts only until the page is reloaded.",
+});
 const transientEditionStorageDenied = new Set();
 const EDITION_TRANSIENT_MESSAGES = {
   uk: "Браузер заборонив збереження: вибір перекладу діє лише в цій вкладці.",
@@ -2917,11 +2922,14 @@ async function renderReader(parts) {
   });
   document.querySelector("#uk-spelling")?.addEventListener("click", () => {
     state.ukOriginal = !state.ukOriginal;
-    localStorage.setItem(
-      "sa.ukSpelling",
-      state.ukOriginal ? "original" : "modern",
+    const language = state.lang;
+    const preferenceSaved = storeReaderPreference(
+      "sa.ukSpelling", state.ukOriginal ? "original" : "modern",
     );
-    route();
+    void route().then(() => {
+      if (!preferenceSaved && state.lang === language)
+        announce(PREFERENCE_TRANSIENT_MESSAGES[language]);
+    });
   });
   document
     .querySelector("#book-select")
@@ -4011,7 +4019,8 @@ async function route() {
 langSelect.addEventListener("change", () => {
   const restorePickerFocus = document.activeElement === langSelect;
   state.lang = langSelect.value;
-  localStorage.setItem("sa.lang", state.lang);
+  const selectedLanguage = state.lang;
+  const preferenceSaved = storeReaderPreference("sa.lang", selectedLanguage);
   state.mission = null;
   setStaticI18n();
   play("nav");
@@ -4019,6 +4028,8 @@ langSelect.addEventListener("change", () => {
     if (restorePickerFocus && document.activeElement === main && document.contains(langSelect)) {
       langSelect.focus({ preventScroll: true });
     }
+    if (!preferenceSaved && state.lang === selectedLanguage)
+      announce(PREFERENCE_TRANSIENT_MESSAGES[selectedLanguage]);
   });
 });
 document.querySelector("#menu-toggle").addEventListener("click", (e) => {

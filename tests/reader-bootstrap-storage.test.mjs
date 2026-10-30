@@ -20,7 +20,7 @@ function startup(storage, search = "") {
     localStorage: storage, EDITIONS, selectedEdition, setEditionForTab,
     loadJSON: (_, fallback) => fallback,
   });
-  vm.runInContext(bootCode + '\nglobalThis.snapshot = () => ({language:state.lang, originalSpelling:state.ukOriginal, edition:activeEdition(state.lang).id}); globalThis.rememberReaderChoice = storeReaderPreference;', ctx);
+  vm.runInContext(bootCode + '\nglobalThis.snapshot = () => ({language:state.lang, originalSpelling:state.ukOriginal, edition:selectedEdition(state.lang).id}); globalThis.rememberReaderChoice = storeReaderPreference;', ctx);
   return ctx;
 }
 
@@ -86,7 +86,7 @@ test("successful storage write persists existing selector choice; forged choice 
 });
 
 test("canonical reader uses best-effort bookmark and exactly one edition selector", () => {
-  assert.ok(source.includes('storeReaderPreference("sa.reader", JSON.stringify(state.reader))'));
+  assert.ok(source.includes('try { localStorage.setItem("sa.reader", JSON.stringify(state.reader)); }'));
   assert.ok(source.includes("editionSelect(state.lang,esc,chosenEdition)"));
   assert.ok(source.includes("onchange = event => onReaderEditionChange(event, parts)"));
 });

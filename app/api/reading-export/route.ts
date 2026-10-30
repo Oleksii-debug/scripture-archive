@@ -30,6 +30,16 @@ export async function GET(request: Request) {
       if (typeof row.data !== "string") throw Error("invalid_progress_data");
       const data: unknown = JSON.parse(row.data);
       if (data === null || typeof data !== "object") throw Error("invalid_progress_data");
+      // The canonical account reader requires an ARRAY of book/chapter/title
+      // receipts. A JSON object or malformed array is not a restorable reading
+      // history, even if JSON.parse succeeded. Preserve other legacy mission
+      // snapshot shapes (objects or arrays) without reinterpreting them.
+      if (row.mission_id === "READING" &&
+          (!Array.isArray(data) || data.some(entry => !entry || typeof entry !== "object" ||
+            Array.isArray(entry) || typeof entry.book !== "string" ||
+            typeof entry.chapter !== "number" || !Number.isInteger(entry.chapter) ||
+            entry.chapter < 1 || typeof entry.title !== "string")))
+        throw Error("invalid_reading_receipt");
       return { mission: row.mission_id, data, updatedAt: row.updated_at };
     });
     const attemptHistory = (attempts.results as Array<{id:string;mission_id:string;book_id:string;chapter:number;group_id:string|null;locale:string;started_at:string;completed_at:string;result_json:string}>).map(row => {

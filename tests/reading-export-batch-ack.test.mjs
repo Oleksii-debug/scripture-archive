@@ -247,6 +247,39 @@ for (const malformed of [
   });
 }
 
+
+for (const title of [
+  "a".repeat(101), "Б".repeat(101), "x".repeat(150),
+  "Ж".repeat(200), "  " + "Р".repeat(100) + "  ",
+]) {
+  test("private READING export refuses title that canonical account reader cannot reopen: length " + title.length, async () => {
+    const rows = standardRows();
+    rows[1].results[0].data = JSON.stringify([
+      { book:"GEN", chapter:1, title:"Existing valid chapter" },
+      { book:"EXO", chapter:1, title },
+    ]);
+    const f = fixture({ results: rows });
+    const { response, body } = await outcome(f);
+    assert.equal(response.status,503);
+    assert.deepEqual(body,{ error:"export_unavailable" });
+    assert.equal(response.headers.get("content-disposition"),null);
+    assert.match(response.headers.get("cache-control"),/no-store, private/);
+    assert.equal(f.batches,1);
+    assert.equal(f.statements.length,4);
+  });
+}
+
+for (const title of ["x".repeat(100), "Ж".repeat(100)]) {
+  test("private READING export preserves exact canonical 100-character title: " + title[0], async () => {
+    const rows = standardRows();
+    rows[1].results[0].data = JSON.stringify([{ book:"GEN",chapter:1,title }]);
+    const {response,body}=await outcome(fixture({results:rows}));
+    assert.equal(response.status,200);
+    assert.equal(body.progress[0].data[0].title,title);
+    assert.match(response.headers.get("content-disposition"),/attachment/);
+  });
+}
+
 test("valid empty READING archive remains exportable, preserving legitimate nonreading array snapshots",async()=>{
   const rows=standardRows();
   rows[1].results[0].data='[]';

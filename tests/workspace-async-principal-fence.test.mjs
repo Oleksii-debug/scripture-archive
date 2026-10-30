@@ -204,3 +204,30 @@ test('native builder still announces acknowledged save for its original current 
     assert.deepEqual(f.announcements,['Material saved.']);
   } finally {globalThis.FormData=savedFormData;f.restore();}
 });
+
+for(const view of ['about','campaigns','dossiers']) {
+  test(view+' drops a late catalog after route and account replacement',async()=>{
+    const f=scenario('/'+view),waiting=deferred();
+    try {
+      f.context.getCatalog=()=>waiting.promise;
+      const old=renderWorkspace(view,f.context);
+      f.state.user={id:'another-account'};
+      globalThis.location.pathname='/groups';
+      waiting.resolve({});
+      await old;
+      assert.deepEqual(f.shells,[],'stale catalog must never overwrite the new route');
+    } finally {f.restore();}
+  });
+  test(view+' cannot overwrite a newer workspace after a slow catalog response',async()=>{
+    const f=scenario('/'+view),waiting=deferred();
+    try {
+      f.context.getCatalog=()=>waiting.promise;
+      const old=renderWorkspace(view,f.context);
+      await renderWorkspace('live',f.context);
+      waiting.resolve({});
+      await old;
+      assert.equal(f.shells.length,1,'only the newer workspace may render');
+      assert.match(f.shells[0],/live-lab/);
+    } finally {f.restore();}
+  });
+}

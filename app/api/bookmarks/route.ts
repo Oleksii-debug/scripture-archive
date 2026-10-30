@@ -111,9 +111,10 @@ export async function GET(request: Request) {
       return reference ? { reference, description: recoveryDescription(row as RecoveryRow) } : null;
     }));
     // Never advertise damaged rows as valid links, and never delete on GET.
+    const recoveryEntries = recoverable.filter((row): row is { reference: string; description: string } => row !== null);
     return json({ bookmarks: validRows,
-      ...(damaged.length ? { warning: "partial_bookmarks",
-        invalid_bookmarks: recoverable.filter((row): row is { reference: string; description: string } => row !== null) } : {}) });
+      ...(damaged.length ? { warning: "partial_bookmarks" } : {}),
+      ...(recoveryEntries.length ? { invalid_bookmarks: recoveryEntries } : {}) });
   } catch { return json({ error: "bookmarks_unavailable" }, 503); }
 }
 

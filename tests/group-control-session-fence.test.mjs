@@ -14,6 +14,7 @@ const production = source.slice(first, last) + '\n({groupPageCurrent, renderGrou
 class FakeFormData {
   constructor(form) { this.entries = Object.entries(form.values || {}); }
   [Symbol.iterator]() { return this.entries[Symbol.iterator](); }
+  get(key) { return this.entries.find(([k]) => k === key)?.[1] ?? null; }
   has(key) { return this.entries.some(([k]) => k === key); }
 }
 function deferred() {

@@ -291,6 +291,7 @@ test('comparison cites the exact selected edition and all verified rights metada
   await f.cite(2);
   assert.equal(f.copied.length,1);
   assert.match(f.copied[0],/^Буття 1:2\. <script>/);
+  assert.ok(f.copied[0].includes('\n'),'citation fields use actual line breaks');
   assert.match(f.copied[0],/Alternate edition · CC BY-SA 4.0/);
   assert.match(f.copied[0],/Original translator/);
   assert.match(f.copied[0],/https:\/\/source\.example\/alternate/);

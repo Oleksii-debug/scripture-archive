@@ -97,7 +97,7 @@ test("reader rechecks after its async book fetch and invalidates an attempt star
   assert.equal(checks,2);
   assert.deepEqual(h.events.filter(e=>e[0]==="request").map(e=>e[1]),["chapter","chapter"]);
   assert.equal(h.events.filter(e=>e[0]==="load-text").length,1);
-  assert.deepEqual(h.events.find(e=>e[0]==="locked"),["locked","GEN",12]);
+  assert.deepEqual(h.events.find(e=>e[0]==="locked"),["locked","GEN",12,""]);
   assert.equal(h.context.state.currentReader,null);
 });
 

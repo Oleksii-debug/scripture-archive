@@ -379,3 +379,36 @@ test('valid exact group identifier continues to create a real meeting', async ()
     assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM group_sessions').get().n, 1);
   } finally { f.db.close(); }
 });
+
+
+// SA-EXT-04 invite rotation uses an exact compare-and-swap token; a malformed
+// overlength submitted predecessor must never be truncated to the valid code.
+for (const [label, invalid] of [
+  ['suffix', 'A'.repeat(32)+'extra'],
+  ['overlong whitespace', 'A'.repeat(32)+' '.repeat(8)],
+]) {
+  test('reject invite rotation with '+label+' after the valid 32-byte code',async()=>{
+    const f=fixture();
+    try {
+      f.db.prepare("UPDATE home_groups SET invite_code=? WHERE id='g'").run('A'.repeat(32));
+      const previous=f.writes;
+      const result=await f.post('rotate-invite',{groupId:'g',expectedInviteCode:invalid,confirm:true});
+      assert.equal(result.status,400,JSON.stringify(result.body));
+      assert.equal(f.writes,previous,'malformed compare token must not mutate D1');
+      assert.equal(f.db.prepare("SELECT invite_code FROM home_groups WHERE id='g'").get().invite_code,'A'.repeat(32));
+    }finally{f.db.close();}
+  });
+}
+
+test('real group owner can still rotate an exact expected invite code',async()=>{
+  const f=fixture();
+  try {
+    f.db.prepare("UPDATE home_groups SET invite_code=? WHERE id='g'").run('A'.repeat(32));
+    const previous=f.writes;
+    const result=await f.post('rotate-invite',{groupId:'g',expectedInviteCode:'A'.repeat(32),confirm:true});
+    assert.equal(result.status,200,JSON.stringify(result.body));
+    assert.equal(f.writes,previous+1);
+    assert.equal(f.db.prepare("SELECT invite_code FROM home_groups WHERE id='g'").get().invite_code,result.body.inviteCode);
+    assert.notEqual(result.body.inviteCode,'A'.repeat(32));
+  }finally{f.db.close();}
+});

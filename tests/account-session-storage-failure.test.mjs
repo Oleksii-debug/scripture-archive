@@ -110,7 +110,7 @@ test("untrusted browser cache cannot contaminate a valid server reading", async 
   await f.sync();
   const put=f.apiCalls.find(([action,method])=>action==="reading"&&method==="PUT");
   assert.ok(put,"server-owned data should still be safely handled");
-  assert.deepEqual(put[2].reading,[{book:"GEN",chapter:1}]);
+  assert.deepEqual(JSON.parse(JSON.stringify(put[2].reading)),[{book:"GEN",chapter:1}]);
 });
 
 test("an unchanged principal keeps its local progress and normal sync", async () => {
@@ -122,7 +122,7 @@ test("an unchanged principal keeps its local progress and normal sync", async ()
   await f.sync();
   const put=f.apiCalls.find(([action,method])=>action==="reading"&&method==="PUT");
   assert.ok(put);
-  assert.deepEqual(put[2].reading,[{book:"GEN",chapter:12}]);
+  assert.deepEqual(JSON.parse(JSON.stringify(put[2].reading)),[{book:"GEN",chapter:12}]);
 });
 
 test("logout and account deletion cleanup do not throw on denied storage", () => {

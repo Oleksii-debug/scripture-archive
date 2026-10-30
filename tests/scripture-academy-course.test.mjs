@@ -107,7 +107,7 @@ test('storage failure leaves the previous confirmed state and badge untouched, a
   assert.equal(ui.buttons[0].attrs['aria-pressed'],'false');
   assert.equal(ui.meter.value,0);
   assert.equal(ui.badge.textContent,'');
-  assert.match(ui.error.textContent,/Не вдалося зберегти позначку/);
+  assert.match(ui.error.textContent,/Не вдалося підтвердити збереження/);
 });
 
 test('source catalog failures never display a claimed course or locally confirmed completion',()=>{
@@ -219,7 +219,7 @@ test('silent successful storage writes cannot fabricate academy completion',()=>
   assert.equal(ui.buttons[0].attrs['aria-pressed'],'false');
   assert.equal(ui.meter.value,0);
   assert.equal(ui.badge.textContent,'');
-  assert.match(ui.error.textContent,/Could not save the marker/);
+  assert.match(ui.error.textContent,/Could not verify that the marker was saved/);
   assert.equal(readAcademyProgress(storage,academyProgressKey({id:'alice'})).completed.length,0);
 });
 
@@ -231,7 +231,7 @@ test('rewritten academy storage values are rejected instead of reported as studi
   ui.buttons[0].click();
   assert.equal(ui.buttons[0].attrs['aria-pressed'],'false');
   assert.equal(ui.meter.value,0);
-  assert.match(ui.error.textContent,/Не вдалося зберегти позначку/);
+  assert.match(ui.error.textContent,/Не вдалося підтвердити збереження/);
   assert.deepEqual(readAcademyProgress(storage,academyProgressKey(user)).completed,[]);
 });
 
@@ -248,5 +248,5 @@ test('unreadable academy post-write confirmation never updates displayed progres
   assert.equal(ui.buttons[0].attrs['aria-pressed'],'false');
   assert.equal(ui.meter.value,0);
   assert.equal(ui.badge.textContent,'');
-  assert.match(ui.error.textContent,/Не удалось сохранить отметку/);
+  assert.match(ui.error.textContent,/Не удалось подтвердить сохранение/);
 });

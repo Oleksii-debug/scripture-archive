@@ -1,8 +1,10 @@
 # Scripture Archive web release
 
-This release originates from the canonical website commit
-`f8eba649ba404b9751e22bd45773a0fa0c06f122` and targets the existing project
-declared in `.openai/hosting.json`. A GitHub push does not publish that project.
+This guide concerns the existing project declared in `.openai/hosting.json`.
+A GitHub push does not publish that project. An earlier version of this guide
+named `f8eba649ba404b9751e22bd45773a0fa0c06f122` as its source; that is a
+historical reference, not evidence of the currently deployed source. Before a
+release, identify the actual deployed version and exact proposed Git commit.
 
 ## Required production bindings
 
@@ -24,8 +26,7 @@ when an authenticated hosting gateway guarantees that client-supplied
 `oai-authenticated-*` headers are removed and replaced. Password accounts do not
 need this setting. Untrusted headers must never grant owner access.
 
-Apply all migrations in `drizzle/` to the production D1 database before the
-new worker receives traffic. Configure the sending domain in Resend and publish
+Configure the sending domain in Resend and publish
 the provider-supplied SPF and DKIM records. Publish a DMARC record separately;
 start with an address-owned reporting mailbox and increase policy enforcement
 only after delivery reports are healthy.
@@ -40,6 +41,36 @@ analytics.
 
 ## Release checks
 
+Before changing production:
+
+1. Read the existing site's current version and source, the exact proposed
+   source commit, its production D1 binding and the database's migration ledger.
+   Verify that the site and database are the intended ones. A Git commit or a
+   local test alone does not establish any of these production facts.
+2. Enumerate the SQL files in `drizzle/` **at the proposed commit** and compare
+   them with the database's recorded migration history. Resolve missing,
+   unexpected, reordered or previously applied migrations before proceeding;
+   do not blindly replay every SQL file. Use the hosting provider's authenticated
+   read-only inspection and migration tooling for that specific database.
+3. Verify a recoverable backup or point-in-time restore and the restoration
+   procedure. Test the outstanding migrations against a protected disposable
+   copy representing the installed schema and data, including account, privacy,
+   reading, group and editorial records. Respect the copy's privacy. The clean
+   local D1 integration test and populated v9 upgrade test are useful checks,
+   but neither proves the production migration history or recovery procedure.
+4. Check that the old and new worker can safely coexist with each intermediate
+   schema and privacy state. If that is not true, arrange a controlled traffic
+   pause and recovery plan before applying anything. A source rollback alone
+   does not reverse a database migration; a database restore can also lose
+   writes made after the backup.
+5. Apply only the verified outstanding migrations using the actual hosting
+   configuration, confirm the resulting ledger and schema, then deploy the
+   checked source to the same site. Preserve bindings, secrets, domain, media,
+   access settings and existing data. If identity, backup, migration status or
+   compatibility cannot be established in preflight, do not begin production
+   changes. If a migration or deployment fails, follow the rehearsed recovery
+   plan and do not report a successful release.
+
 ```sh
 npm ci
 npx tsc --noEmit
@@ -49,8 +80,9 @@ npm run build
 npm run test:integration
 ```
 
-`test:integration` creates a new temporary local D1 database, applies all eight
-migrations, starts a loopback worker, runs the checks, then stops the worker and
+`test:integration` creates a new temporary local D1 database, applies the SQL
+migrations present in the checked-out `drizzle/` directory, starts a loopback
+worker, runs the checks, then stops the worker and
 removes its own temporary database. It never uses the production database.
 Checks include concurrent reuse of verification/reset tokens, rejected identity
 header spoofing, server-owned grading and progress restored in another session.

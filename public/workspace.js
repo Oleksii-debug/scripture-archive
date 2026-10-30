@@ -134,11 +134,13 @@ export async function renderWorkspace(name,c) {
   setActiveNav(name);
   if(name==='about') {
     const catalog=await c.getCatalog();
+    if(!stillCurrent())return;
     shell(`<article class="prose"><p class="eyebrow">Scripture Archive</p><h1>${t('aboutTitle')}</h1><p class="lead">${t('aboutBody')}</p>${editionAboutMarkup(catalog,state.lang,esc)}<h2>${t('accessTitle')}</h2><p>${t('accessBody')}</p></article>`);
     return;
   }
   if(name==='campaigns') {
     const [mission,catalog]=await Promise.all([getMission(),c.getCatalog()]);
+    if(!stillCurrent())return;
     // Self-reported course markers must remain explicitly device-local and
     // principal-scoped; never present them as server-confirmed credentials.
     let storage=null;
@@ -152,6 +154,7 @@ export async function renderWorkspace(name,c) {
   }
   if(name==='dossiers') {
     const catalog=await c.getCatalog();
+    if(!stillCurrent())return;
     const selectedId=new URLSearchParams(globalThis.location?.search || '').get('id');
     shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${esc(w.dossiers)}</h1></div><p>${esc(w.dossierLead)}</p></div>${dossierMarkup(catalog,state.lang,selectedId,esc)}${dossierAtlasMarkup(catalog,state.lang,esc)}`);
     return;

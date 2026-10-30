@@ -372,3 +372,41 @@ test('SA-EXT-01: a damaged oversized parallel chapter cannot exhaust DOM or cita
   await boundary.run();
   assert.match(boundary.result.innerHTML,/data-parallel-cite="256"/);
 }));
+
+
+test('source and licence URLs must not be silently rewritten before attribution',()=>withForm(async()=>{
+  // WHATWG URL drops raw tabs, CR/LF and empty user-info delimiters. A
+  // normalized address is not proof of the original author's source URL.
+  const deceptive=[
+    'https://@source.example/',
+    'https://:@source.example/',
+    'https://source.example\r.evil.example/',
+    'https://source.example/\nchapter',
+    'https://source.example/\tchapter',
+    ' https://source.example/',
+    'https://source.example/ ',
+    'https://source.example/\u007f',
+  ];
+  for(const bad of deceptive){
+    for(const field of ['source','licenseUrl']){
+      const metadata={id:'UKRPAN',title:'Куліш',license:'Public Domain',
+        source:'https://source.example/',licenseUrl:'https://license.example/'};
+      metadata[field]=bad;
+      const f=fixture({catalog:{translations:{},editions:{uk:metadata}}});
+      await f.run();
+      assert.equal(f.result.innerHTML,'','unsafe '+field+' must withhold licensed verse text: '+JSON.stringify(bad));
+      assert.match(f.status.textContent,/Не вдалося/,'provide an accessible retryable failure');
+      assert.equal(f.button.disabled,false,'retry is not disabled on rejected provenance');
+      assert.equal(f.checked(),2,'retain both active-attempt guards');
+    }
+  }
+  const good=fixture({catalog:{translations:{},editions:{uk:{
+    id:'UKRPAN',title:'Куліш',license:'Public Domain',
+    source:'HTTPS://source.example/valid%20path?name=a@b',
+    licenseUrl:'https://license.example/terms%20of%20use',
+  }}}});
+  await good.run();
+  assert.match(good.result.innerHTML,/На початку/);
+  assert.match(good.result.innerHTML,/source\.example/);
+  assert.match(good.result.innerHTML,/license\.example/);
+}));

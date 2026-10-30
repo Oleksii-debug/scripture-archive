@@ -33,7 +33,7 @@ function validReadingReceipt(value:unknown):value is {book:string;chapter:number
   const row=value as Record<string,unknown>;
   return typeof row.book==="string"&&/^[1-3]?[A-Z]{2,3}$/.test(row.book)
     &&typeof row.chapter==="number"&&Number.isInteger(row.chapter)&&row.chapter>0&&row.chapter<=(READING_CHAPTERS.get(row.book as string)??0)
-    &&typeof row.title==="string"&&row.title.length<=100;
+    &&typeof row.title==="string"&&row.title.trim().length>0&&row.title.length<=100;
 }
 function publicUser(id:Identity,row:Record<string,unknown>|null){return {id:id.userId,email:id.email,emailVerified:id.emailVerified,authProvider:id.provider,fullName:id.fullName,firstName:row?.first_name??"",lastName:row?.last_name??"",ageRange:row?.age_range??"",age:row?.age??null,tradition:row?.tradition??"",denomination:row?.denomination??"",church:row?.church??"",maritalStatus:row?.marital_status??"",gender:row?.gender??"",hasChildren:row?.has_children==null?null:Boolean(row.has_children),locale:row?.locale??"uk",sensitiveConsent:Boolean(row?.sensitive_consent && row?.sensitive_consent_version===1),visibility:{firstName:Boolean(row?.public_first_name),lastName:Boolean(row?.public_last_name),church:Boolean(row?.public_church && row?.sensitive_consent && row?.sensitive_consent_version===1),progress:Boolean(row?.public_progress)},profileComplete:Boolean(row),isOwner:isVerifiedOwner(id)}}
 export async function GET(request:Request){

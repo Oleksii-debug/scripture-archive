@@ -13,7 +13,7 @@ const copies={
   ru:'Не удалось проверить сохранённую историю чтения.',
   en:'Saved reading history could not be verified.',
 };
-function setup({decoded=[],lang='uk',signedIn=false,stale=false}={}) {
+function setup({decoded=[],lang='uk',signedIn=false,stale=false,rawHistory}={}) {
   const initial=JSON.stringify(decoded);
   const button={dataset:{},disabled:false,textContent:'Mark',attrs:{},
     setAttribute(key,value){this.attrs[key]=value;},
@@ -27,9 +27,12 @@ function setup({decoded=[],lang='uk',signedIn=false,stale=false}={}) {
   let writes=0,cloudCalls=0,attemptCalls=0,reads=0;
   const announcements=[],saved=[];
   const state={user:signedIn?{id:'user-1'}:null};
+  const loaderStart=source.indexOf('function loadJSON('),loaderEnd=source.indexOf('\nfunction t(',loaderStart);
+  assert.ok(loaderStart>=0&&loaderEnd>loaderStart);
+  const realLoader=new Function('localStorage',source.slice(loaderStart,loaderEnd)+'\nreturn loadJSON;')({getItem:()=>rawHistory});
   const env={
     document,state,readerStillCurrent:()=>!stale,
-    loadJSON:()=>{reads++;return decoded;},
+    loadJSON:(...args)=>{reads++;return rawHistory===undefined?decoded:realLoader(...args);},
     meta:{code:'GEN'},chapter:1,bookTitle:()=> 'Genesis',
     groupId:'',hasTasks:false,w:{readMarked:'Marked'},
     storeReaderPreference:(key,raw)=>{writes++;assert.equal(key,'sa.readingHistory');saved.push(JSON.parse(raw));return true;},
@@ -142,4 +145,23 @@ test('authenticated valid reading retains canonical acknowledged API sequence',a
   assert.equal(h.writes,1);
   assert.equal(h.cloudCalls,1);
   assert.equal(h.button.disabled,true);
+});
+
+test('raw malformed JSON is preserved and cannot unlock or upload a reading',async()=>{
+  for(const rawHistory of ['{bad-json','null','false','0','""']) {
+    const h=setup({rawHistory,signedIn:true});
+    await h.click();
+    assert.equal(h.writes,0,rawHistory);
+    assert.equal(h.cloudCalls,0,rawHistory);
+    assert.equal(h.questions.unlocked,false,rawHistory);
+    assert.deepEqual(h.announcements,[copies.uk]);
+  }
+});
+
+test('a genuinely absent history remains writable',async()=>{
+  const h=setup({rawHistory:null,signedIn:true});
+  await h.click();
+  assert.equal(h.writes,1);
+  assert.deepEqual(h.saved,[[good]]);
+  assert.equal(h.cloudCalls,1);
 });

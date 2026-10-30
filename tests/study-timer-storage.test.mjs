@@ -167,3 +167,50 @@ test("successful storage must never clear the completed-timer announcement", () 
   assert.deepEqual(f.sounds, ["done"]);
   assert.equal(f.writes.length, 1);
 });
+
+test("real normalization on scheduled expiration announces completion exactly once", () => {
+  const begin = source.indexOf("function normalizeTimer() {");
+  const end = source.indexOf("\nconst TIMER_EPHEMERAL_COPY =", begin);
+  assert.ok(begin >= 0 && end > begin, "canonical normalization must be executed");
+  const fields = {
+    "#timer-minutes": { value: "1", disabled: false },
+    "#timer-display": { textContent: "" },
+    "#timer-start": { textContent: "" },
+    "#timer-reset": { textContent: "" },
+    "#timer-status": { textContent: "" },
+  };
+  const state = {
+    lang: "uk",
+    studyTimer: { durationMinutes: 1, remainingSeconds: 1, running: false, endsAt: null },
+  };
+  const sounds = [];
+  let tick, cleared = 0;
+  const context = vm.createContext({
+    state,
+    localStorage: { setItem: () => undefined },
+    document: { querySelector: key => fields[key] ?? null },
+    timerText: timer => String(timer.remainingSeconds),
+    t: key => key,
+    play: sound => sounds.push(sound),
+    clearInterval: () => { cleared++; },
+    setInterval: callback => { tick = callback; return 42; },
+  });
+  vm.runInContext(
+    "let timerInterval = null;\n" + source.slice(begin, end) + "\n" + timerCode,
+    context,
+  );
+  context.activateTimer();
+  fields["#timer-start"].onclick();
+  assert.equal(state.studyTimer.running, true);
+  // Simulate the monotonic deadline having elapsed between interval ticks.
+  state.studyTimer.endsAt = Date.now() - 1000;
+  tick();
+  assert.equal(state.studyTimer.running, false);
+  assert.equal(state.studyTimer.remainingSeconds, 0);
+  assert.equal(fields["#timer-display"].textContent, "0");
+  assert.equal(fields["#timer-status"].textContent, "timerDone");
+  assert.deepEqual(sounds, ["done"]);
+  assert.ok(cleared >= 2, "completed interval must be cleared");
+  tick();
+  assert.deepEqual(sounds, ["done"], "repeated ticks must not replay completion");
+});

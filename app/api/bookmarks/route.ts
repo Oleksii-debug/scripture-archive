@@ -19,7 +19,10 @@ function valid(body: unknown): body is { edition: string; book: string; chapter:
 
 export async function GET(request: Request) {
   if (!env.DB) return json({ error: "database_unavailable" }, 503);
-  const id = await user(request);
+  // An identity-store outage is not the same as a signed-out reader.
+  let id: string | null;
+  try { id = await user(request); }
+  catch { return json({ error: "bookmarks_unavailable" }, 503); }
   if (!id) return json({ error: "authentication_required" }, 401);
   try {
     const rows = await env.DB.prepare("SELECT edition,book,chapter,created_at FROM reader_bookmarks WHERE user_id=? ORDER BY created_at DESC,book,chapter LIMIT 500").bind(id).all();
@@ -31,7 +34,10 @@ export async function GET(request: Request) {
 async function write(request: Request, remove: boolean) {
   if (!env.DB) return json({ error: "database_unavailable" }, 503);
   if (!sameOrigin(request)) return json({ error: "cross_origin_request" }, 403);
-  const id = await user(request);
+  // An identity-store outage is not the same as a signed-out reader.
+  let id: string | null;
+  try { id = await user(request); }
+  catch { return json({ error: "bookmarks_unavailable" }, 503); }
   if (!id) return json({ error: "authentication_required" }, 401);
   const body: unknown = await request.json().catch(() => null);
   if (!valid(body)) return json({ error: "invalid_bookmark" }, 400);

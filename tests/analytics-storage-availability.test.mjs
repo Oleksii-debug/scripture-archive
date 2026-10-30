@@ -275,3 +275,25 @@ test('valid version-four stored analytics session identity remains stable', () =
   assert.equal(a.persisted.session, storedSession);
   assert.equal(a.posts[0].body.sessionId, storedSession);
 });
+
+test('privacy withdrawal immediately stops analytics and durably records denial', () => {
+  const a = boot({ storedConsent: 'granted' });
+  a.window.saAnalytics.pageView();
+  assert.equal(a.posts.length, 1);
+  assert.equal(a.window.saAnalytics.withdrawConsent(), true);
+  assert.equal(a.persisted.consent, 'denied');
+  assert.deepEqual(a.clearedTimers, [1]);
+  a.window.saAnalytics.pageView();
+  assert.equal(a.posts.length, 1);
+  assert.equal(a.window.dataLayer.at(-1)[2].analytics_storage, 'denied');
+});
+
+test('withdrawal stops this tab even if denial cannot be persisted', () => {
+  for (const behavior of [{ localWriteThrows: true }, { discardLocalWrites: true }, { localReadThrows: true }]) {
+    const a = boot({ storedConsent: 'granted', ...behavior });
+    assert.equal(a.window.saAnalytics.withdrawConsent(), false);
+    a.window.saAnalytics.pageView();
+    assert.equal(a.posts.length, 0);
+    assert.equal(a.window.dataLayer.at(-1)[2].analytics_storage, 'denied');
+  }
+});

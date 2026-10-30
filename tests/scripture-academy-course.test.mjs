@@ -176,3 +176,23 @@ test('academy callbacks from a replaced route must not update device progress',(
   ui.buttons[0].click();
   assert.deepEqual(readAcademyProgress(storage,key).completed,['abraham']);
 });
+
+test('every lesson retains every approved source-linked reflection question in all three languages',()=>{
+  for(const lang of ['uk','ru','en']){
+    const html=academyMarkup(catalog,lang,esc,{available:true,completed:[]});
+    for(const [index,id] of academyLessonIds.entries()){
+      const dossier=scriptureDossiers.find(item=>item.id===id);
+      assert.ok(dossier);
+      const marker='<h3>'+String(index+1)+'. <a href="/dossiers?id='+id+'">';
+      const start=html.indexOf(marker),end=html.indexOf('</article>',start);
+      assert.ok(start>=0 && end>start,lang+' '+id+' has its own lesson article');
+      const article=html.slice(start,end);
+      assert.match(article,/<h4>[^<]+<\/h4><ol>/,lang+' '+id+' has semantic questions heading and list');
+      const questions=article.slice(article.indexOf('<ol>'),article.indexOf('</ol>')+5);
+      assert.equal((questions.match(/<li>/g)||[]).length,dossier.prompts[lang].length,
+        lang+' '+id+' must not omit approved questions');
+      for(const prompt of dossier.prompts[lang])assert.ok(questions.includes(esc(prompt)),lang+' '+id+' '+prompt);
+      assert.ok(!article.includes('onclick='),'course controls remain keyboard native');
+    }
+  }
+});

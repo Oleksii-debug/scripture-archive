@@ -382,3 +382,61 @@ test("R0.2: wrong password still returns 401 and does not mint a session", async
   assert.equal(bad.headers.get("set-cookie"), null);
   f.db.close();
 });
+
+
+test("SA-EXT-16 registration ages: reject coercible/non-decimal inputs without account or token writes", async () => {
+  const f = fixture();
+  try {
+    // Every value below used to be either coerced to a permitted 13–120 age
+    // (arrays, hexadecimal, exponent, whitespace) or is an invalid boundary.
+    const malformed = [
+      null, true, false, [], [18], ["18"], [100], {},
+      { age: 18 }, "", " ", " 18", "18 ", "\\t18", "\\n18",
+      "0x12", "0X12", "0b10010", "0o22", "1.8e1", "18e0",
+      "1E2", "100e0", "18.0", "100.00", "+18", "-18",
+      "018", "0018", "18years", "18_0", "Infinity", "NaN",
+      "1e2", "0x64", "100.0", "1.3e1",
+      12, 121, -1, 0, 12.5, 18.1, Number.MAX_SAFE_INTEGER + 1
+    ];
+    for (const age of malformed) {
+      const request = new Request("https://example.invalid/api/auth?action=register", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: "fresh@example.invalid", password: "a-long-password-123",
+          firstName: "Reader", lastName: "Test", age,
+          gender: "prefer_not", maritalStatus: "prefer_not",
+          acceptPrivacy: true
+        })
+      });
+      const response = await f.handler.POST(request);
+      assert.equal(response.status, 400, "age input " + JSON.stringify(age));
+      assert.equal((await response.json()).error, "invalid_registration");
+      assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM accounts").get().n, 1);
+      assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM auth_tokens").get().n, 0);
+      assert.equal(f.emails(), 0, "invalid age must not trigger verification email");
+    }
+  } finally { f.db.close(); }
+});
+
+test("SA-EXT-16 registration ages: accepted decimal form and JSON integer preserve exact profile age", async () => {
+  for (const input of ["13", 18, "100", 120]) {
+    const f = fixture();
+    try {
+      const response = await f.handler.POST(new Request("https://example.invalid/api/auth?action=register", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: "fresh@example.invalid", password: "a-long-password-123",
+          firstName: "Reader", lastName: "Test", age: input,
+          gender: "prefer_not", maritalStatus: "prefer_not",
+          acceptPrivacy: true
+        })
+      }));
+      assert.equal(response.status, 201, "accepted age " + JSON.stringify(input));
+      const profile = f.db.prepare("SELECT age,age_range FROM profiles WHERE email=?").get("fresh@example.invalid");
+      assert.equal(profile.age, Number(input));
+      assert.equal(profile.age_range, Number(input) < 18 ? "13-17" : Number(input) <= 24 ? "18-24" : Number(input) <= 34 ? "25-34" : Number(input) <= 44 ? "35-44" : Number(input) <= 54 ? "45-54" : Number(input) <= 64 ? "55-64" : "65+");
+      assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM auth_tokens").get().n, 1);
+      assert.equal(f.emails(), 1);
+    } finally { f.db.close(); }
+  }
+});

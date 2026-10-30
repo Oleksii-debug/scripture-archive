@@ -1,0 +1,12 @@
+# SA-EXT-03 / PRIVATE_MATERIAL_EXPORT_RESTORABILITY — terminal scope receipt
+
+**2026-10-30 — CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** for the repaired existing editorial backup integrity gate only.
+
+- **Gap:** previous `GET /api/materials?mine=1&export=1` validated JSON root as an object but emitted `200` with a downloadable "restorable" backup for malformed draft or immutable submission payloads: missing/short questions, source references or explanations; unrelated answer or duplicate/invalid choices; unsupported review locale/title.
+- **Canonical fix:** `app/api/materials/route.ts` reuses its existing `exportRecord`, extended with the same bounded authored exercise and immutable review snapshot checks as its writer/editor. For bad stored rows, the entire owner export returns private `503 export_unavailable` with **no attachment**, without changing stored data; legitimate UTF-8 and optional historic owner metadata preserved.
+- **Verified source SHA:** [PR #699](https://github.com/Oleksii-debug/scripture-archive/pull/699) **SQUASH MERGED** into `main@88720a96b84706038cdbc77cd1b9063a8c339a8b`; exact code blob `3c4e3a76f582898915e090a010c8cbee1426aa83`, test blob `8c6c2e55ba0a8c5160a68c6ec2f2d2474b6b17dc`, read back from `main`.
+- **Exact source tests:** `tests/materials-export-structured-records.test.mjs` executes the real route; malformed draft/review object variants, absence of false successful downloads and valid multilingual private roundtrip. [Actions #41057584095](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41057584095) **SUCCESS** at PR head `21ce1de2fc026673409c94ba6ae062b57e49e524`: Node, TypeScript, lint, build, disposable Worker/D1 and Python validators.
+- **Remaining implementation for this scoped fix: 0; required unmerged PRs: 0.** No production deployment, user data changes, migrations, new server or unreviewed publication. Reassign only after a new reproducible defect or approved scope change.
+- **Parent SA-EXT-03 and all 20 SA-EXT-01…20 remain OPEN.** Full editorial product, translated pedagogical materials, live site SHA, email, browser/physical NVDA, accessibility and rights acceptance are outside this narrow receipt. No false LIVE or RELEASE_VERIFIED claim.
+
+**Next:** coordinate remaining first five sections through [#297](https://github.com/Oleksii-debug/scripture-archive/issues/297) and [canonical plan](SCRIPTURE_ARCHIVE_EXPANSION_SECTION_PLAN_2026-10-28.md).

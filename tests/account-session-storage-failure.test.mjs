@@ -357,3 +357,30 @@ test("unreadable owner marker and history leaves ambiguous bytes intact and neve
   await f.sync();
   assert.equal(f.apiCalls.length,0);
 });
+
+test("unsigned guest reload preserves local reading without attributing it to any account", async () => {
+  const guestReading=[{book:"GEN",chapter:8,title:"guest local history"}];
+  const f=fixture({user:null,marker:null,oldReading:guestReading});
+  await f.session();
+  assert.equal(f.state.user,null);
+  assert.equal(f.entries.get("sa.readingHistory"),JSON.stringify(guestReading));
+  assert.equal(f.entries.has("sa.unownedReadingHistory.v1"),false);
+  assert.equal(f.entries.has("sa.progressOwner"),false);
+  await f.sync();
+  assert.equal(f.apiCalls.length,0);
+});
+
+test("logout during pending orphan recovery never silently discards the unowned bytes", async () => {
+  const orphan=[{book:"EXO",chapter:9}];
+  const f=fixture({user:{id:"bob"},marker:null,oldReading:orphan});
+  f.entries.set("sa.unownedReadingHistory.v1",'[{"book":"GEN","chapter":2}]');
+  await f.session();
+  assert.equal(f.state.unownedReadingPendingRecovery,true);
+  f.ctx.fetch=async()=>({ok:true,json:async()=>({user:null})});
+  await f.session();
+  assert.equal(f.state.user,null);
+  assert.equal(f.state.unownedReadingPendingRecovery,true);
+  assert.equal(f.entries.get("sa.readingHistory"),JSON.stringify(orphan));
+  assert.equal(f.entries.has("sa.progressOwner"),false);
+  assert.equal(f.entries.get("sa.unownedReadingHistory.v1"),'[{"book":"GEN","chapter":2}]');
+});

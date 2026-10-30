@@ -16,7 +16,7 @@ function fixture(){
   const status={textContent:''};
   const doc={querySelector(selector){
     if(selector==='.profile-controls')return {insertAdjacentHTML(){}};
-    if(['#password-state','#delete-state','#sensitive-state','#visibility-state'].includes(selector))return status;
+    if(['#password-state','#delete-state','#sensitive-state','#visibility-state','#account-logout-state'].includes(selector))return status;
     return controls[selector]??null;
   }};
   const pending=deferred(),profile=deferred(),calls=[];
@@ -108,3 +108,14 @@ for(const [key,action] of [['#visibility-form','visibility'],['#sensitive-form',
     assert.equal(h.state.user,h.alice);assert.match(h.status.textContent,/could not be completed/i);
   });
 }
+
+test('current logout failure announces the error and preserves its account and progress',async()=>{
+  const h=fixture(),control=h.controls['#logout-button'];
+  const operation=control.onclick();h.pending.reject(Error('unconfirmed revocation'));await operation;
+  assert.equal(h.state.user,h.alice);assert.equal(h.calls.includes('clear'),false);assert.match(h.status.textContent,/could not be completed/i);
+});
+test('late logout failure cannot announce into a later account',async()=>{
+  const h=fixture(),control=h.controls['#logout-button'];
+  const operation=control.onclick();h.state.user=h.bob;h.pending.reject(Error('unconfirmed revocation'));await operation;
+  assert.equal(h.state.user,h.bob);assert.equal(h.status.textContent,'');assert.equal(h.calls.includes('clear'),false);
+});

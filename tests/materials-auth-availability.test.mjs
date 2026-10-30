@@ -88,7 +88,7 @@ for (const method of ["POST", "DELETE"]) {
     assert.equal(h.calls.prepare, 0);
   });
   test(method + ": cross-origin request is rejected before broken identity lookup", async () => {
-    const h = harness({ dbPresent: false });
+    const h = harness({ auth: "throw" });
     const result = await h.invoke(method, "https://attacker.invalid");
     assert.equal(result.status, 403);
     assert.equal(result.body.error, "cross_origin_request");

@@ -71,7 +71,13 @@ function publicGroup(row: Row, includePrivate = false) {
   };
 }
 
+async function checkedGroupRows<T>(result: {success?: boolean;results?: T[]}): Promise<T[]> {
+  if(!result?.success || !Array.isArray(result.results))throw Error("group_read_unconfirmed");
+  return result.results;
+}
+
 export async function GET(request: Request) {
+  try {
   const url = new URL(request.url);
   const id = await authenticateRequest(request);
   const groupId = clean(url.searchParams.get("groupId"), 80);
@@ -80,23 +86,26 @@ export async function GET(request: Request) {
     const row = await env.DB!.prepare(`${groupSelect} WHERE g.id=? AND (g.visibility='public' OR ?=1)`).bind(groupId, member ? 1 : 0).first<Row>();
     if (!row) return Response.json({ error: "not_found" }, { status: 404 });
     const names = row.roster_visibility === "names"
-      ? (await env.DB!.prepare("SELECT display_name,role FROM home_group_members WHERE group_id=? AND public_name=1 ORDER BY joined_at").bind(groupId).all()).results
+      ? await checkedGroupRows(await env.DB!.prepare("SELECT display_name,role FROM home_group_members WHERE group_id=? AND public_name=1 ORDER BY joined_at").bind(groupId).all())
       : [];
-    const sessions = (await env.DB!.prepare("SELECT id,book_id,chapter,answers_correct,answers_total,participant_count,meeting_date,CASE WHEN ?=1 THEN reflection ELSE NULL END AS reflection FROM group_sessions WHERE group_id=? ORDER BY meeting_date DESC,created_at DESC LIMIT 12").bind(member ? 1 : 0, groupId).all()).results;
-    const peers = row.cohort_key ? (await env.DB!.prepare(`${groupSelect} WHERE g.visibility='public' AND m.cohort_key=? ORDER BY chapters_completed DESC,g.name LIMIT 50`).bind(row.cohort_key).all<Row>()).results.map(value => publicGroup(value)) : [];
-    const answers=member?(await env.DB!.prepare("SELECT task_id,solved,first_correct FROM group_answers WHERE group_id=?").bind(groupId).all()).results:[];
+    const sessions = await checkedGroupRows(await env.DB!.prepare("SELECT id,book_id,chapter,answers_correct,answers_total,participant_count,meeting_date,CASE WHEN ?=1 THEN reflection ELSE NULL END AS reflection FROM group_sessions WHERE group_id=? ORDER BY meeting_date DESC,created_at DESC LIMIT 12").bind(member ? 1 : 0, groupId).all());
+    const peers = row.cohort_key ? (await checkedGroupRows(await env.DB!.prepare(`${groupSelect} WHERE g.visibility='public' AND m.cohort_key=? ORDER BY chapters_completed DESC,g.name LIMIT 50`).bind(row.cohort_key).all<Row>())).map(value => publicGroup(value)) : [];
+    const answers=member?await checkedGroupRows(await env.DB!.prepare("SELECT task_id,solved,first_correct FROM group_answers WHERE group_id=?").bind(groupId).all()):[];
     // The owner needs the private membership list to transfer responsibility.
     // Check ownership again in the query, not only in the earlier lookup.
-    const managementMembers = member?.role === "owner" && id ? (await env.DB!.prepare("SELECT hm.user_id,hm.display_name,hm.role FROM home_group_members hm WHERE hm.group_id=? AND EXISTS (SELECT 1 FROM home_groups g JOIN home_group_members owner ON owner.group_id=g.id AND owner.user_id=g.owner_user_id AND owner.role='owner' WHERE g.id=hm.group_id AND g.owner_user_id=?) ORDER BY hm.joined_at,hm.user_id").bind(groupId,id.userId).all()).results : [];
+    const managementMembers = member?.role === "owner" && id ? await checkedGroupRows(await env.DB!.prepare("SELECT hm.user_id,hm.display_name,hm.role FROM home_group_members hm WHERE hm.group_id=? AND EXISTS (SELECT 1 FROM home_groups g JOIN home_group_members owner ON owner.group_id=g.id AND owner.user_id=g.owner_user_id AND owner.role='owner' WHERE g.id=hm.group_id AND g.owner_user_id=?) ORDER BY hm.joined_at,hm.user_id").bind(groupId,id.userId).all()) : [];
     return Response.json({ group: publicGroup(row, Boolean(member)), members: names, managementMembers, sessions, peers, answers, membership: member?.role ?? null }, { headers: { "Cache-Control": "no-store" } });
   }
   if (url.searchParams.get("mine") === "1") {
     if (!id) return forbidden();
-    const rows = (await env.DB!.prepare(`${groupSelect} JOIN home_group_members mine ON mine.group_id=g.id WHERE mine.user_id=? ORDER BY g.updated_at DESC`).bind(id.userId).all<Row>()).results;
+    const rows = await checkedGroupRows(await env.DB!.prepare(`${groupSelect} JOIN home_group_members mine ON mine.group_id=g.id WHERE mine.user_id=? ORDER BY g.updated_at DESC`).bind(id.userId).all<Row>());
     return Response.json({ groups: rows.map(row => publicGroup(row)) }, { headers: { "Cache-Control": "no-store" } });
   }
-  const rows = (await env.DB!.prepare(`${groupSelect} WHERE g.visibility='public' ORDER BY g.updated_at DESC LIMIT 100`).all<Row>()).results;
+  const rows = await checkedGroupRows(await env.DB!.prepare(`${groupSelect} WHERE g.visibility='public' ORDER BY g.updated_at DESC LIMIT 100`).all<Row>());
   return Response.json({ groups: rows.map(row => publicGroup(row)) }, { headers: { "Cache-Control": "no-store" } });
+  } catch {
+    return Response.json({error:"groups_unavailable"},{status:503,headers:{"Cache-Control":"no-store, private"}});
+  }
 }
 
 export async function POST(request: Request) {

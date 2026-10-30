@@ -2342,8 +2342,9 @@ async function getSession() {
       }
     } catch { preservedUnownedReading = false; }
   }
-  if (unownedReading && !preservedUnownedReading) {
-    // Storage denial or conflicting orphan bytes: no wipe, ownership claim,
+  if (!preservedUnownedReading) {
+    // Unknown ownerless history after a failed read, denied archival write, or
+    // conflicting archive: no wipe, ownership claim,
     // account upload or misleading in-memory progress for this account.
     state.localReadingStorageUntrusted = true;
     state.unownedReadingPendingRecovery = true;

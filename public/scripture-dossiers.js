@@ -172,7 +172,11 @@ export function dossierAtlasMarkup(catalog,language,esc) {
     const item=byId.get(id);
     return '<tr><th scope="row">'+(i+1)+'</th><td>'+subject(item)+'</td><td>'+passage(item.sources[0])+'</td></tr>';
   }).join('');
+  // Display every source-backed passage for each place. Selecting only the
+  // first source silently hid independently cited chapters from the atlas.
   const places=nodes.filter(item=>item.type==='place').map(item=>
-    '<tr><th scope="row">'+subject(item)+'</th><td>'+passage(item.sources[0])+'</td></tr>').join('');
+    '<tr><th scope="row">'+subject(item)+'</th><td><ol>'+
+    item.sources.map(source=>'<li>'+passage(source)+'</li>').join('')+
+    '</ol></td></tr>').join('');
   return '<section class="card dossier-atlas" aria-labelledby="dossier-atlas-heading"><h2 id="dossier-atlas-heading">'+esc(terms.title)+'</h2><p>'+esc(terms.intro)+'</p><table><caption>'+esc(terms.order)+'</caption><thead><tr><th scope="col">№</th><th scope="col">'+esc(terms.subject)+'</th><th scope="col">'+esc(terms.passage)+'</th></tr></thead><tbody>'+history+'</tbody></table><table><caption>'+esc(terms.places)+'</caption><thead><tr><th scope="col">'+esc(terms.subject)+'</th><th scope="col">'+esc(terms.passage)+'</th></tr></thead><tbody>'+places+'</tbody></table><p>'+esc(terms.uncertainty)+'</p></section>';
 }

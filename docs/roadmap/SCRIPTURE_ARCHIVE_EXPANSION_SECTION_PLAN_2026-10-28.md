@@ -1,3 +1,9 @@
+## 2026-10-30 — SA-EXT-02 / HISTORY_RENDER_UTC_TIMESTAMP_FAILCLOSED — SCOPED TERMINAL
+
+**CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** лише для реального дефекту історії місій: зіпсовані `completedAt` та `startedAt` більше не відображаються як дійсний час UTC і не породжують хибні посилання. [PR #716](https://github.com/Oleksii-debug/scripture-archive/pull/716) **SQUASH MERGED** `main@99ac8af0f5e7fa6cb9bcf154d26b5c64e45602dc`; [exact-head CI #41059402059](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41059402059) **SUCCESS**: Node 1956 PASS / 0 FAIL / 1 SKIP, disposable Worker/D1 22/22, TypeScript/lint/build, Python 2/2. 62 негативні й сім позитивних/сумісних сценаріїв. [Офіційний доказовий запис](SA_EXT_02_HISTORY_RENDER_UTC_TIMESTAMPS_TERMINAL_20261030.md). `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Повний SA-EXT-02 та всі 20 батьківських розділів SA-EXT-01…20 залишаються OPEN; deployment/live SHA/Windows/NVDA/SMTP не перевірені.**
+
+---
+
 ## 2026-10-30 — SA-EXT-02 / COMPLETED_RESULT_RECEIPT_CONSISTENCY — вузький TERMINAL
 
 **CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** тільки для перевірки відповідності збереженого JSON-результату та D1 балів завершеної місії. [PR #710](https://github.com/Oleksii-debug/scripture-archive/pull/710) **SQUASH MERGED** `main@8ff4618473d25551a6839ecd3a1bfaf7942fbf4e`; final exact-head [CI #41058847951](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41058847951) **SUCCESS** (Node, TS, lint, build, Worker/D1, Python), після виправлення старої тестової фікстури. Пошкоджені `result_json` / `score` / `total` більше не видаються за `completed:true`; приватний 503 і жодних D1 змін. [Офіційна квитанція](SA_EXT_02_COMPLETED_RESULT_CONSISTENCY_TERMINAL_20261030.md). `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` лише для цього дефекту. **Усі 20 повних SA-EXT-01…20 залишаються OPEN**; Sites/Windows/NVDA/production NOT_VERIFIED, деплою немає.

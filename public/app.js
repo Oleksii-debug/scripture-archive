@@ -2789,9 +2789,9 @@ function renderLockedChapter(book, chapter) {
 }
 
 const bookmarkCopy = {
-  uk: { title: "Закладки", save: "Додати цю главу", remove: "Прибрати цю главу", empty: "У цьому виданні закладок ще немає.", login: "Увійдіть, щоб зберігати закладки в обліковому записі.", error: "Не вдалося завантажити або зберегти закладки. Спробуйте ще раз." },
-  ru: { title: "Закладки", save: "Добавить эту главу", remove: "Убрать эту главу", empty: "В этом издании пока нет закладок.", login: "Войдите, чтобы сохранять закладки в учётной записи.", error: "Не удалось загрузить или сохранить закладки. Попробуйте ещё раз." },
-  en: { title: "Bookmarks", save: "Bookmark this chapter", remove: "Remove this bookmark", empty: "No bookmarks in this edition yet.", login: "Sign in to save bookmarks to your account.", error: "Could not load or save bookmarks. Please try again." },
+  uk: { title: "Закладки", save: "Додати цю главу", remove: "Прибрати цю главу", empty: "У цьому виданні закладок ще немає.", login: "Увійдіть, щоб зберігати закладки в обліковому записі.", error: "Не вдалося завантажити або зберегти закладки. Спробуйте ще раз.", partial: "Деякі збережені закладки пошкоджені й не показані. Список неповний; записи не видалено." },
+  ru: { title: "Закладки", save: "Добавить эту главу", remove: "Убрать эту главу", empty: "В этом издании пока нет закладок.", login: "Войдите, чтобы сохранять закладки в учётной записи.", error: "Не удалось загрузить или сохранить закладки. Попробуйте ещё раз.", partial: "Некоторые сохранённые закладки повреждены и не показаны. Список неполный; записи не удалены." },
+  en: { title: "Bookmarks", save: "Bookmark this chapter", remove: "Remove this bookmark", empty: "No bookmarks in this edition yet.", login: "Sign in to save bookmarks to your account.", error: "Could not load or save bookmarks. Please try again.", partial: "Some saved bookmarks are damaged and are not shown. This list is incomplete; the records have not been deleted." },
 };
 
 async function mountReaderBookmarks(meta, chapter, edition, books) {
@@ -2822,7 +2822,7 @@ async function mountReaderBookmarks(meta, chapter, edition, books) {
         Number.isSafeInteger(sourceBook?.chapters) && item.chapter <= sourceBook.chapters;
     });
     const saved = items.some(item => item.book === meta.code && item.chapter === chapter);
-    panel.innerHTML = `<h2>${copy.title}</h2><button class="button" type="button" id="toggle-bookmark" aria-pressed="${saved}">${saved ? copy.remove : copy.save}</button><p role="status" id="bookmark-status"></p>${items.length ? `<ul>${items.map(item => { const book = books.find(value => value.code === item.book); return `<li><a href="/reader/${encodeURIComponent(item.book)}/${item.chapter}">${esc(bookTitle(book))} ${item.chapter}</a></li>`; }).join("")}</ul>` : `<p>${copy.empty}</p>`}`;
+    panel.innerHTML = `<h2>${copy.title}</h2>${data.warning === "partial_bookmarks" ? `<p role="alert">${copy.partial}</p>` : ""}<button class="button" type="button" id="toggle-bookmark" aria-pressed="${saved}">${saved ? copy.remove : copy.save}</button><p role="status" id="bookmark-status"></p>${items.length ? `<ul>${items.map(item => { const book = books.find(value => value.code === item.book); return `<li><a href="/reader/${encodeURIComponent(item.book)}/${item.chapter}">${esc(bookTitle(book))} ${item.chapter}</a></li>`; }).join("")}</ul>` : `<p>${data.warning === "partial_bookmarks" ? "" : copy.empty}</p>`}`;
     panel.querySelector("#toggle-bookmark").addEventListener("click", async event => {
       if (!isCurrent()) return;
       const button = event.currentTarget;

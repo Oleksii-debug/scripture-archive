@@ -46,15 +46,16 @@ export async function GET(request: Request) {
     // A successful SELECT is not evidence that every legacy row is a usable
     // local bookmark. The PUT path already has the canonical edition, book and
     // chapter contract; apply it before advertising saved navigation state.
-    const validRows = rows.results.every((row: unknown) => {
+    const validRows = rows.results.filter((row: unknown) => {
       if (!valid(row)) return false;
       const createdAt = (row as { created_at?: unknown }).created_at;
       return LOCAL_EDITION_IDS.has(row.edition) &&
         row.chapter <= bookChapterLimit(row.edition, row.book) &&
         typeof createdAt === "string" && Boolean(createdAt.trim());
     });
-    if (!validRows) return json({ error: "bookmarks_unavailable" }, 503);
-    return json({ bookmarks: rows.results });
+    // Preserve invalid records in D1 for recovery; never expose them as links
+    // or present the valid subset as a complete account of saved bookmarks.
+    return json({ bookmarks: validRows, ...(validRows.length !== rows.results.length ? { warning: "partial_bookmarks" } : {}) });
   } catch { return json({ error: "bookmarks_unavailable" }, 503); }
 }
 

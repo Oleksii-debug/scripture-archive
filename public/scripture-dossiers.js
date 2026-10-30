@@ -131,7 +131,9 @@ export function dossierMarkup(catalog,language,requestedId,esc) {
   if(!validateDossierGraph(catalog)) return `<p role="alert">${esc(w.invalid)}</p>`;
   // An absent query selects the introduction. An invalid explicit ID must
   // never be silently presented as a different person's source dossier.
-  const selected=requestedId ? nodes.find(item=>item.id===requestedId) : nodes[0];
+  const selected=(requestedId===null || requestedId===undefined)
+    ? nodes[0]
+    : nodes.find(item=>item.id===requestedId);
   const bookNames=new Map(catalog.books[lang].map(book=>[book.code,book.title]));
   const cite=source=>{
     const label=`${bookNames.get(source.book)} ${source.chapter}:${source.first}–${source.last}`;

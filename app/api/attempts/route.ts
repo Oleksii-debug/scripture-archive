@@ -25,6 +25,19 @@ const MISSION_ID = "OT-AB-01";
 function json(data: unknown, status = 200, headers: HeadersInit = {}) {
   return Response.json(data, { status, headers: { "Cache-Control": "no-store", ...headers } });
 }
+// A D1 promise resolving is not proof that the requested change committed.
+// Inspect every receipt, including batch companions, before reporting success.
+function confirmedChanges(result: unknown): number | null {
+  const receipt = result as { success?: unknown; meta?: { changes?: unknown } } | null;
+  const count = receipt?.meta?.changes;
+  return receipt?.success === true && typeof count === "number" &&
+    Number.isSafeInteger(count) && count >= 0 ? count : null;
+}
+function confirmedBatch(results: unknown, expected: number): number[] | null {
+  if (!Array.isArray(results) || results.length !== expected) return null;
+  const changes = results.map(confirmedChanges);
+  return changes.every(value => value !== null) ? changes as number[] : null;
+}
 function clean(value: unknown, max = 100) { return typeof value === "string" ? value.trim().slice(0, max) : ""; }
 function locale(value: unknown): Locale { return value === "ru" || value === "en" ? value : "uk"; }
 function tasksFor(book: string, chapter: number) { return mission.tasks.filter(task => task.book === book && task.chapter === chapter); }
@@ -213,8 +226,9 @@ export async function POST(request: Request) {
       env.DB.prepare("UPDATE mission_attempts SET status='invalidated',invalidated_at=CURRENT_TIMESTAMP,invalidation_reason='chapter_opened' WHERE actor_id=? AND book_id=? AND chapter=? AND status='active' AND expires_at>CURRENT_TIMESTAMP").bind(currentActor.id, book, chapter),
       env.DB.prepare("UPDATE chapter_read_receipts SET consumed_at=CURRENT_TIMESTAMP WHERE actor_id=? AND book_id=? AND chapter=? AND consumed_at IS NULL").bind(currentActor.id, book, chapter),
     ]);
-    if (!result.every(item => item.success)) return json({ error: "database_unavailable" }, 503);
-    return json({ invalidated: result[0].meta.changes > 0 });
+    const changes = confirmedBatch(result, 2);
+    if (!changes) return json({ error: "database_unavailable" }, 503);
+    return json({ invalidated: changes[0] > 0 });
   }
 
   if (action === "read") {
@@ -225,8 +239,9 @@ export async function POST(request: Request) {
     if (groupId && (!currentActor.identity || !await groupFacilitator(groupId, currentActor.identity.userId))) return json({ error: "group_facilitator_required" }, 403);
     const read=await env.DB.prepare("INSERT INTO chapter_read_receipts (id,actor_id,book_id,chapter,group_id) SELECT ?,?,?,?,? WHERE (?='' OR EXISTS (SELECT 1 FROM home_group_members WHERE group_id=? AND user_id=? AND role IN ('owner','facilitator')))")
       .bind(crypto.randomUUID(), currentActor.id, book, chapter, groupId || null, groupId, groupId, currentActor.id).run();
-    if(!read.success)return json({error:"database_unavailable"},503);
-    if(!read.meta.changes)return json({error:"group_facilitator_required"},403);
+    const readChanges = confirmedChanges(read);
+    if (readChanges === null) return json({ error: "database_unavailable" }, 503);
+    if (readChanges === 0) return json({ error: "group_facilitator_required" }, 403);
     return json({ ok: true }, 201, currentActor.cookie ? { "Set-Cookie": currentActor.cookie } : {});
   }
 
@@ -267,16 +282,20 @@ export async function POST(request: Request) {
       env.DB.prepare("UPDATE mission_attempts SET status='invalidated',invalidated_at=CURRENT_TIMESTAMP,invalidation_reason='new_attempt' WHERE actor_id=? AND status='active' AND id<>? AND EXISTS (SELECT 1 FROM mission_attempts WHERE id=?)").bind(currentActor.id, id, id),
       env.DB.prepare("UPDATE chapter_read_receipts SET consumed_at=CURRENT_TIMESTAMP WHERE id=? AND EXISTS (SELECT 1 FROM mission_attempts WHERE id=?)").bind(receipt.id, id),
     ]);
-    if (!started[0].meta.changes) return json({ error: "chapter_must_be_read" }, 409);
+    const startChanges = confirmedBatch(started, 3);
+    if (!startChanges) return json({ error: "database_unavailable" }, 503);
+    if (startChanges[0] === 0) return json({ error: "chapter_must_be_read" }, 409);
     return json({ attemptId: id, task: publicTask(available[0], selectedLocale, 1, taskLimit), guest: currentActor.guest }, 201, currentActor.cookie ? { "Set-Cookie": currentActor.cookie } : {});
   }
 
   if (action === "invalidate") {
     const attemptId = clean(body.attemptId, 80), { attempt } = await ownedAttempt(request, attemptId);
     if (!attempt) return json({ error: "attempt_not_found" }, 404);
-    if (attempt.status === "active")
-      await env.DB.prepare("UPDATE mission_attempts SET status='invalidated',invalidated_at=CURRENT_TIMESTAMP,invalidation_reason=? WHERE id=? AND status='active'")
+    if (attempt.status === "active") {
+      const invalidated = await env.DB.prepare("UPDATE mission_attempts SET status='invalidated',invalidated_at=CURRENT_TIMESTAMP,invalidation_reason=? WHERE id=? AND status='active'")
         .bind(clean(body.reason, 80) || "chapter_opened", attempt.id).run();
+      if (confirmedChanges(invalidated) === null) return json({ error: "database_unavailable" }, 503);
+    }
     return json({ ok: true });
   }
 
@@ -293,7 +312,8 @@ export async function POST(request: Request) {
       return finishAttempt(attempt, currentActor.id, currentActor.guest, true);
     if (attempt.status !== "active") return json({ error: attempt.status === "invalidated" ? "attempt_invalidated" : "attempt_closed" }, 409);
     if (Date.parse(attempt.expires_at) <= Date.now()) {
-      await env.DB.prepare("UPDATE mission_attempts SET status='invalidated',invalidated_at=CURRENT_TIMESTAMP,invalidation_reason='expired' WHERE id=? AND status='active'").bind(attempt.id).run();
+      const expired = await env.DB.prepare("UPDATE mission_attempts SET status='invalidated',invalidated_at=CURRENT_TIMESTAMP,invalidation_reason='expired' WHERE id=? AND status='active'").bind(attempt.id).run();
+      if (confirmedChanges(expired) === null) return json({ error: "database_unavailable" }, 503);
       return json({ error: "attempt_expired" }, 410);
     }
     const tasks = tasksFor(attempt.book_id, attempt.chapter).slice(0, attempt.task_limit), task = tasks[attempt.current_index];
@@ -309,8 +329,12 @@ export async function POST(request: Request) {
       env.DB.prepare("UPDATE mission_attempts SET current_index=?,status=? WHERE id=? AND current_index=? AND status='active' AND expires_at>CURRENT_TIMESTAMP")
         .bind(nextIndex, nextIndex === tasks.length ? "grading" : "active", attempt.id, attempt.current_index),
     ]);
-    if (!accepted.every(item => item.success)) return json({ error: "database_unavailable" }, 503);
-    if (!accepted[1].meta.changes) return json({ error: "attempt_changed" }, 409);
+    const answerChanges = confirmedBatch(accepted, 2);
+    if (!answerChanges) return json({ error: "database_unavailable" }, 503);
+    if (answerChanges[1] === 0) return json({ error: "attempt_changed" }, 409);
+    // A moved cursor without a stored answer is a damaged transaction, not a pass.
+    if (answerChanges[0] !== 1 || answerChanges[1] !== 1)
+      return json({ error: "database_unavailable" }, 503);
     if (nextIndex < tasks.length) return json({ accepted: true, task: publicTask(tasks[nextIndex], attempt.locale, nextIndex + 1, tasks.length) });
     return finishAttempt({ ...attempt, status: "grading", current_index: nextIndex }, currentActor.id, currentActor.guest, true);
   }

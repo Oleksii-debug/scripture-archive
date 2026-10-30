@@ -42,8 +42,15 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
       // Never attribute a new/unrecognized local edition to the primary one.
       const fallback=catalog.editions?.[lang];
       const metadata=catalog.translations?.[edition.id] || (edition.contentId && fallback?.id === edition.contentId ? fallback : null);
-      if (!metadata || typeof metadata.title!=='string') throw Error('missing edition metadata');
-      const source=https(metadata.source), license=https(metadata.licenseUrl);
+      // Keep a comparison inaccessible if its own source or terms are missing.
+      // Never borrow rights metadata from another Bible edition.
+      const source=typeof metadata?.source==='string'?https(metadata.source):'';
+      const license=typeof metadata?.licenseUrl==='string'?https(metadata.licenseUrl):'';
+      if (!metadata || typeof metadata.title!=='string' || !metadata.title.trim()
+          || typeof metadata.license!=='string' || !metadata.license.trim()
+          || !source || (metadata.licenseUrl!=null && !license)) {
+        throw Error('missing or unsafe edition provenance');
+      }
       result.innerHTML=`<section aria-labelledby="parallel-title"><h3 id="parallel-title">${esc(metadata.title)} — ${esc(bookTitle)} ${chapter}</h3><p>${copy.note}</p><p>${copy.license}: ${esc(metadata.license || '—')}</p>${metadata.attribution?`<p>${esc(metadata.attribution)}</p>`:''}${source?`<p><a href="${esc(source)}" target="_blank" rel="noreferrer">${copy.source}</a></p>`:''}${license?`<p><a href="${esc(license)}" target="_blank" rel="noreferrer">${copy.license}</a></p>`:''}<ol>${verses.map(verse=>`<li>${esc(verse)}</li>`).join('')}</ol></section>`;
       status.textContent=copy.ready;
     } catch { if (panel.isConnected && current()) status.textContent=copy.fail; }

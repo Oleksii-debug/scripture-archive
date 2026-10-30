@@ -5,12 +5,33 @@ const clean = (v: unknown, max: number) => typeof v === "string" ? v.trim().slic
 // An owner export must contain restorable structured drafts and review snapshots.
 // JSON.parse accepts null, scalar values and arrays, none of which the canonical
 // study-material/editorial schema can restore as a material or snapshot.
-function exportRecord(raw: unknown): Record<string, unknown> {
+function exportRecord(raw: unknown, snapshot = false): Record<string, unknown> {
   if (typeof raw !== "string") throw Error("invalid_export_record");
   const value: unknown = JSON.parse(raw);
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw Error("invalid_export_record");
-  return value as Record<string, unknown>;
+  const record = value as Record<string, unknown>;
+  // A JSON object by itself is not a restorable authored exercise. Validate
+  // the same content boundaries the canonical builder/editor already demand,
+  // including answer membership, instead of exporting damaged drafts as 200.
+  if (snapshot && (typeof record.title !== "string" ||
+      record.title.trim().length < 3 || record.title.length > 160 ||
+      !["uk", "ru", "en"].includes(record.locale as string)))
+    throw Error("invalid_export_record");
+  const data: unknown = snapshot ? record.data : record;
+  if (!data || typeof data !== "object" || Array.isArray(data))
+    throw Error("invalid_export_record");
+  const d = data as Record<string, unknown>;
+  const options = d.options;
+  if (typeof d.prompt !== "string" || d.prompt.trim().length < 8 || d.prompt.length > 3000 ||
+      typeof d.reference !== "string" || d.reference.trim().length < 3 || d.reference.length > 200 ||
+      typeof d.explanation !== "string" || d.explanation.trim().length < 8 || d.explanation.length > 2000 ||
+      typeof d.answer !== "string" || !d.answer.trim() || d.answer.length > 500 ||
+      !Array.isArray(options) || options.length < 2 || options.length > 8 ||
+      !options.every(option => typeof option === "string" && option.trim() && option.length <= 500) ||
+      new Set(options).size !== options.length || !options.includes(d.answer))
+    throw Error("invalid_export_record");
+  return record;
 }
 
 export async function GET(request: Request) {
@@ -32,7 +53,7 @@ export async function GET(request: Request) {
       ]);
       if (!drafts.success || !versions.success || !Array.isArray(drafts.results) || !Array.isArray(versions.results)) throw Error("export failed");
       const items = (drafts.results as Record<string, unknown>[]).map(row => ({ ...row, data: exportRecord(row.data) }));
-      const history = (versions.results as Record<string, unknown>[]).map(row => ({ ...row, snapshot: exportRecord(row.snapshot) }));
+      const history = (versions.results as Record<string, unknown>[]).map(row => ({ ...row, snapshot: exportRecord(row.snapshot, true) }));
       return new Response(JSON.stringify({ format: "scripture-archive-materials-export", version: 1, exportedAt: new Date().toISOString(), materials: items, submissions: history }, null, 2), { headers: { "Content-Type": "application/json; charset=utf-8", "Content-Disposition": 'attachment; filename="scripture-archive-materials.json"', "Cache-Control": "no-store, private", "X-Content-Type-Options": "nosniff" } });
     } catch { return Response.json({ error: "export_unavailable" }, { status: 503, headers: { "Cache-Control": "no-store, private" } }); }
   }

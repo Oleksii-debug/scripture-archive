@@ -104,3 +104,71 @@ test('anonymous reader cannot use private materials export',async()=>{
   assert.equal(f.batches,0);
   assert.equal(f.queries.length,0);
 });
+
+
+test('editorial export rejects JSON objects without restorable canonical exercise fields', async () => {
+  // A JSON object is not enough: malformed authored content must not be
+  // advertised as a complete private backup after an acknowledged D1 batch.
+  const original = JSON.parse(draft.data);
+  const malformed = [
+    {}, { ...original, prompt:'' }, { ...original, prompt:'short' },
+    { ...original, reference:4 }, { ...original, reference:'x' },
+    { ...original, explanation:null }, { ...original, explanation:'short' },
+    { ...original, answer:'not-an-option' }, { ...original, answer:'' },
+    { ...original, options:[] }, { ...original, options:['A'] },
+    { ...original, options:['A','A'] }, { ...original, options:['A',''] },
+    { ...original, options:['A',false] },
+    { ...original, options:['A','B','C','D','E','F','G','H','I'] },
+    { ...original, prompt:'P'.repeat(3001) },
+    { ...original, reference:'R'.repeat(201) },
+    { ...original, explanation:'E'.repeat(2001) },
+    { ...original, answer:'A'.repeat(501) },
+  ];
+  for (const item of malformed) {
+    const f = fixture({ draftData: JSON.stringify(item) });
+    const { response, body } = await f.get();
+    assert.equal(response.status,503,JSON.stringify(item).slice(0,100));
+    assert.deepEqual(body,{error:'export_unavailable'});
+    assert.equal(response.headers.get('content-disposition'),null);
+    assert.equal('materials' in body,false);
+    assert.equal(f.batches,1);
+  }
+});
+
+test('editorial submission snapshots must preserve authored content and reviewed language', async () => {
+  const original=JSON.parse(submission.snapshot);
+  const malformed=[
+    { ...original, title:'' }, { ...original, title:'xy' },
+    { ...original, title:'T'.repeat(161) },
+    { ...original, locale:'de' }, { ...original, locale:4 },
+    { ...original, data:{} }, { ...original, data:null },
+    { ...original, data:[original.data] },
+    { ...original, data:{...original.data,answer:'not-an-option'} },
+    { ...original, data:{...original.data,options:['A','A']} },
+    { ...original, data:{...original.data,explanation:'short'} },
+  ];
+  for(const item of malformed){
+    const f=fixture({snapshot:JSON.stringify(item)});
+    const {response,body}=await f.get();
+    assert.equal(response.status,503,JSON.stringify(item).slice(0,120));
+    assert.deepEqual(body,{error:'export_unavailable'});
+    assert.equal(response.headers.get('content-disposition'),null);
+    assert.equal('submissions' in body,false);
+    assert.equal(f.batches,1);
+  }
+});
+
+test('valid UTF-8 authored content and optional legacy metadata remain lossless in owner export',async()=>{
+  const complete={...JSON.parse(draft.data),
+    prompt:'Хто був Авраам і яке значення має Буття 12?',
+    reference:'Буття 12:1',answer:'Покликання',
+    options:['Покликання','Мандрівка'],explanation:'Обґрунтування джерела',
+    authorNote:'Older private source metadata',
+  };
+  const archived={title:'Український урок',locale:'uk',data:complete};
+  const {response,body}=await fixture({draftData:JSON.stringify(complete),snapshot:JSON.stringify(archived)}).get();
+  assert.equal(response.status,200);
+  assert.deepEqual(body.materials[0].data,complete);
+  assert.deepEqual(body.submissions[0].snapshot,archived);
+  assert.match(response.headers.get('content-disposition'),/attachment/);
+});

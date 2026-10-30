@@ -7,13 +7,6 @@ const base = process.env.SCRIPTURE_TEST_URL;
 const integration = base ? test : test.skip;
 
 integration("account, progress, attempts, groups, marathon limit and password recovery", async () => {
-  // Disposable Node/Wrangler only: use a fresh HTTP connection for each assertion.
-  // This tests the local proxy keep-alive hypothesis without ever replaying writes.
-  // It does not change browser requests, production handlers, or required statuses.
-  const fetch = (url, init = {}) => globalThis.fetch(url, {
-    ...init,
-    headers: { ...(init.headers || {}), Connection: 'close' },
-  });
   const mission = JSON.parse(await readFile(new URL("../content/mission-abraham.json", import.meta.url), "utf8"));
   const chapter12 = mission.tasks.filter(task => task.book === "GEN" && task.chapter === 12);
   const email = `release-${Date.now()}@example.com`;

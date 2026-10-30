@@ -180,3 +180,52 @@ test('SA-EXT-04 marathon permits real zero usage, refuses exhausted quota, and p
     }finally{f.db.close();}
   }
 });
+
+
+// SA-EXT-04 exact meeting date and private reflection: do not silently turn
+// a raw malformed date into a different valid date or erase an author's tail.
+for (const [description, fields] of [
+  ['date suffix', {meetingDate:'2026-10-28extra'}],
+  ['multiline date', {meetingDate:'2026-10-28\\n2026-10-29'}],
+  ['NUL date suffix', {meetingDate:'2026-10-28\\u0000'}],
+  ['array date', {meetingDate:['2026-10-28']}],
+  ['object date', {meetingDate:{value:'2026-10-28'}}],
+  ['oversized private reflection', {reflection:'R'.repeat(1201)}],
+  ['array reflection', {reflection:['private reflection']}],
+  ['object reflection', {reflection:{message:'private reflection'}}],
+]) {
+  test('SA-EXT-04 rejects raw '+description+' with zero meeting writes',async()=>{
+    const f=fixture();
+    try {
+      const before=f.writes;
+      const response=await f.post('session',{...meeting,...fields});
+      assert.equal(response.status,400,description+' '+JSON.stringify(response.body));
+      assert.equal(response.body.error,'invalid_session');
+      assert.equal(f.writes,before,'invalid raw data must not persist a session');
+      assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM group_sessions').get().n,0);
+    } finally {f.db.close();}
+  });
+}
+
+test('SA-EXT-04 preserves an exact 1200-character private reflection',async()=>{
+  const f=fixture();try{
+    const reflection='R'.repeat(1200);
+    const response=await f.post('session',{...meeting,reflection});
+    assert.equal(response.status,200,JSON.stringify(response.body));
+    const row=f.db.prepare('SELECT meeting_date,reflection FROM group_sessions').get();
+    assert.equal(row.meeting_date,'2026-10-28');
+    assert.equal(row.reflection,reflection);
+    assert.equal(row.reflection.length,1200);
+  }finally{f.db.close();}
+});
+
+test('SA-EXT-04 trims harmless date/reflection whitespace without clipping',async()=>{
+  const f=fixture();try{
+    const response=await f.post('session',{...meeting,
+      meetingDate:' 2026-10-28 ',reflection:'  A precise study reflection  '});
+    assert.equal(response.status,200,JSON.stringify(response.body));
+    const row=f.db.prepare('SELECT meeting_date,reflection FROM group_sessions').get();
+    assert.equal(row.meeting_date,'2026-10-28');
+    assert.equal(row.reflection,'A precise study reflection');
+  }finally{f.db.close();}
+});

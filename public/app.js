@@ -2358,9 +2358,16 @@ async function getSession() {
     (priorPrincipal && priorPrincipal !== state.user?.id) ||
     (previousOwner && previousOwner !== state.user?.id);
   const cleared = mustClear ? clearPersonalProgress() : true;
+  // Do not trust a storage shim that silently ignored a write. An orphan must
+  // be absent from the active reading key before any new owner is certified.
+  let verifiedClear = cleared;
+  if (verifiedClear && unownedReading) {
+    try { verifiedClear = localStorage.getItem('sa.readingHistory') === '[]'; }
+    catch { verifiedClear = false; }
+  }
   // An incomplete wipe must NEVER be certified by assigning the old browser
   // reading history to the newly authenticated principal.
-  if (cleared) {
+  if (verifiedClear) {
     try {
       if (state.user) localStorage.setItem('sa.progressOwner', state.user.id);
       else localStorage.removeItem('sa.progressOwner');
@@ -2369,6 +2376,7 @@ async function getSession() {
     }
   } else {
     state.localReadingStorageUntrusted = true;
+    if (unownedReading) state.unownedReadingPendingRecovery = true;
   }
   return state.user;
 }

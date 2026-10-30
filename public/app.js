@@ -1956,6 +1956,11 @@ const EDITION_TRANSIENT_MESSAGES = {
   ru: "Браузер запретил сохранение: выбор перевода действует только в этой вкладке.",
   en: "Browser storage is unavailable: your edition selection lasts only in this tab.",
 };
+const SPELLING_TRANSIENT_MESSAGES = Object.freeze({
+  uk: "Правопис змінено лише в цій вкладці: браузер заборонив збереження налаштувань.",
+  ru: "Правописание изменено только в этой вкладке: браузер запретил сохранение настроек.",
+  en: "Spelling changed only in this tab because browser storage is unavailable.",
+});
 const LANGUAGE_TRANSIENT_MESSAGES = {
   uk: "Мову змінено лише в цій вкладці: браузер заборонив збереження налаштувань.",
   ru: "Язык изменён только в этой вкладке: браузер запретил сохранение настроек.",
@@ -2922,11 +2927,14 @@ async function renderReader(parts) {
   });
   document.querySelector("#uk-spelling")?.addEventListener("click", () => {
     state.ukOriginal = !state.ukOriginal;
-    localStorage.setItem(
-      "sa.ukSpelling",
-      state.ukOriginal ? "original" : "modern",
+    const language = state.lang;
+    const saved = storeReaderPreference(
+      "sa.ukSpelling", state.ukOriginal ? "original" : "modern",
     );
-    route();
+    void route().then(() => {
+      if (!saved && state.lang === language)
+        announce(SPELLING_TRANSIENT_MESSAGES[language]);
+    });
   });
   document
     .querySelector("#book-select")

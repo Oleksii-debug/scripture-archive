@@ -20,7 +20,14 @@ function validReadingReceipt(value:unknown):value is {book:string;chapter:number
 }
 function publicUser(id:Identity,row:Record<string,unknown>|null){return {id:id.userId,email:id.email,emailVerified:id.emailVerified,authProvider:id.provider,fullName:id.fullName,firstName:row?.first_name??"",lastName:row?.last_name??"",ageRange:row?.age_range??"",age:row?.age??null,tradition:row?.tradition??"",denomination:row?.denomination??"",church:row?.church??"",maritalStatus:row?.marital_status??"",gender:row?.gender??"",hasChildren:row?.has_children==null?null:Boolean(row.has_children),locale:row?.locale??"uk",sensitiveConsent:Boolean(row?.sensitive_consent && row?.sensitive_consent_version===1),visibility:{firstName:Boolean(row?.public_first_name),lastName:Boolean(row?.public_last_name),church:Boolean(row?.public_church && row?.sensitive_consent && row?.sensitive_consent_version===1),progress:Boolean(row?.public_progress)},profileComplete:Boolean(row),isOwner:isVerifiedOwner(id)}}
 export async function GET(request:Request){
-  const action=new URL(request.url).searchParams.get("action")??"me"; const id=await authenticateRequest(request); if(!id)return action==="me"?privateJson({user:null}):unauthorized();
+  const action=new URL(request.url).searchParams.get("action")??"me";
+  // Absence of the identity database is not proof that a saved session has
+  // signed out. Never return user:null for a backend outage.
+  if(!env.DB)return privateJson({error:"database_unavailable"},{status:503});
+  let id: Awaited<ReturnType<typeof authenticateRequest>>;
+  try{id=await authenticateRequest(request);}
+  catch{return privateJson({error:"account_state_unavailable"},{status:503});}
+  if(!id)return action==="me"?privateJson({user:null}):unauthorized();
   if(action==="reading"){
     try{
       const row=await env.DB!.prepare("SELECT data FROM progress WHERE user_id=? AND mission_id='READING'").bind(id.userId).first<{data:string}>();
@@ -66,8 +73,18 @@ export async function GET(request:Request){
       return privateJson({error:"progress_state_unavailable"},{status:503});
     }
   }
-  if(action==="users"){if(!isVerifiedOwner(id))return privateJson({error:"forbidden"},{status:403});const rows=await env.DB!.prepare("SELECT email,first_name,last_name,age_range,locale,created_at,updated_at FROM profiles ORDER BY created_at DESC LIMIT 250").all();return privateJson({users:rows.results})}
-  const row=await env.DB!.prepare("SELECT * FROM profiles WHERE user_id=?").bind(id.userId).first<Record<string,unknown>>(); return privateJson({user:publicUser(id,row)});
+  if(action==="users"){
+    if(!isVerifiedOwner(id))return privateJson({error:"forbidden"},{status:403});
+    try{
+      const rows=await env.DB.prepare("SELECT email,first_name,last_name,age_range,locale,created_at,updated_at FROM profiles ORDER BY created_at DESC LIMIT 250").all();
+      if(!rows.success||!Array.isArray(rows.results))throw Error("owner users read failed");
+      return privateJson({users:rows.results});
+    }catch{return privateJson({error:"account_state_unavailable"},{status:503});}
+  }
+  try{
+    const row=await env.DB.prepare("SELECT * FROM profiles WHERE user_id=?").bind(id.userId).first<Record<string,unknown>>();
+    return privateJson({user:publicUser(id,row)});
+  }catch{return privateJson({error:"account_state_unavailable"},{status:503});}
 }
 export async function POST(request:Request){return write(request)} export async function PUT(request:Request){return write(request)}
 async function write(request:Request){

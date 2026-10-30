@@ -203,10 +203,18 @@ export async function POST(request: Request) {
     if(!/^(?:[A-F0-9]{8}|[A-F0-9]{32})$/.test(code))return Response.json({error:"invalid_invite"},{status:404});
     const group = await env.DB!.prepare("SELECT id FROM home_groups WHERE invite_code=?").bind(code).first<{ id: string }>();
     if (!group) return Response.json({ error: "invalid_invite" }, { status: 404 });
-    await env.DB!.prepare("INSERT OR IGNORE INTO home_group_members (group_id,user_id,display_name,role,public_name,public_activity) SELECT id,?,?,'member',?,? FROM home_groups WHERE id=? AND invite_code=?")
-      .bind(id.userId, `${person.first_name} ${person.last_name}`.trim(), body.publicName === true ? 1 : 0, body.publicActivity === true ? 1 : 0, group.id, code).run();
-    if(!await membership(group.id,id.userId))return Response.json({error:"invalid_invite"},{status:404});
-    return Response.json({ ok: true, groupId: group.id });
+    try {
+      const saved=await env.DB!.prepare("INSERT OR IGNORE INTO home_group_members (group_id,user_id,display_name,role,public_name,public_activity) SELECT id,?,?,'member',?,? FROM home_groups WHERE id=? AND invite_code=?")
+        .bind(id.userId, `${person.first_name} ${person.last_name}`.trim(), body.publicName === true ? 1 : 0, body.publicActivity === true ? 1 : 0, group.id, code).run();
+      // A committed INSERT with a lost D1 receipt is not a confirmed join.
+      // A normal INSERT OR IGNORE may change zero rows for an existing member;
+      // the canonical membership readback still decides that idempotent case.
+      if(!acknowledgedWrite(saved))return Response.json({error:"membership_unconfirmed"},{status:503,headers:{"Cache-Control":"no-store"}});
+      if(!await membership(group.id,id.userId))return Response.json({error:"invalid_invite"},{status:404});
+      return Response.json({ ok: true, groupId: group.id });
+    } catch {
+      return Response.json({error:"membership_unconfirmed"},{status:503,headers:{"Cache-Control":"no-store"}});
+    }
   }
 
   if (action === "session") {

@@ -194,6 +194,11 @@ test('SA-EXT-02: nonnumeric answer indexes cannot be coerced into a graded answe
 
 test('SA-EXT-02: mission chapter mutation actions refuse coercion and preserve a live attempt', async()=>{
   const f=fixture();try{
+    // Reuse the exact migration's receipt schema, not a hand-written SQLite mock.
+    const migration=readFileSync(new URL('../drizzle/0004_accounts_attempts.sql',import.meta.url),'utf8');
+    const receiptDDL=migration.match(/CREATE TABLE `chapter_read_receipts` \\([\\s\\S]*?\\);/)?.[0];
+    assert.ok(receiptDDL,'actual chapter receipt schema required');
+    f.db.exec(receiptDDL);
     f.seed('chapter-type',{status:'active'});
     const bad=[true,false,null,{},[], '0xc','12e0','12.0',' 12 ','012',12.5,Number.MAX_SAFE_INTEGER+1];
     for(const chapterInput of bad) for(const action of ['chapter','read','start']){

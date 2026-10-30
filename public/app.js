@@ -2802,8 +2802,9 @@ async function renderReader(parts) {
   const selectedVerse = verseCoordinateMatches ? readerVerseFromUrl(location.href, verses.length) : null;
   // Do not replace the last readable bookmark when book loading fails.
   state.reader = { book: meta.code, chapter };
-  // A denied preference store cannot prevent an already-authorized chapter from rendering.
-  storeReaderPreference("sa.reader", JSON.stringify(state.reader));
+  // Browser preference storage is optional; never block an authorized chapter.
+  try { localStorage.setItem("sa.reader", JSON.stringify(state.reader)); }
+  catch { /* Keep the current chapter in memory without claiming durable persistence. */ }
   const edition = localEditionMetadata(catalog),
     editionInfo = editionDetails(edition, meta.code);
   const citationCopy = {

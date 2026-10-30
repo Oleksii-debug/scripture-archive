@@ -14,8 +14,12 @@ const compiled = ts.transpileModule(source, {
 });
 assert.equal(compiled.diagnostics?.length ?? 0, 0);
 
-function fixture({ ack = { success: true, meta: { changes: 1 } },
-  row = { count: 1 }, writeError = false, readError = false, database = true } = {}) {
+function fixture(options = {}) {
+  const { writeError = false, readError = false, database = true } = options;
+  // Explicitly supplied undefined is a deliberately missing D1 response, not
+  // a request for a test fixture default.
+  const ack = Object.hasOwn(options, "ack") ? options.ack : { success: true, meta: { changes: 1 } };
+  const row = Object.hasOwn(options, "row") ? options.row : { count: 1 };
   const calls = { writes: 0, reads: 0, statements: [], boundKeys: [] };
   const db = {
     prepare(sql) {

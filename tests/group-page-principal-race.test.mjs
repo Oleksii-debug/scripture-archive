@@ -29,6 +29,7 @@ function fixture({ path = "/groups", groupRequest, getCatalog = async () => ({ b
     groupRequest,
     getCatalog: async () => { catalogReads++; return getCatalog(); },
     setActiveNav() {},
+    document: { querySelector: () => null },
     shell(value) { html.push(value); },
     esc: value => String(value),
     bookTitle: book => book.title,
@@ -101,4 +102,12 @@ test("hash router is accepted for the same owner, but not when the route is repl
   assert.equal(guard("groups/private-alice", state.user), true);
   location.hash = "#/groups/private-bob";
   assert.equal(guard("groups/private-alice", state.user), false);
+});
+
+test("the current public group directory still renders normally", async () => {
+  const h = fixture({ groupRequest: async () => ({ groups: [] }) });
+  h.state.user.profileComplete = false;
+  await h.renderGroups();
+  assert.equal(h.html.length, 1);
+  assert.match(h.html[0], /groups-hero/);
 });

@@ -98,7 +98,16 @@ function publicMaterialMarkup(items, w, esc) {
 const publicMaterialRenderEpoch = new WeakMap();
 
 function attachPublicMaterialAnswers(root, w, active) {
-  root.querySelectorAll('.public-material').forEach(form => form.onsubmit = async event => {
+  root.querySelectorAll('.public-material').forEach(form => {
+    // A grading receipt applies only to the selected option at submission.
+    // Do not leave its result or explanation next to a later selection.
+    form.onchange = event => {
+      if (!active() || form.isConnected === false) return;
+      if (event.target?.name !== 'choice' || event.target?.type !== 'radio') return;
+      const status = form.querySelector('[role="status"]');
+      if (status) status.textContent = '';
+    };
+    form.onsubmit = async event => {
       event.preventDefault();
       if (!active() || form.isConnected === false) return;
       const status=form.querySelector('[role="status"]'), button=form.querySelector('button');
@@ -139,7 +148,8 @@ function attachPublicMaterialAnswers(root, w, active) {
           }
         }
       }
-    });
+    };
+  });
 }
 export async function renderPublicMaterials(root, w, esc, isCurrent = () => true) {
   if (!root || (typeof root !== 'object' && typeof root !== 'function')) return;

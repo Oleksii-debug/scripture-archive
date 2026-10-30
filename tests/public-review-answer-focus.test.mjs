@@ -182,3 +182,20 @@ test('a changed choice with a negative receipt also remains unresolved until rec
   assert.doesNotMatch(x.status.textContent,/Try again\\.|Correct\\./);
   assert.equal(x.button.disabled,false);
 });
+
+test('changing the selected answer clears the prior grading result and explanation', async () => {
+  for (const reply of ['correct', 'wrong', 'error']) {
+    const x = await scenario({reply});
+    assert.ok(x.status.textContent);
+    x.form.onchange({target:{name:'choice',type:'radio'}});
+    assert.equal(x.status.textContent, '');
+  }
+});
+
+test('unrelated form changes do not erase answer feedback', async () => {
+  const x = await scenario();
+  const prior = x.status.textContent;
+  x.form.onchange({target:{name:'other',type:'radio'}});
+  x.form.onchange({target:{name:'choice',type:'text'}});
+  assert.equal(x.status.textContent, prior);
+});

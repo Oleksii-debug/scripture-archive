@@ -25,12 +25,12 @@ async function user(request: Request) {
   return identity && identity.provider !== "agent" ? identity.userId : null;
 }
 
-function valid(body: unknown): body is { edition: string; book: string; chapter: number } {
+function valid(body: unknown, remove = false): body is { edition: string; book: string; chapter: number } {
   if (!body || typeof body !== "object" || Array.isArray(body)) return false;
   const value = body as Record<string, unknown>;
   return typeof value.edition === "string" && /^[a-z0-9-]{1,40}$/.test(value.edition)
     && typeof value.book === "string" && /^[1-3]?[A-Z]{2,3}$/.test(value.book)
-    && typeof value.chapter === "number" && Number.isInteger(value.chapter) && value.chapter >= 1 && value.chapter <= 151;
+    && typeof value.chapter === "number" && Number.isSafeInteger(value.chapter) && value.chapter >= 1 && (remove || value.chapter <= 151);
 }
 
 export async function GET(request: Request) {
@@ -57,7 +57,7 @@ async function write(request: Request, remove: boolean) {
   if (!id) return json({ error: "authentication_required" }, 401);
   const body: unknown = await request.json().catch(() => null);
   // Reject nonexistent chapters on PUT. Keep DELETE able to clean up old invalid entries.
-  if (!valid(body) || (!remove && (!LOCAL_EDITION_IDS.has(body.edition) || body.chapter > bookChapterLimit(body.edition, body.book))))
+  if (!valid(body, remove) || (!remove && (!LOCAL_EDITION_IDS.has(body.edition) || body.chapter > bookChapterLimit(body.edition, body.book))))
     return json({ error: "invalid_bookmark" }, 400);
   // D1 may return a failure receipt or throw after the caller is authenticated.
   // Never claim that a bookmark was saved or deleted unless the write ACK is

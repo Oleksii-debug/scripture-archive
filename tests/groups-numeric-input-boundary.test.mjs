@@ -199,7 +199,9 @@ for (const [label,fields,expected] of [
   test('preserve '+label+' Bible edition selection',async()=>{
     const f=fixture();
     try {
-      const response=await f.post('create',{...group,...fields});
+      const payload={...group,...fields};
+      if(label==='omitted')delete payload.bibleEdition;
+      const response=await f.post('create',payload);
       assert.equal(response.status,201,JSON.stringify(response.body));
       assert.equal(f.db.prepare('SELECT bible_edition FROM home_groups WHERE id=?')
         .get(response.body.groupId).bible_edition,expected);

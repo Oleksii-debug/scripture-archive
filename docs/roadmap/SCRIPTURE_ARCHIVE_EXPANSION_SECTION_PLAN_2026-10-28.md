@@ -1,3 +1,14 @@
+## 2026-10-30 — SA-EXT-01/16 / READING_EXPORT_CANONICAL_BOOK_BOUNDS — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
+
+**Остаточний стан лише підфункції приватного експорту читання:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`; `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Повні батьківські розділи SA-EXT-01, SA-EXT-16 та інші SA-EXT-01…20 залишаються OPEN.** Це не реліз, не 82-мовна готовність і не фізичне NVDA-приймання.
+
+- **Відтворена невідповідність:** чинний `GET /api/reading-export` пропускав вигадані `FAK:2`, `GEN:51`, `3JN:2` як «успішно експортовану» історію читання, бо перевіряв лише шаблон назви книги та главу до 150. Канонічний `/api/account?action=reading` і справжній `/progress` уже перевіряли відповідність текстовому каталогу.
+- **Реалізація в основній платформі:** [PR #596](https://github.com/Oleksii-debug/scripture-archive/pull/596) **SQUASH MERGED** у точний `main@1f4289f6dada96799341bbbc520a5ae56ae9939b`. Реальний маршрут `app/api/reading-export/route.ts@f507ee28f4dde2ed9a0d6c1193db895aff2bd2ea` тепер використовує **існуючий** `public/data/catalog.json` (66 канонічних книг і різні допустимі межі за виданням). Некоректний рядок призводить до приватного HTTP 503 без `Content-Disposition`; валідні `GEN:50`, `PSA:150`, особливий `JOL:4` та не-READING історичні знімки зберігаються. Немає другого каталогу, сервера, сховища або змін user data.
+- **Регресії:** `tests/reading-export-batch-ack.test.mjs@19c849f7336f73c345801a882efbb71e7618b3da` виконує справжній transpiled route з чинним JSON-каталогом. [GitHub Actions #41031422174](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41031422174), точний PR head `2a36ae2858449c20ec0dbdc9604fffc4542d8ca0`: **workflow SUCCESS**; native Node regression, TypeScript, lint, source build, disposable Worker/D1, existing Python validators — кожен етап SUCCESS. Після merge перевірено `main` SHA й обидва source/test blobs.
+- **Не доведено:** live deployed Cloudflare Sites SHA, реальна production D1, DNS/email, повний браузерний сценарій, Windows/NVDA, весь SA-EXT-01/16 чи весь продукт. Повторна реалізація лише за конкретного нового відтвореного дефекту або затвердженої вимоги. Координація: [#297](https://github.com/Oleksii-debug/scripture-archive/issues/297).
+
+---
+
 ## 2026-10-30 — SA-EXT-01 / LOCAL_READING_CANONICAL_BOOK_CHAPTER_BOUNDS — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
 
 **Остаточний статус лише цього дефекту:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Повний SA-EXT-01 і всі двадцять батьківських SA-EXT-01…20 залишаються OPEN.** Повторна реалізація цього дефекту — лише за новою затвердженою вимогою або конкретною регресією.

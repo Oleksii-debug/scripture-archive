@@ -143,3 +143,25 @@ test("private account GET exposes consent and church visibility only for exact n
     assert.deepEqual(f.calls, { auth: 1, reads: 1 });
   }
 });
+
+test("profile visibility and has-children flags accept only exact D1 numeric booleans", async () => {
+  const cases = [
+    [0, false], [1, true], [2, false], [-1, false],
+    ["0", false], ["1", false], [null, false], [false, false],
+  ];
+  for (const [stored, expected] of cases) {
+    const f = fixture({ profile: {
+      public_first_name: stored, public_last_name: stored,
+      public_progress: stored, has_children: stored,
+    } });
+    const result = await f.get("me");
+    assert.equal(result.status, 200, JSON.stringify(stored));
+    assert.equal(result.body.user.visibility.firstName, expected, "firstName " + JSON.stringify(stored));
+    assert.equal(result.body.user.visibility.lastName, expected, "lastName " + JSON.stringify(stored));
+    assert.equal(result.body.user.visibility.progress, expected, "progress " + JSON.stringify(stored));
+    assert.equal(result.body.user.hasChildren, stored === null ? null : expected, "hasChildren " + JSON.stringify(stored));
+    assert.equal(Object.hasOwn(result.body.user.visibility, "church"), true);
+    assert.match(result.cache, /no-store, private/);
+    assert.deepEqual(f.calls, { auth: 1, reads: 1 });
+  }
+});

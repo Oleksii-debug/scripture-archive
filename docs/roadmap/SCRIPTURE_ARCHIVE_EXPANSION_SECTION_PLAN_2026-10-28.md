@@ -1,3 +1,14 @@
+## 2026-10-30 — SA-EXT-04 / GROUP_MARATHON_COUNT_READ_FAILCLOSED — РОЗРОБКУ ПІДПУНКТУ ЗАКРИТО
+
+**Лише встановлений вузький дефект:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Повний SA-EXT-04 і всі батьківські SA-EXT-01…20 залишаються OPEN.**
+
+- **Дефект у справжньому маршруті:** `POST /api/groups?action=session` при чинному марафоні читав `COUNT(DISTINCT ...)`, але `Number(used?.count||0)` помилково перетворював відсутній, `NULL`, рядковий чи пошкоджений D1 count на 0. Це дозволяло створювати зустріч, хоча кількість уже використаних глав не була достовірно встановлена.
+- **Інтеграція:** [PR #614](https://github.com/Oleksii-debug/scripture-archive/pull/614) **SQUASH MERGED** у `main@e45f6287551f123d619579261a65140dba2650fd`; канонічний `app/api/groups/route.ts` blob `4ad7564b12ad849e0f0de8f4d283c7687642a019`. Не підтверджений safe nonnegative integer count — приватний HTTP 503 без створення зустрічі; справжній 0 і точна межа 3 збережені. Немає нової БД, паралельного групового сервера або розгортання.
+- **Регресії:** `tests/groups-numeric-input-boundary.test.mjs` blob `06afb39fdf696df6a884f5a2d69aeb27d91111e1`. В існуючій SQLite fixture з реальними міграціями, активним `group_marathon_registrations` та транспільованим production POST: **10 негативних + 4 позитивні/межові сценарії**; перевірені status/error, кількість записаних зустрічей і відсутність незапланованих D1 writes. Перша exact-head Actions #41036209267: native Node успішний, TypeScript виявив nullable `used` — виправлено в наступному commit без зміни політики. Повторний [Actions #41036390455](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41036390455): native Node, TypeScript, lint, source build і Python **PASS**; **загальний workflow FAIL** лише на окремому disposable Worker/D1, дві спроби **21/22**, перевірені `Your worker restarted mid-request` HTTP 503 на `tests/api-flow.test.mjs:103,100` — [PR #361](https://github.com/Oleksii-debug/scripture-archive/pull/361). Повний E2E не визнано PASS.
+- **Невирішене за межами функції:** deployed Cloudflare Sites SHA, production-D1, email/owner controls, real browser, NVDA, повний SA-EXT-04 і решта секцій не прийняті. Інші пов'язані маршрути не переписувалися; нова розробка цього точного дефекту — лише за новим доказовим відтворенням. Центральна координація [#297](https://github.com/Oleksii-debug/scripture-archive/issues/297).
+
+---
+
 ## 2026-10-30 — SA-EXT-03 / MATERIAL_DRAFT_EXPLICIT_ID_TRUNCATION_ALIAS — РОЗРОБКУ ПІДФУНКЦІЇ ЗАКРИТО
 
 **РІВНО ЦЕЙ ПІДПУНКТ:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`; `remaining_scoped_implementation=0`; `necessary_unmerged_PRs=0`. Повний SA-EXT-03 та всі батьківські SA-EXT-01…20 залишаються **OPEN**.

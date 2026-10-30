@@ -41,7 +41,12 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
       if (!Array.isArray(verses)) { status.textContent=copy.unavailable; return; }
       // Never attribute a new/unrecognized local edition to the primary one.
       const fallback=catalog.editions?.[lang];
-      const metadata=catalog.translations?.[edition.id] || (edition.contentId && fallback?.id === edition.contentId ? fallback : null);
+      const declared=Object.prototype.hasOwnProperty.call(catalog.translations || {}, edition.id);
+      const translation=declared ? catalog.translations[edition.id] : null;
+      // A declared but mismatched identity must not borrow another edition's
+      // licence and attribute that edition's loaded verses to a false source.
+      const metadata=declared ? (translation?.id === edition.id ? translation : null)
+        : (edition.contentId && fallback?.id === edition.contentId ? fallback : null);
       // Keep a comparison inaccessible if its own source or terms are missing.
       // Never borrow rights metadata from another Bible edition.
       const source=typeof metadata?.source==='string'?https(metadata.source):'';

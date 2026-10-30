@@ -2805,7 +2805,14 @@ async function mountReaderBookmarks(meta, chapter, edition, books) {
     const data = await response.json();
     if (!Array.isArray(data.bookmarks)) throw Error("bookmark_load_failed");
     if (!isCurrent()) return;
-    const items = data.bookmarks.filter(item => item.edition === edition.id && books.some(book => book.code === item.book) && Number.isInteger(item.chapter) && item.chapter > 0);
+    // D1 legacy rows may outlive an edition's chapter metadata. Never let a
+    // malformed row hide valid bookmarks or create an unopenable chapter link.
+    const items = data.bookmarks.filter(item => {
+      if (!item || typeof item !== "object" || Array.isArray(item) || item.edition !== edition.id) return false;
+      const book = books.find(value => value.code === item.book);
+      return !!book && Number.isSafeInteger(item.chapter) && item.chapter >= 1
+        && Number.isSafeInteger(book.chapters) && item.chapter <= book.chapters;
+    });
     const saved = items.some(item => item.book === meta.code && item.chapter === chapter);
     panel.innerHTML = `<h2>${copy.title}</h2><button class="button" type="button" id="toggle-bookmark" aria-pressed="${saved}">${saved ? copy.remove : copy.save}</button><p role="status" id="bookmark-status"></p>${items.length ? `<ul>${items.map(item => { const book = books.find(value => value.code === item.book); return `<li><a href="/reader/${encodeURIComponent(item.book)}/${item.chapter}">${esc(bookTitle(book))} ${item.chapter}</a></li>`; }).join("")}</ul>` : `<p>${copy.empty}</p>`}`;
     panel.querySelector("#toggle-bookmark").addEventListener("click", async event => {

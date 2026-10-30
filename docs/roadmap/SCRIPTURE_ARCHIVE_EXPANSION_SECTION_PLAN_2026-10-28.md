@@ -4,6 +4,12 @@
 
 ---
 
+## 2026-10-30 — SA-EXT-10 / COMMUNITY_PUBLIC_PROGRESS_COUNT_INTEGRITY — SCOPED TERMINAL
+
+**ЗАКРИТО ДЛЯ РОЗРОБКИ ЛИШЕ ПІДПУНКТ / `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`.** [PR #739](https://github.com/Oleksii-debug/scripture-archive/pull/739) **SQUASH MERGED** у canonical `main@557262fd51a25bcff46830f711a066de35e7e08c`; [exact-head CI #41063578969](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41063578969) **SUCCESS** (Node/TypeScript/lint/build/Worker-D1/Python). Реальний `GET /api/community` відхиляє зіпсовані дані про прочитані глави й неправдиві SQL-лічильники місій, без нових сховищ чи мутацій. [Постійна квитанція](SA_EXT_10_PUBLIC_PROGRESS_COUNTERS_TERMINAL_20261030.md). `remaining_scoped_implementation=0`; `necessary_unmerged_PRs=0` тільки для цього дефекту. **Усі 20 повних батьківських SA-EXT-01…20, включно з SA-EXT-10, OPEN**; Sites/Windows/NVDA/production NOT_VERIFIED, реліз не виконувався.
+
+---
+
 ## 2026-10-30 — SA-EXT-16 / LATE_AUTH_RESPONSE_COOKIE_CLOBBER — SCOPED SOURCE TERMINAL
 
 **CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** only for the delayed old-auth response clearing a newer login session cookie. [Functional PR #731](https://github.com/Oleksii-debug/scripture-archive/pull/731) **SQUASH MERGED** into `main@4668cd6cb594ecdd532b455fa5cf3682e0aab1a4`; exact-head [CI #41061728225](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41061728225) **SUCCESS** (Node/TS/lint/build/Worker-D1/Python) after test-only SQL regex correction. Four old-session response actions no longer clear the shared cookie; server-side D1 revocation remains enforced. `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` **only** for this source defect. [Permanent scoped receipt](SA_EXT_16_LATE_AUTH_COOKIE_SOURCE_TERMINAL_20261030.md). Real Chrome cookie-jar acceptance [issue #705](https://github.com/Oleksii-debug/scripture-archive/issues/705), deployed site SHA, SMTP, Windows/NVDA and **all 20 SA-EXT parents remain OPEN**. No deployment.

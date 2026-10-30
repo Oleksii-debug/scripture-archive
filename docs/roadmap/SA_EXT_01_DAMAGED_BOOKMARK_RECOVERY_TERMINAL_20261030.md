@@ -15,7 +15,7 @@
 - Feature PR: https://github.com/Oleksii-debug/scripture-archive/pull/661 — `MERGED`.
 - Exact feature main SHA: `f7e13981f7529e57e9c96cd89dfe8ac3dce221f5` (після merge підтверджено main == цей SHA; подальші commits не скасовують ancestry).
 - Exact approved PR head: `f652c5407913c90d119b2911465fa0930ecbded9`.
-- Змінено рівно чотири канонічні файли: `app/api/bookmarks/route.ts`, `public/app.js`, `tests/bookmark-recovery-route.test.mjs`, `tests/bookmark-recovery-ui.test.mjs`. Додані SQLite regression cases містяться у `tests/bookmark-recovery-sqlite.test.mjs`, що входить до того ж PR; разом п'ять шляхів у фактичній source історії.
+- Змінено рівно п'ять шляхів: `app/api/bookmarks/route.ts`, `public/app.js`, `tests/bookmark-recovery-route.test.mjs`, `tests/bookmark-recovery-ui.test.mjs`, `tests/bookmark-recovery-sqlite.test.mjs`.
 - Залишкових завдань **реалізації саме цієї вузької функції немає**: `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`.
 
 ## Виконані перевірки (GitHub Actions, а не симуляція)

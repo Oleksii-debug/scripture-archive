@@ -2332,7 +2332,19 @@ async function getSession() {
   // An absent marker cannot establish that cached reading belongs to the
   // newly authenticated account. Retain exact unowned bytes for a separate,
   // explicit recovery/import decision before replacing the active cache.
-  let unownedReading = false, preservedUnownedReading = true;
+  // The default mission snapshot has no private completion evidence. Any
+  // non-default or malformed ownerless snapshot is retained for explicit
+  // future recovery, never silently assigned to a newly verified account.
+  const emptyMissionSnapshot = raw => {
+    try {
+      const value = JSON.parse(raw);
+      return value && typeof value === 'object' && !Array.isArray(value) &&
+        Object.keys(value).length === 3 && value.index === 0 &&
+        Array.isArray(value.correct) && value.correct.length === 0 &&
+        value.complete === false;
+    } catch { return false; }
+  };
+  let unownedReading = false, unownedMission = false, preservedUnownedReading = true;
   // An unreadable owner marker is as ambiguous as an absent one: preserve
   // readable cached history before clearing or assigning a new principal.
   if (state.user && (!markerReadable || !previousOwner)) {
@@ -2344,6 +2356,15 @@ async function getSession() {
         const priorArchive = localStorage.getItem(archiveKey);
         if (priorArchive === null) localStorage.setItem(archiveKey, legacyReading);
         preservedUnownedReading = localStorage.getItem(archiveKey) === legacyReading;
+      }
+      const legacyMission = localStorage.getItem('sa.mission.OTAB01');
+      if (legacyMission !== null && !emptyMissionSnapshot(legacyMission)) {
+        unownedMission = true;
+        const missionArchiveKey = 'sa.unownedMissionProgress.v1';
+        const priorMissionArchive = localStorage.getItem(missionArchiveKey);
+        if (priorMissionArchive === null) localStorage.setItem(missionArchiveKey, legacyMission);
+        preservedUnownedReading = preservedUnownedReading &&
+          localStorage.getItem(missionArchiveKey) === legacyMission;
       }
     } catch { preservedUnownedReading = false; }
   }
@@ -2359,7 +2380,7 @@ async function getSession() {
     return state.user;
   }
   state.unownedReadingPendingRecovery = false;
-  const mustClear = unownedReading || !markerReadable || state.localReadingStorageUntrusted ||
+  const mustClear = unownedReading || unownedMission || !markerReadable || state.localReadingStorageUntrusted ||
     (priorPrincipal && priorPrincipal !== state.user?.id) ||
     (previousOwner && previousOwner !== state.user?.id);
   const cleared = mustClear ? clearPersonalProgress() : true;
@@ -2368,6 +2389,10 @@ async function getSession() {
   let verifiedClear = cleared;
   if (verifiedClear && unownedReading) {
     try { verifiedClear = localStorage.getItem('sa.readingHistory') === '[]'; }
+    catch { verifiedClear = false; }
+  }
+  if (verifiedClear && unownedMission) {
+    try { verifiedClear = emptyMissionSnapshot(localStorage.getItem('sa.mission.OTAB01')); }
     catch { verifiedClear = false; }
   }
   // An incomplete wipe must NEVER be certified by assigning the old browser
@@ -2381,7 +2406,7 @@ async function getSession() {
     }
   } else {
     state.localReadingStorageUntrusted = true;
-    if (unownedReading) state.unownedReadingPendingRecovery = true;
+    if (unownedReading || unownedMission) state.unownedReadingPendingRecovery = true;
   }
   return state.user;
 }

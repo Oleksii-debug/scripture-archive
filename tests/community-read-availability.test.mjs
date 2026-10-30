@@ -23,7 +23,8 @@ const validReceipts = () => [
 ];
 
 function fixture({ receipts = validReceipts(), throwBatch = false, throwAdvance = false,
-                   missingDb = false, owner = false } = {}) {
+                   missingDb = false, owner = false, throwLimit = false, denyLimit = false,
+                   throwAuth = false, throwOwnerState = false } = {}) {
   const calls = { advance: 0, batch: 0, auth: 0 };
   const db = {
     prepare(sql) { return { sql }; },
@@ -40,9 +41,9 @@ function fixture({ receipts = validReceipts(), throwBatch = false, throwAdvance 
     require(name) {
       if (name === "cloudflare:workers") return { env: { DB: missingDb ? undefined : db } };
       if (name === "../../../lib/auth") return {
-        authenticateRequest: async () => { calls.auth++; return owner ? { userId: "owner" } : null; },
+        authenticateRequest: async () => { calls.auth++; if (throwAuth) throw Error("identity store unavailable"); return owner ? { userId: "owner" } : null; },
         isVerifiedOwner: identity => Boolean(identity?.userId === "owner"),
-        rateLimit: async () => true,
+        rateLimit: async () => { if (throwLimit) throw Error("rate store unavailable"); return !denyLimit; },
         requestAddress: () => "disposable-test",
         sameOrigin: () => true,
       };
@@ -52,17 +53,18 @@ function fixture({ receipts = validReceipts(), throwBatch = false, throwAdvance 
           calls.advance++;
           if (throwAdvance) throw Error("D1 lease failure");
         },
-        communityOwnerState: async () => ({ status: "paused" }),
+        communityOwnerState: async () => { if (throwOwnerState) throw Error("owner D1 unavailable"); return { status: "paused" }; },
         controlCommunity: async () => ({ ok: false }),
         leaseCommunityAgents: async () => ({ jobs: [] }),
       };
       throw Error("Unexpected community route import " + name);
     },
   });
-  async function get(action, summary = false) {
+  async function get(action, summary = false, query = {}) {
     const params = new URLSearchParams();
     if (action) params.set("action", action);
     if (summary) params.set("public", "summary");
+    for (const [key, value] of Object.entries(query)) params.set(key, value);
     const suffix = params.size ? "?" + params.toString() : "";
     const response = await exports.GET(new Request("https://archive.invalid/api/community" + suffix));
     return { status: response.status, body: await response.json(), cache: response.headers.get("cache-control") };
@@ -164,4 +166,73 @@ test("authenticated owner state remains routed to the existing owner authority",
   assert.equal(response.status, 200);
   assert.equal(response.body.status, "paused");
   assert.deepEqual(f.calls, { advance: 0, batch: 0, auth: 1 });
+});
+
+test("failed community rate-limit storage returns private no-store 503, not a thrown 500", async () => {
+  const f = fixture({ throwLimit: true });
+  const response = await f.get();
+  assert.equal(response.status, 503);
+  assert.equal(response.body.error, "community_unavailable");
+  assert.equal(Object.hasOwn(response.body, "members"), false);
+  assert.match(response.cache, /no-store/);
+  assert.equal(f.calls.batch, 0);
+  assert.equal(f.calls.advance, 0);
+});
+
+test("rate-limited community request remains a truthful 429 and performs no D1 directory read", async () => {
+  const f = fixture({ denyLimit: true });
+  const response = await f.get();
+  assert.equal(response.status, 429);
+  assert.equal(response.body.error, "too_many_requests");
+  assert.equal(f.calls.batch, 0);
+});
+
+for (const defect of ["identity", "owner state"]) {
+  test("owner community "+defect+" backend outage is JSON 503, not an HTML crash", async () => {
+    const f = fixture({ owner:true, throwAuth:defect==="identity", throwOwnerState:defect==="owner state" });
+    const response = await f.get("owner");
+    assert.equal(response.status, 503);
+    assert.equal(response.body.error, "community_unavailable");
+    assert.equal(Object.hasOwn(response.body, "status"), false);
+    assert.match(response.cache, /no-store/);
+    assert.equal(f.calls.batch, 0);
+  });
+}
+
+for (const parameters of [
+  {page:"1.9",pageSize:"12.5"},
+  {page:"NaN",pageSize:"Infinity"},
+  {page:"1e2",pageSize:"-48"},
+  {page:"999999999999999999",pageSize:"12.3"},
+  {page:"+1",pageSize:"0x20"},
+]) {
+  test("invalid public directory cursors retain safe integral defaults: "+JSON.stringify(parameters), async () => {
+    const f = fixture();
+    const response = await f.get(undefined, false, parameters);
+    assert.equal(response.status, 200);
+    assert.equal(response.body.page, 1);
+    assert.equal(response.body.pageSize, 24);
+    assert.equal(response.body.members.length, 1);
+    assert.equal(f.calls.advance, 0);
+    assert.equal(f.calls.auth, 0);
+  });
+}
+
+test("valid decimal public directory pagination remains bounded and coherent", async () => {
+  const f = fixture();
+  const a = await f.get(undefined, false, { page:"2",pageSize:"12" });
+  assert.equal(a.status, 200);
+  assert.equal(a.body.page, 2);
+  assert.equal(a.body.pageSize, 12);
+  assert.deepEqual(a.body.members, []);
+  const upper = await f.get(undefined, false, { page:"100000",pageSize:"999" });
+  assert.equal(upper.status, 200);
+  assert.equal(upper.body.page, 10000);
+  assert.equal(upper.body.pageSize, 48);
+  const lower = await f.get(undefined, false, { page:"0",pageSize:"1" });
+  assert.equal(lower.status, 200);
+  assert.equal(lower.body.page, 1);
+  assert.equal(lower.body.pageSize, 12);
+  assert.equal(f.calls.batch, 3);
+  assert.equal(f.calls.advance, 0);
 });

@@ -257,3 +257,36 @@ test("POST first-party heartbeat remains available without event-DTO insert", as
   assert.equal(r.status, 202);
   assert.equal(h.calls.bindings.filter(item => item.sql.includes("INSERT INTO usage_events")).length, 0);
 });
+
+test("POST rejects coerced or out-of-range heartbeat seconds before D1 mutation", async () => {
+  for (const invalid of [true, false, null, "60", "5", "", ["60"], [30], {}, -1, 61, 1.5, 1e100]) {
+    const h = harness();
+    const r = await h.invoke("POST", { action: "heartbeat", overrides: { activeSeconds: invalid } });
+    assert.equal(r.status, 400, "invalid heartbeat seconds must be rejected: " + JSON.stringify(invalid));
+    assert.equal(r.body.error, "invalid_analytics");
+    assert.equal(h.calls.prepare, 0);
+    assert.equal(h.calls.batch, 0);
+  }
+});
+
+test("POST accepts canonical bounded integer heartbeat seconds without coercion", async () => {
+  for (const seconds of [0, 5, 30, 60]) {
+    const h = harness();
+    const r = await h.invoke("POST", { action: "heartbeat", overrides: { activeSeconds: seconds } });
+    assert.equal(r.status, 202);
+    assert.equal(h.calls.batch, 1);
+    assert.equal(h.calls.bindings[0].args[2], seconds);
+    assert.equal(h.calls.bindings[0].args[10], seconds);
+  }
+});
+
+test("POST preserves zero-second legacy heartbeat and ignores event-only activeSeconds", async () => {
+  const legacy = harness();
+  const r = await legacy.invoke("POST", { action: "heartbeat" });
+  assert.equal(r.status, 202);
+  assert.equal(legacy.calls.bindings[0].args[2], 0);
+  const event = harness();
+  const e = await event.invoke("POST", { action: "event", overrides: { activeSeconds: ["invalid"] } });
+  assert.equal(e.status, 202);
+  assert.equal(event.calls.bindings[0].args[2], 0);
+});

@@ -69,7 +69,14 @@ export async function POST(request: Request) {
   const pageName = PAGE_NAMES.has(requestedPage) ? requestedPage
     : requestedPage ? "other" : "home";
   const source = ["direct", "organic", "social", "referral", "campaign"].includes(clean(body.source, 20)) ? clean(body.source, 20) : "direct";
-  const activeSeconds = action === "heartbeat" ? Math.min(60, Math.max(0, Math.round(Number(body.activeSeconds) || 0))) : 0;
+  // The first-party browser sends whole elapsed seconds. JavaScript Number()
+  // otherwise accepts booleans, arrays and numeric strings as fabricated time.
+  // Legacy clients that omit this optional field still record zero seconds.
+  const rawSeconds = body.activeSeconds === undefined ? 0 : body.activeSeconds;
+  if (action === "heartbeat" && (typeof rawSeconds !== "number" ||
+      !Number.isSafeInteger(rawSeconds) || rawSeconds < 0 || rawSeconds > 60))
+    return json({ error: "invalid_analytics" }, 400);
+  const activeSeconds = action === "heartbeat" ? rawSeconds as number : 0;
   const eventType = clean(body.eventType, 40);
   if (action === "event" && !EVENTS.has(eventType)) return json({ error: "invalid_event" }, 400);
   const pageViews = action === "event" && eventType === "page_view" ? 1 : 0;

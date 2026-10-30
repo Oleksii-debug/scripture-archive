@@ -58,8 +58,8 @@ export async function POST(request: Request) {
   catch { return unavailable(); }
   if (!allowed) return json({ error: "too_many_requests" }, 429);
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
-  const sessionId = clean(body?.sessionId, 36), action = clean(body?.action, 20);
-  if (!body || !SESSION_ID.test(sessionId) || !["event", "heartbeat"].includes(action)) return json({ error: "invalid_analytics" }, 400);
+  const sessionId = body?.sessionId, action = clean(body?.action, 20);
+  if (!body || typeof sessionId !== "string" || !SESSION_ID.test(sessionId) || !["event", "heartbeat"].includes(action)) return json({ error: "invalid_analytics" }, 400);
 
   let identity: Awaited<ReturnType<typeof authenticateRequest>>;
   try { identity = await authenticateRequest(request); }

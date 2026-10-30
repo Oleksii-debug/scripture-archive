@@ -14,7 +14,7 @@ test('the real campaigns route opens a canonical, trilingual and source-validate
   assert.equal(new Set(academyLessonIds).size,7);
   assert.ok(workspace.includes("from './scripture-academy.js'"));
   assert.ok(workspace.includes('academyMarkup(catalog,state.lang,esc,courseProgress)'));
-  assert.match(workspace,/attachAcademy\\(globalThis\\.document,storage,state\\.lang,state\\.user,courseProgress,\\s*\\(\\)=>/);
+  assert.ok(workspace.includes('attachAcademy(globalThis.document,storage,state.lang,state.user,courseProgress,'), 'Academy must mount a current-principal callback');
   assert.ok(workspace.includes('!state.sessionUnavailable'), 'current session must gate Academy writes');
   for(const lang of ['uk','ru','en']){
     const html=academyMarkup(catalog,lang,esc,{available:true,completed:[]});

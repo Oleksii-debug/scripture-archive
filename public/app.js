@@ -2326,6 +2326,9 @@ async function getSession() {
   let previousOwner = null, markerReadable = true;
   try { previousOwner = localStorage.getItem('sa.progressOwner'); }
   catch { markerReadable = false; }
+  // A logged-out tab cannot erase an unresolved orphan simply because its
+  // authenticated principal disappeared. Retry preservation on a verified login.
+  if (!state.user && state.unownedReadingPendingRecovery) return state.user;
   // An absent marker cannot establish that cached reading belongs to the
   // newly authenticated account. Retain exact unowned bytes for a separate,
   // explicit recovery/import decision before replacing the active cache.

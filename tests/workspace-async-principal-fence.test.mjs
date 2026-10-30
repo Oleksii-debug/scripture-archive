@@ -201,6 +201,6 @@ test('native builder still announces acknowledged save for its original current 
     response.resolve(answer({saved:true}));
     await action;
     assert.equal(f.shells.length,2,'valid save still redraws canonical builder');
-    assert.deepEqual(f.announcements,['saved']);
+    assert.deepEqual(f.announcements,['Material saved.']);
   } finally {globalThis.FormData=savedFormData;f.restore();}
 });

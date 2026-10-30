@@ -7,7 +7,9 @@ import { academyMarkup, academyProgressKey, readAcademyProgress, attachAcademy }
 // create a misleading chapter link; leave the stored bytes untouched for recovery.
 export function verifiedLocalReadingHistory(raw) {
   if (!Array.isArray(raw)) return [];
-  return raw.slice(0, 1000).filter(item =>
+  // Keep the newest entries. 1000 oldest entries could hide recent legitimate
+  // chapters in a complete Bible-reading journey; 2048 bounds hostile caches.
+  return raw.slice(-2048).filter(item =>
     item && typeof item === 'object' && !Array.isArray(item) &&
     typeof item.book === 'string' && /^[1-3]?[A-Z]{2,4}$/.test(item.book) &&
     Number.isSafeInteger(item.chapter) && item.chapter >= 1 && item.chapter <= 150 &&

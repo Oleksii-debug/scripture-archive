@@ -1,3 +1,14 @@
+## 2026-10-30 — SA-EXT-04 / GROUP_MEETING_EXACT_DATE_REFLECTION — РОЗРОБКУ ВУЗЬКОГО ДЕФЕКТУ ЗАКРИТО
+
+**Лише цей вузький компонент:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. Повний SA-EXT-04 та решта **SA-EXT-01…20 OPEN**.
+
+- **Доведена помилка:** `POST /api/groups?action=session` раніше виконував `clean(body.meetingDate,10)` та `clean(body.reflection,1200)`, перетворюючи некоректну дату із суфіксом/новим рядком на іншу календарну дату та обрізаючи приватний підсумок зустрічі перед записом у D1.
+- **Функціональна інтеграція:** [PR #624](https://github.com/Oleksii-debug/scripture-archive/pull/624) **SQUASH MERGED** `main@0046f5a1b5f1f3073d8b1ee7627be077094235eb`; `app/api/groups/route.ts@78e28d50e7b07bf75ae0a837b815174e148931f2`, `tests/groups-numeric-input-boundary.test.mjs@1444f5f910f124a33b18a5239af8fdcc817988bc`. Валідується повна дата, рядки підсумку понад 1200 відхиляються до SQL, законний 1200-символьний приватний текст зберігається точно; права власника/ведучого, марафон і канонічні таблиці незмінні.
+- **Native tests:** [Actions #41038440157](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41038440157) на exact HEAD `a3cc73fd22d95008871d9b5e246c4a9f6a10f1d2`: **1480 Node PASS, 0 FAIL / 1 SKIP**, TS/lint/build PASS; **цілий workflow FAIL** через інший disposable Wrangler Worker/D1 `Your worker restarted mid-request`, 503, **21/22 двічі**. Python SKIPPED. Production і фізичний NVDA НЕ ПЕРЕВІРЕНО.
+- **Receipt:** [SA_EXT_04_GROUP_MEETING_EXACT_DATE_REFLECTION_TERMINAL_2026-10-30.md](SA_EXT_04_GROUP_MEETING_EXACT_DATE_REFLECTION_TERMINAL_2026-10-30.md). [Координація #297](https://github.com/Oleksii-debug/scripture-archive/issues/297). Нового релізу, мов, окремих сервісів не створювали.
+
+---
+
 ## 2026-10-30 — SA-EXT-01/16 / PRIVATE_BOOKMARK_EXPORT_EDITION_INTEGRITY — ЗАКРИТО ВУЗЬКИЙ ПІДПУНКТ
 
 **`CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`**, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. Тільки ця верифікована функція, **не всі SA-EXT-01…20**; усі батьківські розділи залишаються **OPEN**.

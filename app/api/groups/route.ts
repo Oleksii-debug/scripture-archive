@@ -11,6 +11,11 @@ function clean(value: unknown, max = 160) {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
 
+// Identifiers must not alias another record when caller input is oversized.
+function boundedIdentifier(value: unknown, max = 80) {
+  return typeof value === "string" && value.length <= max ? value.trim() : "";
+}
+
 function integer(value: unknown, min: number, max: number) {
   // HTML number inputs send decimal strings, while JSON clients may send numbers.
   // Do not coerce booleans, arrays, null, hex/exponent notation or empty strings
@@ -113,7 +118,10 @@ async function checkedGroupRows<T>(result: {success?: boolean;results?: T[]}): P
 export async function GET(request: Request) {
   try {
   const url = new URL(request.url);
-  const groupId = clean(url.searchParams.get("groupId"), 80);
+  const requestedGroupId = url.searchParams.get("groupId");
+  if (requestedGroupId !== null && requestedGroupId.length > 80)
+    return Response.json({ error: "invalid_group_id" }, { status: 400 });
+  const groupId = boundedIdentifier(requestedGroupId);
   // Public group discovery includes no private membership or invite data.
   // Do not make that public endpoint depend on a failing/corrupt session;
   // details and mine remain fully authenticated and fail closed on auth errors.
@@ -178,7 +186,7 @@ export async function POST(request: Request) {
   }
 
   if (action === "rotate-invite") {
-    const groupId=clean(body.groupId,80), previous=clean(body.expectedInviteCode,32);
+    const groupId=boundedIdentifier(body.groupId), previous=clean(body.expectedInviteCode,32);
     if(!groupId||!previous||body.confirm!==true)return Response.json({error:"confirmation_required"},{status:400});
     const inviteCode=crypto.randomUUID().replaceAll('-','').toUpperCase();
     try {
@@ -190,7 +198,7 @@ export async function POST(request: Request) {
   }
 
   if (action === "role") {
-    const groupId=clean(body.groupId,80),target=clean(body.targetUserId,80),role=clean(body.role,20),previous=clean(body.expectedRole,20);
+    const groupId=boundedIdentifier(body.groupId),target=boundedIdentifier(body.targetUserId),role=clean(body.role,20),previous=clean(body.expectedRole,20);
     if(!groupId||!target||target===id.userId||!['member','facilitator'].includes(role)||!['member','facilitator'].includes(previous)||role===previous)return Response.json({error:"invalid_role_change"},{status:400});
     // Repeat the same authorization and expected-role predicate in every write.
     // Revocation precedes the role change inside one atomic batch.
@@ -208,7 +216,7 @@ export async function POST(request: Request) {
   }
 
   if (action === "leave") {
-    const groupId=clean(body.groupId,80), member=await membership(groupId,id.userId);
+    const groupId=boundedIdentifier(body.groupId), member=await membership(groupId,id.userId);
     if(!member)return Response.json({error:"not_found"},{status:404});
     if(member.role==='owner')return Response.json({error:"owner_transfer_required"},{status:409});
     try {
@@ -224,7 +232,7 @@ export async function POST(request: Request) {
   }
 
   if (action === "transfer") {
-    const groupId=clean(body.groupId,80), target=clean(body.targetUserId,80);
+    const groupId=boundedIdentifier(body.groupId), target=boundedIdentifier(body.targetUserId);
     if(!groupId||!target||target===id.userId)return Response.json({error:"invalid_transfer"},{status:400});
     try {
       const result=await env.DB!.batch([
@@ -240,7 +248,7 @@ export async function POST(request: Request) {
   }
 
   if (action === "delete") {
-    const groupId=clean(body.groupId,80);
+    const groupId=boundedIdentifier(body.groupId);
     if(!groupId||body.confirm!==true)return Response.json({error:"confirmation_required"},{status:400});
     try {
       const result=await env.DB!.batch([
@@ -258,7 +266,7 @@ export async function POST(request: Request) {
   if (!person) return Response.json({ error: "profile_required" }, { status: 409 });
 
   if (action === "start") {
-    const groupId = clean(body.groupId, 80), member = await membership(groupId, id.userId);
+    const groupId = boundedIdentifier(body.groupId), member = await membership(groupId, id.userId);
     if (member?.role !== "owner") return forbidden(403);
     const registration = await env.DB!.prepare("SELECT cohort_key,status FROM group_marathon_registrations WHERE group_id=?").bind(groupId).first<{cohort_key:string;status:string}>();
     if (!registration || registration.status !== "ready") return Response.json({error:"cohort_not_ready"},{status:409});
@@ -287,7 +295,7 @@ export async function POST(request: Request) {
   }
 
   if (action === "session") {
-    const groupId = clean(body.groupId, 80);
+    const groupId = boundedIdentifier(body.groupId);
     const member = await membership(groupId, id.userId);
     if (!member || !["owner", "facilitator"].includes(member.role)) return forbidden(403);
     const bookId = clean(body.bookId, 8).toUpperCase();

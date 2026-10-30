@@ -15,10 +15,10 @@ function fixture() {
   db.exec(`INSERT INTO home_groups(id,owner_user_id,name,invite_code,visibility,bible_edition) VALUES('g','alice','Group','AABBCCDD','private','en-web'),('other','alice','Other','other','private','en-web');
     INSERT INTO home_group_members(group_id,user_id,display_name,role) VALUES('g','alice','Alice','owner'),('g','bob','Bob','member'),('g','carol','Carol','facilitator'),('other','alice','Alice','owner');
     INSERT INTO group_sessions(id,group_id,created_by,book_id,chapter,meeting_date,reflection) VALUES('s','g','alice','GEN',12,'2026-10-28','private discussion');`);
-  let failure=-1, beforeBatch=null, beforeRun=null, corruptCreateReceipt=null, corruptSingleReceipt=null;
+  let failure=-1, beforeBatch=null, beforeRun=null, corruptCreateReceipt=null, corruptSingleReceipt=null, failAll=false, throwAll=false;
   function statement(sql,args=[]) {return {sql,args,
     first:async()=>db.prepare(sql).get(...args)??null,
-    all:async()=>({success:true,results:db.prepare(sql).all(...args)}),
+    all:async()=>{if(throwAll)throw Error('D1 read unavailable');return failAll?{success:false,results:[]}:{success:true,results:db.prepare(sql).all(...args)};},
     run:async()=>{if(beforeRun){const hook=beforeRun;beforeRun=null;hook();}const changes=Number(db.prepare(sql).run(...args).changes);const mode=corruptSingleReceipt;corruptSingleReceipt=null;if(mode==='missing')return {success:true,meta:{}};if(mode==='failed')return {success:false,meta:{changes}};return {success:true,meta:{changes}};},
   };}
   const D1={prepare(sql){return {...statement(sql),bind:(...args)=>statement(sql,args)};},async batch(statements){
@@ -47,12 +47,13 @@ function fixture() {
   const exports=loadRoute('groups'),attempts=loadRoute('attempts');
   async function attempt(action,body={},user='carol') {const r=await attempts.POST(new Request('https://local.invalid/api/attempts?action='+action,{method:'POST',headers:{origin:'https://local.invalid','content-type':'application/json','x-user':user},body:JSON.stringify({missionId:'OT-AB-01',book:'GEN',chapter:12,groupId:'g',locale:'en',...body})}));return {status:r.status,data:await r.json()};}
   async function get(user='alice',groupId='g'){const r=await exports.GET(new Request('https://local.invalid/api/groups?groupId='+groupId,{headers:user?{'x-user':user}:{}}));return {status:r.status,data:await r.json()};}
+  async function list(user='',mine=false){const r=await exports.GET(new Request('https://local.invalid/api/groups'+(mine?'?mine=1':''),{headers:user?{'x-user':user}:{}}));return {status:r.status,data:await r.json()};}
   async function post(action,body={},user='alice',origin='https://local.invalid') {const r=await exports.POST(new Request('https://local.invalid/api/groups?action='+action,{method:'POST',headers:{origin,'content-type':'application/json',...(user?{'x-user':user}:{})},body:JSON.stringify({groupId:'g',...body})}));return {status:r.status,data:await r.json()};}
   function seedAttempt(id,user,group,status='active') {
     db.prepare("INSERT INTO mission_attempts(id,actor_id,mission_id,book_id,chapter,group_id,locale,task_limit,status,expires_at) VALUES(?,?,'OT-AB-01','GEN',12,?,'en',5,?,datetime('now','+2 hours'))").run(id,user,group,status);
     db.prepare("INSERT INTO chapter_read_receipts(id,actor_id,book_id,chapter,group_id) VALUES(?,?,'GEN',12,?)").run(id,user,group);
   }
-  return {db,get,post,attempt,seedAttempt,beforeRun:fn=>{beforeRun=fn;},setFailure:n=>{failure=n;},beforeBatch:fn=>{beforeBatch=fn;},setCreateReceiptMode:mode=>{corruptCreateReceipt=mode;},setSingleReceiptMode:mode=>{corruptSingleReceipt=mode;}};
+  return {db,get,list,post,attempt,seedAttempt,beforeRun:fn=>{beforeRun=fn;},setFailure:n=>{failure=n;},beforeBatch:fn=>{beforeBatch=fn;},setCreateReceiptMode:mode=>{corruptCreateReceipt=mode;},setSingleReceiptMode:mode=>{corruptSingleReceipt=mode;},setReadFailure:v=>{failAll=v;},setReadThrow:v=>{throwAll=v;}};
 }
 const owner=f=>f.db.prepare("SELECT owner_user_id FROM home_groups WHERE id='g'").get().owner_user_id;
 const roles=f=>f.db.prepare("SELECT user_id,role FROM home_group_members WHERE group_id='g' ORDER BY user_id").all().map(x=>[x.user_id,x.role]);
@@ -375,5 +376,49 @@ test('group creation and marathon cohort transition are one atomic D1 transactio
     const success=await f.post('create',payload);
     assert.equal(success.status,201);assert.equal(success.data.cohortStatus,'ready');
     assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM group_marathon_registrations WHERE cohort_key='shared' AND status='ready'").get().n,2);
+  }finally{f.db.close();}
+});
+
+test('all private group roster/session read errors return a controlled private 503 without partial member disclosure',async()=>{
+  for(const cause of ['failed','throw']){
+    const f=fixture();
+    try{
+      if(cause==='failed')f.setReadFailure(true);else f.setReadThrow(true);
+      const response=await f.get('alice','g');
+      assert.equal(response.status,503,cause);
+      assert.equal(response.data.error,'groups_unavailable');
+      assert.equal(response.data.members,undefined);
+      assert.equal(response.data.managementMembers,undefined);
+      assert.equal(response.data.sessions,undefined);
+      assert.equal(response.data.group,undefined);
+    }finally{f.db.close();}
+  }
+});
+
+test('failed public and private group list reads cannot masquerade as empty',async()=>{
+  for(const cause of ['failed','throw']){
+    const f=fixture();
+    try{
+      f.db.exec("UPDATE home_groups SET visibility='public' WHERE id='g'");
+      assert.equal((await f.list('')).status,200);
+      assert.equal((await f.list('alice',true)).status,200);
+      if(cause==='failed')f.setReadFailure(true);else f.setReadThrow(true);
+      const publicView=await f.list('');
+      const ownView=await f.list('alice',true);
+      for(const response of [publicView,ownView]){
+        assert.equal(response.status,503,cause);
+        assert.equal(response.data.error,'groups_unavailable');
+        assert.equal(response.data.groups,undefined);
+      }
+    }finally{f.db.close();}
+  }
+});
+
+test('empty but successful group list preserves truthful 200 rather than a spurious outage',async()=>{
+  const f=fixture();
+  try{
+    const response=await f.list('');
+    assert.equal(response.status,200);
+    assert.deepEqual(response.data.groups,[]);
   }finally{f.db.close();}
 });

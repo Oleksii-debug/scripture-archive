@@ -7,6 +7,7 @@ import ts from "typescript";
 // Execute the real production TypeScript route with stubbed infrastructure,
 // rather than duplicating its authentication/error behavior in the test.
 const source = readFileSync(new URL("../app/api/bookmarks/route.ts", import.meta.url), "utf8");
+const catalog = JSON.parse(readFileSync(new URL("../public/data/catalog.json", import.meta.url), "utf8"));
 const transpiled = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   reportDiagnostics: true,
@@ -45,6 +46,7 @@ function harness(authMode = "ok", dbMode = "ok", databasePresent = true) {
     exports, Request, Response, URL,
     require(specifier) {
       if (specifier === "cloudflare:workers") return { env: { DB: databasePresent ? db : undefined } };
+      if (specifier.endsWith("public/data/catalog.json")) return { default: catalog };
       if (specifier === "../../../lib/auth") return {
         authenticateRequest: async () => {
           calls.auth++;

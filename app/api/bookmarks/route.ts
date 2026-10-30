@@ -1,7 +1,10 @@
 import { env } from "cloudflare:workers";
 import { authenticateRequest, sameOrigin } from "../../../lib/auth";
+import catalog from "../../../public/data/catalog.json";
 
 export const dynamic = "force-dynamic";
+// Reuse canonical Bible chapter limits; avoid maintaining another book list.
+const BOOK_CHAPTERS = new Map(catalog.books.en.map(book => [book.code, book.chapters]));
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
 
 async function user(request: Request) {
@@ -40,7 +43,9 @@ async function write(request: Request, remove: boolean) {
   catch { return json({ error: "bookmarks_unavailable" }, 503); }
   if (!id) return json({ error: "authentication_required" }, 401);
   const body: unknown = await request.json().catch(() => null);
-  if (!valid(body)) return json({ error: "invalid_bookmark" }, 400);
+  // Reject nonexistent chapters on PUT. Keep DELETE able to clean up old invalid entries.
+  if (!valid(body) || (!remove && body.chapter > (BOOK_CHAPTERS.get(body.book) ?? 0)))
+    return json({ error: "invalid_bookmark" }, 400);
   // D1 may return a failure receipt or throw after the caller is authenticated.
   // Never claim that a bookmark was saved or deleted unless the write ACK is
   // well formed; a failed duplicate/limit probe is equally unavailable.

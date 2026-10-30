@@ -1,3 +1,9 @@
+## 2026-10-30 — SA-EXT-03 / MATERIAL_DRAFT_UPSERT_ACK_BOUND — ВУЗЬКЕ ЗАКРИТТЯ
+
+**CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** лише для точного D1 підтвердження чернеткового UPSERT, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. [PR #671](https://github.com/Oleksii-debug/scripture-archive/pull/671) SQUASH MERGED `main@b0b2fbcd04e04461f84846d13b8992d13b64ce4d`, exact-head [Actions #41053959435](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41053959435) **SUCCESS**. Повторний Worker/D1 виявив, що `ON DELETE CASCADE` законно збільшує `total_changes`; кандидат виправлено до merge, strict `changes<=1` діє тільки для UPSERT. **Повний SA-EXT-03 та решта 20 батьківських SA-EXT-01…20 залишаються OPEN**. [Остаточний запис](SA_EXT_03_MATERIAL_UPSERT_ACK_TERMINAL_20261030.md). Сайт/NVDA/продукційна БД не прийняті.
+
+---
+
 ## 2026-10-30 — SA-EXT-01 / READING_EXPORT_CANONICAL_TITLE_BOUNDARY — ВУЗЬКИЙ ДЕФЕКТ ЗАКРИТО
 
 **CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** лише для експорту збереженої READING-історії: назва понад 100 символів більше не стає фальшивим restorable JSON-архівом. [PR #670](https://github.com/Oleksii-debug/scripture-archive/pull/670) SQUASH MERGED у точний `main@4cb564da6b705b1296e552c20ca8e2b7ade4f78f`. [CI #41053249167](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41053249167) **SUCCESS**: Node 1681 PASS/0 FAIL/1 SKIP, disposable Worker/D1 22/22, TypeScript/lint/build, Python 2/2. Реальна кодова інтеграція та exact-main readback підтверджені. [Повний термінальний запис](SA_EXT_01_READING_EXPORT_TITLE_BOUNDARY_TERMINAL_20261030.md). **Увесь батьківський SA-EXT-01 та всі SA-EXT-01…20 залишаються OPEN**; production Sites/SMTP/браузер/Windows/NVDA — NOT_VERIFIED. Ця документальна позначка не санкціонує деплой.

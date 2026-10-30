@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
 
+const catalog = JSON.parse(readFileSync(new URL("../public/data/catalog.json", import.meta.url), "utf8"));
+
 // Execute the real community GET route with failed/partial D1 result receipts,
 // rather than testing a reimplemented response validator.
 const source = readFileSync(new URL("../app/api/community/route.ts", import.meta.url), "utf8");
@@ -40,6 +42,7 @@ function fixture({ receipts = validReceipts(), throwBatch = false, throwAdvance 
     exports, Request, Response, URL, Date,
     require(name) {
       if (name === "cloudflare:workers") return { env: { DB: missingDb ? undefined : db } };
+      if (name === "../../../public/data/catalog.json") return { default: catalog };
       if (name === "../../../lib/auth") return {
         authenticateRequest: async () => { calls.auth++; if (throwAuth) throw Error("identity store unavailable"); return owner ? { userId: "owner" } : null; },
         isVerifiedOwner: identity => Boolean(identity?.userId === "owner"),

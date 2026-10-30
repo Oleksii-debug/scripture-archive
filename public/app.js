@@ -2789,9 +2789,9 @@ function renderLockedChapter(book, chapter) {
 }
 
 const bookmarkCopy = {
-  uk: { title: "Закладки", save: "Додати цю главу", remove: "Прибрати цю главу", empty: "У цьому виданні закладок ще немає.", login: "Увійдіть, щоб зберігати закладки в обліковому записі.", error: "Не вдалося завантажити або зберегти закладки. Спробуйте ще раз.", partial: "Деякі збережені закладки пошкоджені й не показані. Список неповний; записи не видалено." },
-  ru: { title: "Закладки", save: "Добавить эту главу", remove: "Убрать эту главу", empty: "В этом издании пока нет закладок.", login: "Войдите, чтобы сохранять закладки в учётной записи.", error: "Не удалось загрузить или сохранить закладки. Попробуйте ещё раз.", partial: "Некоторые сохранённые закладки повреждены и не показаны. Список неполный; записи не удалены." },
-  en: { title: "Bookmarks", save: "Bookmark this chapter", remove: "Remove this bookmark", empty: "No bookmarks in this edition yet.", login: "Sign in to save bookmarks to your account.", error: "Could not load or save bookmarks. Please try again.", partial: "Some saved bookmarks are damaged and are not shown. This list is incomplete; the records have not been deleted." },
+  uk: { title: "Закладки", save: "Додати цю главу", remove: "Прибрати цю главу", empty: "У цьому виданні закладок ще немає.", login: "Увійдіть, щоб зберігати закладки в обліковому записі.", error: "Не вдалося завантажити або зберегти закладки. Спробуйте ще раз.", partial: "Деякі збережені закладки пошкоджені й не показані. Список неповний; записи не видалено.", recoveryTitle: "Пошкоджені записи для відновлення", recoveryAction: "Перевірити та видалити", recoveryConfirm: "Безповоротно видалити лише цей пошкоджений запис?", recoveryError: "Не вдалося підтвердити видалення. Оновіть список; інші закладки залишилися без змін." },
+  ru: { title: "Закладки", save: "Добавить эту главу", remove: "Убрать эту главу", empty: "В этом издании пока нет закладок.", login: "Войдите, чтобы сохранять закладки в учётной записи.", error: "Не удалось загрузить или сохранить закладки. Попробуйте ещё раз.", partial: "Некоторые сохранённые закладки повреждены и не показаны. Список неполный; записи не удалены.", recoveryTitle: "Повреждённые записи для восстановления", recoveryAction: "Проверить и удалить", recoveryConfirm: "Безвозвратно удалить только эту повреждённую запись?", recoveryError: "Удаление не подтверждено. Обновите список; остальные закладки не изменены." },
+  en: { title: "Bookmarks", save: "Bookmark this chapter", remove: "Remove this bookmark", empty: "No bookmarks in this edition yet.", login: "Sign in to save bookmarks to your account.", error: "Could not load or save bookmarks. Please try again.", partial: "Some saved bookmarks are damaged and are not shown. This list is incomplete; the records have not been deleted.", recoveryTitle: "Damaged entries to recover", recoveryAction: "Review and remove", recoveryConfirm: "Permanently remove only this damaged entry?", recoveryError: "Deletion was not confirmed. Refresh the list; other bookmarks were not changed." },
 };
 
 async function mountReaderBookmarks(meta, chapter, edition, books) {
@@ -2822,7 +2822,39 @@ async function mountReaderBookmarks(meta, chapter, edition, books) {
         Number.isSafeInteger(sourceBook?.chapters) && item.chapter <= sourceBook.chapters;
     });
     const saved = items.some(item => item.book === meta.code && item.chapter === chapter);
-    panel.innerHTML = `<h2>${copy.title}</h2>${data.warning === "partial_bookmarks" ? `<p role="alert">${copy.partial}</p>` : ""}<button class="button" type="button" id="toggle-bookmark" aria-pressed="${saved}">${saved ? copy.remove : copy.save}</button><p role="status" id="bookmark-status"></p>${items.length ? `<ul>${items.map(item => { const book = books.find(value => value.code === item.book); return `<li><a href="/reader/${encodeURIComponent(item.book)}/${item.chapter}">${esc(bookTitle(book))} ${item.chapter}</a></li>`; }).join("")}</ul>` : `<p>${data.warning === "partial_bookmarks" ? "" : copy.empty}</p>`}`;
+    // Server-issued recovery references never become navigation links or HTML
+    // attributes. Descriptions are untrusted legacy database text.
+    const recoverable = Array.isArray(data.invalid_bookmarks)
+      ? data.invalid_bookmarks.filter(entry => typeof entry?.reference === "string"
+        && /^[1-9][0-9]{0,15}\\.[0-9a-f]{64}$/.test(entry.reference)
+        && typeof entry.description === "string" && entry.description.length <= 256) : [];
+    const recoveryMarkup = recoverable.length ? `<section aria-label="${copy.recoveryTitle}"><h3>${copy.recoveryTitle}</h3><ul>${recoverable.map((entry, index) => `<li><span>${esc(entry.description)}</span> <button class="button" type="button" data-recovery-index="${index}">${copy.recoveryAction}</button></li>`).join("")}</ul></section>` : "";
+    panel.innerHTML = `<h2>${copy.title}</h2>${data.warning === "partial_bookmarks" ? `<p role="alert">${copy.partial}</p>` : ""}<button class="button" type="button" id="toggle-bookmark" aria-pressed="${saved}">${saved ? copy.remove : copy.save}</button><p role="status" id="bookmark-status" aria-live="polite"></p>${items.length ? `<ul>${items.map(item => { const book = books.find(value => value.code === item.book); return `<li><a href="/reader/${encodeURIComponent(item.book)}/${item.chapter}">${esc(bookTitle(book))} ${item.chapter}</a></li>`; }).join("")}</ul>` : `<p>${data.warning === "partial_bookmarks" ? "" : copy.empty}</p>`}${recoveryMarkup}`;
+    panel.querySelectorAll?.("[data-recovery-index]").forEach(button => {
+      const index = Number(button.dataset.recoveryIndex);
+      const entry = recoverable[index];
+      if (!entry) return;
+      button.addEventListener("click", async () => {
+        if (!isCurrent() || globalThis.confirm?.(copy.recoveryConfirm + "\\n" + entry.description) !== true || !isCurrent()) return;
+        button.disabled = true;
+        try {
+          const response = await fetch("/api/bookmarks", {
+            method: "DELETE", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ recovery_ref: entry.reference }),
+          });
+          const receipt = await response.json();
+          if (!response.ok || receipt?.ok !== true) throw Error("bookmark_recovery_failed");
+          if (!isCurrent()) return;
+          await load();
+          if (isCurrent()) panel.querySelector("#toggle-bookmark")?.focus();
+        } catch {
+          if (!isCurrent()) return;
+          const status = panel.querySelector("#bookmark-status");
+          if (status) status.textContent = copy.recoveryError;
+          button.disabled = false;
+        }
+      });
+    });
     panel.querySelector("#toggle-bookmark").addEventListener("click", async event => {
       if (!isCurrent()) return;
       const button = event.currentTarget;

@@ -123,3 +123,23 @@ test("reader, mission and account transitions use the single guarded attempt aut
   assert.match(excerpt("async function renderReader(", "\nasync function renderMissions()"),/forgetActiveAttempt\(\)/);
   assert.doesNotMatch(excerpt("async function renderMission(parts = []) {","\nasync function accountRequest("),/sessionStorage\.(getItem|removeItem)/);
 });
+
+
+test("readable but undeletable old attempt is never revived after account cleanup", () => {
+  const f=fixture({saved:"prior-user-attempt",denyRemove:true});
+  assert.equal(f.ctx.activeAttemptId(),"prior-user-attempt");
+  f.ctx.forgetActiveAttempt();
+  assert.equal(f.stored.get("sa.activeAttempt"),"prior-user-attempt","host refused deletion");
+  assert.equal(f.state.activeAttemptStorageUntrusted,true);
+  assert.equal(f.ctx.activeAttemptId(),null,"stale ID must be hidden after failed deletion");
+});
+
+test("a newly accepted server attempt replaces a stale unreadable session marker", () => {
+  const f=fixture({saved:"old-attempt",denyRemove:true});
+  f.ctx.forgetActiveAttempt();
+  assert.equal(f.ctx.activeAttemptId(),null);
+  f.ctx.rememberActiveAttempt({attemptId:"new-valid-attempt"});
+  assert.equal(f.state.activeAttemptStorageUntrusted,false);
+  assert.equal(f.stored.get("sa.activeAttempt"),"new-valid-attempt");
+  assert.equal(f.ctx.activeAttemptId(),"new-valid-attempt");
+});

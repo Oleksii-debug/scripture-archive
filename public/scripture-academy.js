@@ -37,12 +37,15 @@ export function readAcademyProgress(storage,key){
 
 export function academyMarkup(catalog,language,esc,progress) {
   const lang=languageOf(language),w=COPY[lang];
-  if(!validateDossierGraph(catalog) || !progress?.available)
-    return '<section class="card" role="alert">'+esc(progress?.available===false?w.unavailable:w.invalid)+'</section>';
+  // A private progress read can be unavailable without making public lessons
+  // inaccessible. Show source-verified lessons read-only, never guessed marks.
+  const readOnly = progress?.available === false;
+  if(!validateDossierGraph(catalog) || (!readOnly && progress?.available !== true))
+    return '<section class="card" role="alert">'+esc(w.invalid)+'</section>';
   const byId=new Map(scriptureDossiers.map(item=>[item.id,item]));
   if(academyLessonIds.some(id=>!byId.has(id)))return '<section role="alert">'+esc(w.invalid)+'</section>';
   const titles=new Map(catalog.books[lang].map(book=>[book.code,book.title]));
-  const selected=new Set(progress.completed);
+  const selected=new Set(readOnly?[]:progress.completed);
   const lessons=academyLessonIds.map((id,index)=>{
     const node=byId.get(id),name=esc(node.names[lang]);
     const passages=node.sources.map(ref=>{
@@ -53,10 +56,10 @@ export function academyMarkup(catalog,language,esc,progress) {
     // dropping all but the first one when composing the accessible course.
     const questions=node.prompts[lang].map(prompt=>'<li>'+esc(prompt)+'</li>').join('');
     const studied=selected.has(id);
-    return '<li><article class="card"><h3>'+String(index+1)+'. <a href="/dossiers?id='+id+'">'+name+'</a></h3><p>'+esc(node.summaries[lang])+'</p><ul>'+passages+'</ul><h4>'+esc(w.question)+'</h4><ol>'+questions+'</ol><button type="button" class="button" data-academy-lesson="'+id+'" aria-pressed="'+studied+'">'+esc(studied?w.unmark:w.mark)+'</button></article></li>';
+    return '<li><article class="card"><h3>'+String(index+1)+'. <a href="/dossiers?id='+id+'">'+name+'</a></h3><p>'+esc(node.summaries[lang])+'</p><ul>'+passages+'</ul><h4>'+esc(w.question)+'</h4><ol>'+questions+'</ol>'+(readOnly?'':'<button type="button" class="button" data-academy-lesson="'+id+'" aria-pressed="'+studied+'">'+esc(studied?w.unmark:w.mark)+'</button>')+'</article></li>';
   }).join('');
   const total=academyLessonIds.length,count=selected.size;
-  return '<section class="academy-reading" data-academy-root aria-labelledby="academy-reading-title"><h2 id="academy-reading-title">'+esc(w.title)+'</h2><p>'+esc(w.intro)+'</p><p>'+esc(w.privacy)+'</p><p>'+esc(w.honesty)+'</p><label for="academy-reading-progress">'+esc(w.progress)+'</label> <progress id="academy-reading-progress" max="'+total+'" value="'+count+'"></progress> <span id="academy-reading-status" role="status" aria-live="polite">'+esc(w.progress)+': '+count+'/'+total+'</span><p id="academy-reading-badge" role="status">'+(count===total?esc(w.badge):'')+'</p><p id="academy-reading-error" role="alert"></p><ol>'+lessons+'</ol></section>';
+  return '<section class="academy-reading" data-academy-root aria-labelledby="academy-reading-title"><h2 id="academy-reading-title">'+esc(w.title)+'</h2><p>'+esc(w.intro)+'</p><p>'+esc(w.privacy)+'</p><p>'+esc(w.honesty)+'</p>'+(readOnly?'<p role="alert">'+esc(w.unavailable)+'</p>':'<label for="academy-reading-progress">'+esc(w.progress)+'</label> <progress id="academy-reading-progress" max="'+total+'" value="'+count+'"></progress> <span id="academy-reading-status" role="status" aria-live="polite">'+esc(w.progress)+': '+count+'/'+total+'</span><p id="academy-reading-badge" role="status">'+(count===total?esc(w.badge):'')+'</p><p id="academy-reading-error" role="alert"></p>')+'<ol>'+lessons+'</ol></section>';
 }
 
 export function attachAcademy(document,storage,language,user,progress,isCurrent=()=>true){

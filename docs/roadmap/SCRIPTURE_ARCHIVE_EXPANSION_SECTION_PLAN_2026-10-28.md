@@ -1,3 +1,9 @@
+## 2026-10-30 — SA-EXT-16 / SOURCE_QUALITY_CONFIG_ONLY_COVERAGE — ВУЗЬКИЙ CI-ЗАПОБІЖНИК ЗАКРИТО
+
+**CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** лише для запуску source-quality при змінах кореневих build/security/test-конфігурацій. [PR #655](https://github.com/Oleksii-debug/scripture-archive/pull/655) SQUASH MERGED `main@84359d113a8d9c6183f74d5eb366bcb209980131`; native **1608 Node PASS**, TS/lint/build і Python PASS; **overall CI FAIL** у незалежному Wrangler/D1 HTTP 503 21/22 ([#618](https://github.com/Oleksii-debug/scripture-archive/issues/618)). Усі 20 повних батьківських SA-EXT-01–20 **OPEN**; site SHA/browser/NVDA NOT_VERIFIED. [Повний термінальний запис](SA_EXT_16_SOURCE_QUALITY_CONFIG_ONLY_COVERAGE_TERMINAL_20261030.md).
+
+---
+
 ## 2026-10-30 — SA-EXT-16 / CONSENT_WITHDRAWAL_WITH_STALE_METADATA та SA-EXT-01 / PROFILE_LOCALE_TYPED_BOUNDARY — ДВА ВУЗЬКІ ПІДПУНКТИ ЗАКРИТО
 
 **Лише ці два перевірені source-виправлення:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Повні батьківські SA-EXT-01…20 залишаються OPEN.**

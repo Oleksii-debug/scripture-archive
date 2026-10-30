@@ -111,7 +111,8 @@ for (const action of ["visibility", "profile", "sensitive-consent"]) {
     assert.match(outcome.cache, /no-store, private/);
   });
 }
-\n// Real route input-integrity regression: consent is only accepted for data
+
+// Real route input-integrity regression: consent is only accepted for data
 // whose exact authored text can be persisted, never shortened or coerced.
 const consentBaseline = {acceptSensitive:true,tradition:'protestant',denomination:'Test',church:'Fixture'};
 for (const field of ['tradition','denomination','church']) {

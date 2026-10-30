@@ -17,7 +17,8 @@ function harness({ dbPresent = true, dbMode = "ok", auth = "owner", limit = "all
     prepare(sql) {
       calls.prepare++;
       if (dbMode === "prepare-throw") throw Error("D1 prepare failed");
-      return { bind(...args) { calls.bindings.push({ sql, args }); return this; } };
+      return { bind(...args) { calls.bindings.push({ sql, args }); return this; },
+        async first() { if (dbMode === "write-conflict") return { user_id: "other-account" }; if (dbMode === "write-same-owner") return { user_id: "owner-one" }; if (dbMode === "write-no-owner") return null; throw Error("unverified owner"); } };
     },
     async batch(statements) {
       calls.batch++;
@@ -30,7 +31,7 @@ function harness({ dbPresent = true, dbMode = "ok", auth = "owner", limit = "all
       }
       return statements.map((_, i) => ({
         success: !(dbMode === "write-false" && i === 0),
-        meta: dbMode === "write-no-ack" ? {} : { changes: dbMode === "write-zero" ? 0 : 1 },
+        meta: dbMode === "write-no-ack" ? {} : { changes: (["write-zero", "write-conflict", "write-same-owner", "write-no-owner"].includes(dbMode)) ? 0 : 1 },
       }));
     },
   };
@@ -303,4 +304,21 @@ test("POST rejects modified session identifiers without aliasing a valid UUID", 
   const h=harness();
   assert.equal((await h.invoke("POST",{overrides:{sessionId:valid}})).status,202);
   assert.equal(h.calls.bindings[0].args[0],valid);
+});
+
+test("only a verified foreign owner produces a recoverable session conflict", async () => {
+  for (const action of ["event", "heartbeat"]) {
+    const h=harness({dbMode:"write-conflict"});
+    const response=await h.invoke("POST",{action});
+    assert.equal(response.status,409);
+    assert.equal(response.body.error,"analytics_session_conflict");
+    assert.equal(h.calls.bindings.filter(x=>x.sql.includes("SELECT user_id FROM usage_sessions")).length,1);
+  }
+});
+
+test("zero-row writes without a verified foreign session remain unavailable", async () => {
+  for(const dbMode of ["write-same-owner", "write-no-owner"]) {
+    const response=await harness({dbMode}).invoke("POST",{action:"event"});
+    assert.equal(response.status,503);assert.equal(response.body.error,"analytics_unavailable");
+  }
 });

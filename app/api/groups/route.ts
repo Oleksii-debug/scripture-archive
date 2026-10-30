@@ -265,7 +265,22 @@ export async function POST(request: Request) {
       .bind(groupId, id.userId, `${person.first_name} ${person.last_name}`.trim(), body.publicOwnerName === true ? 1 : 0, body.publicOwnerActivity === true ? 1 : 0)
   ];
   if (marathonEnabled) statements.push(env.DB!.prepare("INSERT INTO group_marathon_registrations (id,group_id,weekly_goal,catchup_mode,cohort_key,status) VALUES (?,?,?,?,?,?)").bind(marathonId, groupId, weeklyGoal, catchupMode, cohortKey, cohortStatus));
-  await env.DB!.batch(statements);
-  if (marathonEnabled && cohortStatus === "ready") await env.DB!.prepare("UPDATE group_marathon_registrations SET status='ready' WHERE cohort_key=? AND status='forming'").bind(cohortKey).run();
-  return Response.json({ ok: true, groupId, cohortStatus }, { status: 201 });
+  try {
+    const results=await env.DB!.batch(statements);
+    // Only an acknowledged committed group, owner membership and optional
+    // cohort registration can be returned as created. A lost D1 ACK is
+    // uncertain, not proof of a rollback: users can inspect their group list.
+    if(!Array.isArray(results)||results.length!==statements.length||
+      results.some(result=>!result?.success||
+        !Number.isSafeInteger(result.meta?.changes)||result.meta.changes!==1))
+      return Response.json({error:"group_creation_unconfirmed"},{status:503,headers:{"Cache-Control":"no-store"}});
+    if(marathonEnabled && cohortStatus==="ready") {
+      const updated=await env.DB!.prepare("UPDATE group_marathon_registrations SET status='ready' WHERE cohort_key=? AND status='forming'").bind(cohortKey).run();
+      if(!updated.success||!Number.isSafeInteger(updated.meta?.changes)||updated.meta.changes<0)
+        return Response.json({error:"group_creation_unconfirmed"},{status:503,headers:{"Cache-Control":"no-store"}});
+    }
+    return Response.json({ok:true,groupId,cohortStatus},{status:201});
+  } catch {
+    return Response.json({error:"group_creation_unconfirmed"},{status:503,headers:{"Cache-Control":"no-store"}});
+  }
 }

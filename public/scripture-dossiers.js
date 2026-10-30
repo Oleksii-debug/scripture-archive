@@ -38,8 +38,7 @@ const nodes=[
   summaries:{uk:'Покликання Давида й повідомлення про місто, пов’язане з його царюванням.',ru:'Призвание Давида и рассказы о городе, связанном с его царствованием.',en:'David’s calling and accounts of the city associated with his reign.'},
   sources:[ref('1SA',16,1,13),ref('2SA',5,1,10),ref('LUK',1,32,33,'interpretive')],
   related:[{to:'jerusalem',via:ref('2SA',5,6,10)}],
-  prompts:{uk:['Що розповідає 1 Самуїла 16 про обрання Давида?','Як Лука 1 пов’язує своє повідомлення з Давидом?'],ru:['Что говорит 1 Царств 16 об избрании Давида?','Как Лука 1 связывает повествование с Давидом?'],en:['How does 1 Samuel 16 describe David’s selection?','How does Luke 1 reference David?']}},,
-
+  prompts:{uk:['Що розповідає 1 Самуїла 16 про обрання Давида?','Як Лука 1 пов’язує своє повідомлення з Давидом?'],ru:['Что говорит 1 Царств 16 об избрании Давида?','Как Лука 1 связывает повествование с Давидом?'],en:['How does 1 Samuel 16 describe David’s selection?','How does Luke 1 reference David?']}},
  {id:'joseph',type:'person',names:{uk:'Йосип (син Якова)',ru:'Иосиф (сын Иакова)',en:'Joseph (son of Jacob)'},
   summaries:{uk:'Оповідь про братів Йосипа, зустріч у Єгипті та пізніші згадки про його покоління.',ru:'Рассказ о братьях Иосифа, встрече в Египте и позднейших упоминаниях его поколения.',en:'The account of Joseph and his brothers, their meeting in Egypt, and later references to that generation.'},
   sources:[ref('GEN',37,3,11),ref('GEN',45,1,8),ref('GEN',50,19,21)],

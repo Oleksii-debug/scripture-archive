@@ -2,6 +2,19 @@ import { reviewText, submissionForm, historyMarkup, queueMarkup, auditMarkup, at
 import { dossierMarkup, dossierAtlasMarkup } from './scripture-dossiers.js';
 import { academyMarkup, academyProgressKey, readAcademyProgress, attachAcademy } from './scripture-academy.js';
 
+// The local reading cache is user/device-controlled JSON, not a trusted Bible
+// chapter receipt. Never let a malformed item break the progress route or
+// create a misleading chapter link; leave the stored bytes untouched for recovery.
+export function verifiedLocalReadingHistory(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.slice(0, 1000).filter(item =>
+    item && typeof item === 'object' && !Array.isArray(item) &&
+    typeof item.book === 'string' && /^[1-3]?[A-Z]{2,4}$/.test(item.book) &&
+    Number.isSafeInteger(item.chapter) && item.chapter >= 1 && item.chapter <= 150 &&
+    typeof item.title === 'string' && item.title.trim().length > 0 && item.title.length <= 200);
+}
+
+
 const COPY = {
   uk: {
     home:'Головна', campaigns:'Кампанії', dossiers:'Дослідницькі досьє', builder:'Конструктор', progress:'Мій прогрес',
@@ -199,8 +212,12 @@ export async function renderWorkspace(name,c) {
     if(state.user) try { history=await request('/api/attempts?action=history'); } catch { history={error:true}; }
     // A late history read belongs to its original route and account only.
     if(!stillCurrent())return;
-    const p=state.missionProgress,read=(state.localReadingStorageUntrusted || state.unownedReadingPendingRecovery)
-      ? [] : c.loadJSON('sa.readingHistory',[]);
+    const p=state.missionProgress;
+    let read=[];
+    if (!state.localReadingStorageUntrusted && !state.unownedReadingPendingRecovery) {
+      try { read=verifiedLocalReadingHistory(c.loadJSON('sa.readingHistory',[])); }
+      catch { /* restricted storage must not block the progress page */ }
+    }
     shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${w.progress}</h1></div><p>${w.progressLead}</p></div>${syncWarning?`<p role="alert">${esc(syncWarning)}</p>`:''}<div class="card-grid"><article class="card progress-stat"><strong>${p.correct.length} / ${taskCount}</strong><p>${w.tasks}</p></article><article class="card progress-stat"><strong>${read.length}</strong><p>${w.chapters}</p></article><article class="card progress-stat"><strong>${p.complete?w.finished:p.index?w.inProgress:w.notStarted}</strong><p>${w.status}</p></article></div><section class="card resume-card"><h2>${esc((mission.title?.[state.lang]||t("missionTitle")))}</h2><progress aria-label="${w.tasks}" max="${taskCount||1}" value="${p.correct.length}"></progress><div class="action-row"><a class="button primary" href="/mission/abraham">${w.continue}</a><a class="button" href="/groups">${t('myGroups')}</a></div></section>${reviewScheduleMarkup(history,state.lang,esc)}${missionHistoryMarkup(history,state.lang,esc)}<section class="card resume-card"><h2>${w.readingHistory}</h2>${read.length?`<div class="reading-links">${read.slice().reverse().map(r=>`<a class="button" href="/reader/${encodeURIComponent(r.book)}/${Number(r.chapter)}">${esc(r.title)} ${Number(r.chapter)}</a>`).join('')}</div>`:`<p>${w.nothingRead}</p>`}</section>`);
     document.querySelector('#retry-mission-history')?.addEventListener('click',()=>renderWorkspace('progress',c));
     return;

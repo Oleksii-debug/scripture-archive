@@ -117,6 +117,11 @@ export async function renderPublicMaterials(root, w, esc, isCurrent = () => true
       button.disabled=true;
       try {
         const result=await post({action:'answer',id:form.dataset.id,choice:Number(choice)});
+        // Never accept a truthy string or numeric "correct" as grading evidence.
+        // A malformed receipt must not announce success or expose an unverified explanation.
+        if (!result || typeof result.correct !== 'boolean' ||
+            (result.correct && result.explanation != null && typeof result.explanation !== 'string'))
+          throw Error('invalid public material answer receipt');
         if (active() && form.isConnected !== false)
           status.textContent=result.correct ? `${w.correct} ${result.explanation || ''}` : w.wrong;
       } catch {

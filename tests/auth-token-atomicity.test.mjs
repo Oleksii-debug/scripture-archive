@@ -36,7 +36,9 @@ function fixture() {
     if (id === "cloudflare:workers") return { env: { DB: D1 } };
     if (id.endsWith("lib/auth")) return { sameOrigin: () => true, requestAddress: () => "test", rateLimit: async () => true,
       sha256: async value => `hash-${value}`, hashPassword: async () => ({ hash: "newhash", salt: "newsalt", iterations: 99 }),
-      clearSessionCookie: () => "sa_session=; Max-Age=0", randomToken: () => "fresh-local-token" };
+      clearSessionCookie: () => "sa_session=; Max-Age=0", randomToken: () => "fresh-local-token",
+      authenticateRequest: async () => ({ userId: "alice", provider: "password" }),
+      verifyPassword: async password => password === "correct" };
     if (id.endsWith("lib/email")) return { sendSecurityEmail: async () => { emails++; return { delivered: true }; } };
     throw Error("Unexpected dependency");
   } });
@@ -125,5 +127,19 @@ test("unconfirmed new verification token may not trigger any email dispatch", as
   });
   await assert.rejects(f.handler.POST(request), /token_save_unconfirmed/);
   assert.equal(f.emails(), 0);
+  f.db.close();
+});
+
+test("unacknowledged session revocation never reports password change success", async () => {
+  const f = fixture();
+  f.unconfirmedAt(1);
+  const request = new Request("https://example.invalid/api/auth?action=change-password", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ currentPassword: "correct", newPassword: "new-password-123" }),
+  });
+  const response = await f.handler.POST(request);
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).error, "password_change_unavailable");
+  assert.equal(response.headers.get("set-cookie"), null);
   f.db.close();
 });

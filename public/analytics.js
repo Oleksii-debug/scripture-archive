@@ -160,8 +160,11 @@
     if (value !== "granted" && value !== "denied") return;
     if (value === "granted") {
       // Consent must be durably recorded before any analytics is enabled.
-      try { localStorage.setItem(consentKey, value); }
-      catch {
+      try {
+        localStorage.setItem(consentKey, value);
+        // A browser shim may silently discard writes; require exact readback.
+        if (localStorage.getItem(consentKey) !== value) throw Error("consent not persisted");
+      } catch {
         notice.textContent = text[4];
         notice.hidden = false;
         return;

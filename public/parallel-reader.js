@@ -16,22 +16,35 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
   const copy = COPY[lang] || COPY.uk;
   const form=panel.querySelector('.parallel-form'), status=panel.querySelector('.parallel-status'), result=panel.querySelector('.parallel-result');
   let selectionRevision = 0;
+  let requestRevision = 0;
+  const submitButton = form.querySelector('button');
   // The licensed text must not remain visible under a different selected edition.
   // Also retire an in-flight A -> B -> A request, which an ID-only check misses.
   form.onchange = event => {
     if (event?.target?.name !== 'edition') return;
     selectionRevision += 1;
+    // A stale network read may never settle; release its UI lease at selection time.
+    requestRevision += 1;
+    submitButton.disabled = false;
+    citation = null;
     result.replaceChildren();
     status.textContent = copy.changed;
   };
   let citation = null;
   form.onsubmit=async event=>{
     event.preventDefault();
-    const button=form.querySelector('button'), id=String(new FormData(form).get('edition') || ''), edition=editions.find(item=>item.id===id && item.local);
+    const button=submitButton, id=String(new FormData(form).get('edition') || ''), edition=editions.find(item=>item.id===id && item.local);
     const submittedRevision = selectionRevision;
     const selectionCurrent = () => selectionRevision === submittedRevision &&
       String(new FormData(form).get('edition') || '') === id;
     if (!edition || button.disabled || !current() || !panel.isConnected) return;
+    const requestId = ++requestRevision;
+    const requestCurrent = () => requestRevision === requestId && selectionCurrent();
+    // A programmatic selection change need not emit onchange; preserve retry text.
+    const announceUnsignalledChange = () => {
+      if (requestRevision === requestId && !selectionCurrent() && panel.isConnected && current())
+        status.textContent = copy.changed;
+    };
     // Disabling a focused submit button moves keyboard focus to BODY in
     // Chromium. Restore only after this same reader finishes and only when
     // nobody has focused another control in the meantime.
@@ -41,24 +54,27 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
     try {
       let guard;
       try { guard=await check(book,chapter); }
-      catch { if(panel.isConnected && current()) failClosed(); return; }
-      if (!panel.isConnected || !current()) return;
+      catch { if(panel.isConnected && current() && requestCurrent()) failClosed(); return; }
+      if (!panel.isConnected || !current() || !requestCurrent()) { announceUnsignalledChange(); return; }
       if (!guard || typeof guard.invalidated !== 'boolean') { failClosed(); return; }
       if (guard.invalidated) { lock(); return; }
       // A changed native select must retire this request, even for the same reader/principal.
-      if (!selectionCurrent()) { status.textContent=copy.changed; return; }
+      if (!requestCurrent()) { announceUnsignalledChange(); return; }
       const data=await getBook(book,edition);
-      if (!panel.isConnected || !current()) return;
+      // A change signalled by onchange fully retires the request. An
+      // unannounced programmatic selection change preserves the historical
+      // final chapter authorization check before suppressing the old text.
+      if (!panel.isConnected || !current() || requestRevision !== requestId) return;
       // Another tab or device may start an attempt while the second text loads.
       // Revalidate after that await and before exposing the comparison text.
       let finalGuard;
       try { finalGuard=await check(book,chapter); }
-      catch { if (panel.isConnected && current()) failClosed(); return; }
-      if (!panel.isConnected || !current()) return;
+      catch { if (panel.isConnected && current() && requestCurrent()) failClosed(); return; }
+      if (!panel.isConnected || !current() || !requestCurrent()) { announceUnsignalledChange(); return; }
       if (!finalGuard || typeof finalGuard.invalidated !== 'boolean') { failClosed(); return; }
       if (finalGuard.invalidated) { lock(); return; }
       // Never show edition A's licensed verses under edition B's selected label.
-      if (!selectionCurrent()) { status.textContent=copy.changed; return; }
+      if (!requestCurrent()) { announceUnsignalledChange(); return; }
       const verses=data.chapters[chapter-1];
       if (!Array.isArray(verses)) { status.textContent=copy.unavailable; return; }
       // A corrupt or empty chapter must never be presented as verified Scripture.
@@ -88,10 +104,10 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
       result.innerHTML=`<section aria-labelledby="parallel-title"><h3 id="parallel-title">${esc(metadata.title)} — ${esc(bookTitle)} ${chapter}</h3><p>${copy.note}</p><p>${copy.license}: ${esc(metadata.license || '—')}</p>${metadata.attribution?`<p>${esc(metadata.attribution)}</p>`:''}${source?`<p><a href="${esc(source)}" target="_blank" rel="noreferrer">${copy.source}</a></p>`:''}${license?`<p><a href="${esc(license)}" target="_blank" rel="noreferrer">${copy.license}</a></p>`:''}<ol>${verses.map((verse,index)=>`<li><span>${esc(verse)}</span> <button type="button" class="parallel-cite" data-parallel-cite="${index+1}" aria-label="${esc(copy.cite)}: ${esc(bookTitle)} ${chapter}:${index+1}">${esc(copy.cite)}</button></li>`).join('')}</ol></section>`;
       citation={ editionId:id, title:metadata.title, license:metadata.license, attribution:typeof metadata.attribution==='string'?metadata.attribution:'', source, licenseUrl:license, verses:verses.slice() };
       status.textContent=copy.ready;
-    } catch { if (panel.isConnected && current()) status.textContent=selectionCurrent() ? copy.fail : copy.changed; }
+    } catch { if (panel.isConnected && current() && requestCurrent()) status.textContent=copy.fail; }
     finally {
-      button.disabled=false;
-      if (hadSubmitFocus && panel.isConnected && typeof document !== 'undefined' &&
+      if (requestRevision === requestId) button.disabled=false;
+      if (requestRevision === requestId && hadSubmitFocus && panel.isConnected && typeof document !== 'undefined' &&
           document.activeElement === document.body && typeof button.focus === 'function') {
         try { if (current()) button.focus({preventScroll:true}); }
         catch { /* A torn-down reader must never steal focus on recovery. */ }

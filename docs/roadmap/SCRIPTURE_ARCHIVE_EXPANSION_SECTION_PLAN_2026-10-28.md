@@ -4,6 +4,12 @@
 
 ---
 
+## 2026-10-30 — SA-EXT-03 / PRIVATE_MATERIAL_EXPORT_RESTORABILITY — SCOPED TERMINAL
+
+**CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** тільки для цілісності приватного експорту авторських чернеток і затверджуваних редакційних snapshots. [PR #699](https://github.com/Oleksii-debug/scripture-archive/pull/699) **SQUASH MERGED** `main@88720a96b84706038cdbc77cd1b9063a8c339a8b`; [exact-head CI #41057584095](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41057584095) **SUCCESS**: Node/TS/lint/build/disposable Worker-D1/Python. Пошкоджені навчальні дані не експортуються зі статусом 200; коректні українські тексти й історичні метадані збережені. [Permanent receipt](SA_EXT_03_MATERIAL_EXPORT_RESTORABILITY_TERMINAL_20261030.md). `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Батьківський SA-EXT-03 та всі 20 повних SA-EXT-01…20 — OPEN**, production/browser/NVDA не підтверджені; без деплою.
+
+---
+
 ## 2026-10-30 — SA-EXT-01 / PARALLEL_READER_VERSE_CITATION — SCOPED TERMINAL
 
 **РОЗДІЛ SA-EXT-01, тільки `PARALLEL_READER_VERSE_CITATION`: ЗАКРИТО ДЛЯ ПОВТОРНОЇ РОЗРОБКИ / `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`.** Existing reader UI, verified second-edition rights and author-attributed clipboard citations merged as [PR #695](https://github.com/Oleksii-debug/scripture-archive/pull/695) → exact `main@50cef1bd98d25f34bc204b6d4c8bb43903ac05d5`. Exact-head [Actions #41057070238](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41057070238) **SUCCESS**: Node **1806 PASS/0 FAIL/1 SKIP**, Worker/D1 **22/22 PASS**, TS/lint/build, Python **2 PASS**. Readback of exact merged source/test blobs completed; `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` **only for this feature**. [Canonical terminal receipt](SA_EXT_01_PARALLEL_VERSE_CITATION_TERMINAL_20261030.md). **All 20 SA-EXT-01…20 parent sections stay OPEN**; live Sites SHA, production/privacy cutover, Chrome/Windows/NVDA and delivery are NOT_VERIFIED. No deploy.

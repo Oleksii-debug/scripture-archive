@@ -1,3 +1,9 @@
+## 2026-10-30 — SA-EXT-01 / READING_EXPORT_CANONICAL_TITLE_BOUNDARY — ВУЗЬКИЙ ДЕФЕКТ ЗАКРИТО
+
+**CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** лише для експорту збереженої READING-історії: назва понад 100 символів більше не стає фальшивим restorable JSON-архівом. [PR #670](https://github.com/Oleksii-debug/scripture-archive/pull/670) SQUASH MERGED у точний `main@4cb564da6b705b1296e552c20ca8e2b7ade4f78f`. [CI #41053249167](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41053249167) **SUCCESS**: Node 1681 PASS/0 FAIL/1 SKIP, disposable Worker/D1 22/22, TypeScript/lint/build, Python 2/2. Реальна кодова інтеграція та exact-main readback підтверджені. [Повний термінальний запис](SA_EXT_01_READING_EXPORT_TITLE_BOUNDARY_TERMINAL_20261030.md). **Увесь батьківський SA-EXT-01 та всі SA-EXT-01…20 залишаються OPEN**; production Sites/SMTP/браузер/Windows/NVDA — NOT_VERIFIED. Ця документальна позначка не санкціонує деплой.
+
+---
+
 ## 2026-10-30 — SA-EXT-04 / GROUP_SETTINGS_EDIT — ВУЗЬКА ПІДФУНКЦІЯ ЗАКРИТА
 
 **CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** — тільки власницьке редагування налаштувань наявної домашньої групи; `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. [PR #668](https://github.com/Oleksii-debug/scripture-archive/pull/668) **SQUASH MERGED** у `main@ceffa24ff8b4fcbc3cd6ff17aa6810d02b986a3e`; exact-head [Actions #41052811616](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41052811616) **SUCCESS**: Node 1656 PASS / 1 SKIP, TS/lint/build, Worker/D1 22/22, Python 2/2. Існуючі UI та API підтримують повне редагування метаданих, CAS/owner право, підтвердження публікації, збереження чернетки, consent-фільтр і focus/readback. **Повний SA-EXT-04 та решта 20 SA-EXT-01…20 — OPEN**; Sites SHA/SMTP/браузер/NVDA НЕ ПІДТВЕРДЖЕНО. [Остаточний доказовий запис](SA_EXT_04_GROUP_SETTINGS_TERMINAL_20261030.md).

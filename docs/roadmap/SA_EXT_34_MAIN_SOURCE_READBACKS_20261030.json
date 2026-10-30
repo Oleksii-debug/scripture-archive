@@ -1,0 +1,290 @@
+{
+  "schema_version": 1,
+  "audit_date_utc": "2026-10-30",
+  "repository": "Oleksii-debug/scripture-archive",
+  "immutable_main_ref": "84bfc241f884f37418431e5b3ccf24d0817e5245",
+  "verified_files": 34,
+  "independent_connector_file_readbacks": 34,
+  "all_file_readbacks_match_git_tree": true,
+  "coverage": "Existing canonical code/test provenance for first ten approved SA-EXT sections plus SA-EXT-16; not a feature completeness judgment",
+  "parent_section_status": "ALL_20_OPEN",
+  "native_tests_for_these_34_files": "NOT_EXECUTED_AS_A_SINGLE_CUMULATIVE_SUITE",
+  "live_site_sha": "NOT_VERIFIED",
+  "note": "The 34 individual GitHub fetch_file calls were made against this immutable SHA (lines 1-5 or 1-8) and compared with the tree. A hash readback is NOT one implemented feature, test pass, production deployment, or terminal parent closure. Do not reassign previously terminal scoped repairs without a new defect.",
+  "approved_plan": "docs/roadmap/SCRIPTURE_ARCHIVE_EXPANSION_SECTION_PLAN_2026-10-28.md",
+  "central_issue": "#297",
+  "items": [
+    {
+      "section_id": "SA-EXT-01",
+      "path": "public/editions.js",
+      "blob_sha": "12d1745955d3b43aea8bc05f077726d5bba8b8c9",
+      "bytes": 4550,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-01",
+      "path": "public/parallel-reader.js",
+      "blob_sha": "21bdb6da604f7f274182cbeafab61acc95501c15",
+      "bytes": 13052,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-01",
+      "path": "tests/parallel-reader.test.mjs",
+      "blob_sha": "e9d0a45de0fbedce86e5fdcc41dffc91a949fe92",
+      "bytes": 19238,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-01",
+      "path": "tests/reader-guard.test.mjs",
+      "blob_sha": "0147b6b80f16031fe7415547022e9ceeac9c1122",
+      "bytes": 8619,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-01",
+      "path": "app/api/bookmarks/route.ts",
+      "blob_sha": "a9bbc84d3d35741ca81a748ed6b6eb96c4209993",
+      "bytes": 11885,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-01",
+      "path": "app/api/reading-export/route.ts",
+      "blob_sha": "92f9acf0b6a30f93bd864ff2da857d60f1c5d7c3",
+      "bytes": 9375,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-02",
+      "path": "app/api/attempts/route.ts",
+      "blob_sha": "9560f683902086c3f310a902bf9cb704fb9b84a7",
+      "bytes": 35242,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-02",
+      "path": "tests/attempt-group-context-typed.test.mjs",
+      "blob_sha": "32e19b6bda0c98ede7437505362345676b473203",
+      "bytes": 5099,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-02",
+      "path": "tests/mission-page-principal-race.test.mjs",
+      "blob_sha": "213f0b4e3afa3d89da23e235c352180cf0eca270",
+      "bytes": 6530,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-02",
+      "path": "tests/reader-attempt-principal-race.test.mjs",
+      "blob_sha": "cbb83f474f4e5870b9c319082b6dd2e5dac3c674",
+      "bytes": 7548,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-03",
+      "path": "app/api/materials/route.ts",
+      "blob_sha": "3c4e3a76f582898915e090a010c8cbee1426aa83",
+      "bytes": 14562,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-03",
+      "path": "app/api/material-review/route.ts",
+      "blob_sha": "dbf9c9f2c36a4700604644bc039669d9cbee4d02",
+      "bytes": 17210,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-03",
+      "path": "app/api/editor-roles/route.ts",
+      "blob_sha": "6ce12d8ab2865c5f4a8ccb4dbc3e143884b5672c",
+      "bytes": 5235,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-03",
+      "path": "public/material-review.js",
+      "blob_sha": "a5da2871509bc26e889e0a67a1c76ad92bf5f851",
+      "bytes": 29989,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-03",
+      "path": "tests/material-review.test.mjs",
+      "blob_sha": "94a2c1565bc35ef939322e7735930b69b220a161",
+      "bytes": 31377,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-04",
+      "path": "app/api/groups/route.ts",
+      "blob_sha": "0df34045ade4bed8b707daf120c1d2e5b6bbbe14",
+      "bytes": 34494,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-04",
+      "path": "tests/group-membership.test.mjs",
+      "blob_sha": "0dafda7003cef7f353ba0bc748a5b25923767122",
+      "bytes": 40632,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-04",
+      "path": "tests/group-page-principal-race.test.mjs",
+      "blob_sha": "687bfc88273a47490ed4c0badf988576ff288c72",
+      "bytes": 4865,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-05",
+      "path": "public/scripture-dossiers.js",
+      "blob_sha": "a1df52de6decc138803a7d152d2fd2a6b7ce4c29",
+      "bytes": 37030,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-05",
+      "path": "tests/dossier-search.test.mjs",
+      "blob_sha": "e0b8d59ebf1612538ebf38f12db9b1fe7279db51",
+      "bytes": 12649,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-05",
+      "path": "tests/source-dossier-graph.test.mjs",
+      "blob_sha": "6ae3013f7e61b938643e1d33ac808cc2316e9f10",
+      "bytes": 11500,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-06",
+      "path": "tests/atlas-history-sources.test.mjs",
+      "blob_sha": "92fb33bc8dbf631993df1528bd265008db1a473a",
+      "bytes": 3555,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-06",
+      "path": "tests/source-dossier-atlas.test.mjs",
+      "blob_sha": "2e6237b1616c757df31c71b5fd30f64edb54619d",
+      "bytes": 6518,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-07",
+      "path": "public/scripture-academy.js",
+      "blob_sha": "ad60c1decb49f5f35ba1bc19488b3a7d13cff3e5",
+      "bytes": 18683,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-07",
+      "path": "tests/scripture-academy-course.test.mjs",
+      "blob_sha": "95ec0f874dfdf6ca6d131011934a33b1032c6af2",
+      "bytes": 13366,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-08",
+      "path": "tests/library-reviewed-route.test.mjs",
+      "blob_sha": "40e6bfff877efbf07cd714e7be5cb5c431b434bd",
+      "bytes": 13317,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-08",
+      "path": "app/api/content/route.ts",
+      "blob_sha": "ecae548f58908b5e0089aeb6f405dee08398632a",
+      "bytes": 10518,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-09",
+      "path": "app/api/community/route.ts",
+      "blob_sha": "0db28637f33a7005e53b2b86945224e881b43ac6",
+      "bytes": 13585,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-09",
+      "path": "lib/community.ts",
+      "blob_sha": "3fb8de44a5c136d5b7e5c234c3dd2fdc8d2ad57d",
+      "bytes": 6434,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-10",
+      "path": "public/workspace.js",
+      "blob_sha": "9068f62616d3d014e755ad38e73031e14d3c517a",
+      "bytes": 63688,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-10",
+      "path": "tests/community-read-availability.test.mjs",
+      "blob_sha": "ad9fc16ea49e739d5a9f7837b89974b47234cf22",
+      "bytes": 13902,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-16",
+      "path": "app/api/help/route.ts",
+      "blob_sha": "56561b0d7dcb4a1137c54b946b8211daefadb937",
+      "bytes": 15330,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-16",
+      "path": "tests/help-attachment-signatures.test.mjs",
+      "blob_sha": "2d094fec56bcbc7235ce9f567c9f8c7bc9de8207",
+      "bytes": 19468,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    },
+    {
+      "section_id": "SA-EXT-16",
+      "path": ".github/workflows/source-quality.yml",
+      "blob_sha": "dac953d3bb59afd975e89b2a716050136ddcfcfe",
+      "bytes": 2491,
+      "readback_status": "EXACT_SHA_MATCH",
+      "evidence_level": "file-existence_and_hash_only"
+    }
+  ]
+}

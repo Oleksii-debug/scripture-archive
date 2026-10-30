@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { authenticateRequest } from "../../../lib/auth";
 import catalog from "../../../public/data/catalog.json";
+import { EDITIONS } from "../../../public/editions.js";
 
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "no-store, private", "X-Content-Type-Options": "nosniff" };
@@ -17,6 +18,18 @@ for (const books of Object.values(catalog.editionBooks)) {
   for (const book of books) {
     READING_CHAPTERS.set(book.code, Math.max(READING_CHAPTERS.get(book.code) ?? 0, book.chapters));
   }
+}
+
+// The canonical bookmark writer only permits local editions and validates
+// passage numbering per edition, not against the max across all translations.
+const PRIMARY_BOOK_CHAPTERS = new Map<string, number>(catalog.books.en.map(book => [book.code, book.chapters]));
+const BOOKMARK_EDITION_CHAPTERS = new Map(Object.entries(catalog.editionBooks)
+  .map(([edition, books]) => [edition, new Map(books.map(book => [book.code, book.chapters]))] as const));
+const LOCAL_EDITION_IDS = new Set(Object.values(EDITIONS).flat()
+  .filter(edition => "local" in edition && edition.local === true)
+  .map(edition => edition.id));
+function bookmarkChapterLimit(edition: string, book: string): number {
+  return (BOOKMARK_EDITION_CHAPTERS.get(edition) ?? PRIMARY_BOOK_CHAPTERS).get(book) ?? 0;
 }
 
 export async function GET(request: Request) {
@@ -62,6 +75,15 @@ export async function GET(request: Request) {
         throw Error("invalid_reading_receipt");
       return { mission: row.mission_id, data, updatedAt: row.updated_at };
     });
+    const verifiedBookmarks = (bookmarks.results as Array<{edition:string;book:string;chapter:number;created_at:string}>).map(row => {
+      if (!row || typeof row.edition !== "string" || !LOCAL_EDITION_IDS.has(row.edition) ||
+          typeof row.book !== "string" || !/^[1-3]?[A-Z]{2,3}$/.test(row.book) ||
+          !Number.isSafeInteger(row.chapter) || row.chapter < 1 ||
+          row.chapter > bookmarkChapterLimit(row.edition, row.book) ||
+          typeof row.created_at !== "string" || !row.created_at.trim())
+        throw Error("invalid_bookmark_record");
+      return row;
+    });
     const attemptHistory = (attempts.results as Array<{id:string;mission_id:string;book_id:string;chapter:number;group_id:string|null;locale:string;started_at:string;completed_at:string;result_json:string}>).map(row => {
       // A saved export is not restorable when D1 returns a malformed completed
       // attempt identity/passage. Reuse the same authoritative chapter catalogue
@@ -83,7 +105,7 @@ export async function GET(request: Request) {
         startedAt:row.started_at, completedAt:row.completed_at, result};
     });
     const payload = { format: "scripture-archive-reading-export", version: 1, exportedAt: new Date().toISOString(),
-      account: { email: identity.email }, profile: profile.results[0] ?? null, progress: records, bookmarks: bookmarks.results,
+      account: { email: identity.email }, profile: profile.results[0] ?? null, progress: records, bookmarks: verifiedBookmarks,
       attemptHistory, scope: "Profile, saved reading, completed learning progress and attempts, and bookmarks. Unfinished attempts and other account data are not included." };
     return new Response(JSON.stringify(payload, null, 2), { status: 200, headers: {
       ...headers, "Content-Type": "application/json; charset=utf-8", "Content-Disposition": 'attachment; filename="scripture-archive-reading-data.json"',

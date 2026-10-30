@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
+import { EDITIONS } from "../public/editions.js";
 
 // Execute the production export route, not a model or a parallel implementation.
 const source = readFileSync(new URL("../app/api/reading-export/route.ts", import.meta.url), "utf8");
@@ -45,6 +46,7 @@ function fixture({ results = standardRows(), dbPresent = true, identity = {
     require(moduleName) {
       if (moduleName === "cloudflare:workers") return { env: { DB: dbPresent ? db : null } };
       if (moduleName === "../../../public/data/catalog.json") return { default: catalog };
+      if (moduleName === "../../../public/editions.js") return { EDITIONS };
       if (moduleName === "../../../lib/auth") return { authenticateRequest: async () => {
         authentications++;
         if (authError) throw authError;
@@ -333,4 +335,42 @@ test("valid completed-attempt export preserves canonical local chapter exception
   assert.equal(body.attemptHistory[0].groupId,"class-1");
   assert.equal(body.attemptHistory[0].locale,"en");
   assert.equal(body.attemptHistory[0].result.score,1);
+});
+
+test("private export refuses corrupt or nonlocal bookmark metadata rather than advertising a usable backup", async () => {
+  const malformed = [
+    {edition:"not-local"}, {edition:"uk-khomenko"}, {edition:7},
+    {book:"FAK"}, {book:"gen"}, {book:null},
+    {chapter:0}, {chapter:51}, {chapter:1.5}, {chapter:"1"},
+    {edition:"en-web",book:"JOL",chapter:4},
+    {created_at:null}, {created_at:""},
+  ];
+  for(const mutation of malformed){
+    const rows=standardRows();
+    rows[2].results[0]={...rows[2].results[0],...mutation};
+    const f=fixture({results:rows});
+    const {response,body}=await outcome(f);
+    assert.equal(response.status,503,JSON.stringify(mutation));
+    assert.deepEqual(body,{error:"export_unavailable"});
+    assert.equal(response.headers.get("content-disposition"),null);
+    assert.equal(f.batches,1);
+  }
+  const rows=standardRows();
+  rows[2].results[0]=null;
+  const {response,body}=await outcome(fixture({results:rows}));
+  assert.equal(response.status,503);
+  assert.deepEqual(body,{error:"export_unavailable"});
+});
+
+test("private bookmark export accepts the real Ohiienko fourth Joel chapter but not its WEB alias", async () => {
+  const rows=standardRows();
+  rows[2].results=[
+    {edition:"uk-ohiienko",book:"JOL",chapter:4,created_at:"2026-10-29"},
+    {edition:"en-web",book:"GEN",chapter:50,created_at:"2026-10-29"},
+  ];
+  const {response,body}=await outcome(fixture({results:rows}));
+  assert.equal(response.status,200);
+  assert.deepEqual(Array.from(body.bookmarks,x=>x.edition+":"+x.book+":"+x.chapter),
+    ["uk-ohiienko:JOL:4","en-web:GEN:50"]);
+  assert.equal(body.attemptHistory[0].chapter,1);
 });

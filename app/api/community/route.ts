@@ -7,6 +7,13 @@ export const dynamic = "force-dynamic";
 
 const clean = (value: unknown, max = 120) => typeof value === "string" ? value.trim().slice(0, max) : "";
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
+function directoryInteger(raw: string | null, fallback: number, min: number, max: number) {
+  // Do not return fractional/NaN pagination cursors while the array slice
+  // silently truncates them. Non-decimal user input retains the safe default.
+  if (raw === null || !/^[0-9]{1,15}$/.test(raw)) return fallback;
+  const number = Number(raw);
+  return Number.isSafeInteger(number) ? Math.max(min, Math.min(max, number)) : fallback;
+}
 type RealRow = { id: string; display_name: string; locale: string; joined_at: string; last_active_at: string | null; reading_data: string | null; mission_count: number };
 
 function progressCount(raw: string | null) {
@@ -19,20 +26,25 @@ function progressCount(raw: string | null) {
 
 export async function GET(request: Request) {
   if (!env.DB) return json({ error: "database_unavailable" }, 503);
-  if (!await rateLimit(`community:${requestAddress(request)}`, 600, 3600)) return json({ error: "too_many_requests" }, 429);
+  // A rate-limit backend failure is an outage, not a public directory HTML 500.
+  try {
+    if (!await rateLimit(`community:${requestAddress(request)}`, 600, 3600)) return json({ error: "too_many_requests" }, 429);
+  } catch { return json({ error: "community_unavailable" }, 503); }
   const now = new Date();
   const action = new URL(request.url).searchParams.get("action");
   if (action === "owner") {
-    const identity = await authenticateRequest(request);
-    if (!isVerifiedOwner(identity)) return json({ error: "forbidden" }, 403);
-    return json(await communityOwnerState());
+    try {
+      const identity = await authenticateRequest(request);
+      if (!isVerifiedOwner(identity)) return json({ error: "forbidden" }, 403);
+      return json(await communityOwnerState());
+    } catch { return json({ error: "community_unavailable" }, 503); }
   }
   // GET is strictly read-only: only owner-controlled POST and the existing
   // scheduled lease path may advance waves or create community members.
   // A public page view, crawler or release preflight must never trigger writes.
   try {
-  const url = new URL(request.url), page = Math.max(1, Math.min(10000, Number(url.searchParams.get("page")) || 1));
-  const pageSize = Math.max(12, Math.min(48, Number(url.searchParams.get("pageSize")) || 24));
+  const url = new URL(request.url), page = directoryInteger(url.searchParams.get("page"), 1, 1, 10000);
+  const pageSize = directoryInteger(url.searchParams.get("pageSize"), 24, 12, 48);
   const query = clean(url.searchParams.get("q"), 60).toLocaleLowerCase();
   const sort = ["recent", "active", "progress", "name"].includes(clean(url.searchParams.get("sort"), 20)) ? clean(url.searchParams.get("sort"), 20) : "recent";
 

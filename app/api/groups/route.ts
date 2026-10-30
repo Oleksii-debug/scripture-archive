@@ -271,7 +271,7 @@ export async function POST(request: Request) {
           registration.weekly_goal < 1 || registration.weekly_goal > 31 ||
           registration.weekly_goal % 2 !== 1 ||
           !["steady", "flexible"].includes(registration.catchup_mode) ||
-          !/^\\d{4}-\\d{2}-\\d{2}$/.test(registration.start_date) ||
+          !/^\d{4}-\d{2}-\d{2}$/.test(registration.start_date) ||
           !Number.isFinite(Date.parse(registration.start_date)) ||
           new Date(registration.start_date).toISOString().slice(0, 10) !== registration.start_date)
         return Response.json({error:"marathon_state_invalid"},{status:409});

@@ -1,3 +1,15 @@
+## 2026-10-30 — SA-EXT-01 / READING_LEGACY_CANONICAL_CHAPTER_SQL_GUARD — РОЗРОБКУ ПІДФУНКЦІЇ ЗАКРИТО
+
+**РІВНО ЦЕЙ ПІДПУНКТ:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`; `remaining_scoped_implementation=0`; `necessary_unmerged_PRs=0`. **Усі повні SA-EXT-01…20 залишаються OPEN**; це не завершення продукту, публічного сайту чи фізичне NVDA-приймання.
+
+- **Реальний дефект:** вхідні `PUT /api/account?action=reading` дані перевірялися за канонічними межами 66 книг, але атомарний SQL `ON CONFLICT` зливав стару приватну `READING`-історію, перевіряючи тільки шаблон назви книги та главу 1–151. Пошкоджені записи `FAK:2`, `GEN:51`, `JOL:5` і порожні за змістом заголовки могли отримати успішне ACK і залишитися в історії.
+- **Інтеграція:** [PR #604](https://github.com/Oleksii-debug/scripture-archive/pull/604) **SQUASH MERGED** у точний `main@c1ef9b2eeeba221dffbac4afdba7f20dc5996f18`. Канонічний маршрут `app/api/account/route.ts` blob `24d3998c32484ff47df4fc2912aceb3922b0647a` використовує ту саму `READING_CHAPTERS` з `public/data/catalog.json` у двох захисних SQL JSON1 підзапитах; невідповідна попередня історія призводить до приватної 503 без її знищення/помилкового 200. Немає нової DB, іншого маршруту, нового серверу, зовнішнього запиту або розгортання.
+- **Регресії:** фактичний транспільований маршрут та SQLite JSON1 в `tests/account-reading-legacy-merge.test.mjs` blob `c0804b65c60f4fdb41be0c3ea6943ae99d564c45`: недійсні книги й глави, пробільні старі записи, атомарна відмова, чинна локальна `JOL:4`, успішне злиття та дедуплікація. Після merge обидва blob і `main` перевірено.
+- **Exact-head CI:** [Actions #41033421494](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41033421494) на `36ac69de7cfeaa3384d7b22610d9e1c94f805c11`: native Node **1394 PASS / 0 FAIL / 1 SKIP**, TypeScript/lint/build PASS, Python **2/2 PASS**. **Загальний CI FAIL:** disposable Wrangler/D1 на двох запусках **21/22**, явний незалежний `Your worker restarted mid-request` / HTTP 503 у `tests/api-flow.test.mjs:100,103` — існуючий власник [#361](https://github.com/Oleksii-debug/scripture-archive/pull/361). Немає підстав називати повний E2E зеленим.
+- **Окремо НЕ ВЕРИФІКОВАНО:** актуальний deployed Sites SHA/HTTPS, production D1, всі тексти та права, повні SA-EXT-01…20, фізичний Chrome/NVDA, розсилки та реліз. Повторний source-development **лише** після нової конкретної регресії або вимоги. Центральна дошка [#297](https://github.com/Oleksii-debug/scripture-archive/issues/297).
+
+---
+
 ## 2026-10-30 — SA-EXT-01/16 / READING_ACCOUNT_TITLE_NONBLANK_ACK — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
 
 **Виключно цей підпункт:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`; `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. Усі батьківські SA-EXT-01…20, повний реліз і приймання залишаються **OPEN**.

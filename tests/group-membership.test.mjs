@@ -326,3 +326,35 @@ test('single-write group invite rotation and marathon start also reject missing 
     assert.equal(start.db.prepare("SELECT status FROM group_marathon_registrations WHERE id='ready'").get().status,'active');
   }finally{start.db.close();}
 });
+
+test('joining an invited group rejects missing or failed D1 insert acknowledgement without lying about rollback',async()=>{
+  for(const mode of ['missing','failed']){
+    const f=fixture();
+    try{
+      f.setSingleReceiptMode(mode);
+      const first=await f.post('join',{inviteCode:'AABBCCDD'},'outsider');
+      assert.equal(first.status,503,mode);
+      assert.equal(first.data.error,'membership_unconfirmed',mode);
+      assert.equal(first.data.ok,undefined,'unknown commit is not a successful membership receipt');
+      const own=f.db.prepare("SELECT role FROM home_group_members WHERE group_id='g' AND user_id='outsider'").get();
+      assert.equal(own.role,'member','actual SQL may have committed despite missing acknowledgement');
+      const account=await f.get('outsider');
+      assert.equal(account.status,200,'existing authenticated membership readback recovers uncertain join');
+      const repeated=await f.post('join',{inviteCode:'AABBCCDD'},'outsider');
+      assert.equal(repeated.status,200,'idempotent retry after confirmed readback');
+      assert.equal(f.db.prepare("SELECT COUNT(*) n FROM home_group_members WHERE group_id='g' AND user_id='outsider'").get().n,1,'no duplicate membership');
+    }finally{f.db.close();}
+  }
+});
+
+test('joining a group preserves a controlled private error for an actual D1 insert exception',async()=>{
+  const f=fixture();
+  try{
+    f.beforeRun(()=>{throw Error('D1 unavailable');});
+    const result=await f.post('join',{inviteCode:'AABBCCDD'},'outsider');
+    assert.equal(result.status,503);
+    assert.equal(result.data.error,'membership_unconfirmed');
+    assert.equal(f.db.prepare("SELECT COUNT(*) n FROM home_group_members WHERE group_id='g' AND user_id='outsider'").get().n,0);
+    assert.equal((await f.get('outsider')).status,404,'no unconfirmed private access');
+  }finally{f.db.close();}
+});

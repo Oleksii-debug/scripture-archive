@@ -46,12 +46,12 @@ function fixture() {
             const gated = sql.includes("CASE WHEN ?=1 THEN reflection ELSE NULL END AS reflection");
             const groupId = gated ? params[1] : params[0];
             assert.ok(groups.has(groupId), "group ID must remain bound");
-            return { results: [{ id: "disposable-meeting", book_id: "GEN", chapter: 12,
+            return { success: true, results: [{ id: "disposable-meeting", book_id: "GEN", chapter: 12,
               answers_correct: 1, answers_total: 2, participant_count: 3,
               meeting_date: "2026-10-01",
               reflection: gated && params[0] !== 1 ? null : privateNote }] };
           }
-          return { results: [] };
+          return { success: true, results: [] };
         },
         async run() { writes += 1; return { success: true }; },
       };

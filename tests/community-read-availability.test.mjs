@@ -203,7 +203,7 @@ for (const parameters of [
   {page:"1.9",pageSize:"12.5"},
   {page:"NaN",pageSize:"Infinity"},
   {page:"1e2",pageSize:"-48"},
-  {page:"999999999999",pageSize:"12.3"},
+  {page:"999999999999999999",pageSize:"12.3"},
   {page:"+1",pageSize:"0x20"},
 ]) {
   test("invalid public directory cursors retain safe integral defaults: "+JSON.stringify(parameters), async () => {

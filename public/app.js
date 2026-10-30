@@ -2792,8 +2792,11 @@ async function mountReaderBookmarks(meta, chapter, edition, books) {
   const copy = bookmarkCopy[state.lang] || bookmarkCopy.uk;
   // A response started under one principal must never paint into another
   // principal's reader, even if the panel node has not been detached yet.
+  // Reader navigation may replace the chapter without replacing this panel or user.
+  // Bind delayed bookmark reads and click handlers to the actual chapter lease.
   const principal = state.user;
-  const isCurrent = () => panel.isConnected && state.user === principal;
+  const readerContext = state.currentReader;
+  const isCurrent = () => panel.isConnected && state.user === principal && state.currentReader === readerContext;
   if (!state.user) { panel.innerHTML = `<h2>${copy.title}</h2><p>${copy.login}</p>`; return; }
   const current = { edition: edition.id, book: meta.code, chapter };
   async function load() {

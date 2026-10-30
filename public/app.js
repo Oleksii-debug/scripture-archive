@@ -3169,8 +3169,15 @@ async function renderGroup(groupId) {
       await groupRequest(action, 'POST', {groupId:group.id, ...payload});
       // A completed request must not navigate away from a page opened meanwhile.
       if (!button.isConnected || !groupPageCurrent(`groups/${groupId}`, principal)) return;
-      if (['leave','delete'].includes(action)) navigateTo('/groups');
-      else await renderGroup(group.id);
+      if (['leave','delete'].includes(action)) {
+        navigateTo('/groups');
+        if (state.user !== principal || state.sessionUnavailable) return;
+      } else {
+        await renderGroup(group.id);
+        // The readback can be delayed independently of the successful POST.
+        // A departed principal must not hear a former owner's success message.
+        if (!groupPageCurrent(`groups/${groupId}`, principal)) return;
+      }
       announce(successText);
     } catch {
       if (manageStatus?.isConnected && groupPageCurrent(`groups/${groupId}`,principal)) manageStatus.textContent = manageCopy.error;

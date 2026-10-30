@@ -20,7 +20,7 @@ function deferred() {
   let resolve;
   return {promise: new Promise(r => {resolve = r;}), resolve};
 }
-function fixture({detail = false, pendingAction = ''} = {}) {
+function fixture({detail = false, pendingAction = '', holdSecondCatalog = false} = {}) {
   const state = {
     user: {id:'alice',profileComplete:true}, lang:'en', sessionUnavailable:false,
   };
@@ -31,6 +31,7 @@ function fixture({detail = false, pendingAction = ''} = {}) {
   const sessionForm = {isConnected:true,values:{bookId:'GEN',chapter:'12',meetingDate:'2026-10-30'}};
   const leave = {isConnected:true,disabled:false};
   const remove = {isConnected:true,disabled:false};
+  const rotate = {isConnected:true,disabled:false};
   const readingBook = {isConnected:true,value:'GEN'};
   const readingChapter = {isConnected:true,value:'12'};
   const readingPreview = {textContent:''};
@@ -39,6 +40,7 @@ function fixture({detail = false, pendingAction = ''} = {}) {
   const controls = {
     '#group-form':groupForm,'#join-form':joinForm,
     '#session-form':sessionForm,'#leave-group':leave,'#delete-group':remove,
+    '#rotate-group-invite':rotate,
     '#target-book':readingBook,'#target-chapter':readingChapter,
     '#reading-preview':readingPreview,'#chapter-link':readingLink,
     '#group-manage-status':status,'#group-form-state':status,'#join-state':status,'#session-state':status,
@@ -55,11 +57,14 @@ function fixture({detail = false, pendingAction = ''} = {}) {
   };
   const data = {group,membership:'owner',members:[],sessions:[],peers:[],managementMembers:[]};
   const postGate = pendingAction ? deferred() : null;
+  const catalogReadback = holdSecondCatalog ? deferred() : null;
+  const secondCatalogStarted = deferred();
+  let catalogReads=0;
   const ctx = {
     state,location,document,FormData:FakeFormData,
     window:{confirm:() => {events.confirmations++; return true;}},
     setActiveNav() {}, t: key => key, esc: String,
-    field: () => '', groupStatus:()=>'',groupMetrics:()=>'',groupCard:()=>'',groupManagementMarkup:()=>'',groupManagementCopy:()=>({leaveConfirm:'Leave?',deleteConfirm:'Delete?',left:'Left',deleted:'Deleted',error:'Error'}),
+    field: () => '', groupStatus:()=>'',groupMetrics:()=>'',groupCard:()=>'',groupManagementMarkup:()=>'',groupManagementCopy:()=>({leaveConfirm:'Leave?',deleteConfirm:'Delete?',left:'Left',deleted:'Deleted',rotateConfirm:'Rotate?',rotated:'Rotated',error:'Error'}),
     shell: html => {events.html.push(html);},
     groupRequest: async (action,method,payload,query) => {
       events.requests.push({action,method,payload,query});
@@ -69,13 +74,19 @@ function fixture({detail = false, pendingAction = ''} = {}) {
     },
     navigateTo:path=>events.navigation.push(path),
     announce:message=>events.announcements.push(message),
-    getCatalog:async()=>({books:{en:[{code:'GEN',name:'Genesis'}]}}),
+    getCatalog:async()=>{
+      if (++catalogReads > 1 && catalogReadback) {
+        secondCatalogStarted.resolve();
+        await catalogReadback.promise;
+      }
+      return {books:{en:[{code:'GEN',name:'Genesis'}]}};
+    },
     bookTitle:book=>book.name,
     EDITIONS:{en:true},localStorage:{setItem(){}},setStaticI18n() {},
     console,
   };
   const controller = vm.runInNewContext(production,ctx);
-  return {state,location,events,groupForm,joinForm,sessionForm,leave,remove,readingBook,readingChapter,postGate,...controller,
+  return {state,location,events,groupForm,joinForm,sessionForm,leave,remove,rotate,readingBook,readingChapter,postGate,catalogReadback,secondCatalogStarted,...controller,
     posts() {return events.requests.filter(x=>x.method==='POST');},
   };
 }
@@ -149,4 +160,31 @@ test('active facilitator retains real meeting write, feedback and canonical rere
   assert.equal(f.posts()[0].action,'session');
   assert.deepEqual(f.events.announcements,['meetingSaved']);
   assert.equal(f.events.html.length,2);
+});
+
+test('old owner success cannot be announced after a second-stage group readback crosses accounts',async()=>{
+  const f=fixture({detail:true,holdSecondCatalog:true});
+  await f.renderGroup('g1');
+  f.rotate.onclick();
+  await f.secondCatalogStarted.promise;
+  assert.equal(f.posts().length,1,'a valid old-owner rotation already committed');
+  assert.equal(f.posts()[0].action,'rotate-invite');
+  f.state.user={id:'bob',profileComplete:true};
+  f.catalogReadback.resolve();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.deepEqual(f.events.announcements,[],
+    'the completed old owner action must not announce into the new identity');
+  assert.equal(f.events.html.length,1,'the second group readback is discarded');
+});
+
+test('same owner still hears successful rotation after the asynchronous detail readback',async()=>{
+  const f=fixture({detail:true,holdSecondCatalog:true});
+  await f.renderGroup('g1');
+  f.rotate.onclick();
+  await f.secondCatalogStarted.promise;
+  f.catalogReadback.resolve();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(f.posts().length,1);
+  assert.equal(f.events.html.length,2,'current detail is refreshed');
+  assert.deepEqual(f.events.announcements,['Rotated']);
 });

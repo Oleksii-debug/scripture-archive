@@ -130,8 +130,14 @@ export async function POST(request: Request) {
         env.DB.prepare("UPDATE material_submissions SET status=?,reviewed_at=CURRENT_TIMESTAMP,reviewed_by=?,review_note=?,source_checked=?,rights_checked=? WHERE id=? AND status='pending' AND author_id<>? AND (?=1 OR EXISTS (SELECT 1 FROM editorial_roles r JOIN accounts a ON a.id=r.user_id WHERE r.user_id=? AND a.deleted_at IS NULL AND a.email_verified_at IS NOT NULL))")
           .bind(body.decision === "approve" ? "approved" : "rejected", identity.userId, note, body.sourceChecked === true ? 1 : 0, body.rightsChecked === true ? 1 : 0, body.id, identity.userId, owner(identity) ? 1 : 0, identity.userId),
       ]);
-      if (results.some(result => !result.success)) return json({ error: "review_failed" }, 503);
-      if (results[1].meta.changes) return json({ ok: true });
+      // D1 can commit a batch but lose its mutation receipt. A missing or
+      // impossible changes count is unknown, never an approved/rejected ACK or
+      // a fabricated "not found" response. The author can inspect history.
+      if (!Array.isArray(results) || results.length !== 2 ||
+        results.some(result => !result?.success ||
+          !Number.isSafeInteger(result.meta?.changes) || result.meta.changes < 0) ||
+        results[1].meta.changes > 1) return json({ error: "review_failed" }, 503);
+      if (results[1].meta.changes === 1) return json({ ok: true });
       // The write predicates remain authoritative even if this explanatory read races.
       const own = await env.DB.prepare("SELECT id FROM material_submissions WHERE id=? AND status='pending' AND author_id=?")
         .bind(body.id, identity.userId).first<{id:string}>();

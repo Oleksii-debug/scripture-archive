@@ -1,5 +1,16 @@
 # SCRIPTURE ARCHIVE — каталог розділів і план реалізації розширень
 
+## 2026-10-30 — SA-EXT-03 / LEGACY_PUBLIC_MATERIAL_FIELD_ALLOWLIST — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузька функція)
+
+**Статус:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`, тільки для захисту історичного публічного `GET /api/materials` від надлишкових полів. **Батьківський SA-EXT-03 залишається OPEN**: це не фінальне приймання конструктора/редакційного конвеєра.
+
+- **Відтворений ризик:** старий публічний список виключав із довільного JSON тільки два ключі (`answer`, `explanation`), тому інші невідомі поля попередніх публічних записів могли передаватися анонімним читачам. Внутрішнє сховище та збережені чернетки не змінювалися.
+- **Реалізовано:** [PR #540](https://github.com/Oleksii-debug/scripture-archive/pull/540) squash MERGED у `main@1a5db3f41d24ac47f3aa23fcc396b78e7123cf66`. Канонічний `app/api/materials/route.ts` тепер повертає з історичного публічного JSON лише `prompt`, `reference`, перевірений масив рядкових `options`; зіпсовані публічні поля закривають усю відповідь як контрольовану помилку без часткового витоку. Для справжнього автора його приватні чернетки повертаються без втрати `answer` та `explanation`. Жодного нового API/сховища або розгортання.
+- **Точний readback GitHub:** PR `merged=true`, source blob `app/api/materials/route.ts@98c2b0b9c013f91c8fae563f4d7e8723e5f49b5a`, tests blob `tests/materials-d1-ack.test.mjs@f7a16b420f999512752dbd6c172d81c5e68688a6`.
+- **Тести:** [Actions #41019810193](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41019810193), PR head `8640ec0f9f40b5d76eeafcb18ad6b18cb2f8a321`: **1145 Node PASS / 0 FAIL / 1 SKIP із 1146**, включно з 3 новими реальними TypeScript-route/SQLite перевірками; **22/22** disposable Worker/D1 PASS; TypeScript, lint, production source build PASS; Python 2 PASS. **CI SUCCESS для цього точного HEAD**; це не підтвердження релізу або стабільного усунення попередніх 503 на інших комітах.
+- **Не засвідчено:** повний SA-EXT-03, браузер/клавіатура/реальний NVDA, незалежне редакторське приймання всіх матеріалів і deployed SHA. Повторне розроблення вже злитої вузької функції — лише за конкретного дефекту чи нової затвердженої вимоги.
+
+
 ## 2026-10-30 — SA-EXT-07 / ACADEMY_UNCONFIRMED_LOCAL_SAVE_COPY — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
 
 **Рішення:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` тільки для неправдивого повідомлення про незмінність прогресу після непідтвердженого запису Академії. **Батьківський SA-EXT-07 та всі SA-EXT-01…20 залишаються OPEN.** Повторне розроблення цієї конкретної поведінки — лише за нової вимоги або відтвореного дефекту.

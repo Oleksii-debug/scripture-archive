@@ -116,6 +116,52 @@ for(const value of [true,false,[],[3],null,{},'', ' ', '0x3','3e0','3.0','+3','0
   });
 }
 
+// Existing production POST create and genuine D1/SQLite: never acknowledge
+// a different group profile from the one its owner entered.
+for (const [field, changed] of [
+  ['name',{name:'N'.repeat(101)}],
+  ['church',{church:'C'.repeat(161)}],
+  ['country',{country:'X'.repeat(81)}],
+  ['city',{city:'Y'.repeat(81)}],
+  ['description',{description:'D'.repeat(601)}],
+]) {
+  test('reject overlong group '+field+' without any SQLite mutation',async()=>{
+    const f=fixture();
+    try {
+      const result=await f.post('create',{...group,...changed});
+      assert.equal(result.status,400,field+' '+JSON.stringify(result.body));
+      assert.equal(result.body.error,'invalid_group');
+      assert.equal(f.writes,0,'oversized field must not reach D1');
+      assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM home_groups').get().n,1);
+    } finally {f.db.close();}
+  });
+}
+
+test('group creation persists the exact maximum authored fields',async()=>{
+  const f=fixture();
+  try{
+    const fields={...group,name:'N'.repeat(100),church:'C'.repeat(160),
+      country:'X'.repeat(80),city:'Y'.repeat(80),description:'D'.repeat(600)};
+    const result=await f.post('create',fields);
+    assert.equal(result.status,201,JSON.stringify(result.body));
+    const persisted=f.db.prepare('SELECT name,church,country,city,description FROM home_groups WHERE id=?')
+      .get(result.body.groupId);
+    for (const field of ['name','church','country','city','description'])
+      assert.equal(persisted[field],fields[field],field+' must never be shortened');
+  }finally{f.db.close();}
+});
+
+test('group create retains harmless whitespace trim at exact name boundary',async()=>{
+  const f=fixture();
+  try{
+    const full='N'.repeat(100);
+    const result=await f.post('create',{...group,name:'  '+full+'  '});
+    assert.equal(result.status,201,JSON.stringify(result.body));
+    assert.equal(f.db.prepare('SELECT name FROM home_groups WHERE id=?')
+      .get(result.body.groupId).name,full);
+  }finally{f.db.close();}
+});
+
 test('accept genuine numeric JSON and decimal HTML-form numeric strings',async()=>{
   const f=fixture();
   try {

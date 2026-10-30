@@ -7,6 +7,7 @@ import ts from "typescript";
 // Execute the real community GET route with failed/partial D1 result receipts,
 // rather than testing a reimplemented response validator.
 const source = readFileSync(new URL("../app/api/community/route.ts", import.meta.url), "utf8");
+const catalog = JSON.parse(readFileSync(new URL("../public/data/catalog.json", import.meta.url), "utf8"));
 const compiled = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   reportDiagnostics: true,
@@ -40,6 +41,7 @@ function fixture({ receipts = validReceipts(), throwBatch = false, throwAdvance 
     exports, Request, Response, URL, Date,
     require(name) {
       if (name === "cloudflare:workers") return { env: { DB: missingDb ? undefined : db } };
+      if (name === "../../../public/data/catalog.json") return { default: catalog };
       if (name === "../../../lib/auth") return {
         authenticateRequest: async () => { calls.auth++; if (throwAuth) throw Error("identity store unavailable"); return owner ? { userId: "owner" } : null; },
         isVerifiedOwner: identity => Boolean(identity?.userId === "owner"),
@@ -288,6 +290,29 @@ for (const [name, count] of [
     const receipts = validReceipts();
     receipts[2].results[0].mission_count = count;
     const response = await fixture({ receipts }).get();
+    assert.equal(response.status, 503);
+    assert.equal(response.body.error, "community_unavailable");
+    assert.equal(Object.hasOwn(response.body, "members"), false);
+  });
+}
+
+test("public progress counts a legitimate local-edition JOL chapter 4 from the canonical catalogue", async () => {
+  const receipts = validReceipts();
+  receipts[2].results[0].reading_data = JSON.stringify([{book:"JOL", chapter:4, title:"Йоіл, 4"}]);
+  const response = await fixture({ receipts }).get();
+  assert.equal(response.status, 200);
+  assert.equal(response.body.members[0].chaptersRead, 1);
+});
+
+for (const receipt of [
+  {book:"ZZZ", chapter:1, title:"Invented book"},
+  {book:"GEN", chapter:51, title:"Invented chapter"},
+  {book:"JOL", chapter:5, title:"Beyond every local edition"},
+]) {
+  test("public directory refuses out-of-catalog reading passage "+receipt.book+"/"+receipt.chapter, async () => {
+    const rows = validReceipts();
+    rows[2].results[0].reading_data = JSON.stringify([receipt]);
+    const response = await fixture({ receipts: rows }).get();
     assert.equal(response.status, 503);
     assert.equal(response.body.error, "community_unavailable");
     assert.equal(Object.hasOwn(response.body, "members"), false);

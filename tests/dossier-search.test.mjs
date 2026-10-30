@@ -259,8 +259,8 @@ test('SA-EXT-05: exact chapter discovery includes the same public relation citat
 test('SA-EXT-05: relation chapter witnesses must not match invented adjacent chapters',()=>{
   for(const query of ['GEN 1','GEN 16','GEN 170','EXO 1','EXO 120']){
     const ids=searchScriptureDossiers('en',query,catalog).map(item=>item.id);
-    if(query.startsWith('GEN '))assert.ok(!ids.includes('abraham')||query==='GEN 1'&&false,'no unrelated Abraham chapter '+query);
-    if(query.startsWith('EXO '))assert.ok(!ids.includes('moses')||query==='EXO 1'&&false,'no unrelated Moses relation chapter '+query);
+    if(query.startsWith('GEN '))assert.ok(!ids.includes('abraham'),'no unrelated Abraham chapter '+query);
+    if(query.startsWith('EXO '))assert.ok(!ids.includes('moses'),'no unrelated Moses relation chapter '+query);
   }
   assert.deepEqual(searchScriptureDossiers('en','GEN 17:14',catalog),[],'outside the published relation verse interval');
 });

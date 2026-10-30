@@ -57,11 +57,9 @@ async function scenario({mode='success', noFocus=false, stale=false, detached=fa
     });
     document.activeElement = noFocus ? document.body : selection ? dropdown : button;
     const submitted = form.onsubmit({preventDefault(){}});
-    assert.equal(button.disabled,!(invalidated));
-    if (!invalidated) {
-      // Allow the first guard to run before the second-text promise resolves.
-      await Promise.resolve(); await Promise.resolve();
-    }
+    assert.equal(button.disabled,true,'guarded request starts single-flight');
+    // Allow the first guard to run before the second-text promise resolves.
+    await Promise.resolve(); await Promise.resolve();
     if (stale) nowCurrent=false;
     if (detached) panel.isConnected=false;
     if (external) document.activeElement=outside;

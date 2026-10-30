@@ -364,3 +364,37 @@ test("explicit oversized or malformed draft IDs cannot alias a shorter owned dra
     assert.equal((await f.post({...valid,id:"  fresh-id  "})).body.id,"fresh-id");
   }finally{f.db.close();}
 });
+
+
+// An explicit author-selected language must not be silently coerced to another
+// language before the real private-draft UPSERT and editorial review pipeline.
+for (const locale of [
+  true,false,0,1,-1,[],["uk"],["ru"],["en"],["uk","ru"],
+  {},{language:"uk"},"UK","Ru","EN","fr","es","sk",
+  "uk-SK","uk_UA"," uk","uk ","uk\\n"," ","  ","0",
+  "undefined","null","ru-RU","en-US"
+]) {
+  test("SA-EXT-03/14 rejects an explicit malformed locale "+JSON.stringify(locale),async()=>{
+    const f=fixture();try{
+      const response=await f.post({...valid,id:"wrong-language",locale});
+      assert.equal(response.status,400,JSON.stringify(response.body));
+      assert.equal(response.body.error,"invalid_material");
+      assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM study_materials").get().n,0,
+        "coercible or unknown language cannot create a mislabelled draft");
+    }finally{f.db.close();}
+  });
+}
+
+for (const [provided,expected] of [
+  ["uk","uk"],["ru","ru"],["en","en"],[null,"uk"],["","uk"],[undefined,"uk"]
+]) {
+  test("SA-EXT-03/14 keeps accepted authored locale "+JSON.stringify(provided),async()=>{
+    const f=fixture();try{
+      const response=await f.post({...valid,id:"correct-language",locale:provided});
+      assert.equal(response.status,201,JSON.stringify(response.body));
+      const row=f.db.prepare("SELECT locale,visibility FROM study_materials WHERE id=?").get("correct-language");
+      assert.equal(row.locale,expected);
+      assert.equal(row.visibility,"private");
+    }finally{f.db.close();}
+  });
+}

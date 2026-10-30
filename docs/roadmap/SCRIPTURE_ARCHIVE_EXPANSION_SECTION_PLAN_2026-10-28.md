@@ -1,3 +1,9 @@
+## 2026-10-30 — SA-EXT-03 / MATERIAL_DRAFT_UPSERT_ACK_BOUND — ВУЗЬКЕ ЗАКРИТТЯ
+
+**CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** лише для точного D1 підтвердження чернеткового UPSERT, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. [PR #671](https://github.com/Oleksii-debug/scripture-archive/pull/671) SQUASH MERGED `main@b0b2fbcd04e04461f84846d13b8992d13b64ce4d`, exact-head [Actions #41053959435](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41053959435) **SUCCESS**. Повторний Worker/D1 виявив, що `ON DELETE CASCADE` законно збільшує `total_changes`; кандидат виправлено до merge, strict `changes<=1` діє тільки для UPSERT. **Повний SA-EXT-03 та решта 20 батьківських SA-EXT-01…20 залишаються OPEN**. [Остаточний запис](SA_EXT_03_MATERIAL_UPSERT_ACK_TERMINAL_20261030.md). Сайт/NVDA/продукційна БД не прийняті.
+
+---
+
 ## 2026-10-30 — SA-EXT-16 / RESET_MAIL_DELIVERY_COPY — SCOPED TERMINAL
 
 **ЗАКРИТО ДЛЯ ПОВТОРНОЇ РОЗРОБКИ лише вузький дефект повідомлення відновлення пароля**, `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`: після `forgot-password` реальний `renderAccount` у UK/RU/EN більше не обіцяє доставку без підтвердження провайдера. [Feature PR #675](https://github.com/Oleksii-debug/scripture-archive/pull/675) **MERGED** в `main@6ecbf2260d5463a585e77ec8b3b58aa6aa57d3c7`. [Exact-head Actions #41053883269](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41053883269) **SUCCESS**: 1681 Node PASS/0 FAIL/1 SKIP, Worker/D1 22/22, TS/lint/build PASS, pytest 2/2 PASS. [Термінальний запис](SA_EXT_16_PASSWORD_RESET_MAIL_COPY_TERMINAL_20261030.md). **Усі батьківські 20 розділів SA-EXT-01…20 залишаються OPEN**; production, live browser, NVDA і реальна доставка пошти не перевірені. Немає незлитих PR для цієї підфункції.

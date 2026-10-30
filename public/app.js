@@ -3010,10 +3010,10 @@ async function renderReader(parts) {
   if (parallelEditions.length) {
     const aside = document.querySelector('.reader-aside');
     aside.insertAdjacentHTML('beforeend', parallelControls(parallelEditions, state.lang, esc));
-    const panel = aside.querySelector('.parallel-reader'), reader = state.currentReader;
+    const panel = aside.querySelector('.parallel-reader');
     mountParallelReader(panel, { editions: parallelEditions, catalog, lang: state.lang, book: meta.code, bookTitle: bookTitle(meta), chapter, getBook, esc,
       check: (code, number) => attemptRequest('chapter', 'POST', { book: code, chapter: number }),
-      current: () => state.currentReader === reader,
+      current: readerStillCurrent,
       lock: () => { forgetActiveAttempt(); state.mission=null; state.currentReader=null; renderLockedChapter(meta.code,chapter); },
       failClosed: () => { state.currentReader=null; shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1></section>`); },
     });

@@ -49,6 +49,12 @@ test('primary-reader citation rejects unsafe source or license URLs',()=>{
   assert.throws(()=>provenance('uk-ohiienko')(malicious),/unsafe_edition_source/);
   const badLicense={...catalog,translations:{'uk-ohiienko':{...catalog.translations['uk-ohiienko'],licenseUrl:'data:text/html,bad'}}};
   assert.throws(()=>provenance('uk-ohiienko')(badLicense),/unsafe_edition_source/);
+  const deceptive={...catalog,translations:{'uk-ohiienko':{...catalog.translations['uk-ohiienko'],source:'https://publisher.example@other.example/read'}}};
+  assert.throws(()=>provenance('uk-ohiienko')(deceptive),/unsafe_edition_source/);
+  const passwordSource={...catalog,translations:{'uk-ohiienko':{...catalog.translations['uk-ohiienko'],source:'https://user:password@source.example/o'}}};
+  assert.throws(()=>provenance('uk-ohiienko')(passwordSource),/unsafe_edition_source/);
+  const passwordLicense={...catalog,translations:{'uk-ohiienko':{...catalog.translations['uk-ohiienko'],licenseUrl:'https://user:password@license.example/terms'}}};
+  assert.throws(()=>provenance('uk-ohiienko')(passwordLicense),/unsafe_edition_source/);
 });
 test('catalog metadata without an HTTPS source does not silently enable the reader',()=>{
   const missing={...catalog,editions:{...catalog.editions,uk:{id:'UKRPAN',title:'Kulish',license:'PD'}}};

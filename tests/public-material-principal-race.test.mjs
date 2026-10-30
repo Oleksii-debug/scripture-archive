@@ -167,3 +167,42 @@ test('invalidated or throwing principal predicate refuses to issue a request',()
     assert.equal(f.rendered(),0);
   }
 ));
+
+
+for (const receipt of [
+  {correct:'false',explanation:'FALSE SUCCESS PRIVATE CONTENT'},
+  {correct:'true',explanation:'FORGED TRUE'},
+  {correct:1,explanation:'FORGED NUMERIC TRUE'},
+  {correct:0},
+  {correct:null},
+  {},
+  {correct:true,explanation:{private:'unvalidated object'}},
+]) {
+  test('public answer receipt must have an exact boolean and safe explanation: '+JSON.stringify(receipt),()=>withNetwork(
+    async (_url,options) => options ? response(receipt) : response({items:[item]}),
+    async () => {
+      const f=fixture();
+      await show(f);
+      await f.form.onsubmit({preventDefault(){}});
+      assert.equal(f.status.textContent,w.answerError,'reject malformed receipt, never announce correct');
+      assert.equal(f.button.disabled,false,'malformed answer is retryable');
+      assert.ok(!f.status.textContent.includes('FORGED'));
+    }
+  ));
+}
+
+test('malformed public answer can be retried successfully with authoritative boolean result',()=>withNetwork(
+  (()=>{let replies=0;return async (_url,options)=>options
+    ? response(++replies===1 ? {correct:'false',explanation:'FORGED'} : {correct:false})
+    : response({items:[item]});})(),
+  async () => {
+    const f=fixture();
+    await show(f);
+    await f.form.onsubmit({preventDefault(){}});
+    assert.equal(f.status.textContent,w.answerError);
+    assert.equal(f.button.disabled,false);
+    await f.form.onsubmit({preventDefault(){}});
+    assert.equal(f.status.textContent,w.wrong,'valid wrong answer does not become correct');
+    assert.equal(f.button.disabled,false);
+  }
+));

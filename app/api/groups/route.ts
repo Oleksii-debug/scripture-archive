@@ -97,7 +97,12 @@ export async function GET(request: Request) {
     // The owner needs the private membership list to transfer responsibility.
     // Check ownership again in the query, not only in the earlier lookup.
     const managementMembers = member?.role === "owner" && id ? await checkedGroupRows(await env.DB!.prepare("SELECT hm.user_id,hm.display_name,hm.role FROM home_group_members hm WHERE hm.group_id=? AND EXISTS (SELECT 1 FROM home_groups g JOIN home_group_members owner ON owner.group_id=g.id AND owner.user_id=g.owner_user_id AND owner.role='owner' WHERE g.id=hm.group_id AND g.owner_user_id=?) ORDER BY hm.joined_at,hm.user_id").bind(groupId,id.userId).all()) : [];
-    return Response.json({ group: publicGroup(row, Boolean(member)), members: names, managementMembers, sessions, peers, answers, membership: member?.role ?? null }, { headers: { "Cache-Control": "no-store" } });
+    // A private roster hides its member count, so its meeting attendance
+    // must not disclose a backdoor count. Keep aggregate study metrics public.
+    const visibleSessions = !member && row.roster_visibility === "private"
+      ? sessions.map(session => ({ ...session, participant_count: null }))
+      : sessions;
+    return Response.json({ group: publicGroup(row, Boolean(member)), members: names, managementMembers, sessions: visibleSessions, peers, answers, membership: member?.role ?? null }, { headers: { "Cache-Control": "no-store" } });
   }
   if (url.searchParams.get("mine") === "1") {
     if (!id) return forbidden();

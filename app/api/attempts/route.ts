@@ -146,6 +146,8 @@ async function finishAttempt(attempt: Attempt, actorId: string, guest: boolean, 
 
 export async function GET(request: Request) {
   if (!env.DB) return json({ error: "database_unavailable" }, 503);
+  // Authentication, active-assessment guards and readbacks must fail closed.
+  try {
   const url = new URL(request.url), action = url.searchParams.get("action") || "current";
   if (action === "manifest") {
     const currentActor = await actor(request);
@@ -188,11 +190,14 @@ export async function GET(request: Request) {
   const tasks = tasksFor(attempt.book_id, attempt.chapter).slice(0, attempt.task_limit), task = tasks[attempt.current_index];
   if (!task) return json({ error: "attempt_state_invalid" }, 409);
   return json({ attemptId: attempt.id, task: publicTask(task, attempt.locale, attempt.current_index + 1, tasks.length) });
+  } catch { return json({ error: "database_unavailable" }, 503); }
 }
 
 export async function POST(request: Request) {
   if (!env.DB) return json({ error: "database_unavailable" }, 503);
   if (!sameOrigin(request)) return json({ error: "cross_origin_request" }, 403);
+  // Guard every D1-dependent actor lookup and preflight, not only finalization.
+  try {
   const action = new URL(request.url).searchParams.get("action") || "start";
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   if (!body) return json({ error: "invalid_json" }, 400);
@@ -311,4 +316,5 @@ export async function POST(request: Request) {
   }
 
   return json({ error: "unknown_action" }, 400);
+  } catch { return json({ error: "database_unavailable" }, 503); }
 }

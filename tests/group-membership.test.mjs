@@ -326,3 +326,35 @@ test('single-write group invite rotation and marathon start also reject missing 
     assert.equal(start.db.prepare("SELECT status FROM group_marathon_registrations WHERE id='ready'").get().status,'active');
   }finally{start.db.close();}
 });
+
+test('joining with a missing or failed D1 ACK never claims membership success',async()=>{
+  for(const receiptMode of ['missing','failed']){
+    const f=fixture();
+    try{
+      f.setSingleReceiptMode(receiptMode);
+      const result=await f.post('join',{inviteCode:'AABBCCDD'},'outsider');
+      assert.equal(result.status,503,receiptMode);
+      assert.equal(result.data.error,'database_unavailable');
+      // SQLite committed before the fabricated D1 receipt was damaged:
+      // the client must query group state and retry idempotently.
+      assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM home_group_members WHERE group_id='g' AND user_id='outsider'").get().n,1);
+      const retry=await f.post('join',{inviteCode:'AABBCCDD'},'outsider');
+      assert.equal(retry.status,200,'existing membership is a valid zero-change retry');
+      assert.equal((await f.get('outsider')).status,200);
+      assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM home_group_members WHERE group_id='g' AND user_id='outsider'").get().n,1);
+    }finally{f.db.close();}
+  }
+});
+
+test('joining on a D1 write exception fails closed without creating membership',async()=>{
+  const f=fixture();
+  try{
+    f.beforeRun(()=>{throw Error('unavailable D1 during join');});
+    const failed=await f.post('join',{inviteCode:'AABBCCDD'},'outsider');
+    assert.equal(failed.status,503);
+    assert.equal(failed.data.error,'database_unavailable');
+    assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM home_group_members WHERE group_id='g' AND user_id='outsider'").get().n,0);
+    assert.equal((await f.post('join',{inviteCode:'AABBCCDD'},'outsider')).status,200);
+    assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM home_group_members WHERE group_id='g' AND user_id='outsider'").get().n,1);
+  }finally{f.db.close();}
+});

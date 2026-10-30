@@ -203,10 +203,17 @@ export async function POST(request: Request) {
     if(!/^(?:[A-F0-9]{8}|[A-F0-9]{32})$/.test(code))return Response.json({error:"invalid_invite"},{status:404});
     const group = await env.DB!.prepare("SELECT id FROM home_groups WHERE invite_code=?").bind(code).first<{ id: string }>();
     if (!group) return Response.json({ error: "invalid_invite" }, { status: 404 });
-    await env.DB!.prepare("INSERT OR IGNORE INTO home_group_members (group_id,user_id,display_name,role,public_name,public_activity) SELECT id,?,?,'member',?,? FROM home_groups WHERE id=? AND invite_code=?")
-      .bind(id.userId, `${person.first_name} ${person.last_name}`.trim(), body.publicName === true ? 1 : 0, body.publicActivity === true ? 1 : 0, group.id, code).run();
-    if(!await membership(group.id,id.userId))return Response.json({error:"invalid_invite"},{status:404});
-    return Response.json({ ok: true, groupId: group.id });
+    try {
+      // Reuse the receipt guard already integrated for other group mutations.
+      // An INSERT can commit while its D1 ACK is lost: do not claim success.
+      const joined = await env.DB!.prepare("INSERT OR IGNORE INTO home_group_members (group_id,user_id,display_name,role,public_name,public_activity) SELECT id,?,?,'member',?,? FROM home_groups WHERE id=? AND invite_code=?")
+        .bind(id.userId, `${person.first_name} ${person.last_name}`.trim(), body.publicName === true ? 1 : 0, body.publicActivity === true ? 1 : 0, group.id, code).run();
+      if(!acknowledgedWrite(joined))return Response.json({error:"database_unavailable"},{status:503});
+      if(!await membership(group.id,id.userId))return Response.json({error:"invalid_invite"},{status:404});
+      return Response.json({ok:true,groupId:group.id});
+    } catch {
+      return Response.json({error:"database_unavailable"},{status:503});
+    }
   }
 
   if (action === "session") {

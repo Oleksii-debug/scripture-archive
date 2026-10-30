@@ -171,6 +171,13 @@ test('SA-EXT-02: nonnumeric answer indexes cannot be coerced into a graded answe
       assert.equal(f.db.prepare("SELECT count(*) n FROM mission_attempt_answers WHERE attempt_id='type-guard'").get().n,0);
       assert.equal(f.db.prepare("SELECT current_index n FROM mission_attempts WHERE id='type-guard'").get().n,0);
     }
+    for(const taskIndex of ['1',true,null,1.5,{}]) {
+      const reply=await f.post('answer',{attemptId:'type-guard',taskIndex,selected:[0]});
+      assert.equal(reply.status,400,JSON.stringify(taskIndex));
+      assert.equal(reply.data.error,'invalid_answer');
+      assert.equal(f.db.prepare("SELECT count(*) n FROM mission_attempt_answers WHERE attempt_id='type-guard'").get().n,0);
+      assert.equal(f.db.prepare("SELECT current_index n FROM mission_attempts WHERE id='type-guard'").get().n,0);
+    }
     const accepted=await f.post('answer',{attemptId:'type-guard',taskIndex:1,selected:[0]});
     assert.equal(accepted.status,200);
     assert.equal(f.db.prepare("SELECT count(*) n FROM mission_attempt_answers WHERE attempt_id='type-guard'").get().n,1);

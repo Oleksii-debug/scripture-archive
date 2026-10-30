@@ -4,6 +4,12 @@
 
 ---
 
+## 2026-10-30 — SA-EXT-02 / CANONICAL_ASSESSMENT_DEADLINE_CALENDAR_INTEGRITY — SOURCE SCOPED TERMINAL
+
+**ТІЛЬКИ ПІДПУНКТ ЗАКРИТО ДЛЯ РОЗРОБКИ / `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`**. Чинний API навчальних спроб відхиляє неможливі дати/час дедлайну, замість розкриття завдання або прийняття відповіді; збережено коректні D1 UTC, дату без часу та ISO-Z. [PR #746](https://github.com/Oleksii-debug/scripture-archive/pull/746) **squash MERGED** у `main@16926cca4bd81e6d267f635c597be110fada3823`; [exact-head CI #41064837337](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41064837337) **SUCCESS**. [Термінальна квитанція](SA_EXT_02_ATTEMPT_DEADLINE_CALENDAR_TERMINAL_20261030.md). `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` тільки для цієї перевірки. **Усі 20 повних батьківських розділів OPEN**, production/browser/NVDA/SMTP NOT_VERIFIED. Без деплою.
+
+---
+
 ## 2026-10-30 — SA-EXT-16 / HISTORICAL_PUBLIC_CHURCH_CONSENT_WRITE_GUARD — SOURCE SCOPED TERMINAL
 
 **Лише цей підпункт ЗАКРИТО ДЛЯ РОЗРОБКИ / `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`**. [PR #743](https://github.com/Oleksii-debug/scripture-archive/pull/743) squash MERGED у `main@0847c2089ffbb5b20cbfe6e08245f0b32f401e56`; exact-head [Actions #41064432625](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41064432625) **SUCCESS**. Міграція `0013_public_church_consent_guard.sql` не дозволяє старому writer повторно відкрити публічність церковних даних без актуальної явної згоди, не скасовує законну згоду версії 1; native SQL migration tests додані. `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` лише для source-guard. [Квитанція](SA_EXT_16_LEGACY_PUBLIC_CHURCH_CONSENT_GUARD_TERMINAL_20261030.md). **Повні SA-EXT-01…20 OPEN; production migration/backup/cutover #689, deployed SHA, браузер/NVDA/SMTP NOT_VERIFIED**; деплою не було.

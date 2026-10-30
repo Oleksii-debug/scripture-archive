@@ -1,3 +1,9 @@
+## 2026-10-30 — SA-EXT-01 / PROGRESS_EXPORT_METADATA_FAILCLOSED — SCOPED TERMINAL
+
+**CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** only for rejecting missing, typed-invalid or blank saved-progress mission IDs and update times in the canonical private export route. [PR #685](https://github.com/Oleksii-debug/scripture-archive/pull/685) **SQUASH MERGED** to exact `main@252e637a7993488cbc1be218d96cd8d2d15e93e2`. [Exact-head CI #41055352814](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41055352814) **SUCCESS**: native Node, TS, lint, build, disposable Worker/D1, Python. The repaired route and tests were read back from merged main; no necessary unmerged PR or remaining implementation for this narrow defect. [Full terminal receipt](SA_EXT_01_PROGRESS_EXPORT_METADATA_TERMINAL_20261030.md). **Parent SA-EXT-01 and all 20 complete SA-EXT sections remain OPEN**; production, browser/NVDA and translation rights not qualified. No deploy.
+
+---
+
 ## 2026-10-30 — SA-EXT-03 / ADMIN_CONTENT_READ_D1_ACK — ВУЗЬКЕ ЗАКРИТТЯ
 
 **CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** лише для owner CMS GET read receipt. [PR #683](https://github.com/Oleksii-debug/scripture-archive/pull/683) SQUASH MERGED у exact `main@4eb14c499e11cf5521adf6b2b1088f53beb3b71c`. [CI #41055178927](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41055178927) **SUCCESS**: Node 1749 PASS / 0 FAIL / 1 SKIP; Worker/D1 22/22; TypeScript/lint/build, Python 2/2. Тепер admin GET не маскує failed/malformed D1 SELECT під 200 із порожньою редакторською історією; 10 нових route-testing сценаріїв. [Terminal receipt](SA_EXT_03_ADMIN_CONTENT_READ_ACK_TERMINAL_20261030.md); [handoff першої п'ятірки відкритих parent](SA_EXT_CONVERGENCE_HANDOFF_20261030_3_TERMINALS.md). **Весь SA-EXT-03 і решта 20 великих SA-EXT-01…20 OPEN; live Sites, SMTP, Chrome/NVDA НЕ підтверджено.** Деплой не запускався.

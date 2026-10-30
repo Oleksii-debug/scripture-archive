@@ -2665,6 +2665,17 @@ attemptChannel?.addEventListener("message", event => {
   }
 });
 
+// A copied excerpt preserves its exact edition, licensing and primary source.
+function readerCitationText(reference, verseText, edition, permalink) {
+  return [
+    `${reference} ${verseText}`,
+    `${edition.title} · ${edition.license}`,
+    edition.attribution || "",
+    edition.source,
+    permalink,
+  ].filter(Boolean).join("\n");
+}
+
 function readerVerseUrl(code, chapter, verse) {
   return `/reader/${encodeURIComponent(code)}/${chapter}?verse=${verse}`;
 }
@@ -2750,6 +2761,11 @@ async function renderReader(parts) {
   localStorage.setItem("sa.reader", JSON.stringify(state.reader));
   const edition = localEditionMetadata(catalog),
     editionInfo = editionDetails(edition, meta.code);
+  const citationCopy = {
+    uk: { button: "Цитувати", label: "Копіювати вірш із джерелом", done: "Цитату з джерелом скопійовано", error: "Не вдалося скопіювати цитату" },
+    ru: { button: "Цитировать", label: "Копировать стих с источником", done: "Цитата с источником скопирована", error: "Не удалось скопировать цитату" },
+    en: { button: "Cite", label: "Copy verse with source", done: "Verse and source copied", error: "Could not copy the verse" },
+  }[state.lang];
   const options = books
     .map(
       (b) =>
@@ -2762,9 +2778,35 @@ async function renderReader(parts) {
       `<option value="${i + 1}" ${i + 1 === chapter ? "selected" : ""}>${i + 1}</option>`,
   ).join("");
   shell(
-    `<div class="section-head reader-heading"><div><p class="eyebrow">${t("reader")}</p><h1>${t("readerTitle")}</h1></div><p>${t("readerIntro")}</p></div><div class="toolbar"><div class="field grow"><label for="book-select">${t("book")}</label><select id="book-select">${options}</select></div><div class="field"><label for="chapter-select">${t("chapter")}</label><select id="chapter-select">${chapters}</select></div><div class="field"><label for="verse-select">${t("verse")}</label><select id="verse-select"><option value="" ${selectedVerse === null ? "selected" : ""}>—</option>${verses.map((_, i) => `<option value="${i + 1}" ${selectedVerse === i + 1 ? "selected" : ""}>${i + 1}</option>`).join("")}</select></div><form id="book-search" class="field grow"><label for="search-input">${t("searchBook")}</label><div style="display:flex;gap:.4rem"><input id="search-input" type="search" placeholder="${t("searchPlaceholder")}"><button class="button" type="submit">${t("search")}</button></div></form></div><div class="reader-layout"><article class="reading-pane"><p class="eyebrow">${meta.testament === "OT" ? t("oldTestament") : t("newTestament")}</p><h1>${esc(bookTitle(meta))} ${chapter}</h1><p class="chapter-meta">${esc(editionInfo.title)}</p><div class="verses">${verses.map((v, i) => `<p class="verse" id="v${i + 1}" ${selectedVerse === i + 1 ? 'data-selected-verse tabindex="-1"' : ''}><a class="verse-number" href="${readerVerseUrl(meta.code, chapter, i + 1)}" aria-label="${esc(bookTitle(meta))} ${chapter}:${i + 1}">${i + 1}</a> ${esc(bibleText(v))}</p>`).join("")}</div><div class="chapter-nav">${chapter > 1 ? `<a class="button" href="/reader/${meta.code}/${chapter - 1}">← ${t("previous")}</a>` : "<span></span>"}${chapter < meta.chapters ? `<a class="button" href="/reader/${meta.code}/${chapter + 1}">${t("next")} →</a>` : "<span></span>"}</div></article><aside class="reader-aside"><div class="card edition-card"><h2>${t("edition")}</h2><p><strong>${esc(editionInfo.title)}</strong></p>${editionInfo.note ? `<p>${esc(editionInfo.note)}</p>` : ""}<p>${t("license")}: ${esc(editionInfo.license)}</p><a href="${esc(editionInfo.source)}" target="_blank" rel="noreferrer">${t("sourceLink")} ↗</a></div>${editionToggle(meta.code)}${timerCard()}<div class="card" id="search-panel" hidden><h2>${t("search")}</h2><ol class="search-results" id="search-results" tabindex="-1"></ol></div></aside></div>`,
+    `<div class="section-head reader-heading"><div><p class="eyebrow">${t("reader")}</p><h1>${t("readerTitle")}</h1></div><p>${t("readerIntro")}</p></div><div class="toolbar"><div class="field grow"><label for="book-select">${t("book")}</label><select id="book-select">${options}</select></div><div class="field"><label for="chapter-select">${t("chapter")}</label><select id="chapter-select">${chapters}</select></div><div class="field"><label for="verse-select">${t("verse")}</label><select id="verse-select"><option value="" ${selectedVerse === null ? "selected" : ""}>—</option>${verses.map((_, i) => `<option value="${i + 1}" ${selectedVerse === i + 1 ? "selected" : ""}>${i + 1}</option>`).join("")}</select></div><form id="book-search" class="field grow"><label for="search-input">${t("searchBook")}</label><div style="display:flex;gap:.4rem"><input id="search-input" type="search" placeholder="${t("searchPlaceholder")}"><button class="button" type="submit">${t("search")}</button></div></form></div><div class="reader-layout"><article class="reading-pane"><p class="eyebrow">${meta.testament === "OT" ? t("oldTestament") : t("newTestament")}</p><h1>${esc(bookTitle(meta))} ${chapter}</h1><p class="chapter-meta">${esc(editionInfo.title)}</p><div class="verses">${verses.map((v, i) => `<p class="verse" id="v${i + 1}" ${selectedVerse === i + 1 ? 'data-selected-verse tabindex="-1"' : ''}><a class="verse-number" href="${readerVerseUrl(meta.code, chapter, i + 1)}" aria-label="${esc(bookTitle(meta))} ${chapter}:${i + 1}">${i + 1}</a> ${esc(bibleText(v))} <button type="button" class="verse-cite" data-verse-cite="${i + 1}" aria-label="${esc(citationCopy.label)}: ${esc(bookTitle(meta))} ${chapter}:${i + 1}">${esc(citationCopy.button)}</button></p>`).join("")}</div><p id="reader-cite-status" role="status" aria-live="polite"></p><div class="chapter-nav">${chapter > 1 ? `<a class="button" href="/reader/${meta.code}/${chapter - 1}">← ${t("previous")}</a>` : "<span></span>"}${chapter < meta.chapters ? `<a class="button" href="/reader/${meta.code}/${chapter + 1}">${t("next")} →</a>` : "<span></span>"}</div></article><aside class="reader-aside"><div class="card edition-card"><h2>${t("edition")}</h2><p><strong>${esc(editionInfo.title)}</strong></p>${editionInfo.note ? `<p>${esc(editionInfo.note)}</p>` : ""}<p>${t("license")}: ${esc(editionInfo.license)}</p><a href="${esc(editionInfo.source)}" target="_blank" rel="noreferrer">${t("sourceLink")} ↗</a></div>${editionToggle(meta.code)}${timerCard()}<div class="card" id="search-panel" hidden><h2>${t("search")}</h2><ol class="search-results" id="search-results" tabindex="-1"></ol></div></aside></div>`,
   );
   activateTimer();
+  document.querySelector(".verses")?.addEventListener("click", async event => {
+    const button = event.target?.closest?.("button[data-verse-cite]");
+    if (!button || !readerStillCurrent()) return;
+    const rawVerse = button.dataset.verseCite;
+    if (!/^[1-9][0-9]*$/.test(rawVerse || "")) return;
+    const number = Number(rawVerse);
+    if (!Number.isSafeInteger(number) || number > verses.length) return;
+    const status = document.querySelector("#reader-cite-status");
+    if (!status) return;
+    status.textContent = "";
+    try {
+      if (!navigator.clipboard?.writeText) throw Error("clipboard_unavailable");
+      const citation = readerCitationText(
+        `${bookTitle(meta)} ${chapter}:${number}.`,
+        bibleText(verses[number - 1]),
+        editionInfo,
+        new URL(readerVerseUrl(meta.code, chapter, number), location.origin).href,
+      );
+      await navigator.clipboard.writeText(citation);
+      if (readerStillCurrent() && button.isConnected && document.querySelector("#reader-cite-status") === status)
+        status.textContent = citationCopy.done;
+    } catch {
+      if (readerStillCurrent() && button.isConnected && document.querySelector("#reader-cite-status") === status)
+        status.textContent = citationCopy.error;
+    }
+  });
   document.querySelector(".reader-aside")?.insertAdjacentHTML("beforeend", '<section class="card" id="reader-bookmarks" aria-live="polite"></section>');
   void mountReaderBookmarks(meta, chapter, chosenEdition, books);
   const parallelEditions = chosenEdition.local ? EDITIONS[state.lang].filter(item => item.local && item.id !== chosenEdition.id) : [];

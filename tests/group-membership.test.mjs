@@ -15,7 +15,7 @@ function fixture() {
   db.exec(`INSERT INTO home_groups(id,owner_user_id,name,invite_code,visibility,bible_edition) VALUES('g','alice','Group','AABBCCDD','private','en-web'),('other','alice','Other','other','private','en-web');
     INSERT INTO home_group_members(group_id,user_id,display_name,role) VALUES('g','alice','Alice','owner'),('g','bob','Bob','member'),('g','carol','Carol','facilitator'),('other','alice','Alice','owner');
     INSERT INTO group_sessions(id,group_id,created_by,book_id,chapter,meeting_date,reflection) VALUES('s','g','alice','GEN',12,'2026-10-28','private discussion');`);
-  let failure=-1, beforeBatch=null, beforeRun=null;
+  let failure=-1, beforeBatch=null, beforeRun=null, corruptCreateReceipt=null;
   function statement(sql,args=[]) {return {sql,args,
     first:async()=>db.prepare(sql).get(...args)??null,
     all:async()=>({success:true,results:db.prepare(sql).all(...args)}),
@@ -26,7 +26,12 @@ function fixture() {
     db.exec('BEGIN');try{const out=[];for(const [i,s] of statements.entries()) {
       if(i===failure)throw Error('injected storage outage');
       const r=db.prepare(s.sql).run(...s.args);out.push({success:true,meta:{changes:Number(r.changes)}});
-    }db.exec('COMMIT');return out;}catch(e){db.exec('ROLLBACK');throw e;}
+    }db.exec('COMMIT');
+    const mode=corruptCreateReceipt;corruptCreateReceipt=null;
+    if(mode==='missing-first')out[0]={...out[0],meta:{}};
+    if(mode==='failed-second')out[1]={...out[1],success:false};
+    if(mode==='truncated')out.pop();
+    return out;}catch(e){db.exec('ROLLBACK');throw e;}
   }};
   function loadRoute(name) {
     const source=readFileSync(new URL(`../app/api/${name}/route.ts`,import.meta.url),'utf8');
@@ -47,7 +52,7 @@ function fixture() {
     db.prepare("INSERT INTO mission_attempts(id,actor_id,mission_id,book_id,chapter,group_id,locale,task_limit,status,expires_at) VALUES(?,?,'OT-AB-01','GEN',12,?,'en',5,?,datetime('now','+2 hours'))").run(id,user,group,status);
     db.prepare("INSERT INTO chapter_read_receipts(id,actor_id,book_id,chapter,group_id) VALUES(?,?,'GEN',12,?)").run(id,user,group);
   }
-  return {db,get,post,attempt,seedAttempt,beforeRun:fn=>{beforeRun=fn;},setFailure:n=>{failure=n;},beforeBatch:fn=>{beforeBatch=fn;}};
+  return {db,get,post,attempt,seedAttempt,beforeRun:fn=>{beforeRun=fn;},setFailure:n=>{failure=n;},beforeBatch:fn=>{beforeBatch=fn;},setCreateReceiptMode:mode=>{corruptCreateReceipt=mode;}};
 }
 const owner=f=>f.db.prepare("SELECT owner_user_id FROM home_groups WHERE id='g'").get().owner_user_id;
 const roles=f=>f.db.prepare("SELECT user_id,role FROM home_group_members WHERE group_id='g' ORDER BY user_id").all().map(x=>[x.user_id,x.role]);
@@ -239,4 +244,43 @@ test('a former owner cannot start a marathon after ownership changed during the 
     assert.equal(f.db.prepare("SELECT status FROM group_marathon_registrations WHERE id='m'").get().status,'ready');
     assert.equal((await f.post('start',{},'bob')).status,200);
   } finally {f.db.close();}
+});
+
+test('group create only acknowledges complete D1 group/owner/cohort mutation receipts',async()=>{
+  const payload={name:'A new real group',weeklyGoal:3,catchupMode:'flexible',visibility:'private',rosterVisibility:'private',bibleEdition:'en-web'};
+  for(const mode of ['missing-first','failed-second','truncated']){
+    const f=fixture();
+    try{
+      const before=f.db.prepare('SELECT count(*) n FROM home_groups').get().n;
+      f.setCreateReceiptMode(mode);
+      const result=await f.post('create',payload);
+      assert.equal(result.status,503,mode);
+      assert.equal(result.data.error,'group_creation_unconfirmed');
+      assert.equal(result.data.ok,undefined,'no fabricated 201');
+      // Simulated D1 committed but discarded the receipt; a 503 MUST NOT
+      // be represented as a durable rollback or encourage blind recreation.
+      assert.equal(f.db.prepare('SELECT count(*) n FROM home_groups').get().n,before+1);
+      const recovered=await f.get('alice',f.db.prepare("SELECT id FROM home_groups WHERE name=?").get(payload.name).id);
+      assert.equal(recovered.status,200,'canonical group readback can recover uncertain creations');
+    }finally{f.db.close();}
+  }
+});
+
+test('group create clean failure is controlled and a successful owner group really exists',async()=>{
+  const payload={name:'Canonical group creation',weeklyGoal:3,catchupMode:'steady',visibility:'private',rosterVisibility:'count'};
+  const failed=fixture();try{
+    failed.setFailure(1);
+    const bad=await failed.post('create',payload);
+    assert.equal(bad.status,503);
+    assert.equal(bad.data.error,'group_creation_unconfirmed');
+    assert.equal(failed.db.prepare("SELECT count(*) n FROM home_groups WHERE name=?").get(payload.name).n,0,'atomic batch rollback');
+  }finally{failed.db.close();}
+  const good=fixture();try{
+    const ok=await good.post('create',payload);
+    assert.equal(ok.status,201);
+    assert.equal(ok.data.ok,true);
+    const row=good.db.prepare("SELECT owner_user_id FROM home_groups WHERE id=?").get(ok.data.groupId);
+    assert.equal(row.owner_user_id,'alice');
+    assert.equal(good.db.prepare("SELECT role FROM home_group_members WHERE group_id=? AND user_id='alice'").get(ok.data.groupId).role,'owner');
+  }finally{good.db.close();}
 });

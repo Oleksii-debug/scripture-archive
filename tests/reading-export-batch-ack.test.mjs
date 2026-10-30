@@ -221,6 +221,13 @@ for (const malformed of [
   '[{}]', '[{"book":"GEN","chapter":"1","title":"Genesis"}]',
   '[{"book":"GEN","chapter":0,"title":"Genesis"}]',
   '[{"book":"GEN","chapter":1,"title":null}]',
+  '[{"book":"ABCD","chapter":1,"title":"Fabricated"}]',
+  '[{"book":"1ABCD","chapter":1,"title":"Fabricated"}]',
+  '[{"book":"gen","chapter":1,"title":"Wrong case"}]',
+  '[{"book":"GEN","chapter":151,"title":"Outside canonical reader range"}]',
+  '[{"book":"GEN","chapter":9007199254740991,"title":"Huge"}]',
+  '[{"book":"GEN","chapter":1,"title":"   "}]',
+  JSON.stringify([{book:"GEN",chapter:1,title:"x".repeat(201)}]),
 ]) {
   test("private export refuses structurally non-restorable READING receipt: " + malformed, async () => {
     const rows = standardRows();
@@ -245,4 +252,17 @@ test("valid empty READING archive remains exportable, preserving legitimate nonr
   assert.deepEqual(Array.from(body.progress[0].data),[]);
   assert.equal(body.progress[1].mission,'LEGACY-ARRAY');
   assert.equal(body.progress[1].data[0].event,'known');
+});
+
+test("canonical 2/3-character and numbered book records remain exportable without reinterpretation", async () => {
+  const rows = standardRows();
+  rows[1].results[0].data = JSON.stringify([
+    {book:"GEN",chapter:1,title:"Genesis"},
+    {book:"1CO",chapter:16,title:"1 Corinthians"},
+    {book:"3JN",chapter:1,title:"3 John"},
+    {book:"PSA",chapter:150,title:"Psalm 150"},
+  ]);
+  const {response,body}=await outcome(fixture({results:rows}));
+  assert.equal(response.status,200);
+  assert.deepEqual(Array.from(body.progress[0].data, entry=>entry.book),["GEN","1CO","3JN","PSA"]);
 });

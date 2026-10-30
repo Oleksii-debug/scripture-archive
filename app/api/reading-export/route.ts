@@ -34,11 +34,16 @@ export async function GET(request: Request) {
       // receipts. A JSON object or malformed array is not a restorable reading
       // history, even if JSON.parse succeeded. Preserve other legacy mission
       // snapshot shapes (objects or arrays) without reinterpreting them.
+      // Match the canonical reader's *structural* admission contract before
+      // advertising a READING export as restorable. This deliberately does not
+      // invent a second 66-book catalogue or claim an edition/licensing check.
       if (row.mission_id === "READING" &&
           (!Array.isArray(data) || data.some(entry => !entry || typeof entry !== "object" ||
             Array.isArray(entry) || typeof entry.book !== "string" ||
-            typeof entry.chapter !== "number" || !Number.isInteger(entry.chapter) ||
-            entry.chapter < 1 || typeof entry.title !== "string")))
+            !/^[1-3]?[A-Z]{2,3}$/.test(entry.book) ||
+            !Number.isSafeInteger(entry.chapter) || entry.chapter < 1 || entry.chapter > 150 ||
+            typeof entry.title !== "string" || entry.title.trim().length === 0 ||
+            entry.title.length > 200)))
         throw Error("invalid_reading_receipt");
       return { mission: row.mission_id, data, updatedAt: row.updated_at };
     });

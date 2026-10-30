@@ -339,3 +339,14 @@ test('no pending comparison citation may copy after reader/principal changed',()
   await request;
   assert.equal(f.copied.length,0);
 }));
+
+test('comparison citation retains a validated snapshot if shared cached chapter data mutates later',()=>withForm(async()=>{
+  const shared=['Original verse','Second original verse'];
+  const f=fixture({getBook:async()=>({chapters:[shared]})});
+  await f.run();
+  shared[0]='LATER REPLACEMENT';shared[1]='UNVERIFIED REPLACEMENT';
+  await f.cite(1);
+  assert.equal(f.copied.length,1);
+  assert.match(f.copied[0],/Original verse/);
+  assert.ok(!f.copied[0].includes('LATER REPLACEMENT'));
+}));

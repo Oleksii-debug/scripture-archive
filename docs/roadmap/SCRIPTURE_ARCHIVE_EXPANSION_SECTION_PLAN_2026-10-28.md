@@ -1,3 +1,14 @@
+## 2026-10-30 — SA-EXT-03 / CMS_PUBLIC_NOTE_LOSSLESS — ВУЗЬКИЙ ПІДПУНКТ ЗАКРИТО
+
+**CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** для перевіреного дефекту, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Батьківський SA-EXT-03 і всі SA-EXT-01…20 залишаються OPEN**.
+
+- Реальний дефект: `PUT /api/content` після власницької перевірки мовчки обрізав поле `liveNote.uk/ru/en` довше за 600 символів, записував інше повідомлення у D1 і повертав `ok:true`.
+- Виправлення: [PR #628](https://github.com/Oleksii-debug/scripture-archive/pull/628) **MERGED**, точний feature `main@22bab7c4530699be2bc37b5f51fffc571138657f`; перевірено source blob `989f9a058876101f77d05f8b2eb3d5fe05533174`, тест blob `63f325af981e121880ee069773adc613bdcfe6ee`. Тепер три рядки перевіряються по повній нормалізованій довжині, завеликий текст → 400 без D1 write, точна межа 600 та три порожні поля збережені.
+- Native [Actions #41039537700](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41039537700): `1486 Node PASS / 0 FAIL / 1 SKIP`, TypeScript/lint/build PASS, Python `2 PASS`; загалом CI **FAIL**, disposable Worker/D1 `21/22` двічі через відомий Wrangler 503 на незалежному редакторському POST, релізний блокер [#618](https://github.com/Oleksii-debug/scripture-archive/issues/618). Це **не** повна E2E/production/NVDA приймання.
+- [Остаточний доказовий запис](SA_EXT_03_CMS_PUBLIC_NOTE_LOSSLESS_TERMINAL_20261030.md). Не відкривати цю вузьку функцію без нового дефекту; не вважати весь SA-EXT-03 або сайт завершеним.
+
+---
+
 ## 2026-10-30 — SA-EXT-01/16 / BOOKMARK_GET_INVALID_ROW_FAILCLOSED — ЗАКРИТО ДЛЯ РОЗРОБКИ ВУЗЬКИЙ ДЕФЕКТ
 
 **Лише цей встановлений дефект:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Повні батьківські SA-EXT-01…20 залишаються OPEN**; статус не є фактичним production / браузерним / NVDA прийманням.

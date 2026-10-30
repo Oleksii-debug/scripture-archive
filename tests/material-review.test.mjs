@@ -25,6 +25,10 @@ function fixture() {
         const mode=submitReceiptMode;submitReceiptMode='normal';
         if(mode==='failed')return {success:false,meta:{changes:Number(r.changes)}};
         if(mode==='missing')return {success:true,meta:{}};
+        if(mode==='text')return {success:true,meta:{changes:'1'}};
+        if(mode==='boolean')return {success:true,meta:{changes:true}};
+        if(mode==='null')return {success:true,meta:{changes:null}};
+        if(mode==='negative')return {success:true,meta:{changes:-1}};
       }
       if(sql.startsWith("UPDATE material_submissions SET status='withdrawn'") && withdrawReceiptMode!=='normal'){
         const mode=withdrawReceiptMode;withdrawReceiptMode='normal';
@@ -201,12 +205,12 @@ test('editorial controls escape untrusted content and public UI does not print a
   try {await renderPublicMaterials(root,w,esc);assert.ok(root.innerHTML.includes('&lt;img&gt;'));assert.ok(!root.innerHTML.includes('answer:'));}finally{globalThis.fetch=previous;}
 });
 
-test('submission never acknowledges a write when D1 mutation receipt is missing or unsuccessful',async()=>{
-  for(const mode of ['missing','failed']){
+test('submission never acknowledges a write with an unavailable, failed or nonnumeric D1 receipt',async()=>{
+  for(const mode of ['missing','failed','text','boolean','null','negative']){
     const f=fixture();try{
       f.setSubmitReceiptMode(mode);
       const result=await f.post(submission);
-      assert.equal(result.status,503,'missing or failed D1 ACK is not success');
+      assert.equal(result.status,503,'untrusted D1 ACK is not success: '+mode);
       assert.equal(result.data.error,'submission_failed');
       assert.equal(f.db.prepare("SELECT COUNT(*) n FROM material_submissions WHERE material_id='m1' AND status='pending'").get().n,1,
         'a lost ACK must not erase a committed pending version');

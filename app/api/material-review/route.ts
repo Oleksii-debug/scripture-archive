@@ -104,7 +104,9 @@ export async function POST(request: Request) {
         FROM study_materials WHERE id=? AND owner_user_id=? AND title=? AND locale=? AND data=?
         ON CONFLICT DO NOTHING`).bind(id, provenance, body.materialId, identity.userId, draft.title, draft.locale, draft.data).run();
       if (!result.success) return json({ error: "submission_failed" }, 503);
-      const changes = Number(result.meta?.changes);
+      // D1 must return a typed mutation receipt, not a coercible JSON value.
+      // A lost or malformed ACK does not prove that the INSERT was rolled back.
+      const changes = result.meta?.changes;
       if (!Number.isSafeInteger(changes) || changes < 0 || changes > 1) return json({ error: "submission_failed" }, 503);
       if (changes === 0) return json({ error: "not_found_or_pending" }, 409);
       return json({ ok: true, id }, 201);

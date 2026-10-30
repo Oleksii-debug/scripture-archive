@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import vm from "node:vm";
-import {EDITIONS, editionSelect} from "../public/editions.js";
+import {EDITIONS, editionSelect, selectedEdition, setEditionForTab} from "../public/editions.js";
 
 const source = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
 const bootStart = source.indexOf("function storedPreference(");
@@ -17,8 +17,7 @@ const handlerCode = source.slice(handlerStart, handlerEnd);
 function startup(storage, search = "") {
   const ctx = vm.createContext({
     URLSearchParams, location: {search, pathname: "/reader/GEN/12", hash: ""},
-    localStorage: storage, EDITIONS,
-    selectedEdition: lang => EDITIONS[lang]?.[0] || EDITIONS.uk[0],
+    localStorage: storage, EDITIONS, selectedEdition, setEditionForTab,
     loadJSON: (_, fallback) => fallback,
   });
   vm.runInContext(bootCode + '\nglobalThis.snapshot = () => ({language:state.lang, originalSpelling:state.ukOriginal, edition:activeEdition(state.lang).id}); globalThis.rememberReaderChoice = storeReaderPreference;', ctx);

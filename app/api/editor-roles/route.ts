@@ -10,7 +10,9 @@ async function owner(request: Request) {
 export async function GET(request: Request) {
   if (!env.DB) return json({error:"database_unavailable"},503);
   if (new URL(request.url).searchParams.get("view") === "me") {
-    const identity = await authenticateRequest(request);
+    let identity: Awaited<ReturnType<typeof authenticateRequest>>;
+    try { identity = await authenticateRequest(request); }
+    catch { return json({error:"database_unavailable"},503); }
     if (!identity || identity.provider === "agent" || !identity.emailVerified) return json({editor:false});
     if (Boolean(isVerifiedOwner(identity))) return json({editor:true,owner:true});
     if (identity.provider !== "password") return json({editor:false});
@@ -19,7 +21,10 @@ export async function GET(request: Request) {
       return json({editor:Boolean(row)});
     } catch { return json({error:"database_unavailable"},503); }
   }
-  if (!await owner(request)) return json({error:"forbidden"},403);
+  let verifiedOwner: Awaited<ReturnType<typeof owner>>;
+  try { verifiedOwner = await owner(request); }
+  catch { return json({error:"database_unavailable"},503); }
+  if (!verifiedOwner) return json({error:"forbidden"},403);
   try {
     if (new URL(request.url).searchParams.get("view") === "audit") {
       const events = await env.DB.prepare("SELECT e.id,e.subject_user_id,e.actor_user_id,e.action,e.created_at,a.email AS subject_email FROM editorial_role_events e LEFT JOIN accounts a ON a.id=e.subject_user_id AND a.deleted_at IS NULL ORDER BY e.id DESC LIMIT 200").all();
@@ -34,7 +39,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return json({error:"cross_origin_request"},403);
   if (!env.DB) return json({error:"database_unavailable"},503);
-  const id = await owner(request);
+  let id: Awaited<ReturnType<typeof owner>>;
+  try { id = await owner(request); }
+  catch { return json({error:"database_unavailable"},503); }
   if (!id) return json({error:"forbidden"},403);
   const body = await request.json().catch(() => null) as {action?: unknown; userId?: unknown; email?: unknown} | null;
   if (!body || (body.action !== "grant" && body.action !== "revoke")) return json({error:"invalid_request"},400);
@@ -49,15 +56,21 @@ export async function POST(request: Request) {
         SELECT id,? FROM accounts WHERE (id=? OR (?!='' AND lower(email)=?)) AND email_verified_at IS NOT NULL AND deleted_at IS NULL AND lower(email)<>?`)
         .bind(id.userId,userId,email,email,OWNER_EMAIL).run();
       if (!result.success) throw Error("write not acknowledged");
-      const changed = Number(result.meta?.changes);
-      if (!Number.isSafeInteger(changed) || changed < 0) throw Error("missing write receipt");
+      const changed = result.meta?.changes;
+      if (typeof changed !== "number" || !Number.isSafeInteger(changed) || changed < 0) throw Error("missing write receipt");
       return changed > 0 ? json({ok:true}) : json({error:"not_eligible_or_granted"},409);
     }
     const results = await env.DB.batch([
       env.DB.prepare("UPDATE editorial_roles SET revoked_by=? WHERE user_id=?").bind(id.userId,userId),
       env.DB.prepare("DELETE FROM editorial_roles WHERE user_id=? AND revoked_by=?").bind(userId,id.userId),
     ]);
-    if (results.some(result => !result.success)) throw Error("write failed");
-    return results[1].meta.changes ? json({ok:true}) : json({error:"not_found"},404);
+    // A role could have been revoked despite a lost or malformed D1 receipt.
+    // Never report successful revocation, or a definitive not-found, from it.
+    if (!Array.isArray(results) || results.length !== 2 || results.some(result => {
+      const changes = result?.meta?.changes;
+      return result?.success !== true || typeof changes !== "number" ||
+        !Number.isSafeInteger(changes) || changes < 0;
+    })) throw Error("write receipt unavailable");
+    return results[1].meta.changes > 0 ? json({ok:true}) : json({error:"not_found"},404);
   } catch { return json({error:"database_unavailable"},503); }
 }

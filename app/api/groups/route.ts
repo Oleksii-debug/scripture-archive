@@ -12,8 +12,13 @@ function clean(value: unknown, max = 160) {
 }
 
 function integer(value: unknown, min: number, max: number) {
+  // HTML number inputs send decimal strings, while JSON clients may send numbers.
+  // Do not coerce booleans, arrays, null, hex/exponent notation or empty strings
+  // into valid chapter/attendance/answer counts before a durable D1 write.
+  if (typeof value !== "number" && typeof value !== "string") return null;
+  if (typeof value === "string" && !/^[0-9]+$/.test(value.trim())) return null;
   const number = Number(value);
-  return Number.isInteger(number) && number >= min && number <= max ? number : null;
+  return Number.isSafeInteger(number) && number >= min && number <= max ? number : null;
 }
 
 function forbidden(status = 401) {

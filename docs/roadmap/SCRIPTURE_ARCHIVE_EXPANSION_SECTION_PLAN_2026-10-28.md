@@ -1,5 +1,15 @@
 # SCRIPTURE ARCHIVE — каталог розділів і план реалізації розширень
 
+## 2026-10-30 — SA-EXT-01 / BOOKMARK_CANONICAL_EDITION_CHAPTER_BOUNDS — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
+
+**Статус:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` виключно для відображення недопустимих записів закладок на сторінці читання. `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` лише тут. **Повний SA-EXT-01 і всі інші 19 батьківських розділів залишаються OPEN**; це не production/NVDA та не загальний реліз.
+
+- **Дефект:** `public/app.js::mountReaderBookmarks` приймав будь-яке `Number.isInteger(chapter)>0` для відомої книги, навіть коли в обраному виданні глави не існує; посилання на `GEN/51` і `uk-ohiienko/JOL/5` порушували справжню навігацію, великі числа створювали оманливі URL. `null` серед давніх рядків зривав усі придатні закладки.
+- **Справжня реалізація:** [PR #546](https://github.com/Oleksii-debug/scripture-archive/pull/546) **squash MERGED** `main@d0785d1d7fb26c8ad7cfa2883e69c1cca6965c91`. Перевірка використовує **вже наявний** каталог глав `books` конкретного локального видання, перевірку безпечного цілого та необов'язковість пошкодженого рядка; без нової бази, паралельної навігації чи видалення коректних закладок. Попередня захисна прив'язка до поточної глави [#542](https://github.com/Oleksii-debug/scripture-archive/pull/542) збережена.
+- **Readback GitHub:** merged=true, останній перевірений exact source `public/app.js@8d512bb5e7157417c0da6ce25c0ef114e7cf75da`, регресія `tests/bookmark-ui.test.mjs@699246195c8f9eec890dab66d1489c4183dcfcc2`, перевірений `main` дорівнює SHA злиття. Два нові тести запускають **справжню** функцію UI: суміш пошкоджених та валідних закладок не прибирає доступні `GEN/12`, `GEN/50`; локальна глава `uk-ohiienko/JOL/4` доступна, `JOL/5` заблокована.
+- **Тестування:** [GitHub Actions #41021110735](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41021110735) exact feature head `94f194e4050e0ead74d3281a8edf1efa908594e8`: весь workflow **SUCCESS**, native Node **1158 PASS / 0 FAIL / 1 SKIP** (усього 1159); disposable Worker/D1 **22/22 PASS**, TypeScript, ESLint (0 errors, попередження), production source build та 2 Python validators **PASS**. Це source/ізольований E2E і **НЕ** фізичний NVDA, браузерне production-приймання або встановлення Sites SHA.
+- **Незавершені вимоги батьківського розділу:** ліцензії повних видань, паралельні порівняння, ширший корпус/експорт, реальне browser+NVDA, опублікований SHA і перевірка live-сайту. Ця вузька функція не підлягає повторній розробці без нової вимоги чи відтвореного дефекту. Не запускали додаткові мови, синтетичні акаунти, деплой, платежі чи розсилку.
+
 ## 2026-10-30 — SA-EXT-01 / PARALLEL_READER_KEYBOARD_SUBMIT_FOCUS — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
 
 **Статус:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` лише для відновлення фокуса клавіатурної кнопки порівняння видань; `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Увесь батьківський SA-EXT-01 та решта 20 розділів залишаються OPEN.** Нові переклади, редакційні права, фізичний NVDA й deployed Sites SHA не вважаються прийнятими.

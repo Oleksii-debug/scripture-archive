@@ -7,13 +7,14 @@ import { renderPublicMaterials, reviewText } from '../public/material-review.js'
 async function scenario({
   lang='en', reply='correct', originallyFocused=true,
   moveFocus=false, changePrincipal=false, detachForm=false, detachRoot=false,
-  focusThrows=false, missingChoice=false, alreadyDisabled=false
+  focusThrows=false, missingChoice=false, alreadyDisabled=false, changeChoice=false
 }={}) {
   const originalFetch=globalThis.fetch;
   const originalFormData=globalThis.FormData;
   const body={kind:'body'}, elsewhere={kind:'outside'};
   const document={body,activeElement:null};
   let focused=0, sent=0, current=true, settle, reject;
+  let selectedChoice='1';
   const pending=new Promise((resolve,rejectFn)=>{settle=resolve; reject=rejectFn;});
   const button={
     _disabled:false,
@@ -41,7 +42,7 @@ async function scenario({
     querySelectorAll:selector=>selector==='.public-material'?[form]:[],
     querySelector:()=>null,
   };
-  globalThis.FormData=class {get(name){return name==='choice'&&!missingChoice?'1':null;}};
+  globalThis.FormData=class {get(name){return name==='choice'&&!missingChoice?selectedChoice:null;}};
   globalThis.fetch=async (url,options)=>{
     if(url==='/api/material-review?view=public')return {
       ok:true,json:async()=>({items:[{
@@ -67,6 +68,7 @@ async function scenario({
     if(!missingChoice&&!alreadyDisabled){
       assert.equal(button.disabled,true);
       if(moveFocus)document.activeElement=elsewhere;
+      if(changeChoice)selectedChoice='0';
       if(changePrincipal)current=false;
       if(detachForm)form.isConnected=false;
       if(detachRoot)root.isConnected=false;
@@ -159,4 +161,24 @@ test('Russian error announcement survives focus restoration',async()=>{
   const x=await scenario({lang:'ru',reply:'error'});
   assert.equal(x.focused,1);
   assert.match(x.status.textContent,/Не удалось/);
+});
+
+test('a changed radio during pending grade never announces the previous choice as correct',async()=>{
+  for(const lang of ['uk','ru','en']){
+    const x=await scenario({lang,changeChoice:true});
+    const w=reviewText(lang);
+    assert.equal(x.sent,1,'the original answer was submitted only once');
+    assert.equal(x.status.textContent,w.choiceChanged,
+      'NVDA live region must describe the changed selection, not the stale grade');
+    assert.doesNotMatch(x.status.textContent,/Answer A was correct|Source explanation|Правильно|Правильно\\.|Correct\\.|Верно\\./);
+    assert.equal(x.button.disabled,false,'the user can check the newly selected answer');
+    assert.equal(x.document.activeElement,x.button,'keyboard focus returns to the live submit');
+  }
+});
+
+test('a changed choice with a negative receipt also remains unresolved until recheck',async()=>{
+  const x=await scenario({lang:'en',reply:'wrong',changeChoice:true});
+  assert.equal(x.status.textContent,reviewText('en').choiceChanged);
+  assert.doesNotMatch(x.status.textContent,/Try again\\.|Correct\\./);
+  assert.equal(x.button.disabled,false);
 });

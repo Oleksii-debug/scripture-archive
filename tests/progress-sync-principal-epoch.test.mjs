@@ -7,7 +7,10 @@ const source=readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
 const start=source.indexOf('async function syncProgress() {');
 const end=source.indexOf('\nfunction field(',start);
 assert.ok(start>=0 && end>start,'canonical progress sync and reset functions must be present');
-const fragment=source.slice(start,end);
+const activeStart=source.indexOf('function rememberActiveAttempt(');
+const activeEnd=source.indexOf('async function getSession() {',activeStart);
+assert.ok(activeStart>=0 && activeEnd>activeStart,'canonical active attempt helpers exist');
+const fragment=source.slice(activeStart,activeEnd)+'\n'+source.slice(start,end);
 
 function deferred(){
   let resolve,reject;
@@ -26,7 +29,7 @@ function harness(accountRequest){
   };
   const loadJSON=(key,fallback)=>JSON.parse(disk.get(key)||JSON.stringify(fallback));
   const funcs=vm.runInNewContext(fragment+'\n({syncProgress,clearPersonalProgress})',
-    {state,localStorage,loadJSON,accountRequest,Map,Number,JSON});
+    {state,localStorage,sessionStorage:{removeItem(){}},loadJSON,accountRequest,Map,Number,JSON});
   return {...funcs,state,disk,writes};
 }
 const validReading={reading:[{book:'GEN',chapter:1,title:'Genesis'}]};

@@ -51,7 +51,7 @@ function boot(consent = 'granted', measurementId = 'G-TEST') {
   const gaEvents = () => [...(window.dataLayer || [])]
     .filter(call => call[0] === 'event')
     .map(call => ({ name: call[1], values: JSON.parse(JSON.stringify(call[2])) }));
-  return { window, listeners, posts, gaEvents, loadedScripts };
+  return { window, listeners, posts, gaEvents, loadedScripts, location, document };
 }
 
 test('consented auth and client errors never export private email or reset token to either analytics sink', () => {
@@ -111,4 +111,43 @@ test('without GA4, error redaction still applies to the first-party endpoint', (
   app.window.saAnalytics.track('sign_up_error', { error: ADDRESS + SECRET });
   assert.equal(app.posts[0].payload.value.error, 'other');
   assert.deepEqual(app.gaEvents(), []);
+});
+
+test('navigation labels and untrusted analytics parameters cannot send private identifiers', () => {
+  const app = boot();
+  app.window.saAnalytics.track('navigation_click', { destination: ADDRESS + '?' + SECRET });
+  app.window.saAnalytics.track('navigation_click', { destination: 'reader' });
+  app.window.saAnalytics.track('login', {
+    method: 'password', page_location: 'https://example.test/?' + SECRET,
+    page_name: ADDRESS, page_title: SECRET, language: ADDRESS, mode: SECRET,
+    score: NaN, total: Infinity,
+  });
+  assert.deepEqual(app.posts.map(post => post.payload.value.destination), ['other', 'reader', undefined]);
+  const values = app.posts[2].payload.value;
+  assert.equal(values.method, 'password');
+  assert.equal(values.language, 'other');
+  assert.equal(values.mode, 'other');
+  for (const key of ['page_location', 'page_name', 'page_title', 'score', 'total'])
+    assert.ok(!(key in values), key);
+  const outbound = JSON.stringify([app.posts, app.gaEvents()]);
+  assert.ok(!outbound.includes(ADDRESS), 'no email in either analytics sink');
+  assert.ok(!outbound.includes(SECRET), 'no private token in either analytics sink');
+});
+
+test('group paths and dynamic document titles are reduced to safe coarse route labels', () => {
+  const app = boot();
+  app.location.pathname = '/groups/' + ADDRESS + '/' + SECRET;
+  app.location.hash = '';
+  app.document.title = 'Private group ' + ADDRESS + ' ' + SECRET;
+  app.window.saAnalytics.pageView();
+  assert.equal(app.posts[0].payload.pageName, 'groups');
+  assert.equal(app.posts[0].payload.value.page_location, 'https://scripture-archive.com/groups');
+  assert.equal(app.posts[0].payload.value.page_name, 'groups');
+  assert.equal(app.posts[0].payload.value.page_title, 'Scripture Archive — groups');
+  app.location.pathname = '/' + ADDRESS + '/private';
+  app.window.saAnalytics.pageView();
+  assert.equal(app.posts[1].payload.pageName, 'other');
+  assert.equal(app.posts[1].payload.value.page_location, 'https://scripture-archive.com/other');
+  assert.ok(!JSON.stringify([app.posts, app.gaEvents()]).includes(ADDRESS));
+  assert.ok(!JSON.stringify([app.posts, app.gaEvents()]).includes(SECRET));
 });

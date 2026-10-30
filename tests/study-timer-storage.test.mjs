@@ -11,9 +11,13 @@ const activateEnd = source.indexOf("\nconst ATTEMPT_COPY =", activateBegin);
 assert.ok(saveBegin >= 0 && saveEnd > saveBegin, "the canonical timer storage implementation must exist");
 assert.ok(activateBegin > saveEnd && activateEnd > activateBegin, "the real timer controls must exist");
 const timerCode = source.slice(saveBegin, saveEnd) + "\n" + source.slice(activateBegin, activateEnd);
+const normalizeBegin = source.indexOf("function normalizeTimer() {");
+const normalizeEnd = source.indexOf("\nconst TIMER_EPHEMERAL_COPY =", normalizeBegin);
+assert.ok(normalizeBegin >= 0 && normalizeEnd > normalizeBegin, "the real timer state transition must exist");
+const normalizeCode = source.slice(normalizeBegin, normalizeEnd) + "\n";
 
-function fixture({ lang = "uk", denied = false, quota = false, duration = 2, remaining = 120 } = {}) {
-  const writes = [], sounds = [], intervals = [];
+function fixture({ lang = "uk", denied = false, quota = false, duration = 2, remaining = 120, realNormalize = false } = {}) {
+  const writes = [], sounds = [], intervals = [], clears = [];
   const controls = {
     "#timer-minutes": { value: String(duration), disabled: false },
     "#timer-display": { textContent: "" },
@@ -38,18 +42,19 @@ function fixture({ lang = "uk", denied = false, quota = false, duration = 2, rem
     timerText: timer => String(timer.remainingSeconds),
     t: key => key,
     play: sound => sounds.push(sound),
-    clearInterval: () => {},
+    clearInterval: id => clears.push(id),
     setInterval: (callback, milliseconds) => {
       assert.equal(milliseconds, 1000);
       intervals.push(callback);
       return 19;
     },
   });
-  vm.runInContext("let timerInterval = null;\n" + timerCode, context);
+  vm.runInContext("let timerInterval = null;\n" + (realNormalize ? normalizeCode : "") + timerCode, context);
   return {
-    state, controls, writes, sounds, intervals,
+    state, controls, writes, sounds, intervals, clears,
     mount: () => context.activateTimer(),
     save: () => context.saveTimer(),
+    setDenied: value => { denied = value; },
   };
 }
 
@@ -132,4 +137,90 @@ test("countdown still updates on a scheduled tick with unavailable storage", () 
   assert.notEqual(f.controls["#timer-display"].textContent, prior);
   assert.equal(f.controls["#timer-display"].textContent, "99");
   assert.match(f.controls["#timer-status"].textContent, /лише в цій вкладці/);
+});
+
+test("real countdown expiry updates UI, announces completion and retires interval", () => {
+  const f = fixture({ duration: 1, remaining: 1, realNormalize: true });
+  f.mount();
+  f.controls["#timer-start"].onclick();
+  f.state.studyTimer.endsAt = Date.now() - 1000;
+  f.intervals[0]();
+  assert.equal(f.state.studyTimer.running, false);
+  assert.equal(f.controls["#timer-start"].textContent, "timerStart");
+  assert.equal(f.controls["#timer-display"].textContent, "0");
+  assert.equal(f.controls["#timer-status"].textContent, "timerDone");
+  assert.deepEqual(f.sounds, ["done"]);
+  assert.ok(f.clears.includes(19), "expired countdown must release its interval");
+});
+
+test("late interval callback cannot announce timer completion a second time", () => {
+  const f = fixture({ duration: 1, remaining: 1, realNormalize: true });
+  f.mount();
+  f.controls["#timer-start"].onclick();
+  f.state.studyTimer.endsAt = Date.now() - 1000;
+  f.intervals[0]();
+  f.intervals[0]();
+  assert.deepEqual(f.sounds, ["done"]);
+  assert.equal(f.controls["#timer-status"].textContent, "timerDone");
+});
+
+test("paused timer and zero-duration stopwatch do not claim deadline completion", () => {
+  const paused = fixture({ duration: 1, remaining: 1, realNormalize: true });
+  paused.mount();
+  paused.controls["#timer-start"].onclick();
+  paused.controls["#timer-start"].onclick();
+  paused.state.studyTimer.remainingSeconds = 0;
+  paused.intervals[0]();
+  assert.equal(paused.controls["#timer-status"].textContent, "");
+  assert.deepEqual(paused.sounds, []);
+  const stopwatch = fixture({ duration: 0, remaining: 0, realNormalize: true });
+  stopwatch.mount();
+  stopwatch.controls["#timer-start"].onclick();
+  stopwatch.intervals[0]();
+  assert.equal(stopwatch.controls["#timer-status"].textContent, "");
+  assert.deepEqual(stopwatch.sounds, []);
+});
+
+test("completion remains announced even when persistent browser storage is denied", () => {
+  const f = fixture({ duration: 1, remaining: 1, realNormalize: true, denied: true });
+  f.mount();
+  f.controls["#timer-start"].onclick();
+  f.state.studyTimer.endsAt = Date.now() - 1000;
+  f.intervals[0]();
+  assert.equal(f.controls["#timer-status"].textContent, "timerDone");
+  assert.deepEqual(f.sounds, ["done"]);
+  assert.equal(f.controls["#timer-start"].textContent, "timerStart");
+});
+
+test("storage recovery clears temporary-only notice on active scheduled tick across all locales", () => {
+  for (const lang of ["uk", "ru", "en"]) {
+    const f = fixture({ lang, denied: true });
+    f.mount();
+    f.controls["#timer-start"].onclick();
+    assert.notEqual(f.controls["#timer-status"].textContent, "");
+    f.setDenied(false);
+    f.intervals[0]();
+    assert.equal(f.controls["#timer-status"].textContent, "");
+    assert.equal(f.state.studyTimer.running, true);
+    assert.equal(f.writes.length, 1);
+    assert.equal(JSON.parse(f.writes[0][1]).running, true);
+  }
+});
+
+test("continued storage denial retains a truthful warning during ticks", () => {
+  const f = fixture({ denied: true });
+  f.mount();
+  f.controls["#timer-start"].onclick();
+  const warning = f.controls["#timer-status"].textContent;
+  f.intervals[0]();
+  assert.equal(f.controls["#timer-status"].textContent, warning);
+  assert.equal(f.writes.length, 0);
+});
+
+test("successful storage does not erase the canonical completion announcement", () => {
+  const f = fixture({ duration: 1, remaining: 0 });
+  f.mount();
+  assert.equal(f.controls["#timer-status"].textContent, "timerDone");
+  assert.deepEqual(f.sounds, ["done"]);
+  assert.equal(f.writes.length, 1);
 });

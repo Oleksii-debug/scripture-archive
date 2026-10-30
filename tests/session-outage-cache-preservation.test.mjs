@@ -30,8 +30,7 @@ function fixture(server, previousOwner = "prior-account", current = null) {
       },
     };
   };
-  // The canonical cleanup now returns whether every private key was cleared.
-  // A successful fixture wipe must acknowledge that contract.
+  // Canonical cleanup reports whether all private keys were wiped.
   const clearPersonalProgress = () => { calls.clear++; return true; };
   const getSession = new Function(
     "fetch", "state", "localStorage", "clearPersonalProgress",

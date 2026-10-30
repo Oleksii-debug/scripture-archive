@@ -118,7 +118,11 @@ const HISTORY = {
   en: { title:'Attempt history', login:'Sign in to see saved attempt history on other devices.', empty:'There are no completed attempts yet.', locked:'History is hidden during an active attempt.', error:'Could not load attempt history.', retry:'Try again', details:'View result', reread:'Read and try again', limit:'Showing the latest 100 completed attempts.', score:'Correct answers', pending:'An answer was saved, but its result still needs to be finalized.', resume:'Finish saving the result', personal:'Personal attempt', group:'Group attempt' },
 };
 
-function validAttemptHistoryPayload(history) {
+function validAttemptHistoryPayload(history, chapterBounds) {
+  // Source readback may include legacy/corrupt DB rows. With a real catalog,
+  // refuse invented books and chapters rather than building false reader links.
+  if (chapterBounds !== undefined &&
+      (!(chapterBounds instanceof Map) || chapterBounds.size !== 66)) return false;
   if (!Array.isArray(history?.attempts) || history.attempts.length > 100 ||
       (history.pending !== undefined &&
        (!Array.isArray(history.pending) || history.pending.length > 20))) return false;
@@ -132,7 +136,8 @@ function validAttemptHistoryPayload(history) {
     row && typeof row === 'object' && !Array.isArray(row) &&
     typeof row.book === 'string' && /^([1-3])?[A-Z]{2,3}$/.test(row.book) &&
     Number.isInteger(row.chapter) && row.chapter >= 1 && row.chapter <= 151 &&
-    safeId(row.id);
+    safeId(row.id) &&
+    (chapterBounds === undefined || row.chapter <= (chapterBounds.get(row.book) || 0));
   return history.attempts.every(row =>
     safeChapter(row) && Number.isInteger(row.score) && Number.isInteger(row.total) &&
     row.total >= 1 && row.score >= 0 && row.score <= row.total &&
@@ -142,26 +147,28 @@ function validAttemptHistoryPayload(history) {
       safeChapter(row) && (row.startedAt === undefined || typeof row.startedAt === 'string')));
 }
 
-export function missionHistoryMarkup(history, lang, esc) {
+export function missionHistoryMarkup(history, lang, esc, chapterBounds) {
   const w=HISTORY[lang] || HISTORY.uk;
   let content;
   if(history.guest) content=`<p>${w.login}</p>`;
   else if(history.error) content=`<p role="status">${w.error}</p><button class="button" id="retry-mission-history">${w.retry}</button>`;
   else if(history.locked) content=`<p>${w.locked}</p>`;
-  else if(!validAttemptHistoryPayload(history)) content=`<p role="status">${w.error}</p><button class="button" id="retry-mission-history">${w.retry}</button>`;
+  else if(!validAttemptHistoryPayload(history,chapterBounds)) content=`<p role="status">${w.error}</p><button class="button" id="retry-mission-history">${w.retry}</button>`;
   else if(!history.attempts.length) content=`<p>${w.empty}</p>`;
   else content=`<p>${w.limit}</p><ol>${history.attempts.map(item=>`<li><p>${esc(item.book)} ${Number(item.chapter)} — ${item.mode==='group'?w.group:w.personal}; ${w.score}: ${Number(item.score)} / ${Number(item.total)}; ${esc(item.completedAt || '')} UTC</p><div class="action-row"><a class="button" href="/mission/attempt/${encodeURIComponent(item.id)}">${w.details}: ${esc(item.book)} ${Number(item.chapter)} — ${esc(item.completedAt || '')} UTC</a>${Number(item.score)<Number(item.total)?`<a class="button" href="/reader/${encodeURIComponent(item.book)}/${Number(item.chapter)}">${w.reread}: ${esc(item.book)} ${Number(item.chapter)}</a>`:''}</div></li>`).join('')}</ol>`;
-  const pending=!history.guest&&!history.error&&!history.locked&&validAttemptHistoryPayload(history)&&history.pending?.length?`<p>${w.pending}</p><ul>${history.pending.map(item=>`<li><a class="button" href="/mission/attempt/${encodeURIComponent(item.id)}">${w.resume}: ${esc(item.book)} ${Number(item.chapter)} — ${esc(item.startedAt || '')} UTC</a></li>`).join('')}</ul>`:'';
+  const pending=!history.guest&&!history.error&&!history.locked&&validAttemptHistoryPayload(history,chapterBounds)&&history.pending?.length?`<p>${w.pending}</p><ul>${history.pending.map(item=>`<li><a class="button" href="/mission/attempt/${encodeURIComponent(item.id)}">${w.resume}: ${esc(item.book)} ${Number(item.chapter)} — ${esc(item.startedAt || '')} UTC</a></li>`).join('')}</ul>`:'';
   return `<section class="card resume-card"><h2>${w.title}</h2>${pending}${content}</section>`;
 }
 
 // A small, deterministic reading suggestion, not an estimate of mastery.
 // History is supplied newest-started-first by the server and capped at 100.
-export function reviewSuggestions(attempts, now=new Date()) {
-  if(!Array.isArray(attempts)||!(now instanceof Date)||!Number.isFinite(now.getTime()))return [];
+export function reviewSuggestions(attempts, now=new Date(), chapterBounds) {
+  if(!Array.isArray(attempts)||!(now instanceof Date)||!Number.isFinite(now.getTime()) ||
+     (chapterBounds !== undefined && (!(chapterBounds instanceof Map) || chapterBounds.size !== 66)))return [];
   const passages=new Map(),invalid=new Set(),intervals=[1,3,7,14];
   for(const item of [...attempts].reverse()) {
-    if(item?.mode!=='personal'||typeof item.book!=='string'||!/^([1-3])?[A-Z]{2,3}$/.test(item.book)||!Number.isInteger(item.chapter)||item.chapter<1||item.chapter>151)continue;
+    if(item?.mode!=='personal'||typeof item.book!=='string'||!/^([1-3])?[A-Z]{2,3}$/.test(item.book)||!Number.isInteger(item.chapter)||item.chapter<1||item.chapter>151||
+       (chapterBounds !== undefined && item.chapter > (chapterBounds.get(item.book) || 0)))continue;
     const key=`${item.book}:${item.chapter}`;
     if(!Number.isInteger(item.score)||!Number.isInteger(item.total)||item.total<1||item.score<0||item.score>item.total||typeof item.completedAt!=='string'||!/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/.test(item.completedAt)) {invalid.add(key);continue;}
     const completed=new Date(item.completedAt.replace(' ','T')+'Z');
@@ -180,9 +187,9 @@ const REVIEW_COPY={
   ru:{title:'Предложения для повторения',description:'На основе последних 100 завершённых попыток. Учитываются только личные попытки; это напоминание, а не оценка усвоения.',empty:'Завершите личную попытку, чтобы получить предложения.',due:'Можно повторить сейчас',later:'Запланировано с',open:'Перечитать главу'},
   en:{title:'Suggested review',description:'Based on the latest 100 completed attempts. Only personal attempts count; these are reminders, not a measure of mastery.',empty:'Complete a personal attempt to receive suggestions.',due:'Ready to review',later:'Suggested from',open:'Read the chapter again'},
 };
-export function reviewScheduleMarkup(history,lang,esc,now=new Date()) {
-  if(history.guest||history.error||history.locked||!validAttemptHistoryPayload(history))return '';
-  const w=REVIEW_COPY[lang]||REVIEW_COPY.uk,suggestions=reviewSuggestions(history.attempts,now);
+export function reviewScheduleMarkup(history,lang,esc,now=new Date(),chapterBounds) {
+  if(history.guest||history.error||history.locked||!validAttemptHistoryPayload(history,chapterBounds))return '';
+  const w=REVIEW_COPY[lang]||REVIEW_COPY.uk,suggestions=reviewSuggestions(history.attempts,now,chapterBounds);
   return `<section class="card resume-card"><h2>${w.title}</h2><p>${w.description}</p>${suggestions.length?`<ol>${suggestions.map(item=>`<li><p>${esc(item.book)} ${item.chapter} — ${item.due?w.due:w.later} <time datetime="${item.dueAt}">${item.dueAt}</time> UTC</p><a class="button" href="/reader/${encodeURIComponent(item.book)}/${item.chapter}">${w.open}: ${esc(item.book)} ${item.chapter}</a></li>`).join('')}</ol>`:`<p>${w.empty}</p>`}</section>`;
 }
 
@@ -292,7 +299,7 @@ export async function renderWorkspace(name,c) {
       ru:'Не удалось проверить библейский каталог. Локальная история чтения временно скрыта.',
       en:'The Bible catalog could not be verified. Local reading history is temporarily hidden.',
     }[state.lang] || 'The Bible catalog could not be verified.';
-    shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${w.progress}</h1></div><p>${w.progressLead}</p></div>${syncWarning?`<p role="alert">${esc(syncWarning)}</p>`:''}<div class="card-grid"><article class="card progress-stat"><strong>${p.correct.length} / ${taskCount}</strong><p>${w.tasks}</p></article><article class="card progress-stat"><strong>${chapterBounds ? read.length : '—'}</strong><p>${w.chapters}</p></article><article class="card progress-stat"><strong>${p.complete?w.finished:p.index?w.inProgress:w.notStarted}</strong><p>${w.status}</p></article></div><section class="card resume-card"><h2>${esc((mission.title?.[state.lang]||t("missionTitle")))}</h2><progress aria-label="${w.tasks}" max="${taskCount||1}" value="${p.correct.length}"></progress><div class="action-row"><a class="button primary" href="/mission/abraham">${w.continue}</a><a class="button" href="/groups">${t('myGroups')}</a></div></section>${reviewScheduleMarkup(history,state.lang,esc)}${missionHistoryMarkup(history,state.lang,esc)}<section class="card resume-card"><h2>${w.readingHistory}</h2>${read.length?`<div class="reading-links">${read.slice().reverse().map(r=>`<a class="button" href="/reader/${encodeURIComponent(r.book)}/${Number(r.chapter)}">${esc(r.title)} ${Number(r.chapter)}</a>`).join('')}</div>`:`<p>${chapterBounds ? w.nothingRead : esc(readingCatalogWarning)}</p>`}</section>`);
+    shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${w.progress}</h1></div><p>${w.progressLead}</p></div>${syncWarning?`<p role="alert">${esc(syncWarning)}</p>`:''}<div class="card-grid"><article class="card progress-stat"><strong>${p.correct.length} / ${taskCount}</strong><p>${w.tasks}</p></article><article class="card progress-stat"><strong>${chapterBounds ? read.length : '—'}</strong><p>${w.chapters}</p></article><article class="card progress-stat"><strong>${p.complete?w.finished:p.index?w.inProgress:w.notStarted}</strong><p>${w.status}</p></article></div><section class="card resume-card"><h2>${esc((mission.title?.[state.lang]||t("missionTitle")))}</h2><progress aria-label="${w.tasks}" max="${taskCount||1}" value="${p.correct.length}"></progress><div class="action-row"><a class="button primary" href="/mission/abraham">${w.continue}</a><a class="button" href="/groups">${t('myGroups')}</a></div></section>${reviewScheduleMarkup(history,state.lang,esc,new Date(),chapterBounds)}${missionHistoryMarkup(history,state.lang,esc,chapterBounds)}<section class="card resume-card"><h2>${w.readingHistory}</h2>${read.length?`<div class="reading-links">${read.slice().reverse().map(r=>`<a class="button" href="/reader/${encodeURIComponent(r.book)}/${Number(r.chapter)}">${esc(r.title)} ${Number(r.chapter)}</a>`).join('')}</div>`:`<p>${chapterBounds ? w.nothingRead : esc(readingCatalogWarning)}</p>`}</section>`);
     document.querySelector('#retry-mission-history')?.addEventListener('click',()=>renderWorkspace('progress',c));
     return;
   }

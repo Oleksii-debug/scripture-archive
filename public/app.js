@@ -2452,8 +2452,20 @@ function normalizeTimer() {
   state.studyTimer = timer;
   return timer;
 }
+const TIMER_EPHEMERAL_COPY = {
+  uk: "Таймер працює лише в цій вкладці: браузер не дозволяє зберегти його стан.",
+  ru: "Таймер работает только в этой вкладке: браузер не разрешает сохранить его состояние.",
+  en: "Timer works only in this tab: the browser could not save its state.",
+};
 function saveTimer() {
-  localStorage.setItem("sa.studyTimer", JSON.stringify(state.studyTimer));
+  // Browser storage may be disabled or full. Retain the live timer in memory;
+  // never claim that its state will survive a reload when persistence failed.
+  try {
+    localStorage.setItem("sa.studyTimer", JSON.stringify(state.studyTimer));
+    return true;
+  } catch {
+    return false;
+  }
 }
 function timerText(timer) {
   if (timer.durationMinutes === 0)
@@ -2489,7 +2501,8 @@ function activateTimer() {
       status.textContent = t("timerDone");
       play("done");
     }
-    saveTimer();
+    if (!saveTimer() && !status.textContent)
+      status.textContent = TIMER_EPHEMERAL_COPY[state.lang] || TIMER_EPHEMERAL_COPY.uk;
   };
   input.onchange = () => {
     const value = Math.min(

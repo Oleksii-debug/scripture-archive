@@ -28,9 +28,8 @@ export function selectedEdition(lang){
   return list.find(edition => edition.id === chosen) || list[0];
 }
 export function editionUrl(edition,code,chapter){if(edition.version)return `https://www.bible.com/bible/${edition.version}/${code}.${chapter}`;if(edition.esv)return `https://www.esv.org/${code}+${chapter}/`;if(edition.gateway)return `https://www.biblegateway.com/passage/?search=${encodeURIComponent(code+' '+chapter)}&version=${edition.gateway}`;return edition.source}
-export function editionSelect(lang,esc){
+export function editionSelect(lang,esc,selected=selectedEdition(lang)){
   const list = EDITIONS[lang] || EDITIONS.uk;
   const copy = editionCopy[lang] || editionCopy.uk;
-  const selected = selectedEdition(lang);
   return `<label class="field grow"><span>${copy.choose}</span><select id="bible-edition">${list.map(e => `<option value="${e.id}" ${e.id===selected.id?'selected':''}>${esc(e.title)}</option>`).join('')}</select></label>`;
 }

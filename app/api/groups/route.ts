@@ -278,14 +278,15 @@ export async function POST(request: Request) {
       .bind(groupId, id.userId, `${person.first_name} ${person.last_name}`.trim(), body.publicOwnerName === true ? 1 : 0, body.publicOwnerActivity === true ? 1 : 0)
   ];
   if (marathonEnabled) statements.push(env.DB!.prepare("INSERT INTO group_marathon_registrations (id,group_id,weekly_goal,catchup_mode,cohort_key,status) VALUES (?,?,?,?,?,?)").bind(marathonId, groupId, weeklyGoal, catchupMode, cohortKey, cohortStatus));
+  // Promote a matching cohort in the SAME D1 transaction. A failed promotion must not
+  // leave a half-created group and require the user to guess whether to retry.
+  const promoteCohort=marathonEnabled && cohortStatus === "ready";
+  if(promoteCohort) statements.push(env.DB!.prepare("UPDATE group_marathon_registrations SET status='ready' WHERE cohort_key=? AND status='forming'").bind(cohortKey));
   try {
     const saved=await env.DB!.batch(statements);
-    if(!Array.isArray(saved)||saved.length!==statements.length||!saved.every(wroteOne))
+    if(!Array.isArray(saved)||saved.length!==statements.length||!saved.every((receipt,index)=>
+      promoteCohort && index===statements.length-1 ? acknowledgedWrite(receipt) : wroteOne(receipt)))
       return Response.json({error:"database_unavailable"},{status:503});
-    if (marathonEnabled && cohortStatus === "ready") {
-      const promoted=await env.DB!.prepare("UPDATE group_marathon_registrations SET status='ready' WHERE cohort_key=? AND status='forming'").bind(cohortKey).run();
-      if(!acknowledgedWrite(promoted))return Response.json({error:"database_unavailable"},{status:503});
-    }
     return Response.json({ ok: true, groupId, cohortStatus }, { status: 201 });
   } catch {return Response.json({error:"database_unavailable"},{status:503});}
 }

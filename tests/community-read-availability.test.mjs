@@ -59,8 +59,11 @@ function fixture({ receipts = validReceipts(), throwBatch = false, throwAdvance 
       throw Error("Unexpected community route import " + name);
     },
   });
-  async function get(action) {
-    const suffix = action ? "?action=" + encodeURIComponent(action) : "";
+  async function get(action, summary = false) {
+    const params = new URLSearchParams();
+    if (action) params.set("action", action);
+    if (summary) params.set("public", "summary");
+    const suffix = params.size ? "?" + params.toString() : "";
     const response = await exports.GET(new Request("https://archive.invalid/api/community" + suffix));
     return { status: response.status, body: await response.json(), cache: response.headers.get("cache-control") };
   }
@@ -139,9 +142,10 @@ test("public GET cannot invoke a failing or state-changing wave advancement", as
 test("repeated public GET and summary preflight never create community advancement", async () => {
   const f = fixture();
   const first = await f.get();
-  const second = await f.get();
+  const second = await f.get(undefined, true);
   assert.equal(first.status, 200);
   assert.equal(second.status, 200);
+  assert.deepEqual(second.body.members, []);
   assert.equal(first.body.summary.registered, second.body.summary.registered);
   assert.deepEqual(f.calls, { advance: 0, batch: 2, auth: 0 });
 });

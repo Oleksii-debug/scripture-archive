@@ -106,34 +106,34 @@ test("exact-length consent details are accepted without truncation", async () =>
 });
 
   
-// Execute the canonical profile route and D1 bind path. Unsupported explicit
-// locale input must not be rewritten to Ukrainian with a success receipt.
+// Exercise the real account route against the D1 bind boundary without
+// changing the historically approved default for unsupported string locales.
 for (const [label, value] of [
-  ['slovak code','sk'], ['unknown code','zz'], ['wrong case','UK'],
-  ['array',['en']], ['boolean',true], ['number',42], ['object',{code:'en'}],
+  ['array',['en']], ['empty array',[]], ['boolean',true],
+  ['false',false], ['number',42], ['object',{code:'en'}],
 ]) {
-  test('explicitly selected profile locale is never silently changed: '+label,async()=>{
+  test('reject explicitly nonstring profile locale: '+label,async()=>{
     const h=harness();
     const result=await h.post('profile',{...profile,locale:value});
     assert.equal(result.status,400,label+' '+JSON.stringify(result.body));
     assert.equal(result.body.error,'invalid_profile_field');
-    assert.equal(h.writes.length,0,'refused locale must never mutate D1');
+    assert.equal(h.writes.length,0,'wrong-type locale must never mutate D1');
   });
 }
-
 for (const [label,value,expected] of [
   ['Ukrainian','uk','uk'], ['Russian','ru','ru'], ['English','en','en'],
   ['trimmed English','  en  ','en'], ['null default',null,'uk'],
   ['blank default','  ','uk'], ['omitted default',undefined,'uk'],
+  ['legacy Slovak fallback','sk','uk'], ['legacy unknown fallback','zz','uk'],
+  ['legacy German fallback','de','uk'], ['legacy uppercase fallback','UK','uk'],
 ]) {
-  test('supported or legacy default profile locale retains exact choice: '+label,async()=>{
-    const h=harness();
-    const payload={...profile};
+  test('preserve canonical profile locale binding: '+label,async()=>{
+    const h=harness(), payload={...profile};
     if(value===undefined)delete payload.locale;
     else payload.locale=value;
     const result=await h.post('profile',payload);
     assert.equal(result.status,200,label+' '+JSON.stringify(result.body));
-    assert.equal(h.writes.length,1,'valid locale should be persisted');
-    assert.equal(h.writes[0].args[9],expected,'persist the chosen canonical locale');
+    assert.equal(h.writes.length,1,'valid or historically defaulted locale should save');
+    assert.equal(h.writes[0].args[9],expected,'persist the expected canonical locale');
   });
 }

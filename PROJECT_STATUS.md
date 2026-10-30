@@ -1,3 +1,18 @@
+## Current-source correction (2026-10-30)
+
+> **Important:** the August 20, 2026 R05 `TEXTUAL_PREPRODUCTION_ACTIVE` snapshot retained **below** is historical. It must not override the later owner-approved product plan, GitHub main, or root `AGENTS.md`. This banner is a dated snapshot, not a floating claim that the live site matches the repository.
+
+**Authoritative current documents:** `AGENTS.md`; [approved 20-section plan](docs/roadmap/SCRIPTURE_ARCHIVE_EXPANSION_SECTION_PLAN_2026-10-28.md); [scope index](docs/EXPANSION_SCOPE_INDEX.md); [central issue #297](https://github.com/Oleksii-debug/scripture-archive/issues/297) and [owner scope #295](https://github.com/Oleksii-debug/scripture-archive/issues/295). Current source checkpoint read from GitHub `main@2c1c1ba7fe10eebae3de2c41e6c5804ffafe8f25` (2026-10-30); later workers must refresh live main.
+
+- There is now a real source app: `app/api/*`, `public/app.js`, `public/workspace.js`, reader, mission, community, course and editorial modules, plus CI tests. Do **not** repeat the August assertion that no app/platform source exists.
+- All **20 full SA-EXT-01…20 parent sections are OPEN**. A narrow `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` receipt must never be presented as a completed parent section, verified release, keyboard/NVDA acceptance or full 82-language support.
+- Two newly merged source improvements: [#518](https://github.com/Oleksii-debug/scripture-archive/pull/518) dossier search `main@4fff3bd6f88ae6628642d8fce3eccd2a7057307b`; [#524](https://github.com/Oleksii-debug/scripture-archive/pull/524) fully sourced narrative atlas `main@75a44e5bf461e94ed2791017c11cec2962b0f404`. Both have test evidence and scoped terminal entries in the approved plan; full sections 05/06 are not terminal. Other worker follow-up [#525](https://github.com/Oleksii-debug/scripture-archive/pull/525) also reconciles filtered dossier selections.
+- **CI truth:** exact-head Node/TS/lint/build/Python can pass while the overall workflow remains RED because the disposable Wrangler Worker/D1 tests intermittently return HTTP 503. Investigate existing [draft PR #361](https://github.com/Oleksii-debug/scripture-archive/pull/361); never reinterpret a 21/22 Worker pass as full E2E PASS.
+- **Unresolved release controls:** confirm actual Sites deployment SHA and access, DNS/email sender/verification/reset, safe owner Stop/Continue and scheduler, and true browser + Windows/NVDA and privacy/security acceptance before declaring production ready. Historically verified Sites v10/`3a04d12` (26 Oct) is a handoff, not proof of today's live site.
+- **New scope is NOT an automatic publish authorization.** The 18+ dating project is separate, opt-in, privacy-sensitive and approved **for planning only**; never mix its user records or release it from the education site by default.
+
+---
+
 # Архів Писання — PROJECT STATUS
 
 **Repository:** `Oleksii-debug/scripture-archive`  

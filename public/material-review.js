@@ -92,6 +92,11 @@ export function attachReviewControls(root, w, refresh, announce, isCurrent = () 
 function publicMaterialMarkup(items, w, esc) {
   return items.map(item=>`<article class="card"><h3>${esc(item.title)}</h3><p>${esc(item.reference)}</p><p>${esc(item.provenance)}</p><form class="public-material" data-id="${esc(item.id)}"><fieldset><legend>${esc(item.prompt)}</legend>${item.options.map((option,index)=>`<label class="option"><input type="radio" name="choice" value="${index}" required><span>${esc(option)}</span></label>`).join('')}</fieldset><button class="button" type="submit">${w.check}</button><p role="status"></p></form></article>`).join('');
 }
+// Concurrent reads for one mounted public-material panel must be ordered by
+// the request that STARTED last, not whichever fetch happens to finish last.
+// Keep the principal/route predicate as an independent authority boundary.
+const publicMaterialRenderEpoch = new WeakMap();
+
 function attachPublicMaterialAnswers(root, w, active) {
   root.querySelectorAll('.public-material').forEach(form => form.onsubmit = async event => {
       event.preventDefault();
@@ -137,12 +142,18 @@ function attachPublicMaterialAnswers(root, w, active) {
     });
 }
 export async function renderPublicMaterials(root, w, esc, isCurrent = () => true) {
-  // This public panel shares the builder shell with private editor state.
-  // A response from an old account, route or render epoch may not repaint it
-  // or leave behind an active answer form after its principal has changed.
+  if (!root || (typeof root !== 'object' && typeof root !== 'function')) return;
+  // The same principal may issue successive refreshes before an earlier HTTP
+  // response settles. Only the newest call may install results, errors, retry
+  // controls, or answer handlers for this root.
+  const epoch = (publicMaterialRenderEpoch.get(root) || 0) + 1;
+  publicMaterialRenderEpoch.set(root, epoch);
   const active = () => {
-    try { return root?.isConnected !== false && isCurrent() === true; }
-    catch { return false; }
+    try {
+      return root.isConnected !== false &&
+        publicMaterialRenderEpoch.get(root) === epoch &&
+        isCurrent() === true;
+    } catch { return false; }
   };
   if (!active()) return;
   try {
@@ -160,8 +171,18 @@ export async function renderPublicMaterials(root, w, esc, isCurrent = () => true
       if (!active() || retry.isConnected === false || retry.disabled) return;
       const hadFocus=wasEditorialControlFocused(root,retry);
       retry.disabled=true;
+      // Starting the retry intentionally retires this failed render's epoch.
+      // Restore keyboard focus only if the retry is still the newest view;
+      // a later navigation/refresh must not have its focus stolen.
+      const retryEpoch=epoch+1;
       await renderPublicMaterials(root,w,esc,isCurrent);
-      if (active()) restoreEditorialFocus(root,hadFocus,'h2');
+      let currentRetry=false;
+      try {
+        currentRetry=root.isConnected !== false &&
+          publicMaterialRenderEpoch.get(root) === retryEpoch &&
+          isCurrent() === true;
+      } catch {}
+      if (currentRetry) restoreEditorialFocus(root,hadFocus,'h2');
     };
   }
 }

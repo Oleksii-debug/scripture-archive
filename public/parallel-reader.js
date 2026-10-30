@@ -128,7 +128,7 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
     // Recheck active assessments immediately before a clipboard disclosure.
     let guard;
     try { guard=await check(book,chapter); }
-    catch { if (panel.isConnected && current()) failClosed(); return; }
+    catch { if (panel.isConnected && current() && citation===record && selected()) failClosed(); return; }
     if (!panel.isConnected || !current() || citation!==record || !selected()) return;
     if (!guard || typeof guard.invalidated!=='boolean') { failClosed(); return; }
     if (guard.invalidated) { lock(); return; }

@@ -109,11 +109,11 @@ test("blank reading receipt titles must not produce a confirmed private save", a
   }
 });
 
-test("a genuine named reading receipt is still acknowledged without rewriting titles", async () => {
+test("a genuine named reading receipt is acknowledged with existing trimmed title normalization", async () => {
   const f = harness();
   const receipt = { book:"GEN", chapter:1, title:"  Буття 1  " };
   const result = await f.put([receipt]);
   assert.equal(result.status, 200);
   assert.deepEqual(result.body, {ok:true});
-  assert.deepEqual(JSON.parse(f.calls[0].args[1]), [receipt]);
+  assert.deepEqual(JSON.parse(f.calls[0].args[1]), [{...receipt, title:"Буття 1"}]);
 });

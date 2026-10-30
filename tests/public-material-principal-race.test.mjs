@@ -44,6 +44,14 @@ async function withNetwork(fetcher, action) {
   }
 }
 const show = async (f) => renderPublicMaterials(f.root,w,esc,f.current);
+const waiting=deferred();
+const wait=deferred();
+const pendingList=deferred();
+const calls=[];
+const delayedPost=deferred();
+const delayedDetached=deferred();
+let posted=0;
+const delayedFailure=deferred();
 
 test('normal public material and canonical answer still render with live principal',()=>withNetwork(
   async (_url,options) => options
@@ -70,7 +78,6 @@ test('late public list response cannot repaint builder for a changed principal',
     assert.equal(f.form.onsubmit,null);
   }
 ));
-const waiting=deferred();
 
 test('late failed list response cannot replace current builder with stale error',()=>withNetwork(
   () => wait.promise,
@@ -82,7 +89,6 @@ test('late failed list response cannot replace current builder with stale error'
     assert.equal(f.rendered(),0);
   }
 ));
-const wait=deferred();
 
 test('detached public list cannot repaint or install controls',()=>withNetwork(
   () => pendingList.promise,
@@ -94,7 +100,6 @@ test('detached public list cannot repaint or install controls',()=>withNetwork(
     assert.equal(f.rendered(),0);
   }
 ));
-const pendingList=deferred();
 
 test('retired controls do not send answer request after principal switch',()=>withNetwork(
   async (_url,options) => { calls.push(options?.method || 'GET'); return options?response({correct:true}):response({items:[item]}); },
@@ -107,7 +112,6 @@ test('retired controls do not send answer request after principal switch',()=>wi
     assert.equal(f.button.disabled,false);
   }
 ));
-const calls=[];
 
 test('in-flight former-principal answer cannot publish success after logout',()=>withNetwork(
   (_url,options) => options ? delayedPost.promise : response({items:[item]}),
@@ -121,7 +125,6 @@ test('in-flight former-principal answer cannot publish success after logout',()=
     assert.equal(f.status.textContent,'');
   }
 ));
-const delayedPost=deferred();
 
 test('detached form answer cannot publish stale result or re-enable its former control',()=>withNetwork(
   (_url,options) => options ? delayedDetached.promise : response({items:[item]}),
@@ -136,7 +139,6 @@ test('detached form answer cannot publish stale result or re-enable its former c
     assert.equal(f.button.disabled,true);
   }
 ));
-const delayedDetached=deferred();
 
 test('one in-flight answer is not submitted twice; a live failure remains retryable',()=>withNetwork(
   (_url,options) => {
@@ -156,8 +158,6 @@ test('one in-flight answer is not submitted twice; a live failure remains retrya
     assert.equal(f.button.disabled,false);
   }
 ));
-let posted=0;
-const delayedFailure=deferred();
 
 test('invalidated or throwing principal predicate refuses to issue a request',()=>withNetwork(
   () => {throw Error('network must not be reached');},

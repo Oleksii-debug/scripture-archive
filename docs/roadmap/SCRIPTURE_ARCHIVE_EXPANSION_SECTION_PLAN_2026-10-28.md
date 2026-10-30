@@ -1,5 +1,14 @@
 # SCRIPTURE ARCHIVE — каталог розділів і план реалізації розширень
 
+## 2026-10-30 — SA-EXT-02 / UNKNOWN_ASSESSMENT_LIFECYCLE_DENIAL — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
+
+**Статус:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` **лише** для недопущення видачі поточного навчального завдання зі зіпсованим/невідомим статусом спроби. `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. Батьківський **SA-EXT-02 та всі 20 батьківських розділів залишаються OPEN**.
+
+- **Відтворений ризик у коді:** `GET /api/attempts?action=current` раніше обробляв `invalidated`, `grading`, `completed`, після чого без явного `status === 'active'` видавав наступне питання також для будь-якого невідомого значення `mission_attempts.status`. Схема `drizzle/0004_accounts_attempts.sql` має поле `TEXT NOT NULL DEFAULT 'active'`, але не гарантує enum CHECK. Пошкоджений чи майбутній статус не повинен відкривати завдання.
+- **Інтегровано:** [PR #549](https://github.com/Oleksii-debug/scripture-archive/pull/549) **SQUASH MERGED** у підтверджений `main@5fcbe43f2b0badb30297f054d8ce8c0e43fc9afc`. Канонічний `app/api/attempts/route.ts@772175e639cf92ef2fe0cb91ebe1970d89a87bd5`; regression `tests/attempt-status-failclosed.test.mjs@baff89f63a21cb2ceeef18b5461297c77fcc7a8b`. Невідомі статуси отримують 409 `attempt_state_invalid` і жодного `task`; авторизований активний сценарій, `grading`, `invalidated`, `completed`, expiry та відсутня/чужа спроба зберегли власні контрактні відповіді. Нового API/БД/копії рушія немає.
+- **Тестування точного PR HEAD `98f85d7da4dcd1a8e3591a47f5643cc90c6a1cb1`:** [GitHub Actions #41021606846](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41021606846) нативна Node-регресія **1172 PASS / 0 FAIL / 1 SKIP**; TypeScript, lint, source build, Python **2 PASS**. **Повна CI FAILURE**, і це не приховано: disposable Wrangler Worker/D1 двічі в першому запуску та двічі під час rerun отримав `Your worker restarted mid-request`, HTTP503 замість очікуваного 400/403/200 на сторонніх HTTP запитах, **21/22 PASS**. Це спільний відомий інфраструктурний блокер [PR #361](https://github.com/Oleksii-debug/scripture-archive/pull/361), а не PASS цього E2E.
+- **Поза межами:** нові місії/педагогічна якість, browser/physical NVDA, production Sites SHA, реліз, source rights і весь SA-EXT-02 **НЕ ЗАКРИТО**. Немає deploy. Вузький код не віддавати знову в розробку без відтвореного дефекту чи нової затвердженої вимоги.
+
 ## 2026-10-30 — SA-EXT-01 / BOOKMARK_CANONICAL_EDITION_CHAPTER_BOUNDS — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
 
 **Статус:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` виключно для відображення недопустимих записів закладок на сторінці читання. `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` лише тут. **Повний SA-EXT-01 і всі інші 19 батьківських розділів залишаються OPEN**; це не production/NVDA та не загальний реліз.

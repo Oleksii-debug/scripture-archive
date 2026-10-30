@@ -12,11 +12,18 @@ const COPY={
 const languageOf=value=>LANGS.includes(value)?value:'uk';
 
 export function academyProgressKey(user){
-  const raw=user && typeof user.id==='string' && /^[a-zA-Z0-9_-]{1,120}$/.test(user.id)?user.id:'guest';
-  return 'sa.academy.reading.v1:'+raw;
+  // Only a truly absent principal is anonymous. Do not alias an invalid
+  // authenticated identity (including reserved "guest") to anonymous data.
+  if(user===null || user===undefined)return 'sa.academy.reading.v1:guest';
+  if(typeof user!=='object' || typeof user.id!=='string' ||
+     !/^[a-zA-Z0-9_-]{1,120}$/.test(user.id) || user.id==='guest')return null;
+  return 'sa.academy.reading.v1:'+user.id;
 }
 export function readAcademyProgress(storage,key){
   try{
+    if(typeof key!=='string' ||
+       !/^sa\.academy\.reading\.v1:[a-zA-Z0-9_-]{1,120}$/.test(key))
+      throw Error('invalid principal progress key');
     if(!storage || typeof storage.getItem!=='function')throw Error('no storage');
     const raw=storage.getItem(key);
     if(raw===null)return {available:true,completed:[]};

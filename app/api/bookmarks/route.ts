@@ -49,7 +49,7 @@ function primitiveField(value: unknown): value is string | number | null {
 }
 async function recoveryReference(owner: string, row: RecoveryRow): Promise<string | null> {
   const rowid = row.recovery_rowid;
-  if (!Number.isSafeInteger(rowid) || (rowid as number) < 1) return null;
+  if (typeof rowid !== "number" || !Number.isSafeInteger(rowid) || rowid < 1) return null;
   const parts = [owner, rowid, row.edition, row.book, row.chapter, row.created_at];
   if (!parts.every(primitiveField)) return null;
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(parts)));

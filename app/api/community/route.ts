@@ -27,6 +27,7 @@ export async function GET(request: Request) {
     if (!isVerifiedOwner(identity)) return json({ error: "forbidden" }, 403);
     return json(await communityOwnerState());
   }
+  try {
   await advanceCommunity(now);
   const url = new URL(request.url), page = Math.max(1, Math.min(10000, Number(url.searchParams.get("page")) || 1));
   const pageSize = Math.max(12, Math.min(48, Number(url.searchParams.get("pageSize")) || 24));
@@ -47,6 +48,11 @@ export async function GET(request: Request) {
       GROUP BY a.id,p.first_name,p.last_name,p.public_first_name,p.public_last_name,p.public_progress,p.locale,a.created_at`),
   ]);
 
+  // A resolved D1 batch is not a successful read unless each individual
+  // result confirms success and supplies a real row array. Never turn a
+  // broken private/profile query into a fabricated zero-activity public 200.
+  if ([accountCount, realOnline, realRows].some(receipt => receipt?.success !== true || !Array.isArray(receipt?.results)))
+    return json({ error: "community_unavailable" }, 503);
   const real = (realRows.results as unknown as RealRow[]).map(row => {
     const online = Boolean(row.last_active_at && new Date(`${row.last_active_at.replace(" ", "T")}Z`).getTime() >= now.getTime() - 300_000);
     return { id: row.id, displayName: row.display_name, locale: row.locale, countryCode: null, joinedAt: row.joined_at, online,
@@ -71,6 +77,11 @@ export async function GET(request: Request) {
     ...(url.searchParams.get("public") === "summary" ? { members: [] } : {}),
     _internal: undefined,
   });
+  } catch {
+    // Failed lease/snapshot reads remain infrastructure errors, never 200
+    // empty directory data or an unhandled HTML/500 response.
+    return json({ error: "community_unavailable" }, 503);
+  }
 }
 
 export async function POST(request: Request) {

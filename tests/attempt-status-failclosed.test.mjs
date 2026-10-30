@@ -26,6 +26,8 @@ function fixture(status='active',{expires_at='2099-01-01',owned=true,dbAvailable
     id:'attempt-1',actor_id:'alice',mission_id:'OT-AB-01',
     book_id:'GEN',chapter:12,group_id:null,locale,
     task_limit:1,current_index:0,status,expires_at,
+    // Completed mock must model the canonical persisted score/total columns.
+    score:1,total:1,
     result_json:JSON.stringify({score:1,total:1}),
   };
   const DB={

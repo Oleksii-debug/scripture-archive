@@ -302,7 +302,11 @@ export async function POST(request: Request) {
           : await env.DB.prepare("SELECT COUNT(DISTINCT book_id || ':' || chapter) AS count FROM group_sessions WHERE group_id=? AND meeting_date>=? AND meeting_date<?").bind(groupId, registration.start_date, weekEnd).first<{ count: number }>();
         const repeated = await env.DB.prepare("SELECT id FROM group_sessions WHERE group_id=? AND book_id=? AND chapter=? LIMIT 1").bind(groupId, book, chapter).first();
         const allowed = registration.weekly_goal * (registration.catchup_mode === "steady" ? 1 : week + 1);
-        if (!repeated && Number(used?.count || 0) >= allowed) return json({ error: "weekly_limit_reached" }, 409);
+        // A missing or corrupt D1 usage aggregate is not proof of zero study.
+        // Refuse to unlock a group mission on uncertain quota evidence.
+        if (!used || !Number.isSafeInteger(used.count) || used.count < 0)
+          return json({ error: "database_unavailable" }, 503);
+        if (!repeated && used.count >= allowed) return json({ error: "weekly_limit_reached" }, 409);
       }
     }
     const receipt = await env.DB.prepare("SELECT id FROM chapter_read_receipts WHERE actor_id=? AND book_id=? AND chapter=? AND COALESCE(group_id,'')=? AND consumed_at IS NULL ORDER BY completed_at DESC LIMIT 1")

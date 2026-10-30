@@ -43,7 +43,7 @@ test("all owner-only entrypoints use the verified owner predicate", async () => 
     read("app/api/materials/route.ts"),
   ]);
   assert.match(account, /isOwner:isVerifiedOwner\(id\)/);
-  assert.match(account, /action==="users".*!isVerifiedOwner\(id\)/);
+  assert.match(account, /if\s*\(action\s*===\s*"users"\)\s*\{\s*if\s*\(!isVerifiedOwner\(id\)\)/);
   assert.match(analytics, /if \(!isVerifiedOwner\(identity\)\)/);
   assert.equal((community.match(/if \(!isVerifiedOwner\(identity\)\)/g) || []).length, 2);
   assert.equal((content.match(/!isVerifiedOwner\(identity\)/g) || []).length, 3);

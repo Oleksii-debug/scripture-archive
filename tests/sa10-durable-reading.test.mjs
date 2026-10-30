@@ -11,6 +11,7 @@ import vm from 'node:vm';
 const root=join(dirname(fileURLToPath(import.meta.url)),'..');
 const require=createRequire(import.meta.url);
 const ts=require('typescript');
+const catalog=JSON.parse(readFileSync(join(root,'public/data/catalog.json'),'utf8'));
 const source=readFileSync(join(root,'app/api/account/route.ts'),'utf8');
 const migration=readFileSync(join(root,'drizzle/0000_scripture_archive.sql'),'utf8');
 const sqlTable=(name)=>migration.match(new RegExp('CREATE TABLE `'+name+'`[^;]+;'))?.[0];
@@ -33,6 +34,7 @@ function fixture(mode){const dir=mkdtempSync(join(tmpdir(),'sa10-canonical-'));c
 }
 function worker(db){const exports={};vm.runInNewContext(compiled.outputText,{exports,require(id){
     if(id==='cloudflare:workers')return {env:{DB:db}};
+    if(id==='../../../public/data/catalog.json')return {default:catalog};
     if(id==='../../../content/mission-abraham.json')return {default:{tasks:[{id:'OTAB01-N001'},{id:'OTAB01-N002'},{id:'OTAB01-N003'},{id:'OTAB01-N004'},{id:'OTAB01-N005'}]}};
     if(id==='../../../lib/auth')return {sameOrigin:r=>r.headers.get('origin')==='https://test.invalid',authenticateRequest:async r=>{
       const userId=r.headers.get('x-test-user');return userId?{userId,email:`${userId}@test.invalid`,emailVerified:true,provider:'test',fullName:null}:null;

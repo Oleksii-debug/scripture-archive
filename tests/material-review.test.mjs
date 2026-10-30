@@ -16,7 +16,7 @@ function fixture() {
   const input = {prompt:'A valid question?',reference:'GEN 12',options:['one','two'],answer:'one',explanation:'Source based explanation'};
   db.prepare('INSERT INTO study_materials(id,owner_user_id,title,locale,data) VALUES (?,?,?,?,?)').run('m1','alice','Original','uk',JSON.stringify(input));
   db.prepare('INSERT INTO study_materials(id,owner_user_id,title,locale,data) VALUES (?,?,?,?,?)').run('m2','bob','Other','en',JSON.stringify(input));
-  let failRead = false, throwRead = false, failBatchAt = -1, afterDraftRead = null, afterRoleRead = null, submitReceiptMode = 'normal';
+  let failRead = false, throwRead = false, failBatchAt = -1, afterDraftRead = null, afterRoleRead = null, submitReceiptMode = 'normal', reviewReceiptMode = 'normal', withdrawReceiptMode = 'normal', throwAuth = false;
   const D1 = {prepare(sql){return {bind(...args){return {
     first:async()=>{const row=db.prepare(sql).get(...args)??null;if(sql.startsWith('SELECT title,locale,data') && afterDraftRead) {const hook=afterDraftRead;afterDraftRead=null;hook();}if(sql.startsWith('SELECT r.user_id') && afterRoleRead) {const hook=afterRoleRead;afterRoleRead=null;hook();}return row;},
     all:async()=>{if(throwRead)throw Error('offline');return failRead ? {success:false,results:[]} : {success:true,results:db.prepare(sql).all(...args)};},
@@ -26,20 +26,32 @@ function fixture() {
         if(mode==='failed')return {success:false,meta:{changes:Number(r.changes)}};
         if(mode==='missing')return {success:true,meta:{}};
       }
+      if(sql.startsWith("UPDATE material_submissions SET status='withdrawn'") && withdrawReceiptMode!=='normal'){
+        const mode=withdrawReceiptMode;withdrawReceiptMode='normal';
+        if(mode==='failed')return {success:false,meta:{changes:Number(r.changes)}};
+        if(mode==='missing')return {success:true,meta:{}};
+        if(mode==='negative')return {success:true,meta:{changes:-1}};
+        if(mode==='text')return {success:true,meta:{changes:'1'}};
+      }
       return {success:true,meta:{changes:Number(r.changes)}};},
   };}, all:async()=>{if(throwRead)throw Error('offline');return failRead ? {success:false,results:[]} : {success:true,results:db.prepare(sql).all()};}};},
-  async batch(statements){db.exec('BEGIN');try {const r=[];for(const [i,s] of statements.entries()){if(i===failBatchAt)throw Error('forced failure');r.push(await s.run());}db.exec('COMMIT');return r;}catch(e){db.exec('ROLLBACK');throw e;}}};
+  async batch(statements){db.exec('BEGIN');try {const r=[];for(const [i,s] of statements.entries()){if(i===failBatchAt)throw Error('forced failure');r.push(await s.run());}db.exec('COMMIT');
+    const mode=reviewReceiptMode;reviewReceiptMode='normal';
+    if(mode==='missing-first')r[0]={...r[0],meta:{}};
+    if(mode==='missing-last')r[1]={...r[1],meta:{}};
+    if(mode==='failed-last')r[1]={...r[1],success:false};
+    return r;}catch(e){db.exec('ROLLBACK');throw e;}}};
   const source=readFileSync(new URL('../app/api/material-review/route.ts',import.meta.url),'utf8');
   const js=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
   const exports={};
   vm.runInNewContext(js,{exports,Request,Response,URL,crypto,require(id){
     if(id==='cloudflare:workers')return {env:{DB:D1}};
-    if(id.endsWith('/auth'))return {isVerifiedOwner:id=>Boolean(id&&id.provider!=='agent'&&id.emailVerified&&id.email?.toLowerCase()==='dordiaioleksii1@gmail.com'),sameOrigin:r=>r.headers.get('origin')==='https://local.invalid',authenticateRequest:async r=>{const id=r.headers.get('x-user');return id?{userId:id,email:id==='editor'?'dordiaioleksii1@gmail.com':`${id}@example.invalid`,emailVerified:id!=='unverified',provider:id==='agent'?'agent':'password'}:null;}};
+    if(id.endsWith('/auth'))return {isVerifiedOwner:id=>Boolean(id&&id.provider!=='agent'&&id.emailVerified&&id.email?.toLowerCase()==='dordiaioleksii1@gmail.com'),sameOrigin:r=>r.headers.get('origin')==='https://local.invalid',authenticateRequest:async r=>{if(throwAuth)throw Error('private session store failed');const id=r.headers.get('x-user');return id?{userId:id,email:id==='editor'?'dordiaioleksii1@gmail.com':`${id}@example.invalid`,emailVerified:id!=='unverified',provider:id==='agent'?'agent':'password'}:null;}};
     throw Error('unexpected import '+id);
   }});
   async function post(body,user='alice',origin='https://local.invalid') {const r=await exports.POST(new Request('https://local.invalid/api/material-review',{method:'POST',headers:{origin,'content-type':'application/json',...(user?{'x-user':user}:{})},body:JSON.stringify(body)}));return {status:r.status,data:await r.json()};}
   async function get(view,user='') {const r=await exports.GET(new Request('https://local.invalid/api/material-review?view='+view,{headers:user?{'x-user':user}:{}}));return {status:r.status,data:await r.json()};}
-  return {db,post,get,setReadFailure:value=>{failRead=value;},setReadThrow:value=>{throwRead=value;},setBatchFailure:value=>{failBatchAt=value;},afterDraftRead:hook=>{afterDraftRead=hook;},afterRoleRead:hook=>{afterRoleRead=hook;},setSubmitReceiptMode:mode=>{submitReceiptMode=mode;}};
+  return {db,post,get,setReadFailure:value=>{failRead=value;},setReadThrow:value=>{throwRead=value;},setBatchFailure:value=>{failBatchAt=value;},afterDraftRead:hook=>{afterDraftRead=hook;},afterRoleRead:hook=>{afterRoleRead=hook;},setSubmitReceiptMode:mode=>{submitReceiptMode=mode;},setReviewReceiptMode:mode=>{reviewReceiptMode=mode;},setWithdrawReceiptMode:mode=>{withdrawReceiptMode=mode;},setAuthFailure:v=>{throwAuth=v;}};
 }
 const submission={action:'submit',materialId:'m1',provenance:'Original work, GEN 12',rightsConfirmed:true};
 const approve=id=>({action:'review',id,decision:'approve',sourceChecked:true,rightsChecked:true});
@@ -213,5 +225,76 @@ test('repeat submission after an accepted write is rejected without duplicate pe
     const repeated=await f.post(submission);
     assert.equal(repeated.status,409);
     assert.equal(f.db.prepare("SELECT COUNT(*) n FROM material_submissions WHERE material_id='m1' AND status='pending'").get().n,1);
+  }finally{f.db.close();}
+});
+
+test('editor review cannot claim success when a committed D1 batch loses either mutation receipt', async () => {
+  for(const mode of ['missing-first','missing-last','failed-last']) {
+    const f=fixture();
+    try {
+      const submitted=await f.post(submission);
+      assert.equal(submitted.status,201);
+      f.setReviewReceiptMode(mode);
+      const response=await f.post(approve(submitted.data.id),'editor');
+      assert.equal(response.status,503,mode+' is an unacknowledged review');
+      assert.equal(response.data.error,'review_failed');
+      // A lost response receipt is NOT evidence the D1 transaction rolled back.
+      // An editor must re-read source-of-truth review history before retrying.
+      const persisted=(await f.get('history','editor')).data.items[0];
+      assert.equal(persisted.status,'approved',mode+' does not fabricate a rollback');
+      const retry=await f.post(approve(submitted.data.id),'editor');
+      assert.equal(retry.status,409,mode+' does not publish a duplicate');
+      assert.equal((await f.get('public')).data.items.length,1);
+    } finally { f.db.close(); }
+  }
+});
+
+test('editorial POST maps a failed session store to a private 503 without changing author records',async()=>{
+  for(const action of [submission,{action:'withdraw',id:'any'},{action:'review',id:'any',decision:'approve',sourceChecked:true,rightsChecked:true}]){
+    const f=fixture();
+    try{
+      f.setAuthFailure(true);
+      const outcome=await f.post(action);
+      assert.equal(outcome.status,503);
+      assert.equal(outcome.data.error,'materials_unavailable');
+      assert.equal(outcome.data.ok,undefined);
+      assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM material_submissions').get().n,0);
+    }finally{f.db.close();}
+  }
+});
+
+test('withdrawal with a missing, unsuccessful or malformed D1 receipt does not falsely acknowledge success',async()=>{
+  for(const mode of ['missing','failed','negative','text']){
+    const f=fixture();
+    try{
+      const created=await f.post(submission);
+      assert.equal(created.status,201);
+      f.setWithdrawReceiptMode(mode);
+      const uncertain=await f.post({action:'withdraw',id:created.data.id});
+      assert.equal(uncertain.status,503,mode);
+      assert.equal(uncertain.data.error,'withdraw_failed');
+      assert.equal(uncertain.data.ok,undefined);
+      // The simulated SQLite write was committed; the application must not
+      // silently assume a failed ACK rolled back or claim it is missing.
+      assert.equal(f.db.prepare('SELECT status FROM material_submissions WHERE id=?').get(created.data.id).status,'withdrawn');
+      const retry=await f.post({action:'withdraw',id:created.data.id});
+      assert.equal(retry.status,409,'safe repeated withdrawal is a verified no-op');
+    }finally{f.db.close();}
+  }
+});
+
+test('valid D1 withdrawal receipt acknowledges once and leaves an immutable audit row',async()=>{
+  const f=fixture();
+  try{
+    const created=await f.post(submission);assert.equal(created.status,201);
+    assert.equal((await f.post({action:'withdraw',id:created.data.id},'bob')).status,409);
+    const accepted=await f.post({action:'withdraw',id:created.data.id});
+    assert.equal(accepted.status,200);
+    assert.equal(accepted.data.ok,true);
+    const closed=f.db.prepare('SELECT author_id,status,closed_at FROM material_submissions WHERE id=?').get(created.data.id);
+    assert.equal(closed.author_id,'alice');
+    assert.equal(closed.status,'withdrawn');
+    assert.ok(closed.closed_at);
+    assert.equal((await f.post({action:'withdraw',id:created.data.id})).status,409);
   }finally{f.db.close();}
 });

@@ -20,8 +20,9 @@ function fixture() {
     data TEXT NOT NULL, visibility TEXT NOT NULL DEFAULT 'private',
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`);
-  let ack = "normal", afterOwnerRead = null;
+  let ack = "normal", afterOwnerRead = null, prepareFailure = null, deleteAck = "normal";
   const D1 = { prepare(sql) {
+    if (prepareFailure && sql.startsWith(prepareFailure)) throw Error("disposable D1 prepare failure");
     const statement = (...args) => ({
       async first() {
         const row = db.prepare(sql).get(...args) || null;
@@ -33,6 +34,12 @@ function fixture() {
       async all() { return { success: true, results: db.prepare(sql).all(...args) }; },
       async run() {
         const result = db.prepare(sql).run(...args);
+        if (sql.startsWith("DELETE FROM study_materials") && deleteAck !== "normal") {
+          const mode = deleteAck; deleteAck = "normal";
+          if (mode === "missing") return { success: true, meta: {} };
+          if (mode === "negative") return { success: true, meta: { changes: -1 } };
+          return { success: false, meta: { changes: Number(result.changes) } };
+        }
         if (sql.startsWith("INSERT INTO study_materials") && ack !== "normal") {
           const mode = ack; ack = "normal";
           if (mode === "missing") return { success: true, meta: {} };
@@ -77,7 +84,19 @@ function fixture() {
     const response = await exported.GET(request);
     return { status: response.status, body: await response.json() };
   }
-  return { db, post, get, setAck(mode) { ack = mode; }, afterOwnerRead(fn) { afterOwnerRead = fn; } };
+  async function remove(id = "draft", user = "alice") {
+    const request = new Request(base + "/api/materials?id=" + encodeURIComponent(id), {
+      method: "DELETE", headers: { origin: base, "x-user": user },
+    });
+    const response = await exported.DELETE(request);
+    return { status: response.status, body: await response.json() };
+  }
+  return { db, post, get, remove,
+    setAck(mode) { ack = mode; },
+    setDeleteAck(mode) { deleteAck = mode; },
+    setPrepareFailure(prefix) { prepareFailure = prefix; },
+    afterOwnerRead(fn) { afterOwnerRead = fn; },
+  };
 }
 
 test("saved material ACK represents a committed owner-conditional write", async () => {
@@ -140,5 +159,104 @@ test("legacy public material list redacts answer and explanation", async () => {
     assert.equal("answer" in data, false);
     assert.equal("explanation" in data, false);
     assert.deepEqual(data.options, ["first", "second"]);
+  } finally { f.db.close(); }
+});
+
+test("corrupt legacy public materials fail closed without leaking a partial list", async () => {
+  const f = fixture();
+  try {
+    const insert = f.db.prepare("INSERT INTO study_materials(id,owner_user_id,title,locale,data,visibility) VALUES (?,?,?,?,?,?)");
+    insert.run("good", "alice", "Valid public lesson", "uk", JSON.stringify(valid), "public");
+    insert.run("damaged", "alice", "Corrupted old lesson", "uk", "{broken JSON", "public");
+    const result = await f.get();
+    assert.equal(result.status, 503);
+    assert.equal(result.body.error, "materials_unavailable");
+    assert.equal("materials" in result.body, false, "no partially disclosed public list");
+  } finally { f.db.close(); }
+});
+
+test("corrupt private drafts fail closed rather than rejecting with an uncaught error", async () => {
+  const f = fixture();
+  try {
+    f.db.prepare("INSERT INTO study_materials(id,owner_user_id,title,locale,data,visibility) VALUES (?,?,?,?,?,?)")
+      .run("damaged", "alice", "Private corrupt draft", "en", "null", "private");
+    const result = await f.get(true, "alice");
+    assert.equal(result.status, 503);
+    assert.equal(result.body.error, "materials_unavailable");
+    assert.equal("materials" in result.body, false);
+  } finally { f.db.close(); }
+});
+
+test("unavailable D1 material query returns a controlled private 503, not a thrown 500", async () => {
+  const f = fixture();
+  f.db.close();
+  const result = await f.get(true, "alice");
+  assert.equal(result.status, 503);
+  assert.equal(result.body.error, "materials_unavailable");
+  assert.equal("materials" in result.body, false);
+});
+
+test("D1 prepare failure for public or private material list returns an uncacheable 503", async () => {
+  for (const mine of [false, true]) {
+    const f = fixture();
+    try {
+      f.setPrepareFailure("SELECT id,title,locale,data,visibility,updated_at");
+      const response = await f.get(mine, mine ? "alice" : "");
+      assert.equal(response.status, 503);
+      assert.equal(response.body.error, "materials_unavailable");
+      assert.equal("materials" in response.body, false);
+    } finally { f.db.close(); }
+  }
+});
+
+test("D1 ownership preflight failure never inserts a private draft or raises 500", async () => {
+  const f = fixture();
+  try {
+    f.setPrepareFailure("SELECT owner_user_id FROM study_materials");
+    const response = await f.post({ ...valid, id: "preflight-unavailable" });
+    assert.equal(response.status, 503);
+    assert.equal(response.body.error, "material_save_failed");
+    assert.equal(f.db.prepare("SELECT COUNT(*) AS total FROM study_materials").get().total, 0);
+  } finally { f.db.close(); }
+});
+
+test("a D1 delete prepare failure returns a stable error without losing a private draft", async () => {
+  const f = fixture();
+  try {
+    assert.equal((await f.post({ ...valid, id: "persisted-draft" })).status, 201);
+    f.setPrepareFailure("DELETE FROM study_materials");
+    const response = await f.remove("persisted-draft");
+    assert.equal(response.status, 503);
+    assert.equal(response.body.error, "delete_failed");
+    assert.equal(f.db.prepare("SELECT COUNT(*) AS total FROM study_materials").get().total, 1);
+  } finally { f.db.close(); }
+});
+
+test("missing, false, or invalid D1 delete receipts never claim success", async () => {
+  for (const ack of ["missing", "negative", "failed"]) {
+    const f = fixture();
+    try {
+      assert.equal((await f.post({ ...valid, id: "lost-delete-ack" })).status, 201);
+      f.setDeleteAck(ack);
+      const response = await f.remove("lost-delete-ack");
+      assert.equal(response.status, 503);
+      assert.equal(response.body.error, "delete_failed");
+      // The actual SQLite deletion may have committed even if the D1 ACK was lost.
+      assert.equal(f.db.prepare("SELECT COUNT(*) AS total FROM study_materials").get().total, 0);
+      assert.equal((await f.remove("lost-delete-ack")).status, 200,
+        "repeated delete after a failed ACK remains an idempotent no-op");
+    } finally { f.db.close(); }
+  }
+});
+
+test("delete preserves owner isolation and idempotence under a valid D1 receipt", async () => {
+  const f = fixture();
+  try {
+    assert.equal((await f.post({ ...valid, id: "owned-draft" })).status, 201);
+    assert.equal((await f.remove("owned-draft", "bob")).status, 200);
+    assert.equal(f.db.prepare("SELECT COUNT(*) AS total FROM study_materials").get().total, 1);
+    assert.equal((await f.remove("owned-draft", "alice")).status, 200);
+    assert.equal((await f.remove("owned-draft", "alice")).status, 200);
+    assert.equal(f.db.prepare("SELECT COUNT(*) AS total FROM study_materials").get().total, 0);
   } finally { f.db.close(); }
 });

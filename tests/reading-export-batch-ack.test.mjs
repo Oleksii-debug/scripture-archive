@@ -24,7 +24,7 @@ const standardRows = () => [
 
 function fixture({ results = standardRows(), dbPresent = true, identity = {
   userId: "reader-a", email: "reader-a@example.invalid", provider: "password",
-}, batchError = null } = {}) {
+}, batchError = null, authError = null } = {}) {
   const statements = [];
   let batches = 0, authentications = 0;
   const db = {
@@ -45,6 +45,7 @@ function fixture({ results = standardRows(), dbPresent = true, identity = {
       if (moduleName === "cloudflare:workers") return { env: { DB: dbPresent ? db : null } };
       if (moduleName === "../../../lib/auth") return { authenticateRequest: async () => {
         authentications++;
+        if (authError) throw authError;
         return identity;
       } };
       throw Error("Unexpected dependency " + moduleName);
@@ -150,6 +151,17 @@ test("missing D1 binding refuses before authentication or database reads", async
   assert.equal(body.error, "database_unavailable");
   assert.equal(f.authentications, 0);
   assert.equal(f.statements.length, 0);
+});
+test("identity storage failure returns private 503 without exposing errors or creating a download", async () => {
+  const f = fixture({ authError: Error("private session database detail") });
+  const { response, body } = await outcome(f);
+  assert.equal(response.status, 503);
+  assert.deepEqual(body, { error: "export_unavailable" });
+  assert.match(response.headers.get("cache-control"), /no-store, private/);
+  assert.equal(response.headers.get("content-disposition"), null);
+  assert.equal(f.authentications, 1);
+  assert.equal(f.statements.length, 0);
+  assert.equal(f.batches, 0);
 });
 test("unauthenticated and agent identities cannot access private export", async () => {
   for (const identity of [null, { userId: "agent", provider: "agent" }]) {

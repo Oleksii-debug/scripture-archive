@@ -5,16 +5,17 @@ import { readFileSync } from 'node:fs';
 // Run the actual canonical reader completion handler with bounded DOM/HTTP doubles.
 // This is a unit regression, not a claim of live-browser or D1 integration.
 const source = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
-const statement = source.split(/\r?\n/).find((line) =>
-  line.includes("document.querySelector('#mark-read').onclick="),
-);
-assert.ok(statement?.trim().endsWith(';'), 'canonical mark-read handler must exist');
+const markStart=source.indexOf("document.querySelector('#mark-read').onclick=async");
+const markEnd=source.indexOf("\n  document.querySelector('#start-questions')?.addEventListener",markStart);
+assert.ok(markStart>=0&&markEnd>markStart,'canonical mark-read handler must exist');
+const statement=source.slice(markStart,markEnd).trim();
+assert.ok(statement.endsWith(';'),'complete handler source is executable');
 const copy = {
-  uk: { retry: 'Повторити збереження', pending: 'Прочитане збережено на цьому пристрої, але сервер не підтвердив збереження. Повторіть спробу.' },
-  ru: { retry: 'Повторить сохранение', pending: 'Прочитанное сохранено на этом устройстве, но сервер не подтвердил сохранение. Повторите попытку.' },
-  en: { retry: 'Retry saving', pending: 'Your reading is saved on this device, but the server did not confirm the save. Please retry.' },
+  uk: { retry: 'Повторити збереження', pending: 'Прочитане збережено на цьому пристрої, але сервер не підтвердив збереження. Повторіть спробу.', unavailable:'Браузер заборонив зберегти прогрес на пристрої. Читати можна, але завершення не зараховане. Дозвольте збереження й повторіть спробу.' },
+  ru: { retry: 'Повторить сохранение', pending: 'Прочитанное сохранено на этом устройстве, но сервер не подтвердил сохранение. Повторите попытку.', unavailable:'Браузер запретил сохранять прогресс на устройстве. Читать можно, но завершение не засчитано. Разрешите сохранение и повторите попытку.' },
+  en: { retry: 'Retry saving', pending: 'Your reading is saved on this device, but the server did not confirm the save. Please retry.', unavailable:'Browser storage is unavailable. Reading remains available, but completion has not been saved. Enable storage and retry.' },
 };
-function scenario({ locale = 'uk', signedIn = true, cloud = [true], refuseAttempt = false, cloudGate = null, attemptGate = null, sharedStore = null, chapter = 1 } = {}) {
+function scenario({ locale = 'uk', signedIn = true, cloud = [true], refuseAttempt = false, cloudGate = null, attemptGate = null, sharedStore = null, chapter = 1, deniedStorage = false } = {}) {
   const button = { disabled: false, textContent: 'Mark', dataset: {}, attrs: {}, setAttribute(k,v) { this.attrs[k]=v; }, removeAttribute(k) { delete this.attrs[k]; } };
   const questions = { unlocked: false, removeAttribute(name) { assert.equal(name, 'disabled'); this.unlocked = true; } };
   const document = { querySelector: (selector) =>
@@ -23,12 +24,15 @@ function scenario({ locale = 'uk', signedIn = true, cloud = [true], refuseAttemp
   const history = store.has('sa.readingHistory') ? JSON.parse(store.get('sa.readingHistory')) : [];
   const meta = { code: 'GEN' }, alreadyRead = false;
   const state = { user: signedIn ? { id: 'person-1' } : null }, hasTasks = true, groupId = '';
+  const principal = state.user, readerStillCurrent = () => state.user === principal;
   const w = { readMarked: 'Read marked' }, bookTitle = () => 'Genesis';
   let saved = [], cloudCalls = 0, attemptCalls = 0;
   const cloudReadings = [];
   const localStorage = { setItem(key, json) {
+    if(deniedStorage)throw Error('SecurityError: local storage disabled');
     assert.equal(key, 'sa.readingHistory'); saved = JSON.parse(json); store.set(key,json);
   } };
+  const storeReaderPreference=(key,value)=>{try{localStorage.setItem(key,value);return true}catch{return false}};
   const loadJSON = (key, fallback) => {
     assert.equal(key, 'sa.readingHistory');
     try { return store.has(key) ? JSON.parse(store.get(key)) : fallback; }
@@ -50,16 +54,18 @@ function scenario({ locale = 'uk', signedIn = true, cloud = [true], refuseAttemp
   const t = key => ({
     readingSyncRetry: copy[locale].retry,
     readingSyncPending: copy[locale].pending,
+    readerStorageUnavailable: copy[locale].unavailable,
     errorLoad: 'Load failed',
   })[key];
-  const args = { document, history, loadJSON, meta, chapter, alreadyRead, state,
-    hasTasks, groupId, w, bookTitle, localStorage, accountRequest, attemptRequest, announce, t };
+  const args = { document, history, loadJSON, meta, chapter, alreadyRead, state, readerStillCurrent,
+    hasTasks, groupId, w, bookTitle, localStorage, storeReaderPreference, accountRequest, attemptRequest, announce, t };
   const init = new Function(...Object.keys(args),
     statement + '\nreturn document.querySelector("#mark-read").onclick;');
   const click = init(...Object.values(args));
   const nextButton = { disabled: false, textContent: 'Next chapter' };
   const nextQuestions = { unlocked: false, removeAttribute() { this.unlocked = true; } };
   return {
+    switchAccount() { state.user = { id: 'person-2' }; },
     navigateAway() {
       document.querySelector = selector => selector === '#mark-read' ? nextButton : selector === '#start-questions' ? nextQuestions : null;
     },
@@ -199,3 +205,81 @@ for (const locale of ['uk', 'ru', 'en']) {
     assert.deepEqual(reopened.initialHistory.map(row => row.chapter), [1, 2]);
   });
 }
+
+test('account replacement while reading save is pending cannot unlock the next user', async () => {
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const h = scenario({ cloud: [true], cloudGate: gate });
+  const pending = h.click();
+  assert.equal(h.cloudCalls, 1);
+  h.switchAccount();
+  release();
+  await pending;
+  assert.equal(h.attemptCalls, 0, 'no attempt receipt under the new session');
+  assert.equal(h.questions.unlocked, false);
+  assert.deepEqual(h.announcements, []);
+  assert.equal(h.button.disabled, false);
+  assert.equal(h.button.attrs['aria-busy'], undefined);
+});
+
+test('account replacement during attempt receipt cannot announce or unlock old read completion', async () => {
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const h = scenario({ cloud: [true], attemptGate: gate });
+  const pending = h.click();
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+  assert.equal(h.attemptCalls, 1);
+  h.switchAccount();
+  release();
+  await pending;
+  assert.equal(h.questions.unlocked, false);
+  assert.deepEqual(h.announcements, []);
+  assert.equal(h.button.disabled, false);
+  assert.equal(h.button.attrs['aria-busy'], undefined);
+});
+
+test('a retained old-account read-completion handler cannot initiate a new write', async () => {
+  const h = scenario();
+  h.switchAccount();
+  await h.click();
+  assert.equal(h.cloudCalls, 0);
+  assert.equal(h.attemptCalls, 0);
+  assert.deepEqual(h.saved, []);
+  assert.equal(h.button.dataset.saSaving, undefined);
+});
+
+for(const locale of ['uk','ru','en']){
+  test(locale + ' guest denied browser storage cannot falsely complete or unlock attempts',async()=>{
+    const h=scenario({locale,signedIn:false,deniedStorage:true});
+    await h.click();
+    assert.equal(h.cloudCalls,0);
+    assert.equal(h.attemptCalls,0);
+    assert.equal(h.button.disabled,false);
+    assert.equal(h.questions.unlocked,false);
+    assert.equal(h.button.textContent,copy[locale].retry);
+    assert.deepEqual(h.announcements,[copy[locale].unavailable]);
+    assert.equal(h.button.attrs['aria-busy'],undefined);
+    assert.deepEqual(h.saved,[]);
+    assert.ok(source.includes('readerStorageUnavailable: "'+copy[locale].unavailable+'"'));
+  });
+}
+test('authenticated server acknowledgement remains authoritative when local preference storage is blocked',async()=>{
+  const h=scenario({deniedStorage:true,cloud:[true]});
+  await h.click();
+  assert.equal(h.cloudCalls,1);
+  assert.equal(h.attemptCalls,1);
+  assert.equal(h.questions.unlocked,true);
+  assert.equal(h.button.disabled,true);
+  assert.deepEqual(h.announcements,['Read marked']);
+  assert.deepEqual(h.saved,[]);
+});
+test('server refusal and blocked storage cannot claim local or remote reading completion',async()=>{
+  const h=scenario({deniedStorage:true,cloud:[false]});
+  await h.click();
+  assert.equal(h.cloudCalls,1);
+  assert.equal(h.attemptCalls,0);
+  assert.equal(h.questions.unlocked,false);
+  assert.equal(h.button.disabled,false);
+  assert.deepEqual(h.announcements,[copy.uk.unavailable]);
+  assert.deepEqual(h.saved,[]);
+});

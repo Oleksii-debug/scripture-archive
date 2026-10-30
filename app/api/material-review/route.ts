@@ -81,7 +81,10 @@ export async function POST(request: Request) {
     return json(correct ? { correct, explanation: snapshot.data.explanation } : { correct });
     } catch { return json({ error: "materials_unavailable" }, 503); }
   }
-  const identity = await authenticateRequest(request);
+  // A failing session store is not evidence of an unauthenticated author.
+  let identity: Awaited<ReturnType<typeof authenticateRequest>>;
+  try { identity = await authenticateRequest(request); }
+  catch { return json({ error: "materials_unavailable" }, 503); }
   if (!identity || identity.provider === "agent") return json({ error: "authentication_required" }, 401);
   if (body.action === "submit") {
     const provenance = typeof body.provenance === "string" ? body.provenance.trim() : "";
@@ -111,8 +114,13 @@ export async function POST(request: Request) {
     if (!validId(body.id)) return json({ error: "invalid_submission" }, 400);
     try {
     const result = await env.DB.prepare("UPDATE material_submissions SET status='withdrawn',closed_at=CURRENT_TIMESTAMP WHERE id=? AND author_id=? AND status IN ('pending','approved')").bind(body.id, identity.userId).run();
-    if (!result.success) return json({ error: "withdraw_failed" }, 503);
-    return result.meta.changes ? json({ ok: true }) : json({ error: "not_found_or_closed" }, 409);
+    // An unconfirmed D1 UPDATE may already have committed; neither a missing
+    // receipt nor a malformed affected-row count can claim a successful
+    // withdrawal or a definitive not-found result.
+    const changes = result.meta?.changes;
+    if (!result.success || !Number.isSafeInteger(changes) || changes < 0 || changes > 1)
+      return json({ error: "withdraw_failed" }, 503);
+    return changes === 1 ? json({ ok: true }) : json({ error: "not_found_or_closed" }, 409);
     } catch { return json({ error: "withdraw_failed" }, 503); }
   }
   if (body.action === "review") {
@@ -130,8 +138,14 @@ export async function POST(request: Request) {
         env.DB.prepare("UPDATE material_submissions SET status=?,reviewed_at=CURRENT_TIMESTAMP,reviewed_by=?,review_note=?,source_checked=?,rights_checked=? WHERE id=? AND status='pending' AND author_id<>? AND (?=1 OR EXISTS (SELECT 1 FROM editorial_roles r JOIN accounts a ON a.id=r.user_id WHERE r.user_id=? AND a.deleted_at IS NULL AND a.email_verified_at IS NOT NULL))")
           .bind(body.decision === "approve" ? "approved" : "rejected", identity.userId, note, body.sourceChecked === true ? 1 : 0, body.rightsChecked === true ? 1 : 0, body.id, identity.userId, owner(identity) ? 1 : 0, identity.userId),
       ]);
-      if (results.some(result => !result.success)) return json({ error: "review_failed" }, 503);
-      if (results[1].meta.changes) return json({ ok: true });
+      // D1 can commit a batch but lose its mutation receipt. A missing or
+      // impossible changes count is unknown, never an approved/rejected ACK or
+      // a fabricated "not found" response. The author can inspect history.
+      if (!Array.isArray(results) || results.length !== 2 ||
+        results.some(result => !result?.success ||
+          !Number.isSafeInteger(result.meta?.changes) || result.meta.changes < 0) ||
+        results[1].meta.changes > 1) return json({ error: "review_failed" }, 503);
+      if (results[1].meta.changes === 1) return json({ ok: true });
       // The write predicates remain authoritative even if this explanatory read races.
       const own = await env.DB.prepare("SELECT id FROM material_submissions WHERE id=? AND status='pending' AND author_id=?")
         .bind(body.id, identity.userId).first<{id:string}>();

@@ -52,6 +52,7 @@ test("changing language restores native picker focus only when user has not move
     runInNewContext(source, {
       langSelect, main, document: doc, state,
       localStorage: { setItem(key, value) { saved.push([key, value]); } },
+      storeReaderPreference(key, value) { saved.push([key, value]); return true; },
       setStaticI18n() { translated++; }, play() {},
       route() { doc.activeElement = main; return Promise.resolve(); },
     });
@@ -71,7 +72,8 @@ test("changing language restores native picker focus only when user has not move
   const doc = { activeElement: langSelect, contains() { return true; } };
   runInNewContext(source, {
     langSelect, main, document: doc, state: {},
-    localStorage: { setItem() {} }, setStaticI18n() {}, play() {},
+    localStorage: { setItem() {} }, storeReaderPreference() { return true; },
+    setStaticI18n() {}, play() {},
     route() { doc.activeElement = main; return Promise.resolve().then(() => { doc.activeElement = other; }); },
   });
   onChange();

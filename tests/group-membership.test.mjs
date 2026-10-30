@@ -15,18 +15,23 @@ function fixture() {
   db.exec(`INSERT INTO home_groups(id,owner_user_id,name,invite_code,visibility,bible_edition) VALUES('g','alice','Group','AABBCCDD','private','en-web'),('other','alice','Other','other','private','en-web');
     INSERT INTO home_group_members(group_id,user_id,display_name,role) VALUES('g','alice','Alice','owner'),('g','bob','Bob','member'),('g','carol','Carol','facilitator'),('other','alice','Alice','owner');
     INSERT INTO group_sessions(id,group_id,created_by,book_id,chapter,meeting_date,reflection) VALUES('s','g','alice','GEN',12,'2026-10-28','private discussion');`);
-  let failure=-1, beforeBatch=null, beforeRun=null;
+  let failure=-1, beforeBatch=null, beforeRun=null, corruptCreateReceipt=null, corruptSingleReceipt=null, failAll=false, throwAll=false;
   function statement(sql,args=[]) {return {sql,args,
     first:async()=>db.prepare(sql).get(...args)??null,
-    all:async()=>({success:true,results:db.prepare(sql).all(...args)}),
-    run:async()=>{if(beforeRun){const hook=beforeRun;beforeRun=null;hook();}return {success:true,meta:{changes:Number(db.prepare(sql).run(...args).changes)}};},
+    all:async()=>{if(throwAll)throw Error('D1 read unavailable');return failAll?{success:false,results:[]}:{success:true,results:db.prepare(sql).all(...args)};},
+    run:async()=>{if(beforeRun){const hook=beforeRun;beforeRun=null;hook();}const changes=Number(db.prepare(sql).run(...args).changes);const mode=corruptSingleReceipt;corruptSingleReceipt=null;if(mode==='missing')return {success:true,meta:{}};if(mode==='failed')return {success:false,meta:{changes}};return {success:true,meta:{changes}};},
   };}
   const D1={prepare(sql){return {...statement(sql),bind:(...args)=>statement(sql,args)};},async batch(statements){
     if(beforeBatch){const hook=beforeBatch;beforeBatch=null;hook();}
     db.exec('BEGIN');try{const out=[];for(const [i,s] of statements.entries()) {
       if(i===failure)throw Error('injected storage outage');
       const r=db.prepare(s.sql).run(...s.args);out.push({success:true,meta:{changes:Number(r.changes)}});
-    }db.exec('COMMIT');return out;}catch(e){db.exec('ROLLBACK');throw e;}
+    }db.exec('COMMIT');
+    const mode=corruptCreateReceipt;corruptCreateReceipt=null;
+    if(mode==='missing-first')out[0]={...out[0],meta:{}};
+    if(mode==='failed-second')out[1]={...out[1],success:false};
+    if(mode==='truncated')out.pop();
+    return out;}catch(e){db.exec('ROLLBACK');throw e;}
   }};
   function loadRoute(name) {
     const source=readFileSync(new URL(`../app/api/${name}/route.ts`,import.meta.url),'utf8');
@@ -42,12 +47,13 @@ function fixture() {
   const exports=loadRoute('groups'),attempts=loadRoute('attempts');
   async function attempt(action,body={},user='carol') {const r=await attempts.POST(new Request('https://local.invalid/api/attempts?action='+action,{method:'POST',headers:{origin:'https://local.invalid','content-type':'application/json','x-user':user},body:JSON.stringify({missionId:'OT-AB-01',book:'GEN',chapter:12,groupId:'g',locale:'en',...body})}));return {status:r.status,data:await r.json()};}
   async function get(user='alice',groupId='g'){const r=await exports.GET(new Request('https://local.invalid/api/groups?groupId='+groupId,{headers:user?{'x-user':user}:{}}));return {status:r.status,data:await r.json()};}
+  async function list(user='',mine=false){const r=await exports.GET(new Request('https://local.invalid/api/groups'+(mine?'?mine=1':''),{headers:user?{'x-user':user}:{}}));return {status:r.status,data:await r.json()};}
   async function post(action,body={},user='alice',origin='https://local.invalid') {const r=await exports.POST(new Request('https://local.invalid/api/groups?action='+action,{method:'POST',headers:{origin,'content-type':'application/json',...(user?{'x-user':user}:{})},body:JSON.stringify({groupId:'g',...body})}));return {status:r.status,data:await r.json()};}
   function seedAttempt(id,user,group,status='active') {
     db.prepare("INSERT INTO mission_attempts(id,actor_id,mission_id,book_id,chapter,group_id,locale,task_limit,status,expires_at) VALUES(?,?,'OT-AB-01','GEN',12,?,'en',5,?,datetime('now','+2 hours'))").run(id,user,group,status);
     db.prepare("INSERT INTO chapter_read_receipts(id,actor_id,book_id,chapter,group_id) VALUES(?,?,'GEN',12,?)").run(id,user,group);
   }
-  return {db,get,post,attempt,seedAttempt,beforeRun:fn=>{beforeRun=fn;},setFailure:n=>{failure=n;},beforeBatch:fn=>{beforeBatch=fn;}};
+  return {db,get,list,post,attempt,seedAttempt,beforeRun:fn=>{beforeRun=fn;},setFailure:n=>{failure=n;},beforeBatch:fn=>{beforeBatch=fn;},setCreateReceiptMode:mode=>{corruptCreateReceipt=mode;},setSingleReceiptMode:mode=>{corruptSingleReceipt=mode;},setReadFailure:v=>{failAll=v;},setReadThrow:v=>{throwAll=v;}};
 }
 const owner=f=>f.db.prepare("SELECT owner_user_id FROM home_groups WHERE id='g'").get().owner_user_id;
 const roles=f=>f.db.prepare("SELECT user_id,role FROM home_group_members WHERE group_id='g' ORDER BY user_id").all().map(x=>[x.user_id,x.role]);
@@ -239,4 +245,180 @@ test('a former owner cannot start a marathon after ownership changed during the 
     assert.equal(f.db.prepare("SELECT status FROM group_marathon_registrations WHERE id='m'").get().status,'ready');
     assert.equal((await f.post('start',{},'bob')).status,200);
   } finally {f.db.close();}
+});
+
+test('group create only acknowledges complete D1 group/owner/cohort mutation receipts',async()=>{
+  const payload={name:'A new real group',weeklyGoal:3,catchupMode:'flexible',visibility:'private',rosterVisibility:'private',bibleEdition:'en-web'};
+  for(const mode of ['missing-first','failed-second','truncated']){
+    const f=fixture();
+    try{
+      const before=f.db.prepare('SELECT count(*) n FROM home_groups').get().n;
+      f.setCreateReceiptMode(mode);
+      const result=await f.post('create',payload);
+      assert.equal(result.status,503,mode);
+      assert.equal(result.data.error,'group_creation_unconfirmed');
+      assert.equal(result.data.ok,undefined,'no fabricated 201');
+      // Simulated D1 committed but discarded the receipt; a 503 MUST NOT
+      // be represented as a durable rollback or encourage blind recreation.
+      assert.equal(f.db.prepare('SELECT count(*) n FROM home_groups').get().n,before+1);
+      const recovered=await f.get('alice',f.db.prepare("SELECT id FROM home_groups WHERE name=?").get(payload.name).id);
+      assert.equal(recovered.status,200,'canonical group readback can recover uncertain creations');
+    }finally{f.db.close();}
+  }
+});
+
+test('group create clean failure is controlled and a successful owner group really exists',async()=>{
+  const payload={name:'Canonical group creation',weeklyGoal:3,catchupMode:'steady',visibility:'private',rosterVisibility:'count'};
+  const failed=fixture();try{
+    failed.setFailure(1);
+    const bad=await failed.post('create',payload);
+    assert.equal(bad.status,503);
+    assert.equal(bad.data.error,'group_creation_unconfirmed');
+    assert.equal(failed.db.prepare("SELECT count(*) n FROM home_groups WHERE name=?").get(payload.name).n,0,'atomic batch rollback');
+  }finally{failed.db.close();}
+  const good=fixture();try{
+    const ok=await good.post('create',payload);
+    assert.equal(ok.status,201);
+    assert.equal(ok.data.ok,true);
+    const row=good.db.prepare("SELECT owner_user_id FROM home_groups WHERE id=?").get(ok.data.groupId);
+    assert.equal(row.owner_user_id,'alice');
+    assert.equal(good.db.prepare("SELECT role FROM home_group_members WHERE group_id=? AND user_id='alice'").get(ok.data.groupId).role,'owner');
+  }finally{good.db.close();}
+});
+
+test('missing D1 batch receipt cannot falsely acknowledge role, transfer, leave, delete or session',async()=>{
+  for(const scenario of ['role','transfer','leave','delete','session']){
+    const f=fixture();
+    try{
+      f.setCreateReceiptMode('missing-first');
+      let result;
+      if(scenario==='role')result=await f.post('role',{targetUserId:'bob',role:'facilitator',expectedRole:'member'});
+      if(scenario==='transfer')result=await f.post('transfer',{targetUserId:'bob'});
+      if(scenario==='leave')result=await f.post('leave',{},'bob');
+      if(scenario==='delete')result=await f.post('delete',{confirm:true});
+      if(scenario==='session')result=await f.post('session',{bookId:'GEN',chapter:12,answersCorrect:0,answersTotal:0,meetingDate:'2026-10-28'},'carol');
+      assert.equal(result.status,503,scenario+' must not claim success after losing a batch receipt');
+      assert.equal(result.data.error,'database_unavailable',scenario);
+      // The SQLite transaction committed before receipt corruption, so the
+      // next user action must re-read actual state instead of assuming rollback.
+      if(scenario==='role')assert.equal(f.db.prepare("SELECT role FROM home_group_members WHERE group_id='g' AND user_id='bob'").get().role,'facilitator');
+      if(scenario==='transfer')assert.equal(owner(f),'bob');
+      if(scenario==='leave')assert.equal((await f.get('bob')).status,404);
+      if(scenario==='delete')assert.equal(f.db.prepare("SELECT count(*) n FROM home_groups WHERE id='g'").get().n,0);
+      if(scenario==='session')assert.equal(f.db.prepare("SELECT count(*) n FROM group_sessions WHERE group_id='g'").get().n,2);
+    }finally{f.db.close();}
+  }
+});
+
+test('single-write group invite rotation and marathon start also reject missing D1 ACK',async()=>{
+  const rotate=fixture();try{
+    rotate.setSingleReceiptMode('missing');
+    const response=await rotate.post('rotate-invite',{expectedInviteCode:'AABBCCDD',confirm:true});
+    assert.equal(response.status,503);
+    assert.equal(response.data.error,'database_unavailable');
+    assert.notEqual(rotate.db.prepare("SELECT invite_code FROM home_groups WHERE id='g'").get().invite_code,'AABBCCDD');
+  }finally{rotate.db.close();}
+  const start=fixture();try{
+    start.db.prepare("INSERT INTO group_marathon_registrations(id,group_id,weekly_goal,catchup_mode,cohort_key,status) VALUES('ready','g',3,'flexible','new-cohort','ready')").run();
+    start.setSingleReceiptMode('missing');
+    const response=await start.post('start');
+    assert.equal(response.status,503);
+    assert.equal(response.data.error,'database_unavailable');
+    assert.equal(start.db.prepare("SELECT status FROM group_marathon_registrations WHERE id='ready'").get().status,'active');
+  }finally{start.db.close();}
+});
+
+test('joining with a missing or failed D1 ACK never claims membership success',async()=>{
+  for(const receiptMode of ['missing','failed']){
+    const f=fixture();
+    try{
+      f.setSingleReceiptMode(receiptMode);
+      const result=await f.post('join',{inviteCode:'AABBCCDD'},'outsider');
+      assert.equal(result.status,503,receiptMode);
+      assert.equal(result.data.error,'database_unavailable');
+      // SQLite committed before the fabricated D1 receipt was damaged:
+      // the client must query group state and retry idempotently.
+      assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM home_group_members WHERE group_id='g' AND user_id='outsider'").get().n,1);
+      const retry=await f.post('join',{inviteCode:'AABBCCDD'},'outsider');
+      assert.equal(retry.status,200,'existing membership is a valid zero-change retry');
+      assert.equal((await f.get('outsider')).status,200);
+      assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM home_group_members WHERE group_id='g' AND user_id='outsider'").get().n,1);
+    }finally{f.db.close();}
+  }
+});
+
+test('joining on a D1 write exception fails closed without creating membership',async()=>{
+  const f=fixture();
+  try{
+    f.beforeRun(()=>{throw Error('unavailable D1 during join');});
+    const failed=await f.post('join',{inviteCode:'AABBCCDD'},'outsider');
+    assert.equal(failed.status,503);
+    assert.equal(failed.data.error,'database_unavailable');
+    assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM home_group_members WHERE group_id='g' AND user_id='outsider'").get().n,0);
+    assert.equal((await f.post('join',{inviteCode:'AABBCCDD'},'outsider')).status,200);
+    assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM home_group_members WHERE group_id='g' AND user_id='outsider'").get().n,1);
+  }finally{f.db.close();}
+});
+
+test('group creation and marathon cohort transition are one atomic D1 transaction',async()=>{
+  const f=fixture();try {
+    f.db.prepare("INSERT INTO group_marathon_registrations(id,group_id,weekly_goal,catchup_mode,cohort_key,status) VALUES('existing','g',3,'flexible','shared','forming')").run();
+    const payload={name:'Cohort group',weeklyGoal:3,catchupMode:'flexible',visibility:'private',rosterVisibility:'count',bibleEdition:'en-web',marathonEnabled:true};
+    const before=f.db.prepare("SELECT COUNT(*) AS n FROM home_groups").get().n;
+    // The final statement is the cohort promotion; a D1 failure must roll back
+    // the group and membership, not leave a group without its planned cohort.
+    f.setFailure(3);
+    const failed=await f.post('create',payload);
+    assert.equal(failed.status,503);assert.equal(failed.data.error,'group_creation_unconfirmed');
+    assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM home_groups").get().n,before);
+    assert.equal(f.db.prepare("SELECT status FROM group_marathon_registrations WHERE id='existing'").get().status,'forming');
+    f.setFailure(-1);
+    const success=await f.post('create',payload);
+    assert.equal(success.status,201);assert.equal(success.data.cohortStatus,'ready');
+    assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM group_marathon_registrations WHERE cohort_key='shared' AND status='ready'").get().n,2);
+  }finally{f.db.close();}
+});
+
+test('all private group roster/session read errors return a controlled private 503 without partial member disclosure',async()=>{
+  for(const cause of ['failed','throw']){
+    const f=fixture();
+    try{
+      if(cause==='failed')f.setReadFailure(true);else f.setReadThrow(true);
+      const response=await f.get('alice','g');
+      assert.equal(response.status,503,cause);
+      assert.equal(response.data.error,'groups_unavailable');
+      assert.equal(response.data.members,undefined);
+      assert.equal(response.data.managementMembers,undefined);
+      assert.equal(response.data.sessions,undefined);
+      assert.equal(response.data.group,undefined);
+    }finally{f.db.close();}
+  }
+});
+
+test('failed public and private group list reads cannot masquerade as empty',async()=>{
+  for(const cause of ['failed','throw']){
+    const f=fixture();
+    try{
+      f.db.exec("UPDATE home_groups SET visibility='public' WHERE id='g'");
+      assert.equal((await f.list('')).status,200);
+      assert.equal((await f.list('alice',true)).status,200);
+      if(cause==='failed')f.setReadFailure(true);else f.setReadThrow(true);
+      const publicView=await f.list('');
+      const ownView=await f.list('alice',true);
+      for(const response of [publicView,ownView]){
+        assert.equal(response.status,503,cause);
+        assert.equal(response.data.error,'groups_unavailable');
+        assert.equal(response.data.groups,undefined);
+      }
+    }finally{f.db.close();}
+  }
+});
+
+test('empty but successful group list preserves truthful 200 rather than a spurious outage',async()=>{
+  const f=fixture();
+  try{
+    const response=await f.list('');
+    assert.equal(response.status,200);
+    assert.deepEqual(response.data.groups,[]);
+  }finally{f.db.close();}
 });

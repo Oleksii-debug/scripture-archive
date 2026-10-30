@@ -5,7 +5,12 @@ const clean = (v: unknown, max: number) => typeof v === "string" ? v.trim().slic
 
 export async function GET(request: Request) {
   if (!env.DB) return Response.json({ error: "database_unavailable" }, { status: 503, headers: { "Cache-Control": "no-store" } });
-  const identity = await authenticateRequest(request), userId = identity?.userId;
+  let identity: Awaited<ReturnType<typeof authenticateRequest>>;
+  try { identity = await authenticateRequest(request); }
+  catch {
+    return Response.json({ error: "materials_unavailable" }, { status: 503, headers: { "Cache-Control": "no-store, private" } });
+  }
+  const userId = identity?.userId;
   const url = new URL(request.url), mine = url.searchParams.get("mine") === "1";
   if (mine && !userId) return Response.json({ error: "authentication_required" }, { status: 401 });
   if (url.searchParams.get("export") === "1") {
@@ -21,26 +26,40 @@ export async function GET(request: Request) {
       return new Response(JSON.stringify({ format: "scripture-archive-materials-export", version: 1, exportedAt: new Date().toISOString(), materials: items, submissions: history }, null, 2), { headers: { "Content-Type": "application/json; charset=utf-8", "Content-Disposition": 'attachment; filename="scripture-archive-materials.json"', "Cache-Control": "no-store, private", "X-Content-Type-Options": "nosniff" } });
     } catch { return Response.json({ error: "export_unavailable" }, { status: 503, headers: { "Cache-Control": "no-store, private" } }); }
   }
-  const query = mine
-    ? env.DB!.prepare("SELECT id,title,locale,data,visibility,updated_at FROM study_materials WHERE owner_user_id=? ORDER BY updated_at DESC LIMIT 100").bind(userId)
-    : env.DB!.prepare("SELECT id,title,locale,data,visibility,updated_at FROM study_materials WHERE visibility='public' ORDER BY updated_at DESC LIMIT 100");
-  const result = await query.all<{ id: string; data: string }>();
-  if (!result.success || !Array.isArray(result.results)) return Response.json({ error: "materials_unavailable" }, { status: 503, headers: { "Cache-Control": "no-store, private" } });
-  const rows = result.results;
-  return Response.json({ materials: rows.map(row => {
-    const data = JSON.parse(row.data);
-    if (mine) return { ...row, data };
-    // Older owner-published rows remain visible, but cannot reveal answers.
-    const { answer: _answer, explanation: _explanation, ...publicData } = data;
-    void _answer; void _explanation;
-    return { ...row, data: publicData };
-  }) }, { headers: { "Cache-Control": "no-store" } });
+  // Corrupt legacy JSON, D1 prepare/bind/read errors and invalid receipts
+  // fail closed before any private or public study-material data is returned.
+  try {
+    const query = mine
+      ? env.DB!.prepare("SELECT id,title,locale,data,visibility,updated_at FROM study_materials WHERE owner_user_id=? ORDER BY updated_at DESC LIMIT 100").bind(userId)
+      : env.DB!.prepare("SELECT id,title,locale,data,visibility,updated_at FROM study_materials WHERE visibility='public' ORDER BY updated_at DESC LIMIT 100");
+    const result = await query.all<{ id: string; data: string }>();
+    if (!result.success || !Array.isArray(result.results)) throw Error("materials read failed");
+    const materials = result.results.map(row => {
+      const data: unknown = JSON.parse(row.data);
+      if (!data || typeof data !== "object" || Array.isArray(data))
+        throw Error("invalid material payload");
+      if (mine) return { ...row, data };
+      // Older owner-published rows remain visible, but cannot reveal answers.
+      const { answer: _answer, explanation: _explanation, ...publicData } = data as Record<string, unknown>;
+      void _answer; void _explanation;
+      return { ...row, data: publicData };
+    });
+    return Response.json({ materials }, { headers: { "Cache-Control": "no-store" } });
+  } catch {
+    return Response.json({ error: "materials_unavailable" }, { status: 503, headers: { "Cache-Control": "no-store, private" } });
+  }
 }
 
 export async function POST(request: Request) {
-  if (!env.DB) return Response.json({ error: "database_unavailable" }, { status: 503 });
+  // Reject cross-origin mutations before consulting the session or storage.
   if (!sameOrigin(request)) return Response.json({ error: "cross_origin_request" }, { status: 403 });
-  const identity = await authenticateRequest(request), userId = identity?.userId;
+  if (!env.DB) return Response.json({ error: "database_unavailable" }, { status: 503 });
+  let identity: Awaited<ReturnType<typeof authenticateRequest>>;
+  try { identity = await authenticateRequest(request); }
+  catch {
+    return Response.json({ error: "materials_unavailable" }, { status: 503, headers: { "Cache-Control": "no-store, private" } });
+  }
+  const userId = identity?.userId;
   if (!userId) return Response.json({ error: "authentication_required" }, { status: 401 });
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   if (!body) return Response.json({ error: "invalid_json" }, { status: 400 });
@@ -58,7 +77,14 @@ export async function POST(request: Request) {
   }
   const visibility = "private";
   const id = clean(body.id, 80) || crypto.randomUUID();
-  const existing = await env.DB!.prepare("SELECT owner_user_id FROM study_materials WHERE id=?").bind(id).first<{ owner_user_id: string }>();
+  // The preflight is not authoritative for ownership (the UPSERT still checks
+  // it atomically), but a failed D1 read must never escape as an uncaught 500.
+  let existing: { owner_user_id: string } | null;
+  try {
+    existing = await env.DB!.prepare("SELECT owner_user_id FROM study_materials WHERE id=?").bind(id).first<{ owner_user_id: string }>();
+  } catch {
+    return Response.json({ error: "material_save_failed" }, { status: 503, headers: { "Cache-Control": "no-store, private" } });
+  }
   if (existing && existing.owner_user_id !== userId) return Response.json({ error: "forbidden" }, { status: 403 });
   const data = JSON.stringify({ prompt, reference, explanation, answer, options });
   // The owner constraint must be enforced by the write itself: another user can
@@ -79,13 +105,29 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  if (!env.DB) return Response.json({ error: "database_unavailable" }, { status: 503 });
+  // Reject cross-origin mutations before consulting the session or storage.
   if (!sameOrigin(request)) return Response.json({ error: "cross_origin_request" }, { status: 403 });
-  const identity = await authenticateRequest(request), userId = identity?.userId;
+  if (!env.DB) return Response.json({ error: "database_unavailable" }, { status: 503 });
+  let identity: Awaited<ReturnType<typeof authenticateRequest>>;
+  try { identity = await authenticateRequest(request); }
+  catch {
+    return Response.json({ error: "materials_unavailable" }, { status: 503, headers: { "Cache-Control": "no-store, private" } });
+  }
+  const userId = identity?.userId;
   if (!userId) return Response.json({ error: "authentication_required" }, { status: 401 });
   const id = new URL(request.url).searchParams.get("id") || "";
   if (!id || id.length > 80) return Response.json({ error: "invalid_material" }, { status: 400 });
-  const result = await env.DB.prepare("DELETE FROM study_materials WHERE id=? AND owner_user_id=?").bind(id, userId).run();
-  if (!result.success) return Response.json({ error: "delete_failed" }, { status: 503 });
-  return Response.json({ ok: true });
+  try {
+    const result = await env.DB.prepare("DELETE FROM study_materials WHERE id=? AND owner_user_id=?").bind(id, userId).run();
+    const changes = Number(result.meta?.changes);
+    // A successful-looking D1 reply without an authoritative write receipt
+    // cannot claim deletion, including when the service lost its ACK.
+    if (!result.success || !Number.isSafeInteger(changes) || changes < 0)
+      return Response.json({ error: "delete_failed" }, { status: 503, headers: { "Cache-Control": "no-store, private" } });
+    // Zero affected rows is an idempotent no-op: do not disclose whether a
+    // private draft exists or belongs to another user.
+    return Response.json({ ok: true });
+  } catch {
+    return Response.json({ error: "delete_failed" }, { status: 503, headers: { "Cache-Control": "no-store, private" } });
+  }
 }

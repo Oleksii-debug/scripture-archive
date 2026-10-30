@@ -3,7 +3,7 @@ const COPY = {
   ru: { title:'Сравнить издания', choose:'Второе издание', open:'Показать вторую версию главы', loading:'Загрузка…', ready:'Вторая версия главы загружена ниже.', fail:'Не удалось загрузить вторую версию. Попробуйте ещё раз.', unavailable:'В этом издании такой главы нет.', note:'Нумерация стихов в изданиях может отличаться. Тексты приведены отдельно.', source:'Источник', license:'Условия использования' },
   en: { title:'Compare editions', choose:'Second edition', open:'Show the second chapter text', loading:'Loading…', ready:'The second chapter text is available below.', fail:'Could not load the second text. Please try again.', unavailable:'This chapter is not available in that edition.', note:'Verse numbering may differ between editions. The texts are presented separately.', source:'Source', license:'Terms of use' },
 };
-const https = value => { try { const url = new URL(value); return url.protocol === 'https:' ? url.href : ''; } catch { return ''; } };
+const https = value => { try { const url = new URL(value); return url.protocol === 'https:' && !url.username && !url.password ? url.href : ''; } catch { return ''; } };
 
 export function parallelControls(editions, lang, esc) {
   const copy = COPY[lang] || COPY.uk;
@@ -42,8 +42,15 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
       // Never attribute a new/unrecognized local edition to the primary one.
       const fallback=catalog.editions?.[lang];
       const metadata=catalog.translations?.[edition.id] || (edition.contentId && fallback?.id === edition.contentId ? fallback : null);
-      if (!metadata || typeof metadata.title!=='string') throw Error('missing edition metadata');
-      const source=https(metadata.source), license=https(metadata.licenseUrl);
+      // Keep a comparison inaccessible if its own source or terms are missing.
+      // Never borrow rights metadata from another Bible edition.
+      const source=typeof metadata?.source==='string'?https(metadata.source):'';
+      const license=typeof metadata?.licenseUrl==='string'?https(metadata.licenseUrl):'';
+      if (!metadata || typeof metadata.title!=='string' || !metadata.title.trim()
+          || typeof metadata.license!=='string' || !metadata.license.trim()
+          || !source || (metadata.licenseUrl!=null && !license)) {
+        throw Error('missing or unsafe edition provenance');
+      }
       result.innerHTML=`<section aria-labelledby="parallel-title"><h3 id="parallel-title">${esc(metadata.title)} — ${esc(bookTitle)} ${chapter}</h3><p>${copy.note}</p><p>${copy.license}: ${esc(metadata.license || '—')}</p>${metadata.attribution?`<p>${esc(metadata.attribution)}</p>`:''}${source?`<p><a href="${esc(source)}" target="_blank" rel="noreferrer">${copy.source}</a></p>`:''}${license?`<p><a href="${esc(license)}" target="_blank" rel="noreferrer">${copy.license}</a></p>`:''}<ol>${verses.map(verse=>`<li>${esc(verse)}</li>`).join('')}</ol></section>`;
       status.textContent=copy.ready;
     } catch { if (panel.isConnected && current()) status.textContent=copy.fail; }

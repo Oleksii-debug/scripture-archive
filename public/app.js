@@ -2,7 +2,7 @@ import { parallelControls, mountParallelReader } from './parallel-reader.js';
 import {renderWorkspace, workspaceCopy, groupManagementCopy, groupManagementMarkup} from './workspace.js';
 import {supportSection} from './support.js';
 import {homePage} from './home.js';
-import {EDITIONS, editionCopy, selectedEdition, editionUrl, editionSelect} from './editions.js';
+import {EDITIONS, editionCopy, selectedEdition, editionUrl, editionSelect, setEditionForTab} from './editions.js';
 
 const I18N = {
   uk: {
@@ -132,6 +132,7 @@ const I18N = {
     retryLoad: "Повторити спробу",
     readingSyncPending: "Прочитане збережено на цьому пристрої, але сервер не підтвердив збереження. Повторіть спробу.",
     readingSyncRetry: "Повторити збереження",
+    readerStorageUnavailable: "Браузер заборонив зберегти прогрес на пристрої. Читати можна, але завершення не зараховане. Дозвольте збереження й повторіть спробу.",
     readerMissionUnavailable: "Завдання тимчасово недоступні. Читання та пошук доступні.",
   },
   ru: {
@@ -261,6 +262,7 @@ const I18N = {
     retryLoad: "Повторить попытку",
     readingSyncPending: "Прочитанное сохранено на этом устройстве, но сервер не подтвердил сохранение. Повторите попытку.",
     readingSyncRetry: "Повторить сохранение",
+    readerStorageUnavailable: "Браузер запретил сохранять прогресс на устройстве. Читать можно, но завершение не засчитано. Разрешите сохранение и повторите попытку.",
     readerMissionUnavailable: "Задания временно недоступны. Чтение и поиск доступны.",
   },
   en: {
@@ -390,6 +392,7 @@ const I18N = {
     retryLoad: "Try again",
     readingSyncPending: "Your reading is saved on this device, but the server did not confirm the save. Please retry.",
     readingSyncRetry: "Retry saving",
+    readerStorageUnavailable: "Browser storage is unavailable. Reading remains available, but completion has not been saved. Enable storage and retry.",
     readerMissionUnavailable: "Exercises are temporarily unavailable. Reading and search are still available.",
   },
 };
@@ -1942,12 +1945,37 @@ const LIVE = new Set([
   "E15",
   "E18",
 ]);
+function storedPreference(key) {
+  try { return localStorage.getItem(key); }
+  catch { return null; }
+}
+function storeReaderPreference(key, value) {
+  try { localStorage.setItem(key, value); return true; }
+  catch { return false; }
+}
+const transientEditionStorageDenied = new Set();
+const EDITION_TRANSIENT_MESSAGES = {
+  uk: "Браузер заборонив збереження: вибір перекладу діє лише в цій вкладці.",
+  ru: "Браузер запретил сохранение: выбор перевода действует только в этой вкладке.",
+  en: "Browser storage is unavailable: your edition selection lasts only in this tab.",
+};
+const SPELLING_TRANSIENT_MESSAGES = Object.freeze({
+  uk: "Правопис змінено лише в цій вкладці: браузер заборонив збереження налаштувань.",
+  ru: "Правописание изменено только в этой вкладке: браузер запретил сохранение настроек.",
+  en: "Spelling changed only in this tab because browser storage is unavailable.",
+});
+const LANGUAGE_TRANSIENT_MESSAGES = {
+  uk: "Мову змінено лише в цій вкладці: браузер заборонив збереження налаштувань.",
+  ru: "Язык изменён только в этой вкладке: браузер запретил сохранение настроек.",
+  en: "Language changed only for this tab because browser storage is unavailable.",
+};
 const requestedLang = new URLSearchParams(location.search).get("lang");
+const savedLang = storedPreference("sa.lang");
 const state = {
   lang: ["uk", "ru", "en"].includes(requestedLang)
     ? requestedLang
-    : localStorage.getItem("sa.lang") || "uk",
-  ukOriginal: localStorage.getItem("sa.ukSpelling") === "original",
+    : ["uk", "ru", "en"].includes(savedLang) ? savedLang : "uk",
+  ukOriginal: storedPreference("sa.ukSpelling") === "original",
   catalog: null,
   cms: null,
   user: null,
@@ -2231,15 +2259,28 @@ async function getCMS() {
   return state.cms;
 }
 async function getSession() {
+  let authenticatedUser;
   try {
-    const response = await fetch("/api/account?action=me", {
-        cache: "no-store",
-      }),
-      data = await response.json();
-    state.user = response.ok ? data.user : null;
+    const response = await fetch("/api/account?action=me", { cache: "no-store" });
+    // Only a validated 200 user:null is evidence that the account signed out.
+    // A D1 outage, bad JSON or incomplete envelope must not erase local work.
+    if (!response.ok) throw Error("account_unavailable");
+    const data = await response.json();
+    if (!data || typeof data !== "object" ||
+        !Object.prototype.hasOwnProperty.call(data, "user") ||
+        (data.user !== null && (typeof data.user !== "object" ||
+          typeof data.user.id !== "string" || !data.user.id))) throw Error("account_unavailable");
+    authenticatedUser = data.user;
   } catch {
+    // Prevent uncertain server identity from granting access to private UI;
+    // retain the device cache and ownership marker for a later verified retry.
     state.user = null;
+    state.sessionUnavailable = true;
+    state.progressSyncStatus = "unavailable";
+    throw Error("account_unavailable");
   }
+  state.user = authenticatedUser;
+  state.sessionUnavailable = false;
   const previousOwner=localStorage.getItem('sa.progressOwner');
   if(previousOwner&&previousOwner!==state.user?.id)clearPersonalProgress();
   if(state.user)localStorage.setItem('sa.progressOwner',state.user.id);else localStorage.removeItem('sa.progressOwner');
@@ -2291,8 +2332,10 @@ function localEditionMetadata(catalog) {
       typeof metadata.source !== "string") throw Error("local_edition_provenance_unavailable");
   // Retain only HTTPS, verified-shaped citation links in the rendered reader.
   try {
-    if (new URL(metadata.source).protocol !== "https:" ||
-        (metadata.licenseUrl && new URL(metadata.licenseUrl).protocol !== "https:"))
+    const sourceUrl = new URL(metadata.source);
+    const licenseUrl = metadata.licenseUrl ? new URL(metadata.licenseUrl) : null;
+    if (sourceUrl.protocol !== "https:" || sourceUrl.username || sourceUrl.password ||
+        (licenseUrl && (licenseUrl.protocol !== "https:" || licenseUrl.username || licenseUrl.password)))
       throw Error("unsafe_edition_source");
   } catch { throw Error("unsafe_edition_source"); }
   return metadata;
@@ -2609,6 +2652,10 @@ async function mountReaderBookmarks(meta, chapter, edition, books) {
   const panel = document.querySelector("#reader-bookmarks");
   if (!panel) return;
   const copy = bookmarkCopy[state.lang] || bookmarkCopy.uk;
+  // A response started under one principal must never paint into another
+  // principal's reader, even if the panel node has not been detached yet.
+  const principal = state.user;
+  const isCurrent = () => panel.isConnected && state.user === principal;
   if (!state.user) { panel.innerHTML = `<h2>${copy.title}</h2><p>${copy.login}</p>`; return; }
   const current = { edition: edition.id, book: meta.code, chapter };
   async function load() {
@@ -2616,22 +2663,28 @@ async function mountReaderBookmarks(meta, chapter, edition, books) {
     if (!response.ok) throw Error("bookmark_load_failed");
     const data = await response.json();
     if (!Array.isArray(data.bookmarks)) throw Error("bookmark_load_failed");
-    if (!panel.isConnected) return;
+    if (!isCurrent()) return;
     const items = data.bookmarks.filter(item => item.edition === edition.id && books.some(book => book.code === item.book) && Number.isInteger(item.chapter) && item.chapter > 0);
     const saved = items.some(item => item.book === meta.code && item.chapter === chapter);
     panel.innerHTML = `<h2>${copy.title}</h2><button class="button" type="button" id="toggle-bookmark" aria-pressed="${saved}">${saved ? copy.remove : copy.save}</button><p role="status" id="bookmark-status"></p>${items.length ? `<ul>${items.map(item => { const book = books.find(value => value.code === item.book); return `<li><a href="/reader/${encodeURIComponent(item.book)}/${item.chapter}">${esc(bookTitle(book))} ${item.chapter}</a></li>`; }).join("")}</ul>` : `<p>${copy.empty}</p>`}`;
     panel.querySelector("#toggle-bookmark").addEventListener("click", async event => {
+      if (!isCurrent()) return;
       const button = event.currentTarget;
       button.disabled = true;
       try {
         const response = await fetch("/api/bookmarks", { method: saved ? "DELETE" : "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(current) });
         if (!response.ok) throw Error("bookmark_save_failed");
         await load();
-        panel.querySelector("#toggle-bookmark")?.focus();
-      } catch { const status = panel.querySelector("#bookmark-status"); if (status) status.textContent = copy.error; button.disabled = false; }
+        if (isCurrent()) panel.querySelector("#toggle-bookmark")?.focus();
+      } catch {
+        if (!isCurrent()) return;
+        const status = panel.querySelector("#bookmark-status");
+        if (status) status.textContent = copy.error;
+        button.disabled = false;
+      }
     });
   }
-  try { await load(); } catch { if (panel.isConnected) panel.innerHTML = `<h2>${copy.title}</h2><p role="alert">${copy.error}</p>`; }
+  try { await load(); } catch { if (isCurrent()) panel.innerHTML = `<h2>${copy.title}</h2><p role="alert">${copy.error}</p>`; }
 }
 
 attemptChannel?.addEventListener("message", event => {
@@ -2641,6 +2694,17 @@ attemptChannel?.addEventListener("message", event => {
     renderLockedChapter(message.book, message.chapter);
   }
 });
+
+// A copied excerpt preserves its exact edition, licensing and primary source.
+function readerCitationText(reference, verseText, edition, permalink) {
+  return [
+    `${reference} ${verseText}`,
+    `${edition.title} · ${edition.license}`,
+    edition.attribution || "",
+    edition.source,
+    permalink,
+  ].filter(Boolean).join("\n");
+}
 
 function readerVerseUrl(code, chapter, verse) {
   return `/reader/${encodeURIComponent(code)}/${chapter}?verse=${verse}`;
@@ -2664,9 +2728,30 @@ function readerChapterNumber(value, maxChapters) {
   return Math.min(parsed, maxChapters);
 }
 
+async function onReaderEditionChange(event, parts) {
+  // Only trusted catalogue entries can be remembered or used for the current tab.
+  const lang = state.lang;
+  const nextEdition = EDITIONS[lang]?.find(item => item.id === event.target?.value);
+  if (!nextEdition) { announce(t("errorLoad")); return; }
+  const restoreFocus = document.activeElement === event.currentTarget;
+  const readerUrl = location.pathname + location.search + location.hash;
+  const saved = storeReaderPreference(`sa.edition.${lang}`, nextEdition.id);
+  setEditionForTab(lang, nextEdition.id);
+  if (saved) transientEditionStorageDenied.delete(lang);
+  else transientEditionStorageDenied.add(lang);
+  await renderReader(parts);
+  if (!saved && state.lang === lang && location.pathname + location.search + location.hash === readerUrl)
+    announce(EDITION_TRANSIENT_MESSAGES[lang]);
+  if (restoreFocus && document.activeElement === main &&
+      location.pathname + location.search + location.hash === readerUrl)
+    document.querySelector("#bible-edition")?.focus({preventScroll: true});
+}
+
 async function renderReader(parts) {
+  const readerPrincipal = state.user;
   setActiveNav("reader");
   const catalog = await getCatalog();
+  if (state.user !== readerPrincipal || (typeof location !== "undefined" && location.pathname && !location.pathname.startsWith("/reader"))) return;
   const chosenEdition = selectedEdition(state.lang);
   const books = catalog.editionBooks?.[chosenEdition.id] || catalog.books[state.lang];
   const code = (parts[1] || state.reader.book || "GEN").toUpperCase();
@@ -2675,9 +2760,10 @@ async function renderReader(parts) {
   const groupId = parts[3] === "group" ? parts[4] || "" : "";
   state.currentReader = { book: meta.code, chapter };
   const readerContext = state.currentReader;
+  const readerStillCurrent = () => state.currentReader === readerContext && state.user === readerPrincipal;
   try {
     const attemptState = await attemptRequest("chapter", "POST", { book: meta.code, chapter });
-    if (state.currentReader !== readerContext) return;
+    if (!readerStillCurrent()) return;
     if (!attemptState || typeof attemptState.invalidated !== "boolean") {
       throw new Error("invalid_attempt_guard_response");
     }
@@ -2689,18 +2775,26 @@ async function renderReader(parts) {
       return;
     }
   } catch {
-    if (state.currentReader !== readerContext) return;
+    if (!readerStillCurrent()) return;
     state.currentReader = null;
     shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1></section>`);
     return;
   }
-  const book = await getBook(meta.code);
+  let book;
+  try {
+    book = await getBook(meta.code);
+  } catch (error) {
+    // A cancelled chapter must never let the route-level error handler
+    // replace a newer account or page with an obsolete failure.
+    if (!readerStillCurrent()) return;
+    throw error;
+  }
   // A different device may start a new attempt while the Bible JSON loads.
   // Prevent the async reader from undoing an invalidation in another tab.
-  if (state.currentReader !== readerContext) return;
+  if (!readerStillCurrent()) return;
   try {
     const finalState = await attemptRequest("chapter", "POST", { book: meta.code, chapter });
-    if (state.currentReader !== readerContext) return;
+    if (!readerStillCurrent()) return;
     if (!finalState || typeof finalState.invalidated !== "boolean") throw Error("invalid_attempt_guard_response");
     if (finalState.invalidated) {
       sessionStorage.removeItem("sa.activeAttempt");
@@ -2710,7 +2804,7 @@ async function renderReader(parts) {
       return;
     }
   } catch {
-    if (state.currentReader !== readerContext) return;
+    if (!readerStillCurrent()) return;
     state.currentReader = null;
     shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1></section>`);
     return;
@@ -2721,9 +2815,16 @@ async function renderReader(parts) {
   const selectedVerse = verseCoordinateMatches ? readerVerseFromUrl(location.href, verses.length) : null;
   // Do not replace the last readable bookmark when book loading fails.
   state.reader = { book: meta.code, chapter };
-  localStorage.setItem("sa.reader", JSON.stringify(state.reader));
+  // Browser preference storage is optional; never block an authorized chapter.
+  try { localStorage.setItem("sa.reader", JSON.stringify(state.reader)); }
+  catch { /* Keep the current chapter in memory without claiming durable persistence. */ }
   const edition = localEditionMetadata(catalog),
     editionInfo = editionDetails(edition, meta.code);
+  const citationCopy = {
+    uk: { button: "Цитувати", label: "Копіювати вірш із джерелом", done: "Цитату з джерелом скопійовано", error: "Не вдалося скопіювати цитату" },
+    ru: { button: "Цитировать", label: "Копировать стих с источником", done: "Цитата с источником скопирована", error: "Не удалось скопировать цитату" },
+    en: { button: "Cite", label: "Copy verse with source", done: "Verse and source copied", error: "Could not copy the verse" },
+  }[state.lang];
   const options = books
     .map(
       (b) =>
@@ -2736,9 +2837,35 @@ async function renderReader(parts) {
       `<option value="${i + 1}" ${i + 1 === chapter ? "selected" : ""}>${i + 1}</option>`,
   ).join("");
   shell(
-    `<div class="section-head reader-heading"><div><p class="eyebrow">${t("reader")}</p><h1>${t("readerTitle")}</h1></div><p>${t("readerIntro")}</p></div><div class="toolbar"><div class="field grow"><label for="book-select">${t("book")}</label><select id="book-select">${options}</select></div><div class="field"><label for="chapter-select">${t("chapter")}</label><select id="chapter-select">${chapters}</select></div><div class="field"><label for="verse-select">${t("verse")}</label><select id="verse-select"><option value="" ${selectedVerse === null ? "selected" : ""}>—</option>${verses.map((_, i) => `<option value="${i + 1}" ${selectedVerse === i + 1 ? "selected" : ""}>${i + 1}</option>`).join("")}</select></div><form id="book-search" class="field grow"><label for="search-input">${t("searchBook")}</label><div style="display:flex;gap:.4rem"><input id="search-input" type="search" placeholder="${t("searchPlaceholder")}"><button class="button" type="submit">${t("search")}</button></div></form></div><div class="reader-layout"><article class="reading-pane"><p class="eyebrow">${meta.testament === "OT" ? t("oldTestament") : t("newTestament")}</p><h1>${esc(bookTitle(meta))} ${chapter}</h1><p class="chapter-meta">${esc(editionInfo.title)}</p><div class="verses">${verses.map((v, i) => `<p class="verse" id="v${i + 1}" ${selectedVerse === i + 1 ? 'data-selected-verse tabindex="-1"' : ''}><a class="verse-number" href="${readerVerseUrl(meta.code, chapter, i + 1)}" aria-label="${esc(bookTitle(meta))} ${chapter}:${i + 1}">${i + 1}</a> ${esc(bibleText(v))}</p>`).join("")}</div><div class="chapter-nav">${chapter > 1 ? `<a class="button" href="/reader/${meta.code}/${chapter - 1}">← ${t("previous")}</a>` : "<span></span>"}${chapter < meta.chapters ? `<a class="button" href="/reader/${meta.code}/${chapter + 1}">${t("next")} →</a>` : "<span></span>"}</div></article><aside class="reader-aside"><div class="card edition-card"><h2>${t("edition")}</h2><p><strong>${esc(editionInfo.title)}</strong></p>${editionInfo.note ? `<p>${esc(editionInfo.note)}</p>` : ""}<p>${t("license")}: ${esc(editionInfo.license)}</p><a href="${esc(editionInfo.source)}" target="_blank" rel="noreferrer">${t("sourceLink")} ↗</a></div>${editionToggle(meta.code)}${timerCard()}<div class="card" id="search-panel" hidden><h2>${t("search")}</h2><ol class="search-results" id="search-results" tabindex="-1"></ol></div></aside></div>`,
+    `<div class="section-head reader-heading"><div><p class="eyebrow">${t("reader")}</p><h1>${t("readerTitle")}</h1></div><p>${t("readerIntro")}</p></div><div class="toolbar"><div class="field grow"><label for="book-select">${t("book")}</label><select id="book-select">${options}</select></div><div class="field"><label for="chapter-select">${t("chapter")}</label><select id="chapter-select">${chapters}</select></div><div class="field"><label for="verse-select">${t("verse")}</label><select id="verse-select"><option value="" ${selectedVerse === null ? "selected" : ""}>—</option>${verses.map((_, i) => `<option value="${i + 1}" ${selectedVerse === i + 1 ? "selected" : ""}>${i + 1}</option>`).join("")}</select></div><form id="book-search" class="field grow"><label for="search-input">${t("searchBook")}</label><div style="display:flex;gap:.4rem"><input id="search-input" type="search" placeholder="${t("searchPlaceholder")}"><button class="button" type="submit">${t("search")}</button></div></form></div><div class="reader-layout"><article class="reading-pane"><p class="eyebrow">${meta.testament === "OT" ? t("oldTestament") : t("newTestament")}</p><h1>${esc(bookTitle(meta))} ${chapter}</h1><p class="chapter-meta">${esc(editionInfo.title)}</p><div class="verses">${verses.map((v, i) => `<p class="verse" id="v${i + 1}" ${selectedVerse === i + 1 ? 'data-selected-verse tabindex="-1"' : ''}><a class="verse-number" href="${readerVerseUrl(meta.code, chapter, i + 1)}" aria-label="${esc(bookTitle(meta))} ${chapter}:${i + 1}">${i + 1}</a> ${esc(bibleText(v))} <button type="button" class="verse-cite" data-verse-cite="${i + 1}" aria-label="${esc(citationCopy.label)}: ${esc(bookTitle(meta))} ${chapter}:${i + 1}">${esc(citationCopy.button)}</button></p>`).join("")}</div><p id="reader-cite-status" role="status" aria-live="polite"></p><div class="chapter-nav">${chapter > 1 ? `<a class="button" href="/reader/${meta.code}/${chapter - 1}">← ${t("previous")}</a>` : "<span></span>"}${chapter < meta.chapters ? `<a class="button" href="/reader/${meta.code}/${chapter + 1}">${t("next")} →</a>` : "<span></span>"}</div></article><aside class="reader-aside"><div class="card edition-card"><h2>${t("edition")}</h2><p><strong>${esc(editionInfo.title)}</strong></p>${editionInfo.note ? `<p>${esc(editionInfo.note)}</p>` : ""}<p>${t("license")}: ${esc(editionInfo.license)}</p><a href="${esc(editionInfo.source)}" target="_blank" rel="noreferrer">${t("sourceLink")} ↗</a></div>${editionToggle(meta.code)}${timerCard()}<div class="card" id="search-panel" hidden><h2>${t("search")}</h2><ol class="search-results" id="search-results" tabindex="-1"></ol></div></aside></div>`,
   );
   activateTimer();
+  document.querySelector(".verses")?.addEventListener("click", async event => {
+    const button = event.target?.closest?.("button[data-verse-cite]");
+    if (!button || !readerStillCurrent()) return;
+    const rawVerse = button.dataset.verseCite;
+    if (!/^[1-9][0-9]*$/.test(rawVerse || "")) return;
+    const number = Number(rawVerse);
+    if (!Number.isSafeInteger(number) || number > verses.length) return;
+    const status = document.querySelector("#reader-cite-status");
+    if (!status) return;
+    status.textContent = "";
+    try {
+      if (!navigator.clipboard?.writeText) throw Error("clipboard_unavailable");
+      const citation = readerCitationText(
+        `${bookTitle(meta)} ${chapter}:${number}.`,
+        bibleText(verses[number - 1]),
+        editionInfo,
+        new URL(readerVerseUrl(meta.code, chapter, number), location.origin).href,
+      );
+      await navigator.clipboard.writeText(citation);
+      if (readerStillCurrent() && button.isConnected && document.querySelector("#reader-cite-status") === status)
+        status.textContent = citationCopy.done;
+    } catch {
+      if (readerStillCurrent() && button.isConnected && document.querySelector("#reader-cite-status") === status)
+        status.textContent = citationCopy.error;
+    }
+  });
   document.querySelector(".reader-aside")?.insertAdjacentHTML("beforeend", '<section class="card" id="reader-bookmarks" aria-live="polite"></section>');
   void mountReaderBookmarks(meta, chapter, chosenEdition, books);
   const parallelEditions = chosenEdition.local ? EDITIONS[state.lang].filter(item => item.local && item.id !== chosenEdition.id) : [];
@@ -2753,13 +2880,16 @@ async function renderReader(parts) {
       failClosed: () => { state.currentReader=null; shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1></section>`); },
     });
   }
-  const editionText=editionCopy[state.lang];
+  const editionText = transientEditionStorageDenied.has(state.lang)
+    ? {...editionCopy[state.lang], externalNote: EDITION_TRANSIENT_MESSAGES[state.lang]}
+    : editionCopy[state.lang];
   if(editionInfo.attribution) document.querySelector('.edition-card').insertAdjacentHTML('beforeend', `<p class="edition-attribution">${esc(editionInfo.attribution)}</p>`);
   if(editionInfo.licenseUrl) document.querySelector('.edition-card').insertAdjacentHTML('beforeend', `<a href="${esc(editionInfo.licenseUrl)}" target="_blank" rel="noreferrer">${esc(editionInfo.license)} ↗</a>`);
-  document.querySelector('.toolbar').insertAdjacentHTML('afterbegin',editionSelect(state.lang,esc));
-  document.querySelector('#bible-edition').onchange=e=>{localStorage.setItem(`sa.edition.${state.lang}`,e.target.value);renderReader(parts)};
+  document.querySelector('.toolbar').insertAdjacentHTML('afterbegin',editionSelect(state.lang,esc,chosenEdition));
+  document.querySelector('#bible-edition').onchange = event => onReaderEditionChange(event, parts);
   if(!chosenEdition.local){document.querySelector('.verses').innerHTML=`<section class="publisher-reading"><p class="lead">${editionText.externalNote}</p><a class="button primary" target="_blank" rel="noreferrer" href="${editionUrl(chosenEdition,meta.code,chapter)}">${editionText.external} ↗</a></section>`;document.querySelector('.chapter-meta').textContent=chosenEdition.title;document.querySelector('.edition-card').innerHTML=`<h2>${t('edition')}</h2><p><strong>${esc(chosenEdition.title)}</strong></p><p>${editionText.whole}</p><a href="${chosenEdition.source}" target="_blank" rel="noreferrer">${t('sourceLink')} ↗</a>`;document.querySelector('#uk-spelling')?.remove();document.querySelector('#book-search').hidden=true;}
   const w=workspaceCopy(state.lang),attemptCopy=ATTEMPT_COPY[state.lang],missionManifest=await readerMissionManifest();
+  if (!readerStillCurrent()) return;
   const hasTasks=Array.isArray(missionManifest?.chapters)&&missionManifest.chapters.some(item=>item?.book===meta.code&&Number(item.chapter)===chapter);
   document.querySelector('.chapter-nav').insertAdjacentHTML('beforebegin',`<div class="read-completion"><button class="button primary" id="mark-read">${attemptCopy.finishReading}</button>${hasTasks?`<button class="button" id="start-questions" disabled>${attemptCopy.transition}</button>`:""}<a href="/progress">${w.progress}</a></div>${hasTasks?`<dialog id="attempt-dialog" class="attempt-dialog" aria-labelledby="attempt-dialog-title"><form method="dialog"><h2 id="attempt-dialog-title">${attemptCopy.prepareTitle}</h2><p>${attemptCopy.prepareText}</p><ul>${attemptCopy.prepareRules.map(rule=>`<li>${rule}</li>`).join("")}</ul><div class="action-row"><button class="button" value="cancel">${attemptCopy.cancel}</button><button class="button primary" id="confirm-attempt" value="default">${attemptCopy.begin}</button></div><p id="attempt-state" role="status"></p></form></dialog>`:""}`);
   if (!missionManifest) {
@@ -2768,16 +2898,94 @@ async function renderReader(parts) {
       `<p class="notice" role="status">${t("readerMissionUnavailable")}</p>`,
     );
   }
-  document.querySelector('#mark-read').onclick=async()=>{const readButton=document.querySelector('#mark-read');if(readButton.dataset.saSaving==='1')return;readButton.dataset.saSaving='1';readButton.setAttribute('aria-busy','true');try{const latestHistory=loadJSON('sa.readingHistory',[]),readingHistory=Array.isArray(latestHistory)?latestHistory:[];if(!readingHistory.some(r=>r.book===meta.code&&r.chapter===chapter))readingHistory.push({book:meta.code,chapter,title:bookTitle(meta)});localStorage.setItem('sa.readingHistory',JSON.stringify(readingHistory));if(state.user)try{await accountRequest('reading','PUT',{reading:readingHistory})}catch{if(document.querySelector('#mark-read')===readButton){readButton.textContent=t('readingSyncRetry');announce(t('readingSyncPending'))}return}if(document.querySelector('#mark-read')!==readButton)return;try{if(hasTasks)await attemptRequest('read','POST',{book:meta.code,chapter,groupId:groupId||undefined});if(document.querySelector('#mark-read')!==readButton)return;document.querySelector('#start-questions')?.removeAttribute('disabled');readButton.disabled=true;readButton.textContent=w.readMarked;announce(w.readMarked)}catch{if(document.querySelector('#mark-read')===readButton)announce(t('errorLoad'))}}finally{delete readButton.dataset.saSaving;readButton.removeAttribute('aria-busy')}};
-  document.querySelector('#start-questions')?.addEventListener('click',()=>document.querySelector('#attempt-dialog').showModal());
-  document.querySelector('#confirm-attempt')?.addEventListener('click',async event=>{event.preventDefault();const status=document.querySelector('#attempt-state');try{const attempt=await attemptRequest('start','POST',{missionId:'OT-AB-01',book:meta.code,chapter,locale:state.lang,groupId:groupId||undefined});sessionStorage.setItem('sa.activeAttempt',attempt.attemptId);state.activeAttempt=attempt;state.mission=null;window.saAnalytics?.track("quiz_start",{language:state.lang,mode:groupId?"group":"personal"});attemptChannel?.postMessage({type:'attempt-started',attemptId:attempt.attemptId,book:meta.code,chapter});document.querySelector('#attempt-dialog').close();state.currentReader=null;navigateTo(`/mission/attempt/${attempt.attemptId}`,true)}catch(error){window.saAnalytics?.track("quiz_start_error",{error:String(error.message).slice(0,60)});status.textContent=error.message==='chapter_must_be_read'?attemptCopy.readRequired:t('errorLoad')}});
+  document.querySelector('#mark-read').onclick=async()=>{
+    const readButton=document.querySelector('#mark-read');
+    if(!readButton||!readerStillCurrent()||readButton.dataset.saSaving==='1')return;
+    readButton.dataset.saSaving='1';
+    readButton.setAttribute('aria-busy','true');
+    try {
+      const latestHistory=loadJSON('sa.readingHistory',[]);
+      const readingHistory=Array.isArray(latestHistory)?latestHistory:[];
+      if(!readingHistory.some(r=>r.book===meta.code&&r.chapter===chapter))
+        readingHistory.push({book:meta.code,chapter,title:bookTitle(meta)});
+      const storedLocally=storeReaderPreference('sa.readingHistory',JSON.stringify(readingHistory));
+      // A guest has no server account: do not claim completion or unlock tasks
+      // when their only durable store refused the history write.
+      if(!storedLocally&&!state.user){
+        if(readerStillCurrent()&&document.querySelector('#mark-read')===readButton){
+          readButton.textContent=t('readingSyncRetry');
+          announce(t('readerStorageUnavailable'));
+        }
+        return;
+      }
+      if(state.user){
+        try { await accountRequest('reading','PUT',{reading:readingHistory}); }
+        catch {
+          if(readerStillCurrent()&&document.querySelector('#mark-read')===readButton){
+            readButton.textContent=t('readingSyncRetry');
+            announce(t(storedLocally?'readingSyncPending':'readerStorageUnavailable'));
+          }
+          return;
+        }
+      }
+      if(!readerStillCurrent()||document.querySelector('#mark-read')!==readButton)return;
+      try {
+        if(hasTasks)await attemptRequest('read','POST',{book:meta.code,chapter,groupId:groupId||undefined});
+        if(!readerStillCurrent()||document.querySelector('#mark-read')!==readButton)return;
+        document.querySelector('#start-questions')?.removeAttribute('disabled');
+        const restoreFocus=document.activeElement===readButton;
+        readButton.disabled=true;
+        readButton.textContent=w.readMarked;
+        if(restoreFocus)(document.querySelector('#start-questions')||document.querySelector('.read-completion a'))?.focus({preventScroll:true});
+        announce(w.readMarked);
+      } catch {
+        if(readerStillCurrent()&&document.querySelector('#mark-read')===readButton)
+          announce(t('errorLoad'));
+      }
+    } finally {
+      delete readButton.dataset.saSaving;
+      readButton.removeAttribute('aria-busy');
+    }
+  };
+  document.querySelector('#start-questions')?.addEventListener('click', () => {
+    if (readerStillCurrent()) document.querySelector('#attempt-dialog')?.showModal();
+  });
+  document.querySelector('#confirm-attempt')?.addEventListener('click', async event => {
+    event.preventDefault();
+    const trigger = event.currentTarget;
+    if (!readerStillCurrent() || document.querySelector('#confirm-attempt') !== trigger) return;
+    const status = document.querySelector('#attempt-state');
+    try {
+      const attempt = await attemptRequest('start', 'POST', {
+        missionId: 'OT-AB-01', book: meta.code, chapter, locale: state.lang, groupId: groupId || undefined
+      });
+      // The server may have started the attempt for the original principal.
+      // Never publish its ID, broadcast or navigate a subsequently switched account.
+      if (!readerStillCurrent() || document.querySelector('#confirm-attempt') !== trigger) return;
+      sessionStorage.setItem('sa.activeAttempt', attempt.attemptId);
+      state.activeAttempt = attempt;
+      state.mission = null;
+      window.saAnalytics?.track("quiz_start", { language: state.lang, mode: groupId ? "group" : "personal" });
+      attemptChannel?.postMessage({ type: 'attempt-started', attemptId: attempt.attemptId, book: meta.code, chapter });
+      document.querySelector('#attempt-dialog').close();
+      state.currentReader = null;
+      navigateTo(`/mission/attempt/${attempt.attemptId}`, true);
+    } catch (error) {
+      if (!readerStillCurrent() || document.querySelector('#confirm-attempt') !== trigger) return;
+      window.saAnalytics?.track("quiz_start_error", { error: String(error.message).slice(0, 60) });
+      status.textContent = error.message === 'chapter_must_be_read' ? attemptCopy.readRequired : t('errorLoad');
+    }
+  });
   document.querySelector("#uk-spelling")?.addEventListener("click", () => {
     state.ukOriginal = !state.ukOriginal;
-    localStorage.setItem(
-      "sa.ukSpelling",
-      state.ukOriginal ? "original" : "modern",
+    const language = state.lang;
+    const saved = storeReaderPreference(
+      "sa.ukSpelling", state.ukOriginal ? "original" : "modern",
     );
-    route();
+    void route().then(() => {
+      if (!saved && state.lang === language)
+        announce(SPELLING_TRANSIENT_MESSAGES[language]);
+    });
   });
   document
     .querySelector("#book-select")
@@ -2932,8 +3140,17 @@ function groupCard(group) {
       : t("regularGroup");
   return `<article class="group-card">${groupStatus(group)}<h3>${esc(group.name)}</h3>${group.church ? `<p class="group-church">${esc(group.church)}</p>` : ""}${place ? `<p>${esc(place)}</p>` : ""}<p>${esc(group.description || "")}</p><p class="pace">${pace}</p><p>${esc(edition || "")}</p>${groupMetrics(group)}<a class="button" href="/groups/${esc(group.id)}">${t("openGroup")}</a></article>`;
 }
+// Do not render a departed account's private group membership or invite code
+// after an asynchronous request or a navigation to a different route.
+function groupPageCurrent(expected, principal) {
+  const active = location.hash.startsWith("#/")
+    ? location.hash.slice(2) : location.pathname.replace(/^\/+/, "");
+  return state.user === principal && !state.sessionUnavailable && active.replace(/\/+$/, "") === expected;
+}
+
 async function renderGroups() {
   setActiveNav("groups");
+  const principal = state.user;
   const publicData = await groupRequest("", "GET"),
     groups = publicData.groups || [];
   let mine = [];
@@ -2941,6 +3158,7 @@ async function renderGroups() {
     try {
       mine = (await groupRequest("", "GET", undefined, "mine=1")).groups || [];
     } catch {}
+  if (!groupPageCurrent("groups", principal)) return;
   const paceOptions = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21]
     .map((value) => `<option value="${value}">${value}</option>`)
     .join("");
@@ -2955,44 +3173,57 @@ async function renderGroups() {
   if (document.querySelector("#group-form"))
     document.querySelector("#group-form").onsubmit = async (e) => {
       e.preventDefault();
-      const form = new FormData(e.currentTarget),
+      const control=e.currentTarget;
+      if(control?.isConnected===false||!groupPageCurrent("groups",principal))return;
+      const form = new FormData(control),
         data = Object.fromEntries(form);
       data.weeklyGoal = Number(data.weeklyGoal);
       data.publicOwnerName = form.has("publicOwnerName");
       try {
         const result = await groupRequest("create", "POST", data);
+        if(control?.isConnected===false||!groupPageCurrent("groups",principal))return;
         announce(t("groupSaved"));
         navigateTo(`/groups/${result.groupId}`);
       } catch {
-        document.querySelector("#group-form-state").textContent =
-          t("groupError");
+        if(control?.isConnected!==false&&groupPageCurrent("groups",principal)){
+          const status=document.querySelector("#group-form-state");
+          if(status)status.textContent=t("groupError");
+        }
       }
     };
   if (document.querySelector("#join-form"))
     document.querySelector("#join-form").onsubmit = async (e) => {
       e.preventDefault();
-      const form = new FormData(e.currentTarget),
+      const control=e.currentTarget;
+      if(control?.isConnected===false||!groupPageCurrent("groups",principal))return;
+      const form = new FormData(control),
         data = Object.fromEntries(form);
       data.publicName = form.has("publicName");
       try {
         const result = await groupRequest("join", "POST", data);
+        if(control?.isConnected===false||!groupPageCurrent("groups",principal))return;
         announce(t("joined"));
         navigateTo(`/groups/${result.groupId}`);
       } catch {
-        document.querySelector("#join-state").textContent = t("groupError");
+        if(control?.isConnected!==false&&groupPageCurrent("groups",principal)){
+          const status=document.querySelector("#join-state");
+          if(status)status.textContent=t("groupError");
+        }
       }
     };
 }
 
 async function renderGroup(groupId) {
   setActiveNav("groups");
+  const principal = state.user;
   const data = await groupRequest(
       "",
       "GET",
       undefined,
       `groupId=${encodeURIComponent(groupId)}`,
-    ),
-    group = data.group,
+    );
+  if (!groupPageCurrent(`groups/${groupId}`, principal)) return;
+  const group = data.group,
     catalog = await getCatalog(),
     books = catalog.books[state.lang],
     bookOptions = books
@@ -3005,6 +3236,7 @@ async function renderGroup(groupId) {
       const found = books.find((book) => book.code === code);
       return found ? bookTitle(found) : code;
     };
+  if (!groupPageCurrent(`groups/${groupId}`, principal)) return;
   const names = (data.members || [])
       .map(
         (member) =>
@@ -3034,38 +3266,48 @@ async function renderGroup(groupId) {
   const manageCopy = groupManagementCopy(state.lang);
   const manageStatus = document.querySelector('#group-manage-status');
   async function manageGroup(action, payload, button, successText) {
+    if(button?.isConnected===false||!groupPageCurrent(`groups/${groupId}`,principal))return;
     button.disabled = true;
     if (manageStatus) manageStatus.textContent = '';
     try {
       await groupRequest(action, 'POST', {groupId:group.id, ...payload});
       // A completed request must not navigate away from a page opened meanwhile.
-      if (!button.isConnected) return;
-      if (['leave','delete'].includes(action)) navigateTo('/groups');
-      else await renderGroup(group.id);
+      if (!button.isConnected || !groupPageCurrent(`groups/${groupId}`, principal)) return;
+      if (['leave','delete'].includes(action)) {
+        navigateTo('/groups');
+        if (state.user !== principal || state.sessionUnavailable) return;
+      } else {
+        await renderGroup(group.id);
+        // The readback can be delayed independently of the successful POST.
+        // A departed principal must not hear a former owner's success message.
+        if (!groupPageCurrent(`groups/${groupId}`, principal)) return;
+      }
       announce(successText);
     } catch {
-      if (manageStatus?.isConnected) manageStatus.textContent = manageCopy.error;
+      if (manageStatus?.isConnected && groupPageCurrent(`groups/${groupId}`,principal)) manageStatus.textContent = manageCopy.error;
     } finally {
       if (button.isConnected) button.disabled = false;
     }
   }
   const leaveButton = document.querySelector('#leave-group');
   if (leaveButton) leaveButton.onclick = () => {
-    if (window.confirm(manageCopy.leaveConfirm)) void manageGroup('leave', {}, leaveButton, manageCopy.left);
+    if (leaveButton.isConnected!==false && groupPageCurrent(`groups/${groupId}`,principal) && window.confirm(manageCopy.leaveConfirm)) void manageGroup('leave', {}, leaveButton, manageCopy.left);
   };
   const transferForm = document.querySelector('#transfer-group');
   if (transferForm) transferForm.onsubmit = event => {
     event.preventDefault();
+    if(transferForm.isConnected===false||!groupPageCurrent(`groups/${groupId}`,principal))return;
     const select = transferForm.elements.namedItem('targetUserId');
     if (window.confirm(manageCopy.transferConfirm + select.selectedOptions[0].textContent))
       void manageGroup('transfer', {targetUserId:select.value}, transferForm.querySelector('button'), manageCopy.transferred);
   };
   const rotateButton = document.querySelector('#rotate-group-invite');
   if (rotateButton) rotateButton.onclick = () => {
-    if (window.confirm(manageCopy.rotateConfirm)) void manageGroup('rotate-invite', {expectedInviteCode:group.inviteCode,confirm:true}, rotateButton, manageCopy.rotated);
+    if (rotateButton.isConnected!==false && groupPageCurrent(`groups/${groupId}`,principal) && window.confirm(manageCopy.rotateConfirm)) void manageGroup('rotate-invite', {expectedInviteCode:group.inviteCode,confirm:true}, rotateButton, manageCopy.rotated);
   };
   document.querySelectorAll('.group-role-button').forEach(button => {
     button.onclick = () => {
+      if(button.isConnected===false||!groupPageCurrent(`groups/${groupId}`,principal))return;
       const member = data.managementMembers.find(item => item.user_id === button.dataset.userId);
       if (member && window.confirm(manageCopy.roleConfirm + member.display_name))
         void manageGroup('role', {targetUserId:member.user_id,expectedRole:member.role,role:member.role==='facilitator'?'member':'facilitator'}, button, manageCopy.roleSaved);
@@ -3073,11 +3315,12 @@ async function renderGroup(groupId) {
   });
   const deleteButton = document.querySelector('#delete-group');
   if (deleteButton) deleteButton.onclick = () => {
-    if (window.confirm(manageCopy.deleteConfirm)) void manageGroup('delete', {confirm:true}, deleteButton, manageCopy.deleted);
+    if (deleteButton.isConnected!==false && groupPageCurrent(`groups/${groupId}`,principal) && window.confirm(manageCopy.deleteConfirm)) void manageGroup('delete', {confirm:true}, deleteButton, manageCopy.deleted);
   };
   const targetBook = document.querySelector("#target-book"),
     targetChapter = document.querySelector("#target-chapter"),
     updateTarget = () => {
+      if(targetBook?.isConnected===false||targetChapter?.isConnected===false||!groupPageCurrent(`groups/${groupId}`,principal))return;
       const code = targetBook.value,
         chapter = Math.max(1, Number(targetChapter.value) || 1);
       document.querySelector("#reading-preview").textContent =
@@ -3087,12 +3330,14 @@ async function renderGroup(groupId) {
     };
   targetBook.onchange = updateTarget;
   targetChapter.oninput = updateTarget;
-  document.querySelector('#chapter-link').addEventListener('click',()=>{const lang=String(group.bibleEdition||state.lang).slice(0,2);if(EDITIONS[lang]){localStorage.setItem(`sa.edition.${lang}`,group.bibleEdition);state.lang=lang;localStorage.setItem('sa.lang',lang);setStaticI18n()}});
-  if(group.marathonEnabled&&group.cohortStatus==='ready'&&data.membership==='owner'){document.querySelector('.cohort-card').insertAdjacentHTML('beforeend',`<button class="button primary" id="start-marathon">${state.lang==='uk'?'Почати марафон':state.lang==='ru'?'Начать марафон':'Start marathon'}</button>`);document.querySelector('#start-marathon').onclick=async()=>{try{await groupRequest('start','POST',{groupId:group.id});await renderGroup(group.id)}catch{announce(t('groupError'))}};}
+  document.querySelector('#chapter-link').addEventListener('click',event=>{if(event.currentTarget?.isConnected===false||!groupPageCurrent(`groups/${groupId}`,principal))return;const lang=String(group.bibleEdition||state.lang).slice(0,2);if(["uk","ru","en"].includes(lang)){const edition=EDITIONS[lang].find(item=>item.id===group.bibleEdition);if(edition){const saved=storeReaderPreference(`sa.edition.${lang}`,edition.id);setEditionForTab(lang,edition.id);if(saved)transientEditionStorageDenied.delete(lang);else transientEditionStorageDenied.add(lang)}state.lang=lang;const savedLang=storeReaderPreference('sa.lang',lang);setStaticI18n();if(!savedLang)announce(LANGUAGE_TRANSIENT_MESSAGES[lang])}});
+  if(group.marathonEnabled&&group.cohortStatus==='ready'&&data.membership==='owner'){document.querySelector('.cohort-card').insertAdjacentHTML('beforeend',`<button class="button primary" id="start-marathon">${state.lang==='uk'?'Почати марафон':state.lang==='ru'?'Начать марафон':'Start marathon'}</button>`);document.querySelector('#start-marathon').onclick=async event=>{const button=event?.currentTarget;if(button?.isConnected===false||!groupPageCurrent(`groups/${groupId}`,principal))return;try{await groupRequest('start','POST',{groupId:group.id});if(button?.isConnected===false||!groupPageCurrent(`groups/${groupId}`,principal))return;await renderGroup(group.id)}catch{if(groupPageCurrent(`groups/${groupId}`,principal))announce(t('groupError'))}};}
   if (document.querySelector("#session-form"))
     document.querySelector("#session-form").onsubmit = async (e) => {
       e.preventDefault();
-      const form = new FormData(e.currentTarget),
+      const control=e.currentTarget;
+      if(control?.isConnected===false||!groupPageCurrent(`groups/${groupId}`,principal))return;
+      const form = new FormData(control),
         payload = Object.fromEntries(form);
       payload.groupId = group.id;
       payload.chapter = Number(payload.chapter);
@@ -3103,10 +3348,14 @@ async function renderGroup(groupId) {
       payload.answersTotal = 0;
       try {
         await groupRequest("session", "POST", payload);
+        if(control?.isConnected===false||!groupPageCurrent(`groups/${groupId}`,principal))return;
         announce(t("meetingSaved"));
         await renderGroup(group.id);
       } catch {
-        document.querySelector("#session-state").textContent = t("groupError");
+        if(control?.isConnected!==false&&groupPageCurrent(`groups/${groupId}`,principal)){
+          const status=document.querySelector("#session-state");
+          if(status)status.textContent=t("groupError");
+        }
       }
     };
 }
@@ -3123,7 +3372,17 @@ function renderAttemptResult(result, book, chapter, groupId = "", groupRecorded)
   play("done");
 }
 
+let missionViewEpoch = 0;
+function activeMissionPath() {
+  const active = location.hash.startsWith("#/")
+    ? location.hash.slice(2) : location.pathname.replace(/^\/+/, "");
+  return active.replace(/\/+$/, "");
+}
 async function renderMission(parts = []) {
+  // A prior account's late grading/result response may never render into the
+  // current account, a newer mission load, or a different browser route.
+  const principal = state.user, path = activeMissionPath(), epoch = ++missionViewEpoch;
+  const isCurrent = () => state.user === principal && missionViewEpoch === epoch && activeMissionPath() === path;
   setActiveNav("missions");
   state.currentReader = null;
   const copy = ATTEMPT_COPY[state.lang], attemptId = parts[2] || sessionStorage.getItem("sa.activeAttempt");
@@ -3134,9 +3393,12 @@ async function renderMission(parts = []) {
   let data;
   try {
     data = await attemptRequest("current", "GET", undefined, `attemptId=${encodeURIComponent(attemptId)}`);
+    if (!isCurrent()) return;
     if (data.grading) data = await attemptRequest("finalize", "POST", { attemptId });
+    if (!isCurrent()) return;
   }
   catch (error) {
+    if (!isCurrent()) return;
     if (["attempt_invalidated", "attempt_expired", "attempt_closed"].includes(error.message)) {
       if(sessionStorage.getItem("sa.activeAttempt")===attemptId)sessionStorage.removeItem("sa.activeAttempt");
       renderLockedChapter("GEN", 12); return;
@@ -3155,18 +3417,21 @@ async function renderMission(parts = []) {
   shell(`<div class="section-head"><div><p class="eyebrow">${t("missionTitle")}</p><h1>${copy.prepareTitle}</h1></div><p>${copy.memory}</p></div><div class="mission-shell public"><article class="mission-main"><div class="mission-progress"><span style="width:${Math.round((task.index - 1) * 100 / task.total)}%"></span></div><p><strong>${t("task")} ${task.index} ${t("of")} ${task.total}</strong></p><form id="answer-form"><fieldset class="options"><legend class="question">${esc(task.question)}</legend><p>${task.type === "multi" ? t("selectAll") : t("selectOne")}</p>${options}</fieldset><div class="action-row"><button class="button primary" type="submit">${copy.submit}</button></div><p id="answer-state" role="status"></p></form></article></div>`);
   document.querySelector("#answer-form").onsubmit = async event => {
     event.preventDefault();
+    if (!isCurrent()) return;
     const selected = [...document.querySelectorAll('input[name="answer"]:checked')].map(input => Number(input.value)).sort((a, b) => a - b);
     if (!selected.length) { announce(t("selectOne")); return; }
     const button = event.currentTarget.querySelector("button[type=submit]"), status = document.querySelector("#answer-state");
     button.disabled = true;
     try {
       const response = await attemptRequest("answer", "POST", { attemptId, taskIndex: task.index, selected });
+      if (!isCurrent()) return;
       if (response.completed) {
         sessionStorage.removeItem("sa.activeAttempt");
         attemptChannel?.postMessage({ type: "attempt-completed", attemptId });
         renderAttemptResult(response.result, response.book, response.chapter, response.groupId, response.groupRecorded);
       } else await renderMission(["mission", "attempt", attemptId]);
     } catch (error) {
+      if (!isCurrent()) return;
       if (["attempt_changed", "answer_already_submitted", "attempt_closed"].includes(error.message)) { await renderMission(["mission", "attempt", attemptId]); return; }
       status.textContent = error.message === "attempt_invalidated" ? copy.lockedText : t("errorLoad");
       button.disabled = false;
@@ -3407,18 +3672,29 @@ async function authRequest(action, body = {}) {
   return data;
 }
 async function syncProgress() {
-  if (!state.user) return;
+  const principal=state.user;
+  if (!principal) return;
+  const requestEpoch=(syncProgress._epoch=(syncProgress._epoch||0)+1);
+  // A previous login or superseded refresh must never publish private data
+  // into a later account's cache or UI.
+  const current=()=>syncProgress._epoch===requestEpoch&&state.user===principal;
   state.progressSyncStatus = "unavailable";
   try {
     const readingData=await accountRequest('reading');
+    if(!current())return;
     // A successful-looking HTTP reply with no reading array is not evidence
     // of empty reading history; never overwrite the local cache on that basis.
     if(!Array.isArray(readingData.reading))throw Error("missing_reading_history");
     const localReading=loadJSON('sa.readingHistory',[]);
     if(!Array.isArray(localReading))throw Error("invalid_local_reading_history");
     const mergedReading=[...new Map([...readingData.reading,...localReading].map(r=>[r.book+':'+r.chapter,r])).values()];
-    if(mergedReading.length)await accountRequest('reading','PUT',{reading:mergedReading});
+    if(!current())return;
+    if(mergedReading.length){
+      await accountRequest('reading','PUT',{reading:mergedReading});
+      if(!current())return;
+    }
     const data = await accountRequest("progress");
+    if(!current())return;
     if (!data.progress || !Number.isSafeInteger(data.progress.index) ||
       data.progress.index<0 || !Array.isArray(data.progress.correct) ||
       typeof data.progress.complete!=="boolean")throw Error("invalid_progress_receipt");
@@ -3432,6 +3708,7 @@ async function syncProgress() {
     // legacy row; never quietly present those totals as definitive.
     state.progressSyncStatus = data.warning === "partial_progress_history" ? "partial" : null;
   } catch {
+    if(!current())return;
     // Preserve cached evidence and show a localized nonvisual warning on the
     // canonical progress page instead of silently claiming it is current.
     state.progressSyncStatus = "unavailable";
@@ -3439,6 +3716,7 @@ async function syncProgress() {
 }
 function clearPersonalProgress() {
   state.progressSyncStatus=null;
+  syncProgress._epoch=(syncProgress._epoch||0)+1;
   state.missionProgress={index:0,correct:[],complete:false};
   localStorage.setItem("sa.mission.OTAB01",JSON.stringify(state.missionProgress));
   localStorage.setItem("sa.readingHistory","[]");
@@ -3459,11 +3737,17 @@ function renderAccount() {
     ru: {mailDelayed:"Учётная запись создана, но письмо подтверждения пока не удалось отправить. Попробуйте отправить его повторно.",resend:"Отправить письмо повторно",requested:"Запрос принят. Проверьте почту.",emailInUse:"Этот адрес уже зарегистрирован. Войдите или воспользуйтесь восстановлением пароля.",rateLimited:"Слишком много попыток. Подождите и попробуйте позже.",resetSent:"Если этот адрес принадлежит подтверждённой учётной записи, вы получите письмо для восстановления доступа."},
     en: {mailDelayed:"Your account was created, but the verification email could not be sent yet. Try sending it again.",resend:"Resend verification email",requested:"Request accepted. Check your email.",emailInUse:"This email is already registered. Sign in or reset your password.",rateLimited:"Too many attempts. Please wait and try again later.",resetSent:"If this address belongs to a verified account, you will receive a password reset email."}
   }[state.lang]);
+  copy.sessionUnavailable = {
+    uk: "Сервер не підтвердив стан входу. Ваш локальний прогрес збережено; повторіть перевірку з'єднання.",
+    ru: "Сервер не подтвердил состояние входа. Ваш локальный прогресс сохранён; повторите проверку соединения.",
+    en: "The server could not confirm your sign-in state. Local progress is retained; retry when the connection returns.",
+  }[state.lang];
   copy.sensitiveRequired = {
     uk: "Щоб зберегти ці релігійні відомості, позначте окрему згоду або залиште ці поля порожніми.",
     ru: "Чтобы сохранить эти религиозные сведения, отметьте отдельное согласие или оставьте эти поля пустыми.",
     en: "To save religious information, give separate consent or leave those fields empty.",
   }[state.lang];
+  const sessionAlert = state.sessionUnavailable ? `<p role="alert">${esc(copy.sessionUnavailable)}</p>` : "";
   const sets = ACCOUNT_OPTIONS[state.lang], resetToken = new URLSearchParams(location.search).get("reset"), verified = new URLSearchParams(location.search).get("verified") === "1", passwordChanged = new URLSearchParams(location.search).get("passwordChanged") === "1";
   if (!state.user) {
     if (resetToken) {
@@ -3479,7 +3763,7 @@ function renderAccount() {
       };
       return;
     }
-    shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${copy.title}</h1></div><p>${copy.intro}</p></div>${verified?`<div class="notice success" role="status">${copy.verified}</div>`:""}${passwordChanged?`<div class="notice success" role="status">${copy.resetDone}</div>`:""}<div class="auth-grid"><section class="card auth-card"><h2>${copy.login}</h2><form id="login-form" class="account-form">${field("email",copy.email,"email",'autocomplete="email" required')}${field("password",copy.password,"password",'autocomplete="current-password" required')}<button class="button primary">${copy.login}</button><p id="login-state" role="status"></p></form><details><summary>${copy.forgot}</summary><form id="forgot-form" class="account-form">${field("email",copy.email,"email",'autocomplete="email" required')}<button class="button">${copy.send}</button><p id="forgot-state" role="status"></p></form></details></section><section class="card auth-card"><h2>${copy.register}</h2><form id="register-form" class="account-form account-form-grid">${field("firstName",t("firstName"),"text",'autocomplete="given-name" required maxlength="80"')}${field("lastName",t("lastName"),"text",'autocomplete="family-name" required maxlength="80"')}${field("age",copy.age,"number",'min="13" max="120" inputmode="numeric" required')}<label class="account-field"><span>${t("gender")}</span><select name="gender" required>${options(sets.gender)}</select></label><label class="account-field"><span>${t("religion")} · ${t("optional")}</span><select name="tradition">${options(sets.religion)}</select></label>${field("denomination",`${copy.denomination} · ${t("optional")}`)}<label class="account-field"><span>${t("marital")}</span><select name="maritalStatus" required>${options(sets.marital)}</select></label><label class="account-field"><span>${copy.children} · ${t("optional")}</span><select name="hasChildren"><option value=""></option><option value="yes">${copy.yes}</option><option value="no">${copy.no}</option></select></label>${field("email",copy.email,"email",'autocomplete="email" required')}${field("password",copy.password,"password",'autocomplete="new-password" minlength="12" maxlength="128" required aria-describedby="register-password-rule"')}<small id="register-password-rule" class="full">${copy.passwordRule}</small><label class="account-check full"><input name="acceptSensitive" type="checkbox"><span>${t("sensitiveAgree")}</span></label><label class="account-check full"><input name="acceptPrivacy" type="checkbox" required><span>${t("privacyAgree")} <a href="/privacy">${t("privacy")}</a></span></label><button class="button primary">${copy.register}</button><p id="register-state" role="status"></p></form></section></div>`);
+    shell(`${sessionAlert}<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${copy.title}</h1></div><p>${copy.intro}</p></div>${verified?`<div class="notice success" role="status">${copy.verified}</div>`:""}${passwordChanged?`<div class="notice success" role="status">${copy.resetDone}</div>`:""}<div class="auth-grid"><section class="card auth-card"><h2>${copy.login}</h2><form id="login-form" class="account-form">${field("email",copy.email,"email",'autocomplete="email" required')}${field("password",copy.password,"password",'autocomplete="current-password" required')}<button class="button primary">${copy.login}</button><p id="login-state" role="status"></p></form><details><summary>${copy.forgot}</summary><form id="forgot-form" class="account-form">${field("email",copy.email,"email",'autocomplete="email" required')}<button class="button">${copy.send}</button><p id="forgot-state" role="status"></p></form></details></section><section class="card auth-card"><h2>${copy.register}</h2><form id="register-form" class="account-form account-form-grid">${field("firstName",t("firstName"),"text",'autocomplete="given-name" required maxlength="80"')}${field("lastName",t("lastName"),"text",'autocomplete="family-name" required maxlength="80"')}${field("age",copy.age,"number",'min="13" max="120" inputmode="numeric" required')}<label class="account-field"><span>${t("gender")}</span><select name="gender" required>${options(sets.gender)}</select></label><label class="account-field"><span>${t("religion")} · ${t("optional")}</span><select name="tradition">${options(sets.religion)}</select></label>${field("denomination",`${copy.denomination} · ${t("optional")}`)}<label class="account-field"><span>${t("marital")}</span><select name="maritalStatus" required>${options(sets.marital)}</select></label><label class="account-field"><span>${copy.children} · ${t("optional")}</span><select name="hasChildren"><option value=""></option><option value="yes">${copy.yes}</option><option value="no">${copy.no}</option></select></label>${field("email",copy.email,"email",'autocomplete="email" required')}${field("password",copy.password,"password",'autocomplete="new-password" minlength="12" maxlength="128" required aria-describedby="register-password-rule"')}<small id="register-password-rule" class="full">${copy.passwordRule}</small><label class="account-check full"><input name="acceptSensitive" type="checkbox"><span>${t("sensitiveAgree")}</span></label><label class="account-check full"><input name="acceptPrivacy" type="checkbox" required><span>${t("privacyAgree")} <a href="/privacy">${t("privacy")}</a></span></label><button class="button primary">${copy.register}</button><p id="register-state" role="status"></p></form></section></div>`);
     document.querySelector("#login-form").onsubmit=async event=>{event.preventDefault();const status=document.querySelector("#login-state"),data=Object.fromEntries(new FormData(event.currentTarget));try{await authRequest("login",data);await getSession();window.saAnalytics?.track("login",{method:"password"});if(state.user?.profileComplete)await syncProgress();window.history.replaceState(null,"","/account");renderAccount()}catch(error){if(error.message==="email_not_verified")await authRequest("resend-verification",{email:data.email}).catch(()=>{});window.saAnalytics?.track("login_error",{error:String(error.message).slice(0,60)});status.textContent=error.message==="email_not_verified"?copy.verification:copy.error}};
     document.querySelector("#forgot-form").onsubmit=async event=>{event.preventDefault();const status=document.querySelector("#forgot-state");try{await authRequest("forgot-password",Object.fromEntries(new FormData(event.currentTarget)));status.textContent=copy.resetSent}catch{status.textContent=copy.error}};
     document.querySelector("#register-form").onsubmit=async event=>{
@@ -3542,7 +3826,15 @@ function renderAccount() {
   document.querySelector("#profile-form").onsubmit=async event=>{event.preventDefault();const form=new FormData(event.currentTarget),data=Object.fromEntries(form);data.acceptSensitive=form.has("acceptSensitive");data.acceptPrivacy=form.has("acceptPrivacy");data.locale=state.lang;try{state.user=(await accountRequest("profile","POST",data)).user;await syncProgress();renderAccount()}catch{document.querySelector("#profile-state").textContent=copy.error}};
 }
 
+let editorViewEpoch = 0;
 async function renderEditor() {
+  const principal = state.user, epoch = ++editorViewEpoch;
+  const isCurrent = () => {
+    const path = location.hash.startsWith("#/")
+      ? location.hash.slice(2) : location.pathname.replace(/^\/+/, "");
+    return state.user === principal && Boolean(principal?.isOwner) &&
+      editorViewEpoch === epoch && path.replace(/\/+$/, "") === "editor";
+  };
   clearInterval(communityOwnerRefreshInterval);
   setActiveNav("account");
   if (!state.user?.isOwner) {
@@ -3577,14 +3869,17 @@ async function renderEditor() {
   try {
     users = (await accountRequest("users")).users || [];
   } catch {}
+  if (!isCurrent()) return;
   try {
     const response = await fetch("/api/content?admin=1", { cache: "no-store" });
     if (response.ok) managed = await response.json();
   } catch {}
+  if (!isCurrent()) return;
   try {
     const response = await fetch("/api/analytics?days=30", { cache: "no-store" });
     if (response.ok) analytics = await response.json();
   } catch {}
+  if (!isCurrent()) return;
   const note = state.cms?.liveNote || {};
   shell(
     `<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${copy[0]}</h1></div><p>${esc(state.user.email)}</p></div><div class="editor-grid"><section class="card"><h2>${copy[1]}</h2><form id="content-form" class="account-form"><label class="account-field"><span>Українська</span><textarea name="uk" rows="4">${esc(note.uk || "")}</textarea></label><label class="account-field"><span>Русский</span><textarea name="ru" rows="4">${esc(note.ru || "")}</textarea></label><label class="account-field"><span>English</span><textarea name="en" rows="4">${esc(note.en || "")}</textarea></label><button class="button primary">${copy[2]}</button><p id="content-state" role="status"></p></form></section><section class="card"><h2>${copy[3]} · ${users.length}</h2><div class="user-list">${users.length ? users.map((u) => `<p><strong>${esc(u.first_name)} ${esc(u.last_name)}</strong><br><span>${esc(u.email)} · ${esc(u.locale)} · ${esc(u.age_range)}</span></p>`).join("") : "<p>—</p>"}</div></section></div>`,
@@ -3609,12 +3904,26 @@ async function renderEditor() {
   const stateNames={uk:{waiting:"Очікує запуску",running:"Працює",paused:"Призупинено",stopped:"Зупинено"},ru:{waiting:"Ожидает запуска",running:"Работает",paused:"Приостановлено",stopped:"Остановлено"},en:{waiting:"Ready to start",running:"Running",paused:"Paused",stopped:"Stopped"}}[state.lang];
   const localTime=value=>value?new Intl.DateTimeFormat(state.lang,{timeZone:"Europe/Warsaw",dateStyle:"short",timeStyle:"short"}).format(new Date(value.replace(" ","T")+"Z")):"—";
   document.querySelector(".analytics-dashboard").insertAdjacentHTML("afterend",`<section class="card full community-admin"><div class="section-head compact"><div><p class="eyebrow">Scripture Archive</p><h2>${communityAdmin.title}</h2></div><p>${communityAdmin.status}: <strong data-community-run-status>${esc(stateNames[runStatus]||runStatus)}</strong></p></div><div class="analytics-metrics"><article><strong>${formatNumber(analytics.accounts.total)}</strong><span>${communityAdmin.real}</span></article><article><strong>${formatNumber(communityState.synthetic?.total)}</strong><span>${communityAdmin.automatic}</span></article></div><h3>${communityAdmin.schedule}</h3><div class="community-wave-list">${(communityState.waves||[]).map(wave=>`<p><strong>${esc(wave.label)}</strong><span>${formatNumber(wave.created_count)} ${communityAdmin.of} ${formatNumber(wave.target_count)} ${communityAdmin.created} · ${communityAdmin.next}: ${esc(localTime(wave.next_at))} · ${esc(wave.status)}</span></p>`).join("")||"<p>—</p>"}</div><div class="action-row"><button class="button" data-community-control="pause" ${!["waiting","running"].includes(runStatus)?"disabled":""}>${communityAdmin.pause}</button><button class="button" data-community-control="resume" ${runStatus!=="paused"?"disabled":""}>${communityAdmin.resume}</button></div><p id="community-control-state" role="status"></p><details><summary>${communityAdmin.log}</summary><ol>${(communityState.log||[]).map(event=>`<li>${esc(localTime(event.created_at))} · ${esc(event.event_type)}</li>`).join("")}</ol></details></section>`);
-  document.querySelectorAll("[data-community-control]").forEach(button=>button.onclick=async()=>{button.disabled=true;const status=document.querySelector("#community-control-state");try{const response=await fetch("/api/community",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:button.dataset.communityControl})});if(!response.ok)throw Error(String(response.status));const result=await response.json();await renderEditor();announce(stateNames[result.status]||result.status)}catch{status.textContent=t("registerError")}});
+  document.querySelectorAll("[data-community-control]").forEach(button => button.onclick = async () => {
+    if (!isCurrent()) return;
+    button.disabled = true;
+    const status = document.querySelector("#community-control-state");
+    try {
+      const response = await fetch("/api/community", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({action:button.dataset.communityControl})});
+      if (!isCurrent()) return;
+      if (!response.ok) throw Error(String(response.status));
+      const result = await response.json();
+      if (!isCurrent()) return;
+      await renderEditor();
+      if (state.user === principal && (location.pathname === "/editor" || location.hash.startsWith("#/editor")))
+        announce(stateNames[result.status] || result.status);
+    } catch { if (isCurrent()) status.textContent = t("registerError"); }
+  });
   communityOwnerRefreshInterval=setInterval(async()=>{
-    if(document.hidden)return;
+    if(document.hidden || !isCurrent())return;
     try{
-      const response=await fetch("/api/community?action=owner",{cache:"no-store"});if(!response.ok)return;
-      const current=await response.json(),panel=main.querySelector(".community-admin");if(!panel)return;
+      const response=await fetch("/api/community?action=owner",{cache:"no-store"});if(!response.ok || !isCurrent())return;
+      const current=await response.json(),panel=main.querySelector(".community-admin");if(!panel || !isCurrent())return;
       const status=current.run?.status||"waiting";
       panel.querySelector("[data-community-run-status]").textContent=stateNames[status]||status;
       panel.querySelector('[data-community-control="pause"]').disabled=!["waiting","running"].includes(status);
@@ -3627,30 +3936,36 @@ async function renderEditor() {
   document.querySelector(".editor-grid").insertAdjacentHTML("beforeend", `<section class="card full"><h2>${adminLabels.heading}</h2><p>${adminLabels.lead}</p><form id="managed-content-form" class="account-form account-form-grid"><label class="account-field"><span>ID</span><input name="id" maxlength="100"></label><label class="account-field"><span>${adminLabels.kind}</span><select name="kind"><option value="book">book</option><option value="chapter">chapter</option><option value="translation">translation</option><option value="mission">mission</option><option value="question">question</option><option value="route">route</option><option value="marathon">marathon</option><option value="ui_text">ui_text</option></select></label><label class="account-field"><span>${adminLabels.locale}</span><select name="locale"><option>uk</option><option>ru</option><option>en</option><option>all</option></select></label><label class="account-field"><span>${adminLabels.status}</span><select name="status"><option value="draft">${adminLabels.draft}</option><option value="published">${adminLabels.published}</option><option value="hidden">${adminLabels.hidden}</option></select></label>${field("title",adminLabels.title,"text",'required maxlength="200"')}<label class="account-field full"><span>${adminLabels.data}</span><textarea name="data" rows="8" required>{}</textarea></label><button class="button primary">${adminLabels.save}</button><p id="managed-content-state" role="status"></p></form><div class="managed-list">${managed.items.length?managed.items.map(item=>`<article><strong>${esc(item.title)}</strong><span>${esc(item.kind)} · ${esc(item.locale)} · ${esc(item.status)}</span></article>`).join(""):`<p>—</p>`}</div><details><summary>${adminLabels.history} · ${managed.revisions.length}</summary><ol>${managed.revisions.slice(0,30).map(revision=>`<li>${esc(revision.content_key)} · ${esc(revision.created_at)}</li>`).join("")}</ol></details></section>`);
   document.querySelector("#content-form").onsubmit = async (e) => {
     e.preventDefault();
+    if (!isCurrent()) return;
     const data = Object.fromEntries(new FormData(e.currentTarget));
     const response = await fetch("/api/content", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ liveNote: data }),
     });
+    if (!isCurrent()) return;
     if (response.ok) {
-      state.cms = await response.json();
+      const savedCMS = await response.json();
+      if (!isCurrent()) return;
+      state.cms = savedCMS;
       document.querySelector("#content-state").textContent = t("progressSaved");
     } else
       document.querySelector("#content-state").textContent = t("registerError");
   };
   document.querySelector("#managed-content-form").onsubmit = async event => {
     event.preventDefault();
+    if (!isCurrent()) return;
     const form = new FormData(event.currentTarget), status = document.querySelector("#managed-content-state");
     let data;
     try { data = JSON.parse(String(form.get("data"))); }
     catch { status.textContent = "JSON"; return; }
     try {
       const response = await fetch("/api/content", { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ action:"upsert-item", id:form.get("id"), kind:form.get("kind"), locale:form.get("locale"), status:form.get("status"), title:form.get("title"), data }) });
+      if (!isCurrent()) return;
       if (!response.ok) throw Error(String(response.status));
       status.textContent = t("progressSaved");
       await renderEditor();
-    } catch { status.textContent = t("registerError"); }
+    } catch { if (isCurrent()) status.textContent = t("registerError"); }
   };
 }
 
@@ -3758,13 +4073,22 @@ async function route() {
 }
 
 langSelect.addEventListener("change", () => {
+  // Unsupported browser-supplied values cannot select a missing translation UI.
+  if (!["uk", "ru", "en"].includes(langSelect.value)) {
+    langSelect.value = state.lang;
+    return;
+  }
   const restorePickerFocus = document.activeElement === langSelect;
   state.lang = langSelect.value;
-  localStorage.setItem("sa.lang", state.lang);
+  const currentLanguage = state.lang;
+  const saved = storeReaderPreference("sa.lang", currentLanguage);
   state.mission = null;
   setStaticI18n();
   play("nav");
   void route().then(() => {
+    // A delayed old render cannot change focus or report the wrong language.
+    if (state.lang !== currentLanguage) return;
+    if (!saved) announce(LANGUAGE_TRANSIENT_MESSAGES[currentLanguage]);
     if (restorePickerFocus && document.activeElement === main && document.contains(langSelect)) {
       langSelect.focus({ preventScroll: true });
     }
@@ -3795,7 +4119,7 @@ window.addEventListener("hashchange", () => {
   route();
 });
 window.addEventListener("popstate", route);
-Promise.all([getCMS(), getSession()]).finally(async () => {
+Promise.all([getCMS(), getSession().catch(() => null)]).finally(async () => {
   if (state.user?.profileComplete) await syncProgress();
   setStaticI18n();
   route();

@@ -90,11 +90,12 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const ownAccount = await (await fetch(`${base}/api/account?action=me`, {headers:{Cookie:cookie}})).json();
   const roleAction = (action, principal = ownerCookie, origin = base) => fetch(`${base}/api/editor-roles`, {method:'POST',headers:{Origin:origin,Cookie:principal,'Content-Type':'application/json'},body:JSON.stringify({action,userId:ownAccount.user.id})});
   assert.equal((await roleAction('grant',cookie)).status,403);
-  // Dev proxy can itself restart on an unrelated remote Origin header.
-  // Changing the local host label is a genuine cross-origin browser request,
-  // while the separate real-handler unit test checks attacker.invalid.
+  // An Origin with another port is cross-origin under the browser's
+  // scheme/host/port tuple, without changing the Wrangler dev proxy hostname.
+  // Separate real-handler tests also reject a genuinely remote host.
   const forgedLocalOrigin = new URL(base);
-  forgedLocalOrigin.hostname = 'localhost';
+  forgedLocalOrigin.port = forgedLocalOrigin.port === '54321' ? '54322' : '54321';
+  assert.notEqual(forgedLocalOrigin.origin, new URL(base).origin);
   const forgedGrant = await roleAction('grant',ownerCookie,forgedLocalOrigin.origin);
   assert.equal(forgedGrant.status,403,
     `Cross-origin mutation must be rejected; local Worker response: ${(await forgedGrant.clone().text()).slice(0,300)}`);

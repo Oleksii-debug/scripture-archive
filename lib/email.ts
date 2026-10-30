@@ -22,6 +22,18 @@ function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
 }
 
+// A 2xx transport response alone is not a provider acceptance receipt.
+// Resend's send-email endpoint returns a non-empty message id on acceptance.
+// Do not tell callers the message was accepted if the provider returned
+// malformed JSON, an error object, or a bare HTTP success response.
+async function providerAccepted(response: Response | null): Promise<boolean> {
+  if (!response?.ok) return false;
+  const receipt: unknown = await response.json().catch(() => null);
+  if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) return false;
+  const id = (receipt as { id?: unknown }).id;
+  return typeof id === "string" && id.trim().length > 0 && id.length <= 200;
+}
+
 export async function sendSecurityEmail(email: string, localeValue: string, purpose: Purpose, url: string) {
   const locale: Locale = localeValue === "ru" || localeValue === "en" ? localeValue : "uk";
   const copy = COPY[locale][purpose];
@@ -38,7 +50,7 @@ export async function sendSecurityEmail(email: string, localeValue: string, purp
       text: `${copy.title}\n\n${copy.body}\n\n${url}\n\n${copy.expiry}\n\nScripture Archive`,
     }),
   }).catch(() => null);
-  if (!response?.ok) return { delivered: false, reason: "email_provider_error" };
+  if (!await providerAccepted(response)) return { delivered: false, reason: "email_provider_error" };
   return { delivered: true };
 }
 
@@ -69,7 +81,7 @@ export async function sendSupportRequestEmail(input: {
       attachments: input.attachments.map(file => ({ filename: file.filename, content_type: file.contentType, content: file.content })),
     }),
   }).catch(() => null);
-  if (!response?.ok) return { delivered: false, reason: "email_provider_error" };
+  if (!await providerAccepted(response)) return { delivered: false, reason: "email_provider_error" };
   return { delivered: true };
 }
 

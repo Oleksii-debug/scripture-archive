@@ -3,9 +3,9 @@
 // not copied Bible text, external historical evidence, or licence assertions.
 const LANGS = ['uk','ru','en'];
 const COPY = {
-  uk: {index:'Каталог досьє',sources:'Біблійні свідчення',relations:'Зв’язки з іншими досьє',questions:'Питання для дослідження',person:'Особа',place:'Місце',event:'Подія',read:'Відкрити джерело в читальні',narrative:'Зв’язок у біблійній оповіді',interpretive:'Тематичне зіставлення, не незалежний історичний доказ',scope:'Це навігаційне дослідження біблійних текстів, а не археологічний висновок. Порівнюйте переклади у читальні; права й походження конкретного видання наведені там.',selected:'Поточне досьє',invalid:'Дані джерел для цього досьє не перевірені. Перегляд тимчасово недоступний.',none:'Виберіть тему зі списку.',mission:'Перейти до місії Авраама'},
-  ru: {index:'Каталог досье',sources:'Библейские свидетельства',relations:'Связи с другими досье',questions:'Вопросы для исследования',person:'Человек',place:'Место',event:'Событие',read:'Открыть источник в читальне',narrative:'Связь в библейском повествовании',interpretive:'Тематическое сопоставление, не независимое историческое доказательство',scope:'Это навигационное исследование библейских текстов, а не археологический вывод. Сравнивайте переводы в читальне; права и происхождение конкретного издания приведены там.',selected:'Текущее досье',invalid:'Данные источников этого досье не проверены. Просмотр временно недоступен.',none:'Выберите тему из списка.',mission:'Перейти к миссии Авраама'},
-  en: {index:'Dossier catalogue',sources:'Scripture references',relations:'Connections to other dossiers',questions:'Study questions',person:'Person',place:'Place',event:'Event',read:'Open source in reader',narrative:'Connection in the biblical narrative',interpretive:'Thematic comparison, not independent historical proof',scope:'This navigates biblical texts; it does not assert independent archaeological proof. Compare editions in the reader, where individual source and licensing details are shown.',selected:'Current dossier',invalid:'The sources for this dossier could not be validated. Viewing is temporarily unavailable.',none:'Choose a topic from the list.',mission:'Open Abraham mission'},
+  uk: {index:'Каталог досьє',sources:'Біблійні свідчення',relations:'Зв’язки з іншими досьє',questions:'Питання для дослідження',person:'Особа',place:'Місце',event:'Подія',read:'Відкрити джерело в читальні',narrative:'Зв’язок у біблійній оповіді',interpretive:'Тематичне зіставлення, не незалежний історичний доказ',scope:'Це навігаційне дослідження біблійних текстів, а не археологічний висновок. Порівнюйте переклади у читальні; права й походження конкретного видання наведені там.',selected:'Поточне досьє',invalid:'Дані джерел для цього досьє не перевірені. Перегляд тимчасово недоступний.',none:'Виберіть тему зі списку.',unknown:'Такого досьє не знайдено. Оберіть тему з каталогу.',mission:'Перейти до місії Авраама'},
+  ru: {index:'Каталог досье',sources:'Библейские свидетельства',relations:'Связи с другими досье',questions:'Вопросы для исследования',person:'Человек',place:'Место',event:'Событие',read:'Открыть источник в читальне',narrative:'Связь в библейском повествовании',interpretive:'Тематическое сопоставление, не независимое историческое доказательство',scope:'Это навигационное исследование библейских текстов, а не археологический вывод. Сравнивайте переводы в читальне; права и происхождение конкретного издания приведены там.',selected:'Текущее досье',invalid:'Данные источников этого досье не проверены. Просмотр временно недоступен.',none:'Выберите тему из списка.',unknown:'Такое досье не найдено. Выберите тему в каталоге.',mission:'Перейти к миссии Авраама'},
+  en: {index:'Dossier catalogue',sources:'Scripture references',relations:'Connections to other dossiers',questions:'Study questions',person:'Person',place:'Place',event:'Event',read:'Open source in reader',narrative:'Connection in the biblical narrative',interpretive:'Thematic comparison, not independent historical proof',scope:'This navigates biblical texts; it does not assert independent archaeological proof. Compare editions in the reader, where individual source and licensing details are shown.',selected:'Current dossier',invalid:'The sources for this dossier could not be validated. Viewing is temporarily unavailable.',none:'Choose a topic from the list.',unknown:'That dossier was not found. Choose a topic from the catalogue.',mission:'Open Abraham mission'},
 };
 const ref=(book,chapter,first,last,kind='narrative')=>({book,chapter,first,last,kind});
 const nodes=[
@@ -39,6 +39,68 @@ const nodes=[
   sources:[ref('1SA',16,1,13),ref('2SA',5,1,10),ref('LUK',1,32,33,'interpretive')],
   related:[{to:'jerusalem',via:ref('2SA',5,6,10)}],
   prompts:{uk:['Що розповідає 1 Самуїла 16 про обрання Давида?','Як Лука 1 пов’язує своє повідомлення з Давидом?'],ru:['Что говорит 1 Царств 16 об избрании Давида?','Как Лука 1 связывает повествование с Давидом?'],en:['How does 1 Samuel 16 describe David’s selection?','How does Luke 1 reference David?']}},
+ {id:'joseph',type:'person',names:{uk:'Йосип (син Якова)',ru:'Иосиф (сын Иакова)',en:'Joseph (son of Jacob)'},
+  summaries:{uk:'Оповідь про братів Йосипа, зустріч у Єгипті та пізніші згадки про його покоління.',ru:'Рассказ о братьях Иосифа, встрече в Египте и позднейших упоминаниях его поколения.',en:'The account of Joseph and his brothers, their meeting in Egypt, and later references to that generation.'},
+  sources:[ref('GEN',37,3,11),ref('GEN',45,1,8),ref('GEN',50,19,21)],
+  related:[{to:'exodus',via:ref('EXO',1,6,8)}],
+  prompts:{uk:['Що розповідає Буття 37 про стосунки братів?','Якими словами Йосип пояснює події в Бутті 45?'],
+    ru:['Что рассказывает Бытие 37 об отношениях братьев?','Какими словами Иосиф объясняет события в Бытии 45?'],
+    en:['What does Genesis 37 show about the brothers?','How does Joseph explain the events in Genesis 45?']}},
+ {id:'bethlehem',type:'place',names:{uk:'Вифлеєм',ru:'Вифлеем',en:'Bethlehem'},
+  summaries:{uk:'Зіставлення згадок про Вифлеєм у книзі Михея та оповідях Євангелій.',ru:'Сопоставление упоминаний Вифлеема у Михея и в евангельских повествованиях.',en:'Compare references to Bethlehem in Micah and the Gospel narratives.'},
+  sources:[ref('MIC',5,2,4,'interpretive'),ref('MAT',2,1,12),ref('LUK',2,1,7)],
+  related:[{to:'jerusalem',via:ref('MAT',2,1,6)}],
+  prompts:{uk:['Як у Михея 5 представлено Вифлеєм?','Що в Матвія 2 та Луки 2 сказано про це місце?'],
+    ru:['Как в Михее 5 представлен Вифлеем?','Что о нём сказано в Матфея 2 и Луки 2?'],
+    en:['How does Micah 5 describe Bethlehem?','What do Matthew 2 and Luke 2 say about this place?']}},
+ {id:'nativity',type:'event',names:{uk:'Народження Ісуса',ru:'Рождение Иисуса',en:'Birth of Jesus'},
+  summaries:{uk:'Порівняйте повідомлення Матвія та Луки про народження Ісуса та пов’язані події.',ru:'Сравните рассказы Матфея и Луки о рождении Иисуса и связанных событиях.',en:'Compare Matthew and Luke on the birth of Jesus and the events surrounding it.'},
+  sources:[ref('MAT',1,18,25),ref('LUK',2,1,20),ref('MAT',2,1,12)],
+  related:[{to:'bethlehem',via:ref('LUK',2,1,7)}],
+  prompts:{uk:['Які події висвітлює Матвій 1?','Які подробиці додає Лука 2 та як вони відрізняються?'],
+    ru:['Какие события описывает Матфей 1?','Что добавляет Лука 2 и чем его рассказ отличается?'],
+    en:['Which events does Matthew 1 describe?','What details does Luke 2 add, and how do the accounts differ?']}},
+
+ {id:'egypt',type:'place',names:{uk:'Єгипет',ru:'Египет',en:'Egypt'},
+  summaries:{uk:'Порівняйте три окремі біблійні оповіді, дія яких відбувається в Єгипті: подорож Аврама, вихід ізраїльтян і перебування родини Ісуса.',ru:'Сравните три отдельные библейские истории, происходящие в Египте: путешествие Аврама, исход израильтян и пребывание семьи Иисуса.',en:'Compare three distinct biblical narratives set in Egypt: Abram’s journey, the Israelites’ departure, and Jesus’ family seeking refuge.'},
+  sources:[ref('GEN',12,10,20),ref('EXO',12,29,42),ref('MAT',2,13,15)],
+  related:[{to:'exodus',via:ref('EXO',12,29,42)}],
+  prompts:{uk:['Чому Аврам вирушає до Єгипту в Бутті 12?','Чим відрізняються обставини виходу у Виході 12 і втечі родини Ісуса в Матвія 2?'],ru:['Почему Аврам отправляется в Египет в Бытии 12?','Чем различаются обстоятельства исхода в Исходе 12 и бегства семьи Иисуса в Матфея 2?'],en:['Why does Abram travel to Egypt in Genesis 12?','How do the departures in Exodus 12 and Matthew 2 differ?']}},
+ {id:'nazareth',type:'place',names:{uk:'Назарет',ru:'Назарет',en:'Nazareth'},
+  summaries:{uk:'Зіставте благовіщення в Назареті, повернення родини Ісуса та подальший виступ у місцевій синагозі.',ru:'Сопоставьте благовещение в Назарете, возвращение семьи Иисуса и последующее выступление в местной синагоге.',en:'Compare the annunciation in Nazareth, Jesus’ family settling there, and his later visit to the synagogue.'},
+  sources:[ref('LUK',1,26,38),ref('MAT',2,19,23),ref('LUK',4,16,21)],
+  related:[{to:'nativity',via:ref('MAT',2,19,23)}],
+  prompts:{uk:['Що Лука 1 повідомляє про Назарет і Марію?','Що змінюється між Матвія 2 і Лукою 4?'],ru:['Что Лука 1 сообщает о Назарете и Марии?','Что меняется между Матфея 2 и Луки 4?'],en:['What does Luke 1 report about Nazareth and Mary?','How do Matthew 2 and Luke 4 portray different moments?']}},
+ {id:'jericho',type:'place',names:{uk:'Єрихон',ru:'Иерихон',en:'Jericho'},
+  summaries:{uk:'Зіставте оповідь Ісуса Навина про Єрихон із новозавітними розповідями про Закхея та Вартимея, не вважаючи їх однією подією.',ru:'Сопоставьте рассказ Иисуса Навина об Иерихоне с новозаветными историями о Закхее и Вартимее, не объединяя их в одно событие.',en:'Compare Joshua’s Jericho narrative with later accounts of Zacchaeus and Bartimaeus, without treating them as a single event.'},
+  sources:[ref('JOS',6,1,5),ref('LUK',19,1,10),ref('MRK',10,46,52)],
+  related:[{to:'exodus',via:ref('JOS',6,1,5,'interpretive')}],
+  prompts:{uk:['Яку подію описує Ісус Навин 6?','Чим відрізняються зустрічі, описані в Луки 19 і Марка 10?'],ru:['Какое событие описывает Иисус Навин 6?','Чем различаются встречи в Луки 19 и Марка 10?'],en:['What event does Joshua 6 describe?','How do the encounters in Luke 19 and Mark 10 differ?']}},
+ {id:'galilee',type:'place',names:{uk:'Галілея',ru:'Галилея',en:'Galilee'},
+  summaries:{uk:'Порівняйте початок служіння Ісуса в Галілеї та згадку про Галілейське море в Євангелії від Івана.',ru:'Сравните начало служения Иисуса в Галилее и упоминание Галилейского моря в Евангелии от Иоанна.',en:'Compare the beginning of Jesus’ ministry in Galilee with John’s account at the Sea of Galilee.'},
+  sources:[ref('MAT',4,12,17),ref('MRK',1,14,20),ref('JHN',6,1,14)],
+  related:[{to:'peter',via:ref('MRK',1,16,18)}],
+  prompts:{uk:['Як Матвій 4 описує початок проповіді в Галілеї?','Які події біля моря згадано в Марка 1 та Івана 6?'],ru:['Как Матфей 4 описывает начало проповеди в Галилее?','Какие события у моря упомянуты в Марка 1 и Иоанна 6?'],en:['How does Matthew 4 describe the ministry’s beginning in Galilee?','What happens beside the sea in Mark 1 and John 6?']}},
+ {id:'ruth',type:'person',names:{uk:'Рут (Руф)',ru:'Руфь',en:'Ruth'},
+  summaries:{uk:'Оповідь про родинну вірність, переселення до Вифлеєма та подальшу сімейну історію.',ru:'Повествование о верности семье, переезде в Вифлеем и дальнейшей семейной истории.',en:'A narrative of family loyalty, the move to Bethlehem, and Ruth’s later family story.'},
+  sources:[ref('RUT',1,1,5),ref('RUT',1,16,22),ref('RUT',4,13,17)],
+  related:[{to:'bethlehem',via:ref('RUT',1,19,22)}],
+  prompts:{uk:['Як Рут відповідає Ноомі у першій главі?','Як четверта глава завершує сімейну оповідь?'],ru:['Как Руфь отвечает Ноемини в первой главе?','Как четвёртая глава завершает семейный рассказ?'],en:['How does Ruth answer Naomi in chapter 1?','How does chapter 4 conclude the family account?']}},
+ {id:'paul',type:'person',names:{uk:'Павло (Савло)',ru:'Павел (Савл)',en:'Paul (Saul)'},
+  summaries:{uk:'Зіставлення оповідей про навернення Савла та його власного опису покликання.',ru:'Сопоставление рассказов об обращении Савла и его собственного описания призвания.',en:'Compare narratives about Saul’s conversion with his own account of his calling.'},
+  sources:[ref('ACT',9,1,9),ref('ACT',22,6,11),ref('GAL',1,11,17,'interpretive')],
+  related:[{to:'exodus',via:ref('1CO',10,1,4,'interpretive')}],
+  prompts:{uk:['Які подробиці подає Діяння 9?','Що Павло підкреслює в Галатів 1?'],ru:['Какие подробности приводит Деяния 9?','Что Павел подчёркивает в Галатам 1?'],en:['Which details appear in Acts 9?','What does Paul emphasize in Galatians 1?']}},
+ {id:'mary-mother',type:'person',names:{uk:'Марія, мати Ісуса',ru:'Мария, мать Иисуса',en:'Mary, mother of Jesus'},
+  summaries:{uk:'Повідомлення про благовіщення, народження Ісуса та згадку Марії серед учнів.',ru:'Рассказы о благовещении, рождении Иисуса и упоминании Марии среди учеников.',en:'The annunciation, Jesus’ birth, and a later reference to Mary among the disciples.'},
+  sources:[ref('LUK',1,26,38),ref('LUK',2,1,20),ref('ACT',1,12,14)],
+  related:[{to:'nativity',via:ref('LUK',2,1,7)}],
+  prompts:{uk:['Що промовляє Марія в Луки 1?','Де Марія згадана в Діяннях 1?'],ru:['Что говорит Мария в Луки 1?','Где Мария упоминается в Деяниях 1?'],en:['What does Mary say in Luke 1?','Where is Mary named in Acts 1?']}},
+ {id:'peter',type:'person',names:{uk:'Петро (Симон)',ru:'Пётр (Симон)',en:'Peter (Simon)'},
+  summaries:{uk:'Зіставлення визнання Петра, подій його зречення та звернення до слухачів у Діяннях.',ru:'Сопоставление исповедания Петра, его отречения и обращения к слушателям в Деяниях.',en:'Compare Peter’s confession, his denial, and his address to the crowd in Acts.'},
+  sources:[ref('MAT',16,13,20),ref('LUK',22,54,62),ref('ACT',2,14,21)],
+  related:[{to:'jerusalem',via:ref('ACT',2,14,21)}],
+  prompts:{uk:['Що Петро відповідає у Матвія 16?','Як Лука 22 і Діяння 2 показують різні моменти його історії?'],ru:['Что Пётр отвечает в Матфея 16?','Как Лука 22 и Деяния 2 показывают разные моменты его истории?'],en:['What does Peter say in Matthew 16?','How do Luke 22 and Acts 2 depict different moments in his story?']}},
 ];
 export const scriptureDossiers=nodes;
 
@@ -67,16 +129,54 @@ export function validateDossierGraph(catalog) {
 export function dossierMarkup(catalog,language,requestedId,esc) {
   const lang=LANGS.includes(language)?language:'uk',w=COPY[lang];
   if(!validateDossierGraph(catalog)) return `<p role="alert">${esc(w.invalid)}</p>`;
-  const selected=nodes.find(item=>item.id===requestedId)||nodes[0];
+  // An absent query selects the introduction. An invalid explicit ID must
+  // never be silently presented as a different person's source dossier.
+  const selected=(requestedId===null || requestedId===undefined)
+    ? nodes[0]
+    : nodes.find(item=>item.id===requestedId);
   const bookNames=new Map(catalog.books[lang].map(book=>[book.code,book.title]));
   const cite=source=>{
     const label=`${bookNames.get(source.book)} ${source.chapter}:${source.first}–${source.last}`;
     return `<a href="/reader/${source.book}/${source.chapter}?verse=${source.first}" aria-label="${esc(w.read)}: ${esc(label)}">${esc(label)}</a>`;
   };
-  const index=`<nav aria-label="${esc(w.index)}"><h2>${esc(w.index)}</h2><ol>${nodes.map(item=>`<li><a href="/dossiers?id=${item.id}"${item.id===selected.id?' aria-current="page"':''}>${esc(item.names[lang])}</a> — ${esc(w[item.type])}</li>`).join('')}</ol></nav>`;
+  const index=`<nav aria-label="${esc(w.index)}"><h2>${esc(w.index)}</h2><ol>${nodes.map(item=>`<li><a href="/dossiers?id=${item.id}"${selected && item.id===selected.id?' aria-current="page"':''}>${esc(item.names[lang])}</a> — ${esc(w[item.type])}</li>`).join('')}</ol></nav>`;
+  if(!selected) return `<div class="dossier-layout"><aside class="card dossier-index">${index}</aside><p role="alert">${esc(w.unknown)}</p></div>`;
   const references=`<ol>${selected.sources.map(source=>`<li>${cite(source)} — ${esc(w[source.kind])}</li>`).join('')}</ol>`;
   const relations=`<ul>${selected.related.map(link=>`<li><a href="/dossiers?id=${link.to}">${esc(nodes.find(item=>item.id===link.to).names[lang])}</a> — ${cite(link.via)} — ${esc(w[link.via.kind])}</li>`).join('')}</ul>`;
   const questions=`<ol>${selected.prompts[lang].map(prompt=>`<li>${esc(prompt)}</li>`).join('')}</ol>`;
   const mission=selected.id==='abraham'? `<p><a class="button primary" href="/mission/abraham">${esc(w.mission)}</a></p>` : '';
   return `<div class="dossier-layout"><aside class="card dossier-index">${index}</aside><article class="card dossier-article" aria-labelledby="dossier-heading"><p class="eyebrow">${esc(w.selected)} · ${esc(w[selected.type])}</p><h2 id="dossier-heading" tabindex="-1">${esc(selected.names[lang])}</h2><p class="lead">${esc(selected.summaries[lang])}</p><p>${esc(w.scope)}</p><h3>${esc(w.sources)}</h3>${references}<h3>${esc(w.relations)}</h3>${relations}<h3>${esc(w.questions)}</h3>${questions}${mission}</article></div>`;
+}
+
+
+// SA-EXT-06: accessible text-first passage/place index. Editorial reading
+// order is NOT absolute historical dating or archaeological confirmation.
+export function dossierAtlasMarkup(catalog,language,esc) {
+  const lang=LANGS.includes(language)?language:'uk',w=COPY[lang];
+  if(!validateDossierGraph(catalog))return '<p role="alert">'+esc(w.invalid)+'</p>';
+  const terms={
+    uk:{title:'Біблійний атлас: текстова лабораторія',intro:'Орієнтовна послідовність оповідей для читання. Це не датування історичних подій і не незалежне археологічне підтвердження.',order:'Порядок читання',subject:'Тема',passage:'Біблійний уривок',places:'Згадані місця',uncertainty:'Сучасні координати, маршрути й археологічні локалізації тут не встановлені; використовуйте першоджерела, а не припущення на карті.'},
+    ru:{title:'Библейский атлас: текстовая лаборатория',intro:'Ориентировочная последовательность повествований для чтения. Это не датировка исторических событий и не независимое археологическое подтверждение.',order:'Порядок чтения',subject:'Тема',passage:'Библейский отрывок',places:'Упомянутые места',uncertainty:'Современные координаты, маршруты и археологические локализации здесь не установлены; используйте первоисточники, а не предположения на карте.'},
+    en:{title:'Scripture atlas: text-first research',intro:'An approximate narrative reading sequence, not a historical date assignment or independent archaeological verification.',order:'Reading order',subject:'Subject',passage:'Scripture passage',places:'Places mentioned',uncertainty:'Modern coordinates, routes and archaeological identifications are not established here; use source passages rather than guessed map locations.'}
+  }[lang];
+  const order=['abraham','sarah','joseph','moses','exodus','david','nativity'];
+  const byId=new Map(nodes.map(item=>[item.id,item]));
+  if(order.some(id=>!byId.has(id)))return '<p role="alert">'+esc(w.invalid)+'</p>';
+  const bookNames=new Map(catalog.books[lang].map(book=>[book.code,book.title]));
+  const passage=source=>{
+    const label=bookNames.get(source.book)+' '+source.chapter+':'+source.first+'–'+source.last;
+    return '<a href="/reader/'+source.book+'/'+source.chapter+'?verse='+source.first+'" aria-label="'+esc(w.read)+': '+esc(label)+'">'+esc(label)+'</a>';
+  };
+  const subject=item=>'<a href="/dossiers?id='+item.id+'">'+esc(item.names[lang])+'</a>';
+  const history=order.map((id,i)=>{
+    const item=byId.get(id);
+    return '<tr><th scope="row">'+(i+1)+'</th><td>'+subject(item)+'</td><td>'+passage(item.sources[0])+'</td></tr>';
+  }).join('');
+  // Display every source-backed passage for each place. Selecting only the
+  // first source silently hid independently cited chapters from the atlas.
+  const places=nodes.filter(item=>item.type==='place').map(item=>
+    '<tr><th scope="row">'+subject(item)+'</th><td><ol>'+
+    item.sources.map(source=>'<li>'+passage(source)+' — '+esc(w[source.kind])+'</li>').join('')+
+    '</ol></td></tr>').join('');
+  return '<section class="card dossier-atlas" aria-labelledby="dossier-atlas-heading"><h2 id="dossier-atlas-heading">'+esc(terms.title)+'</h2><p>'+esc(terms.intro)+'</p><table><caption>'+esc(terms.order)+'</caption><thead><tr><th scope="col">№</th><th scope="col">'+esc(terms.subject)+'</th><th scope="col">'+esc(terms.passage)+'</th></tr></thead><tbody>'+history+'</tbody></table><table><caption>'+esc(terms.places)+'</caption><thead><tr><th scope="col">'+esc(terms.subject)+'</th><th scope="col">'+esc(terms.passage)+'</th></tr></thead><tbody>'+places+'</tbody></table><p>'+esc(terms.uncertainty)+'</p></section>';
 }

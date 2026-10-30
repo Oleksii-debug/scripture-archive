@@ -84,3 +84,25 @@
 ## Ролі й контроль доказів
 Кожен запис у подальших Issue/PR повинен мати: `section_id`, `owner`, `dependencies`, `source branch/SHA`, `status` (PLANNED/IN_PROGRESS/SOURCE_READY/RELEASE_VERIFIED), `evidence`, `acceptance`, `privacy/accessibility`, `rights`. Жоден статус SOURCE_READY не конвертувати в LIVE без реальних end-to-end доказів.
 Зв'язки: `docs/product/SCRIPTURE_ARCHIVE_EXPANDED_PRODUCT_VISION_2026-10-28.md`; `docs/architecture/CHRISTIAN_COMMUNITY_AND_DATING_TECHNICAL_SPEC_2026-10-28.md`; GitHub #78; handoff 26.10.2026.
+
+---
+
+## Verified source convergence 2026-10-30 — evidence, not product acceptance
+
+**Операційний статус:** цей додаток лише підтверджує конкретні перевірені підфункції у живому GitHub `main`; він не змінює затвердженого обсягу SA-EXT-01…20, не перетворює `PLANNED_NEW` на готовий продукт і не санкціонує випуск. Початкова версія плану 28.10 залишається джерелом повних вимог.
+
+**Перевірений інтеграційний SHA після трьох ремонтів:** `19b53d0cde0318d2e8e4079bef190efe47892cda`; усі три merge SHA належать історії пізнішого `main` (перевірено `compare_commits`). Координація та продовження: [#297](https://github.com/Oleksii-debug/scripture-archive/issues/297#issuecomment-6513640327).
+
+| Підфункція плану | Вихідний стан, який реально відтворено | Виправлення у `main` | Точний стан |
+| --- | --- | --- | --- |
+| SA-EXT-06 / ATLAS_ALL_PLACE_SOURCES | Атлас приховував 11 інших посилань із шести досьє місць; показував по одному джерелу | [PR #447](https://github.com/Oleksii-debug/scripture-archive/pull/447), SHA `0353c85c0c36db8a00776bf7fcb192fbc21d5317`: усі три першоджерела на місце з клавіатурними посиланнями | **Підфункція SOURCE_CLOSED / SCOPED_TERMINAL**; увесь розділ SA-EXT-06 — **OPEN** |
+| SA-EXT-07 / ACADEMY_ALL_AUTHORED_QUESTIONS | Сім уроків ховали друге затверджене запитання (21 локалізований пропуск у uk/ru/en) | [PR #452](https://github.com/Oleksii-debug/scripture-archive/pull/452), SHA `4f10d944ef59d519d91edaa0fd9e61555271d57e`: усі питання у семантичних списках; одночасний fix #449 збережено | **Підфункція SOURCE_CLOSED / SCOPED_TERMINAL**; увесь SA-EXT-07 — **OPEN** |
+| SA-EXT-05/06 / ATLAS_SOURCE_KIND_PROVENANCE | Посилання на Михея 5:2 як тематичне тлумачення в атласі не мало застереження, яке вже було в досьє | [PR #453](https://github.com/Oleksii-debug/scripture-archive/pull/453), SHA `19b53d0cde0318d2e8e4079bef190efe47892cda`: тип джерела позначено для кожного уривка усіма трьома мовами | **Підфункція SOURCE_CLOSED / SCOPED_TERMINAL**; увесь SA-EXT-05/06 — **OPEN** |
+
+### Верифіковані перевірки та обмеження
+
+- Власноруч виконані source-executed V8-контракти: **95/95 + 88/88 + 66/66 PASS** на відповідних версіях реального JavaScript та каталогу.
+- GitHub Actions [#40991814980](https://github.com/Oleksii-debug/scripture-archive/actions/runs/40991814980): 765 Node PASS / 1 SKIP; [#40992473695](https://github.com/Oleksii-debug/scripture-archive/actions/runs/40992473695) і [#40992745009](https://github.com/Oleksii-debug/scripture-archive/actions/runs/40992745009): кожен по 779 Node PASS / 1 SKIP. Нові цільові тести PASS; TypeScript, lint, source build та Python-валідатори PASS.
+- **Кожен цілий workflow — RED**: disposable Worker/D1 двічі 21/22; раніше відтворена помилка `Your worker restarted mid-request` на `tests/api-flow.test.mjs:103`. Відкрита ділянка [#361](https://github.com/Oleksii-debug/scripture-archive/pull/361) залишається DRAFT/NOT_READY. Не називати ці перевірки загальним CI PASS.
+- Досі **НЕ ПІДТВЕРДЖЕНО** сайт/production SHA, реальне D1, email/DNS, owner scheduler, фізичний NVDA, Windows-пакет, дозволи на майбутні видання та незалежне editorial acceptance. Усі **повні розділи SA-EXT-01…20 залишаються відкритими**, аж поки не буде всього раніше затвердженого функціоналу. Ці дрібні source fixes не слід повторно призначати без конкретного регресійного дефекту.
+- **Не зроблено і не дозволено цим записом:** деплой, нові 82 мови, розсилки/Cron, платежі, синтетичні профілі, сервіс знайомств або міграція виробничих персональних даних. Вимоги до окремого 18+ продукту SA-EXT-20 залишаються окремими.

@@ -2,7 +2,13 @@
   const measurementId = document.querySelector('meta[name="sa-ga4-id"]')?.content?.trim();
   const consentKey = "sa.analyticsConsent";
   const sessionKey = "sa.analyticsSession";
-  let consent = localStorage.getItem(consentKey);
+  // Restricted storage must not break browsing or imply analytics consent.
+  // Only these two persisted values are meaningful; corrupt values re-prompt.
+  let consent = null;
+  try {
+    const saved = localStorage.getItem(consentKey);
+    if (saved === "granted" || saved === "denied") consent = saved;
+  } catch { /* browser privacy policy can deny storage */ }
   let heartbeatTimer = 0;
   let lastActiveAt = Date.now();
   const privateRoutes = new Set(["account", "mission", "progress", "editor"]);
@@ -17,16 +23,29 @@
     const path = privateRoutes.has(route) ? `/${route}` : location.pathname;
     return `${location.origin}${path || "/"}`;
   };
+  // Error messages may contain emails, reset URLs, answers or account data.
+  // Both first-party and GA4 analytics receive only known machine-code labels.
+  const safeErrorCodes = new Set([
+    "email_in_use", "email_not_verified", "too_many_requests",
+    "chapter_must_be_read", "sensitive_consent_required", "script_error",
+  ]);
+  const safeErrorCode = value =>
+    typeof value === "string" && safeErrorCodes.has(value) ? value : "other";
   const safeParameters = parameters => Object.fromEntries(
     Object.entries(parameters || {})
       .filter(([name, value]) => allowedParameters.has(name) && ["string", "number", "boolean"].includes(typeof value))
-      .map(([name, value]) => [name, typeof value === "string" ? value.slice(0, 80) : value]),
+      .map(([name, value]) => [
+        name, name === "error" ? safeErrorCode(value) :
+          typeof value === "string" ? value.slice(0, 80) : value,
+      ]),
   );
   const sessionId = (() => {
-    const stored = sessionStorage.getItem(sessionKey);
+    let stored = null;
+    try { stored = sessionStorage.getItem(sessionKey); } catch {}
     if (/^[0-9a-f-]{36}$/i.test(stored || "")) return stored;
     const created = crypto.randomUUID();
-    sessionStorage.setItem(sessionKey, created);
+    // Session ID may remain ephemeral if browser storage is restricted.
+    try { sessionStorage.setItem(sessionKey, created); } catch {}
     return created;
   })();
   const trafficSource = () => {
@@ -113,7 +132,7 @@
     else lastActiveAt = Date.now();
   });
   window.addEventListener("pagehide", () => heartbeat(true));
-  window.addEventListener("error", event => track("client_error", { error: String(event.message || "script_error").slice(0, 80) }));
+  window.addEventListener("error", () => track("client_error", { error: "script_error" }));
 
   if (consent === "granted") {
     loadGoogleAnalytics();
@@ -122,9 +141,9 @@
   if (consent) return;
 
   const copy = {
-    uk: ["Аналітичні cookie", "За вашою згодою анонімна статистика допомагає покращувати сайт. Вона вимірює сторінки, дії та активний час без передачі паролів, відповідей чи вмісту профілю.", "Дозволити", "Відхилити"],
-    ru: ["Аналитические cookie", "С вашего согласия анонимная статистика помогает улучшать сайт. Она измеряет страницы, действия и активное время без передачи паролей, ответов или содержимого профиля.", "Разрешить", "Отклонить"],
-    en: ["Analytics cookies", "With your consent, anonymous statistics measure pages, actions, and active time. Passwords, answers, and profile content are never sent.", "Allow", "Decline"],
+    uk: ["Аналітичні cookie", "За вашою згодою анонімна статистика допомагає покращувати сайт. Вона вимірює сторінки, дії та активний час без передачі паролів, відповідей чи вмісту профілю.", "Дозволити", "Відхилити", "Не вдалося зберегти дозвіл у браузері. Аналітику не ввімкнено; можна відхилити cookie."],
+    ru: ["Аналитические cookie", "С вашего согласия анонимная статистика помогает улучшать сайт. Она измеряет страницы, действия и активное время без передачи паролей, ответов или содержимого профиля.", "Разрешить", "Отклонить", "Не удалось сохранить согласие в браузере. Аналитика не включена; можно отклонить cookie."],
+    en: ["Analytics cookies", "With your consent, anonymous statistics measure pages, actions, and active time. Passwords, answers, and profile content are never sent.", "Allow", "Decline", "Your browser could not save consent. Analytics is not enabled; you can decline cookies."],
   };
   const language = document.documentElement.lang in copy ? document.documentElement.lang : "uk", text = copy[language];
   const banner = document.createElement("section");
@@ -132,11 +151,30 @@
   banner.setAttribute("role", "dialog");
   banner.setAttribute("aria-labelledby", "cookie-title");
   banner.innerHTML = `<div><strong id="cookie-title">${text[0]}</strong><p>${text[1]}</p></div><div class="action-row"><button class="button primary" data-consent="granted">${text[2]}</button><button class="button" data-consent="denied">${text[3]}</button></div>`;
+  const notice = document.createElement("p");
+  notice.setAttribute("role", "alert");
+  notice.hidden = true;
+  banner.appendChild(notice);
   banner.addEventListener("click", event => {
     const value = event.target.closest("button")?.dataset.consent;
-    if (!value) return;
+    if (value !== "granted" && value !== "denied") return;
+    if (value === "granted") {
+      // Consent must be durably recorded before any analytics is enabled.
+      try {
+        localStorage.setItem(consentKey, value);
+        // A browser shim may silently discard writes; require exact readback.
+        if (localStorage.getItem(consentKey) !== value) throw Error("consent not persisted");
+      } catch {
+        notice.textContent = text[4];
+        notice.hidden = false;
+        return;
+      }
+    } else {
+      // Denial must work even when persistence is unavailable.
+      try { localStorage.setItem(consentKey, value); } catch {}
+    }
     consent = value;
-    localStorage.setItem(consentKey, value);
+    notice.hidden = true;
     window.gtag?.("consent", "update", { analytics_storage: value });
     if (value === "granted") {
       loadGoogleAnalytics();

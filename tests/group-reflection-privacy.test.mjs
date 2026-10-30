@@ -46,12 +46,12 @@ function fixture() {
             const gated = sql.includes("CASE WHEN ?=1 THEN reflection ELSE NULL END AS reflection");
             const groupId = gated ? params[1] : params[0];
             assert.ok(groups.has(groupId), "group ID must remain bound");
-            return { results: [{ id: "disposable-meeting", book_id: "GEN", chapter: 12,
+            return { success: true, results: [{ id: "disposable-meeting", book_id: "GEN", chapter: 12,
               answers_correct: 1, answers_total: 2, participant_count: 3,
               meeting_date: "2026-10-01",
               reflection: gated && params[0] !== 1 ? null : privateNote }] };
           }
-          return { results: [] };
+          return { success: true, results: [] };
         },
         async run() { writes += 1; return { success: true }; },
       };
@@ -101,6 +101,7 @@ test("anonymous visitor retains aggregate meeting metrics but not discussion tex
   const result = await response.json();
   assert.equal(response.status, 200);
   assert.equal(result.sessions[0].answers_total, 2);
+  assert.equal(result.sessions[0].participant_count, null, "private roster cannot leak meeting attendance");
   assert.equal(result.sessions[0].reflection, null);
   assert.ok(!JSON.stringify(result).includes(privateNote));
   assert.ok(!Object.hasOwn(result.group, "inviteCode"));
@@ -112,6 +113,7 @@ test("another authenticated profile cannot read public-group discussion text", a
   const result = await response.json();
   assert.equal(response.status, 200);
   assert.equal(result.membership, null);
+  assert.equal(result.sessions[0].participant_count, null, "outsiders cannot infer roster size from attendance");
   assert.equal(result.sessions[0].reflection, null);
   assert.ok(!JSON.stringify(result).includes(privateNote));
 });
@@ -122,6 +124,7 @@ test("existing group member retains access to the own-group discussion", async (
   const result = await response.json();
   assert.equal(response.status, 200);
   assert.equal(result.membership, "member");
+  assert.equal(result.sessions[0].participant_count, 3, "members retain attendance");
   assert.equal(result.sessions[0].reflection, privateNote);
 });
 

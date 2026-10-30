@@ -3,12 +3,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import ts from 'typescript';
+import { EDITIONS } from '../public/editions.js';
 function handler(result) {
   const source = readFileSync(new URL('../app/api/bookmarks/route.ts', import.meta.url),'utf8');
   const compiled = ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText;
+  const catalog = JSON.parse(readFileSync(new URL('../public/data/catalog.json', import.meta.url),'utf8'));
   const exports = {};
   vm.runInNewContext(compiled,{exports,Response,require(id) {
     if (id === 'cloudflare:workers') return {env:{DB:{prepare:()=>({bind:()=>({all:async()=>{if(result instanceof Error)throw result;return result}})})}}};
+    if (id.endsWith('public/data/catalog.json')) return { default: catalog };
+    if (id.endsWith('public/editions.js')) return { EDITIONS };
     if (id.endsWith('lib/auth')) return {authenticateRequest:async()=>({userId:'alice',provider:'local'})};
     throw Error(id);
   }});

@@ -20,6 +20,7 @@ const ALLOWED_TYPES = new Set([
 
 const clean = (value: FormDataEntryValue | null, max: number) => typeof value === "string" ? value.trim().slice(0, max) : "";
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
+const unavailable = () => Response.json({ error: "support_unavailable" }, { status: 503, headers: { "Cache-Control": "no-store, private" } });
 
 function safeFilename(value: string) {
   const normalized = value.normalize("NFKC").replace(/[\\/:*?"<>|\u0000-\u001f]/g, "-").trim();
@@ -169,12 +170,25 @@ function toBase64(bytes: Uint8Array) {
   return btoa(binary);
 }
 
+// D1 promises can resolve without confirming that a support row was persisted.
+// Require one acknowledged insert per row before reporting receipt or emailing.
+function acknowledgedSupportInsert(receipt: unknown): boolean {
+  const row = receipt as { success?: unknown; meta?: { changes?: unknown } } | null;
+  return row?.success === true && row.meta?.changes === 1;
+}
+
 export async function POST(request: Request) {
   if (!env.DB) return json({ error: "database_unavailable" }, 503);
   if (!sameOrigin(request)) return json({ error: "cross_origin_request" }, 403);
-  if (!await rateLimit(`help:${requestAddress(request)}`, 8, 3600)) return json({ error: "too_many_requests" }, 429);
+  // Rate-limit and session storage may fail independently of a bad request.
+  let allowed: boolean;
+  try { allowed = await rateLimit(`help:${requestAddress(request)}`, 8, 3600); }
+  catch { return unavailable(); }
+  if (!allowed) return json({ error: "too_many_requests" }, 429);
 
-  const identity = await authenticateRequest(request);
+  let identity: Awaited<ReturnType<typeof authenticateRequest>>;
+  try { identity = await authenticateRequest(request); }
+  catch { return unavailable(); }
   const form = await request.formData().catch(() => null);
   if (!form) return json({ error: "invalid_form" }, 400);
   const email = (identity?.email || clean(form.get("email"), 254)).toLowerCase();
@@ -198,6 +212,7 @@ export async function POST(request: Request) {
     });
   }
   const requestId = crypto.randomUUID();
+  try {
   const statements = [env.DB.prepare(`INSERT INTO support_requests
       (id,user_id,email,subject,message,locale,status,email_delivered,attachment_count)
       VALUES (?,?,?,?,?,?,'new',0,?)`)
@@ -208,23 +223,29 @@ export async function POST(request: Request) {
     .bind(file.id, requestId, file.filename, file.contentType, file.size, file.content));
   // Do not send or acknowledge an email for a request that D1 did not commit.
   // The batch must have one successful result for the request and each attachment.
-  try {
     const saved = await env.DB.batch(statements);
-    if (!Array.isArray(saved) || saved.length !== statements.length || saved.some(result => result?.success !== true))
+    if (!Array.isArray(saved) || saved.length !== statements.length || saved.some(result => !acknowledgedSupportInsert(result)))
       return json({ error: "support_save_failed" }, 503);
   } catch {
     return json({ error: "support_save_failed" }, 503);
   }
 
-  const delivery = await sendSupportRequestEmail({
-    requestId,
-    email,
-    subject,
-    message,
-    locale,
-    userName: identity?.fullName,
-    attachments,
-  });
+  // This request is already committed. An unexpected provider exception does
+  // not justify asking the user to submit (and possibly email) it a second time.
+  let delivery: Awaited<ReturnType<typeof sendSupportRequestEmail>>;
+  try {
+    delivery = await sendSupportRequestEmail({
+      requestId,
+      email,
+      subject,
+      message,
+      locale,
+      userName: identity?.fullName,
+      attachments,
+    });
+  } catch {
+    return json({ ok: true, requestId, mailStatus: "delivery_unknown" }, 201);
+  }
   if (delivery.delivered) {
     // The request itself is already durably accepted. If recording the mail
     // receipt fails after mail delivery, returning 5xx would invite the user
@@ -242,7 +263,9 @@ export async function POST(request: Request) {
 
 export async function GET(request: Request) {
   if (!env.DB) return json({ error: "database_unavailable" }, 503);
-  const identity = await authenticateRequest(request);
+  let identity: Awaited<ReturnType<typeof authenticateRequest>>;
+  try { identity = await authenticateRequest(request); }
+  catch { return unavailable(); }
   // A matching email string alone is not proof of owner authorization.
   // Unverified accounts and synthetic agents must not read support messages.
   if (!identity || identity.provider === "agent" || !identity.emailVerified ||

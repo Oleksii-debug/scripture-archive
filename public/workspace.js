@@ -1,5 +1,6 @@
 import { reviewText, submissionForm, historyMarkup, queueMarkup, auditMarkup, attachReviewControls, renderPublicMaterials, loadReviewData, editorRolesMarkup, attachEditorRoles } from './material-review.js';
-import { dossierMarkup } from './scripture-dossiers.js';
+import { dossierMarkup, dossierAtlasMarkup } from './scripture-dossiers.js';
+import { academyMarkup, academyProgressKey, readAcademyProgress, attachAcademy } from './scripture-academy.js';
 
 const COPY = {
   uk: {
@@ -99,7 +100,7 @@ const EDITION_ABOUT = {
   ru: {title:'Библейские издания',intro:'Издания хранятся отдельно. Название перевода остаётся рядом с текстом.',local:'Издания для чтения на платформе',external:'Другие издания',externalText:'Переводы Хоменко, Турконяка и другие издания можно открыть на сайтах их издателей из читальни.',source:'Источник',license:'Условия использования',missing:'Сведения об этом издании недоступны.'},
   en: {title:'Bible editions',intro:'Editions are stored separately. The translation name stays beside the text.',local:'Editions available on the platform',external:'Other editions',externalText:'Khomenko, Turkoniak and other editions can be opened on their publishers’ websites from the reader.',source:'Source',license:'Terms of use',missing:'Details for this edition are unavailable.'},
 };
-const httpsUrl=value=>{try {const url=new URL(value);return url.protocol==='https:'?url.href:'';} catch {return '';}};
+const httpsUrl=value=>{try {const url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password?url.href:'';} catch {return '';}};
 
 export function editionAboutMarkup(catalog,lang,esc) {
   const w=EDITION_ABOUT[lang]||EDITION_ABOUT.uk;
@@ -118,23 +119,44 @@ async function request(path, options) {
   return data;
 }
 
+let workspaceRenderEpoch = 0;
+
 export async function renderWorkspace(name,c) {
   const {state,t,esc,shell,getMission,setActiveNav}=c, w=workspaceCopy(state.lang);
+  const epoch=++workspaceRenderEpoch, principal=state.user;
+  const path=globalThis.location?.pathname, search=globalThis.location?.search, hash=globalThis.location?.hash;
+  // Unlike the render epoch, the principal/route identity survives a legitimate
+  // builder redraw. Late messages must still be suppressed after navigation.
+  const samePrincipalRoute=()=>state.user===principal && !state.sessionUnavailable &&
+    globalThis.location?.pathname===path && globalThis.location?.search===search &&
+    globalThis.location?.hash===hash;
+  const stillCurrent=()=>epoch===workspaceRenderEpoch && samePrincipalRoute();
   setActiveNav(name);
   if(name==='about') {
     const catalog=await c.getCatalog();
+    if(!stillCurrent())return;
     shell(`<article class="prose"><p class="eyebrow">Scripture Archive</p><h1>${t('aboutTitle')}</h1><p class="lead">${t('aboutBody')}</p>${editionAboutMarkup(catalog,state.lang,esc)}<h2>${t('accessTitle')}</h2><p>${t('accessBody')}</p></article>`);
     return;
   }
   if(name==='campaigns') {
-    const mission=await getMission();
-    shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${w.campaigns}</h1></div><p>${w.campaignLead}</p></div><div class="card-grid campaign-grid">${w.campaignNames.map((title,i)=>`<article class="card campaign-card ${i===2?'featured':''}"><span class="path-number">${String(i+1).padStart(2,'0')}</span><h2>${title}</h2><p>${w.campaignDescriptions[i]}</p>${i===2?`<p>${esc((mission.title?.[state.lang]||t("missionTitle")))}</p><a class="button primary" href="/missions">${t('open')}</a>`:`<span class="status soon">${t('comingSoon')}</span>`}</article>`).join('')}</div>`);
+    const [mission,catalog]=await Promise.all([getMission(),c.getCatalog()]);
+    if(!stillCurrent())return;
+    // Self-reported course markers must remain explicitly device-local and
+    // principal-scoped; never present them as server-confirmed credentials.
+    let storage=null;
+    try { storage=globalThis.localStorage; } catch {}
+    const courseProgress=readAcademyProgress(storage,academyProgressKey(state.user));
+    shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${w.campaigns}</h1></div><p>${w.campaignLead}</p></div><div class="card-grid campaign-grid">${w.campaignNames.map((title,i)=>`<article class="card campaign-card ${i===2?'featured':''}"><span class="path-number">${String(i+1).padStart(2,'0')}</span><h2>${title}</h2><p>${w.campaignDescriptions[i]}</p>${i===2?`<p>${esc((mission.title?.[state.lang]||t("missionTitle")))}</p><a class="button primary" href="/missions">${t('open')}</a>`:`<span class="status soon">${t('comingSoon')}</span>`}</article>`).join('')}</div>${academyMarkup(catalog,state.lang,esc,courseProgress)}`);
+    const coursePrincipal=state.user?.id??null;
+    attachAcademy(globalThis.document,storage,state.lang,state.user,courseProgress,
+      ()=>!state.sessionUnavailable&&(state.user?.id??null)===coursePrincipal);
     return;
   }
   if(name==='dossiers') {
     const catalog=await c.getCatalog();
+    if(!stillCurrent())return;
     const selectedId=new URLSearchParams(globalThis.location?.search || '').get('id');
-    shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${esc(w.dossiers)}</h1></div><p>${esc(w.dossierLead)}</p></div>${dossierMarkup(catalog,state.lang,selectedId,esc)}`);
+    shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${esc(w.dossiers)}</h1></div><p>${esc(w.dossierLead)}</p></div>${dossierMarkup(catalog,state.lang,selectedId,esc)}${dossierAtlasMarkup(catalog,state.lang,esc)}`);
     return;
   }
   if(name==='live') {
@@ -147,40 +169,57 @@ export async function renderWorkspace(name,c) {
     const syncWarning=state.progressSyncStatus==='partial'?w.progressSyncPartial:state.progressSyncStatus==='unavailable'?w.progressSyncUnavailable:'';
     let history={guest:true};
     if(state.user) try { history=await request('/api/attempts?action=history'); } catch { history={error:true}; }
+    // A late history read belongs to its original route and account only.
+    if(!stillCurrent())return;
     shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${w.progress}</h1></div><p>${w.progressLead}</p></div>${syncWarning?`<p role="alert">${esc(syncWarning)}</p>`:''}<div class="card-grid"><article class="card progress-stat"><strong>${p.correct.length} / ${taskCount}</strong><p>${w.tasks}</p></article><article class="card progress-stat"><strong>${read.length}</strong><p>${w.chapters}</p></article><article class="card progress-stat"><strong>${p.complete?w.finished:p.index?w.inProgress:w.notStarted}</strong><p>${w.status}</p></article></div><section class="card resume-card"><h2>${esc((mission.title?.[state.lang]||t("missionTitle")))}</h2><progress aria-label="${w.tasks}" max="${taskCount||1}" value="${p.correct.length}"></progress><div class="action-row"><a class="button primary" href="/mission/abraham">${w.continue}</a><a class="button" href="/groups">${t('myGroups')}</a></div></section>${reviewScheduleMarkup(history,state.lang,esc)}${missionHistoryMarkup(history,state.lang,esc)}<section class="card resume-card"><h2>${w.readingHistory}</h2>${read.length?`<div class="reading-links">${read.slice().reverse().map(r=>`<a class="button" href="/reader/${encodeURIComponent(r.book)}/${Number(r.chapter)}">${esc(r.title)} ${Number(r.chapter)}</a>`).join('')}</div>`:`<p>${w.nothingRead}</p>`}</section>`);
     document.querySelector('#retry-mission-history')?.addEventListener('click',()=>renderWorkspace('progress',c));
     return;
   }
   if(name==='builder') {
     const review = reviewText(state.lang);
-    if(!state.user) { shell(`<section class="gate-panel"><h1>${w.builder}</h1><p class="lead">${w.accountNeeded}</p><a class="button primary" href="/account">${w.signIn}</a></section><section class="card" id="public-materials" aria-live="polite"></section>`); await renderPublicMaterials(document.querySelector('#public-materials'),review,esc); return; }
+    if(!state.user) { shell(`<section class="gate-panel"><h1>${w.builder}</h1><p class="lead">${w.accountNeeded}</p><a class="button primary" href="/account">${w.signIn}</a></section><section class="card" id="public-materials" aria-live="polite"></section>`); await renderPublicMaterials(document.querySelector('#public-materials'),review,esc,stillCurrent); return; }
     const role=await request('/api/editor-roles?view=me');
+    if(!stillCurrent())return;
     const [data,reviews,roles,roleAudit]=await Promise.all([request('/api/materials?mine=1'),loadReviewData(role.editor),role.owner?request('/api/editor-roles'):Promise.resolve({editors:[]}),role.owner?request('/api/editor-roles?view=audit'):Promise.resolve({events:[]})]);
+    if(!stillCurrent())return;
     let editing=null;
+    const refreshBuilder=()=>stillCurrent()?renderWorkspace('builder',c):Promise.resolve();
+    const announceBuilder=message=>{if(samePrincipalRoute())c.announce(message);};
+    // The next builder render invalidates this one's epoch. Save the new epoch
+    // and do not announce after a newer view has superseded that refresh.
+    const refreshMutation=async message=>{
+      if(!stillCurrent())return;
+      const refresh=renderWorkspace('builder',c);
+      const refreshedEpoch=workspaceRenderEpoch;
+      await refresh;
+      if(refreshedEpoch===workspaceRenderEpoch)announceBuilder(message);
+    };
     function draw() {
+      if(!stillCurrent())return;
       const d=editing?.data||{},form=(key,label,rows)=>`<label class="account-field"><span>${label}</span>${rows?`<textarea name="${key}" rows="${rows}" required>${esc(d[key]||'')}</textarea>`:`<input name="${key}" value="${esc(key==='title'?editing?.title||'':d[key]||'')}" required>`}</label>`;
       shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${w.builder}</h1></div><p>${w.builderLead}</p></div><div class="builder-layout"><section class="card"><h2>${editing?w.edit:w.newMaterial}</h2><form id="material-form" class="account-form">${form('title',w.title)}${form('prompt',w.prompt,3)}${form('reference',w.reference)}<label class="account-field"><span>${w.options}</span><textarea name="options" rows="4" required>${esc((d.options||[]).join('\n'))}</textarea></label>${form('answer',w.answer)}${form('explanation',w.explanation,3)}<button class="button primary">${w.save}</button><p id="material-status" role="status"></p></form></section><aside class="card"><h2>${w.myMaterials}</h2><div class="material-list">${data.materials.length?data.materials.map(m=>`<article><span class="status">${m.visibility==='public'?w.public:w.private}</span><h3>${esc(m.title)}</h3><p>${esc(m.data.reference)}</p><div class="action-row"><button class="button" data-edit="${esc(m.id)}">${w.edit}</button><button class="button" data-test="${esc(m.id)}">${w.test}</button><button class="button" data-delete="${esc(m.id)}">${review.remove}</button></div>${submissionForm(m,review,esc)}</article>`).join(''):`<p>${w.empty}</p>`}</div><button class="button" id="new-material">${w.newMaterial}</button> <a class="button" href="/api/materials?mine=1&amp;export=1" download>${w.export}</a></aside></div>${historyMarkup(reviews.mine,review,esc)}${role.editor?queueMarkup(reviews.queue,review,esc)+auditMarkup(reviews.history,review,esc):''}${role.owner?editorRolesMarkup(roles.editors,state.lang,esc,roleAudit.events):''}<section class="card" id="public-materials" aria-live="polite"></section>`);
-      attachReviewControls(document.querySelector('main'),review,()=>renderWorkspace('builder',c),c.announce);
-      if(role.owner) attachEditorRoles(document.querySelector('main'),state.lang,()=>renderWorkspace('builder',c),c.announce);
-      void renderPublicMaterials(document.querySelector('#public-materials'),review,esc);
-      document.querySelector('#new-material').onclick=()=>{editing=null;draw()};
-      document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{editing=data.materials.find(m=>m.id===b.dataset.edit);draw()});
-      document.querySelectorAll('[data-test]').forEach(b=>b.onclick=()=>test(data.materials.find(m=>m.id===b.dataset.test)));
+      attachReviewControls(document.querySelector('main'),review,refreshBuilder,announceBuilder,stillCurrent,samePrincipalRoute);
+      if(role.owner) attachEditorRoles(document.querySelector('main'),state.lang,refreshBuilder,announceBuilder,stillCurrent,samePrincipalRoute);
+      void renderPublicMaterials(document.querySelector('#public-materials'),review,esc,stillCurrent);
+      document.querySelector('#new-material').onclick=()=>{if(!stillCurrent())return;editing=null;draw()};
+      document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{if(!stillCurrent())return;editing=data.materials.find(m=>m.id===b.dataset.edit);draw()});
+      document.querySelectorAll('[data-test]').forEach(b=>b.onclick=()=>{if(stillCurrent())test(data.materials.find(m=>m.id===b.dataset.test));});
       document.querySelectorAll('[data-delete]').forEach(button=>button.onclick=async()=>{
-        if(!window.confirm(review.confirm))return; button.disabled=true;
-        try{await request(`/api/materials?id=${encodeURIComponent(button.dataset.delete)}`,{method:'DELETE'});await renderWorkspace('builder',c);c.announce(review.removed)}
-        catch{document.querySelector('#material-status').textContent=review.error;button.disabled=false}
+        if(!stillCurrent()||button.isConnected===false||!window.confirm(review.confirm))return; button.disabled=true;
+        try{await request(`/api/materials?id=${encodeURIComponent(button.dataset.delete)}`,{method:'DELETE'});if(!stillCurrent())return;await refreshMutation(review.removed)}
+        catch{if(!stillCurrent())return;document.querySelector('#material-status').textContent=review.error;button.disabled=false}
       });
       document.querySelector('#material-form').onsubmit=async e=>{
-        e.preventDefault();const f=new FormData(e.currentTarget),payload=Object.fromEntries(f);
+        e.preventDefault();if(!stillCurrent()||e.currentTarget?.isConnected===false)return;const f=new FormData(e.currentTarget),payload=Object.fromEntries(f);
         payload.options=payload.options.split(/\r?\n/).map(v=>v.trim()).filter(Boolean);payload.locale=state.lang;if(editing)payload.id=editing.id;
-        try{await request('/api/materials',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});await renderWorkspace('builder',c);c.announce(w.saved)}catch{document.querySelector('#material-status').textContent=w.error}
+        try{await request('/api/materials',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(!stillCurrent())return;await refreshMutation(w.saved)}catch{if(!stillCurrent())return;document.querySelector('#material-status').textContent=w.error}
       };
     }
     function test(m) {
+      if(!stillCurrent())return;
       shell(`<article class="card practice-card"><p class="eyebrow">${esc(m.data.reference)}</p><h1>${esc(m.title)}</h1><form id="practice-form"><fieldset class="options"><legend class="question">${esc(m.data.prompt)}</legend>${m.data.options.map((v,i)=>`<label class="option"><input type="radio" name="answer" value="${i}" required><span>${esc(v)}</span></label>`).join('')}</fieldset><button class="button primary">${w.check}</button></form><div id="practice-feedback" role="status"></div><button class="button" id="practice-back">${w.back}</button></article>`);
       document.querySelector('#practice-back').onclick=draw;
-      document.querySelector('#practice-form').onsubmit=e=>{e.preventDefault();const index=Number(new FormData(e.currentTarget).get('answer')),ok=m.data.options[index]===m.data.answer;document.querySelector('#practice-feedback').innerHTML=`<div class="notice ${ok?'success':'info'}"><h2>${ok?w.correct:w.retry}</h2>${ok?`<p>${esc(m.data.explanation)}</p>`:''}</div>`;c.play(ok?'ok':'bad')};
+      document.querySelector('#practice-form').onsubmit=e=>{e.preventDefault();if(!stillCurrent())return;const index=Number(new FormData(e.currentTarget).get('answer')),ok=m.data.options[index]===m.data.answer;document.querySelector('#practice-feedback').innerHTML=`<div class="notice ${ok?'success':'info'}"><h2>${ok?w.correct:w.retry}</h2>${ok?`<p>${esc(m.data.explanation)}</p>`:''}</div>`;c.play(ok?'ok':'bad')};
     }
     draw();
   }

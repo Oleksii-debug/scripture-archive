@@ -1,7 +1,23 @@
 import { env } from "cloudflare:workers";
 import { authenticateRequest, sameOrigin } from "../../../lib/auth";
+import catalog from "../../../public/data/catalog.json";
+import { EDITIONS } from "../../../public/editions.js";
 
 export const dynamic = "force-dynamic";
+// Reuse canonical Bible chapter limits; avoid maintaining another book list.
+const BOOK_CHAPTERS = new Map(catalog.books.en.map(book => [book.code, book.chapters]));
+// Editions may retain their own canonical chapter numbering. E.g. the local
+// Ohiienko edition has JOL chapter 4, while the WEB reader has only three.
+const EDITION_BOOK_CHAPTERS = new Map(Object.entries(catalog.editionBooks)
+  .map(([edition, books]) => [edition, new Map(books.map(book => [book.code, book.chapters]))] as const));
+function bookChapterLimit(edition: string, book: string) {
+  return (EDITION_BOOK_CHAPTERS.get(edition) ?? BOOK_CHAPTERS).get(book) ?? 0;
+}
+// Only editions with an actual local reader can have a chapter bookmark.
+// Reuse the edition registry shown by the canonical UI, including Ohiienko.
+const LOCAL_EDITION_IDS = new Set(Object.values(EDITIONS).flat()
+  .filter(edition => "local" in edition && edition.local === true)
+  .map(edition => edition.id));
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
 
 async function user(request: Request) {
@@ -19,7 +35,10 @@ function valid(body: unknown): body is { edition: string; book: string; chapter:
 
 export async function GET(request: Request) {
   if (!env.DB) return json({ error: "database_unavailable" }, 503);
-  const id = await user(request);
+  // An identity-store outage is not the same as a signed-out reader.
+  let id: string | null;
+  try { id = await user(request); }
+  catch { return json({ error: "bookmarks_unavailable" }, 503); }
   if (!id) return json({ error: "authentication_required" }, 401);
   try {
     const rows = await env.DB.prepare("SELECT edition,book,chapter,created_at FROM reader_bookmarks WHERE user_id=? ORDER BY created_at DESC,book,chapter LIMIT 500").bind(id).all();
@@ -31,10 +50,15 @@ export async function GET(request: Request) {
 async function write(request: Request, remove: boolean) {
   if (!env.DB) return json({ error: "database_unavailable" }, 503);
   if (!sameOrigin(request)) return json({ error: "cross_origin_request" }, 403);
-  const id = await user(request);
+  // An identity-store outage is not the same as a signed-out reader.
+  let id: string | null;
+  try { id = await user(request); }
+  catch { return json({ error: "bookmarks_unavailable" }, 503); }
   if (!id) return json({ error: "authentication_required" }, 401);
   const body: unknown = await request.json().catch(() => null);
-  if (!valid(body)) return json({ error: "invalid_bookmark" }, 400);
+  // Reject nonexistent chapters on PUT. Keep DELETE able to clean up old invalid entries.
+  if (!valid(body) || (!remove && (!LOCAL_EDITION_IDS.has(body.edition) || body.chapter > bookChapterLimit(body.edition, body.book))))
+    return json({ error: "invalid_bookmark" }, 400);
   // D1 may return a failure receipt or throw after the caller is authenticated.
   // Never claim that a bookmark was saved or deleted unless the write ACK is
   // well formed; a failed duplicate/limit probe is equally unavailable.

@@ -49,7 +49,7 @@ test('failed second-edition load leaves the original reader intact and allows re
 }));
 
 test('untrusted metadata is escaped and non-HTTPS links are not rendered',()=>withForm(async()=>{
-  const f=fixture({catalog:{translations:{},editions:{uk:{id:'UKRPAN',title:'<img>',source:'javascript:alert(1)',license:'<script>',attribution:'<svg>'}}}});
+  const f=fixture({catalog:{translations:{},editions:{uk:{id:'UKRPAN',title:'<img>',source:'https://source.example/',license:'<script>',attribution:'<svg>'}}}});
   await f.run();assert.ok(!f.result.innerHTML.includes('<img>'));assert.ok(!f.result.innerHTML.includes('<svg>'));
   assert.ok(!f.result.innerHTML.includes('javascript:'));assert.ok(f.result.innerHTML.includes('&lt;img&gt;'));
 }));
@@ -102,4 +102,34 @@ test('reader changed while post-load guard runs does not render late results',()
   await run;
   assert.equal(f.result.innerHTML,'');
   assert.equal(f.button.disabled,false);
+}));
+
+
+test('unverified second-edition provenance cannot disclose comparison verse text',()=>withForm(async()=>{
+  const bad=[
+    {title:'Куліш',source:'https://source.example/'},
+    {title:'Куліш',license:'Public Domain'},
+    {title:'Куліш',license:'Public Domain',source:'javascript:alert(1)'},
+    {title:'Куліш',license:'Public Domain',source:'http://source.example/'},
+    {title:'Куліш',license:'Public Domain',source:'https://user:password@source.example/'},
+    {title:'Куліш',license:'Public Domain',source:'https://trusted.example@other.example/'},
+    {title:'Куліш',license:'Public Domain',source:'https://source.example/',licenseUrl:'https://user:password@licenses.example/'},
+    {title:'Куліш',license:'Public Domain',source:'https://source.example/',licenseUrl:'javascript:alert(1)'},
+    {title:' ',license:'Public Domain',source:'https://source.example/'},
+    {title:'Куліш',license:' ',source:'https://source.example/'},
+  ];
+  for(const metadata of bad){
+    const f=fixture({catalog:{translations:{},editions:{uk:{id:'UKRPAN',...metadata}}}});
+    await f.run();
+    assert.equal(f.result.innerHTML,'','no text when provenance is missing/unsafe');
+    assert.match(f.status.textContent,/Не вдалося/);
+    assert.equal(f.button.disabled,false);
+  }
+  const good=fixture({catalog:{translations:{},editions:{uk:{
+    id:'UKRPAN',title:'Куліш',license:'CC BY-SA 4.0',source:'https://source.example/',
+    licenseUrl:'https://creativecommons.org/licenses/by-sa/4.0/'
+  }}}});
+  await good.run();
+  assert.match(good.result.innerHTML,/На початку/);
+  assert.match(good.result.innerHTML,/creativecommons.org/);
 }));

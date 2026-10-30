@@ -52,40 +52,77 @@ const wasEditorialControlFocused = (root, form) => Boolean(
   form.contains(root.ownerDocument.activeElement)
 );
 
-export function attachReviewControls(root, w, refresh, announce) {
+export function attachReviewControls(root, w, refresh, announce, isCurrent = () => true, canPresent = isCurrent) {
+  // The main shell remains mounted across route/account changes. Retained
+  // editor controls and late mutations must never act for a replaced principal.
+  const active = target => {
+    try { return isCurrent() === true && root?.isConnected !== false && target?.isConnected !== false; }
+    catch { return false; }
+  };
+  // A successful refresh intentionally replaces the old form. Check its original
+  // principal/route, not the detached control or the obsolete render epoch.
+  const present = () => {
+    try { return canPresent() === true && root?.isConnected !== false; }
+    catch { return false; }
+  };
   root.querySelectorAll('.material-submit').forEach(form => form.onsubmit = async event => {
-    event.preventDefault(); const f = new FormData(form), button = form.querySelector('button'), status = form.querySelector('[role="status"]');
+    event.preventDefault(); if (!active(form)) return;
+    const f = new FormData(form), button = form.querySelector('button'), status = form.querySelector('[role="status"]');
     const hadFocus = wasEditorialControlFocused(root, form); button.disabled = true;
-    try { await post({action:'submit',materialId:form.dataset.id,provenance:f.get('provenance'),rightsConfirmed:f.has('rights')}); await refresh(); restoreEditorialFocus(root, hadFocus); announce(w.sent); }
-    catch { status.textContent = w.error; button.disabled = false; }
+    try { await post({action:'submit',materialId:form.dataset.id,provenance:f.get('provenance'),rightsConfirmed:f.has('rights')}); if (!active(form)) return; await refresh(); if (!present()) return; restoreEditorialFocus(root, hadFocus); announce(w.sent); }
+    catch { if (active(form)) { status.textContent = w.error; button.disabled = false; } }
   });
   root.querySelectorAll('.material-withdraw').forEach(button => button.onclick = async () => {
+    if (!active(button)) return;
     const hadFocus = wasEditorialControlFocused(root, button.parentElement || button);
-    button.disabled = true; try { await post({action:'withdraw',id:button.dataset.id}); await refresh(); restoreEditorialFocus(root, hadFocus); announce(w.withdrawn); }
-    catch { root.querySelector('.review-history-status').textContent = w.error; button.disabled = false; }
+    button.disabled = true; try { await post({action:'withdraw',id:button.dataset.id}); if (!active(button)) return; await refresh(); if (!present()) return; restoreEditorialFocus(root, hadFocus); announce(w.withdrawn); }
+    catch { if (active(button)) { root.querySelector('.review-history-status').textContent = w.error; button.disabled = false; } }
   });
   root.querySelectorAll('.material-review').forEach(form => form.querySelectorAll('[data-decision]').forEach(button => button.onclick = async () => {
+    if (!active(form)) return;
     const f = new FormData(form), status = form.querySelector('[role="status"]');
     const decision = button.dataset.decision;
     if ((decision === 'approve' && (!f.has('source') || !f.has('rights'))) || (decision === 'reject' && !String(f.get('note') || '').trim())) { status.textContent = w.error; return; }
     const hadFocus = wasEditorialControlFocused(root, form);
     const buttons = form.querySelectorAll('button'); buttons.forEach(item => { item.disabled = true; });
-    try { await post({action:'review',id:form.dataset.id,decision,note:f.get('note'),sourceChecked:f.has('source'),rightsChecked:f.has('rights')}); await refresh(); restoreEditorialFocus(root, hadFocus); announce(w.reviewed); }
-    catch (error) { status.textContent = error?.message === 'self_review_forbidden' ? w.selfReview : w.error; buttons.forEach(item => { item.disabled = false; }); }
+    try { await post({action:'review',id:form.dataset.id,decision,note:f.get('note'),sourceChecked:f.has('source'),rightsChecked:f.has('rights')}); if (!active(form)) return; await refresh(); if (!present()) return; restoreEditorialFocus(root, hadFocus); announce(w.reviewed); }
+    catch (error) { if (active(form)) { status.textContent = error?.message === 'self_review_forbidden' ? w.selfReview : w.error; buttons.forEach(item => { item.disabled = false; }); } }
   }));
 }
-export async function renderPublicMaterials(root, w, esc) {
+export async function renderPublicMaterials(root, w, esc, isCurrent = () => true) {
+  // This public panel shares the builder shell with private editor state.
+  // A response from an old account, route or render epoch may not repaint it
+  // or leave behind an active answer form after its principal has changed.
+  const active = () => {
+    try { return root?.isConnected !== false && isCurrent() === true; }
+    catch { return false; }
+  };
+  if (!active()) return;
   try {
     const {items} = await api('/api/material-review?view=public');
-    if (!root.isConnected) return;
+    if (!active()) return;
     root.innerHTML = `<h2>${w.publicTitle}</h2>${items.length ? items.map(item=>`<article class="card"><h3>${esc(item.title)}</h3><p>${esc(item.reference)}</p><p>${esc(item.provenance)}</p><form class="public-material" data-id="${esc(item.id)}"><fieldset><legend>${esc(item.prompt)}</legend>${item.options.map((option,index)=>`<label class="option"><input type="radio" name="choice" value="${index}" required><span>${esc(option)}</span></label>`).join('')}</fieldset><button class="button" type="submit">${w.check}</button><p role="status"></p></form></article>`).join('') : `<p>${w.empty}</p>`}`;
     root.querySelectorAll('.public-material').forEach(form => form.onsubmit = async event => {
-      event.preventDefault(); const status=form.querySelector('[role="status"]'), button=form.querySelector('button'), choice = new FormData(form).get('choice');
-      if (choice === null) return; button.disabled=true;
-      try { const result=await post({action:'answer',id:form.dataset.id,choice:Number(choice)}); status.textContent=result.correct ? `${w.correct} ${result.explanation || ''}` : w.wrong; }
-      catch { status.textContent=w.answerError; } finally { button.disabled=false; }
+      event.preventDefault();
+      if (!active() || form.isConnected === false) return;
+      const status=form.querySelector('[role="status"]'), button=form.querySelector('button');
+      if (button.disabled) return;
+      const choice = new FormData(form).get('choice');
+      if (choice === null) return;
+      button.disabled=true;
+      try {
+        const result=await post({action:'answer',id:form.dataset.id,choice:Number(choice)});
+        if (active() && form.isConnected !== false)
+          status.textContent=result.correct ? `${w.correct} ${result.explanation || ''}` : w.wrong;
+      } catch {
+        if (active() && form.isConnected !== false) status.textContent=w.answerError;
+      } finally {
+        if (active() && form.isConnected !== false) button.disabled=false;
+      }
     });
-  } catch { if (root.isConnected) root.innerHTML=`<h2>${w.publicTitle}</h2><p role="alert">${w.error}</p>`; }
+  } catch {
+    if (active()) root.innerHTML=`<h2>${w.publicTitle}</h2><p role="alert">${w.error}</p>`;
+  }
 }
 export async function loadReviewData(isEditor) {
   const [mine, queue, history] = await Promise.all([api('/api/material-review?view=mine'), isEditor ? api('/api/material-review?view=queue') : Promise.resolve({items:[]}), isEditor ? api('/api/material-review?view=history') : Promise.resolve({items:[]})]);
@@ -100,15 +137,26 @@ export function editorRolesMarkup(items,lang,esc,events=[]) {
   const w=ROLE_TEXT[lang]||ROLE_TEXT.uk;
   return `<section class="card"><h2>${w.title}</h2><p>${w.help}</p><form id="editor-role-form"><label class="account-field"><span>${w.email}</span><input type="email" name="email" maxlength="254" required></label><button class="button">${w.grant}</button></form>${items.length?`<ul>${items.map(item=>`<li>${esc(item.email)} <button class="button editor-revoke" type="button" data-id="${esc(item.id)}" aria-label="${w.revoke}: ${esc(item.email)}">${w.revoke}</button></li>`).join('')}</ul>`:`<p>${w.empty}</p>`}<p id="editor-role-status" role="status"></p><details><summary>${w.audit}</summary>${events.length?`<ol>${events.map(event=>`<li>${esc(event.subject_email || event.subject_user_id)} — ${event.action==='grant'?w.granted:w.revoked}; ${esc(event.created_at)}; ${esc(event.actor_user_id)}</li>`).join('')}</ol>`:`<p>${w.noEvents}</p>`}</details></section>`;
 }
-export function attachEditorRoles(root,lang,refresh,announce) {
+export function attachEditorRoles(root,lang,refresh,announce,isCurrent = () => true, canPresent = isCurrent) {
+  const active = target => {
+    try { return isCurrent() === true && root?.isConnected !== false && target?.isConnected !== false; }
+    catch { return false; }
+  };
+  // A successful refresh intentionally replaces the old form. Check its original
+  // principal/route, not the detached control or the obsolete render epoch.
+  const present = () => {
+    try { return canPresent() === true && root?.isConnected !== false; }
+    catch { return false; }
+  };
   const w=ROLE_TEXT[lang]||ROLE_TEXT.uk, status=root.querySelector('#editor-role-status');
   async function change(body,buttons) {
+    if (!active(buttons[0])) return;
     const hadFocus = Boolean(root?.ownerDocument && buttons.some(b => b === root.ownerDocument.activeElement));
     buttons.forEach(b=>b.disabled=true);
-    try { await api('/api/editor-roles',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); await refresh(); restoreEditorialFocus(root, hadFocus); announce(w.saved); }
-    catch { status.textContent=w.error; buttons.forEach(b=>b.disabled=false); }
+    try { await api('/api/editor-roles',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); if (!active(buttons[0])) return; await refresh(); if (!present()) return; restoreEditorialFocus(root, hadFocus); announce(w.saved); }
+    catch { if (active(buttons[0])) { status.textContent=w.error; buttons.forEach(b=>b.disabled=false); } }
   }
   const form=root.querySelector('#editor-role-form');
-  form.onsubmit=event=>{event.preventDefault();void change({action:'grant',email:new FormData(form).get('email')},[form.querySelector('button')]);};
+  form.onsubmit=event=>{event.preventDefault();if (!active(form)) return;void change({action:'grant',email:new FormData(form).get('email')},[form.querySelector('button')]);};
   root.querySelectorAll('.editor-revoke').forEach(button=>button.onclick=()=>change({action:'revoke',userId:button.dataset.id},[button]));
 }

@@ -87,8 +87,11 @@ for (const [locale,expected] of [
     assert.equal(response.status,201);
     assert.equal(response.body.task.question,expected);
     assert.equal(response.body.guest,false);
-    assert.equal(h.queries.length,1);
+    assert.equal(h.queries.length,4, "one receipt lookup plus three canonical prepared batch writes");
     assert.match(h.queries[0].sql,/chapter_read_receipts/);
+    assert.match(h.queries[1].sql,/INSERT INTO mission_attempts/);
+    assert.match(h.queries[2].sql,/UPDATE mission_attempts/);
+    assert.match(h.queries[3].sql,/UPDATE chapter_read_receipts/);
     assert.equal(h.writes.length,1);
     assert.match(response.cache,/no-store/);
   });

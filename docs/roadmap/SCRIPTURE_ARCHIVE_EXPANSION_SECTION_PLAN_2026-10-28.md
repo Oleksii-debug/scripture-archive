@@ -1,3 +1,9 @@
+## 2026-10-30 — SA-EXT-04 / GROUP_PUBLIC_COUNT_INTEGRITY — SCOPED TERMINAL
+
+**Тільки підпункт `GROUP_PUBLIC_COUNT_INTEGRITY`: ЗАКРИТО ДЛЯ РОЗРОБКИ / `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`.** Канонічний `app/api/groups/route.ts` відмовляє у недостовірних кількостях учасників, зустрічей та когорт (D1 COUNT), замість HTTP 200 з вигаданими показниками. [PR #724](https://github.com/Oleksii-debug/scripture-archive/pull/724) **SQUASH MERGED** у `main@9d3e8b2aa856384324228682cd4043f7726e9bff`, source/test/fixture blobs readback виконано. [Exact-head CI #41060270624](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41060270624) **SUCCESS**: Node 1998 PASS/1 SKIP, Worker/D1 22/22, TypeScript/lint/build/Python PASS. `remaining_scoped_implementation=0`; `necessary_unmerged_PRs=0`. [Постійний запис](SA_EXT_04_GROUP_COUNT_READ_INTEGRITY_TERMINAL_20261030.md). **Повний SA-EXT-04 та всі 20 батьківських розділів OPEN**; production/Sites/Windows/NVDA/SMTP не підтверджені, деплою немає.
+
+---
+
 ## 2026-10-30 — SA-EXT-02 / API_HISTORY_CANONICAL_UTC — вузький TERMINAL
 
 **CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** лише для коректних UTC timestamp у приватному API історії місій: [PR #722](https://github.com/Oleksii-debug/scripture-archive/pull/722) **SQUASH MERGED** `main@2e648177e91d0606cc001f2a79a7ee8a16c3b33a`; exact-head [CI #41059922244](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41059922244) **SUCCESS** (Node/TS/lint/build/Worker-D1/Python). У реальному `GET /api/attempts?action=history` недійсні дати `1`, 31 лютого й неканонічні SQL timestamps тепер дають приватний 503, не фальшивий 200, без запису до D1; узгоджено з UI #716. [Повна квитанція](SA_EXT_02_API_HISTORY_CANONICAL_UTC_TERMINAL_20261030.md). `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` тільки для цього дефекту. **Усі 20 SA-EXT батьківських розділів залишаються OPEN**, production/Windows/NVDA NOT_VERIFIED. Без деплою.

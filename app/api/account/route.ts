@@ -239,6 +239,10 @@ async function write(request:Request){
      oversized(body.tradition,40)||oversized(body.maritalStatus,40)||oversized(body.gender,30)||
      oversized(body.church,160)||oversized(body.locale,2))
     return privateJson({error:"invalid_profile_field"},{status:400});
+  // Preserve the established fallback for unknown textual locales (SA10).
+  // Reject typed JSON masquerading as a locale instead of silently coercing it.
+  if(body.locale!==undefined&&body.locale!==null&&typeof body.locale!=="string")
+    return privateJson({error:"invalid_profile_locale"},{status:400});
   const firstName=clean(body.firstName,80),lastName=clean(body.lastName,80),ageRange=clean(body.ageRange,10),rawTradition=clean(body.tradition,40),maritalStatus=clean(body.maritalStatus,40),gender=clean(body.gender,30);if(!firstName||!lastName||!AGE_RANGES.has(ageRange)||body.acceptPrivacy!==true)return privateJson({error:"required_fields"},{status:400});
   if((rawTradition&&!TRADITIONS.has(rawTradition))||(maritalStatus&&!MARITAL_STATUSES.has(maritalStatus))||(gender&&!GENDERS.has(gender)))return privateJson({error:"invalid_profile_option"},{status:400});
   const consent=body.acceptSensitive===true, locale=ALLOWED_LOCALES.has(clean(body.locale,2))?clean(body.locale,2):"uk",tradition=consent?rawTradition||null:null,church=consent?clean(body.church,160)||null:null;

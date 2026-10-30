@@ -3691,7 +3691,21 @@ async function renderEditor() {
   const stateNames={uk:{waiting:"Очікує запуску",running:"Працює",paused:"Призупинено",stopped:"Зупинено"},ru:{waiting:"Ожидает запуска",running:"Работает",paused:"Приостановлено",stopped:"Остановлено"},en:{waiting:"Ready to start",running:"Running",paused:"Paused",stopped:"Stopped"}}[state.lang];
   const localTime=value=>value?new Intl.DateTimeFormat(state.lang,{timeZone:"Europe/Warsaw",dateStyle:"short",timeStyle:"short"}).format(new Date(value.replace(" ","T")+"Z")):"—";
   document.querySelector(".analytics-dashboard").insertAdjacentHTML("afterend",`<section class="card full community-admin"><div class="section-head compact"><div><p class="eyebrow">Scripture Archive</p><h2>${communityAdmin.title}</h2></div><p>${communityAdmin.status}: <strong data-community-run-status>${esc(stateNames[runStatus]||runStatus)}</strong></p></div><div class="analytics-metrics"><article><strong>${formatNumber(analytics.accounts.total)}</strong><span>${communityAdmin.real}</span></article><article><strong>${formatNumber(communityState.synthetic?.total)}</strong><span>${communityAdmin.automatic}</span></article></div><h3>${communityAdmin.schedule}</h3><div class="community-wave-list">${(communityState.waves||[]).map(wave=>`<p><strong>${esc(wave.label)}</strong><span>${formatNumber(wave.created_count)} ${communityAdmin.of} ${formatNumber(wave.target_count)} ${communityAdmin.created} · ${communityAdmin.next}: ${esc(localTime(wave.next_at))} · ${esc(wave.status)}</span></p>`).join("")||"<p>—</p>"}</div><div class="action-row"><button class="button" data-community-control="pause" ${!["waiting","running"].includes(runStatus)?"disabled":""}>${communityAdmin.pause}</button><button class="button" data-community-control="resume" ${runStatus!=="paused"?"disabled":""}>${communityAdmin.resume}</button></div><p id="community-control-state" role="status"></p><details><summary>${communityAdmin.log}</summary><ol>${(communityState.log||[]).map(event=>`<li>${esc(localTime(event.created_at))} · ${esc(event.event_type)}</li>`).join("")}</ol></details></section>`);
-  document.querySelectorAll("[data-community-control]").forEach(button=>button.onclick=async()=>{button.disabled=true;const status=document.querySelector("#community-control-state");try{const response=await fetch("/api/community",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:button.dataset.communityControl})});if(!response.ok)throw Error(String(response.status));const result=await response.json();await renderEditor();announce(stateNames[result.status]||result.status)}catch{status.textContent=t("registerError")}});
+  document.querySelectorAll("[data-community-control]").forEach(button => button.onclick = async () => {
+    if (!isCurrent()) return;
+    button.disabled = true;
+    const status = document.querySelector("#community-control-state");
+    try {
+      const response = await fetch("/api/community", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({action:button.dataset.communityControl})});
+      if (!isCurrent()) return;
+      if (!response.ok) throw Error(String(response.status));
+      const result = await response.json();
+      if (!isCurrent()) return;
+      await renderEditor();
+      if (state.user === principal && (location.pathname === "/editor" || location.hash.startsWith("#/editor")))
+        announce(stateNames[result.status] || result.status);
+    } catch { if (isCurrent()) status.textContent = t("registerError"); }
+  });
   communityOwnerRefreshInterval=setInterval(async()=>{
     if(document.hidden || !isCurrent())return;
     try{

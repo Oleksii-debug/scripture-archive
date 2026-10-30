@@ -35,8 +35,32 @@ test('account deletion clears personal records while preserving other users', as
   db.prepare("INSERT INTO group_sessions(id,group_id,created_by,book_id,chapter,meeting_date,reflection,answers_correct,answers_total) VALUES ('alice-meeting','bob-group','alice','GEN',12,'2026-10-27','Alice private reflection',2,3)").run();
   db.prepare("INSERT INTO group_sessions(id,group_id,created_by,book_id,chapter,meeting_date,reflection,answers_correct,answers_total) VALUES ('bob-meeting','bob-group','bob','GEN',13,'2026-10-28','Bob authored text',3,3)").run();
   db.prepare("INSERT INTO group_sessions(id,group_id,created_by,book_id,chapter,meeting_date,reflection) VALUES ('owned-meeting','alice-group','alice','GEN',14,'2026-10-28','Owner text')").run();
-  let failAfter = -1;
-  const D1 = {prepare(sql) {return {bind(...args) {return {first: async () => db.prepare(sql).get(...args), run: async () => db.prepare(sql).run(...args)};}};}, async batch(statements) {db.exec('BEGIN');try {for (const [index, statement] of statements.entries()) {if(index === failAfter) throw Error('simulated database failure'); await statement.run();}db.exec('COMMIT');} catch(error) {db.exec('ROLLBACK');throw error;}}};
+  let failAfter = -1, unconfirmedBatch = false;
+  const D1 = {
+    prepare(sql) { return { bind(...args) { return {
+      first: async () => db.prepare(sql).get(...args),
+      run: async () => {
+        const outcome = db.prepare(sql).run(...args);
+        return { success: true, meta: { changes: Number(outcome.changes) } };
+      },
+    }; } }; },
+    async batch(statements) {
+      // A fake incomplete ACK does not assert a rollback. It proves only that
+      // the API refuses to claim successful deletion without D1 confirmation.
+      if (unconfirmedBatch) return statements.map((_, index) =>
+        ({ success: index !== 2, meta: { changes: index === 17 ? 1 : 0 } }));
+      db.exec('BEGIN');
+      try {
+        const receipts = [];
+        for (const [index, statement] of statements.entries()) {
+          if (index === failAfter) throw Error('simulated database failure');
+          receipts.push(await statement.run());
+        }
+        db.exec('COMMIT');
+        return receipts;
+      } catch (error) { db.exec('ROLLBACK'); throw error; }
+    },
+  };
   const source = readFileSync(new URL('../app/api/auth/route.ts', import.meta.url), 'utf8');
   const compiled = ts.transpileModule(source, {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
   const exports = {};
@@ -64,6 +88,13 @@ test('account deletion clears personal records while preserving other users', as
   assert.deepEqual({...db.prepare("SELECT created_by,reflection FROM group_sessions WHERE id='alice-meeting'").get()}, {created_by:'alice',reflection:'Alice private reflection'});
   assert.equal(db.prepare("SELECT count(*) AS n FROM home_group_members WHERE group_id='bob-group'").get().n, 2);
   failAfter = -1;
+  unconfirmedBatch = true;
+  const unconfirmed = await exports.POST(request('correct'));
+  assert.equal(unconfirmed.status, 503);
+  assert.equal((await unconfirmed.json()).error, 'deletion_failed');
+  assert.equal(db.prepare("SELECT deleted_at FROM accounts WHERE id='alice'").get().deleted_at, null);
+  assert.equal(db.prepare("SELECT count(*) n FROM progress WHERE user_id='alice'").get().n, 1);
+  unconfirmedBatch = false;
   assert.equal((await exports.POST(request('correct'))).status, 200);
   const alice = db.prepare("SELECT email,first_name,last_name,password_hash,password_salt,deleted_at FROM accounts WHERE id='alice'").get();
   assert.equal(alice.first_name, ''); assert.equal(alice.last_name, ''); assert.equal(alice.password_hash, ''); assert.equal(alice.password_salt, ''); assert.ok(alice.deleted_at); assert.equal(alice.email, 'deleted-alice@invalid.local');

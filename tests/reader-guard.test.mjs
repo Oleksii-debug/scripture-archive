@@ -139,3 +139,33 @@ test("failed initial guard after route replacement cannot erase another screen",
   assert.equal(h.events.some(e=>e[0]==="render"||e[0]==="locked"),false);
   assert.equal(h.events.some(e=>e[0]==="load-text"),false);
 });
+
+test("late chapter JSON failure cannot repaint a new account's screen", async () => {
+  let reject;
+  const deferred = new Promise((_, fail) => { reject = fail; });
+  const h = harness(() => ({ invalidated: false }), () => deferred);
+  h.context.state.user = { id: "alice" };
+  const work = h.run();
+  for (let i = 0; i < 15; i++) await Promise.resolve();
+  assert.equal(h.events.some(e => e[0] === "load-text"), true);
+  h.context.state.user = { id: "bob" };
+  reject(Error("old account's Bible fetch failed"));
+  await work;
+  assert.equal(h.events.some(e => e[0] === "render" || e[0] === "locked" || e[0] === "remove"), false);
+  assert.equal(h.events.filter(e => e[0] === "request").length, 1);
+});
+
+test("late chapter JSON failure cannot replace another chapter after navigation", async () => {
+  let reject;
+  const deferred = new Promise((_, fail) => { reject = fail; });
+  const h = harness(() => ({ invalidated: false }), () => deferred);
+  const work = h.run();
+  for (let i = 0; i < 15; i++) await Promise.resolve();
+  const next = { book: "EXO", chapter: 1 };
+  h.context.state.currentReader = next;
+  reject(Error("stale chapter load failed"));
+  await work;
+  assert.equal(h.context.state.currentReader, next);
+  assert.equal(h.events.some(e => e[0] === "render" || e[0] === "locked" || e[0] === "remove"), false);
+  assert.equal(h.events.filter(e => e[0] === "request").length, 1);
+});

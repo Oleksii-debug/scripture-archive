@@ -2731,7 +2731,15 @@ async function renderReader(parts) {
     shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1></section>`);
     return;
   }
-  const book = await getBook(meta.code);
+  let book;
+  try {
+    book = await getBook(meta.code);
+  } catch (error) {
+    // A cancelled chapter must never let the route-level error handler
+    // replace a newer account or page with an obsolete failure.
+    if (!readerStillCurrent()) return;
+    throw error;
+  }
   // A different device may start a new attempt while the Bible JSON loads.
   // Prevent the async reader from undoing an invalidation in another tab.
   if (!readerStillCurrent()) return;

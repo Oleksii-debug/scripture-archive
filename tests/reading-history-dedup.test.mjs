@@ -206,10 +206,10 @@ test('real progress route excludes forged chapters but preserves the approved Jo
         row('JOL',4,'Йоіл'),row('GEN',50,'Буття')],
       announce(){},play(){},getCatalog:async()=>canonicalCatalog,
     });
-    assert.match(html,/<strong>2<\\/strong><p>Глав позначено прочитаними<\\/p>/);
-    assert.match(html,/href="\\/reader\\/JOL\\/4"/);
-    assert.match(html,/href="\\/reader\\/GEN\\/50"/);
-    assert.doesNotMatch(html,/href="\\/reader\\/FAK\\/|href="\\/reader\\/GEN\\/51"/);
+    assert.match(html,/<strong>2<\/strong><p>Глав позначено прочитаними<\/p>/);
+    assert.match(html,/href="\/reader\/JOL\/4"/);
+    assert.match(html,/href="\/reader\/GEN\/50"/);
+    assert.doesNotMatch(html,/href="\/reader\/FAK\/|href="\/reader\/GEN\/51"/);
     assert.doesNotMatch(html,/Вигадана|Неможлива/);
   } finally {
     for (const key of ['fetch','location','document']) {
@@ -233,9 +233,9 @@ test('missing verified catalog never reports invented local history as zero comp
       loadJSON:()=>[row('GEN',1,'Genesis')],
       announce(){},play(){},getCatalog:async()=>{throw Error('offline catalog');},
     });
-    assert.match(html,/<strong>—<\\/strong><p>Chapters marked as read<\\/p>/);
+    assert.match(html,/<strong>—<\/strong><p>Chapters marked as read<\/p>/);
     assert.match(html,/Bible catalog could not be verified/);
-    assert.doesNotMatch(html,/href="\\/reader\\/GEN\\/1"/);
+    assert.doesNotMatch(html,/href="\/reader\/GEN\/1"/);
   } finally {
     for (const key of ['fetch','location','document']) {
       if(previous[key]===undefined)delete globalThis[key];else globalThis[key]=previous[key];

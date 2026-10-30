@@ -1,3 +1,14 @@
+## 2026-10-30 — SA-EXT-16 / HELP_RAW_FIELD_TRUNCATION — РОЗРОБКУ ВУЗЬКОГО ДЕФЕКТУ ЗАКРИТО
+
+**Лише цей дефект:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`; `remaining_scoped_implementation=0`; `necessary_unmerged_PRs=0`. Повний **SA-EXT-16 та всі SA-EXT-01…20 залишаються OPEN**.
+
+- **Реальна проблема:** `POST /api/help` обрізав анонімну електронну адресу, тему та повідомлення через `.trim().slice(0,max)` ще до валідації; адреса з допустимим 254-символьним префіксом і хвостом записувалася й могла бути надіслана як *інша* адреса; повідомлення користувача скорочувалося без попередження.
+- **Виправлення:** [PR #616](https://github.com/Oleksii-debug/scripture-archive/pull/616) **SQUASH MERGED**, точний `main@e6889d77e832f3f2c6fb3ba9ebbcb4ac63ed880b`, маршрут `app/api/help/route.ts@dbb4b6bc1b8b56a3817902d81d89253a33fa03bd`; невідповідні email (254), subject (160), message (6000) відхиляються до D1 і пошти; законні граничні дані зберігаються повністю. Без нового API, БД, розсилки чи релізу.
+- **Native tests:** [Actions #41037040019](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41037040019) на head `165bd8587235dda83484ce71fae1b80883979511`: **1419 Node PASS, 0 FAIL** з 6 новими route-executing перевірками, TS/lint/build PASS. **Загальний CI FAIL**: disposable Worker/D1 **21/22** двічі через `Your worker restarted mid-request`, HTTP 503 на незалежному `tests/api-flow.test.mjs`; Python **SKIPPED**. Це не повний E2E PASS.
+- **Реєстр:** [SA_EXT_16_HELP_EXACT_FIELDS_TERMINAL_2026-10-30.md](SA_EXT_16_HELP_EXACT_FIELDS_TERMINAL_2026-10-30.md). Production Sites SHA/D1, фізичний NVDA/Windows, усі 20 розділів **NOT VERIFIED**. [Координація #297](https://github.com/Oleksii-debug/scripture-archive/issues/297). Повторно не розробляти цей підпункт без нового фактичного дефекту.
+
+---
+
 ## 2026-10-30 — SA-EXT-02/16 / COMPLETED_ATTEMPT_EXPORT_METADATA_INTEGRITY — РОЗРОБКУ ВУЗЬКОГО ПІДПУНКТУ ЗАКРИТО
 
 **Виключно цей підпункт:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Повні SA-EXT-01…20 залишаються OPEN.** Відсутність поточного production SHA, реального браузерного й NVDA-приймання не перетворюється на повторну розробку цієї вже злитої функції.

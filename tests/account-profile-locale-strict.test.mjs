@@ -46,16 +46,16 @@ function fixture(){
 const validProfile={firstName:"Ada",lastName:"Reader",ageRange:"18-24",acceptPrivacy:true,acceptSensitive:false};
 
 for(const [name,locale] of [
-  ["unsupported French","fr"],
-  ["unsupported German","de"],
-  ["unsupported Slovak","sk"],
-  ["unsupported with padding","  fr  "],
   ["array pretending to be supported",["en"]],
   ["object pretending to be supported",{value:"uk"}],
   ["numeric locale",23],
-  ["boolean locale",true],
+  ["boolean true",true],
   ["array with no items",[]],
   ["empty object",{}],
+  ["boolean false",false],
+  ["numeric zero",0],
+  ["negative numeric",-1],
+  ["array with two locales",["uk","en"]],
 ]){
   test("profile refuses "+name+" without D1 mutation",async()=>{
     const h=fixture();
@@ -75,6 +75,10 @@ for(const [name,locale,expected] of [
   ["null optional locale",null,"uk"],
   ["empty HTML locale","","uk"],
   ["blank HTML locale","  ","uk"],
+  ["unsupported French falls back by SA10 contract","fr","uk"],
+  ["unsupported German falls back by SA10 contract","de","uk"],
+  ["unsupported Slovak falls back by SA10 contract","sk","uk"],
+  ["unknown padded locale falls back by SA10 contract","  fr  ","uk"],
 ]){
   test("profile stores "+name+" without rewriting explicit locale",async()=>{
     const h=fixture();

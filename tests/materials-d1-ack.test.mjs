@@ -41,6 +41,8 @@ function fixture() {
           if (mode === "text") return { success: true, meta: { changes: "1" } };
           if (mode === "boolean") return { success: true, meta: { changes: true } };
           if (mode === "null") return { success: true, meta: { changes: null } };
+          if (mode === "multi") return { success: true, meta: { changes: 2 } };
+          if (mode === "unsafe") return { success: true, meta: { changes: Number.MAX_SAFE_INTEGER + 1 } };
           return { success: false, meta: { changes: Number(result.changes) } };
         }
         if (sql.startsWith("INSERT INTO study_materials") && ack !== "normal") {
@@ -50,6 +52,8 @@ function fixture() {
           if (mode === "text") return { success: true, meta: { changes: "1" } };
           if (mode === "boolean") return { success: true, meta: { changes: true } };
           if (mode === "null") return { success: true, meta: { changes: null } };
+          if (mode === "multi") return { success: true, meta: { changes: 2 } };
+          if (mode === "unsafe") return { success: true, meta: { changes: Number.MAX_SAFE_INTEGER + 1 } };
           return { success: false, meta: { changes: Number(result.changes) } };
         }
         return { success: true, meta: { changes: Number(result.changes) } };
@@ -210,8 +214,10 @@ test("draft text permits surrounding whitespace but never drops meaningful text"
   } finally { f.db.close(); }
 });
 
-test("false and missing D1 ACKs return 503 even when SQLite completed the write", async () => {
-  for (const mode of ["failed", "missing", "negative", "text", "boolean", "null"]) {
+// Even a truthy, safely typed D1 receipt is untrustworthy if it claims
+// a single-primary-key write changed more than one row.
+test("false, missing or multi-row D1 ACKs return 503 even when SQLite completed the write", async () => {
+  for (const mode of ["failed", "missing", "negative", "text", "boolean", "null", "multi", "unsafe"]) {
     const f = fixture();
     try {
       f.setAck(mode);
@@ -324,8 +330,8 @@ test("a D1 delete prepare failure returns a stable error without losing a privat
   } finally { f.db.close(); }
 });
 
-test("missing, false, or invalid D1 delete receipts never claim success", async () => {
-  for (const ack of ["missing", "negative", "failed", "text", "boolean", "null"]) {
+test("missing, false, multi-row or invalid D1 delete receipts never claim success", async () => {
+  for (const ack of ["missing", "negative", "failed", "text", "boolean", "null", "multi", "unsafe"]) {
     const f = fixture();
     try {
       assert.equal((await f.post({ ...valid, id: "lost-delete-ack" })).status, 201);

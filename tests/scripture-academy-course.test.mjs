@@ -196,7 +196,7 @@ test('every lesson retains every approved source-linked reflection question in a
     for(const [index,id] of academyLessonIds.entries()){
       const dossier=scriptureDossiers.find(item=>item.id===id);
       assert.ok(dossier);
-      const marker='<h3>'+String(index+1)+'. <a href="/dossiers?id='+id+'">';
+      const marker='<h3 id="academy-lesson-'+id+'" tabindex="-1">'+String(index+1)+'. <a href="/dossiers?id='+id+'">';
       const start=html.indexOf(marker),end=html.indexOf('</article>',start);
       assert.ok(start>=0 && end>start,lang+' '+id+' has its own lesson article');
       const article=html.slice(start,end);

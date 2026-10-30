@@ -1,5 +1,18 @@
 # SCRIPTURE ARCHIVE — каталог розділів і план реалізації розширень
 
+## 2026-10-30 — SA-EXT-02 / RECENT_READING_HISTORY_BOUND — ЗАКРИТО ДЛЯ РОЗРОБКИ (новий відтворений дефект)
+
+**Тільки цей конкретний дефект: `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`.** Основний SA-EXT-02 та всі SA-EXT-01…20 батьківські розділи залишаються **OPEN**. Це не приймання релізу, браузера чи NVDA.
+
+- **Відтворено на точних байтах старого main:** новий `verifiedLocalReadingHistory(raw)` після виправлення пошкоджених JSON-форм використовував `raw.slice(0, 1000)`; при 1189 структурно коректних записах повертав лише 1000, а найновіші 189 зникали з історії та лічильника. Незалежно виконано оригінальну JS-функцію з GitHub blob `0fdeb3bb96e90024febda96ddb33740fc45548e7` (RED).
+- **Закрита функція:** канонічний `public/workspace.js` тепер обробляє найновіші максимум 2048 записів, не приховуючи записи понад стару межу 1000; валідація книги/глави/назви, довіра до власника кешу, доступний `/progress` та незмінні байти браузерного сховища збережені. Жодних нових API, БД, серверів чи обов'язкових незлитих PR.
+- **GitHub:** [PR #535](https://github.com/Oleksii-debug/scripture-archive/pull/535) **SQUASH MERGED**; точний кодовий інтегрований `main@3bf328a2eb48658166226f2adf97d2ec92246af5`. Після конкурентного оновлення `main@8d383a5b4dd5e10f63e3184ae938c847746e6e40` перевірено ancestor-status `behind_by=0` та наявність source/test, без перезапису змін іншого виконавця.
+- **Source runtime assertions:** виконана нова точна JS-функція з PR blob `08441a8d832d23e8f8383a2255a9bef16e035f17`: 0→0, 1000→1000, 1189→1189, 2100→2048 (найновіші включно з 2099; перший — 52), PASS.
+- **Незалежні GitHub Actions:** [run #41019149248](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41019149248) exact PR head `e25b8dd97e32c0925acb0e626922a89bd765bc9e`: **1133 native Node PASS, 0 FAIL, 1 SKIP**, TypeScript PASS, lint PASS, source build PASS, Python **2 PASS**. **Загальний CI FAIL**: disposable Worker/D1 двічі 21/22, `Your worker restarted mid-request`, HTTP503 на незалежному CI дефекті [#361](https://github.com/Oleksii-debug/scripture-archive/pull/361). Жодного непідтвердженого claim про full CI GREEN.
+- **Не доведено:** production deployed SHA/Cloudflare Sites, реальний browser/keyboard, фізичний NVDA, випускове приймання. Для нового дефекту дозволене відновлення роботи лише за новим відтворенням; повний батьківський розділ усе ще потребує затвердженого функціоналу.
+
+
+
 ## 2026-10-30 — SA-EXT-08 / REVIEWED_STUDY_LIBRARY_ROUTE — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузька функція)
 
 **Статус:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` для **окремого** опублікованого каталогу вже затверджених редактором навчальних матеріалів; `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. Увесь батьківський **SA-EXT-08 залишається OPEN**, як і всі інші незакриті батьківські розділи. Не називати це завершеною електронною бібліотекою, платним каталогом чи production-релізом.

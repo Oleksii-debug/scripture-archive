@@ -122,6 +122,8 @@ async function write(request:Request){
     const reading=body.reading.map(r=>({book:clean(r.book,4),chapter:r.chapter,title:clean(r.title,100)}));
     if(!reading.every(validReadingReceipt))return privateJson({error:"invalid_reading"},{status:400});
     const unique=[...new Map(reading.map(r=>[`${r.book}:${r.chapter}`,r])).values()];
+    // Validate prior, possibly legacy receipts inside the same atomic D1 merge.
+    const chapterLimits=JSON.stringify(Object.fromEntries(READING_CHAPTERS));
     // Serialize the merge in one canonical D1 statement. Never replace a newer read receipt with a stale snapshot.
     // Invalid stored JSON fails the transaction rather than overwriting evidence of corruption.
     try {
@@ -141,6 +143,8 @@ async function write(request:Request){
                    OR COALESCE(json_type(receipt.value,'$.title'),'missing')!='text'
                    OR NOT (json_extract(receipt.value,'$.chapter') BETWEEN 1 AND 151)
                    OR length(json_extract(receipt.value,'$.title'))>100
+                   OR length(trim(json_extract(receipt.value,'$.title'), char(9)||char(10)||char(13)||' '))=0
+                   OR COALESCE(json_extract(?, '$.' || json_extract(receipt.value,'$.book')), 0)<json_extract(receipt.value,'$.chapter')
                    OR NOT (
                      json_extract(receipt.value,'$.book') GLOB '[A-Z][A-Z]'
                      OR json_extract(receipt.value,'$.book') GLOB '[A-Z][A-Z][A-Z]'
@@ -161,6 +165,8 @@ async function write(request:Request){
                    OR COALESCE(json_type(receipt.value,'$.title'),'missing')!='text'
                    OR NOT (json_extract(receipt.value,'$.chapter') BETWEEN 1 AND 151)
                    OR length(json_extract(receipt.value,'$.title'))>100
+                   OR length(trim(json_extract(receipt.value,'$.title'), char(9)||char(10)||char(13)||' '))=0
+                   OR COALESCE(json_extract(?, '$.' || json_extract(receipt.value,'$.book')), 0)<json_extract(receipt.value,'$.chapter')
                    OR NOT (
                      json_extract(receipt.value,'$.book') GLOB '[A-Z][A-Z]'
                      OR json_extract(receipt.value,'$.book') GLOB '[A-Z][A-Z][A-Z]'
@@ -175,7 +181,7 @@ async function write(request:Request){
           )
         ),
         updated_at=CURRENT_TIMESTAMP
-    `).bind(id.userId,JSON.stringify(unique)).run();
+    `).bind(id.userId,JSON.stringify(unique),chapterLimits,chapterLimits).run();
     const written=confirmedD1Changes(result);
     if(written===null||written===0)return privateJson({error:"reading_save_failed"},{status:503});
     return privateJson({ok:true});

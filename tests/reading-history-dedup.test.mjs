@@ -136,7 +136,7 @@ test('canonical progress screen shows distinct count and only one chapter link',
       loadJSON:()=>[row('GEN',12,'First'),row('EXO',3,'Other'),row('GEN',12,'Newest')],
       announce(){},play(){},getCatalog:async()=>({}),
     });
-    assert.match(html,/<strong>2<\/strong><p>Chapters marked read<\/p>/);
+    assert.match(html,/<strong>2<\/strong><p>Chapters marked as read<\/p>/);
     assert.equal((html.match(/href="\/reader\/GEN\/12"/g)||[]).length,1);
     assert.equal((html.match(/href="\/reader\/EXO\/3"/g)||[]).length,1);
     assert.match(html,/Newest/);

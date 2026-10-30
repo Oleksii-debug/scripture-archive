@@ -1,3 +1,9 @@
+## 2026-10-30 — SA-EXT-03 / CMS_ITEM_TITLE_EXACT_BOUNDARY — ЗАКРИТО ВУЗЬКИЙ ДЕФЕКТ
+
+**CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL**, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` лише для точного редакційного заголовка; **батьківський SA-EXT-03 та всі SA-EXT-01…20 залишаються OPEN**. Реальний owner CMS раніше обрізав `title` на 200 UTF-16 одиницях із хибним HTTP 200; тепер понад 200 відхиляється до D1, правильний текст на межі записується точно. [PR #635](https://github.com/Oleksii-debug/scripture-archive/pull/635) squash merged `main@21bac597223107bf1fd153c5745e309a5f6f2816`; actual source/test blobs `58041c2ce0070c1b5bc9326a07864e26583b41fb` / `3c718b6708c80da89b557cd759da2826666f761a`. CI #41040738618: Node 1498 PASS, 1 SKIP, TS/lint/build, Python 2 PASS; повний E2E FAIL 21/22 двічі — відомий незалежний Wrangler/D1 restart HTTP 503, #618. Production/browser/Windows/NVDA NOT_VERIFIED. [Повний terminal receipt](SA_EXT_03_CMS_ITEM_TITLE_EXACT_TERMINAL_20261030.md). Реліз/інші розділи не закрито.
+
+---
+
 ## 2026-10-30 — SA-EXT-01/02 / READING_RECEIPT_TITLE_LOSSLESS — ВУЗЬКИЙ ПІДПУНКТ ЗАКРИТО
 
 **CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** для цього дефекту, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`; **усі 20 повних SA-EXT-01…20 залишаються OPEN**.

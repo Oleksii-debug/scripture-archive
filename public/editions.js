@@ -19,8 +19,19 @@ export const EDITIONS = {
   ]
 };
 export const editionCopy={uk:{choose:'Переклад Біблії',external:'Читати у видавця',externalNote:'Це видання відкривається на сайті видавця. Ваш вибір зберігається для наступного читання.',current:'Читати на платформі',whole:'Старий і Новий Завіти'},ru:{choose:'Перевод Библии',external:'Читать у издателя',externalNote:'Это издание открывается на сайте издателя. Ваш выбор сохранится для следующего чтения.',current:'Читать на платформе',whole:'Ветхий и Новый Заветы'},en:{choose:'Bible translation',external:'Read with the publisher',externalNote:'This edition opens on the publisher’s website. Your choice is saved for your next reading session.',current:'Read on the platform',whole:'Old and New Testaments'}};
+// A browser can deny preference persistence while the local Bible stays readable.
+// Keep the selected *canonical* edition in this tab, without pretending it was saved.
+const currentTabEditions = new Map();
+export function setEditionForTab(lang, id) {
+  const found = EDITIONS[lang]?.find(edition => edition.id === id);
+  if (!found) return null;
+  currentTabEditions.set(lang, id);
+  return found;
+}
 export function selectedEdition(lang){
   const list = EDITIONS[lang] || EDITIONS.uk;
+  const current = currentTabEditions.get(lang);
+  if (current) return list.find(edition => edition.id === current) || list[0];
   // Blocked browser storage must never prevent reading local Bible content.
   let chosen = null;
   try { chosen = localStorage.getItem(`sa.edition.${lang}`); }
@@ -28,9 +39,8 @@ export function selectedEdition(lang){
   return list.find(edition => edition.id === chosen) || list[0];
 }
 export function editionUrl(edition,code,chapter){if(edition.version)return `https://www.bible.com/bible/${edition.version}/${code}.${chapter}`;if(edition.esv)return `https://www.esv.org/${code}+${chapter}/`;if(edition.gateway)return `https://www.biblegateway.com/passage/?search=${encodeURIComponent(code+' '+chapter)}&version=${edition.gateway}`;return edition.source}
-export function editionSelect(lang,esc){
+export function editionSelect(lang,esc,selected=selectedEdition(lang)){
   const list = EDITIONS[lang] || EDITIONS.uk;
   const copy = editionCopy[lang] || editionCopy.uk;
-  const selected = selectedEdition(lang);
   return `<label class="field grow"><span>${copy.choose}</span><select id="bible-edition">${list.map(e => `<option value="${e.id}" ${e.id===selected.id?'selected':''}>${esc(e.title)}</option>`).join('')}</select></label>`;
 }

@@ -1,5 +1,16 @@
 # SCRIPTURE ARCHIVE — каталог розділів і план реалізації розширень
 
+## 2026-10-30 — SA-EXT-02 / PROGRESS_LOCAL_READING_RECORDS — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузька функція)
+
+**РІШЕННЯ:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` тільки для захисту канонічної сторінки `/progress` від пошкоджених записів локальної історії читання. `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Повний батьківський SA-EXT-02 і SA-EXT-01…20 залишаються OPEN**: цей запис не означає готовність місій, навчальної пам'яті, продакшену чи NVDA.
+
+- **Відтворений дефект:** до виправлення `c.loadJSON('sa.readingHistory',[])` використовувався без перевірки як масив записів. Зіпсований JSON-тип (наприклад, рядок) або `[null]` у локальному кеші зривав відображення `/progress` через `.reverse().map`/`r.book`; некоректні глави формували хибні посилання. Нової бази або другого маршруту не створено.
+- **Завершена реалізація:** `public/workspace.js` перевіряє структуру кожного локального запису, довжину назви, допустимий формат і цілочисловий діапазон глави до формування доступних посилань і кількості. Некоректні елементи не виводяться, придатні не втрачаються, вихідне сховище не перезаписується; відмова браузерного storage не зриває сторінку. Раніше злиті перевірки довіри до principal/власника кешу залишено без послаблення.
+- **GitHub:** [PR #529](https://github.com/Oleksii-debug/scripture-archive/pull/529) **squash MERGED**, точний source `main@c06006781e5d340132da14c43b59de873082c28e`, source blob `public/workspace.js@0fdeb3bb96e90024febda96ddb33740fc45548e7`, regression blob `tests/workspace-async-principal-fence.test.mjs@2826d465ffc6c00bdf34857ae45c8b727ebb3a28`; незалежно перевірено стан merged, `main` ref і обидва blobs.
+- **Справжні тести:** [GitHub Actions #41017922308](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41017922308) на точному PR head `b7103805fa88f9cee3c802273b39fa61c5b7f9bb`: **1131 Node PASS, 0 FAIL, 1 SKIP** із 1132, включно з 3 новими source-executing regression тестами; TypeScript PASS, ESLint 0 errors / 12 warnings, production source build PASS, Python validators **2 PASS**. **Повна CI FAIL:** disposable Wrangler Worker/D1 `21/22` на двох незалежних спробах, відомий окремий restart `Your worker restarted mid-request`, HTTP 503; див. [PR #361](https://github.com/Oleksii-debug/scripture-archive/pull/361). Не оголошувати цей E2E PASS.
+- **Неперевірено окремо:** browser/keyboard/NVDA, встановлений Sites SHA, реальна production інтеграція, повний батьківський розділ. Повторне розроблення цієї вузької функції — лише за новою вимогою або відтвореним дефектом.
+
+
 ## 2026-10-30 — SA-EXT-16 / PROGRESS_UNTRUSTED_READING_HISTORY — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
 
 **Розділ №16: лише цей конкретний підпункт — `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`.** `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` саме для описаного дефекту. **Батьківський SA-EXT-16 та інші SA-EXT-01…20 залишаються OPEN.**

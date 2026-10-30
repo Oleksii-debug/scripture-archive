@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { dossierMarkup, scriptureDossiers, validateDossierGraph } from '../public/scripture-dossiers.js';
+import { dossierAtlasMarkup, dossierMarkup, scriptureDossiers, validateDossierGraph } from '../public/scripture-dossiers.js';
 
 const catalog=JSON.parse(readFileSync(new URL('../public/data/catalog.json',import.meta.url),'utf8'));
 const esc=value=>String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
@@ -204,4 +204,48 @@ test('explicit empty dossier query is invalid; only an absent query opens the de
     assert.match(introduction,/id="dossier-heading"/,'missing query still selects default introduction');
   }
   assert.match(dossierMarkup(catalog,'en',undefined,esc),/id="dossier-heading"/);
+});
+
+test('unsafe canonical book codes fail closed before dossier or atlas link rendering',()=>{
+  // These characters can break an unescaped href or change its route. All
+  // three source editions must reject them even if a damaged catalogue agrees.
+  const hostileCodes=[
+    'GEN" onfocus="alert(1)',
+    'GEN/../ROM',
+    'GEN?src=1',
+    'GEN&extra=1',
+    'GEN X',
+    'GEN\nX',
+  ];
+  const record=scriptureDossiers[0].sources[0];
+  const previous=record.book;
+  try {
+    for(const code of hostileCodes){
+      const damaged=structuredClone(catalog);
+      for(const lang of ['uk','ru','en']){
+        damaged.books[lang].push({...damaged.books[lang][0],code,title:'Untrusted book'});
+      }
+      assert.equal(validateDossierGraph(damaged),false,
+        'invalid edition catalog code must not become a reader href');
+      record.book=code;
+      assert.equal(validateDossierGraph(damaged),false,
+        'invalid dossier evidence code must not become a reader href');
+      for(const lang of ['uk','ru','en']){
+        for(const markup of [
+          dossierMarkup(damaged,lang,'abraham',esc),
+          dossierAtlasMarkup(damaged,lang,esc),
+        ]){
+          assert.match(markup,/role="alert"/,lang+' '+code);
+          assert.doesNotMatch(markup,/href="\\/reader\\//,lang+' '+code);
+          assert.doesNotMatch(markup,/onfocus=|onclick=|onerror=/,
+            'never publish attacker-controlled HTML attributes');
+        }
+      }
+      record.book=previous;
+    }
+  } finally {
+    record.book=previous;
+  }
+  assert.equal(validateDossierGraph(catalog),true,
+    'the real canonical 66-book catalog must still validate');
 });

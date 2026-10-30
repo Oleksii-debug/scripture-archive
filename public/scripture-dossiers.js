@@ -115,6 +115,9 @@ export function validateDossierGraph(catalog) {
   // into markup/URL attributes or present blank text as validated Scripture.
   const safeId = value => typeof value === 'string' && /^[a-z][a-z0-9-]*$/.test(value);
   const nonblank = value => typeof value === 'string' && value.trim().length > 0;
+  // Book codes become internal reader URL segments. Reject unsafe catalogue
+  // or dossier provenance before rendering any href (including atlas links).
+  const safeBookCode = value => typeof value === 'string' && /^(?:[1-3])?[A-Z]{2,4}$/.test(value);
   if (!nodes.every(item => item && safeId(item.id) &&
       ['person','place','event'].includes(item.type) &&
       Array.isArray(item.sources) && item.sources.length > 0 &&
@@ -129,12 +132,12 @@ export function validateDossierGraph(catalog) {
   // A malformed or ambiguous edition catalogue must show the accessible
   // source-unavailable state, not throw while assembling the dossier.
   const catalogs = LANGS.map(lang=>catalog.books[lang]);
-  if(catalogs.some(books=>books.some(book=>!book || typeof book.code!=='string' || !book.code ||
+  if(catalogs.some(books=>books.some(book=>!book || !safeBookCode(book.code) ||
       typeof book.title!=='string' || !book.title.trim() ||
       !Number.isSafeInteger(book.chapters) || book.chapters<1) ||
       new Set(books.map(book=>book.code)).size!==books.length)) return false;
   const bookMaps = catalogs.map(books=>new Map(books.map(book=>[book.code,book.chapters])));
-  const validRef = source => source && Number.isInteger(source.first) && source.first>0 &&
+  const validRef = source => source && safeBookCode(source.book) && Number.isInteger(source.first) && source.first>0 &&
     Number.isInteger(source.last) && source.last>=source.first &&
     Number.isInteger(source.chapter) && source.chapter>0 &&
     ['narrative','interpretive'].includes(source.kind) &&

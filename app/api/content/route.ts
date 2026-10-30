@@ -36,7 +36,19 @@ export async function GET(request: Request) {
     if (itemsRead?.success !== true || !Array.isArray(itemsRead.results)) return unavailable();
     const revisionsRead = await env.DB!.prepare("SELECT id,content_key,created_at,created_by FROM content_revisions ORDER BY created_at DESC LIMIT 200").all();
     if (revisionsRead?.success !== true || !Array.isArray(revisionsRead.results)) return unavailable();
-    return Response.json({ items: itemsRead.results.map(item => ({ ...item, data: JSON.parse(String(item.data)) })), revisions: revisionsRead.results }, { headers: { "Cache-Control": "no-store" } });
+    // The canonical CMS writer stores only JSON objects. A persisted scalar,
+    // array or coerced nonstring D1 data value is a damaged editorial item,
+    // not a valid owner catalogue snapshot. Reject the complete read rather
+    // than reporting a fabricated partially restorable 200 response.
+    const items = itemsRead.results.map(item => {
+      if (!item || typeof item !== "object" || Array.isArray(item) ||
+          typeof item.data !== "string") throw Error("invalid_editorial_item_data");
+      const parsed: unknown = JSON.parse(item.data);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+        throw Error("invalid_editorial_item_data");
+      return { ...item, data: parsed };
+    });
+    return Response.json({ items, revisions: revisionsRead.results }, { headers: { "Cache-Control": "no-store" } });
   }
   const row = await env.DB!.prepare("SELECT data,updated_at FROM site_content WHERE key='public'").first<{ data: string; updated_at: string }>();
   if (!row) return Response.json(EMPTY, { headers: { "Cache-Control": "no-store" } });

@@ -13,15 +13,15 @@ function storage(initial={}){
 function mount(store,{progress={available:true,completed:['abraham']},user={id:'alice'},isCurrent=()=>true,locks={request:async(_name,_opts,cb)=>cb()}}={}){
   const events={};
   const reset={disabled:false,addEventListener:(name,fn)=>events[name]=fn};
-  const confirm={checked:false}, output={textContent:''};
+  const confirm={checked:false}, output={textContent:''}, unavailable={textContent:'Local markers could not be read. Progress has not been changed.'};
   const lesson={attrs:{'data-academy-lesson':'abraham','aria-pressed':'true'},textContent:'Unmark studied',
     getAttribute(k){return this.attrs[k]},setAttribute(k,v){this.attrs[k]=v},addEventListener(){}};
   const status={textContent:'Studied: 1/7'},meter={value:1},badge={textContent:'badge'},error={textContent:'error'};
-  const elements={'#academy-reset':reset,'#academy-reset-confirm':confirm,'#academy-reset-status':output,'#academy-reading-status':status,'#academy-reading-progress':meter,'#academy-reading-badge':badge,'#academy-reading-error':error};
+  const elements={'#academy-reset':reset,'#academy-reset-confirm':confirm,'#academy-reset-status':output,'#academy-reading-unavailable':unavailable,'#academy-reading-status':status,'#academy-reading-progress':meter,'#academy-reading-badge':badge,'#academy-reading-error':error};
   const root={querySelector:s=>elements[s]??null,querySelectorAll:()=>progress.available?[lesson]:[]};
   const doc={active:true,querySelector:s=>s==='[data-academy-root]'&&doc.active?root:null};
   attachAcademy(doc,store,'en',user,progress,isCurrent,locks);
-  return {reset,confirm,output,status,meter,badge,error,lesson,doc,click:()=>events.click()};
+  return {reset,confirm,output,unavailable,status,meter,badge,error,lesson,doc,click:()=>events.click()};
 }
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 const alice=academyProgressKey({id:'alice'}),bob=academyProgressKey({id:'bob'}),guest=academyProgressKey(null);
@@ -44,7 +44,7 @@ test('read-only corrupt course can be recovered explicitly without destroying ot
   const store=storage({[alice]:'{broken',[bob]:record});
   const ui=mount(store,{progress:{available:false,completed:[]}});ui.confirm.checked=true;ui.click();await flush();
   assert.equal(store.getItem(alice),null);assert.equal(store.getItem(bob),record);
-  assert.match(ui.output.textContent,/Reload the page/);
+  assert.match(ui.output.textContent,/Reload the page/);assert.equal(ui.unavailable.textContent,'');
   for(const lang of ['en','uk','ru']){
     const html=academyMarkup(catalog,lang,esc,{available:false,completed:[]});
     assert.match(html,/<details><summary>/);assert.match(html,/id="academy-reset-confirm"/);

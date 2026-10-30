@@ -3,7 +3,19 @@ const COPY = {
   ru: { title:'Сравнить издания', choose:'Второе издание', open:'Показать вторую версию главы', loading:'Загрузка…', ready:'Вторая версия главы загружена ниже.', fail:'Не удалось загрузить вторую версию. Попробуйте ещё раз.', changed:'Выбранное издание изменилось. Нажмите кнопку ещё раз, чтобы сравнить его.', unavailable:'В этом издании такой главы нет.', note:'Нумерация стихов в изданиях может отличаться. Тексты приведены отдельно.', source:'Источник', license:'Условия использования', cite:'Цитировать стих', cited:'Цитата с источником скопирована.', citeFail:'Не удалось скопировать цитату.' },
   en: { title:'Compare editions', choose:'Second edition', open:'Show the second chapter text', loading:'Loading…', ready:'The second chapter text is available below.', fail:'Could not load the second text. Please try again.', changed:'The selected edition changed. Submit again to compare the current selection.', unavailable:'This chapter is not available in that edition.', note:'Verse numbering may differ between editions. The texts are presented separately.', source:'Source', license:'Terms of use', cite:'Cite verse', cited:'Verse and source copied.', citeFail:'Could not copy the citation.' },
 };
-const https = value => { try { const url = new URL(value); return url.protocol === 'https:' && !url.username && !url.password ? url.href : ''; } catch { return ''; } };
+// Provenance URL admission must inspect the *raw* string first: WHATWG URL
+// silently strips tabs/newlines and empty user-info delimiters. Such a rewrite
+// can silently change which source or licence we attribute Bible text to.
+const https = value => {
+  if (typeof value !== 'string' || !/^https:\/\//i.test(value) ||
+      /[\u0000-\u0020\u007f]/u.test(value)) return '';
+  const authority = value.slice(value.indexOf('://') + 3).split(/[/?#]/u, 1)[0];
+  if (!authority || authority.includes('@')) return '';
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && !url.username && !url.password ? url.href : '';
+  } catch { return ''; }
+};
 
 export function parallelControls(editions, lang, esc) {
   const copy = COPY[lang] || COPY.uk;

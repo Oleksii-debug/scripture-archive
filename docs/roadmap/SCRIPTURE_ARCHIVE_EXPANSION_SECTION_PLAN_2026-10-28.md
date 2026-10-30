@@ -1,3 +1,21 @@
+## 2026-10-30 — SA-EXT-02/16 / READING_EXPORT_STRUCTURED_PROGRESS — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
+
+**Статус:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` лише для відмови експорту особистого прогресу зі збереженими JSON scalar/null/non-string records. `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Повні SA-EXT-02, SA-EXT-16 та інші SA-EXT-01…20 залишаються OPEN.**
+
+- **Доведений дефект:** канонічний `GET /api/reading-export` використовував `JSON.parse(row.data)`, але JSON `null`, `false`, числа та рядки давали HTTP 200 і файл хибно повної резервної копії. Раніше було відхилено лише синтаксично неправильний JSON.
+- **Виправлення й інтеграція:** [PR #578](https://github.com/Oleksii-debug/scripture-archive/pull/578) SQUASH MERGED у `main@f99b9c336a7380a0a038fc2c7d457bed2a2b6c4f`; source blob `app/api/reading-export/route.ts@cb15ce7eb69e7430d7ff54a6359a9ac3e69ae7ad`; реальні regression tests `tests/reading-export-batch-ack.test.mjs@6050780d61a66dee2ad3333d363c99fcace200d3`, readback у main підтверджений. Об'єкти й масиви прогресу зберігають свій зміст, пошкоджене повертає приватне 503 без вкладення, приватність/D1 не змінені.
+- **Перевірки:** [Actions #41026466829](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41026466829): Node **1294 PASS / 0 FAIL / 1 SKIP**, TypeScript/lint/build/Python **PASS**; загальний CI **FAIL** через відомий несуміжний disposable Worker/D1 restart HTTP 503, дві спроби **21/22**, власник [PR #361](https://github.com/Oleksii-debug/scripture-archive/pull/361). Немає підтвердженого production/NVDA/browser PASS. Цей конкретний підпункт не розробляти повторно без нового реального дефекту.
+
+## 2026-10-30 — SA-EXT-03 / MATERIALS_EXPORT_STRUCTURED_RECORDS — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
+
+**Статус:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` лише для перевірки форми чернетки й редакційного snapshot при експорті. `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Увесь SA-EXT-03 та інші 19 батьківських розділів залишаються OPEN**. Це структурна перевірка, не повна перевірка змісту/прав на матеріали.
+
+- **Доведений дефект:** приватний `GET /api/materials?mine=1&export=1` приймав `JSON.parse(String(...))` для історичних `data`/`snapshot`: `null`, `[]`, числа і рядки видавалися за відновлювані авторські вправи/редакційні версії та повноцінну резервну копію.
+- **Реальна інтеграція:** [PR #581](https://github.com/Oleksii-debug/scripture-archive/pull/581) SQUASH MERGED у `main@b3ebbd52665fe99d868e04bea3c0d95ee8c586df`; source blob `app/api/materials/route.ts@76cc53c02951d3a3391c286a334c34841b759a29`; `tests/materials-export-structured-records.test.mjs@c0429edb99d07e036422fdc7a52dbde471fb2f84`; main readback підтверджений. Збережені об'єкти видаються без змін, пошкоджені записи — приватне 503, без вкладення; той самий endpoint/DB/роль.
+- **Перевірки:** [Actions #41026781283](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41026781283): Node **1303 PASS / 0 FAIL / 1 SKIP**, TypeScript/lint/build/Python **PASS**. Загальний CI **FAIL** через окреме Worker/D1 503 замість 403, дві спроби **21/22**, #361. Жодного Cloudflare production release, browser/NVDA чи повного SA-EXT-03 acceptance не підтверджено; scoped implementation terminal.
+
+---
+
 ## 2026-10-30 — SA-EXT-02/16 / HISTORY_BOOK_CODE_READER_LINK_FAILCLOSED — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
 
 **Статус:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` лише для відмови від навігаційних посилань з неправильно сформованим кодом біблійної книги в історії завершених або відновлюваних спроб. `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Батьківські SA-EXT-02, SA-EXT-16 та всі SA-EXT-01…20 залишаються OPEN.**

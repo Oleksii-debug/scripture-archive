@@ -302,3 +302,39 @@ test('valid D1 withdrawal receipt acknowledges once and leaves an immutable audi
     assert.equal((await f.post({action:'withdraw',id:created.data.id})).status,409);
   }finally{f.db.close();}
 });
+
+
+test('historical approved snapshots exceeding the canonical author limits fail closed', async () => {
+  const f = fixture();
+  try {
+    const id = (await f.post(submission)).data.id;
+    assert.equal((await f.post(approve(id), 'editor')).status, 200);
+    const select = f.db.prepare('SELECT snapshot FROM material_submissions WHERE id=?');
+    const update = f.db.prepare('UPDATE material_submissions SET snapshot=? WHERE id=?');
+    const original = JSON.parse(select.get(id).snapshot);
+    const cases = [
+      ['title length', s => { s.title = 'T'.repeat(161); }],
+      ['unsupported locale', s => { s.locale = 'de'; }],
+      ['prompt length', s => { s.data.prompt = 'P'.repeat(3001); }],
+      ['reference length', s => { s.data.reference = 'R'.repeat(201); }],
+      ['answer length', s => { s.data.answer = 'A'.repeat(501); s.data.options[0] = s.data.answer; }],
+      ['explanation length', s => { s.data.explanation = 'E'.repeat(2001); }],
+      ['option length', s => { s.data.options[1] = 'O'.repeat(501); }],
+      ['blank legacy option', s => { s.data.options[1] = '   '; }],
+    ];
+    for (const [label, mutate] of cases) {
+      const snapshot = structuredClone(original);
+      mutate(snapshot);
+      update.run(JSON.stringify(snapshot), id);
+      assert.equal((await f.get('public')).status, 503, label + ': public listing must fail closed');
+      assert.equal((await f.post({action:'answer',id,choice:0},'')).status, 503, label + ': answer must not be graded');
+      assert.equal((await f.get('mine','alice')).status, 503, label + ': private history must not claim a valid snapshot');
+    }
+    update.run(JSON.stringify(original), id);
+    assert.equal((await f.get('public')).status, 200);
+    assert.equal((await f.post({action:'answer',id,choice:0},'')).status, 200);
+    assert.equal((await f.get('mine','alice')).status, 200);
+  } finally {
+    f.db.close();
+  }
+});

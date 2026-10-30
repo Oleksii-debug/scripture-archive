@@ -2332,7 +2332,7 @@ async function getSession() {
   let unownedReading = false, preservedUnownedReading = true;
   // An unreadable owner marker is as ambiguous as an absent one: preserve
   // readable cached history before clearing or assigning a new principal.
-  if (!markerReadable || !previousOwner) {
+  if (state.user && (!markerReadable || !previousOwner)) {
     try {
       const legacyReading = localStorage.getItem('sa.readingHistory');
       if (legacyReading !== null && legacyReading !== '[]' && legacyReading !== '') {

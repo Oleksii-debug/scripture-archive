@@ -27,7 +27,7 @@ function harness(authMode = "ok", dbMode = "ok", databasePresent = true) {
             async all() {
               calls.all++;
               return dbMode === "failed-read" ? { success: false } : {
-                success: true, results: [{ edition: "en", book: "GEN", chapter: 1 }],
+                success: true, results: [{ edition: "en-web", book: "GEN", chapter: 1, created_at: "2026-10-30" }],
               };
             },
             async run() {
@@ -108,7 +108,7 @@ for (const method of ["GET", "PUT", "DELETE"]) {
     assert.equal(response.status, 200);
     assert.match(response.cache, /no-store/);
     if (method === "GET") {
-      assert.deepEqual(JSON.parse(JSON.stringify(response.data.bookmarks)), [{ edition: "en", book: "GEN", chapter: 1 }]);
+      assert.deepEqual(JSON.parse(JSON.stringify(response.data.bookmarks)), [{ edition: "en-web", book: "GEN", chapter: 1, created_at: "2026-10-30" }]);
       assert.equal(h.calls.all, 1);
       assert.equal(h.calls.run, 0);
     } else {

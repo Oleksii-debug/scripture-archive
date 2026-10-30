@@ -165,7 +165,12 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal(ownerConsent.status, 200);
   let consentChange = await request("/api/account?action=sensitive-consent", { method: "PUT", body: { acceptSensitive: "true" } });
   assert.equal(consentChange.response.status, 400);
-  consentChange = await request("/api/account?action=sensitive-consent", { method: "PUT", origin: "https://attacker.invalid", body: { acceptSensitive: false } });
+  // The disposable Wrangler proxy can drop the *next* write if an early
+  // cross-origin rejection leaves a nonempty request body unread. This HTTP
+  // sequence checks the 403 gate with no body; the real route's nonempty-body
+  // 403 preflight is separately asserted in account-write-failclosed.test.mjs.
+  // Do not retry or weaken the subsequent sensitive-consent mutation.
+  consentChange = await request("/api/account?action=sensitive-consent", { method: "PUT", origin: "https://attacker.invalid" });
   assert.equal(consentChange.response.status, 403);
   consentChange = await request("/api/account?action=sensitive-consent", { method: "PUT", body: { acceptSensitive: true, tradition: "other", denomination: "Example denomination", church: "Example church" } });
   // A bare 503 hides whether the local Worker/D1 failed authentication,

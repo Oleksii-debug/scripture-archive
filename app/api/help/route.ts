@@ -170,6 +170,13 @@ function toBase64(bytes: Uint8Array) {
   return btoa(binary);
 }
 
+// D1 promises can resolve without confirming that a support row was persisted.
+// Require one acknowledged insert per row before reporting receipt or emailing.
+function acknowledgedSupportInsert(receipt: unknown): boolean {
+  const row = receipt as { success?: unknown; meta?: { changes?: unknown } } | null;
+  return row?.success === true && row.meta?.changes === 1;
+}
+
 export async function POST(request: Request) {
   if (!env.DB) return json({ error: "database_unavailable" }, 503);
   if (!sameOrigin(request)) return json({ error: "cross_origin_request" }, 403);
@@ -217,7 +224,7 @@ export async function POST(request: Request) {
   // Do not send or acknowledge an email for a request that D1 did not commit.
   // The batch must have one successful result for the request and each attachment.
     const saved = await env.DB.batch(statements);
-    if (!Array.isArray(saved) || saved.length !== statements.length || saved.some(result => result?.success !== true))
+    if (!Array.isArray(saved) || saved.length !== statements.length || saved.some(result => !acknowledgedSupportInsert(result)))
       return json({ error: "support_save_failed" }, 503);
   } catch {
     return json({ error: "support_save_failed" }, 503);

@@ -26,7 +26,7 @@ async function fixture({ identity = null } = {}) {
     },
     async batch(statements) {
       state.batches.push(statements.map(statement => ({ sql: statement.sql, args: statement.args })));
-      return statements.map(() => ({ success: true }));
+      return statements.map(() => ({ success: true, meta: { changes: 1 } }));
     },
   };
   const requireFake = id => {

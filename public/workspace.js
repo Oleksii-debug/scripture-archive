@@ -153,6 +153,10 @@ function validAttemptHistoryPayload(history, chapterBounds) {
     if (typeof id !== 'string' || !id || id.length > 80) return false;
     try { encodeURIComponent(id); return true; } catch { return false; }
   };
+  // A single historical attempt must never appear twice as two completions,
+  // or be both finalized and pending in the same private API receipt.
+  const allRows = history.attempts.concat(history.pending || []);
+  if (new Set(allRows.map(row => row?.id)).size !== allRows.length) return false;
   const safeChapter = row =>
     row && typeof row === 'object' && !Array.isArray(row) &&
     typeof row.book === 'string' && /^([1-3])?[A-Z]{2,3}$/.test(row.book) &&
@@ -186,11 +190,17 @@ export function missionHistoryMarkup(history, lang, esc, chapterBounds) {
 export function reviewSuggestions(attempts, now=new Date(), chapterBounds) {
   if(!Array.isArray(attempts)||!(now instanceof Date)||!Number.isFinite(now.getTime()) ||
      (chapterBounds !== undefined && (!(chapterBounds instanceof Map) || chapterBounds.size !== 66)))return [];
-  const passages=new Map(),invalid=new Set(),intervals=[1,3,7,14];
+  const passages=new Map(),invalid=new Set(),attemptIdOwners=new Map(),intervals=[1,3,7,14];
   for(const item of [...attempts].reverse()) {
     if(item?.mode!=='personal'||typeof item.book!=='string'||!/^([1-3])?[A-Z]{2,3}$/.test(item.book)||!Number.isInteger(item.chapter)||item.chapter<1||item.chapter>151||
        (chapterBounds !== undefined && item.chapter > (chapterBounds.get(item.book) || 0)))continue;
     const key=`${item.book}:${item.chapter}`;
+    // Do not count a duplicated completion as a new spaced-repetition step.
+    // Mark both passages untrusted if a stored ID conflicts across passages.
+    if(typeof item.id!=='string'||!item.id||item.id.length>80){invalid.add(key);continue;}
+    const earlier=attemptIdOwners.get(item.id);
+    if(earlier!==undefined){invalid.add(earlier);invalid.add(key);continue;}
+    attemptIdOwners.set(item.id,key);
     if(!Number.isInteger(item.score)||!Number.isInteger(item.total)||item.total<1||item.score<0||item.score>item.total||typeof item.completedAt!=='string'||!/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/.test(item.completedAt)) {invalid.add(key);continue;}
     const completed=new Date(item.completedAt.replace(' ','T')+'Z');
     if(!Number.isFinite(completed.getTime())||completed.toISOString().slice(0,10)!==item.completedAt.slice(0,10)){invalid.add(key);continue;}

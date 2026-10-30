@@ -97,3 +97,55 @@ test('exact proxy body used as a status assertion message also qualifies one dis
   assert.equal(isDisposableWorkerRestart(direct+"\n  AssertionError: wrong ownership persisted"),false);
   assert.equal(isDisposableWorkerRestart(failedRun("AssertionError [ERR_ASSERTION]: Your worker restarted mid-request but context unknown")),false);
 });
+
+test('exact Worker restart HTTP 503 in a single assertion permits only a fresh-state whole-suite retry', async () => {
+  const actualRestart = failedRun(
+    'AssertionError [ERR_ASSERTION]: Your worker restarted mid-request. Please try sending the request again. Only GET or HEAD requests are retried automatically.\n\n  503 !== 200'
+  );
+  assert.equal(isDisposableWorkerRestart(actualRestart), true);
+  let runs = 0;
+  const result = await runWithFreshState(async () => ++runs === 1
+    ? {code:1,log:actualRestart} : {code:0,log:'22 of 22 passed'});
+  assert.deepEqual(result,{attempts:2,recovered:true});
+  assert.equal(runs,2);
+});
+
+test('mixed assertion, unrelated restart banner, or non-503 evidence cannot trigger retry', async () => {
+  const phrase = 'Your worker restarted mid-request. Please try sending the request again. Only GET or HEAD requests are retried automatically.';
+  const rejected = [
+    failedRun('AssertionError [ERR_ASSERTION]: data was not durable\n  503 !== 200\n  '+phrase),
+    failedRun('AssertionError [ERR_ASSERTION]: '+phrase+'\n  502 !== 200'),
+    failedRun('AssertionError [ERR_ASSERTION]: '+phrase+'\n  503 !== 200\n  AssertionError: another failure'),
+    failedRun('AssertionError [ERR_ASSERTION]: '+phrase+'\n  503 !== 200',{count:2}),
+    failedRun('AssertionError [ERR_ASSERTION]: 503 Service Unavailable\n  503 !== 200',{trailer:'[wrangler:info] '+phrase}),
+  ];
+  for(const log of rejected) {
+    assert.equal(isDisposableWorkerRestart(log), false, log);
+  }
+});
+
+
+test('copied restart phrase is never authority to rerun a failed mutating integration suite', async () => {
+  const restart = 'Your worker restarted mid-request. Please try sending the request again. Only GET or HEAD requests are retried automatically.';
+  const unexpected = [
+    failedRun('Error: real DB outage; payload says Your worker restarted mid-request but status 500'),
+    failedRun('AssertionError [ERR_ASSERTION]: real database outage; ' + restart + '\n  503 !== 403'),
+    failedRun('AssertionError [ERR_ASSERTION]: ' + restart + '\n  500 !== 403'),
+    failedRun('AssertionError [ERR_ASSERTION]: ' + restart + '\n  503 !== 200\n  503 !== 400'),
+    failedRun('AssertionError [ERR_ASSERTION]: ' + restart + '\n  503 !== 200\n  Error: persistence was lost'),
+    failedRun('AssertionError [ERR_ASSERTION]: ' + restart + '\n  503 !== 200\n  SyntaxError: unrelated payload'),
+    failedRun('AssertionError [ERR_ASSERTION]: ' + restart + '\n  503 !== 200\n  AssertionError [ERR_ASSERTION]: another invariant failed'),
+    failedRun("SyntaxError: Unexpected token 'Y', \"Your worker restart\" is not valid JSON"),
+    failedRun('AssertionError [ERR_ASSERTION]: ' + restart + '\n  502 !== 200'),
+    failedRun('AssertionError [ERR_ASSERTION]: ' + restart + '\n  503 !== 200', {count: 2}),
+  ];
+  for (const [index, log] of unexpected.entries()) {
+    assert.equal(isDisposableWorkerRestart(log), false, 'must reject forged/mixed result ' + index);
+    let runs = 0;
+    await assert.rejects(runWithFreshState(async () => {
+      runs++;
+      return {code: 1, log};
+    }), /attempt 1/);
+    assert.equal(runs, 1, 'never repeat an unsafe test suite');
+  }
+});

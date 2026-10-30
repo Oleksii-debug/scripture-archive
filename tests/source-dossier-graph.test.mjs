@@ -8,7 +8,7 @@ const esc=value=>String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').re
 
 test('the source-linked dossier graph validates against the canonical 3-language edition catalog',()=>{
   assert.equal(validateDossierGraph(catalog),true);
-  assert.ok(scriptureDossiers.length>=6);
+  assert.ok(scriptureDossiers.length>=9);
   const ids=scriptureDossiers.map(d=>d.id);
   assert.equal(new Set(ids).size,ids.length,'stable unique dossier IDs');
   assert.ok(scriptureDossiers.some(x=>x.type==='person'));
@@ -118,4 +118,23 @@ test('the public dossier workspace uses the shared catalog and actual source-gra
   assert.match(source,/if\(name==='dossiers'\)/);
   assert.match(source,/const catalog=await c\.getCatalog\(\)/);
   assert.match(source,/dossierMarkup\(catalog,state\.lang,selectedId,esc\)/);
+});
+
+test('new Joseph, Bethlehem and birth dossiers are independently navigable with traced links',()=>{
+  const expected={
+    joseph:['GEN/37?verse=3','GEN/45?verse=1','GEN/50?verse=19','EXO/1?verse=6'],
+    bethlehem:['MIC/5?verse=2','MAT/2?verse=1','LUK/2?verse=1'],
+    nativity:['MAT/1?verse=18','LUK/2?verse=1','MAT/2?verse=1'],
+  };
+  for(const lang of ['uk','ru','en']){
+    for(const [id,links] of Object.entries(expected)){
+      const item=scriptureDossiers.find(x=>x.id===id);
+      assert.ok(item,'dossier remains in canonical graph: '+id);
+      const markup=dossierMarkup(catalog,lang,id,esc);
+      assert.match(markup,/aria-current="page"/);
+      assert.ok(markup.includes(esc(item.names[lang])));
+      for(const link of links)assert.ok(markup.includes('href="/reader/'+link+'"'),lang+' '+id+' '+link);
+      assert.ok(!markup.includes('href="/mission/abraham"'),'unwritten missions cannot be presented as real');
+    }
+  }
 });

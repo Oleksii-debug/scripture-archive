@@ -1,3 +1,15 @@
+## 2026-10-30 — SA-EXT-16 / RATE_LIMIT_D1_ACK_AND_COUNTER_TRUTH — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
+
+**Остаточний статус тільки цього підпункту:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`; `remaining_scoped_implementation=0`, `necessary_unmerged_feature_PRs=0`. **Батьківський SA-EXT-16 і всі 20 батьківських SA-EXT-01…20 залишаються OPEN.** Не повторювати виправлений підпункт без конкретної відтвореної регресії або нової затвердженої вимоги.
+
+- **Доведений дефект:** єдина спільна `lib/auth.ts::rateLimit` раніше ігнорувала результат `INSERT ... ON CONFLICT DO UPDATE` для лічильника D1, а відсутній/пошкоджений `SELECT count` трактувала як `0`, дозволяючи запит без підтвердженого rate-limit. Через цю функцію проходять реєстрація, вхід, підтримка, аналітика й читання каталогу спільноти.
+- **Канонічна реалізація:** [PR #583](https://github.com/Oleksii-debug/scripture-archive/pull/583) **SQUASH MERGED** у точний `main@d5d55ec9fdee6e38e40e70e2bd4ec5422f2c081f`. Реальний код `lib/auth.ts@5860291bace4b57a58f94af44201bf716846884d`; реальні тести `tests/rate-limit-d1-failclosed.test.mjs@1510af12785ced60667030570afed58227002fe6`. SQL, відбиток ключа, вікно D1, маршрути й межі квот збережені. Лише `success===true` та `meta.changes===1` підтверджують запис; `SELECT count` має містити додатне безпечне ціле число. Інакше обробка відмовляє закрито — не повертає хибне `allowed=true`. Нового сервера, DB, розгортання чи акаунтів немає.
+- **Exact-head перевірки:** [GitHub Actions #41027280733](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41027280733) на `82ce76e95b181dea3e6c910eed728fcf8e88bdfc`: нативний Node **1345 PASS / 0 FAIL** (зокрема 32 source-executing edge cases), TypeScript PASS, ESLint **0 errors / 12 warnings**, build source PASS, Python **2 PASS**. Перша перевірка виявила й виправила 2 помилки лише в тестовій fixture (`undefined` переозначалося default), повторний точний HEAD native suite зелений.
+- **Відокремлений блокер:** disposable Worker/D1 **21/22** в обох спробах, реальний `Your worker restarted mid-request`: HTTP 503 замість очікуваного cross-origin 403 у `tests/api-flow.test.mjs`; відомий окремий [#361](https://github.com/Oleksii-debug/scripture-archive/pull/361). **Весь workflow FAIL, не 22/22 PASS**. Живий Sites SHA, production release, справжній browser, фізичний NVDA, решта privacy/abuse acceptance **не перевірені**.
+- **Координація:** [#297](https://github.com/Oleksii-debug/scripture-archive/issues/297), claim comment 6518529052. Наявний загальний release-шлюз не послаблено.
+
+---
+
 ## 2026-10-30 — SA-EXT-01/16 / LOCAL_READING_HISTORY_BOOK_CODE_SHAPE — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
 
 **Остаточний стан конкретної підфункції:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. Повні батьківські SA-EXT-01, SA-EXT-16 та всі SA-EXT-01…20 залишаються **OPEN**.

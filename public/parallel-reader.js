@@ -15,10 +15,21 @@ export function parallelControls(editions, lang, esc) {
 export function mountParallelReader(panel, { editions, catalog, lang, book, bookTitle, chapter, getBook, check, current, lock, failClosed, esc }) {
   const copy = COPY[lang] || COPY.uk;
   const form=panel.querySelector('.parallel-form'), status=panel.querySelector('.parallel-status'), result=panel.querySelector('.parallel-result');
+  let selectionRevision = 0;
+  // The licensed text must not remain visible under a different selected edition.
+  // Also retire an in-flight A -> B -> A request, which an ID-only check misses.
+  form.onchange = event => {
+    if (event?.target?.name !== 'edition') return;
+    selectionRevision += 1;
+    result.replaceChildren();
+    status.textContent = copy.changed;
+  };
   form.onsubmit=async event=>{
     event.preventDefault();
     const button=form.querySelector('button'), id=String(new FormData(form).get('edition') || ''), edition=editions.find(item=>item.id===id && item.local);
-    const selectionCurrent = () => String(new FormData(form).get('edition') || '') === id;
+    const submittedRevision = selectionRevision;
+    const selectionCurrent = () => selectionRevision === submittedRevision &&
+      String(new FormData(form).get('edition') || '') === id;
     if (!edition || button.disabled || !current() || !panel.isConnected) return;
     // Disabling a focused submit button moves keyboard focus to BODY in
     // Chromium. Restore only after this same reader finishes and only when

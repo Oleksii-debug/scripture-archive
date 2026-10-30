@@ -358,3 +358,50 @@ test('joining on a D1 write exception fails closed without creating membership',
     assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM home_group_members WHERE group_id='g' AND user_id='outsider'").get().n,1);
   }finally{f.db.close();}
 });
+
+test('cohort promotion commits atomically with new group and owner membership',async()=>{
+  const f=fixture();
+  try{
+    f.db.prepare("INSERT INTO group_marathon_registrations(id,group_id,weekly_goal,catchup_mode,cohort_key,status) VALUES ('earlier','g',3,'flexible','existing-cohort','forming')").run();
+    const payload={name:'Atomic cohort member',weeklyGoal:3,catchupMode:'flexible',
+      visibility:'private',rosterVisibility:'count',bibleEdition:'en-web',marathonEnabled:true};
+    const before=f.db.prepare('SELECT COUNT(*) AS n FROM home_groups').get().n;
+    // Fourth SQL statement is the cohort promotion: failure must rollback
+    // the first three INSERTs, not strand a partial group.
+    f.setFailure(3);
+    const rejected=await f.post('create',payload);
+    assert.equal(rejected.status,503);
+    assert.equal(rejected.data.error,'group_creation_unconfirmed');
+    assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM home_groups').get().n,before);
+    assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM group_marathon_registrations").get().n,1);
+    assert.equal(f.db.prepare("SELECT status FROM group_marathon_registrations WHERE id='earlier'").get().status,'forming');
+    f.setFailure(-1);
+    const accepted=await f.post('create',payload);
+    assert.equal(accepted.status,201);
+    assert.equal(accepted.data.cohortStatus,'ready');
+    assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM home_groups').get().n,before+1);
+    assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM group_marathon_registrations WHERE cohort_key='existing-cohort' AND status='ready'").get().n,2);
+    assert.equal(f.db.prepare("SELECT role FROM home_group_members WHERE group_id=? AND user_id='alice'").get(accepted.data.groupId).role,'owner');
+  }finally{f.db.close();}
+});
+
+test('missing cohort promotion receipt cannot claim create success after committed batch',async()=>{
+  const f=fixture();
+  try{
+    f.db.prepare("INSERT INTO group_marathon_registrations(id,group_id,weekly_goal,catchup_mode,cohort_key,status) VALUES ('earlier','g',3,'flexible','existing-cohort','forming')").run();
+    const payload={name:'Receipt recovery group',weeklyGoal:3,catchupMode:'flexible',
+      visibility:'private',rosterVisibility:'count',bibleEdition:'en-web',marathonEnabled:true};
+    const count=()=>f.db.prepare('SELECT COUNT(*) AS n FROM home_groups').get().n;
+    const before=count();
+    // D1 committed all four statements but returned only three receipts.
+    f.setCreateReceiptMode('truncated');
+    const unknown=await f.post('create',payload);
+    assert.equal(unknown.status,503);
+    assert.equal(unknown.data.error,'group_creation_unconfirmed');
+    assert.equal(count(),before+1,'lost D1 ACK is not proof of a rollback');
+    assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM group_marathon_registrations WHERE cohort_key='existing-cohort' AND status='ready'").get().n,2);
+    const created=f.db.prepare("SELECT id FROM home_groups WHERE name=?").get(payload.name);
+    assert.ok(created?.id);
+    assert.equal((await f.get('alice',created.id)).status,200,'owner can recover by canonical group readback');
+  }finally{f.db.close();}
+});

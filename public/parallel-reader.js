@@ -1,7 +1,7 @@
 const COPY = {
-  uk: { title:'Порівняти видання', choose:'Друге видання', open:'Показати другу версію глави', loading:'Завантаження…', ready:'Другу версію глави завантажено нижче.', fail:'Не вдалося завантажити другу версію. Спробуйте ще раз.', unavailable:'У цьому виданні такої глави немає.', note:'Нумерація віршів у виданнях може відрізнятися. Тексти наведено окремо.', source:'Джерело', license:'Умови використання' },
-  ru: { title:'Сравнить издания', choose:'Второе издание', open:'Показать вторую версию главы', loading:'Загрузка…', ready:'Вторая версия главы загружена ниже.', fail:'Не удалось загрузить вторую версию. Попробуйте ещё раз.', unavailable:'В этом издании такой главы нет.', note:'Нумерация стихов в изданиях может отличаться. Тексты приведены отдельно.', source:'Источник', license:'Условия использования' },
-  en: { title:'Compare editions', choose:'Second edition', open:'Show the second chapter text', loading:'Loading…', ready:'The second chapter text is available below.', fail:'Could not load the second text. Please try again.', unavailable:'This chapter is not available in that edition.', note:'Verse numbering may differ between editions. The texts are presented separately.', source:'Source', license:'Terms of use' },
+  uk: { title:'Порівняти видання', choose:'Друге видання', open:'Показати другу версію глави', loading:'Завантаження…', ready:'Другу версію глави завантажено нижче.', fail:'Не вдалося завантажити другу версію. Спробуйте ще раз.', changed:'Вибране видання змінилося. Натисніть кнопку ще раз, щоб порівняти його.', unavailable:'У цьому виданні такої глави немає.', note:'Нумерація віршів у виданнях може відрізнятися. Тексти наведено окремо.', source:'Джерело', license:'Умови використання' },
+  ru: { title:'Сравнить издания', choose:'Второе издание', open:'Показать вторую версию главы', loading:'Загрузка…', ready:'Вторая версия главы загружена ниже.', fail:'Не удалось загрузить вторую версию. Попробуйте ещё раз.', changed:'Выбранное издание изменилось. Нажмите кнопку ещё раз, чтобы сравнить его.', unavailable:'В этом издании такой главы нет.', note:'Нумерация стихов в изданиях может отличаться. Тексты приведены отдельно.', source:'Источник', license:'Условия использования' },
+  en: { title:'Compare editions', choose:'Second edition', open:'Show the second chapter text', loading:'Loading…', ready:'The second chapter text is available below.', fail:'Could not load the second text. Please try again.', changed:'The selected edition changed. Submit again to compare the current selection.', unavailable:'This chapter is not available in that edition.', note:'Verse numbering may differ between editions. The texts are presented separately.', source:'Source', license:'Terms of use' },
 };
 const https = value => { try { const url = new URL(value); return url.protocol === 'https:' && !url.username && !url.password ? url.href : ''; } catch { return ''; } };
 
@@ -18,6 +18,7 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
   form.onsubmit=async event=>{
     event.preventDefault();
     const button=form.querySelector('button'), id=String(new FormData(form).get('edition') || ''), edition=editions.find(item=>item.id===id && item.local);
+    const selectionCurrent = () => String(new FormData(form).get('edition') || '') === id;
     if (!edition || button.disabled || !current() || !panel.isConnected) return;
     // Disabling a focused submit button moves keyboard focus to BODY in
     // Chromium. Restore only after this same reader finishes and only when
@@ -32,6 +33,8 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
       if (!panel.isConnected || !current()) return;
       if (!guard || typeof guard.invalidated !== 'boolean') { failClosed(); return; }
       if (guard.invalidated) { lock(); return; }
+      // A changed native select must retire this request, even for the same reader/principal.
+      if (!selectionCurrent()) { status.textContent=copy.changed; return; }
       const data=await getBook(book,edition);
       if (!panel.isConnected || !current()) return;
       // Another tab or device may start an attempt while the second text loads.
@@ -42,6 +45,8 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
       if (!panel.isConnected || !current()) return;
       if (!finalGuard || typeof finalGuard.invalidated !== 'boolean') { failClosed(); return; }
       if (finalGuard.invalidated) { lock(); return; }
+      // Never show edition A's licensed verses under edition B's selected label.
+      if (!selectionCurrent()) { status.textContent=copy.changed; return; }
       const verses=data.chapters[chapter-1];
       if (!Array.isArray(verses)) { status.textContent=copy.unavailable; return; }
       // A corrupt or empty chapter must never be presented as verified Scripture.
@@ -70,7 +75,7 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
       }
       result.innerHTML=`<section aria-labelledby="parallel-title"><h3 id="parallel-title">${esc(metadata.title)} — ${esc(bookTitle)} ${chapter}</h3><p>${copy.note}</p><p>${copy.license}: ${esc(metadata.license || '—')}</p>${metadata.attribution?`<p>${esc(metadata.attribution)}</p>`:''}${source?`<p><a href="${esc(source)}" target="_blank" rel="noreferrer">${copy.source}</a></p>`:''}${license?`<p><a href="${esc(license)}" target="_blank" rel="noreferrer">${copy.license}</a></p>`:''}<ol>${verses.map(verse=>`<li>${esc(verse)}</li>`).join('')}</ol></section>`;
       status.textContent=copy.ready;
-    } catch { if (panel.isConnected && current()) status.textContent=copy.fail; }
+    } catch { if (panel.isConnected && current()) status.textContent=selectionCurrent() ? copy.fail : copy.changed; }
     finally {
       button.disabled=false;
       if (hadSubmitFocus && panel.isConnected && typeof document !== 'undefined' &&

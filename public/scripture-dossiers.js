@@ -150,7 +150,11 @@ export function searchScriptureDossiers(language,value) {
   const query=value.normalize('NFC').trim().toLocaleLowerCase(lang);
   if(query.length>120)return [];
   if(!query)return [...nodes];
-  return nodes.filter(item=>[item.id,item.names[lang],item.summaries[lang],COPY[lang][item.type]]
+  // Search the authored study questions too: they are already displayed in each
+  // source-validated dossier and contain useful biblical research terms that
+  // may not occur in the dossier title or summary.
+  return nodes.filter(item=>[item.id,item.names[lang],item.summaries[lang],COPY[lang][item.type],
+    ...item.prompts[lang]]
     .some(text=>text.normalize('NFC').toLocaleLowerCase(lang).includes(query)));
 }
 

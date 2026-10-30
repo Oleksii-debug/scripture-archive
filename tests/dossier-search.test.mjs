@@ -145,3 +145,30 @@ test('SA-EXT-05 filtered native GET result links preserve query across route rou
   assert.ok(unfiltered.includes('href="/dossiers?id=abraham"'),'legacy direct link stays stable');
   assert.ok(!unfiltered.includes('href="/dossiers?id=abraham&amp;q='),'no empty phantom filter');
 });
+
+test('SA-EXT-05: authored research questions are searchable in all three interface languages',()=>{
+  for(const [lang,query] of [
+    ['uk','Які зміни імен'],
+    ['ru','Какие изменения имён'],
+    ['en','Which name changes'],
+  ]){
+    const results=searchScriptureDossiers(lang,query);
+    assert.deepEqual(results.map(item=>item.id),['sarah'],lang+' question must find source-backed Sarah dossier');
+    const html=dossierMarkup(catalog,lang,'sarah',esc,query);
+    assert.ok(html.includes(resultLink('sarah',query)),'question match preserves the original GET filter');
+    assert.match(html,/id="dossier-heading"/);
+    assert.match(html,/aria-current="page"/);
+    assert.ok(html.includes('href="/reader/GEN/17?verse=15"'),'real source passage remains navigable');
+    assert.ok(!html.includes('href="/reader/EXO/3?verse=1"'),'unrelated evidence is not substituted');
+  }
+});
+
+test('SA-EXT-05: a question-only filter cannot open unrelated source dossiers',()=>{
+  const query='Which name changes';
+  const mismatched=dossierMarkup(catalog,'en','moses',esc,query);
+  assert.match(mismatched,/role="alert"/);
+  assert.doesNotMatch(mismatched,/id="dossier-heading"/);
+  assert.doesNotMatch(mismatched,/href="\/reader\//);
+  assert.ok(mismatched.includes(resultLink('sarah',query)));
+  assert.deepEqual(searchScriptureDossiers('en','which NAME changes').map(item=>item.id),['sarah']);
+});

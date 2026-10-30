@@ -5,7 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 
 // Execute the production SQL, not a rewritten model of its ownership rules.
 const route = readFileSync(new URL("../app/api/analytics/route.ts", import.meta.url), "utf8");
-const match = route.match(/env\\.DB\\.prepare\\(`(INSERT INTO usage_sessions[\\s\\S]*?)`\\)\\s*\\.bind\\(/);
+const match = route.match(/env\.DB\.prepare\(`(INSERT INTO usage_sessions[\s\S]*?)`\)\s*\.bind\(/);
 assert.ok(match, "canonical analytics upsert SQL must remain testable");
 const sql = match[1];
 

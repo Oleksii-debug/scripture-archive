@@ -136,6 +136,19 @@ test('simultaneous same-account academy views preserve newer lesson selections',
   assert.equal(first.buttons[1].attrs['aria-pressed'],'true');
 });
 
+test('stale same-lesson controls perform the action they display',()=>{
+  const storage=store(),user={id:'same-lesson'},key=academyProgressKey(user);
+  const first=view(),second=view(),start={available:true,completed:[]};
+  attachAcademy(first.document,storage,'en',user,start);
+  attachAcademy(second.document,storage,'en',user,start);
+  first.buttons[0].click();
+  second.buttons[0].click(); // still displays mark; must not remove the mark
+  assert.deepEqual(readAcademyProgress(storage,key).completed,['abraham']);
+  first.buttons[0].click(); // first still displays unmark
+  second.buttons[0].click(); // also displays unmark; must not mark it again
+  assert.deepEqual(readAcademyProgress(storage,key).completed,[]);
+});
+
 test('academy never overwrites progress corrupted by another tab after rendering',()=>{
   const storage=store(),user={id:'test-account'},key=academyProgressKey(user),ui=view();
   attachAcademy(ui.document,storage,'en',user,{available:true,completed:[]});

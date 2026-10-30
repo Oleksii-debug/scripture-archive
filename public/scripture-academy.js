@@ -77,7 +77,9 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
         return;
       }
       const next=new Set(current.completed);
-      if(next.has(id))next.delete(id);else next.add(id);
+      // Apply the action shown on this button, even if another view has
+      // changed this same lesson since it was rendered.
+      if(button.getAttribute('aria-pressed')==='true')next.delete(id);else next.add(id);
       const completed=academyLessonIds.filter(x=>next.has(x));
       try{
         if(!storage || typeof storage.setItem!=='function')throw Error('no storage');

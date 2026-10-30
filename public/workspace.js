@@ -1,4 +1,4 @@
-import { reviewText, submissionForm, historyMarkup, queueMarkup, auditMarkup, attachReviewControls, renderPublicMaterials, loadReviewData, editorRolesMarkup, attachEditorRoles } from './material-review.js';
+import { reviewText, submissionForm, historyMarkup, queueMarkup, auditMarkup, attachReviewControls, renderPublicMaterials, renderReviewedLibrary, loadReviewData, editorRolesMarkup, attachEditorRoles } from './material-review.js';
 import { dossierMarkup, dossierAtlasMarkup } from './scripture-dossiers.js';
 import { academyMarkup, academyProgressKey, readAcademyProgress, attachAcademy } from './scripture-academy.js';
 
@@ -101,7 +101,18 @@ const GROUP_ROLES={
   ru:{roles:'Ведущие группы',roleHelp:'Ведущий может сохранять встречи и проходить групповые миссии. Обычный участник сохраняет доступ к обсуждениям.',promote:'Назначить ведущим',demote:'Снять роль ведущего',roleConfirm:'Изменить роль участника: ',roleSaved:'Роль обновлена.',rotate:'Заменить код приглашения',rotateHelp:'Старый код перестанет действовать. Участники останутся в группе; передайте новый код тем, кого приглашаете.',rotateConfirm:'Заменить код приглашения? Старый код больше не позволит вступить в группу.',rotated:'Код приглашения заменён. Новый код показан на странице.'},
   en:{roles:'Group facilitators',roleHelp:'Facilitators can record meetings and take group missions. Ordinary members keep access to discussions.',promote:'Make facilitator',demote:'Remove facilitator role',roleConfirm:'Change the role for: ',roleSaved:'Role updated.',rotate:'Replace invitation code',rotateHelp:'The old code will stop working. Current members stay in the group; share the new code with people you invite.',rotateConfirm:'Replace the invitation code? The old code will no longer allow anyone to join.',rotated:'Invitation code replaced. The new code is shown on the page.'},
 };
-export function groupManagementCopy(lang){return {...(GROUP_MANAGE[lang]||GROUP_MANAGE.uk),...(GROUP_ROLES[lang]||GROUP_ROLES.uk)};}
+const GROUP_SETTINGS={
+  uk:{settings:'Налаштування групи',name:'Назва',church:'Громада або церква',country:'Країна',city:'Місто',description:'Опис',visibility:'Видимість групи',public:'Публічна',private:'Приватна',roster:'Список учасників',count:'Лише кількість',names:'Імена учасників, які дали згоду',hidden:'Прихований',saveSettings:'Зберегти налаштування',settingsSaved:'Налаштування групи збережено.',settingsHelp:'У публічній групі назва, опис, місце й загальні підсумки доступні відвідувачам. Приватні обговорення бачать лише учасники.',publishConfirm:'Зробити групу публічною? Її опис, місце й загальні підсумки стануть доступні відвідувачам.',settingsConflict:'Налаштування вже змінилися або ваші права змінилися. Ваш текст залишився у формі. Скопіюйте потрібні зміни перед оновленням сторінки.',settingsUnconfirmed:'Не вдалося підтвердити збереження. Ваш текст залишився у формі. Оновіть дані перед повторною спробою.',reloadSettings:'Завантажити поточні дані',reloadConfirm:'Завантажити поточні дані групи? Незбережений текст цієї форми буде втрачено.'},
+  ru:{settings:'Настройки группы',name:'Название',church:'Община или церковь',country:'Страна',city:'Город',description:'Описание',visibility:'Видимость группы',public:'Публичная',private:'Приватная',roster:'Список участников',count:'Только количество',names:'Имена участников, давших согласие',hidden:'Скрытый',saveSettings:'Сохранить настройки',settingsSaved:'Настройки группы сохранены.',settingsHelp:'В публичной группе название, описание, место и общие итоги доступны посетителям. Приватные обсуждения видны только участникам.',publishConfirm:'Сделать группу публичной? Её описание, место и общие итоги станут доступны посетителям.',settingsConflict:'Настройки или ваши права уже изменились. Ваш текст остался в форме. Скопируйте нужные изменения перед обновлением страницы.',settingsUnconfirmed:'Не удалось подтвердить сохранение. Ваш текст остался в форме. Обновите данные перед повторной попыткой.',reloadSettings:'Загрузить текущие данные',reloadConfirm:'Загрузить текущие данные группы? Несохранённый текст этой формы будет потерян.'},
+  en:{settings:'Group settings',name:'Name',church:'Community or church',country:'Country',city:'City',description:'Description',visibility:'Group visibility',public:'Public',private:'Private',roster:'Member list',count:'Count only',names:'Names of members who consented',hidden:'Hidden',saveSettings:'Save settings',settingsSaved:'Group settings saved.',settingsHelp:'For public groups, the name, description, location and aggregate results are visible to visitors. Private discussions remain available only to members.',publishConfirm:'Make this group public? Its description, location and aggregate results will become visible to visitors.',settingsConflict:'The settings or your permissions have changed. Your text remains in the form. Copy any changes you want to keep before reloading.',settingsUnconfirmed:'Saving could not be confirmed. Your text remains in the form. Reload the current data before trying again.',reloadSettings:'Load current data',reloadConfirm:'Load current group data? Unsaved text in this form will be lost.'},
+};
+export function groupSettingsMarkup(group,w,esc){
+  if(!group)return '';
+  const input=(key,max,required=false)=>`<label class="account-field"><span>${w[key]}</span><input name="${key}" maxlength="${max}" value="${esc(group[key]??'')}" ${required?'required':''}></label>`;
+  const select=(key,label,options)=>`<label class="account-field"><span>${label}</span><select name="${key}">${options.map(([value,text])=>`<option value="${value}"${group[key]===value?' selected':''}>${text}</option>`).join('')}</select></label>`;
+  return `<details class="card"><summary id="group-settings-summary">${w.settings}</summary><p>${w.settingsHelp}</p><form id="group-settings-form" class="account-form account-form-grid">${input('name',100,true)}${input('church',160)}${input('country',80)}${input('city',80)}<label class="account-field full"><span>${w.description}</span><textarea name="description" maxlength="600" rows="4">${esc(group.description??'')}</textarea></label>${select('visibility',w.visibility,[['private',w.private],['public',w.public]])}${select('rosterVisibility',w.roster,[['private',w.hidden],['count',w.count],['names',w.names]])}<button class="button primary" type="submit">${w.saveSettings}</button><button class="button" type="button" id="reload-group-settings">${w.reloadSettings}</button><p id="group-settings-status" role="status" aria-live="polite"></p></form></details>`;
+}
+export function groupManagementCopy(lang){return {...(GROUP_MANAGE[lang]||GROUP_MANAGE.uk),...(GROUP_ROLES[lang]||GROUP_ROLES.uk),...(GROUP_SETTINGS[lang]||GROUP_SETTINGS.uk)};}
 export function groupManagementMarkup(data,lang,esc){
   const w=groupManagementCopy(lang);
   if(!data.membership)return '';
@@ -109,7 +120,7 @@ export function groupManagementMarkup(data,lang,esc){
   const candidates=(data.managementMembers||[]).filter(member=>['member','facilitator'].includes(member.role));
   const transfer=candidates.length?`<form id="transfer-group" class="account-form"><label class="account-field"><span>${w.transferLabel}</span><select name="targetUserId" required>${candidates.map(member=>`<option value="${esc(member.user_id)}">${esc(member.display_name)}</option>`).join('')}</select></label><button class="button">${w.transfer}</button></form>`:`<p>${w.noMembers}</p>`;
   const roles=candidates.length?`<h3>${w.roles}</h3><p>${w.roleHelp}</p><ul>${candidates.map(member=>`<li><strong>${esc(member.display_name)}</strong> <button type="button" class="button group-role-button" data-user-id="${esc(member.user_id)}" data-role="${esc(member.role)}" aria-label="${esc((member.role==='facilitator'?w.demote:w.promote)+': '+member.display_name)}">${member.role==='facilitator'?w.demote:w.promote}</button></li>`).join('')}</ul>`:'';
-  return `<section class="card"><h2>${w.title}</h2><h3>${w.transferTitle}</h3><p>${w.transferHelp}</p>${transfer}${roles}<h3>${w.rotate}</h3><p>${w.rotateHelp}</p><button type="button" class="button" id="rotate-group-invite">${w.rotate}</button><details class="danger-zone"><summary>${w.delete}</summary><p>${w.deleteHelp}</p><button class="button" id="delete-group">${w.delete}</button></details><p id="group-manage-status" role="status"></p></section>`;
+  return `${groupSettingsMarkup(data.group,w,esc)}<section class="card"><h2>${w.title}</h2><h3>${w.transferTitle}</h3><p>${w.transferHelp}</p>${transfer}${roles}<h3>${w.rotate}</h3><p>${w.rotateHelp}</p><button type="button" class="button" id="rotate-group-invite">${w.rotate}</button><details class="danger-zone"><summary>${w.delete}</summary><p>${w.deleteHelp}</p><button class="button" id="delete-group">${w.delete}</button></details><p id="group-manage-status" role="status"></p></section>`;
 }
 
 const HISTORY = {
@@ -117,6 +128,15 @@ const HISTORY = {
   ru: { title:'История попыток', login:'Войдите, чтобы видеть сохранённую историю попыток на других устройствах.', empty:'Завершённых попыток пока нет.', locked:'История скрыта во время активной попытки.', error:'Не удалось загрузить историю попыток.', retry:'Попробовать снова', details:'Посмотреть результат', reread:'Перечитать и повторить', limit:'Показаны последние 100 завершённых попыток.', score:'Правильных ответов', pending:'Для сохранённого ответа нужно завершить запись результата.', resume:'Завершить сохранение результата', personal:'Личная попытка', group:'Групповая попытка' },
   en: { title:'Attempt history', login:'Sign in to see saved attempt history on other devices.', empty:'There are no completed attempts yet.', locked:'History is hidden during an active attempt.', error:'Could not load attempt history.', retry:'Try again', details:'View result', reread:'Read and try again', limit:'Showing the latest 100 completed attempts.', score:'Correct answers', pending:'An answer was saved, but its result still needs to be finalized.', resume:'Finish saving the result', personal:'Personal attempt', group:'Group attempt' },
 };
+
+function canonicalHistoryUtcTimestamp(value) {
+  // SQLite/D1 history timestamps are canonical UTC seconds, never a local
+  // calendar guess. Date parsing alone normalizes impossible dates silently.
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)) return false;
+  const date = new Date(value.replace(' ', 'T') + 'Z');
+  return Number.isFinite(date.getTime()) &&
+    date.toISOString().slice(0, 19).replace('T', ' ') === value;
+}
 
 function validAttemptHistoryPayload(history, chapterBounds) {
   // Source readback may include legacy/corrupt DB rows. With a real catalog,
@@ -142,9 +162,9 @@ function validAttemptHistoryPayload(history, chapterBounds) {
     safeChapter(row) && Number.isInteger(row.score) && Number.isInteger(row.total) &&
     row.total >= 1 && row.score >= 0 && row.score <= row.total &&
     (row.mode === undefined || row.mode === 'personal' || row.mode === 'group') &&
-    (row.completedAt === undefined || typeof row.completedAt === 'string')) &&
+    (row.completedAt === undefined || canonicalHistoryUtcTimestamp(row.completedAt))) &&
     (history.pending === undefined || history.pending.every(row =>
-      safeChapter(row) && (row.startedAt === undefined || typeof row.startedAt === 'string')));
+      safeChapter(row) && (row.startedAt === undefined || canonicalHistoryUtcTimestamp(row.startedAt))));
 }
 
 export function missionHistoryMarkup(history, lang, esc, chapterBounds) {
@@ -238,11 +258,11 @@ export async function renderWorkspace(name,c) {
   }
   if(name==='library') {
     const copy=LIBRARY_COPY[state.lang] || LIBRARY_COPY.uk;
-    shell(`<section class="reviewed-library" aria-labelledby="reviewed-library-title"><div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1 id="reviewed-library-title">${esc(copy.title)}</h1></div></div><p class="lead">${esc(copy.lead)}</p><p>${esc(copy.scope)}</p><div id="public-materials" aria-live="polite"></div><p><a href="/builder">${esc(reviewText(state.lang).builder)}</a></p></section>`);
+    shell(`<section class="reviewed-library" aria-labelledby="reviewed-library-title"><div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1 id="reviewed-library-title">${esc(copy.title)}</h1></div></div><p class="lead">${esc(copy.lead)}</p><p>${esc(copy.scope)}</p><div id="public-materials"></div><p><a href="/builder">${esc(reviewText(state.lang).builder)}</a></p></section>`);
     // Reuse the canonical reviewed-material list and answer-check API: no
     // shadow library database or second publication/identity authority.
     const list=globalThis.document?.querySelector('#public-materials');
-    if(list)await renderPublicMaterials(list,reviewText(state.lang),esc,stillCurrent);
+    if(list)await renderReviewedLibrary(list,reviewText(state.lang),state.lang,esc,stillCurrent);
     return;
   }
   if(name==='campaigns') {

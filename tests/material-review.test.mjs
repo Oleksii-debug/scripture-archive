@@ -60,6 +60,50 @@ function fixture() {
 const submission={action:'submit',materialId:'m1',provenance:'Original work, GEN 12',rightsConfirmed:true};
 const approve=id=>({action:'review',id,decision:'approve',sourceChecked:true,rightsChecked:true});
 
+// Route-executing SQLite checks for lossless editorial audit notes. The UI
+// already limits input to 2000, but direct JSON clients must not get a
+// successful review after their longer authored text was silently shortened.
+for (const decision of ['approve', 'reject']) {
+  test('overlong '+decision+' review note cannot mutate a pending decision', async () => {
+    const f=fixture();try {
+      const id=(await f.post(submission)).data.id;
+      const body=decision==='approve'
+        ? {...approve(id),note:'Ж'.repeat(2001)}
+        : {action:'review',id,decision:'reject',note:'Ж'.repeat(2001)};
+      const response=await f.post(body,'editor');
+      assert.equal(response.status,400);
+      assert.equal(response.data.error,'invalid_review');
+      const row=f.db.prepare('SELECT status,reviewed_by,review_note FROM material_submissions WHERE id=?').get(id);
+      assert.equal(row.status,'pending');
+      assert.equal(row.reviewed_by,null);
+      assert.ok(!row.review_note, 'no partial audit text may persist');
+    }finally{f.db.close();}
+  });
+}
+
+test('editor rejection persists an exact 2000-character Unicode rationale',async()=>{
+  const f=fixture();try{
+    const id=(await f.post(submission)).data.id;
+    const full='Ж'.repeat(2000);
+    assert.equal((await f.post({action:'review',id,decision:'reject',note:full},'editor')).status,200);
+    const row=f.db.prepare('SELECT status,review_note FROM material_submissions WHERE id=?').get(id);
+    assert.equal(row.status,'rejected');
+    assert.equal(row.review_note,full);
+    const history=(await f.get('mine','alice')).data.items.find(item=>item.id===id);
+    assert.equal(history.reviewNote,full);
+  }finally{f.db.close();}
+});
+
+test('surrounding whitespace is trimmed without shortening an exact-limit approval',async()=>{
+  const f=fixture();try{
+    const id=(await f.post(submission)).data.id;
+    const full='Д'.repeat(2000);
+    const response=await f.post({...approve(id),note:'   '+full+'   '},'editor');
+    assert.equal(response.status,200);
+    assert.equal(f.db.prepare('SELECT review_note FROM material_submissions WHERE id=?').get(id).review_note,full);
+  }finally{f.db.close();}
+});
+
 test('private draft requires consent and editor approval; public answers remain server-side',async()=>{
   const f=fixture();try {
     assert.equal((await f.post(submission,'','https://local.invalid')).status,401);
@@ -337,4 +381,84 @@ test('historical approved snapshots exceeding the canonical author limits fail c
   } finally {
     f.db.close();
   }
+});
+
+function seedLibrary(f, count) {
+  const insertMaterial=f.db.prepare('INSERT INTO study_materials(id,owner_user_id,title,locale,data) VALUES (?,?,?,?,?)');
+  const insertReview=f.db.prepare(`INSERT INTO material_submissions
+    (id,material_id,author_id,snapshot,provenance,rights_attested,status,submitted_at,reviewed_at,reviewed_by,source_checked,rights_checked)
+    VALUES (?,?,?,?,?,1,'approved',?,'2026-01-01','editor',1,1)`);
+  for (let i=0;i<count;i++) {
+    const id=String(i).padStart(4,'0');
+    const data={prompt:'Which public source?',reference:'GEN 1:1',options:['private-answer-option','other'],answer:'private-answer-option',explanation:'private explanation secret'};
+    const title=i===count-1?'ІСТОРІЯ ЦЕРКВИ':'Study '+id;
+    insertMaterial.run('library-material-'+id,'alice',title,'uk',JSON.stringify(data));
+    insertReview.run('library-'+id,'library-material-'+id,'alice',JSON.stringify({title,locale:'uk',data}),'Visible source','2026-01-01');
+  }
+}
+
+test('public library search continues beyond 200 reviewed records, matches Cyrillic case and never searches private answer fields',async()=>{
+  const f=fixture();try {
+    seedLibrary(f,230);
+    const unpublished={prompt:'A valid pending question?',reference:'GEN 12',options:['one','two'],answer:'one',explanation:'Source based explanation'};
+    const pendingSnapshot=JSON.stringify({title:'Secret pending item',locale:'uk',data:unpublished});
+    f.db.prepare(`INSERT INTO material_submissions(id,material_id,author_id,snapshot,provenance,rights_attested,status)
+      VALUES ('pending','m1','alice',?,'source',1,'pending')`).run(pendingSnapshot);
+    const unpublishedSearch=await f.post({action:'librarySearch',query:'Secret pending',cursor:null},'');
+    assert.deepEqual(unpublishedSearch.data.items,[]);
+    let first=await f.post({action:'librarySearch',query:'церкви',cursor:null},'');
+    assert.equal(first.status,200);
+    assert.deepEqual(first.data.items,[]);
+    assert.deepEqual(first.data.nextCursor,{id:'library-0199',submittedAt:'2026-01-01'});
+    const second=await f.post({action:'librarySearch',query:'церкви',cursor:first.data.nextCursor},'');
+    assert.equal(second.status,200);
+    assert.deepEqual(second.data.items.map(x=>x.title),['ІСТОРІЯ ЦЕРКВИ']);
+    assert.equal(second.data.nextCursor,null);
+    assert.equal('answer' in second.data.items[0],false);
+    assert.equal('explanation' in second.data.items[0],false);
+    assert.equal('snapshot' in second.data.items[0],false);
+    // Searching either answer-only/option-only or explanation-only strings must
+    // not let a visitor infer hidden correctness or explanatory content.
+    for(const query of ['private-answer-option','private explanation secret',"x' OR 1=1--"]) {
+      let cursor=null, found=[];
+      do {const response=await f.post({action:'librarySearch',query,cursor},'');
+        assert.equal(response.status,200); found.push(...response.data.items); cursor=response.data.nextCursor;
+      } while(cursor);
+      assert.deepEqual(found,[]);
+    }
+  }finally{f.db.close();}
+});
+
+test('library pagination uses a stable keyset for tied timestamps even when an earlier item is withdrawn',async()=>{
+  const f=fixture();try {
+    seedLibrary(f,31);
+    const first=await f.post({action:'librarySearch',query:'study',cursor:null},'');
+    assert.equal(first.data.items.length,12);
+    assert.deepEqual(first.data.items.map(x=>x.id),Array.from({length:12},(_,i)=>'library-'+String(i).padStart(4,'0')));
+    f.db.prepare("UPDATE material_submissions SET status='withdrawn' WHERE id='library-0005'").run();
+    const second=await f.post({action:'librarySearch',query:'study',cursor:first.data.nextCursor},'');
+    assert.deepEqual(second.data.items.map(x=>x.id),Array.from({length:12},(_,i)=>'library-'+String(i+12).padStart(4,'0')));
+    const third=await f.post({action:'librarySearch',query:'study',cursor:second.data.nextCursor},'');
+    assert.deepEqual(third.data.items.map(x=>x.id),Array.from({length:6},(_,i)=>'library-'+String(i+24).padStart(4,'0')));
+    assert.equal(third.data.nextCursor,null);
+    assert.equal([...first.data.items,...second.data.items,...third.data.items].some(x=>x.id==='library-0030'),false);
+  }finally{f.db.close();}
+});
+
+test('library search rejects malformed cursors and surfaces unavailable storage, including cross-origin requests',async()=>{
+  const f=fixture();try {
+    for(const body of [
+      {action:'librarySearch',query:42,cursor:null},
+      {action:'librarySearch',query:'x'.repeat(101),cursor:null},
+      {action:'librarySearch',query:'',cursor:[]},
+      {action:'librarySearch',query:'',cursor:{id:'x',submittedAt:'t',extra:'x'}},
+      {action:'librarySearch',query:'',cursor:{id:'x',submittedAt:''}},
+      {action:'librarySearch',query:'',cursor:{id:'',submittedAt:'t'}},
+    ]) assert.equal((await f.post(body,'')).status,400);
+    assert.equal((await f.post({action:'librarySearch',query:'',cursor:null},'','https://other.invalid')).status,403);
+    f.setReadFailure(true);
+    assert.equal((await f.post({action:'librarySearch',query:'',cursor:null},'')).status,503);
+    f.setReadFailure(false);f.setReadThrow(true);
+    assert.equal((await f.post({action:'librarySearch',query:'',cursor:null},'')).status,503);
+  }finally{f.db.close();}
 });

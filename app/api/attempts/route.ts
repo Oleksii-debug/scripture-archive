@@ -19,6 +19,8 @@ type Attempt = {
   status: string;
   expires_at: string;
   result_json: string | null;
+  score: number | null;
+  total: number | null;
 };
 
 const MISSION_ID = "OT-AB-01";
@@ -39,6 +41,15 @@ function confirmedBatch(results: unknown, expected: number): number[] | null {
   return changes.every(value => value !== null) ? changes as number[] : null;
 }
 function clean(value: unknown, max = 100) { return typeof value === "string" ? value.trim().slice(0, max) : ""; }
+// Group mode is an assessment and durable-progress authority. A malformed
+// explicit group identifier must not silently become a personal attempt, and
+// truncating a long identifier must not alias a real group's ID.
+function requestedGroupId(value: unknown): string | null {
+  if (value === undefined || value === null || value === "") return "";
+  if (typeof value !== "string") return null;
+  const groupId = value.trim();
+  return groupId && groupId.length <= 80 ? groupId : null;
+}
 // Chapter input must be numeric evidence, not JavaScript truthy/coercible text.
 // Decimal form field values remain supported without accepting hex/exponent,
 // whitespace, booleans, arrays or unsafe integers as a Bible passage.
@@ -48,13 +59,34 @@ function requestedChapter(value: unknown): number | null {
   const result = Number(value);
   return Number.isSafeInteger(result) ? result : null;
 }
-function locale(value: unknown): Locale { return value === "ru" || value === "en" ? value : "uk"; }
+// Missing/empty locale retains historical Ukrainian default; explicitly typed
+// non-text JSON is not a language choice and must never silently start a test.
+function requestedLocale(value: unknown): Locale | null {
+  if (value === undefined || value === null || value === "") return "uk";
+  if (typeof value !== "string") return null;
+  // Preserve existing textual fallback until additional locale assets are accepted.
+  return value === "ru" || value === "en" ? value : "uk";
+}
 // D1 is not an enum/date constraint: legacy or corrupt rows can contain invalid
 // deadlines. Date.parse(NaN) is never <= now, so such rows must fail closed.
 function attemptDeadline(raw: unknown): number | null {
   if (typeof raw !== "string" || !raw || raw !== raw.trim()) return null;
   const parsed = Date.parse(raw);
   return Number.isFinite(parsed) ? parsed : null;
+}
+// A successful SQLite read still can contain forged or legacy malformed
+// timestamp text. Date.parse('1') and overflow days accept false history;
+// match the canonical D1 CURRENT_TIMESTAMP UTC seconds (and the reader guard).
+function canonicalHistoryUtcTimestamp(value: unknown): boolean {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)) return false;
+  const date = new Date(value.replace(" ", "T") + "Z");
+  return Number.isFinite(date.getTime()) &&
+    date.toISOString().slice(0, 19).replace("T", " ") === value;
+}
+// D1 can contain legacy/corrupt locale types despite TypeScript's static Locale.
+// Never emit a task missing its localized question/options or grade against it.
+function storedLocale(value: unknown): value is Locale {
+  return value === "uk" || value === "ru" || value === "en";
 }
 function tasksFor(book: string, chapter: number) { return mission.tasks.filter(task => task.book === book && task.chapter === chapter); }
 function publicTask(task: MissionTask, selectedLocale: Locale, index: number, total: number) {
@@ -118,7 +150,22 @@ function resultFor(tasks: MissionTask[], answers: Array<Record<string, unknown>>
 async function completedResponse(attempt: Attempt, accepted = false) {
   try {
     if (!attempt.result_json) return json({ error: "attempt_state_invalid" }, 503);
-    const result = JSON.parse(attempt.result_json);
+    // D1 can contain a legacy or damaged completed row. JSON.parse succeeds
+    // for arrays, strings and forged score objects; none is a legitimate
+    // assessment result. Never announce completed:true with inconsistent
+    // persisted score/total, even on a retry after a network interruption.
+    let parsed: unknown;
+    try { parsed = JSON.parse(attempt.result_json); }
+    catch { return json({ error: "attempt_state_invalid" }, 503); }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+      return json({ error: "attempt_state_invalid" }, 503);
+    const result = parsed as Record<string, unknown>;
+    if (typeof result.score !== "number" || typeof result.total !== "number" ||
+        !Number.isSafeInteger(result.score) || !Number.isSafeInteger(result.total) ||
+        result.total < 1 || result.score < 0 || result.score > result.total ||
+        !Number.isSafeInteger(attempt.score) || !Number.isSafeInteger(attempt.total) ||
+        attempt.score !== result.score || attempt.total !== result.total)
+      return json({ error: "attempt_state_invalid" }, 503);
     let groupRecorded: boolean | undefined;
     if (attempt.group_id && result.completionVersion === 1) {
       const session = await env.DB!.prepare("SELECT id FROM group_sessions WHERE id=? AND group_id=?")
@@ -135,6 +182,7 @@ async function completedResponse(attempt: Attempt, accepted = false) {
 async function finishAttempt(attempt: Attempt, actorId: string, guest: boolean, accepted = false) {
   if (attempt.status === "completed") return completedResponse(attempt, accepted);
   if (attempt.status !== "grading") return json({ error: "attempt_changed" }, 409);
+  if (!storedLocale(attempt.locale)) return json({ error: "attempt_state_invalid" }, 409);
   try {
     const tasks = tasksFor(attempt.book_id, attempt.chapter).slice(0, attempt.task_limit);
     if (!tasks.length || tasks.length !== attempt.task_limit || attempt.current_index !== tasks.length)
@@ -206,6 +254,37 @@ export async function GET(request: Request) {
       ]);
       if (!active.success || !history.success || !pending.success || !Array.isArray(active.results) || !Array.isArray(history.results) || !Array.isArray(pending.results)) return json({ error: "database_unavailable" }, 503);
       if (active.results.length) return json({ locked: true, attempts: [] });
+      // A successful batch can still contain a legacy/corrupt summary. Never
+      // publish an impossible score as a completed learning achievement.
+      // Keep the saved result immutable: this GET only validates, never fixes
+      // or deletes another user's historical attempts.
+      const scoreValid = (row: Record<string, unknown>) =>
+        typeof row.score === "number" && Number.isSafeInteger(row.score) && row.score >= 0 &&
+        typeof row.total === "number" && Number.isSafeInteger(row.total) &&
+        row.total > 0 && row.score <= row.total;
+      // Saved rows can predate current constraints or be corrupted in D1.
+      // Invalid provenance must not be presented as an authentic chapter,
+      // completed timestamp, or group/personal history. This read never repairs
+      // another user's data or silently discards their record.
+      const contextValid = (row: Record<string, unknown>, dateField: string) =>
+        row && typeof row === "object" && !Array.isArray(row) &&
+        typeof row.id === "string" && row.id.length > 0 && row.id.length <= 80 &&
+        row.id.trim() === row.id &&
+        typeof row.book_id === "string" && row.book_id.length > 0 &&
+        row.book_id.length <= 8 && row.book_id.trim() === row.book_id &&
+        Number.isSafeInteger(row.chapter) && (row.chapter as number) > 0 &&
+        typeof row[dateField] === "string" &&
+        (row[dateField] as string).trim() === row[dateField] &&
+        canonicalHistoryUtcTimestamp(row[dateField]);
+      const historyRows = history.results as Array<Record<string, unknown>>;
+      const pendingRows = pending.results as Array<Record<string, unknown>>;
+      if (historyRows.some(row =>
+        !contextValid(row, "completed_at") || !scoreValid(row) ||
+        (row.group_id != null &&
+          (typeof row.group_id !== "string" || row.group_id.length < 1 ||
+           row.group_id.length > 80 || row.group_id.trim() !== row.group_id))) ||
+        pendingRows.some(row => !contextValid(row, "started_at")))
+        return json({ error: "attempt_history_unavailable" }, 503);
       return json({ attempts: (history.results as Array<Record<string, unknown>>).map(row => ({ id: row.id, book: row.book_id, chapter: row.chapter, mode: row.group_id ? "group" : "personal", score: row.score, total: row.total, completedAt: row.completed_at })), pending: (pending.results as Array<Record<string, unknown>>).map(row => ({id:row.id,book:row.book_id,chapter:row.chapter,startedAt:row.started_at})) });
     } catch { return json({ error: "database_unavailable" }, 503); }
   }
@@ -221,6 +300,7 @@ export async function GET(request: Request) {
   const deadline = attemptDeadline(attempt.expires_at);
   if (deadline === null) return json({ error: "attempt_state_invalid" }, 409);
   if (deadline <= Date.now()) return json({ error: "attempt_expired" }, 410);
+  if (!storedLocale(attempt.locale)) return json({ error: "attempt_state_invalid" }, 409);
   const tasks = tasksFor(attempt.book_id, attempt.chapter).slice(0, attempt.task_limit), task = tasks[attempt.current_index];
   if (!task) return json({ error: "attempt_state_invalid" }, 409);
   return json({ attemptId: attempt.id, task: publicTask(task, attempt.locale, attempt.current_index + 1, tasks.length) });
@@ -255,7 +335,8 @@ export async function POST(request: Request) {
   if (action === "read") {
     const currentActor = await actor(request, true);
     if (!currentActor) return json({ error: "actor_unavailable" }, 401);
-    const book = clean(body.book, 8).toUpperCase(), chapter = requestedChapter(body.chapter), groupId = clean(body.groupId, 80);
+    const book = clean(body.book, 8).toUpperCase(), chapter = requestedChapter(body.chapter), groupId = requestedGroupId(body.groupId);
+    if (groupId === null) return json({ error: "invalid_group" }, 400);
     if (chapter === null) return json({ error: "invalid_chapter" }, 400);
     if (!tasksFor(book, chapter).length) return json({ error: "mission_chapter_unavailable" }, 404);
     if (groupId && (!currentActor.identity || !await groupFacilitator(groupId, currentActor.identity.userId))) return json({ error: "group_facilitator_required" }, 403);
@@ -271,8 +352,10 @@ export async function POST(request: Request) {
     const currentActor = await actor(request, true);
     if (!currentActor) return json({ error: "actor_unavailable" }, 401);
     if (currentActor.identity && !currentActor.identity.emailVerified) return json({ error: "email_verification_required" }, 403);
-    const book = clean(body.book, 8).toUpperCase(), chapter = requestedChapter(body.chapter), selectedLocale = locale(body.locale), groupId = clean(body.groupId, 80);
+    const book = clean(body.book, 8).toUpperCase(), chapter = requestedChapter(body.chapter), selectedLocale = requestedLocale(body.locale), groupId = requestedGroupId(body.groupId);
+    if (groupId === null) return json({ error: "invalid_group" }, 400);
     if (chapter === null) return json({ error: "invalid_chapter" }, 400);
+    if (selectedLocale === null) return json({ error: "invalid_locale" }, 400);
     const available = tasksFor(book, chapter);
     if (body.missionId !== MISSION_ID || !available.length) return json({ error: "mission_chapter_unavailable" }, 404);
     if (groupId && (!currentActor.identity || !await groupFacilitator(groupId, currentActor.identity.userId))) return json({ error: "group_facilitator_required" }, 403);
@@ -302,7 +385,11 @@ export async function POST(request: Request) {
           : await env.DB.prepare("SELECT COUNT(DISTINCT book_id || ':' || chapter) AS count FROM group_sessions WHERE group_id=? AND meeting_date>=? AND meeting_date<?").bind(groupId, registration.start_date, weekEnd).first<{ count: number }>();
         const repeated = await env.DB.prepare("SELECT id FROM group_sessions WHERE group_id=? AND book_id=? AND chapter=? LIMIT 1").bind(groupId, book, chapter).first();
         const allowed = registration.weekly_goal * (registration.catchup_mode === "steady" ? 1 : week + 1);
-        if (!repeated && Number(used?.count || 0) >= allowed) return json({ error: "weekly_limit_reached" }, 409);
+        // A missing or corrupt D1 usage aggregate is not proof of zero study.
+        // Refuse to unlock a group mission on uncertain quota evidence.
+        if (!used || !Number.isSafeInteger(used.count) || used.count < 0)
+          return json({ error: "database_unavailable" }, 503);
+        if (!repeated && used.count >= allowed) return json({ error: "weekly_limit_reached" }, 409);
       }
     }
     const receipt = await env.DB.prepare("SELECT id FROM chapter_read_receipts WHERE actor_id=? AND book_id=? AND chapter=? AND COALESCE(group_id,'')=? AND consumed_at IS NULL ORDER BY completed_at DESC LIMIT 1")
@@ -348,6 +435,7 @@ export async function POST(request: Request) {
     if ((attempt.status === "grading" || attempt.status === "completed") && taskIndex === attempt.task_limit)
       return finishAttempt(attempt, currentActor.id, currentActor.guest, true);
     if (attempt.status !== "active") return json({ error: attempt.status === "invalidated" ? "attempt_invalidated" : "attempt_closed" }, 409);
+    if (!storedLocale(attempt.locale)) return json({ error: "attempt_state_invalid" }, 409);
     const deadline = attemptDeadline(attempt.expires_at);
     if (deadline === null) return json({ error: "attempt_state_invalid" }, 409);
     if (deadline <= Date.now()) {

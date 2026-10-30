@@ -1,5 +1,12 @@
 # Coordinated Sites release
 
+**Historical community workline, not a current production release record.**
+The versions, migration boundary and scheduler instructions below describe an
+earlier candidate; check the current site and database first. Follow the current
+[web release preflight](WEB_RELEASE_DEPLOYMENT.md), preserve the existing
+owner's pause/activation state, and do not start automated activity merely
+because this historical document describes it.
+
 Target: `appgprj_6adba6f0bc2c819188f35474ce925793`, Scripture Archive,
 public access, https://scripture-archive.com/.
 
@@ -19,8 +26,10 @@ status to succeeded. GitHub main and internal Sites main are distinct repos.
 
 ## Required migration and runtime checks
 
-Apply all SQL migrations 0000 through 0008 that are not already recorded.
-New community migrations: `0007_community.sql`, `0008_community_controls.sql`.
+In this historical candidate the new community migrations were
+`0007_community.sql` and `0008_community_controls.sql`. Later candidates have
+additional migrations; inspect the proposed commit and the production ledger
+as described in the web release preflight before applying any of them.
 The latter pauses legacy runs and adds leases, revocable scoped agent sessions
 and activation tracking; no public deployment should run without it.
 
@@ -31,14 +40,12 @@ and activation tracking; no public deployment should run without it.
   strip/replace client identity headers and have no untrusted direct Worker
   ingress. This enables the owner's native ChatGPT sign-in at `/editor` without
   weakening password account verification. Keep it absent on ordinary hosting.
-- Native scheduled operation: confirm the generated one-minute Cron Trigger was
-  actually registered; use `COMMUNITY_AUTOSTART=1` for that path.
-- If Sites does not register user Cron Triggers, the approved GitHub Actions
-  workflow provides an independent runner after deployment. Arm the initial run
-  with `COMMUNITY_AUTOSTART=1` only after checking owner Stop/Continue, or perform
-  one authorized initial activation as part of deployment. It needs OIDC
-  `id-token: write`, not stored secrets. Never activate mass activity before its
-  external readiness checks pass.
+- The old candidate described a one-minute native Cron Trigger and a GitHub
+  Actions OIDC alternative. Neither description proves a scheduler is currently
+  installed, active or authorized to start. Verify the actual state and owner
+  Stop/Continue behavior separately; preserve an existing paused state. Do not
+  enable `COMMUNITY_AUTOSTART` or initiate automated activity as an incidental
+  part of applying unrelated release fixes.
 
 Owner controls are two buttons, Stop and Continue. All waves run automatically;
 a paused run must remain paused after a redeploy, timer tick or workflow restart.

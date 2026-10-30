@@ -13,13 +13,14 @@ const transpiled = ts.transpileModule(source, {
 assert.equal(transpiled.diagnostics?.length ?? 0, 0);
 
 function harness(mode) {
-  const calls = { batch: 0, prepare: 0 };
+  const calls = { batch: 0, prepare: 0, bound: [] };
   const ok = { success: true, meta: { changes: 1 } };
   const DB = {
     prepare(sql) {
       calls.prepare++;
       return {
         bind(...values) {
+          calls.bound.push({sql, values});
           return {
             sql, values,
             first: async () => ({ kind: "book", title: "Existing", locale: "uk", data: "{}" }),
@@ -159,6 +160,86 @@ test("explicit complete three-language note preserves existing authoring contrac
   assert.equal(h.calls.batch, 1);
 });
 
+// Exercise the real transpiled owner CMS route: the persisted note must equal
+// the explicitly authorized text, never a silent 600-character prefix.
+for (const locale of ["uk", "ru", "en"]) {
+  test("owner CMS refuses oversized " + locale + " public note before D1", async () => {
+    const h = harness("ok");
+    const response = await h.invoke("public-note", "https://scripture.invalid", {
+      liveNote: { ...completedNote, [locale]: "Ж".repeat(601) },
+    });
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).error, "invalid_content_note");
+    assert.equal(h.calls.batch, 0);
+    assert.equal(h.calls.prepare, 0);
+  });
+}
+
+test("public note accepts full 600-character Unicode boundary without clipping", async () => {
+  const h = harness("ok");
+  const full = "Ж".repeat(600);
+  const response = await h.invoke("public-note", "https://scripture.invalid", {
+    liveNote: { uk: full, ru: "Сохранено", en: "Saved" },
+  });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).liveNote.uk, full);
+  assert.equal(h.calls.batch, 1);
+});
+
+test("public note trims surrounding whitespace before enforcing limit", async () => {
+  const h = harness("ok");
+  const full = "Ж".repeat(600);
+  const response = await h.invoke("public-note", "https://scripture.invalid", {
+    liveNote: { uk: "  " + full + "  ", ru: "Сохранено", en: "Saved" },
+  });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).liveNote.uk, full);
+  assert.equal(h.calls.batch, 1);
+});
+
+test("public note refuses normalized overlimit without rewriting any language", async () => {
+  const h = harness("ok");
+  const response = await h.invoke("public-note", "https://scripture.invalid", {
+    liveNote: { uk: "Збережено", ru: "  " + "А".repeat(601) + "  ", en: "Saved" },
+  });
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error, "invalid_content_note");
+  assert.equal(h.calls.batch, 0);
+});
+
+// The owner-generated immutable revision and the managed title must never
+// silently differ from the editor's original title.
+for (const [label, title] of [
+  ["201 characters", "Ж".repeat(201)],
+  ["overlimit after trimming", "  "+"Ж".repeat(201)+"  "],
+]) {
+  test("CMS upsert rejects "+label+" title before any D1 mutation",async()=>{
+    const h=harness("ok");
+    const response=await h.invoke("upsert","https://scripture.invalid",{
+      action:"upsert-item",id:"record",kind:"book",locale:"uk",title,
+      status:"draft",data:{text:"Author content"},
+    });
+    assert.equal(response.status,400);
+    assert.equal((await response.json()).error,"invalid_content_item");
+    assert.equal(h.calls.batch,0);
+    assert.equal(h.calls.prepare,0);
+  });
+}
+
+test("CMS upsert preserves the full Unicode 200-character title in D1 bind",async()=>{
+  const h=harness("ok");
+  const full="Ж".repeat(200);
+  const response=await h.invoke("upsert","https://scripture.invalid",{
+    action:"upsert-item",id:"record",kind:"book",locale:"uk",title:"  "+full+"  ",
+    status:"draft",data:{text:"Author content"},
+  });
+  assert.equal(response.status,200);
+  assert.equal(h.calls.batch,1);
+  const write=h.calls.bound.find(x=>x.sql.includes("INSERT INTO managed_content"));
+  assert.ok(write);
+  assert.equal(write.values[3],full,"bound title is the complete authored normalized title");
+});
+
 const existingIdentity = "k".repeat(100);
 const upsertWithIdentity = id => ({
   action:"upsert-item", id, kind:"book", locale:"uk",
@@ -219,3 +300,38 @@ test("omitted upsert identity still creates a canonical UUID-backed item", async
   assert.equal((await response.json()).id, "test-generated-id");
   assert.equal(h.calls.batch, 1);
 });
+
+// Execute the canonical owner item upsert rather than trusting a DTO mock.
+// Rejecting long titles is a content-integrity rule: a 200 response must not
+// silently publish a different title than the one the editor entered.
+for (const [label, title] of [
+  ["201 Unicode letters", "Ї".repeat(201)],
+  ["101 emoji / 202 UTF-16 units", "🙂".repeat(101)],
+  ["201 after trimming", "   " + "A".repeat(201) + "   "],
+]) {
+  test("owner CMS refuses oversized item title before D1: " + label, async () => {
+    const h = harness("ok");
+    const response = await h.invoke("upsert", "https://scripture.invalid", {
+      ...upsertWithIdentity("existing-cms-id"), title,
+    });
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).error, "invalid_content_item");
+    assert.equal(h.calls.batch, 0);
+    assert.equal(h.calls.prepare, 0);
+  });
+}
+
+for (const [label, title] of [
+  ["exactly 200 Ukrainian letters", "Ї".repeat(200)],
+  ["exactly 100 emoji / 200 UTF-16 units", "🙂".repeat(100)],
+  ["trimmed exact-boundary title", "  " + "Ї".repeat(200) + "  "],
+]) {
+  test("owner CMS saves valid item title without clipping: " + label, async () => {
+    const h = harness("ok");
+    const response = await h.invoke("upsert", "https://scripture.invalid", {
+      ...upsertWithIdentity("existing-cms-id"), title,
+    });
+    assert.equal(response.status, 200);
+    assert.equal(h.calls.batch, 1);
+  });
+}

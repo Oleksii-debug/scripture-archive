@@ -40,6 +40,18 @@ function acknowledgedBatch(receipts: unknown, count: number) {
   return Array.isArray(receipts) && receipts.length===count && receipts.every(acknowledgedWrite);
 }
 
+const SETTINGS_KEYS = ['name','church','country','city','description','visibility','rosterVisibility'] as const;
+function groupSettings(value: unknown): Row | null {
+  if(!value || typeof value!=='object' || Array.isArray(value))return null;
+  const row=value as Row;
+  if(Object.keys(row).length!==SETTINGS_KEYS.length || SETTINGS_KEYS.some(key=>!Object.hasOwn(row,key)))return null;
+  if(typeof row.name!=='string' || !row.name.trim() || row.name.length>100)return null;
+  for(const [key,max] of [['church',160],['country',80],['city',80],['description',600]] as const)
+    if(row[key]!==null && (typeof row[key]!=='string' || (row[key] as string).length>max))return null;
+  if(!['public','private'].includes(row.visibility as string) || !['count','names','private'].includes(row.rosterVisibility as string))return null;
+  return row;
+}
+
 async function profile(id: Identity) {
   return env.DB!.prepare("SELECT first_name,last_name FROM profiles WHERE user_id=?").bind(id.userId).first<{ first_name: string; last_name: string }>();
 }
@@ -62,7 +74,21 @@ const groupSelect = `
   FROM home_groups g LEFT JOIN group_marathon_registrations m ON m.group_id=g.id`;
 
 function publicGroup(row: Row, includePrivate = false) {
-  const total = Number(row.answers_total || 0);
+  // D1 aggregate success does not make damaged stored group scores truthful.
+  // A missing, negative, fractional or over-total answer count must never be
+  // displayed as a public 0%, 100%+, or an invented successful group report.
+  const counters = [row.answers_correct, row.answers_total, row.chapters_completed];
+  if (counters.some(value => typeof value !== "number" ||
+      !Number.isSafeInteger(value) || value < 0) ||
+      (row.answers_correct as number) > (row.answers_total as number))
+    throw Error("invalid_group_study_aggregate");
+  // SQLite COUNT() is always a nonnegative integer. A corrupted/malformed
+  // D1 response cannot be coerced into a false membership or meeting count.
+  const publicCounts = [row.member_count, row.session_count, row.cohort_size];
+  if (publicCounts.some(value => typeof value !== "number" ||
+      !Number.isSafeInteger(value) || value < 0))
+    throw Error("invalid_group_public_count");
+  const total = row.answers_total as number;
   return {
     id: row.id, name: row.name, church: row.church, country: row.country, city: row.city,
     description: row.description, visibility: row.visibility, rosterVisibility: row.roster_visibility,
@@ -135,6 +161,21 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null) as Row | null;
   if (!body) return Response.json({ error: "invalid_json" }, { status: 400 });
   const action = new URL(request.url).searchParams.get("action") || "create";
+
+  if (action === "settings") {
+    // Exact values make both the authored text and the conflict check lossless.
+    const next=groupSettings(body.settings), previous=groupSettings(body.expected);
+    const groupId=body.groupId;
+    if(typeof groupId!=='string'||!groupId||groupId.length>80||!next||!previous)
+      return Response.json({error:"invalid_group_settings"},{status:400});
+    const saved=await env.DB.prepare(`UPDATE home_groups SET name=?,church=?,country=?,city=?,description=?,visibility=?,roster_visibility=?,updated_at=CURRENT_TIMESTAMP
+      WHERE id=? AND owner_user_id=? AND EXISTS (SELECT 1 FROM home_group_members WHERE group_id=? AND user_id=? AND role='owner')
+      AND name IS ? AND church IS ? AND country IS ? AND city IS ? AND description IS ? AND visibility IS ? AND roster_visibility IS ?`)
+      .bind(...SETTINGS_KEYS.map(key=>next[key]),groupId,id.userId,groupId,id.userId,...SETTINGS_KEYS.map(key=>previous[key])).run();
+    if(!acknowledgedWrite(saved))return unavailableWrite();
+    if(saved.meta.changes!==1)return Response.json({error:"group_settings_changed_or_forbidden"},{status:409});
+    return Response.json({ok:true},{headers:{"Cache-Control":"no-store, private"}});
+  }
 
   if (action === "rotate-invite") {
     const groupId=clean(body.groupId,80), previous=clean(body.expectedInviteCode,32);
@@ -254,7 +295,13 @@ export async function POST(request: Request) {
     const participantCount = body.participantCount === "" || body.participantCount == null ? null : integer(body.participantCount, 1, 500);
     const answersTotal = integer(body.answersTotal, 0, 1000);
     const answersCorrect = integer(body.answersCorrect, 0, 1000);
-    const meetingDate = clean(body.meetingDate, 10);
+    // Unlike display labels, recorded meeting dates and private reflections
+    // must not be clipped into different valid data before an actual D1 write.
+    const meetingDate = typeof body.meetingDate === "string" ? body.meetingDate.trim() : "";
+    const reflection = typeof body.reflection === "string" ? body.reflection.trim()
+      : body.reflection == null ? "" : null;
+    if (reflection === null || reflection.length > 1200)
+      return Response.json({error:"invalid_session"},{status:400});
     const groupEdition = await env.DB!.prepare("SELECT bible_edition FROM home_groups WHERE id=?").bind(groupId).first<{bible_edition:string}>();
     const chapterLimit = groupEdition?.bible_edition === 'uk-ohiienko'
       ? catalog.editionBooks['uk-ohiienko'].find(book => book.code === bookId)?.chapters
@@ -296,7 +343,7 @@ export async function POST(request: Request) {
     try {
     const saved=await env.DB!.batch([
       env.DB!.prepare("INSERT INTO group_sessions (id,group_id,created_by,book_id,chapter,chapters_completed,answers_correct,answers_total,reflection,participant_count,meeting_date) SELECT ?,?,?,?,?,1,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM home_group_members WHERE group_id=? AND user_id=? AND role IN ('owner','facilitator'))")
-        .bind(sessionId, groupId, id.userId, bookId, chapter, answersCorrect, answersTotal, clean(body.reflection, 1200) || null, participantCount, meetingDate, groupId, id.userId),
+        .bind(sessionId, groupId, id.userId, bookId, chapter, answersCorrect, answersTotal, reflection || null, participantCount, meetingDate, groupId, id.userId),
       env.DB!.prepare("UPDATE home_groups SET updated_at=CURRENT_TIMESTAMP WHERE id=? AND EXISTS (SELECT 1 FROM group_sessions WHERE id=?)").bind(groupId,sessionId),
     ]);
     if(!acknowledgedBatch(saved,2))return Response.json({error:"database_unavailable"},{status:503});
@@ -306,12 +353,29 @@ export async function POST(request: Request) {
   }
 
   if (action !== "create") return Response.json({ error: "unknown_action" }, { status: 400 });
+  // Group owners must not receive a 201 for a silently rewritten profile.
+  // Validate authored fields *before* clean() can slice meaningful text, and
+  // before group/membership/cohort records can be inserted into D1.
+  if (typeof body.name !== "string" || ([
+    ["name", 100], ["church", 160], ["country", 80],
+    ["city", 80], ["description", 600],
+  ] as const).some(([key, max]) => {
+    const value = body[key];
+    // An explicitly supplied non-string optional field must not be silently
+    // converted to null by clean() and reported as successfully saved.
+    return value != null && (typeof value !== "string" || value.trim().length > max);
+  })) return Response.json({ error: "invalid_group" }, { status: 400 });
   const name = clean(body.name, 100);
   const weeklyGoal = integer(body.weeklyGoal, 1, 31);
   const catchupMode = clean(body.catchupMode, 16);
   const visibility = clean(body.visibility, 12);
   const rosterVisibility = clean(body.rosterVisibility, 12);
   const marathonEnabled = body.marathonEnabled === true || body.marathonEnabled === "on" || body.marathonEnabled === "true";
+  // An explicit JSON value with a non-string type must not be silently
+  // replaced with the Ukrainian default and acknowledged as the owner's choice.
+  // Absent/null/blank HTML form values retain the established default.
+  if (body.bibleEdition != null && typeof body.bibleEdition !== "string")
+    return Response.json({error:"invalid_edition"},{status:400});
   const bibleEdition = clean(body.bibleEdition, 40) || "uk-ohiienko";
   if (!["uk-kulish","uk-ohiienko","uk-khomenko","uk-turkoniak","ru-synodal","ru-nrt","ru-rsp","ru-kulakov","en-web","en-kjv","en-niv","en-esv"].includes(bibleEdition)) return Response.json({error:"invalid_edition"},{status:400});
   if (!name || !weeklyGoal || weeklyGoal % 2 === 0 || !["flexible", "steady"].includes(catchupMode) || !["public", "private"].includes(visibility) || !["count", "names", "private"].includes(rosterVisibility)) return Response.json({ error: "invalid_group" }, { status: 400 });

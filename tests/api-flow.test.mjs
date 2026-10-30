@@ -88,15 +88,24 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal(ownerLogin.status, 200);
   const ownerCookie = ownerLogin.headers.get("set-cookie").split(";",1)[0];
   const ownAccount = await (await fetch(`${base}/api/account?action=me`, {headers:{Cookie:cookie}})).json();
-  const roleAction = (action, principal = ownerCookie, origin = base) => fetch(`${base}/api/editor-roles`, {method:'POST',headers:{Origin:origin,Cookie:principal,'Content-Type':'application/json'},body:JSON.stringify({action,userId:ownAccount.user.id})});
-  assert.equal((await roleAction('grant',cookie)).status,403);
+  // The local Wrangler proxy may drop a following request when its Worker
+  // rejects an early POST without consuming a nonempty JSON body. For role/origin
+  // preflight checks the body is irrelevant: the real-route source test
+  // editor-origin-preflight.test.mjs separately asserts the same rejection with
+  // an actual JSON body, before any auth or D1 access.
+  const roleAction = (action, principal = ownerCookie, origin = base, omitBody = false) => fetch(`${base}/api/editor-roles`, {
+    method:'POST',
+    headers:{Origin:origin,Cookie:principal,...(omitBody ? {} : {'Content-Type':'application/json'})},
+    ...(omitBody ? {} : {body:JSON.stringify({action,userId:ownAccount.user.id})}),
+  });
+  assert.equal((await roleAction('grant',cookie,base,true)).status,403);
   // An Origin with another port is cross-origin under the browser's
   // scheme/host/port tuple, without changing the Wrangler dev proxy hostname.
   // Separate real-handler tests also reject a genuinely remote host.
   const forgedLocalOrigin = new URL(base);
   forgedLocalOrigin.port = forgedLocalOrigin.port === '54321' ? '54322' : '54321';
   assert.notEqual(forgedLocalOrigin.origin, new URL(base).origin);
-  const forgedGrant = await roleAction('grant',ownerCookie,forgedLocalOrigin.origin);
+  const forgedGrant = await roleAction('grant',ownerCookie,forgedLocalOrigin.origin,true);
   assert.equal(forgedGrant.status,403,
     `Cross-origin mutation must be rejected; local Worker response: ${(await forgedGrant.clone().text()).slice(0,300)}`);
   const emailGrant = await fetch(`${base}/api/editor-roles`,{method:'POST',headers:{Origin:base,Cookie:ownerCookie,'Content-Type':'application/json'},body:JSON.stringify({action:'grant',email:ownAccount.user.email.toUpperCase()})});
@@ -113,9 +122,18 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal((await (await fetch(`${base}/api/editor-roles?view=me`,{headers:{Cookie:cookie}})).json()).editor,false);
   assert.equal((await fetch(`${base}/api/material-review?view=queue`,{headers:{Cookie:cookie}})).status,403);
   const mark = { edition: "en-web", book: "GEN", chapter: 12 };
-  const bookmarkWrite = (body, method = "PUT", origin = base) => fetch(`${base}/api/bookmarks`, { method, headers: { Origin: origin, Cookie: cookie, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  // The disposable Wrangler proxy can abort a following request when an
+  // early Origin-rejected PUT carries an unread request body. This probe tests
+  // only the cross-origin gate, so omit its body in THIS local HTTP sequence.
+  // The production-route test bookmark-auth-availability.test.mjs separately
+  // sends a genuine nonempty JSON body and still demands 403 before auth/D1.
+  const bookmarkWrite = (body, method = "PUT", origin = base, omitBody = false) => fetch(`${base}/api/bookmarks`, {
+    method,
+    headers: { Origin: origin, Cookie: cookie, ...(omitBody ? {} : {"Content-Type": "application/json"}) },
+    ...(omitBody ? {} : { body: JSON.stringify(body) }),
+  });
   assert.equal((await fetch(`${base}/api/bookmarks`)).status, 401);
-  assert.equal((await bookmarkWrite(mark, "PUT", "https://attacker.invalid")).status, 403);
+  assert.equal((await bookmarkWrite(mark, "PUT", "https://attacker.invalid", true)).status, 403);
   const invalidBookmark = await bookmarkWrite({ ...mark, chapter: -1 });
   assert.equal(invalidBookmark.status, 400, (await invalidBookmark.text()).slice(0, 500));
   assert.equal((await bookmarkWrite(mark)).status, 200);
@@ -147,10 +165,23 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal(ownerConsent.status, 200);
   let consentChange = await request("/api/account?action=sensitive-consent", { method: "PUT", body: { acceptSensitive: "true" } });
   assert.equal(consentChange.response.status, 400);
-  consentChange = await request("/api/account?action=sensitive-consent", { method: "PUT", origin: "https://attacker.invalid", body: { acceptSensitive: false } });
+  // The disposable Wrangler proxy can drop the *next* write if an early
+  // cross-origin rejection leaves a nonempty request body unread. This HTTP
+  // sequence checks the 403 gate with no body; the real route's nonempty-body
+  // 403 preflight is separately asserted in account-write-failclosed.test.mjs.
+  // Do not retry or weaken the subsequent sensitive-consent mutation.
+  consentChange = await request("/api/account?action=sensitive-consent", { method: "PUT", origin: "https://attacker.invalid" });
   assert.equal(consentChange.response.status, 403);
   consentChange = await request("/api/account?action=sensitive-consent", { method: "PUT", body: { acceptSensitive: true, tradition: "other", denomination: "Example denomination", church: "Example church" } });
-  assert.equal(consentChange.response.status, 200);
+  // A bare 503 hides whether the local Worker/D1 failed authentication,
+  // mutation acknowledgement, or the post-write readback. Log only the
+  // canonical public error CODE (never account/consent fields or a raw body).
+  const consentErrorCode = consentChange.data &&
+    typeof consentChange.data.error === 'string' &&
+    /^[a-z_]{1,64}$/.test(consentChange.data.error)
+    ? consentChange.data.error : 'missing_or_noncanonical';
+  assert.equal(consentChange.response.status, 200,
+    `Sensitive-consent E2E: expected HTTP 200; error_code=${consentErrorCode}`);
   assert.equal(consentChange.data.user.sensitiveConsent, true);
   await request("/api/account?action=visibility", { method: "PUT", body: { church: true } });
   consentChange = await request("/api/account?action=sensitive-consent", { method: "PUT", body: { acceptSensitive: false } });
@@ -216,8 +247,10 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal(result.data.materials.find(item => item.id === material.id).title, material.title);
   // Draft -> review -> published immutable snapshot -> replacement -> withdrawal.
   const submitReview = { action: "submit", materialId: material.id, provenance: "Original exercise; source GEN 12", rightsConfirmed: true };
-  const reviewPost = async (body, principal = cookie, origin = base) => {
-    const response = await fetch(`${base}/api/material-review`, { method: "POST", headers: { Origin: origin, Cookie: principal, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const reviewPost = async (body, principal = cookie, origin = base, omitBody = false) => {
+    const response = await fetch(`${base}/api/material-review`, { method: "POST",
+      headers: { Origin: origin, Cookie: principal, ...(omitBody ? {} : { "Content-Type": "application/json" }) },
+      ...(omitBody ? {} : { body: JSON.stringify(body) }) });
     if (response.status >= 500) console.error("Local review HTTP failure", response.status, response.headers.get("content-type"), (await response.clone().text()).slice(0, 300));
     return { response, data: await response.json() };
   };
@@ -235,7 +268,10 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.ok(ownerQueue.items.some(item => item.id === ownerSubmission.data.id), 'self-review keeps the submission pending');
   const ownerDelete = await fetch(`${base}/api/materials?id=${encodeURIComponent(ownerMaterial.id)}`, { method: 'DELETE', headers: { Origin: base, Cookie: ownerCookie } });
   assert.equal(ownerDelete.status, 200);
-  assert.equal((await reviewPost(submitReview, cookie, "https://attacker.invalid")).response.status, 403);
+  // The local Wrangler proxy must not see an unread body on a request
+  // rejected by Origin before parsing. Exact shipping route/body semantics
+  // are checked in material-review-origin-preflight.test.mjs.
+  assert.equal((await reviewPost(submitReview, cookie, "https://attacker.invalid", true)).response.status, 403);
   assert.equal((await reviewPost({ ...submitReview, rightsConfirmed: false })).response.status, 400);
   assert.equal((await reviewPost(submitReview, ownerCookie)).response.status, 409, "another user cannot submit the author's draft");
   const submissions = await Promise.all([reviewPost(submitReview), reviewPost(submitReview)]);
@@ -245,6 +281,9 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal((await reviewPost({ action: "review", id: submission, decision: "approve", sourceChecked: true, rightsChecked: true })).response.status, 403);
   assert.equal((await reviewPost({ action: "review", id: submission, decision: "approve" }, ownerCookie)).response.status, 400);
   assert.equal((await reviewPost({ action: "answer", id: submission, choice: 0 })).response.status, 404, "pending answers stay private");
+  let library = await reviewPost({ action: "librarySearch", query: "Test material", cursor: null }, '');
+  assert.equal(library.response.status, 200);
+  assert.equal(library.data.items.some(item => item.id === submission), false, "pending drafts are not searchable");
   const queue = await (await fetch(`${base}/api/material-review?view=queue`, { headers: { Cookie: ownerCookie } })).json();
   assert.equal(queue.items.find(item => item.id === submission).snapshot.data.answer, "one");
   assert.equal((await reviewPost({ action: "review", id: submission, decision: "approve", sourceChecked: true, rightsChecked: true }, ownerCookie)).response.status, 200);
@@ -252,6 +291,11 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const published = publicReviews.items.find(item => item.id === submission);
   assert.equal(published.title, material.title);
   assert.equal("answer" in published, false); assert.equal("explanation" in published, false);
+  library = await reviewPost({ action: "librarySearch", query: "TEST MATERIAL", cursor: null }, '');
+  assert.equal(library.response.status, 200);
+  const libraryItem = library.data.items.find(item => item.id === submission);
+  assert.equal(libraryItem.title, material.title);
+  assert.equal("answer" in libraryItem, false); assert.equal("explanation" in libraryItem, false);
   let checked = await reviewPost({ action: "answer", id: submission, choice: 1 });
   assert.deepEqual(checked.data, { correct: false });
   checked = await reviewPost({ action: "answer", id: submission, choice: 0 });
@@ -270,6 +314,9 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal((await reviewPost({ action: "withdraw", id: nextSubmission.data.id }, ownerCookie)).response.status, 409);
   assert.equal((await reviewPost({ action: "withdraw", id: nextSubmission.data.id })).response.status, 200);
   assert.equal((await reviewPost({ action: "answer", id: nextSubmission.data.id, choice: 0 })).response.status, 404);
+  library = await reviewPost({ action: "librarySearch", query: "Edited draft", cursor: null }, '');
+  assert.equal(library.response.status, 200);
+  assert.equal(library.data.items.some(item => item.id === nextSubmission.data.id), false, "withdrawn materials are not searchable");
   const reviewHistory = await (await fetch(`${base}/api/material-review?view=mine`, { headers: { Cookie: cookie } })).json();
   assert.ok(reviewHistory.items.some(item => item.id === submission && item.status === "superseded"));
   assert.ok(reviewHistory.items.some(item => item.id === nextSubmission.data.id && item.status === "withdrawn"));
@@ -307,7 +354,9 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.ok(publicMember);
   assert.equal(publicMember.chaptersRead, 2);
   assert.equal("sourceKind" in publicMember, false);
-  result = await request("/api/account?action=progress", { method: "PUT", body: { progress: {} }, origin: "https://attacker.invalid" });
+  // Same constraint for progress; source-executed account-write-failclosed
+  // preserves the real full-body forged-Origin 403 preflight.
+  result = await request("/api/account?action=progress", { method: "PUT", origin: "https://attacker.invalid" });
   assert.equal(result.response.status, 403);
 
   // Both existing local Ukrainian editions are available for the guarded comparison.
@@ -384,7 +433,9 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const unrelatedLookup = await request("/api/attempts?action=chapter&book=JHN&chapter=3", { useCookie: false });
   assert.equal(unrelatedLookup.response.status, 405);
   assert.deepEqual(unrelatedLookup.data, result.data);
-  result = await request("/api/attempts?action=chapter", { method: "POST", body: { book: "GEN", chapter: 12 }, origin: "https://attacker.invalid" });
+  // The canonical attempts handler's full-body cross-origin refusal is
+  // separately source-executed by attempt-availability-boundary.test.mjs.
+  result = await request("/api/attempts?action=chapter", { method: "POST", origin: "https://attacker.invalid" });
   assert.equal(result.response.status, 403);
   for (const options of [
     { body: { book: "GEN", chapter: 12 }, useCookie: false },
@@ -453,11 +504,24 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const lifecycleId = result.data.groupId;
   result = await request(`/api/groups?groupId=${lifecycleId}`);
   const lifecycleInvite = result.data.group.inviteCode;
+  const lifecycleSettings=Object.fromEntries(['name','church','country','city','description','visibility','rosterVisibility'].map(key=>[key,result.data.group[key]]));
   assert.match(lifecycleInvite,/^[A-F0-9]{32}$/);
   async function managerGroup(action, body) {
     return fetch(`${base}/api/groups?action=${action}`, {method:'POST',headers:{Cookie:ownerCookie,Origin:base,'Content-Type':'application/json'},body:JSON.stringify(body)});
   }
   assert.equal((await managerGroup('join',{inviteCode:lifecycleInvite})).status,200);
+  const editedSettings={...lifecycleSettings,name:'Updated group',description:'Full description\nSecond line',visibility:'public',city:'Kyiv'};
+  assert.equal((await managerGroup('settings',{groupId:lifecycleId,expected:lifecycleSettings,settings:editedSettings})).status,409);
+  result=await request('/api/groups?action=settings',{method:'POST',body:{groupId:lifecycleId,expected:lifecycleSettings,settings:editedSettings}});
+  assert.equal(result.response.status,200);
+  const visitorSettings=await (await fetch(`${base}/api/groups?groupId=${lifecycleId}`)).json();
+  assert.equal(visitorSettings.group.name,'Updated group');assert.equal(visitorSettings.group.description,editedSettings.description);
+  result=await request('/api/groups?action=settings',{method:'POST',body:{groupId:lifecycleId,expected:lifecycleSettings,settings:editedSettings}});
+  assert.equal(result.response.status,409,'a stale editor cannot overwrite new metadata');
+  result=await request('/api/groups?action=settings',{method:'POST',body:{groupId:lifecycleId,expected:editedSettings,settings:{...editedSettings,visibility:'private'}}});
+  assert.equal(result.response.status,200);
+  assert.equal((await fetch(`${base}/api/groups?groupId=${lifecycleId}`)).status,404);
+
   const memberView = await (await fetch(`${base}/api/groups?groupId=${lifecycleId}`,{headers:{Cookie:ownerCookie}})).json();
   assert.deepEqual(memberView.managementMembers,[]);
   assert.equal((await managerGroup('delete',{groupId:lifecycleId,confirm:true})).status,403);

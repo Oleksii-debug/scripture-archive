@@ -1,0 +1,12 @@
+# SA-EXT-01 — PROGRESS_EXPORT_METADATA_FAILCLOSED — terminal source receipt
+
+**2026-10-30.** **CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** for the specific previously missing private-export metadata validation only.
+
+- **Canonical implementation:** `app/api/reading-export/route.ts` (`27c6a3dc57d02876f8f79c64ce76c101f7cf5a83`). Reuses the existing `GET /api/reading-export`, D1 batch and `export_unavailable` failure contract. Rejects malformed/blank `progress.mission_id` and `progress.updated_at` after acknowledged batch read, before assembling any downloadable archive.
+- **Actual user-facing effect:** no downloadable 200 "restorable" personal backup is issued for a damaged saved-progress identity or timestamp. Valid `READING` entries, arbitrary existing non-READING mission identifiers, and exact update times continue to export.
+- **Regression tests:** `tests/reading-export-batch-ack.test.mjs` (`7dc72bf3313b41b6b61d5cde814f745b10533235`), 11 malformed row variants + positive non-READING mission and update timestamp, in addition to existing privacy/export scenarios.
+- **Integration:** [PR #685](https://github.com/Oleksii-debug/scripture-archive/pull/685) **SQUASH MERGED**, exact integration `main@252e637a7993488cbc1be218d96cd8d2d15e93e2`; implementation and test blob SHAs verified by reading `main` after merge. `necessary_unmerged_PRs_for_this_scope=0`; `remaining_scoped_implementation=0`.
+- **Exact PR-head tests:** [GitHub Actions #41055352814](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41055352814) **SUCCESS** at `5b4d0a8c73b941d790dc9f814be7ab93c2f9a397`: native Node tests, TypeScript, ESLint, source build, disposable local Worker/D1 HTTP integration and canonical Python validations all **SUCCESS**. This is CI, not live-user acceptance.
+- **Limits:** this is **one terminal subfeature**, not a claim that the complete **SA-EXT-01** or any of SA-EXT-01…20 is closed. Production Sites deployed SHA, real email/DNS, browser/NVDA, translation rights and release readiness are **NOT VERIFIED**. No deploy, migration, user data, secrets, cron, payments, new languages or dating-service activation occurred.
+
+**Closure rule:** do not reassign or redevelop this verified narrow subfeature unless there is a concrete new defect or changed requirement. Continue with the next unmet approved requirements through [coordination #297](https://github.com/Oleksii-debug/scripture-archive/issues/297) and [the 20-section plan](SCRIPTURE_ARCHIVE_EXPANSION_SECTION_PLAN_2026-10-28.md).

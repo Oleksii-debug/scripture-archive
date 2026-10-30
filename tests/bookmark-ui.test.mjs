@@ -6,7 +6,7 @@ import vm from "node:vm";
 const source = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
 const code = source.slice(source.indexOf("const bookmarkCopy ="), source.indexOf("attemptChannel?.addEventListener"));
 
-function harness({ signedIn = true, fail = false, delayedRead = false } = {}) {
+function harness({ signedIn = true, fail = false, delayedRead = false, partial = false } = {}) {
   let handler, current = [], writes = 0, releaseRead;
   const readGate = delayedRead ? new Promise(resolve => { releaseRead = resolve; }) : null;
   const state = { lang: "en", user: signedIn ? { id: "one" } : null, currentReader: { book: "GEN", chapter: 12 } };
@@ -24,7 +24,7 @@ function harness({ signedIn = true, fail = false, delayedRead = false } = {}) {
         const item = JSON.parse(options.body);
         current = options.method === "PUT" ? [item] : [];
       }
-      return { ok: true, async json() { return { bookmarks: current }; } };
+      return { ok: true, async json() { return { bookmarks: current, ...(partial ? {warning:'partial_bookmarks'} : {}) }; } };
     },
   });
   vm.runInContext(code, context);
@@ -38,6 +38,23 @@ function harness({ signedIn = true, fail = false, delayedRead = false } = {}) {
     click: () => handler({ currentTarget: button }),
   };
 }
+
+test('partial bookmark response shows valid links and an accessible incomplete warning', async () => {
+  const h=harness({partial:true});
+  h.seedBookmarks([{edition:'en-web',book:'GEN',chapter:12}]);
+  await h.mount();
+  assert.match(h.panel.innerHTML,/role="alert"/);
+  assert.match(h.panel.innerHTML,/list is incomplete/);
+  assert.match(h.panel.innerHTML,/\/reader\/GEN\/12/);
+  assert.doesNotMatch(h.panel.innerHTML,/No bookmarks in this edition/);
+});
+
+test('partial empty bookmark response does not falsely claim there are no bookmarks', async () => {
+  const h=harness({partial:true});
+  await h.mount();
+  assert.match(h.panel.innerHTML,/role="alert"/);
+  assert.doesNotMatch(h.panel.innerHTML,/No bookmarks in this edition/);
+});
 
 test("signed-in reader can save and remove a chapter bookmark", async () => {
   const h = harness();

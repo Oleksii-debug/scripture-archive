@@ -19,10 +19,10 @@ function fixture() {
   }
   db.exec('CREATE TABLE progress (user_id TEXT NOT NULL,mission_id TEXT NOT NULL,data TEXT NOT NULL,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,mission_id))');
   db.exec("INSERT INTO home_groups(id,owner_user_id,name,invite_code) VALUES('g','alice','Group','invite'); INSERT INTO home_group_members(group_id,user_id,display_name,role) VALUES('g','alice','Alice','owner')");
-  let failBatchAt=-1, failAnswerRead=false, afterAttemptRead=null;
+  let failBatchAt=-1, failAnswerRead=false, afterAttemptRead=null, marathonUsageOverride=undefined;
   function statement(sql,args=[]) {
     return {sql,args,
-      first:async()=>{const row=db.prepare(sql).get(...args)??null;if(sql.startsWith('SELECT * FROM mission_attempts')&&afterAttemptRead){const hook=afterAttemptRead;afterAttemptRead=null;hook();}return row;},
+      first:async()=>{const row=sql.includes('SELECT COUNT(DISTINCT book_id') && marathonUsageOverride!==undefined ? marathonUsageOverride : db.prepare(sql).get(...args)??null;if(sql.startsWith('SELECT * FROM mission_attempts')&&afterAttemptRead){const hook=afterAttemptRead;afterAttemptRead=null;hook();}return row;},
       all:async()=>failAnswerRead&&sql.startsWith('SELECT task_id,selected_json')?{success:false,results:[]}:{success:true,results:db.prepare(sql).all(...args)},
       run:async()=>{const r=db.prepare(sql).run(...args);return {success:true,meta:{changes:Number(r.changes)}};},
     };
@@ -48,7 +48,7 @@ function fixture() {
   }
   async function get(action,id='',user='alice'){const req=new Request(`https://local.invalid/api/attempts?action=${action}&attemptId=${id}`,{headers:user?{'x-user':user}:{}});const r=await exports.GET(req);return {status:r.status,data:await r.json()};}
   async function post(action,body,user='alice',origin='https://local.invalid'){const r=await exports.POST(new Request('https://local.invalid/api/attempts?action='+action,{method:'POST',headers:{origin,'content-type':'application/json',...(user?{'x-user':user}:{})},body:JSON.stringify(body)}));return {status:r.status,data:await r.json()};}
-  return {db,seed,get,post,setFailBatch:n=>{failBatchAt=n;},setFailRead:v=>{failAnswerRead=v;},afterAttemptRead:fn=>{afterAttemptRead=fn;}};
+  return {db,seed,get,post,setFailBatch:n=>{failBatchAt=n;},setFailRead:v=>{failAnswerRead=v;},afterAttemptRead:fn=>{afterAttemptRead=fn;},setMarathonUsageOverride:value=>{marathonUsageOverride=value;}};
 }
 
 test('failed finalization rolls back and concurrent retries save exactly one group report',async()=>{
@@ -161,8 +161,11 @@ test('history markup rejects invalid book codes, escapes stored text and offers 
   assert.doesNotMatch(malformed,/href="/);
   const html=missionHistoryMarkup({attempts:[{id:'a"',book:'GEN',chapter:12,score:1,total:2,completedAt:'<date>'},{id:'b',book:'GEN',chapter:13,score:2,total:2}]},'en',esc);
   assert.ok(!html.includes('<date>'));
-  assert.ok(html.includes('&lt;date&gt;'));
-  assert.equal((html.match(/Read and try again/g)||[]).length,1);
+  assert.ok(!html.includes('&lt;date&gt;'),'corrupt time metadata must not appear as a verified UTC record');
+  assert.match(html,/retry-mission-history/);
+  assert.doesNotMatch(html,/href="/);
+  const validHtml=missionHistoryMarkup({attempts:[{id:'a"',book:'GEN',chapter:12,score:1,total:2,completedAt:'2026-10-30 06:00:00'},{id:'b',book:'GEN',chapter:13,score:2,total:2}]},'en',esc);
+  assert.equal((validHtml.match(/Read and try again/g)||[]).length,1);
   assert.ok(missionHistoryMarkup({error:true},'uk',esc).includes('retry-mission-history'));
   assert.ok(missionHistoryMarkup({attempts:[],pending:[{id:'pending',book:'GEN',chapter:12}]},'en',esc).includes('Finish saving the result: GEN 12'));
 });
@@ -217,5 +220,208 @@ test('SA-EXT-02: mission chapter mutation actions refuse coercion and preserve a
     assert.equal(valid.status,200);
     assert.equal(valid.data.invalidated,true);
     assert.equal(f.db.prepare("SELECT status FROM mission_attempts WHERE id='chapter-type'").get().status,'invalidated');
+  }finally{f.db.close();}
+});
+
+
+function seedActiveAttemptMarathon(f) {
+  const migration=readFileSync(new URL('../drizzle/0004_accounts_attempts.sql',import.meta.url),'utf8');
+  const tableStart=migration.indexOf('CREATE TABLE `chapter_read_receipts` (');
+  const tableEnd=tableStart >= 0 ? migration.indexOf(');',tableStart) : -1;
+  const receiptDDL=tableStart >= 0 && tableEnd >= 0 ? migration.slice(tableStart,tableEnd+2) : null;
+  assert.ok(receiptDDL,'real chapter receipt migration required');
+  f.db.exec(receiptDDL);
+  f.db.prepare("INSERT INTO chapter_read_receipts(id,actor_id,book_id,chapter,group_id) VALUES('ready','alice','GEN',12,'g')").run();
+  // Start at UTC midnight today so real Date.now() always resolves to week 0
+  // without a test-environment calendar dependency.
+  const today=new Date().toISOString().slice(0,10);
+  f.db.prepare("INSERT INTO group_marathon_registrations(id,group_id,weekly_goal,catchup_mode,cohort_key,status,start_date) VALUES('marathon','g',3,'steady','cohort','active',?)").run(today);
+}
+const marathonStart={missionId:'OT-AB-01',book:'GEN',chapter:12,groupId:'g',locale:'en'};
+for(const [description,aggregate] of [
+  ['no COUNT row',null],
+  ['no count property',{}],
+  ['SQL NULL',{count:null}],
+  ['undefined count',{count:undefined}],
+  ['numeric string',{count:'0'}],
+  ['untrusted text',{count:'oops'}],
+  ['negative count',{count:-1}],
+  ['fractional count',{count:0.5}],
+  ['Infinity',{count:Infinity}],
+  ['NaN',{count:NaN}]
+]) {
+  test('SA-EXT-02/04 marathon attempt refuses '+description+' with no mutation',async()=>{
+    const f=fixture();try{
+      seedActiveAttemptMarathon(f);
+      f.setMarathonUsageOverride(aggregate);
+      const before=f.db.prepare('SELECT total_changes() n').get().n;
+      const result=await f.post('start',marathonStart);
+      assert.equal(result.status,503,'failed aggregate '+description);
+      assert.equal(result.data.error,'database_unavailable');
+      assert.equal(f.db.prepare('SELECT total_changes() n').get().n,before);
+      assert.equal(f.db.prepare('SELECT COUNT(*) n FROM mission_attempts').get().n,0);
+      assert.equal(f.db.prepare("SELECT consumed_at FROM chapter_read_receipts WHERE id='ready'").get().consumed_at,null);
+    }finally{f.db.close();}
+  });
+}
+
+test('SA-EXT-02/04 mission start accepts real remaining quota and rejects exhausted quota',async()=>{
+  for(const [count,status] of [[0,201],[2,201],[3,409],[4,409]]) {
+    const f=fixture();try{
+      seedActiveAttemptMarathon(f);
+      f.setMarathonUsageOverride({count});
+      const result=await f.post('start',marathonStart);
+      assert.equal(result.status,status,'aggregate count '+count+' '+JSON.stringify(result.data));
+      assert.equal(f.db.prepare('SELECT COUNT(*) n FROM mission_attempts').get().n,status===201?1:0);
+      assert.equal(Boolean(f.db.prepare("SELECT consumed_at FROM chapter_read_receipts WHERE id='ready'").get().consumed_at),status===201);
+    }finally{f.db.close();}
+  }
+});
+
+
+test('SA-EXT-02: persisted history refuses impossible scores without erasing real achievements', async () => {
+  const f = fixture();
+  try {
+    f.seed('valid-alice');
+    f.seed('valid-bob', {user:'bob'});
+    assert.equal((await f.post('finalize',{attemptId:'valid-alice'})).status,200);
+    assert.equal((await f.post('finalize',{attemptId:'valid-bob'},'bob')).status,200);
+    const baseline = f.db.prepare("SELECT score,total FROM mission_attempts WHERE id='valid-alice'").get();
+    assert.equal((await f.get('history')).status,200);
+
+    for (const [field,value] of [
+      ['score',null],['score','not-a-score'],['score',-1],
+      ['score',0.5],['score',baseline.total+1],
+      ['total',null],['total','not-a-total'],['total',0],
+      ['total',-1],['total',1.5],
+    ]) {
+      f.db.prepare(`UPDATE mission_attempts SET ${field}=? WHERE id='valid-alice'`).run(value);
+      const before=f.db.prepare('SELECT total_changes() AS n').get().n;
+      const response=await f.get('history');
+      assert.equal(response.status,503,field+'='+String(value));
+      assert.equal(response.data.error,'attempt_history_unavailable');
+      assert.equal(Object.hasOwn(response.data,'attempts'),false,
+        'a damaged row cannot become an empty or fabricated successful history');
+      assert.equal(f.db.prepare('SELECT total_changes() AS n').get().n,before,
+        'private history read must not mutate records while reporting corruption');
+      const other=await f.get('history','','bob');
+      assert.equal(other.status,200,'another principal retains a valid history');
+      assert.deepEqual(other.data.attempts.map(row=>row.id),['valid-bob']);
+      f.db.prepare("UPDATE mission_attempts SET score=?,total=? WHERE id='valid-alice'")
+        .run(baseline.score,baseline.total);
+      const recovered=await f.get('history');
+      assert.equal(recovered.status,200,'valid history remains readable after repair');
+      assert.deepEqual(recovered.data.attempts.map(row=>row.id),['valid-alice']);
+    }
+  } finally { f.db.close(); }
+});
+
+
+test('SA-EXT-02 persisted history rejects corrupt chapter/source/time/group metadata without mutating records', async () => {
+  const f=fixture();
+  try {
+    f.seed('history-alice');
+    f.seed('history-bob',{user:'bob'});
+    assert.equal((await f.post('finalize',{attemptId:'history-alice'})).status,200);
+    assert.equal((await f.post('finalize',{attemptId:'history-bob'},'bob')).status,200);
+    assert.equal((await f.get('history')).status,200);
+    const original=f.db.prepare("SELECT chapter,book_id,completed_at,group_id FROM mission_attempts WHERE id='history-alice'").get();
+    for(const [field,bad] of [
+      ['chapter',-1], ['chapter',1.5], ['chapter','unknown'],
+      ['book_id',''], ['book_id','X'.repeat(9)],
+      ['completed_at',null], ['completed_at','not-a-date'],
+      ['completed_at','1'],['completed_at','2026-02-31 12:00:00'],
+      ['completed_at','2026-10-30 24:00:00'],
+      ['completed_at','2026-10-30T06:00:00Z'],
+      ['group_id',''], ['group_id','G'.repeat(81)], ['group_id',' leading']
+    ]) {
+      f.db.prepare(`UPDATE mission_attempts SET ${field}=? WHERE id='history-alice'`).run(bad);
+      const changes=f.db.prepare('SELECT total_changes() AS n').get().n;
+      const damaged=await f.get('history');
+      assert.equal(damaged.status,503,field+': '+String(bad));
+      assert.equal(damaged.data.error,'attempt_history_unavailable');
+      assert.equal(Object.hasOwn(damaged.data,'attempts'),false);
+      assert.equal(f.db.prepare('SELECT total_changes() AS n').get().n,changes,'GET must never mutate D1');
+      const other=await f.get('history','','bob');
+      assert.equal(other.status,200);
+      assert.deepEqual(other.data.attempts.map(item=>item.id),['history-bob']);
+      f.db.prepare(`UPDATE mission_attempts SET ${field}=? WHERE id='history-alice'`).run(original[field]);
+      assert.equal((await f.get('history')).status,200,'history recovers after legitimate data repair');
+    }
+  } finally {f.db.close();}
+});
+
+test('SA-EXT-02 grading history refuses malformed pending metadata and recovers read-only', async () => {
+  const f=fixture();
+  try {
+    f.seed('pending-alice');
+    f.seed('pending-bob',{user:'bob'});
+    assert.equal((await f.get('history')).status,200);
+    const original=f.db.prepare("SELECT started_at,chapter,book_id FROM mission_attempts WHERE id='pending-alice'").get();
+    for(const [field,bad] of [
+      ['started_at','invalid'], ['started_at',''],
+      ['started_at','1'],['started_at','2026-02-31 12:00:00'],
+      ['started_at','2026-10-30 27:00:00'],
+      ['started_at','2026-10-30 06:00:00Z'],
+      ['chapter',-1], ['chapter','not-a-chapter'], ['book_id','']
+    ]) {
+      f.db.prepare(`UPDATE mission_attempts SET ${field}=? WHERE id='pending-alice'`).run(bad);
+      const mutations=f.db.prepare('SELECT total_changes() AS n').get().n;
+      const damaged=await f.get('history');
+      assert.equal(damaged.status,503,field+': '+String(bad));
+      assert.equal(damaged.data.error,'attempt_history_unavailable');
+      assert.equal(f.db.prepare('SELECT total_changes() AS n').get().n,mutations);
+      const other=await f.get('history','','bob');
+      assert.equal(other.status,200);
+      assert.deepEqual(other.data.pending.map(item=>item.id),['pending-bob']);
+      f.db.prepare(`UPDATE mission_attempts SET ${field}=? WHERE id='pending-alice'`).run(original[field]);
+      assert.equal((await f.get('history')).status,200);
+    }
+  } finally {f.db.close();}
+});
+
+
+test('SA-EXT-02 completed result refuses forged JSON or mismatched D1 scores and recovers',async()=>{
+  const f=fixture();
+  try {
+    f.seed('completed-alice'); f.seed('completed-bob',{user:'bob'});
+    assert.equal((await f.post('finalize',{attemptId:'completed-alice'})).status,200);
+    assert.equal((await f.post('finalize',{attemptId:'completed-bob'},'bob')).status,200);
+    const canonical=f.db.prepare("SELECT score,total,result_json FROM mission_attempts WHERE id='completed-alice'").get();
+    assert.equal((await f.get('current','completed-alice')).status,200);
+    const legitimate=JSON.parse(canonical.result_json);
+    for(const payload of [
+      'null','[]','"pretend"', '{}','not-json',
+      JSON.stringify({score:'1',total:canonical.total}),
+      JSON.stringify({...legitimate,score:canonical.total+1}),
+      JSON.stringify({...legitimate,total:0}),
+      JSON.stringify({...legitimate,score:-1}),
+      JSON.stringify({...legitimate,total:1.5}),
+    ]) {
+      f.db.prepare("UPDATE mission_attempts SET result_json=? WHERE id='completed-alice'").run(payload);
+      const count=f.db.prepare('SELECT total_changes() AS n').get().n;
+      for(const [action,call] of [
+        ['current',()=>f.get('current','completed-alice')],
+        ['finalize retry',()=>f.post('finalize',{attemptId:'completed-alice'})],
+      ]) {
+        const damaged=await call();
+        assert.equal(damaged.status,503,action+' payload '+payload);
+        assert.equal(damaged.data.error,'attempt_state_invalid');
+        assert.equal(Object.hasOwn(damaged.data,'completed'),false);
+      }
+      assert.equal(f.db.prepare('SELECT total_changes() AS n').get().n,count);
+      assert.equal((await f.get('current','completed-bob','bob')).status,200);
+    }
+    f.db.prepare("UPDATE mission_attempts SET result_json=? WHERE id='completed-alice'").run(canonical.result_json);
+    for(const [field,value] of [['score',canonical.score+1],['total',canonical.total+1],['score',null],['total',null]]) {
+      f.db.prepare(`UPDATE mission_attempts SET ${field}=? WHERE id='completed-alice'`).run(value);
+      assert.equal((await f.get('current','completed-alice')).status,503,field);
+      assert.equal((await f.post('finalize',{attemptId:'completed-alice'})).status,503);
+      f.db.prepare(`UPDATE mission_attempts SET ${field}=? WHERE id='completed-alice'`).run(canonical[field]);
+    }
+    const restored=await f.get('current','completed-alice');
+    assert.equal(restored.status,200);
+    assert.equal(restored.data.completed,true);
+    assert.equal(restored.data.result.score,canonical.score);
   }finally{f.db.close();}
 });

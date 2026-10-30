@@ -5,6 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { waitForStableWorker, startReadOnlyHeartbeat } from "./integration-ready.mjs";
+import { diagnoseDisposableWorkerReads } from "./disposable-worker-diagnostic.mjs";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
@@ -94,6 +95,16 @@ try {
   }
   if (inspected !== 1) throw Error(`Expected one bookmark database, found ${inspected}`);
 } catch(error) {
+  // Source-only diagnostics after a disposable integration failure: three
+  // bounded anonymous GETs, no request replay and no response body logging.
+  if (worker && worker.exitCode === null) {
+    try {
+      const report = await diagnoseDisposableWorkerReads(base);
+      console.error("Disposable Worker read-only diagnostics:", JSON.stringify(report));
+    } catch {
+      console.error("Disposable Worker read-only diagnostics unavailable.");
+    }
+  }
   console.error(logs.replace(/([?&](?:token|reset)=)[^&\s]+/g,"$1[redacted]").replace(/(sa_(?:agent|session)=)[^;\s]+/g,"$1[redacted]"));
   throw error;
 } finally {

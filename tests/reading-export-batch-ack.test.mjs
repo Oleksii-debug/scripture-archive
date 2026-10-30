@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
+import { EDITIONS } from "../public/editions.js";
 
 // Execute the production export route, not a model or a parallel implementation.
 const source = readFileSync(new URL("../app/api/reading-export/route.ts", import.meta.url), "utf8");
@@ -45,6 +46,7 @@ function fixture({ results = standardRows(), dbPresent = true, identity = {
     require(moduleName) {
       if (moduleName === "cloudflare:workers") return { env: { DB: dbPresent ? db : null } };
       if (moduleName === "../../../public/data/catalog.json") return { default: catalog };
+      if (moduleName === "../../../public/editions.js") return { EDITIONS };
       if (moduleName === "../../../lib/auth") return { authenticateRequest: async () => {
         authentications++;
         if (authError) throw authError;
@@ -245,6 +247,39 @@ for (const malformed of [
   });
 }
 
+
+for (const title of [
+  "a".repeat(101), "Б".repeat(101), "x".repeat(150),
+  "Ж".repeat(200), "  " + "Р".repeat(100) + "  ",
+]) {
+  test("private READING export refuses title that canonical account reader cannot reopen: length " + title.length, async () => {
+    const rows = standardRows();
+    rows[1].results[0].data = JSON.stringify([
+      { book:"GEN", chapter:1, title:"Existing valid chapter" },
+      { book:"EXO", chapter:1, title },
+    ]);
+    const f = fixture({ results: rows });
+    const { response, body } = await outcome(f);
+    assert.equal(response.status,503);
+    assert.deepEqual(body,{ error:"export_unavailable" });
+    assert.equal(response.headers.get("content-disposition"),null);
+    assert.match(response.headers.get("cache-control"),/no-store, private/);
+    assert.equal(f.batches,1);
+    assert.equal(f.statements.length,4);
+  });
+}
+
+for (const title of ["x".repeat(100), "Ж".repeat(100)]) {
+  test("private READING export preserves exact canonical 100-character title: " + title[0], async () => {
+    const rows = standardRows();
+    rows[1].results[0].data = JSON.stringify([{ book:"GEN",chapter:1,title }]);
+    const {response,body}=await outcome(fixture({results:rows}));
+    assert.equal(response.status,200);
+    assert.equal(body.progress[0].data[0].title,title);
+    assert.match(response.headers.get("content-disposition"),/attachment/);
+  });
+}
+
 test("valid empty READING archive remains exportable, preserving legitimate nonreading array snapshots",async()=>{
   const rows=standardRows();
   rows[1].results[0].data='[]';
@@ -300,4 +335,117 @@ test("READING export preserves approved edition-specific Joel 4 without inventin
   assert.equal(response.status,200);
   assert.deepEqual(Array.from(body.progress[0].data, row=>row.book+":"+row.chapter),
     ["GEN:50","JOL:4","PSA:150"]);
+});
+
+
+test("private export refuses corrupt completed-attempt metadata rather than claiming a restorable backup", async () => {
+  const badRows = [
+    {id:""}, {mission_id:""}, {book_id:"FAK"}, {book_id:"GEN",chapter:51},
+    {book_id:"JOL",chapter:5}, {book_id:"3JN",chapter:2},
+    {chapter:0}, {chapter:1.5}, {chapter:"1"}, {locale:"de"},
+    {group_id:false}, {group_id:""}, {started_at:null}, {completed_at:""},
+  ];
+  for (const mutation of badRows) {
+    const rows = standardRows();
+    rows[3].results[0] = {...rows[3].results[0], ...mutation};
+    const f = fixture({results:rows});
+    const {response,body} = await outcome(f);
+    assert.equal(response.status,503,JSON.stringify(mutation));
+    assert.deepEqual(body,{error:"export_unavailable"});
+    assert.equal(response.headers.get("content-disposition"),null);
+    assert.match(response.headers.get("cache-control"),/no-store, private/);
+    assert.equal(f.batches,1);
+  }
+});
+
+test("valid completed-attempt export preserves canonical local chapter exceptions and group identity", async () => {
+  const rows=standardRows();
+  rows[3].results[0]={...rows[3].results[0],book_id:"JOL",chapter:4,locale:"en",group_id:"class-1"};
+  const {response,body}=await outcome(fixture({results:rows}));
+  assert.equal(response.status,200);
+  assert.equal(body.attemptHistory[0].book,"JOL");
+  assert.equal(body.attemptHistory[0].chapter,4);
+  assert.equal(body.attemptHistory[0].groupId,"class-1");
+  assert.equal(body.attemptHistory[0].locale,"en");
+  assert.equal(body.attemptHistory[0].result.score,1);
+});
+
+test("private export refuses corrupt or nonlocal bookmark metadata rather than advertising a usable backup", async () => {
+  const malformed = [
+    {edition:"not-local"}, {edition:"uk-khomenko"}, {edition:7},
+    {book:"FAK"}, {book:"gen"}, {book:null},
+    {chapter:0}, {chapter:51}, {chapter:1.5}, {chapter:"1"},
+    {edition:"en-web",book:"JOL",chapter:4},
+    {created_at:null}, {created_at:""},
+  ];
+  for(const mutation of malformed){
+    const rows=standardRows();
+    rows[2].results[0]={...rows[2].results[0],...mutation};
+    const f=fixture({results:rows});
+    const {response,body}=await outcome(f);
+    assert.equal(response.status,503,JSON.stringify(mutation));
+    assert.deepEqual(body,{error:"export_unavailable"});
+    assert.equal(response.headers.get("content-disposition"),null);
+    assert.equal(f.batches,1);
+  }
+  const rows=standardRows();
+  rows[2].results[0]=null;
+  const {response,body}=await outcome(fixture({results:rows}));
+  assert.equal(response.status,503);
+  assert.deepEqual(body,{error:"export_unavailable"});
+});
+
+test("private bookmark export accepts the real Ohiienko fourth Joel chapter but not its WEB alias", async () => {
+  const rows=standardRows();
+  rows[2].results=[
+    {edition:"uk-ohiienko",book:"JOL",chapter:4,created_at:"2026-10-29"},
+    {edition:"en-web",book:"GEN",chapter:50,created_at:"2026-10-29"},
+  ];
+  const {response,body}=await outcome(fixture({results:rows}));
+  assert.equal(response.status,200);
+  assert.deepEqual(Array.from(body.bookmarks,x=>x.edition+":"+x.book+":"+x.chapter),
+    ["uk-ohiienko:JOL:4","en-web:GEN:50"]);
+  assert.equal(body.attemptHistory[0].chapter,1);
+});
+
+
+test("private export refuses corrupt progress identity and updated-at metadata", async () => {
+  // The canonical progress table uses (user_id, mission_id) as a key and
+  // updated_at NOT NULL. A malformed D1 result is not a valid backup merely
+  // because its JSON snapshot parses.
+  const invalid = [
+    null,
+    { mission_id: null }, { mission_id: 12 }, { mission_id: "" },
+    { mission_id: "   " }, { mission_id: undefined },
+    { updated_at: null }, { updated_at: 0 }, { updated_at: "" },
+    { updated_at: " \n\t " }, { updated_at: undefined },
+  ];
+  for (const mutation of invalid) {
+    const results = standardRows();
+    results[1].results[0] = mutation === null
+      ? null
+      : { ...results[1].results[0], ...mutation };
+    const f = fixture({ results });
+    const { response, body } = await outcome(f);
+    assert.equal(response.status, 503, JSON.stringify(mutation));
+    assert.deepEqual(body, { error: "export_unavailable" });
+    assert.equal(response.headers.get("content-disposition"), null);
+    assert.match(response.headers.get("cache-control"), /no-store, private/);
+    assert.equal(f.batches, 1);
+    assert.equal(f.statements.length, 4);
+  }
+});
+
+test("private export preserves valid non-READING mission keys and update time", async () => {
+  const rows = standardRows();
+  rows[1].results.push({
+    mission_id: "OT-AB-01:lesson/2",
+    data: '{"completed":true}',
+    updated_at: "2026-10-30 12:55:00",
+  });
+  const { response, body } = await outcome(fixture({ results: rows }));
+  assert.equal(response.status, 200);
+  assert.equal(body.progress[1].mission, "OT-AB-01:lesson/2");
+  assert.equal(body.progress[1].updatedAt, "2026-10-30 12:55:00");
+  assert.equal(body.progress[1].data.completed, true);
 });

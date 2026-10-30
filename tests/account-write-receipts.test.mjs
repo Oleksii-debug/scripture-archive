@@ -14,9 +14,10 @@ const compiled = ts.transpileModule(source, {
 assert.equal(compiled.diagnostics?.length ?? 0, 0);
 
 function harness(mode, { readFailure = false } = {}) {
-  const calls = { run: 0, first: 0 };
+  const calls = { run: 0, first: 0, bound: [] };
   const database = { prepare() {
-    return { bind() {
+    return { bind(...values) {
+      calls.bound.push(values);
       return {
         async run() {
           calls.run++;
@@ -56,7 +57,7 @@ function harness(mode, { readFailure = false } = {}) {
       throw Error("unexpected import " + specifier);
     },
   });
-  async function invoke(action) {
+  async function invoke(action, overridePayload = undefined) {
     const payload = action === "reading"
       ? { reading: [{ book: "GEN", chapter: 1, title: "Genesis" }] }
       : action === "visibility"
@@ -68,7 +69,7 @@ function harness(mode, { readFailure = false } = {}) {
     const request = new Request("https://archive.invalid/api/account?action=" + action, {
       method: "POST",
       headers: { Origin: "https://archive.invalid", "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(overridePayload === undefined ? payload : overridePayload),
     });
     const response = await exports.POST(request);
     return { status: response.status, body: await response.json(), cache: response.headers.get("cache-control") };
@@ -111,3 +112,55 @@ for (const action of ["visibility", "profile", "sensitive-consent"]) {
     assert.match(outcome.cache, /no-store, private/);
   });
 }
+
+// Real route input-integrity regression: consent is only accepted for data
+// whose exact authored text can be persisted, never shortened or coerced.
+const consentBaseline = {acceptSensitive:true,tradition:'protestant',denomination:'Test',church:'Fixture'};
+for (const field of ['tradition','denomination','church']) {
+  for (const [kind,value] of [
+    ['boolean',true],['number',42],['array',['wrong']],
+    ['object',{value:'wrong'}],
+    ['overlong', 'Ж'.repeat(field==='tradition'?41:161)],
+  ]) {
+    test('sensitive-consent rejects '+field+' '+kind+' without a D1 write',async()=>{
+      const h=harness('ok');
+      const result=await h.invoke('sensitive-consent',{...consentBaseline,[field]:value});
+      assert.equal(result.status,400,field+' '+kind+' '+JSON.stringify(result.body));
+      assert.equal(result.body.error,'invalid_profile_field');
+      assert.equal(h.calls.run,0,'invalid consent metadata cannot write to D1');
+      assert.equal(h.calls.first,0,'invalid consent metadata cannot read a saved profile');
+    });
+  }
+}
+for (const [label,metadata] of [
+  ['omitted',{}],
+  ['explicit null',{tradition:null,denomination:null,church:null}],
+]) {
+  test('sensitive-consent accepts '+label+' optional metadata',async()=>{
+    const h=harness('ok');
+    const result=await h.invoke('sensitive-consent',{acceptSensitive:true,...metadata});
+    assert.equal(result.status,200,JSON.stringify(result.body));
+    assert.equal(h.calls.run,1);
+    assert.equal(h.calls.first,1);
+  });
+}
+test('sensitive-consent accepts and saves Unicode exact 160-character fields',async()=>{
+  const h=harness('ok');
+  const result=await h.invoke('sensitive-consent',{
+    ...consentBaseline,denomination:'Д'.repeat(160),church:'Ц'.repeat(160),
+  });
+  assert.equal(result.status,200,JSON.stringify(result.body));
+  assert.equal(h.calls.run,1);
+  assert.equal(h.calls.first,1);
+  assert.equal(h.calls.bound[0][3],'Д'.repeat(160),'denomination must remain exact');
+  assert.equal(h.calls.bound[0][4],'Ц'.repeat(160),'church must remain exact');
+});
+test('sensitive-consent withdrawal remains possible with stale malformed metadata',async()=>{
+  const h=harness('ok');
+  const result=await h.invoke('sensitive-consent',{
+    acceptSensitive:false,tradition:['bad'],denomination:42,church:{stale:true},
+  });
+  assert.equal(result.status,200,JSON.stringify(result.body));
+  assert.equal(h.calls.run,1,'sensitive-consent withdrawal must reach canonical D1');
+  assert.equal(h.calls.first,1);
+});

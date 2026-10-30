@@ -156,16 +156,24 @@ export async function createSession(request: Request, userId: string, version: n
   const token = randomToken();
   const tokenHash = await sha256(token);
   const userAgentHash = await sha256(request.headers.get("user-agent") || "unknown");
-  await env.DB.prepare(
+  const receipt=await env.DB.prepare(
     "INSERT INTO auth_sessions (token_hash,user_id,session_version,user_agent_hash,created_at,expires_at) VALUES (?,?,?,?,CURRENT_TIMESTAMP,datetime('now','+30 days'))",
   ).bind(tokenHash, userId, version, userAgentHash).run();
+  // Never issue a usable-looking cookie for a session without a confirmed insert.
+  if(receipt?.success!==true || typeof receipt.meta?.changes!=="number" || receipt.meta.changes!==1)
+    throw new Error("session_create_unavailable");
   return { token, cookie: sessionCookie(request, token) };
 }
 
 export async function revokeCurrentSession(request: Request) {
   const token = parseCookies(request).get(SESSION_COOKIE);
-  if (token && env.DB)
-    await env.DB.prepare("UPDATE auth_sessions SET revoked_at=CURRENT_TIMESTAMP WHERE token_hash=?").bind(await sha256(token)).run();
+  if (!token) return;
+  if (!env.DB) throw new Error("session_revoke_unavailable");
+  const receipt=await env.DB.prepare("UPDATE auth_sessions SET revoked_at=CURRENT_TIMESTAMP WHERE token_hash=?").bind(await sha256(token)).run();
+  // A confirmed zero-row update is idempotent: this token has no session.
+  const changes=receipt?.meta?.changes;
+  if(receipt?.success!==true || typeof changes!=="number" || !Number.isSafeInteger(changes) || changes<0 || changes>1)
+    throw new Error("session_revoke_unavailable");
 }
 
 export async function rateLimit(key: string, limit: number, seconds: number) {

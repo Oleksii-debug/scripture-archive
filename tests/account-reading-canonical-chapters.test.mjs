@@ -90,6 +90,25 @@ test("one invalid entry rejects whole batch without acknowledging valid entries"
   assert.equal(f.calls.length, 0);
 });
 
+test("reading refuses overlong authored titles rather than saving a truncated chapter", async () => {
+  for (const title of ["Ж".repeat(101), "  "+"Б".repeat(101)+"  ", "Chapter "+"x".repeat(100)]) {
+    const f = harness();
+    const result = await f.put([receipt("GEN",1), {book:"EXO",chapter:1,title}]);
+    assert.equal(result.status,400);
+    assert.equal(result.body.error,"invalid_reading");
+    assert.equal(f.calls.length,0,"a mixed batch cannot acknowledge a silently shortened title");
+  }
+});
+
+test("reading persists exact 100-character Unicode title and intentional whitespace trim", async () => {
+  const f = harness();
+  const full = "Ж".repeat(100);
+  const result = await f.put([{ book:"GEN",chapter:1,title:"  "+full+"  " }]);
+  assert.equal(result.status,200);
+  assert.equal(f.calls.length,1);
+  assert.deepEqual(JSON.parse(f.calls[0].args[1]),[{book:"GEN",chapter:1,title:full}]);
+});
+
 test("genuine empty reading update remains a durable acknowledged write", async () => {
   const f = harness();
   const response = await f.put([]);

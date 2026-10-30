@@ -89,20 +89,16 @@ export function attachReviewControls(root, w, refresh, announce, isCurrent = () 
     catch (error) { if (active(form)) { status.textContent = error?.message === 'self_review_forbidden' ? w.selfReview : w.error; buttons.forEach(item => { item.disabled = false; }); } }
   }));
 }
-export async function renderPublicMaterials(root, w, esc, isCurrent = () => true) {
-  // This public panel shares the builder shell with private editor state.
-  // A response from an old account, route or render epoch may not repaint it
-  // or leave behind an active answer form after its principal has changed.
-  const active = () => {
-    try { return root?.isConnected !== false && isCurrent() === true; }
-    catch { return false; }
-  };
-  if (!active()) return;
-  try {
-    const {items} = await api('/api/material-review?view=public');
-    if (!active()) return;
-    root.innerHTML = `<h2>${w.publicTitle}</h2>${items.length ? items.map(item=>`<article class="card"><h3>${esc(item.title)}</h3><p>${esc(item.reference)}</p><p>${esc(item.provenance)}</p><form class="public-material" data-id="${esc(item.id)}"><fieldset><legend>${esc(item.prompt)}</legend>${item.options.map((option,index)=>`<label class="option"><input type="radio" name="choice" value="${index}" required><span>${esc(option)}</span></label>`).join('')}</fieldset><button class="button" type="submit">${w.check}</button><p role="status"></p></form></article>`).join('') : `<p>${w.empty}</p>`}`;
-    root.querySelectorAll('.public-material').forEach(form => form.onsubmit = async event => {
+function publicMaterialMarkup(items, w, esc) {
+  return items.map(item=>`<article class="card"><h3>${esc(item.title)}</h3><p>${esc(item.reference)}</p><p>${esc(item.provenance)}</p><form class="public-material" data-id="${esc(item.id)}"><fieldset><legend>${esc(item.prompt)}</legend>${item.options.map((option,index)=>`<label class="option"><input type="radio" name="choice" value="${index}" required><span>${esc(option)}</span></label>`).join('')}</fieldset><button class="button" type="submit">${w.check}</button><p role="status"></p></form></article>`).join('');
+}
+// Concurrent reads for one mounted public-material panel must be ordered by
+// the request that STARTED last, not whichever fetch happens to finish last.
+// Keep the principal/route predicate as an independent authority boundary.
+const publicMaterialRenderEpoch = new WeakMap();
+
+function attachPublicMaterialAnswers(root, w, active) {
+  root.querySelectorAll('.public-material').forEach(form => form.onsubmit = async event => {
       event.preventDefault();
       if (!active() || form.isConnected === false) return;
       const status=form.querySelector('[role="status"]'), button=form.querySelector('button');
@@ -144,6 +140,27 @@ export async function renderPublicMaterials(root, w, esc, isCurrent = () => true
         }
       }
     });
+}
+export async function renderPublicMaterials(root, w, esc, isCurrent = () => true) {
+  if (!root || (typeof root !== 'object' && typeof root !== 'function')) return;
+  // The same principal may issue successive refreshes before an earlier HTTP
+  // response settles. Only the newest call may install results, errors, retry
+  // controls, or answer handlers for this root.
+  const epoch = (publicMaterialRenderEpoch.get(root) || 0) + 1;
+  publicMaterialRenderEpoch.set(root, epoch);
+  const active = () => {
+    try {
+      return root.isConnected !== false &&
+        publicMaterialRenderEpoch.get(root) === epoch &&
+        isCurrent() === true;
+    } catch { return false; }
+  };
+  if (!active()) return;
+  try {
+    const {items} = await api('/api/material-review?view=public');
+    if (!active()) return;
+    root.innerHTML = `<h2>${w.publicTitle}</h2>${items.length ? publicMaterialMarkup(items,w,esc) : `<p>${w.empty}</p>`}`;
+    attachPublicMaterialAnswers(root, w, active);
   } catch {
     if (!active()) return;
     // Public-load failure is recoverable without leaving the editor/reader;
@@ -154,10 +171,90 @@ export async function renderPublicMaterials(root, w, esc, isCurrent = () => true
       if (!active() || retry.isConnected === false || retry.disabled) return;
       const hadFocus=wasEditorialControlFocused(root,retry);
       retry.disabled=true;
+      // Starting the retry intentionally retires this failed render's epoch.
+      // Restore keyboard focus only if the retry is still the newest view;
+      // a later navigation/refresh must not have its focus stolen.
+      const retryEpoch=epoch+1;
       await renderPublicMaterials(root,w,esc,isCurrent);
-      if (active()) restoreEditorialFocus(root,hadFocus,'h2');
+      let currentRetry=false;
+      try {
+        currentRetry=root.isConnected !== false &&
+          publicMaterialRenderEpoch.get(root) === retryEpoch &&
+          isCurrent() === true;
+      } catch {}
+      if (currentRetry) restoreEditorialFocus(root,hadFocus,'h2');
     };
   }
+}
+
+const LIBRARY_SEARCH = {
+  uk: {label:'Пошук матеріалів', hint:'Шукайте за назвою, запитанням, біблійним посиланням або джерелом.', submit:'Шукати', more:'Продовжити пошук', heading:'Результати пошуку', loading:'Пошук матеріалів…', empty:'Збігів не знайдено.', end:'Більше збігів немає.', batchEmpty:'У цій частині збігів немає. Продовжте пошук.', moreHint:'Пошук можна продовжити.', found:n=>`Знайдено в цій частині: ${n}.`},
+  ru: {label:'Поиск материалов', hint:'Ищите по названию, вопросу, библейской ссылке или источнику.', submit:'Искать', more:'Продолжить поиск', heading:'Результаты поиска', loading:'Поиск материалов…', empty:'Совпадений не найдено.', end:'Больше совпадений нет.', batchEmpty:'В этой части совпадений нет. Продолжите поиск.', moreHint:'Поиск можно продолжить.', found:n=>`Найдено в этой части: ${n}.`},
+  en: {label:'Search materials', hint:'Search by title, question, Bible reference, or source.', submit:'Search', more:'Continue search', heading:'Search results', loading:'Searching materials…', empty:'No matches found.', end:'No more matches.', batchEmpty:'No matches in this part. Continue searching.', moreHint:'You can continue searching.', found:n=>`Found in this part: ${n}.`},
+};
+
+// The public library uses the reviewed-material authority, not a separate
+// catalogue. Search terms stay in the request body, not a URL or browser history.
+export async function renderReviewedLibrary(root, w, lang, esc, isCurrent = () => true) {
+  const copy=LIBRARY_SEARCH[lang] || LIBRARY_SEARCH.uk;
+  const active=()=>{ try { return root?.isConnected !== false && isCurrent() === true; } catch { return false; } };
+  if (!active()) return;
+  root.innerHTML=`<form class="library-search"><label class="account-field"><span>${copy.label}</span><input name="query" type="search" maxlength="100" aria-describedby="library-search-help"></label><p id="library-search-help">${copy.hint}</p><button class="button" type="submit">${copy.submit}</button></form><p class="library-search-status" role="status"></p><div class="library-search-results"></div><button class="button library-search-more" type="button" hidden>${copy.more}</button>`;
+  const form=root.querySelector('.library-search'), input=form?.querySelector('input'), submit=form?.querySelector('button');
+  const status=root.querySelector('.library-search-status'), results=root.querySelector('.library-search-results'), more=root.querySelector('.library-search-more');
+  if (!form || !input || !status || !results || !more) return;
+  let requestEpoch=0, searchEpoch=0, nextCursor=null, currentQuery='', page=0, loading=false;
+  async function load(query, cursor, trigger) {
+    if (!active()) return;
+    const request=++requestEpoch, search=searchEpoch;
+    const doc=root.ownerDocument, hadFocus=Boolean(trigger && doc?.activeElement===trigger);
+    loading=true;
+    status.textContent=copy.loading;
+    try {
+      const data=await post({action:'librarySearch',query,cursor});
+      if (!active() || request!==requestEpoch || search!==searchEpoch) return;
+      const validCursor=data?.nextCursor===null || (data?.nextCursor &&
+        typeof data.nextCursor.id==='string' && data.nextCursor.id.length>0 && data.nextCursor.id.length<=100 &&
+        typeof data.nextCursor.submittedAt==='string' && data.nextCursor.submittedAt.length>0 && data.nextCursor.submittedAt.length<=100);
+      if (!Array.isArray(data?.items) || data.items.length>12 || !validCursor ||
+        !data.items.every(item=>item && ['id','title','reference','prompt','provenance'].every(key=>typeof item[key]==='string') &&
+          Array.isArray(item.options) && item.options.length>=2 && item.options.length<=8 && item.options.every(value=>typeof value==='string')))
+        throw Error('invalid library response');
+      nextCursor=data.nextCursor;
+      currentQuery=query;
+      page++;
+      const headingId=`library-search-page-${page}`;
+      const message=data.items.length ? `${copy.found(data.items.length)} ${nextCursor ? copy.moreHint : ''}` :
+        (nextCursor ? copy.batchEmpty : page===1 ? copy.empty : copy.end);
+      results.insertAdjacentHTML('beforeend',`<section aria-labelledby="${headingId}"><h2 id="${headingId}" tabindex="-1">${copy.heading} ${page}</h2>${data.items.length ? publicMaterialMarkup(data.items,w,esc) : `<p>${esc(message)}</p>`}</section>`);
+      attachPublicMaterialAnswers(results,w,()=>active() && search===searchEpoch);
+      status.textContent=message;
+      const shouldFocus=hadFocus && doc?.activeElement===trigger;
+      more.hidden=!nextCursor;
+      // Keep the next batch in the keyboard reading order, but do not steal
+      // focus if the reader moved elsewhere while the request was in flight.
+      // Capture this before hiding the final-page button, which can itself
+      // cause the browser to move focus to the document body.
+      if (shouldFocus) {
+        try { results.querySelector(`#${headingId}`)?.focus(); } catch { /* Results are still usable if focus fails. */ }
+      }
+    } catch {
+      if (active() && request===requestEpoch && search===searchEpoch) status.textContent=w.error;
+    } finally {
+      if (request===requestEpoch) loading=false;
+    }
+  }
+  form.onsubmit=event=>{
+    event.preventDefault();
+    if (!active()) return;
+    searchEpoch++; page=0; nextCursor=null; more.hidden=true; results.innerHTML='';
+    void load(input.value.trim(),null,submit);
+  };
+  more.onclick=()=>{
+    if (!active() || loading || !nextCursor) return;
+    void load(currentQuery,nextCursor,more);
+  };
+  await load('',null,null);
 }
 export async function loadReviewData(isEditor) {
   const [mine, queue, history] = await Promise.all([api('/api/material-review?view=mine'), isEditor ? api('/api/material-review?view=queue') : Promise.resolve({items:[]}), isEditor ? api('/api/material-review?view=history') : Promise.resolve({items:[]})]);

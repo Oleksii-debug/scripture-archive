@@ -2305,6 +2305,11 @@ function forgetActiveAttemptIf(attemptId) {
 }
 
 async function getSession() {
+  // A startup read may finish after login or another session refresh. Only
+  // the newest request for the still-current in-tab principal may publish.
+  const requestEpoch=(getSession._epoch=(getSession._epoch||0)+1);
+  const initialPrincipal=state.user,initialSessionEpoch=state.sessionEpoch||0;
+  const current=()=>getSession._epoch===requestEpoch&&state.user===initialPrincipal&&(state.sessionEpoch||0)===initialSessionEpoch;
   let authenticatedUser;
   try {
     const response = await fetch("/api/account?action=me", { cache: "no-store" });
@@ -2318,6 +2323,7 @@ async function getSession() {
           typeof data.user.id !== "string" || !data.user.id))) throw Error("account_unavailable");
     authenticatedUser = data.user;
   } catch {
+    if(!current())return state.user;
     // Prevent uncertain server identity from granting access to private UI;
     // retain the device cache and ownership marker for a later verified retry.
     state.user = null;
@@ -2325,6 +2331,7 @@ async function getSession() {
     state.progressSyncStatus = "unavailable";
     throw Error("account_unavailable");
   }
+  if(!current())return state.user;
   // The server response, not browser storage availability, decides identity.
   // If the old owner's local progress cannot be safely read/cleared, discard
   // in-tab personal state and prohibit sending stale local reading to the server.
@@ -2789,9 +2796,9 @@ function renderLockedChapter(book, chapter) {
 }
 
 const bookmarkCopy = {
-  uk: { title: "Закладки", save: "Додати цю главу", remove: "Прибрати цю главу", empty: "У цьому виданні закладок ще немає.", login: "Увійдіть, щоб зберігати закладки в обліковому записі.", error: "Не вдалося завантажити або зберегти закладки. Спробуйте ще раз." },
-  ru: { title: "Закладки", save: "Добавить эту главу", remove: "Убрать эту главу", empty: "В этом издании пока нет закладок.", login: "Войдите, чтобы сохранять закладки в учётной записи.", error: "Не удалось загрузить или сохранить закладки. Попробуйте ещё раз." },
-  en: { title: "Bookmarks", save: "Bookmark this chapter", remove: "Remove this bookmark", empty: "No bookmarks in this edition yet.", login: "Sign in to save bookmarks to your account.", error: "Could not load or save bookmarks. Please try again." },
+  uk: { title: "Закладки", save: "Додати цю главу", remove: "Прибрати цю главу", empty: "У цьому виданні закладок ще немає.", login: "Увійдіть, щоб зберігати закладки в обліковому записі.", error: "Не вдалося завантажити або зберегти закладки. Спробуйте ще раз.", partial: "Деякі збережені закладки пошкоджені й не показані. Список неповний; записи не видалено.", recoveryTitle: "Пошкоджені записи для відновлення", recoveryAction: "Перевірити та видалити", recoveryConfirm: "Безповоротно видалити лише цей пошкоджений запис?", recoveryError: "Не вдалося підтвердити видалення. Оновіть список; інші закладки залишилися без змін." },
+  ru: { title: "Закладки", save: "Добавить эту главу", remove: "Убрать эту главу", empty: "В этом издании пока нет закладок.", login: "Войдите, чтобы сохранять закладки в учётной записи.", error: "Не удалось загрузить или сохранить закладки. Попробуйте ещё раз.", partial: "Некоторые сохранённые закладки повреждены и не показаны. Список неполный; записи не удалены.", recoveryTitle: "Повреждённые записи для восстановления", recoveryAction: "Проверить и удалить", recoveryConfirm: "Безвозвратно удалить только эту повреждённую запись?", recoveryError: "Удаление не подтверждено. Обновите список; остальные закладки не изменены." },
+  en: { title: "Bookmarks", save: "Bookmark this chapter", remove: "Remove this bookmark", empty: "No bookmarks in this edition yet.", login: "Sign in to save bookmarks to your account.", error: "Could not load or save bookmarks. Please try again.", partial: "Some saved bookmarks are damaged and are not shown. This list is incomplete; the records have not been deleted.", recoveryTitle: "Damaged entries to recover", recoveryAction: "Review and remove", recoveryConfirm: "Permanently remove only this damaged entry?", recoveryError: "Deletion was not confirmed. Refresh the list; other bookmarks were not changed." },
 };
 
 async function mountReaderBookmarks(meta, chapter, edition, books) {
@@ -2822,7 +2829,39 @@ async function mountReaderBookmarks(meta, chapter, edition, books) {
         Number.isSafeInteger(sourceBook?.chapters) && item.chapter <= sourceBook.chapters;
     });
     const saved = items.some(item => item.book === meta.code && item.chapter === chapter);
-    panel.innerHTML = `<h2>${copy.title}</h2><button class="button" type="button" id="toggle-bookmark" aria-pressed="${saved}">${saved ? copy.remove : copy.save}</button><p role="status" id="bookmark-status"></p>${items.length ? `<ul>${items.map(item => { const book = books.find(value => value.code === item.book); return `<li><a href="/reader/${encodeURIComponent(item.book)}/${item.chapter}">${esc(bookTitle(book))} ${item.chapter}</a></li>`; }).join("")}</ul>` : `<p>${copy.empty}</p>`}`;
+    // Server-issued recovery references never become navigation links or HTML
+    // attributes. Descriptions are untrusted legacy database text.
+    const recoverable = Array.isArray(data.invalid_bookmarks)
+      ? data.invalid_bookmarks.filter(entry => typeof entry?.reference === "string"
+        && /^[1-9][0-9]{0,15}\.[0-9a-f]{64}$/.test(entry.reference)
+        && typeof entry.description === "string" && entry.description.length <= 256) : [];
+    const recoveryMarkup = recoverable.length ? `<section aria-label="${copy.recoveryTitle}"><h3>${copy.recoveryTitle}</h3><ul>${recoverable.map((entry, index) => `<li><span>${esc(entry.description)}</span> <button class="button" type="button" data-recovery-index="${index}">${copy.recoveryAction}</button></li>`).join("")}</ul></section>` : "";
+    panel.innerHTML = `<h2>${copy.title}</h2>${data.warning === "partial_bookmarks" ? `<p role="alert">${copy.partial}</p>` : ""}<button class="button" type="button" id="toggle-bookmark" aria-pressed="${saved}">${saved ? copy.remove : copy.save}</button><p role="status" id="bookmark-status" aria-live="polite"></p>${items.length ? `<ul>${items.map(item => { const book = books.find(value => value.code === item.book); return `<li><a href="/reader/${encodeURIComponent(item.book)}/${item.chapter}">${esc(bookTitle(book))} ${item.chapter}</a></li>`; }).join("")}</ul>` : `<p>${data.warning === "partial_bookmarks" ? "" : copy.empty}</p>`}${recoveryMarkup}`;
+    panel.querySelectorAll?.("[data-recovery-index]").forEach(button => {
+      const index = Number(button.dataset.recoveryIndex);
+      const entry = recoverable[index];
+      if (!entry) return;
+      button.addEventListener("click", async () => {
+        if (!isCurrent() || globalThis.confirm?.(copy.recoveryConfirm + "\n" + entry.description) !== true || !isCurrent()) return;
+        button.disabled = true;
+        try {
+          const response = await fetch("/api/bookmarks", {
+            method: "DELETE", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ recovery_ref: entry.reference }),
+          });
+          const receipt = await response.json();
+          if (!response.ok || receipt?.ok !== true) throw Error("bookmark_recovery_failed");
+          if (!isCurrent()) return;
+          await load();
+          if (isCurrent()) panel.querySelector("#toggle-bookmark")?.focus();
+        } catch {
+          if (!isCurrent()) return;
+          const status = panel.querySelector("#bookmark-status");
+          if (status) status.textContent = copy.recoveryError;
+          button.disabled = false;
+        }
+      });
+    });
     panel.querySelector("#toggle-bookmark").addEventListener("click", async event => {
       if (!isCurrent()) return;
       const button = event.currentTarget;
@@ -3462,6 +3501,46 @@ async function renderGroup(groupId) {
       if (button.isConnected) button.disabled = false;
     }
   }
+  const settingsForm = document.querySelector('#group-settings-form');
+  if (settingsForm) {
+    const keys=['name','church','country','city','description','visibility','rosterVisibility'];
+    const expected=Object.fromEntries(keys.map(key=>[key,group[key]]));
+    const settingsStatus=document.querySelector('#group-settings-status');
+    const save=settingsForm.querySelector('button[type="submit"]');
+    let busy=false;
+    const current=()=>settingsForm.isConnected!==false&&groupPageCurrent(`groups/${groupId}`,principal);
+    settingsForm.onsubmit=async event=>{
+      event.preventDefault();
+      if(busy||!current())return;
+      const form=new FormData(settingsForm),settings=Object.fromEntries(form);
+      for(const key of ['church','country','city','description'])if(settings[key]==='')settings[key]=null;
+      if(expected.visibility!=='public'&&settings.visibility==='public'&&!window.confirm(manageCopy.publishConfirm))return;
+      if(!current())return;
+      busy=true;save.disabled=true;settingsStatus.textContent='';
+      try {
+        const result=await groupRequest('settings','POST',{groupId:group.id,expected,settings});
+        if(!current())return;
+        if(result?.ok!==true)throw Error('unconfirmed');
+        await renderGroup(group.id);
+        if(!groupPageCurrent(`groups/${groupId}`,principal))return;
+        document.querySelector('#group-settings-summary')?.focus({preventScroll:true});
+        announce(manageCopy.settingsSaved);
+      } catch(error) {
+        if(current())settingsStatus.textContent=error.message==='group_settings_changed_or_forbidden'?manageCopy.settingsConflict:manageCopy.settingsUnconfirmed;
+      } finally {
+        busy=false;if(save.isConnected!==false)save.disabled=false;
+      }
+    };
+    document.querySelector('#reload-group-settings').onclick=async()=>{
+      if(busy||!current()||!window.confirm(manageCopy.reloadConfirm)||!current())return;
+      busy=true;
+      try {
+        await renderGroup(group.id);
+        if(groupPageCurrent(`groups/${groupId}`,principal))document.querySelector('#group-settings-summary')?.focus({preventScroll:true});
+      } catch {if(current())settingsStatus.textContent=manageCopy.settingsUnconfirmed;}
+      finally {busy=false;}
+    };
+  }
   const leaveButton = document.querySelector('#leave-group');
   if (leaveButton) leaveButton.onclick = () => {
     if (leaveButton.isConnected!==false && groupPageCurrent(`groups/${groupId}`,principal) && window.confirm(manageCopy.leaveConfirm)) void manageGroup('leave', {}, leaveButton, manageCopy.left);
@@ -3910,6 +3989,9 @@ async function syncProgress() {
 }
 function clearPersonalProgress() {
   state.progressSyncStatus=null;
+  // Also retire in-flight identity reads, even for null→null transitions
+  // such as a password reset while a startup session request is pending.
+  state.sessionEpoch=(state.sessionEpoch||0)+1;
   syncProgress._epoch=(syncProgress._epoch||0)+1;
   forgetActiveAttempt();
   state.missionProgress={index:0,correct:[],complete:false};
@@ -3938,14 +4020,14 @@ function field(name, label, type = "text", extra = "") {
 function renderAccount() {
   setActiveNav("account");
   const copy = {
-    uk: { title:"Обліковий запис",intro:"Підтверджена пошта захищає доступ, а серверне збереження повертає ваш прогрес на іншому пристрої.",login:"Увійти",register:"Створити обліковий запис",forgot:"Забули пароль?",reset:"Встановити новий пароль",change:"Змінити пароль",currentPassword:"Поточний пароль",newPassword:"Новий пароль",email:"Електронна пошта",password:"Пароль",passwordRule:"Щонайменше 12 символів",age:"Вік",denomination:"Деномінація або назва церкви",children:"Чи є діти",yes:"Так",no:"Ні",send:"Надіслати посилання",verification:"Перевірте пошту та відкрийте одноразове посилання підтвердження.",verified:"Електронну адресу підтверджено. Тепер увійдіть.",resetSent:"Якщо обліковий запис існує, запит на відновлення пароля прийнято. Перевірте пошту і папку «Спам». Це повідомлення не підтверджує доставку листа.",resetDone:"Пароль змінено. Інші активні сесії завершено. Увійдіть з новим паролем.",saved:"Профіль і прогрес синхронізуються між пристроями.",edit:"Редагувати сайт",visibility:"Публічна видимість",visibilityHelp:"Усі чутливі поля залишаються приватними. Окремо можна дозволити лише наведені поля.",publicFirst:"Показувати ім’я",publicLast:"Показувати прізвище",publicChurch:"Показувати назву церкви",publicProgress:"Показувати навчальний поступ",save:"Зберегти",delete:"Видалити обліковий запис",deleteHelp:"Буде видалено профіль, особистий прогрес і групи, якими ви володієте. У чужих групах залишаться лише знеособлені підсумкові числа й дата зустрічі, без вашого ідентифікатора та написаного вами підсумку. Надіслані листи й резервні копії не видаляються цією дією.",confirmDelete:"Я розумію, що дані буде видалено",logout:"Вийти",error:"Не вдалося виконати дію. Перевірте дані та спробуйте ще раз." },
-    ru: { title:"Учётная запись",intro:"Подтверждённая почта защищает доступ, а серверное сохранение возвращает прогресс на другом устройстве.",login:"Войти",register:"Создать учётную запись",forgot:"Забыли пароль?",reset:"Установить новый пароль",change:"Изменить пароль",currentPassword:"Текущий пароль",newPassword:"Новый пароль",email:"Электронная почта",password:"Пароль",passwordRule:"Не менее 12 символов",age:"Возраст",denomination:"Деноминация или название церкви",children:"Есть ли дети",yes:"Да",no:"Нет",send:"Отправить ссылку",verification:"Проверьте почту и откройте одноразовую ссылку подтверждения.",verified:"Электронный адрес подтверждён. Теперь войдите.",resetSent:"Если учётная запись существует, запрос на восстановление пароля принят. Проверьте почту и папку «Спам». Это сообщение не подтверждает доставку письма.",resetDone:"Пароль изменён. Другие активные сессии завершены. Войдите с новым паролем.",saved:"Профиль и прогресс синхронизируются между устройствами.",edit:"Редактировать сайт",visibility:"Публичная видимость",visibilityHelp:"Все чувствительные поля остаются приватными. Отдельно можно разрешить только перечисленные поля.",publicFirst:"Показывать имя",publicLast:"Показывать фамилию",publicChurch:"Показывать название церкви",publicProgress:"Показывать учебный прогресс",save:"Сохранить",delete:"Удалить учётную запись",deleteHelp:"Будут удалены профиль, личный прогресс и группы, которыми вы владеете. В чужих группах сохранятся только обезличенные результаты и дата встречи, без вашего идентификатора и написанного вами итога. Отправленные письма и резервные копии этой операцией не удаляются.",confirmDelete:"Я понимаю, что данные будут удалены",logout:"Выйти",error:"Не удалось выполнить действие. Проверьте данные и попробуйте снова." },
-    en: { title:"Account",intro:"Verified email protects access, and server-side storage restores your progress on another device.",login:"Sign in",register:"Create account",forgot:"Forgot your password?",reset:"Create a new password",change:"Change password",currentPassword:"Current password",newPassword:"New password",email:"Email",password:"Password",passwordRule:"At least 12 characters",age:"Age",denomination:"Denomination or church name",children:"Do you have children?",yes:"Yes",no:"No",send:"Send one-time link",verification:"Check your inbox and open the one-time verification link.",verified:"Your email is verified. You can now sign in.",resetSent:"If the account exists, a password reset was requested. Check your inbox and spam folder. This message does not confirm email delivery.",resetDone:"Password changed. Other active sessions have been ended. Sign in with the new password.",saved:"Your profile and progress synchronize across devices.",edit:"Edit site",visibility:"Public visibility",visibilityHelp:"Sensitive fields remain private. You may separately allow only the fields listed below.",publicFirst:"Show first name",publicLast:"Show last name",publicChurch:"Show church name",publicProgress:"Show learning progress",save:"Save",delete:"Delete account",deleteHelp:"This removes your profile, personal progress and groups you own. Meetings you authored in other groups retain only de-identified totals and dates, without your account ID or written reflection. Previously sent emails and backups are not erased by this action.",confirmDelete:"I understand that the data will be deleted",logout:"Sign out",error:"The action could not be completed. Check the details and try again." },
+    uk: { title:"Обліковий запис",intro:"Підтверджена пошта захищає доступ, а серверне збереження повертає ваш прогрес на іншому пристрої.",login:"Увійти",register:"Створити обліковий запис",forgot:"Забули пароль?",reset:"Встановити новий пароль",change:"Змінити пароль",currentPassword:"Поточний пароль",newPassword:"Новий пароль",email:"Електронна пошта",password:"Пароль",passwordRule:"Щонайменше 12 символів",age:"Вік",denomination:"Деномінація або назва церкви",children:"Чи є діти",yes:"Так",no:"Ні",send:"Надіслати посилання",verification:"Перевірте пошту та відкрийте одноразове посилання підтвердження.",verified:"Електронну адресу підтверджено. Тепер увійдіть.",resetSent:"Якщо обліковий запис існує, запит на відновлення пароля прийнято. Перевірте пошту і папку «Спам». Це повідомлення не підтверджує доставку листа.",resetDone:"Пароль змінено. Інші активні сесії завершено. Увійдіть з новим паролем.",saved:"Профіль і прогрес синхронізуються між пристроями.",edit:"Редагувати сайт",visibility:"Публічна видимість",visibilityHelp:"Усі чутливі поля залишаються приватними. Окремо можна дозволити лише наведені поля.",publicFirst:"Показувати ім’я",publicLast:"Показувати прізвище",publicChurch:"Показувати назву церкви",publicProgress:"Показувати навчальний поступ",save:"Зберегти",delete:"Видалити обліковий запис",deleteHelp:"Буде видалено профіль, особистий прогрес і групи, якими ви володієте. У чужих групах залишаться лише знеособлені підсумкові числа й дата зустрічі, без вашого ідентифікатора та написаного вами підсумку. Локальні позначки Академії в браузерах не видаляються автоматично: очистіть їх на сторінці курсів у кожному браузері до видалення акаунта. Надіслані листи й резервні копії не видаляються цією дією.",confirmDelete:"Я розумію, що дані буде видалено",logout:"Вийти",error:"Не вдалося виконати дію. Перевірте дані та спробуйте ще раз." },
+    ru: { title:"Учётная запись",intro:"Подтверждённая почта защищает доступ, а серверное сохранение возвращает прогресс на другом устройстве.",login:"Войти",register:"Создать учётную запись",forgot:"Забыли пароль?",reset:"Установить новый пароль",change:"Изменить пароль",currentPassword:"Текущий пароль",newPassword:"Новый пароль",email:"Электронная почта",password:"Пароль",passwordRule:"Не менее 12 символов",age:"Возраст",denomination:"Деноминация или название церкви",children:"Есть ли дети",yes:"Да",no:"Нет",send:"Отправить ссылку",verification:"Проверьте почту и откройте одноразовую ссылку подтверждения.",verified:"Электронный адрес подтверждён. Теперь войдите.",resetSent:"Если учётная запись существует, запрос на восстановление пароля принят. Проверьте почту и папку «Спам». Это сообщение не подтверждает доставку письма.",resetDone:"Пароль изменён. Другие активные сессии завершены. Войдите с новым паролем.",saved:"Профиль и прогресс синхронизируются между устройствами.",edit:"Редактировать сайт",visibility:"Публичная видимость",visibilityHelp:"Все чувствительные поля остаются приватными. Отдельно можно разрешить только перечисленные поля.",publicFirst:"Показывать имя",publicLast:"Показывать фамилию",publicChurch:"Показывать название церкви",publicProgress:"Показывать учебный прогресс",save:"Сохранить",delete:"Удалить учётную запись",deleteHelp:"Будут удалены профиль, личный прогресс и группы, которыми вы владеете. В чужих группах сохранятся только обезличенные результаты и дата встречи, без вашего идентификатора и написанного вами итога. Локальные отметки Академии в браузерах не удаляются автоматически: очистите их на странице курсов в каждом браузере до удаления аккаунта. Отправленные письма и резервные копии этой операцией не удаляются.",confirmDelete:"Я понимаю, что данные будут удалены",logout:"Выйти",error:"Не удалось выполнить действие. Проверьте данные и попробуйте снова." },
+    en: { title:"Account",intro:"Verified email protects access, and server-side storage restores your progress on another device.",login:"Sign in",register:"Create account",forgot:"Forgot your password?",reset:"Create a new password",change:"Change password",currentPassword:"Current password",newPassword:"New password",email:"Email",password:"Password",passwordRule:"At least 12 characters",age:"Age",denomination:"Denomination or church name",children:"Do you have children?",yes:"Yes",no:"No",send:"Send one-time link",verification:"Check your inbox and open the one-time verification link.",verified:"Your email is verified. You can now sign in.",resetSent:"If the account exists, a password reset was requested. Check your inbox and spam folder. This message does not confirm email delivery.",resetDone:"Password changed. Other active sessions have been ended. Sign in with the new password.",saved:"Your profile and progress synchronize across devices.",edit:"Edit site",visibility:"Public visibility",visibilityHelp:"Sensitive fields remain private. You may separately allow only the fields listed below.",publicFirst:"Show first name",publicLast:"Show last name",publicChurch:"Show church name",publicProgress:"Show learning progress",save:"Save",delete:"Delete account",deleteHelp:"This removes your profile, personal progress and groups you own. Meetings you authored in other groups retain only de-identified totals and dates, without your account ID or written reflection. Local Academy markers in browsers are not removed automatically: clear them on the courses page in each browser before deleting the account. Previously sent emails and backups are not erased by this action.",confirmDelete:"I understand that the data will be deleted",logout:"Sign out",error:"The action could not be completed. Check the details and try again." },
   }[state.lang];
   Object.assign(copy, {
-    uk: {mailDelayed:"Обліковий запис створено, але лист підтвердження поки не вдалося надіслати. Спробуйте надіслати його повторно.",resend:"Надіслати лист повторно",requested:"Запит прийнято. Перевірте пошту.",emailInUse:"Цю адресу вже зареєстровано. Увійдіть або скористайтеся відновленням пароля.",rateLimited:"Забагато спроб. Зачекайте й повторіть пізніше.",resetSent:"Якщо ця адреса належить підтвердженому обліковому запису, ви отримаєте лист для відновлення доступу."},
-    ru: {mailDelayed:"Учётная запись создана, но письмо подтверждения пока не удалось отправить. Попробуйте отправить его повторно.",resend:"Отправить письмо повторно",requested:"Запрос принят. Проверьте почту.",emailInUse:"Этот адрес уже зарегистрирован. Войдите или воспользуйтесь восстановлением пароля.",rateLimited:"Слишком много попыток. Подождите и попробуйте позже.",resetSent:"Если этот адрес принадлежит подтверждённой учётной записи, вы получите письмо для восстановления доступа."},
-    en: {mailDelayed:"Your account was created, but the verification email could not be sent yet. Try sending it again.",resend:"Resend verification email",requested:"Request accepted. Check your email.",emailInUse:"This email is already registered. Sign in or reset your password.",rateLimited:"Too many attempts. Please wait and try again later.",resetSent:"If this address belongs to a verified account, you will receive a password reset email."}
+    uk: {mailDelayed:"Обліковий запис створено, але лист підтвердження поки не вдалося надіслати. Спробуйте надіслати його повторно.",resend:"Надіслати лист повторно",requested:"Запит прийнято. Перевірте пошту.",emailInUse:"Цю адресу вже зареєстровано. Увійдіть або скористайтеся відновленням пароля.",rateLimited:"Забагато спроб. Зачекайте й повторіть пізніше."},
+    ru: {mailDelayed:"Учётная запись создана, но письмо подтверждения пока не удалось отправить. Попробуйте отправить его повторно.",resend:"Отправить письмо повторно",requested:"Запрос принят. Проверьте почту.",emailInUse:"Этот адрес уже зарегистрирован. Войдите или воспользуйтесь восстановлением пароля.",rateLimited:"Слишком много попыток. Подождите и попробуйте позже."},
+    en: {mailDelayed:"Your account was created, but the verification email could not be sent yet. Try sending it again.",resend:"Resend verification email",requested:"Request accepted. Check your email.",emailInUse:"This email is already registered. Sign in or reset your password.",rateLimited:"Too many attempts. Please wait and try again later."}
   }[state.lang]);
   copy.sessionUnavailable = {
     uk: "Сервер не підтвердив стан входу. Ваш локальний прогрес збережено; повторіть перевірку з'єднання.",
@@ -4002,8 +4084,10 @@ function renderAccount() {
     return;
   }
   if (state.user.profileComplete) {
+    let accountPrincipal=state.user;
+    const accountCurrent=()=>state.user===accountPrincipal&&!state.sessionUnavailable;
     const visibility=state.user.visibility||{};
-    shell(`<article class="prose account-dashboard"><p class="eyebrow">${t("account")}</p><h1>${esc(state.user.firstName)} ${esc(state.user.lastName)}</h1><p>${esc(state.user.email)}</p><div class="notice success">${copy.saved}</div><div class="action-row"><a class="button primary" href="/missions">${t("continue")}</a><a class="button" href="/groups">${t("myGroups")}</a>${state.user.isOwner?`<a class="button" href="/editor">${copy.edit}</a>`:""}<button class="button" id="logout-button">${copy.logout}</button></div><section class="profile-controls"><h2>${copy.visibility}</h2><p>${copy.visibilityHelp}</p><form id="visibility-form" class="account-form"><label class="account-check"><input name="firstName" type="checkbox" ${visibility.firstName?"checked":""}><span>${copy.publicFirst}</span></label><label class="account-check"><input name="lastName" type="checkbox" ${visibility.lastName?"checked":""}><span>${copy.publicLast}</span></label><label class="account-check"><input name="church" type="checkbox" ${visibility.church?"checked":""}><span>${copy.publicChurch}</span></label><label class="account-check"><input name="progress" type="checkbox" ${visibility.progress?"checked":""}><span>${copy.publicProgress}</span></label><button class="button">${copy.save}</button><p id="visibility-state" role="status"></p></form></section>${state.user.authProvider==="password"?`<details class="profile-controls"><summary>${copy.change}</summary><form id="password-form" class="account-form">${field("currentPassword",copy.currentPassword,"password",'autocomplete="current-password" required')}${field("newPassword",copy.newPassword,"password",'autocomplete="new-password" minlength="12" maxlength="128" required')}<small>${copy.passwordRule}</small><button class="button">${copy.change}</button><p id="password-state" role="status"></p></form></details><details class="danger-zone"><summary>${copy.delete}</summary><p>${copy.deleteHelp}</p><form id="delete-form" class="account-form">${field("password",copy.password,"password",'autocomplete="current-password" required')}<label class="account-check"><input name="confirm" type="checkbox" required><span>${copy.confirmDelete}</span></label><button class="button">${copy.delete}</button><p id="delete-state" role="status"></p></form></details>`:""}</article>`);
+    shell(`<article class="prose account-dashboard"><p class="eyebrow">${t("account")}</p><h1>${esc(state.user.firstName)} ${esc(state.user.lastName)}</h1><p>${esc(state.user.email)}</p><div class="notice success">${copy.saved}</div><div class="action-row"><a class="button primary" href="/missions">${t("continue")}</a><a class="button" href="/groups">${t("myGroups")}</a>${state.user.isOwner?`<a class="button" href="/editor">${copy.edit}</a>`:""}<button class="button" id="logout-button">${copy.logout}</button></div><p id="account-logout-state" role="alert"></p><section class="profile-controls"><h2>${copy.visibility}</h2><p>${copy.visibilityHelp}</p><form id="visibility-form" class="account-form"><label class="account-check"><input name="firstName" type="checkbox" ${visibility.firstName?"checked":""}><span>${copy.publicFirst}</span></label><label class="account-check"><input name="lastName" type="checkbox" ${visibility.lastName?"checked":""}><span>${copy.publicLast}</span></label><label class="account-check"><input name="church" type="checkbox" ${visibility.church?"checked":""}><span>${copy.publicChurch}</span></label><label class="account-check"><input name="progress" type="checkbox" ${visibility.progress?"checked":""}><span>${copy.publicProgress}</span></label><button class="button">${copy.save}</button><p id="visibility-state" role="status"></p></form></section>${state.user.authProvider==="password"?`<details class="profile-controls"><summary>${copy.change}</summary><form id="password-form" class="account-form">${field("currentPassword",copy.currentPassword,"password",'autocomplete="current-password" required')}${field("newPassword",copy.newPassword,"password",'autocomplete="new-password" minlength="12" maxlength="128" required')}<small>${copy.passwordRule}</small><button class="button">${copy.change}</button><p id="password-state" role="status"></p></form></details><details class="danger-zone"><summary>${copy.delete}</summary><p>${copy.deleteHelp}</p><form id="delete-form" class="account-form">${field("password",copy.password,"password",'autocomplete="current-password" required')}<label class="account-check"><input name="confirm" type="checkbox" required><span>${copy.confirmDelete}</span></label><button class="button">${copy.delete}</button><p id="delete-state" role="status"></p></form></details>`:""}</article>`);
     const exportCopy = {
       uk: ["Експорт даних", "Завантажити профіль, історію навчання та закладки", "Файл не містить інших даних акаунта або вкладень звернень."],
       ru: ["Экспорт данных", "Скачать профиль, историю обучения и закладки", "Файл не содержит другие данные аккаунта или вложения обращений."],
@@ -4018,17 +4102,62 @@ function renderAccount() {
     const traditionOptions=sets.religion.map(([value,label])=>`<option value="${esc(value)}" ${value===(state.user.tradition||"")?"selected":""}>${esc(label)}</option>`).join("");
     const needsReaffirmation=!state.user.sensitiveConsent&&Boolean(state.user.tradition||state.user.denomination||state.user.church);
     document.querySelector(".profile-controls")?.insertAdjacentHTML("beforebegin", `<section class="profile-controls"><h2>${sensitiveCopy[0]}</h2><p>${sensitiveCopy[1]}</p>${needsReaffirmation?`<p role="status">${sensitiveCopy[5]}</p>`:""}<form id="sensitive-form" class="account-form"><label class="account-field"><span>${t("religion")} · ${t("optional")}</span><select name="tradition">${traditionOptions}</select></label><label class="account-field"><span>${sensitiveCopy[2]} · ${t("optional")}</span><input name="denomination" maxlength="160" value="${esc(state.user.denomination||"")}"></label><label class="account-field"><span>${sensitiveCopy[3]} · ${t("optional")}</span><input name="church" maxlength="160" value="${esc(state.user.church||"")}"></label><label class="account-check"><input name="acceptSensitive" type="checkbox"><span>${t("sensitiveAgree")}</span></label><button class="button" type="submit">${copy.save}</button><p id="sensitive-state" role="status"></p></form></section>`);
-    document.querySelector("#sensitive-form").onsubmit=async event=>{
-      event.preventDefault();const form=event.currentTarget,data=new FormData(form),status=document.querySelector("#sensitive-state"),accepted=data.has("acceptSensitive");
-      try{state.user=(await accountRequest("sensitive-consent","PUT",{acceptSensitive:accepted,tradition:data.get("tradition"),denomination:data.get("denomination"),church:data.get("church")})).user;
+    const sensitiveForm=document.querySelector("#sensitive-form");
+    sensitiveForm.onsubmit=async event=>{
+      event.preventDefault();if(!accountCurrent()||document.querySelector("#sensitive-form")!==sensitiveForm)return;
+      const form=event.currentTarget,data=new FormData(form),status=document.querySelector("#sensitive-state"),accepted=data.has("acceptSensitive"),requestedPrincipal=accountPrincipal;
+      try{
+        const result=await accountRequest("sensitive-consent","PUT",{acceptSensitive:accepted,tradition:data.get("tradition"),denomination:data.get("denomination"),church:data.get("church")});
+        if(!accountCurrent()||accountPrincipal!==requestedPrincipal||document.querySelector("#sensitive-form")!==sensitiveForm)return;
+        if(!result?.user||result.user.id!==requestedPrincipal.id)throw Error("invalid_account_response");
+        state.user=result.user;accountPrincipal=result.user;
         if(!accepted){form.elements.tradition.value="";form.elements.denomination.value="";form.elements.church.value="";const publicChurch=document.querySelector('#visibility-form [name="church"]');if(publicChurch)publicChurch.checked=false;}
-        status.textContent=sensitiveCopy[4];
-      }catch{status.textContent=copy.error}
+        if(status)status.textContent=sensitiveCopy[4];
+      }catch{if(accountCurrent()&&accountPrincipal===requestedPrincipal&&document.querySelector("#sensitive-form")===sensitiveForm&&status)status.textContent=copy.error}
     };
-    document.querySelector("#logout-button").onclick=async()=>{await authRequest("logout");state.user=null;clearPersonalProgress();renderAccount()};
-    document.querySelector("#visibility-form").onsubmit=async event=>{event.preventDefault();const form=new FormData(event.currentTarget),status=document.querySelector("#visibility-state");try{state.user=(await accountRequest("visibility","PUT",{firstName:form.has("firstName"),lastName:form.has("lastName"),church:form.has("church"),progress:form.has("progress")})).user;status.textContent=copy.saved}catch{status.textContent=copy.error}};
-    if(document.querySelector("#password-form"))document.querySelector("#password-form").onsubmit=async event=>{event.preventDefault();const status=document.querySelector("#password-state"),data=Object.fromEntries(new FormData(event.currentTarget));try{await authRequest("change-password",data);state.user=null;clearPersonalProgress();renderAccount()}catch{status.textContent=copy.error}};
-    if(document.querySelector("#delete-form"))document.querySelector("#delete-form").onsubmit=async event=>{event.preventDefault();const status=document.querySelector("#delete-state"),form=new FormData(event.currentTarget);if(!form.has("confirm"))return;try{await authRequest("delete-account",{password:form.get("password")});state.user=null;clearPersonalProgress();renderAccount()}catch{status.textContent=copy.error}};
+    // A response belongs to the account and dashboard that issued it. It
+    // cannot clear a later account's progress or redraw a replaced route.
+    const logoutButton=document.querySelector("#logout-button");
+    const finishAccountExit=()=>{
+      if(!accountCurrent())return;
+      state.user=null;clearPersonalProgress();
+      if(document.querySelector("#logout-button")===logoutButton)renderAccount();
+      else void route();
+    };
+    logoutButton.onclick=async()=>{
+      if(!accountCurrent()||document.querySelector("#logout-button")!==logoutButton)return;
+      try { await authRequest("logout");finishAccountExit(); }
+      catch {
+        if(accountCurrent()&&document.querySelector("#logout-button")===logoutButton){
+          const status=document.querySelector("#account-logout-state");if(status)status.textContent=copy.error;
+        }
+      }
+    };
+    const visibilityForm=document.querySelector("#visibility-form");
+    visibilityForm.onsubmit=async event=>{
+      event.preventDefault();if(!accountCurrent()||document.querySelector("#visibility-form")!==visibilityForm)return;
+      const form=new FormData(event.currentTarget),status=document.querySelector("#visibility-state"),requestedPrincipal=accountPrincipal;
+      try{
+        const result=await accountRequest("visibility","PUT",{firstName:form.has("firstName"),lastName:form.has("lastName"),church:form.has("church"),progress:form.has("progress")});
+        if(!accountCurrent()||accountPrincipal!==requestedPrincipal||document.querySelector("#visibility-form")!==visibilityForm)return;
+        if(!result?.user||result.user.id!==requestedPrincipal.id)throw Error("invalid_account_response");
+        state.user=result.user;accountPrincipal=result.user;if(status)status.textContent=copy.saved;
+      }catch{if(accountCurrent()&&accountPrincipal===requestedPrincipal&&document.querySelector("#visibility-form")===visibilityForm&&status)status.textContent=copy.error}
+    };
+    const passwordForm=document.querySelector("#password-form");
+    if(passwordForm)passwordForm.onsubmit=async event=>{
+      event.preventDefault();if(!accountCurrent()||document.querySelector("#password-form")!==passwordForm)return;
+      const status=document.querySelector("#password-state"),data=Object.fromEntries(new FormData(event.currentTarget));
+      try{await authRequest("change-password",data);finishAccountExit()}
+      catch{if(accountCurrent()&&document.querySelector("#password-form")===passwordForm&&status)status.textContent=copy.error}
+    };
+    const deleteForm=document.querySelector("#delete-form");
+    if(deleteForm)deleteForm.onsubmit=async event=>{
+      event.preventDefault();if(!accountCurrent()||document.querySelector("#delete-form")!==deleteForm)return;
+      const status=document.querySelector("#delete-state"),form=new FormData(event.currentTarget);if(!form.has("confirm"))return;
+      try{await authRequest("delete-account",{password:form.get("password")});finishAccountExit()}
+      catch{if(accountCurrent()&&document.querySelector("#delete-form")===deleteForm&&status)status.textContent=copy.error}
+    };
     return;
   }
   const ageOptions=["13-17","18-24","25-34","35-44","45-54","55-64","65+"].map(value=>`<option>${value}</option>`).join("");

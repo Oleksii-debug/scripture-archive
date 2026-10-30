@@ -33,13 +33,17 @@ test('corrupted private progress never leaks prior account marks into read-only 
   assert.doesNotMatch(academyMarkup(catalog,'en',esc,missingPrincipal),/data-academy-lesson=/);
 });
 
-test('unavailable progress never mounts action handlers or writes',()=>{
-  let called=0;
-  const root={querySelectorAll(){called++;return []}};
-  const doc={querySelector(){called++;return root}};
-  const storage={setItem(){throw Error('unexpected write')}};
+test('unavailable progress remains read-only unless explicit recovery is confirmed',()=>{
+  let writes=0,listener;
+  const reset={addEventListener(_event,fn){listener=fn}};
+  const confirmation={checked:false};
+  const root={querySelectorAll(){return []},querySelector(s){return s==='#academy-reset'?reset:s==='#academy-reset-confirm'?confirmation:null}};
+  const doc={querySelector(){return root}};
+  const storage={setItem(){writes++},removeItem(){writes++}};
   attachAcademy(doc,storage,'uk',{id:'alice'},{available:false,completed:[]});
-  assert.equal(called,0);
+  assert.equal(typeof listener,'function');
+  listener();
+  assert.equal(writes,0);
 });
 
 test('invalid source catalog remains fail-closed even when storage is unavailable',()=>{

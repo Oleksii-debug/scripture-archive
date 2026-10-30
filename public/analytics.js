@@ -67,7 +67,7 @@
   const sessionId = (() => {
     let stored = null;
     try { stored = sessionStorage.getItem(sessionKey); } catch {}
-    if (/^[0-9a-f-]{36}$/i.test(stored || "")) return stored;
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(stored || "")) return stored;
     const created = crypto.randomUUID();
     // Session ID may remain ephemeral if browser storage is restricted.
     try { sessionStorage.setItem(sessionKey, created); } catch {}
@@ -159,6 +159,15 @@
   });
   window.addEventListener("pagehide", () => heartbeat(true));
   window.addEventListener("error", () => track("client_error", { error: "script_error" }));
+  // A consent withdrawal or storage clear in another tab must retire this
+  // tab's cached opt-in immediately. Never auto-enable from a remote grant.
+  window.addEventListener("storage", event => {
+    if (event.key !== consentKey && event.key !== null) return;
+    if (event.newValue === "granted" || consent !== "granted") return;
+    consent = "denied";
+    if (heartbeatTimer) { window.clearInterval(heartbeatTimer); heartbeatTimer = 0; }
+    window.gtag?.("consent", "update", { analytics_storage: "denied" });
+  });
 
   if (consent === "granted") {
     loadGoogleAnalytics();

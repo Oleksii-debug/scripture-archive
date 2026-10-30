@@ -150,7 +150,11 @@ export function searchScriptureDossiers(language,value) {
   const query=value.normalize('NFC').trim().toLocaleLowerCase(lang);
   if(query.length>120)return [];
   if(!query)return [...nodes];
-  return nodes.filter(item=>[item.id,item.names[lang],item.summaries[lang],COPY[lang][item.type]]
+  // Search the authored study questions too: they are already displayed in each
+  // source-validated dossier and contain useful biblical research terms that
+  // may not occur in the dossier title or summary.
+  return nodes.filter(item=>[item.id,item.names[lang],item.summaries[lang],COPY[lang][item.type],
+    ...item.prompts[lang]]
     .some(text=>text.normalize('NFC').toLocaleLowerCase(lang).includes(query)));
 }
 
@@ -180,7 +184,15 @@ export function dossierMarkup(catalog,language,requestedId,esc,searchQuery='') {
   const shownQuery=typeof searchQuery==='string'?searchQuery.trim().slice(0,120):'';
   const searchForm=`<form action="/dossiers" method="get" role="search"><label for="dossier-search">${esc(searchLabel.label)}</label><input id="dossier-search" name="q" type="search" maxlength="120" value="${esc(shownQuery)}"><button type="submit">${esc(searchLabel.submit)}</button></form>`;
   const clearSearch=hasQuery?`<p><a href="/dossiers">${esc(searchLabel.clear)}</a></p><p role="status">${esc(searchLabel.results)}: ${matching.length}</p>`:'';
-  const index=`<nav aria-label="${esc(w.index)}"><h2>${esc(w.index)}</h2>${searchForm}${clearSearch}<ol>${matching.map(item=>`<li><a href="/dossiers?id=${item.id}"${selected && item.id===selected.id?' aria-current="page"':''}>${esc(item.names[lang])}</a> — ${esc(w[item.type])}</li>`).join('')}</ol></nav>`;
+  // Keep the active GET filter when following a result. URLSearchParams
+  // handles Unicode and malformed UTF-16 safely; escape its '&' for HTML.
+  // Without q, preserve the original stable /dossiers?id=... deep link.
+  const resultHref=item=>{
+    const params=new URLSearchParams({id:item.id});
+    if(hasQuery) params.set('q',shownQuery);
+    return '/dossiers?'+params.toString();
+  };
+  const index=`<nav aria-label="${esc(w.index)}"><h2>${esc(w.index)}</h2>${searchForm}${clearSearch}<ol>${matching.map(item=>`<li><a href="${esc(resultHref(item))}"${selected && item.id===selected.id?' aria-current="page"':''}>${esc(item.names[lang])}</a> — ${esc(w[item.type])}</li>`).join('')}</ol></nav>`;
   if(!selected) return `<div class="dossier-layout"><aside class="card dossier-index">${index}</aside><p role="alert">${esc(noMatch?SEARCH_COPY[lang].empty:filteredId?w.filtered:w.unknown)}</p></div>`;
   const references=`<ol>${selected.sources.map(source=>`<li>${cite(source)} — ${esc(w[source.kind])}</li>`).join('')}</ol>`;
   const relations=`<ul>${selected.related.map(link=>`<li><a href="/dossiers?id=${link.to}">${esc(nodes.find(item=>item.id===link.to).names[lang])}</a> — ${cite(link.via)} — ${esc(w[link.via.kind])}</li>`).join('')}</ul>`;

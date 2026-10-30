@@ -5,12 +5,33 @@ const clean = (v: unknown, max: number) => typeof v === "string" ? v.trim().slic
 // An owner export must contain restorable structured drafts and review snapshots.
 // JSON.parse accepts null, scalar values and arrays, none of which the canonical
 // study-material/editorial schema can restore as a material or snapshot.
-function exportRecord(raw: unknown): Record<string, unknown> {
+function exportRecord(raw: unknown, snapshot = false): Record<string, unknown> {
   if (typeof raw !== "string") throw Error("invalid_export_record");
   const value: unknown = JSON.parse(raw);
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw Error("invalid_export_record");
-  return value as Record<string, unknown>;
+  const record = value as Record<string, unknown>;
+  // A JSON object by itself is not a restorable authored exercise. Validate
+  // the same content boundaries the canonical builder/editor already demand,
+  // including answer membership, instead of exporting damaged drafts as 200.
+  if (snapshot && (typeof record.title !== "string" ||
+      record.title.trim().length < 3 || record.title.length > 160 ||
+      !["uk", "ru", "en"].includes(record.locale as string)))
+    throw Error("invalid_export_record");
+  const data: unknown = snapshot ? record.data : record;
+  if (!data || typeof data !== "object" || Array.isArray(data))
+    throw Error("invalid_export_record");
+  const d = data as Record<string, unknown>;
+  const options = d.options;
+  if (typeof d.prompt !== "string" || d.prompt.trim().length < 8 || d.prompt.length > 3000 ||
+      typeof d.reference !== "string" || d.reference.trim().length < 3 || d.reference.length > 200 ||
+      typeof d.explanation !== "string" || d.explanation.trim().length < 8 || d.explanation.length > 2000 ||
+      typeof d.answer !== "string" || !d.answer.trim() || d.answer.length > 500 ||
+      !Array.isArray(options) || options.length < 2 || options.length > 8 ||
+      !options.every(option => typeof option === "string" && option.trim() && option.length <= 500) ||
+      new Set(options).size !== options.length || !options.includes(d.answer))
+    throw Error("invalid_export_record");
+  return record;
 }
 
 export async function GET(request: Request) {
@@ -32,7 +53,7 @@ export async function GET(request: Request) {
       ]);
       if (!drafts.success || !versions.success || !Array.isArray(drafts.results) || !Array.isArray(versions.results)) throw Error("export failed");
       const items = (drafts.results as Record<string, unknown>[]).map(row => ({ ...row, data: exportRecord(row.data) }));
-      const history = (versions.results as Record<string, unknown>[]).map(row => ({ ...row, snapshot: exportRecord(row.snapshot) }));
+      const history = (versions.results as Record<string, unknown>[]).map(row => ({ ...row, snapshot: exportRecord(row.snapshot, true) }));
       return new Response(JSON.stringify({ format: "scripture-archive-materials-export", version: 1, exportedAt: new Date().toISOString(), materials: items, submissions: history }, null, 2), { headers: { "Content-Type": "application/json; charset=utf-8", "Content-Disposition": 'attachment; filename="scripture-archive-materials.json"', "Cache-Control": "no-store, private", "X-Content-Type-Options": "nosniff" } });
     } catch { return Response.json({ error: "export_unavailable" }, { status: 503, headers: { "Cache-Control": "no-store, private" } }); }
   }
@@ -81,6 +102,17 @@ export async function POST(request: Request) {
   if (!userId) return Response.json({ error: "authentication_required" }, { status: 401 });
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   if (!body) return Response.json({ error: "invalid_json" }, { status: 400 });
+  // The editor must review exactly what the author submitted. Silent slicing
+  // of required text fields previously returned ok:true for a different
+  // exercise, including a 501-character answer matching a 500-char option
+  // only *after* truncation. Refuse those requests before any D1 interaction.
+  if (([
+    ["title", 160], ["prompt", 3000], ["reference", 200],
+    ["explanation", 2000], ["answer", 500],
+  ] as const).some(([key, max]) => {
+    const value = body[key];
+    return typeof value !== "string" || value.trim().length > max;
+  })) return Response.json({ error: "invalid_material" }, { status: 400 });
   const title = clean(body.title, 160), prompt = clean(body.prompt, 3000), reference = clean(body.reference, 200),
     explanation = clean(body.explanation, 2000), answer = clean(body.answer, 500),
     // Do not silently drop malformed choices or truncate excess answers.
@@ -91,7 +123,14 @@ export async function POST(request: Request) {
       ? body.options.map(value => value.trim()) : [];
   if (title.length < 3 || prompt.length < 8 || reference.length < 3 || !answer || explanation.length < 8 || options.length < 2 || new Set(options).size !== options.length || !options.includes(answer))
     return Response.json({ error: "invalid_material" }, { status: 400 });
-  const locale = ["uk", "ru", "en"].includes(String(body.locale)) ? String(body.locale) : "uk";
+  // A supplied locale is an authorship and source-review boundary. Never
+  // coerce arrays/objects to a language, or silently relabel an explicitly
+  // unsupported translation as Ukrainian. An omitted/blank picker uses uk.
+  const locale = body.locale === undefined || body.locale === null || body.locale === ""
+    ? "uk"
+    : typeof body.locale === "string" && ["uk", "ru", "en"].includes(body.locale)
+      ? body.locale : null;
+  if (!locale) return Response.json({ error: "invalid_material" }, { status: 400 });
   // Publication requires an immutable independent editorial approval, never a
   // direct owner toggle or an unverified matching email identity.
   if (body.visibility === "public") {
@@ -122,9 +161,9 @@ export async function POST(request: Request) {
   try {
     const saved = await env.DB!.prepare("INSERT INTO study_materials (id,owner_user_id,title,locale,data,visibility) VALUES (?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,locale=excluded.locale,data=excluded.data,visibility=excluded.visibility,updated_at=CURRENT_TIMESTAMP WHERE study_materials.owner_user_id=excluded.owner_user_id")
       .bind(id, userId, title, locale, data, visibility).run();
-    // A D1 mutation receipt must already be a numeric count; never coerce one.
+    // This primary-key UPSERT can affect at most one row; a multi-row ACK is\n    // corrupted/uncertain evidence, not a saved-draft confirmation.\n    // A D1 mutation receipt must already be a numeric count; never coerce one.
     const changes = saved.meta?.changes;
-    if (!saved.success || !Number.isSafeInteger(changes) || changes < 0)
+    if (!saved.success || !Number.isSafeInteger(changes) || changes < 0 || changes > 1)
       return Response.json({ error: "material_save_failed" }, { status: 503 });
     if (changes === 0) return Response.json({ error: "forbidden" }, { status: 403 });
     return Response.json({ ok: true, id }, { status: existing ? 200 : 201 });
@@ -148,7 +187,9 @@ export async function DELETE(request: Request) {
   if (!id || id.length > 80) return Response.json({ error: "invalid_material" }, { status: 400 });
   try {
     const result = await env.DB.prepare("DELETE FROM study_materials WHERE id=? AND owner_user_id=?").bind(id, userId).run();
-    // A completed DELETE with a malformed ACK is an unknown outcome, not success.
+    // D1 meta.changes is sqlite3_total_changes(): a one-row DELETE may report
+    // several changes when linked editorial submissions cascade. Accept that
+    // legitimate total while rejecting missing, negative or unsafe receipts.
     const changes = result.meta?.changes;
     // A successful-looking D1 reply without an authoritative write receipt
     // cannot claim deletion, including when the service lost its ACK.

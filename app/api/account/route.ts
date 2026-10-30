@@ -17,6 +17,9 @@ function confirmedD1Changes(result:unknown):number|null{
   return receipt?.success===true&&typeof changes==="number"&&Number.isSafeInteger(changes)&&changes>=0?changes:null;
 }
 function clean(value:unknown,max=120){return typeof value==="string"?value.trim().slice(0,max):""}
+// Preserve user-authored profile/consent text; trimming is intentional,
+// silently cutting identity or sensitive-profile fields before D1 is not.
+function oversized(value:unknown,max:number){return typeof value==="string"&&value.trim().length>max}
 // The reader renders every receipt as a book/chapter/title. Do not ACK damaged arrays.
 // Reading receipts do not store an edition. Accept the chapter when it is
 // present in at least one canonical LOCAL Bible edition, including translated
@@ -117,7 +120,11 @@ async function write(request:Request){
   if(action==="reading"){
     if(!Array.isArray(body.reading)||body.reading.length>2000)return privateJson({error:"invalid_reading"},{status:400});
     // Reject the entire invalid request: silently filtering all entries used to return a false 200 ACK.
-    if(!body.reading.every(r=>r&&typeof r==="object"&&!Array.isArray(r)&&typeof r.title==="string"))
+    // Do not acknowledge a different title from the one the reader sent.
+    // The canonical title limit is 100; trimming whitespace is intentional,
+    // silently slicing a longer authored title before persistence is not.
+    if(!body.reading.every(r=>r&&typeof r==="object"&&!Array.isArray(r)&&
+        typeof r.title==="string"&&r.title.trim().length<=100))
       return privateJson({error:"invalid_reading"},{status:400});
     const reading=body.reading.map(r=>({book:clean(r.book,4),chapter:r.chapter,title:clean(r.title,100)}));
     if(!reading.every(validReadingReceipt))return privateJson({error:"invalid_reading"},{status:400});
@@ -191,6 +198,13 @@ async function write(request:Request){
   if(action==="sensitive-consent"){
     if(id.provider==="agent")return privateJson({error:"forbidden"},{status:403});
     if(typeof body.acceptSensitive!=="boolean")return privateJson({error:"invalid_consent"},{status:400});
+    // Validate lossless sensitive metadata only when accepting consent.
+    // Stale/malformed optional fields must never prevent a user from
+    // withdrawing consent and clearing sensitive values.
+    if(body.acceptSensitive===true && (
+      oversized(body.tradition,40)||oversized(body.denomination,160)||oversized(body.church,160)||
+      ["tradition","denomination","church"].some(key=>body[key]!=null&&typeof body[key]!=="string")
+    ))return privateJson({error:"invalid_profile_field"},{status:400});
     const accepted=body.acceptSensitive, tradition=clean(body.tradition,40), denomination=clean(body.denomination,160), church=clean(body.church,160);
     if(accepted&&tradition&&!TRADITIONS.has(tradition))return privateJson({error:"invalid_profile_option"},{status:400});
     try {
@@ -221,6 +235,14 @@ async function write(request:Request){
     }catch{return privateJson({error:"visibility_save_failed"},{status:503});}
   }
   if(action!=="profile")return privateJson({error:"unknown_action"},{status:400});
+  if(oversized(body.firstName,80)||oversized(body.lastName,80)||oversized(body.ageRange,10)||
+     oversized(body.tradition,40)||oversized(body.maritalStatus,40)||oversized(body.gender,30)||
+     oversized(body.church,160)||oversized(body.locale,2))
+    return privateJson({error:"invalid_profile_field"},{status:400});
+  // Preserve the established fallback for unknown textual locales (SA10).
+  // Reject typed JSON masquerading as a locale instead of silently coercing it.
+  if(body.locale!==undefined&&body.locale!==null&&typeof body.locale!=="string")
+    return privateJson({error:"invalid_profile_locale"},{status:400});
   const firstName=clean(body.firstName,80),lastName=clean(body.lastName,80),ageRange=clean(body.ageRange,10),rawTradition=clean(body.tradition,40),maritalStatus=clean(body.maritalStatus,40),gender=clean(body.gender,30);if(!firstName||!lastName||!AGE_RANGES.has(ageRange)||body.acceptPrivacy!==true)return privateJson({error:"required_fields"},{status:400});
   if((rawTradition&&!TRADITIONS.has(rawTradition))||(maritalStatus&&!MARITAL_STATUSES.has(maritalStatus))||(gender&&!GENDERS.has(gender)))return privateJson({error:"invalid_profile_option"},{status:400});
   const consent=body.acceptSensitive===true, locale=ALLOWED_LOCALES.has(clean(body.locale,2))?clean(body.locale,2):"uk",tradition=consent?rawTradition||null:null,church=consent?clean(body.church,160)||null:null;

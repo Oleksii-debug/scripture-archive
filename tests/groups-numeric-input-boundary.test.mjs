@@ -116,6 +116,124 @@ for(const value of [true,false,[],[3],null,{},'', ' ', '0x3','3e0','3.0','+3','0
   });
 }
 
+// Existing production POST create and genuine D1/SQLite: never acknowledge
+// a different group profile from the one its owner entered.
+for (const [field, changed] of [
+  ['name',{name:'N'.repeat(101)}],
+  ['church',{church:'C'.repeat(161)}],
+  ['country',{country:'X'.repeat(81)}],
+  ['city',{city:'Y'.repeat(81)}],
+  ['description',{description:'D'.repeat(601)}],
+]) {
+  test('reject overlong group '+field+' without any SQLite mutation',async()=>{
+    const f=fixture();
+    try {
+      const result=await f.post('create',{...group,...changed});
+      assert.equal(result.status,400,field+' '+JSON.stringify(result.body));
+      assert.equal(result.body.error,'invalid_group');
+      assert.equal(f.writes,0,'oversized field must not reach D1');
+      assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM home_groups').get().n,1);
+    } finally {f.db.close();}
+  });
+}
+
+// An omitted/null optional value remains valid, but a supplied value of the
+// wrong JSON type must not be silently converted to a different saved record.
+for (const field of ['church','country','city','description']) {
+  for (const [kind,value] of [
+    ['boolean',true], ['number',42], ['array',['unexpected']],
+    ['object',{unexpected:'value'}],
+  ]) {
+    test('reject explicit '+kind+' group '+field+' before D1',async()=>{
+      const f=fixture();
+      try {
+        const response=await f.post('create',{...group,[field]:value});
+        assert.equal(response.status,400,field+' '+kind+' '+JSON.stringify(response.body));
+        assert.equal(response.body.error,'invalid_group');
+        assert.equal(f.writes,0,'wrong-type optional field must not reach D1');
+        assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM home_groups').get().n,1);
+      } finally {f.db.close();}
+    });
+  }
+}
+for (const [label,optionalFields] of [
+  ['omitted',{}],
+  ['explicit null',{church:null,country:null,city:null,description:null}],
+]) {
+  test('group create accepts '+label+' optional profile fields',async()=>{
+    const f=fixture();
+    try {
+      const response=await f.post('create',{...group,...optionalFields});
+      assert.equal(response.status,201,JSON.stringify(response.body));
+      const row=f.db.prepare('SELECT church,country,city,description FROM home_groups WHERE id=?')
+        .get(response.body.groupId);
+      for (const field of ['church','country','city','description'])
+        assert.equal(row[field],null,field+' should remain explicitly optional');
+    } finally {f.db.close();}
+  });
+}
+
+// A group must not claim it saved the requested Bible edition after coercing
+// an explicit JSON value into the Ukrainian default. Use the real route+SQLite.
+for (const [label,value] of [
+  ['array',['en-web']],['boolean',true],['number',42],
+  ['object',{id:'en-web'}],['false',false],
+]) {
+  test('reject explicit '+label+' Bible edition before D1 group creation',async()=>{
+    const f=fixture();
+    try {
+      const response=await f.post('create',{...group,bibleEdition:value});
+      assert.equal(response.status,400,JSON.stringify(response.body));
+      assert.equal(response.body.error,'invalid_edition');
+      assert.equal(f.writes,0,'invalid edition cannot write any group record');
+      assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM home_groups').get().n,1);
+    } finally { f.db.close(); }
+  });
+}
+for (const [label,fields,expected] of [
+  ['omitted',{},'uk-ohiienko'],
+  ['explicit null',{bibleEdition:null},'uk-ohiienko'],
+  ['blank HTML selection',{bibleEdition:''},'uk-ohiienko'],
+  ['trimmed named edition',{bibleEdition:'  en-web  '},'en-web'],
+]) {
+  test('preserve '+label+' Bible edition selection',async()=>{
+    const f=fixture();
+    try {
+      const payload={...group,...fields};
+      if(label==='omitted')delete payload.bibleEdition;
+      const response=await f.post('create',payload);
+      assert.equal(response.status,201,JSON.stringify(response.body));
+      assert.equal(f.db.prepare('SELECT bible_edition FROM home_groups WHERE id=?')
+        .get(response.body.groupId).bible_edition,expected);
+    } finally { f.db.close(); }
+  });
+}
+
+test('group creation persists the exact maximum authored fields',async()=>{
+  const f=fixture();
+  try{
+    const fields={...group,name:'N'.repeat(100),church:'C'.repeat(160),
+      country:'X'.repeat(80),city:'Y'.repeat(80),description:'D'.repeat(600)};
+    const result=await f.post('create',fields);
+    assert.equal(result.status,201,JSON.stringify(result.body));
+    const persisted=f.db.prepare('SELECT name,church,country,city,description FROM home_groups WHERE id=?')
+      .get(result.body.groupId);
+    for (const field of ['name','church','country','city','description'])
+      assert.equal(persisted[field],fields[field],field+' must never be shortened');
+  }finally{f.db.close();}
+});
+
+test('group create retains harmless whitespace trim at exact name boundary',async()=>{
+  const f=fixture();
+  try{
+    const full='N'.repeat(100);
+    const result=await f.post('create',{...group,name:'  '+full+'  '});
+    assert.equal(result.status,201,JSON.stringify(result.body));
+    assert.equal(f.db.prepare('SELECT name FROM home_groups WHERE id=?')
+      .get(result.body.groupId).name,full);
+  }finally{f.db.close();}
+});
+
 test('accept genuine numeric JSON and decimal HTML-form numeric strings',async()=>{
   const f=fixture();
   try {
@@ -179,4 +297,53 @@ test('SA-EXT-04 marathon permits real zero usage, refuses exhausted quota, and p
       assert.equal(f.writes-previous,status===200?2:0);
     }finally{f.db.close();}
   }
+});
+
+
+// SA-EXT-04 exact meeting date and private reflection: do not silently turn
+// a raw malformed date into a different valid date or erase an author's tail.
+for (const [description, fields] of [
+  ['date suffix', {meetingDate:'2026-10-28extra'}],
+  ['multiline date', {meetingDate:'2026-10-28\\n2026-10-29'}],
+  ['NUL date suffix', {meetingDate:'2026-10-28\\u0000'}],
+  ['array date', {meetingDate:['2026-10-28']}],
+  ['object date', {meetingDate:{value:'2026-10-28'}}],
+  ['oversized private reflection', {reflection:'R'.repeat(1201)}],
+  ['array reflection', {reflection:['private reflection']}],
+  ['object reflection', {reflection:{message:'private reflection'}}],
+]) {
+  test('SA-EXT-04 rejects raw '+description+' with zero meeting writes',async()=>{
+    const f=fixture();
+    try {
+      const before=f.writes;
+      const response=await f.post('session',{...meeting,...fields});
+      assert.equal(response.status,400,description+' '+JSON.stringify(response.body));
+      assert.equal(response.body.error,'invalid_session');
+      assert.equal(f.writes,before,'invalid raw data must not persist a session');
+      assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM group_sessions').get().n,0);
+    } finally {f.db.close();}
+  });
+}
+
+test('SA-EXT-04 preserves an exact 1200-character private reflection',async()=>{
+  const f=fixture();try{
+    const reflection='R'.repeat(1200);
+    const response=await f.post('session',{...meeting,reflection});
+    assert.equal(response.status,200,JSON.stringify(response.body));
+    const row=f.db.prepare('SELECT meeting_date,reflection FROM group_sessions').get();
+    assert.equal(row.meeting_date,'2026-10-28');
+    assert.equal(row.reflection,reflection);
+    assert.equal(row.reflection.length,1200);
+  }finally{f.db.close();}
+});
+
+test('SA-EXT-04 trims harmless date/reflection whitespace without clipping',async()=>{
+  const f=fixture();try{
+    const response=await f.post('session',{...meeting,
+      meetingDate:' 2026-10-28 ',reflection:'  A precise study reflection  '});
+    assert.equal(response.status,200,JSON.stringify(response.body));
+    const row=f.db.prepare('SELECT meeting_date,reflection FROM group_sessions').get();
+    assert.equal(row.meeting_date,'2026-10-28');
+    assert.equal(row.reflection,'A precise study reflection');
+  }finally{f.db.close();}
 });

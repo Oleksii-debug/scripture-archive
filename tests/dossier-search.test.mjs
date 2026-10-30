@@ -5,6 +5,7 @@ import {dossierMarkup,searchScriptureDossiers,scriptureDossiers,validateDossierG
 
 const catalog=JSON.parse(readFileSync(new URL('../public/data/catalog.json',import.meta.url),'utf8'));
 const esc=v=>String(v).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+const resultLink=(id,q)=>'href="/dossiers?'+new URLSearchParams({id,q}).toString().replaceAll('&','&amp;')+'"';
 
 test('a native GET form searches the real validated dossier graph',()=>{
   assert.equal(validateDossierGraph(catalog),true);
@@ -18,7 +19,7 @@ test('a native GET form searches the real validated dossier graph',()=>{
     assert.match(html,/<form action="\/dossiers" method="get" role="search">/);
     assert.match(html,/<label for="dossier-search">/);
     assert.match(html,/name="q" type="search" maxlength="120"/);
-    assert.ok(html.includes('href="/dossiers?id='+id+'"'));
+    assert.ok(html.includes(resultLink(id,q)),'filtered result keeps its GET search');
     assert.match(html,/id="dossier-heading"/);
     assert.match(html,/aria-current="page"/);
   }
@@ -97,7 +98,7 @@ test('SA-EXT-05: explicit dossier outside current search is not presented as a m
     assert.ok(mismatch.includes(expected));
     assert.doesNotMatch(mismatch,/id="dossier-heading"/);
     assert.doesNotMatch(mismatch,/href="\/reader\//);
-    assert.ok(mismatch.includes('href="/dossiers?id=moses"'));
+    assert.ok(mismatch.includes(resultLink('moses',query)),'filtered result remains navigable');
     assert.ok(mismatch.includes('href="/dossiers"'));
     // The same result can be opened, but only if it actually matched.
     const inResult=dossierMarkup(catalog,lang,'moses',esc,query);
@@ -117,4 +118,57 @@ test('SA-EXT-05: unknown explicit ID and no matches stay separately explained',(
   assert.doesNotMatch(noMatches,/href="\/reader\//);
   const backwards=dossierMarkup(catalog,'en','abraham',esc);
   assert.match(backwards,/href="\/reader\/GEN\/12\?verse=1"/);
+});
+
+test('SA-EXT-05 filtered native GET result links preserve query across route roundtrip',()=>{
+  for (const [lang,query,id] of [
+    ['en','Moses','moses'],
+    ['uk',' Мойсей ','moses'],
+    ['ru','МОИСЕЙ','moses'],
+    ['en','ABRAHAM','abraham'],
+  ]) {
+    const trimmed=query.trim();
+    const html=dossierMarkup(catalog,lang,null,esc,query);
+    assert.ok(html.includes(resultLink(id,trimmed)),lang+' encoded result href');
+    assert.ok(!html.includes('href="/dossiers?id='+id+'&q='),'query delimiter must be HTML-escaped');
+    const escapedHref=resultLink(id,trimmed).slice('href="'.length,-1);
+    const link=new URL(escapedHref.replaceAll('&amp;','&'),'https://scripture-archive.example');
+    assert.equal(link.pathname,'/dossiers');
+    assert.equal(link.searchParams.get('id'),id);
+    assert.equal(link.searchParams.get('q'),trimmed);
+    const next=dossierMarkup(catalog,lang,link.searchParams.get('id'),esc,link.searchParams.get('q'));
+    assert.match(next,/id="dossier-heading"/);
+    assert.match(next,/aria-current="page"/);
+    assert.ok(next.includes(resultLink(id,trimmed)),'search stays active after following result');
+  }
+  const unfiltered=dossierMarkup(catalog,'en',null,esc);
+  assert.ok(unfiltered.includes('href="/dossiers?id=abraham"'),'legacy direct link stays stable');
+  assert.ok(!unfiltered.includes('href="/dossiers?id=abraham&amp;q='),'no empty phantom filter');
+});
+
+test('SA-EXT-05: authored research questions are searchable in all three interface languages',()=>{
+  for(const [lang,query] of [
+    ['uk','Які зміни імен'],
+    ['ru','Какие изменения имён'],
+    ['en','Which name changes'],
+  ]){
+    const results=searchScriptureDossiers(lang,query);
+    assert.deepEqual(results.map(item=>item.id),['sarah'],lang+' question must find source-backed Sarah dossier');
+    const html=dossierMarkup(catalog,lang,'sarah',esc,query);
+    assert.ok(html.includes(resultLink('sarah',query)),'question match preserves the original GET filter');
+    assert.match(html,/id="dossier-heading"/);
+    assert.match(html,/aria-current="page"/);
+    assert.ok(html.includes('href="/reader/GEN/17?verse=15"'),'real source passage remains navigable');
+    assert.ok(!html.includes('href="/reader/EXO/3?verse=1"'),'unrelated evidence is not substituted');
+  }
+});
+
+test('SA-EXT-05: a question-only filter cannot open unrelated source dossiers',()=>{
+  const query='Which name changes';
+  const mismatched=dossierMarkup(catalog,'en','moses',esc,query);
+  assert.match(mismatched,/role="alert"/);
+  assert.doesNotMatch(mismatched,/id="dossier-heading"/);
+  assert.doesNotMatch(mismatched,/href="\/reader\//);
+  assert.ok(mismatched.includes(resultLink('sarah',query)));
+  assert.deepEqual(searchScriptureDossiers('en','which NAME changes').map(item=>item.id),['sarah']);
 });

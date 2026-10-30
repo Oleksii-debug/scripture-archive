@@ -20,6 +20,8 @@ function fixture() {
     data TEXT NOT NULL, visibility TEXT NOT NULL DEFAULT 'private',
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`);
+  // D1 counts cascaded rows through sqlite3_total_changes(), not only direct sqlite3_changes().
+  db.exec("PRAGMA foreign_keys = ON; CREATE TABLE material_submissions (id TEXT PRIMARY KEY, material_id TEXT NOT NULL REFERENCES study_materials(id) ON DELETE CASCADE)");
   let ack = "normal", afterOwnerRead = null, prepareFailure = null, deleteAck = "normal";
   const D1 = { prepare(sql) {
     if (prepareFailure && sql.startsWith(prepareFailure)) throw Error("disposable D1 prepare failure");
@@ -33,7 +35,9 @@ function fixture() {
       },
       async all() { return { success: true, results: db.prepare(sql).all(...args) }; },
       async run() {
+        const beforeTotal = db.prepare("SELECT total_changes() AS n").get().n;
         const result = db.prepare(sql).run(...args);
+        const totalWritten = db.prepare("SELECT total_changes() AS n").get().n - beforeTotal;
         if (sql.startsWith("DELETE FROM study_materials") && deleteAck !== "normal") {
           const mode = deleteAck; deleteAck = "normal";
           if (mode === "missing") return { success: true, meta: {} };
@@ -41,6 +45,8 @@ function fixture() {
           if (mode === "text") return { success: true, meta: { changes: "1" } };
           if (mode === "boolean") return { success: true, meta: { changes: true } };
           if (mode === "null") return { success: true, meta: { changes: null } };
+          if (mode === "multi") return { success: true, meta: { changes: 2 } };
+          if (mode === "unsafe") return { success: true, meta: { changes: Number.MAX_SAFE_INTEGER + 1 } };
           return { success: false, meta: { changes: Number(result.changes) } };
         }
         if (sql.startsWith("INSERT INTO study_materials") && ack !== "normal") {
@@ -50,9 +56,11 @@ function fixture() {
           if (mode === "text") return { success: true, meta: { changes: "1" } };
           if (mode === "boolean") return { success: true, meta: { changes: true } };
           if (mode === "null") return { success: true, meta: { changes: null } };
+          if (mode === "multi") return { success: true, meta: { changes: 2 } };
+          if (mode === "unsafe") return { success: true, meta: { changes: Number.MAX_SAFE_INTEGER + 1 } };
           return { success: false, meta: { changes: Number(result.changes) } };
         }
-        return { success: true, meta: { changes: Number(result.changes) } };
+        return { success: true, meta: { changes: Number(totalWritten) } };
       },
     });
     return { bind: (...args) => statement(...args), ...statement() };
@@ -160,8 +168,60 @@ test("valid boundary-size choice lists keep the submitted order and answer",asyn
   } finally { f.db.close(); }
 });
 
-test("false and missing D1 ACKs return 503 even when SQLite completed the write", async () => {
-  for (const mode of ["failed", "missing", "negative", "text", "boolean", "null"]) {
+// Real production API + SQLite: no authored field may be clipped and then
+// acknowledged as a legitimate draft for editorial review.
+const overLimitDrafts = [
+  ["title", {title:"T".repeat(161)}],
+  ["prompt", {prompt:"P".repeat(3001)}],
+  ["reference", {reference:"R".repeat(201)}],
+  ["explanation", {explanation:"E".repeat(2001)}],
+  ["answer", {answer:"A".repeat(501),options:["A".repeat(500),"second"]}],
+];
+for (const [field, changed] of overLimitDrafts) {
+  test("authored "+field+" overflow cannot save a silently shortened draft", async () => {
+    const f=fixture();
+    try {
+      const response=await f.post({...valid,...changed,id:"overlimit-"+field});
+      assert.equal(response.status,400,field);
+      assert.equal(response.body.error,"invalid_material");
+      assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM study_materials").get().n,0,
+        "oversized authored text cannot reach the canonical D1 mutation");
+    } finally { f.db.close(); }
+  });
+}
+
+test("all five authored text fields persist complete exact-boundary values", async () => {
+  const f=fixture();
+  try {
+    const full={
+      ...valid,id:"maximum-authored-text",
+      title:"T".repeat(160),prompt:"P".repeat(3000),reference:"R".repeat(200),
+      explanation:"E".repeat(2000),answer:"A".repeat(500),options:["A".repeat(500),"second"],
+    };
+    const response=await f.post(full);
+    assert.equal(response.status,201);
+    const row=f.db.prepare("SELECT title,data FROM study_materials WHERE id=?").get(full.id);
+    assert.equal(row.title,full.title);
+    const persisted=JSON.parse(row.data);
+    for (const field of ["prompt","reference","explanation","answer","options"])
+      assert.deepEqual(persisted[field],full[field],field);
+  } finally { f.db.close(); }
+});
+
+test("draft text permits surrounding whitespace but never drops meaningful text",async()=>{
+  const f=fixture();
+  try {
+    const full="T".repeat(160);
+    const result=await f.post({...valid,title:"  "+full+"  ",id:"trim-exact-boundary"});
+    assert.equal(result.status,201);
+    assert.equal(f.db.prepare("SELECT title FROM study_materials WHERE id=?").get("trim-exact-boundary").title,full);
+  } finally { f.db.close(); }
+});
+
+// Even a truthy, safely typed D1 receipt is untrustworthy if it claims
+// a single-primary-key write changed more than one row.
+test("false, missing or multi-row D1 ACKs return 503 even when SQLite completed the write", async () => {
+  for (const mode of ["failed", "missing", "negative", "text", "boolean", "null", "multi", "unsafe"]) {
     const f = fixture();
     try {
       f.setAck(mode);
@@ -274,8 +334,8 @@ test("a D1 delete prepare failure returns a stable error without losing a privat
   } finally { f.db.close(); }
 });
 
-test("missing, false, or invalid D1 delete receipts never claim success", async () => {
-  for (const ack of ["missing", "negative", "failed", "text", "boolean", "null"]) {
+test("missing, false or invalid D1 delete receipts never claim success", async () => {
+  for (const ack of ["missing", "negative", "failed", "text", "boolean", "null", "unsafe"]) {
     const f = fixture();
     try {
       assert.equal((await f.post({ ...valid, id: "lost-delete-ack" })).status, 201);
@@ -289,6 +349,24 @@ test("missing, false, or invalid D1 delete receipts never claim success", async 
         "repeated delete after a failed ACK remains an idempotent no-op");
     } finally { f.db.close(); }
   }
+});
+
+test("owner delete accepts a real cascading submission total_changes acknowledgement", async () => {
+  const f = fixture();
+  try {
+    assert.equal((await f.post({ ...valid, id: "reviewed-parent" })).status, 201);
+    f.db.prepare("INSERT INTO material_submissions(id,material_id) VALUES (?,?)")
+      .run("submission-child", "reviewed-parent");
+    assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM material_submissions").get().n, 1);
+    const before = f.db.prepare("SELECT total_changes() AS n").get().n;
+    const response = await f.remove("reviewed-parent");
+    const changed = f.db.prepare("SELECT total_changes() AS n").get().n - before;
+    assert.equal(changed, 2, "D1 reports parent plus ON DELETE CASCADE child");
+    assert.equal(response.status, 200, "valid cascade is not a corrupt D1 ACK");
+    assert.equal(response.body.ok, true);
+    assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM study_materials").get().n, 0);
+    assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM material_submissions").get().n, 0);
+  } finally { f.db.close(); }
 });
 
 test("delete preserves owner isolation and idempotence under a valid D1 receipt", async () => {
@@ -364,3 +442,37 @@ test("explicit oversized or malformed draft IDs cannot alias a shorter owned dra
     assert.equal((await f.post({...valid,id:"  fresh-id  "})).body.id,"fresh-id");
   }finally{f.db.close();}
 });
+
+
+// An explicit author-selected language must not be silently coerced to another
+// language before the real private-draft UPSERT and editorial review pipeline.
+for (const locale of [
+  true,false,0,1,-1,[],["uk"],["ru"],["en"],["uk","ru"],
+  {},{language:"uk"},"UK","Ru","EN","fr","es","sk",
+  "uk-SK","uk_UA"," uk","uk ","uk\\n"," ","  ","0",
+  "undefined","null","ru-RU","en-US"
+]) {
+  test("SA-EXT-03/14 rejects an explicit malformed locale "+JSON.stringify(locale),async()=>{
+    const f=fixture();try{
+      const response=await f.post({...valid,id:"wrong-language",locale});
+      assert.equal(response.status,400,JSON.stringify(response.body));
+      assert.equal(response.body.error,"invalid_material");
+      assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM study_materials").get().n,0,
+        "coercible or unknown language cannot create a mislabelled draft");
+    }finally{f.db.close();}
+  });
+}
+
+for (const [provided,expected] of [
+  ["uk","uk"],["ru","ru"],["en","en"],[null,"uk"],["","uk"],[undefined,"uk"]
+]) {
+  test("SA-EXT-03/14 keeps accepted authored locale "+JSON.stringify(provided),async()=>{
+    const f=fixture();try{
+      const response=await f.post({...valid,id:"correct-language",locale:provided});
+      assert.equal(response.status,201,JSON.stringify(response.body));
+      const row=f.db.prepare("SELECT locale,visibility FROM study_materials WHERE id=?").get("correct-language");
+      assert.equal(row.locale,expected);
+      assert.equal(row.visibility,"private");
+    }finally{f.db.close();}
+  });
+}

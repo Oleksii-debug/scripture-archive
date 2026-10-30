@@ -13,7 +13,17 @@ assert.ok(copyBegin > begin && copyEnd > copyBegin, "canonical account copy expr
 const accountCopyExpression = source.slice(
   copyBegin + "  const copy = ".length, copyEnd + "  }[state.lang]".length,
 );
-const accountCopy = new Function("state", "return (" + accountCopyExpression + ");");
+// The renderer applies a second language dictionary to this very object. That
+// merge used to overwrite the truthful base receipt with an unverified promise
+// that a reset email would arrive; a base-only copy test missed the regression.
+const overridesBegin = source.indexOf("  Object.assign(copy, {", copyEnd);
+const overridesTerminator = "  }[state.lang]);";
+const overridesEnd = source.indexOf(overridesTerminator, overridesBegin);
+assert.ok(overridesBegin > copyEnd && overridesEnd > overridesBegin, "actual runtime translation override is present");
+const effectiveOverrides = source.slice(overridesBegin, overridesEnd + overridesTerminator.length);
+const accountCopy = new Function("state",
+  "const copy = (" + accountCopyExpression + ");\n" + effectiveOverrides + "\nreturn copy;");
+assert.match(source, /status\.textContent=copy\.resetSent/, "real forgot-password form uses this effective receipt");
 
 // Actual server policy: the forgot-password endpoint intentionally returns an
 // enumeration-resistant generic ok:true receipt for both unknown addresses and

@@ -29,12 +29,38 @@ export async function GET(request: Request) {
   if (url.searchParams.get("admin") === "1") {
     const identity = await authenticateRequest(request);
     if (!isVerifiedOwner(identity)) return Response.json({ error: "forbidden" }, { status: 403 });
-    const items = (await env.DB!.prepare("SELECT id,kind,locale,title,status,data,created_at,updated_at FROM managed_content ORDER BY updated_at DESC LIMIT 500").all()).results;
-    const revisions = (await env.DB!.prepare("SELECT id,content_key,created_at,created_by FROM content_revisions ORDER BY created_at DESC LIMIT 200").all()).results;
-    return Response.json({ items: items.map(item => ({ ...item, data: JSON.parse(String(item.data)) })), revisions }, { headers: { "Cache-Control": "no-store" } });
+    // A D1 response with success:false and results:[] is a read outage, not
+    // an empty editorial catalog. Refuse the owner snapshot before any
+    // partial data or false "no revisions" readback can reach the UI.
+    const itemsRead = await env.DB!.prepare("SELECT id,kind,locale,title,status,data,created_at,updated_at FROM managed_content ORDER BY updated_at DESC LIMIT 500").all();
+    if (itemsRead?.success !== true || !Array.isArray(itemsRead.results)) return unavailable();
+    const revisionsRead = await env.DB!.prepare("SELECT id,content_key,created_at,created_by FROM content_revisions ORDER BY created_at DESC LIMIT 200").all();
+    if (revisionsRead?.success !== true || !Array.isArray(revisionsRead.results)) return unavailable();
+    // The canonical CMS writer stores only JSON objects. A persisted scalar,
+    // array or coerced nonstring D1 data value is a damaged editorial item,
+    // not a valid owner catalogue snapshot. Reject the complete read rather
+    // than reporting a fabricated partially restorable 200 response.
+    const items = itemsRead.results.map(item => {
+      if (!item || typeof item !== "object" || Array.isArray(item) ||
+          typeof item.data !== "string") throw Error("invalid_editorial_item_data");
+      const parsed: unknown = JSON.parse(item.data);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+        throw Error("invalid_editorial_item_data");
+      return { ...item, data: parsed };
+    });
+    return Response.json({ items, revisions: revisionsRead.results }, { headers: { "Cache-Control": "no-store" } });
   }
   const row = await env.DB!.prepare("SELECT data,updated_at FROM site_content WHERE key='public'").first<{ data: string; updated_at: string }>();
-  return Response.json(row ? { ...JSON.parse(row.data), updatedAt: row.updated_at } : EMPTY, { headers: { "Cache-Control": "no-store" } });
+  if (!row) return Response.json(EMPTY, { headers: { "Cache-Control": "no-store" } });
+  // A successful D1 read is not proof that its persisted public JSON is an
+  // object. Spreading a JSON string/array/scalar produced a misleading 200
+  // with invented keys or an empty apparent publication. Never publish it.
+  if (typeof row.data !== "string" || typeof row.updated_at !== "string" ||
+      !row.updated_at.trim()) return unavailable();
+  const published: unknown = JSON.parse(row.data);
+  if (!published || typeof published !== "object" || Array.isArray(published))
+    return unavailable();
+  return Response.json({ ...published, updatedAt: row.updated_at }, { headers: { "Cache-Control": "no-store" } });
   } catch { return unavailable(); }
 }
 
@@ -55,11 +81,19 @@ export async function PUT(request: Request) {
     if (body.id !== undefined && body.id !== null &&
         (typeof body.id !== "string" || body.id.trim().length > 100))
       return Response.json({ error: "invalid_content_item" }, { status: 400 });
+    // Keep authored CMS item titles lossless. The previous clean(title,200)
+    // silently shortened an overlong owner title while acknowledging success
+    // and recording the altered text in the immutable revision history.
+    if (typeof body.title !== "string" || body.title.trim().length > 200)
+      return Response.json({ error: "invalid_content_item" }, { status: 400 });
     const id = clean(body.id, 100) || crypto.randomUUID(), kind = clean(body.kind, 30), locale = clean(body.locale, 3);
-    const title = clean(body.title, 200), status = clean(body.status, 20);
+    // Author-supplied publication titles must never be silently truncated.
+    // An overlong edit is invalid rather than a different saved title.
+    const title = typeof body.title === "string" ? body.title.trim() : "";
+    const status = clean(body.status, 20);
     const itemData = body.data && typeof body.data === "object" && !Array.isArray(body.data) ? body.data : null;
     const encoded = JSON.stringify(itemData);
-    if (!KINDS.has(kind) || !LOCALES.has(locale) || !STATUSES.has(status) || !title || !itemData || encoded.length > 100_000)
+    if (!KINDS.has(kind) || !LOCALES.has(locale) || !STATUSES.has(status) || !title || title.length > 200 || !itemData || encoded.length > 100_000)
       return Response.json({ error: "invalid_content_item" }, { status: 400 });
     const snapshot = JSON.stringify({ id, kind, locale, title, status, data: itemData });
     const acknowledged = await contentBatchAcknowledged(() => env.DB!.batch([
@@ -76,12 +110,18 @@ export async function PUT(request: Request) {
       !body.liveNote || typeof body.liveNote !== "object" || Array.isArray(body.liveNote))
     return Response.json({ error: "invalid_content_command" }, { status: 400 });
   const note = body.liveNote as Record<string, unknown>;
-  if (!["uk", "ru", "en"].every(locale => typeof note[locale] === "string"))
+  // Preserve the owner's entire authored notice or refuse the edit before
+  // any D1 write. Truncating 601+ characters silently published a different
+  // statement while still returning ok:true to the editor.
+  if (!["uk", "ru", "en"].every(locale => {
+    const value = note[locale];
+    return typeof value === "string" && value.trim().length <= 600;
+  }))
     return Response.json({ error: "invalid_content_note" }, { status: 400 });
   const liveNote = {
-    uk: typeof note.uk === "string" ? note.uk.trim().slice(0, 600) : "",
-    ru: typeof note.ru === "string" ? note.ru.trim().slice(0, 600) : "",
-    en: typeof note.en === "string" ? note.en.trim().slice(0, 600) : "",
+    uk: (note.uk as string).trim(),
+    ru: (note.ru as string).trim(),
+    en: (note.en as string).trim(),
   };
   const safe = { updates: [], text: {}, liveNote }, data = JSON.stringify(safe);
   const acknowledged = await contentBatchAcknowledged(() => env.DB!.batch([

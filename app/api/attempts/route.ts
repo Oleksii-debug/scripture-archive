@@ -39,6 +39,15 @@ function confirmedBatch(results: unknown, expected: number): number[] | null {
   return changes.every(value => value !== null) ? changes as number[] : null;
 }
 function clean(value: unknown, max = 100) { return typeof value === "string" ? value.trim().slice(0, max) : ""; }
+// Chapter input must be numeric evidence, not JavaScript truthy/coercible text.
+// Decimal form field values remain supported without accepting hex/exponent,
+// whitespace, booleans, arrays or unsafe integers as a Bible passage.
+function requestedChapter(value: unknown): number | null {
+  if (typeof value === "number") return Number.isSafeInteger(value) && value > 0 ? value : null;
+  if (typeof value !== "string" || !/^[1-9][0-9]*$/.test(value)) return null;
+  const result = Number(value);
+  return Number.isSafeInteger(result) ? result : null;
+}
 function locale(value: unknown): Locale { return value === "ru" || value === "en" ? value : "uk"; }
 // D1 is not an enum/date constraint: legacy or corrupt rows can contain invalid
 // deadlines. Date.parse(NaN) is never <= now, so such rows must fail closed.
@@ -228,8 +237,8 @@ export async function POST(request: Request) {
   if (!body) return json({ error: "invalid_json" }, 400);
 
   if (action === "chapter") {
-    const book = clean(body.book, 8).toUpperCase(), chapter = Number(body.chapter);
-    if (!book || !Number.isInteger(chapter) || chapter < 1) return json({ error: "invalid_chapter" }, 400);
+    const book = clean(body.book, 8).toUpperCase(), chapter = requestedChapter(body.chapter);
+    if (!book || chapter === null) return json({ error: "invalid_chapter" }, 400);
     const currentActor = await actor(request);
     if (!currentActor) return json({ invalidated: false });
     // Invalidate before reporting a match: a read-only lookup would reveal the
@@ -246,7 +255,8 @@ export async function POST(request: Request) {
   if (action === "read") {
     const currentActor = await actor(request, true);
     if (!currentActor) return json({ error: "actor_unavailable" }, 401);
-    const book = clean(body.book, 8).toUpperCase(), chapter = Number(body.chapter), groupId = clean(body.groupId, 80);
+    const book = clean(body.book, 8).toUpperCase(), chapter = requestedChapter(body.chapter), groupId = clean(body.groupId, 80);
+    if (chapter === null) return json({ error: "invalid_chapter" }, 400);
     if (!tasksFor(book, chapter).length) return json({ error: "mission_chapter_unavailable" }, 404);
     if (groupId && (!currentActor.identity || !await groupFacilitator(groupId, currentActor.identity.userId))) return json({ error: "group_facilitator_required" }, 403);
     const read=await env.DB.prepare("INSERT INTO chapter_read_receipts (id,actor_id,book_id,chapter,group_id) SELECT ?,?,?,?,? WHERE (?='' OR EXISTS (SELECT 1 FROM home_group_members WHERE group_id=? AND user_id=? AND role IN ('owner','facilitator')))")
@@ -261,7 +271,8 @@ export async function POST(request: Request) {
     const currentActor = await actor(request, true);
     if (!currentActor) return json({ error: "actor_unavailable" }, 401);
     if (currentActor.identity && !currentActor.identity.emailVerified) return json({ error: "email_verification_required" }, 403);
-    const book = clean(body.book, 8).toUpperCase(), chapter = Number(body.chapter), selectedLocale = locale(body.locale), groupId = clean(body.groupId, 80);
+    const book = clean(body.book, 8).toUpperCase(), chapter = requestedChapter(body.chapter), selectedLocale = locale(body.locale), groupId = clean(body.groupId, 80);
+    if (chapter === null) return json({ error: "invalid_chapter" }, 400);
     const available = tasksFor(book, chapter);
     if (body.missionId !== MISSION_ID || !available.length) return json({ error: "mission_chapter_unavailable" }, 404);
     if (groupId && (!currentActor.identity || !await groupFacilitator(groupId, currentActor.identity.userId))) return json({ error: "group_facilitator_required" }, 403);

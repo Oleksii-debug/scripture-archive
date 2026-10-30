@@ -9,6 +9,17 @@
 
 ---
 
+## 2026-10-30 — SA-EXT-02/16 / COMPLETED_ATTEMPT_EXPORT_METADATA_INTEGRITY — РОЗРОБКУ ВУЗЬКОГО ПІДПУНКТУ ЗАКРИТО
+
+**Виключно цей підпункт:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Повні SA-EXT-01…20 залишаються OPEN.** Відсутність поточного production SHA, реального браузерного й NVDA-приймання не перетворюється на повторну розробку цієї вже злитої функції.
+
+- **Доведений source-дефект:** `GET /api/reading-export` визнавав сформований приватний архів успішним, навіть якщо завершена спроба навчання містила недійсні назву книги, главу, ідентифікатор, мову або дату. Перевірка була лише для `result_json`, не для метаданих відновлюваної історії.
+- **Злито в канонічну платформу:** [PR #619](https://github.com/Oleksii-debug/scripture-archive/pull/619) SQUASH MERGED, exact feature `main@a4b6748307946b735ab97273ee4732ec799437f5`; `app/api/reading-export/route.ts` blob `dcb47df874bd311c0207bc3703353cda3b38d463`, `tests/reading-export-batch-ack.test.mjs` blob `825643dfa5b479602a47acef3482e2f8317d07ff`. Повторно використано чинну 66-книжну главну мапу та особливість `JOL:4` для локальних видань; некоректна завершена спроба призводить до приватного 503 без фальшивого downloadable backup. Жодної міграції, другого API, зміни прав, розгортання чи додаткової мови.
+- **Перевірка на exact PR source SHA `d29d27fd484ab5e1f6a8639405e8619380ed52c2`:** [Actions #41037398225](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41037398225) — native Node `1426 PASS / 0 FAIL / 1 SKIP`, включно з 14 негативними новими варіантами та позитивним `JOL:4`; TypeScript, lint, build і Python 2/2 PASS. **Загальний workflow FAIL**: Worker/D1 disposable E2E двічі `21/22` через незалежний `tests/api-flow.test.mjs:100` `Your worker restarted mid-request`, 503 замість 403. Source і тестові blobs прочитані з merged main; production, actual Cloudflare D1/browser/NVDA та повний E2E **NOT_VERIFIED**.
+- **Залишок:** для цього конкретного scoped дефекту немає незлитого коду; ширший план, release і 20 батьківських розділів ще не закриті. Координація [#297](https://github.com/Oleksii-debug/scripture-archive/issues/297). Повторно відкривати цю вузьку функцію тільки за новою конкретною регресією або затвердженою вимогою.
+
+---
+
 ## 2026-10-30 — SA-EXT-02/04 / ATTEMPT_MARATHON_COUNT_READ_FAILCLOSED — РОЗРОБКУ ПІДФУНКЦІЇ ЗАКРИТО
 
 **Виключно цей bounded authorization defect:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`; `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Повні SA-EXT-02, SA-EXT-04 та всі батьківські SA-EXT-01…20 залишаються OPEN.**

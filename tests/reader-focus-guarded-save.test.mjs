@@ -31,7 +31,7 @@ test('read completion focuses the next available action, unless keyboard focus m
         '.read-completion a':progress})[sel]??null,
     };
     runInNewContext(completionListener,{
-      document,state:{user:null},loadJSON:()=>[],meta:{code:'JHN'},chapter:3,
+      document,state:{user:null},readerStillCurrent:()=>true,loadJSON:()=>[],meta:{code:'JHN'},chapter:3,
       bookTitle:()=> 'John',localStorage:{setItem(){}},groupId:'',hasTasks,
       attemptRequest:async()=>{if(moved)document.activeElement=other;},
       accountRequest:async()=>({ok:true}),w:{readMarked:lang+'-marked'},
@@ -53,7 +53,7 @@ test('failed private save leaves button enabled for a retry, with busy state cle
   const readButton={dataset:{},textContent:'',disabled:false,setAttribute(){},removeAttribute(){}};
   const document={activeElement:readButton,querySelector:sel=>sel==='#mark-read'?readButton:null};
   runInNewContext(completionListener,{
-    document,state:{user:{id:'account-one'}},loadJSON:()=>[],meta:{code:'JHN'},chapter:3,
+    document,state:{user:{id:'account-one'}},readerStillCurrent:()=>true,loadJSON:()=>[],meta:{code:'JHN'},chapter:3,
     bookTitle:()=> 'John',localStorage:{setItem(){writes++;}},groupId:'',hasTasks:true,
     attemptRequest:async()=>{asked++;},accountRequest:async()=>{throw Error('D1 read unavailable');},
     w:{readMarked:'Marked'},announce:value=>{announceValue=value;},

@@ -1,3 +1,25 @@
+## 2026-10-30 — SA-EXT-01/02 / READING_RECEIPT_TITLE_LOSSLESS — ВУЗЬКИЙ ПІДПУНКТ ЗАКРИТО
+
+**CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** для цього дефекту, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`; **усі 20 повних SA-EXT-01…20 залишаються OPEN**.
+
+- Реальний дефект: account `PUT?action=reading` мовчки обрізав 101+ символів приватної назви прочитаної глави до 100 і віддавав успішний D1 ACK.
+- [PR #634](https://github.com/Oleksii-debug/scripture-archive/pull/634) **MERGED**, source `main@9155350dabb4811a0a3d58ebdf0b7e5b461f50bb`; source blob `dfff30fbe4d93a802e8b1e633fa91c1e781f010a`, tests blob `560897725df121cbeda298c929cec0b1ff5b0103`. Нормалізована довга назва → `400 invalid_reading`, 0 D1 writes; рівно 100 і законний trim зберігаються повністю.
+- [Actions #41040586805](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41040586805), exact HEAD `33c6a7b0ecfb251fc40193714072bf118c567a12`: **SUCCESS**, `1490 Node PASS/0 FAIL/1 SKIP`, TypeScript/lint/build PASS, disposable Worker/D1 `22/22 PASS`, Python `2 PASS`. Це не live browser/NVDA/production Sites acceptance; загальна флейковість #618 не оголошена вирішеною.
+- [Детальний термінальний запис](SA_EXT_01_READING_TITLE_LOSSLESS_TERMINAL_20261030.md). Не повторювати без нового фактичного дефекту; parent SA-EXT-01/02 OPEN.
+
+---
+
+## 2026-10-30 — SA-EXT-03 / REVIEW_NOTE_LOSSLESS — ВУЗЬКИЙ ПІДПУНКТ ЗАКРИТО
+
+**CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** лише цього дефекту, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`; **повний SA-EXT-03 та всі SA-EXT-01…20 залишаються OPEN**.
+
+- Реальний дефект: `POST /api/material-review` на review мовчки обрізав рішення редактора понад 2000 символів, записував часткову причину та повертав `ok:true`.
+- [PR #633](https://github.com/Oleksii-debug/scripture-archive/pull/633) **MERGED**, source `main@16d27d8b2a148a3f1862d0ce098ee7f08c19662f`; canonical source blob `90fe7d143d039e5fefe4eb7fba813a174268bec3`, real-route SQLite test blob `cdb8088ee01882d4f413a010ec2afc639e726a52`. Довга причина → HTTP 400 до D1, точна межа/Unicode/trim зберігаються.
+- [Actions #41040325955](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41040325955): `1492 Node PASS/0 FAIL/1 SKIP`, TS/lint/build, Python `2 PASS`; загалом CI **FAIL** лише через окремий disposable Worker/D1 21/22 двічі (HTTP 503; #618). Ні full E2E, ні production, ні NVDA не оголошені PASS.
+- [Детальний термінальний запис](SA_EXT_03_REVIEW_NOTE_LOSSLESS_TERMINAL_20261030.md). Parent SA-EXT-03 OPEN; не повторювати вузький дефект без нової регресії.
+
+---
+
 ## 2026-10-30 — SA-EXT-03 / CMS_PUBLIC_NOTE_LOSSLESS — ВУЗЬКИЙ ПІДПУНКТ ЗАКРИТО
 
 **CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** для перевіреного дефекту, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Батьківський SA-EXT-03 і всі SA-EXT-01…20 залишаються OPEN**.

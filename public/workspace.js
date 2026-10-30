@@ -181,7 +181,8 @@ export async function renderWorkspace(name,c) {
     const catalog=await c.getCatalog();
     if(!stillCurrent())return;
     const selectedId=new URLSearchParams(globalThis.location?.search || '').get('id');
-    shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${esc(w.dossiers)}</h1></div><p>${esc(w.dossierLead)}</p></div>${dossierMarkup(catalog,state.lang,selectedId,esc)}${dossierAtlasMarkup(catalog,state.lang,esc)}`);
+    const searchQuery=new URLSearchParams(globalThis.location?.search || '').get('q') || '';
+    shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${esc(w.dossiers)}</h1></div><p>${esc(w.dossierLead)}</p></div>${dossierMarkup(catalog,state.lang,selectedId,esc,searchQuery)}${dossierAtlasMarkup(catalog,state.lang,esc)}`);
     return;
   }
   if(name==='live') {

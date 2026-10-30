@@ -207,7 +207,10 @@ export function dossierAtlasMarkup(catalog,language,esc) {
   const subject=item=>'<a href="/dossiers?id='+item.id+'">'+esc(item.names[lang])+'</a>';
   const history=order.map((id,i)=>{
     const item=byId.get(id);
-    return '<tr><th scope="row">'+(i+1)+'</th><td>'+subject(item)+'</td><td>'+passage(item.sources[0])+'</td></tr>';
+    // Each narrative row must expose all its canonical witness passages, not
+    // only the first reference. Keep interpretive sources explicitly labelled.
+    const witnesses='<ol>'+item.sources.map(source=>'<li>'+passage(source)+' — '+esc(w[source.kind])+'</li>').join('')+'</ol>';
+    return '<tr><th scope="row">'+(i+1)+'</th><td>'+subject(item)+'</td><td>'+witnesses+'</td></tr>';
   }).join('');
   // Display every source-backed passage for each place. Selecting only the
   // first source silently hid independently cited chapters from the atlas.

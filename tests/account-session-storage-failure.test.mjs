@@ -161,8 +161,12 @@ test("failed marker reads invalidate private in-memory data even for a changed i
   await f.session();
   assert.equal(f.state.user.id,"bob");
   assert.equal(f.state.missionProgress.index,0);
-  assert.equal(f.entries.get("sa.progressOwner"),"bob");
-  assert.equal(f.state.localReadingStorageUntrusted,false);
+  assert.equal(f.entries.get("sa.progressOwner"),"alice",
+    "unreadable owner and reading must never certify a new owner");
+  assert.equal(f.state.localReadingStorageUntrusted,true);
+  assert.equal(f.state.unownedReadingPendingRecovery,true);
+  await f.sync();
+  assert.equal(f.apiCalls.length,0);
 });
 
 test("marker persistence failure also forbids reuse of local history", async () => {

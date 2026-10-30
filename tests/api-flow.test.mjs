@@ -88,15 +88,24 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal(ownerLogin.status, 200);
   const ownerCookie = ownerLogin.headers.get("set-cookie").split(";",1)[0];
   const ownAccount = await (await fetch(`${base}/api/account?action=me`, {headers:{Cookie:cookie}})).json();
-  const roleAction = (action, principal = ownerCookie, origin = base) => fetch(`${base}/api/editor-roles`, {method:'POST',headers:{Origin:origin,Cookie:principal,'Content-Type':'application/json'},body:JSON.stringify({action,userId:ownAccount.user.id})});
-  assert.equal((await roleAction('grant',cookie)).status,403);
+  // The local Wrangler proxy may drop a following request when its Worker
+  // rejects an early POST without consuming a nonempty JSON body. For role/origin
+  // preflight checks the body is irrelevant: the real-route source test
+  // editor-origin-preflight.test.mjs separately asserts the same rejection with
+  // an actual JSON body, before any auth or D1 access.
+  const roleAction = (action, principal = ownerCookie, origin = base, omitBody = false) => fetch(`${base}/api/editor-roles`, {
+    method:'POST',
+    headers:{Origin:origin,Cookie:principal,...(omitBody ? {} : {'Content-Type':'application/json'})},
+    ...(omitBody ? {} : {body:JSON.stringify({action,userId:ownAccount.user.id})}),
+  });
+  assert.equal((await roleAction('grant',cookie,base,true)).status,403);
   // An Origin with another port is cross-origin under the browser's
   // scheme/host/port tuple, without changing the Wrangler dev proxy hostname.
   // Separate real-handler tests also reject a genuinely remote host.
   const forgedLocalOrigin = new URL(base);
   forgedLocalOrigin.port = forgedLocalOrigin.port === '54321' ? '54322' : '54321';
   assert.notEqual(forgedLocalOrigin.origin, new URL(base).origin);
-  const forgedGrant = await roleAction('grant',ownerCookie,forgedLocalOrigin.origin);
+  const forgedGrant = await roleAction('grant',ownerCookie,forgedLocalOrigin.origin,true);
   assert.equal(forgedGrant.status,403,
     `Cross-origin mutation must be rejected; local Worker response: ${(await forgedGrant.clone().text()).slice(0,300)}`);
   const emailGrant = await fetch(`${base}/api/editor-roles`,{method:'POST',headers:{Origin:base,Cookie:ownerCookie,'Content-Type':'application/json'},body:JSON.stringify({action:'grant',email:ownAccount.user.email.toUpperCase()})});

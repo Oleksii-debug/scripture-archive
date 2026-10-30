@@ -122,9 +122,18 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal((await (await fetch(`${base}/api/editor-roles?view=me`,{headers:{Cookie:cookie}})).json()).editor,false);
   assert.equal((await fetch(`${base}/api/material-review?view=queue`,{headers:{Cookie:cookie}})).status,403);
   const mark = { edition: "en-web", book: "GEN", chapter: 12 };
-  const bookmarkWrite = (body, method = "PUT", origin = base) => fetch(`${base}/api/bookmarks`, { method, headers: { Origin: origin, Cookie: cookie, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  // The disposable Wrangler proxy can abort a following request when an
+  // early Origin-rejected PUT carries an unread request body. This probe tests
+  // only the cross-origin gate, so omit its body in THIS local HTTP sequence.
+  // The production-route test bookmark-auth-availability.test.mjs separately
+  // sends a genuine nonempty JSON body and still demands 403 before auth/D1.
+  const bookmarkWrite = (body, method = "PUT", origin = base, omitBody = false) => fetch(`${base}/api/bookmarks`, {
+    method,
+    headers: { Origin: origin, Cookie: cookie, ...(omitBody ? {} : {"Content-Type": "application/json"}) },
+    ...(omitBody ? {} : { body: JSON.stringify(body) }),
+  });
   assert.equal((await fetch(`${base}/api/bookmarks`)).status, 401);
-  assert.equal((await bookmarkWrite(mark, "PUT", "https://attacker.invalid")).status, 403);
+  assert.equal((await bookmarkWrite(mark, "PUT", "https://attacker.invalid", true)).status, 403);
   const invalidBookmark = await bookmarkWrite({ ...mark, chapter: -1 });
   assert.equal(invalidBookmark.status, 400, (await invalidBookmark.text()).slice(0, 500));
   assert.equal((await bookmarkWrite(mark)).status, 200);

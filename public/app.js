@@ -2330,7 +2330,9 @@ async function getSession() {
   // newly authenticated account. Retain exact unowned bytes for a separate,
   // explicit recovery/import decision before replacing the active cache.
   let unownedReading = false, preservedUnownedReading = true;
-  if (markerReadable && !previousOwner) {
+  // An unreadable owner marker is as ambiguous as an absent one: preserve
+  // readable cached history before clearing or assigning a new principal.
+  if (!markerReadable || !previousOwner) {
     try {
       const legacyReading = localStorage.getItem('sa.readingHistory');
       if (legacyReading !== null && legacyReading !== '[]' && legacyReading !== '') {

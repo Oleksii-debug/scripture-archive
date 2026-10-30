@@ -350,3 +350,25 @@ test('comparison citation retains a validated snapshot if shared cached chapter 
   assert.match(f.copied[0],/Original verse/);
   assert.ok(!f.copied[0].includes('LATER REPLACEMENT'));
 }));
+
+
+test('SA-EXT-01: a damaged oversized parallel chapter cannot exhaust DOM or citation controls',()=>withForm(async()=>{
+  for (const verses of [Array(257).fill('verse'), ['V'.repeat(131073)],
+    Array(128).fill('V'.repeat(1025))]) {
+    const f=fixture({getBook:async()=>({chapters:[verses]})});
+    await f.run();
+    assert.equal(f.result.innerHTML,'','unbounded chapter must never reach HTML');
+    assert.match(f.status.textContent,/Не вдалося/);
+    assert.equal(f.checked(),2,'both existing authorization guards execute');
+    assert.equal(f.button.disabled,false,'keyboard retry remains usable');
+    await f.cite(1);
+    assert.equal(f.copied.length,0,'no citation from rejected payload');
+  }
+  const psalmLike=fixture({getBook:async()=>({chapters:[Array(176).fill('Valid verse')]})});
+  await psalmLike.run();
+  assert.match(psalmLike.status.textContent,/завантажено/);
+  assert.match(psalmLike.result.innerHTML,/data-parallel-cite="176"/);
+  const boundary=fixture({getBook:async()=>({chapters:[Array(256).fill('V')]})});
+  await boundary.run();
+  assert.match(boundary.result.innerHTML,/data-parallel-cite="256"/);
+}));

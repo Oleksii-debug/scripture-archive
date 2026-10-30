@@ -24,6 +24,11 @@ const IMPORT_COPY={
   ru:{label:'Файл отметок курса',action:'Добавить отметки из файла',detail:'Импорт добавляет отметки к имеющимся только в этом браузере и для текущего пользователя; ничего не удаляет и не проверяет знания.',done:'Отметки из файла добавлены в этот браузер.',invalid:'Файл не распознан или не прочитан. Отметки не изменены.',uncertain:'Не удалось подтвердить сохранение. Обновите страницу и проверьте отметки.',lock:'Безопасное сохранение между вкладками недоступно. Отметки не изменены.'},
   en:{label:'Course markers file',action:'Add markers from file',detail:'Import adds markers to existing ones only in this browser for the current user; it does not delete markers or verify knowledge.',done:'Markers from the file were added in this browser.',invalid:'The file is invalid or could not be read. Markers were not changed.',uncertain:'Could not confirm the save. Reload the page and check the markers.',lock:'Safe cross-tab saving is unavailable. Markers were not changed.'}
 };
+const RESUME_COPY={
+  uk:{button:'Перейти до наступного неопрацьованого заняття',done:'Усі заняття позначено як опрацьовані. Це самооцінка.',error:'Не вдалося визначити наступне заняття. Перевірте локальні позначки.'},
+  ru:{button:'Перейти к следующему непройденному занятию',done:'Все занятия отмечены как пройденные. Это самооценка.',error:'Не удалось определить следующее занятие. Проверьте локальные отметки.'},
+  en:{button:'Go to the next unmarked lesson',done:'All lessons are marked studied. This is self-reported.',error:'Could not determine the next lesson. Check your local markers.'}
+};
 const SYNC_ERROR={
   uk:'Не вдалося прочитати оновлені позначки з іншої вкладки. Оновіть сторінку й перевірте їх.',
   ru:'Не удалось прочитать обновлённые отметки из другой вкладки. Обновите страницу и проверьте их.',
@@ -56,7 +61,7 @@ export function readAcademyProgress(storage,key){
 }
 
 export function academyMarkup(catalog,language,esc,progress) {
-  const lang=languageOf(language),w=COPY[lang],reset=RESET_COPY[lang],exportCopy=EXPORT_COPY[lang],importCopy=IMPORT_COPY[lang];
+  const lang=languageOf(language),w=COPY[lang],reset=RESET_COPY[lang],exportCopy=EXPORT_COPY[lang],importCopy=IMPORT_COPY[lang],resume=RESUME_COPY[lang];
   // A private progress read can be unavailable without making public lessons
   // inaccessible. Show source-verified lessons read-only, never guessed marks.
   const readOnly = progress?.available === false;
@@ -76,10 +81,10 @@ export function academyMarkup(catalog,language,esc,progress) {
     // dropping all but the first one when composing the accessible course.
     const questions=node.prompts[lang].map(prompt=>'<li>'+esc(prompt)+'</li>').join('');
     const studied=selected.has(id);
-    return '<li><article class="card"><h3>'+String(index+1)+'. <a href="/dossiers?id='+id+'">'+name+'</a></h3><p>'+esc(node.summaries[lang])+'</p><ul>'+passages+'</ul><h4>'+esc(w.question)+'</h4><ol>'+questions+'</ol>'+(readOnly?'':'<button type="button" class="button" data-academy-lesson="'+id+'" aria-pressed="'+studied+'">'+esc(studied?w.unmark:w.mark)+'</button>')+'</article></li>';
+    return '<li><article class="card"><h3 id="academy-lesson-'+id+'" tabindex="-1">'+String(index+1)+'. <a href="/dossiers?id='+id+'">'+name+'</a></h3><p>'+esc(node.summaries[lang])+'</p><ul>'+passages+'</ul><h4>'+esc(w.question)+'</h4><ol>'+questions+'</ol>'+(readOnly?'':'<button type="button" class="button" data-academy-lesson="'+id+'" aria-pressed="'+studied+'">'+esc(studied?w.unmark:w.mark)+'</button>')+'</article></li>';
   }).join('');
   const total=academyLessonIds.length,count=selected.size;
-  return '<section class="academy-reading" data-academy-root aria-labelledby="academy-reading-title"><h2 id="academy-reading-title">'+esc(w.title)+'</h2><p>'+esc(w.intro)+'</p><p>'+esc(w.privacy)+'</p><p>'+esc(w.honesty)+'</p>'+(readOnly?'<p id="academy-reading-unavailable" role="alert">'+esc(w.unavailable)+'</p>':'<label for="academy-reading-progress">'+esc(w.progress)+'</label> <progress id="academy-reading-progress" max="'+total+'" value="'+count+'"></progress> <span id="academy-reading-status" role="status" aria-live="polite">'+esc(w.progress)+': '+count+'/'+total+'</span><p id="academy-reading-badge" role="status">'+(count===total?esc(w.badge):'')+'</p><p id="academy-reading-error" role="alert"></p>')+(readOnly?'':'<p>'+esc(exportCopy.detail)+'</p><button type="button" class="button" id="academy-export">'+esc(exportCopy.button)+'</button><p id="academy-export-status" role="status" aria-live="polite"></p><p>'+esc(importCopy.detail)+'</p><label for="academy-import-file">'+esc(importCopy.label)+'</label> <input id="academy-import-file" type="file" accept="application/json,.json"> <button type="button" class="button" id="academy-import">'+esc(importCopy.action)+'</button><p id="academy-import-status" role="status" aria-live="polite"></p>')+'<details><summary>'+esc(reset.title)+'</summary><p>'+esc(reset.detail)+'</p><label><input type="checkbox" id="academy-reset-confirm"> '+esc(reset.confirm)+'</label> <button type="button" class="button" id="academy-reset">'+esc(reset.action)+'</button><p id="academy-reset-status" role="status" aria-live="polite"></p></details><ol>'+lessons+'</ol></section>';
+  return '<section class="academy-reading" data-academy-root aria-labelledby="academy-reading-title"><h2 id="academy-reading-title">'+esc(w.title)+'</h2><p>'+esc(w.intro)+'</p><p>'+esc(w.privacy)+'</p><p>'+esc(w.honesty)+'</p>'+(readOnly?'<p id="academy-reading-unavailable" role="alert">'+esc(w.unavailable)+'</p>':'<label for="academy-reading-progress">'+esc(w.progress)+'</label> <progress id="academy-reading-progress" max="'+total+'" value="'+count+'"></progress> <span id="academy-reading-status" role="status" aria-live="polite">'+esc(w.progress)+': '+count+'/'+total+'</span><p id="academy-reading-badge" role="status">'+(count===total?esc(w.badge):'')+'</p><p id="academy-reading-error" role="alert"></p><button type="button" class="button" id="academy-resume">'+esc(resume.button)+'</button><p id="academy-resume-status" role="status" aria-live="polite"></p>')+(readOnly?'':'<p>'+esc(exportCopy.detail)+'</p><button type="button" class="button" id="academy-export">'+esc(exportCopy.button)+'</button><p id="academy-export-status" role="status" aria-live="polite"></p><p>'+esc(importCopy.detail)+'</p><label for="academy-import-file">'+esc(importCopy.label)+'</label> <input id="academy-import-file" type="file" accept="application/json,.json"> <button type="button" class="button" id="academy-import">'+esc(importCopy.action)+'</button><p id="academy-import-status" role="status" aria-live="polite"></p>')+'<details><summary>'+esc(reset.title)+'</summary><p>'+esc(reset.detail)+'</p><label><input type="checkbox" id="academy-reset-confirm"> '+esc(reset.confirm)+'</label> <button type="button" class="button" id="academy-reset">'+esc(reset.action)+'</button><p id="academy-reset-status" role="status" aria-live="polite"></p></details><ol>'+lessons+'</ol></section>';
 }
 
 let detachAcademyStorageListener=()=>{};
@@ -110,6 +115,24 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
     try{return Boolean(isCurrent()) && document?.querySelector('[data-academy-root]')===root;}
     catch{return false;}
   };
+  const resumeButton=root.querySelector('#academy-resume');
+  const resumeStatus=root.querySelector('#academy-resume-status');
+  const resume=RESUME_COPY[languageOf(language)];
+  if(resumeButton && typeof resumeButton.addEventListener==='function') {
+    resumeButton.addEventListener('click',()=>{
+      if(!currentView())return;
+      const current=readAcademyProgress(storage,key);
+      if(!current.available){if(resumeStatus)resumeStatus.textContent=resume.error;return;}
+      const next=academyLessonIds.find(id=>!current.completed.includes(id));
+      if(!next){if(resumeStatus)resumeStatus.textContent=resume.done;return;}
+      try {
+        const heading=root.querySelector('#academy-lesson-'+next);
+        if(!heading || typeof heading.focus!=='function')throw Error('lesson unavailable');
+        if(resumeStatus)resumeStatus.textContent='';
+        heading.focus();
+      } catch {if(resumeStatus)resumeStatus.textContent=resume.error;}
+    });
+  }
   const exportButton=root.querySelector('#academy-export');
   const exportStatus=root.querySelector('#academy-export-status');
   const exportCopy=EXPORT_COPY[languageOf(language)];

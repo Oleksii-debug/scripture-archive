@@ -74,6 +74,55 @@ export async function POST(request: Request) {
   if (!sameOrigin(request)) return json({ error: "cross_origin_request" }, 403);
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   if (!body) return json({ error: "invalid_json" }, 400);
+  if (body.action === "librarySearch") {
+    // Match only fields already visible in the public catalogue. Searching the
+    // entire snapshot would turn private answer/explanation text into an oracle.
+    if (typeof body.query !== "string" || body.query.length > 100)
+      return json({ error: "invalid_search" }, 400);
+    const cursor = body.cursor;
+    if (cursor !== null && cursor !== undefined &&
+      (!cursor || typeof cursor !== "object" || Array.isArray(cursor) ||
+       Object.keys(cursor).sort().join(",") !== "id,submittedAt" ||
+       !validId((cursor as Record<string, unknown>).id) ||
+       typeof (cursor as Record<string, unknown>).submittedAt !== "string" ||
+       !(cursor as {submittedAt:string}).submittedAt.length ||
+       (cursor as {submittedAt:string}).submittedAt.length > 100))
+      return json({ error: "invalid_search" }, 400);
+    const after = cursor as {id:string;submittedAt:string} | null | undefined;
+    try {
+      // A keyset cursor keeps equal timestamps stable and avoids skipping rows
+      // when a prior page is removed. Scan at most 200 records per request;
+      // the extra row tells the client whether to offer continued searching.
+      const sql = "SELECT id,snapshot,provenance,submitted_at FROM material_submissions WHERE status='approved'" +
+        (after ? " AND (submitted_at < ? OR (submitted_at = ? AND id > ?))" : "") +
+        " ORDER BY submitted_at DESC,id ASC LIMIT 201";
+      const statement = env.DB.prepare(sql);
+      const rows = after ? await statement.bind(after.submittedAt, after.submittedAt, after.id).all<{
+        id:string;snapshot:string;provenance:string;submitted_at:string
+      }>() : await statement.all<{id:string;snapshot:string;provenance:string;submitted_at:string}>();
+      if (!rows.success || !Array.isArray(rows.results)) return json({ error: "materials_unavailable" }, 503);
+      const normalize = (value: string) => value.normalize("NFKC").toLowerCase();
+      const query = normalize(body.query.trim());
+      const items = [];
+      let nextCursor: {id:string;submittedAt:string} | null = null;
+      for (let i = 0; i < Math.min(rows.results.length, 200); i++) {
+        const row = rows.results[i], item = readSnapshot(row.snapshot);
+        if (!item || !validId(row.id) || typeof row.provenance !== "string" || row.provenance.length > 1000 ||
+          typeof row.submitted_at !== "string" || !row.submitted_at.length || row.submitted_at.length > 100)
+          return json({ error: "materials_unavailable" }, 503);
+        if (!query || [item.title, item.data.reference, item.data.prompt, row.provenance]
+          .some(value => normalize(value).includes(query))) {
+          items.push({ id: row.id, title: item.title, locale: item.locale, reference: item.data.reference,
+            prompt: item.data.prompt, options: item.data.options, provenance: row.provenance });
+        }
+        if (items.length === 12 || i === 199) {
+          if (i + 1 < rows.results.length) nextCursor = { id: row.id, submittedAt: row.submitted_at };
+          break;
+        }
+      }
+      return json({ items, nextCursor });
+    } catch { return json({ error: "materials_unavailable" }, 503); }
+  }
   if (body.action === "answer") {
     if (!validId(body.id) || !Number.isInteger(body.choice) || Number(body.choice) < 0) return json({ error: "invalid_answer" }, 400);
     try {

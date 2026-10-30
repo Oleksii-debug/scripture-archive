@@ -281,6 +281,9 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal((await reviewPost({ action: "review", id: submission, decision: "approve", sourceChecked: true, rightsChecked: true })).response.status, 403);
   assert.equal((await reviewPost({ action: "review", id: submission, decision: "approve" }, ownerCookie)).response.status, 400);
   assert.equal((await reviewPost({ action: "answer", id: submission, choice: 0 })).response.status, 404, "pending answers stay private");
+  let library = await reviewPost({ action: "librarySearch", query: "Test material", cursor: null }, '');
+  assert.equal(library.response.status, 200);
+  assert.equal(library.data.items.some(item => item.id === submission), false, "pending drafts are not searchable");
   const queue = await (await fetch(`${base}/api/material-review?view=queue`, { headers: { Cookie: ownerCookie } })).json();
   assert.equal(queue.items.find(item => item.id === submission).snapshot.data.answer, "one");
   assert.equal((await reviewPost({ action: "review", id: submission, decision: "approve", sourceChecked: true, rightsChecked: true }, ownerCookie)).response.status, 200);
@@ -288,6 +291,11 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const published = publicReviews.items.find(item => item.id === submission);
   assert.equal(published.title, material.title);
   assert.equal("answer" in published, false); assert.equal("explanation" in published, false);
+  library = await reviewPost({ action: "librarySearch", query: "TEST MATERIAL", cursor: null }, '');
+  assert.equal(library.response.status, 200);
+  const libraryItem = library.data.items.find(item => item.id === submission);
+  assert.equal(libraryItem.title, material.title);
+  assert.equal("answer" in libraryItem, false); assert.equal("explanation" in libraryItem, false);
   let checked = await reviewPost({ action: "answer", id: submission, choice: 1 });
   assert.deepEqual(checked.data, { correct: false });
   checked = await reviewPost({ action: "answer", id: submission, choice: 0 });
@@ -306,6 +314,9 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal((await reviewPost({ action: "withdraw", id: nextSubmission.data.id }, ownerCookie)).response.status, 409);
   assert.equal((await reviewPost({ action: "withdraw", id: nextSubmission.data.id })).response.status, 200);
   assert.equal((await reviewPost({ action: "answer", id: nextSubmission.data.id, choice: 0 })).response.status, 404);
+  library = await reviewPost({ action: "librarySearch", query: "Edited draft", cursor: null }, '');
+  assert.equal(library.response.status, 200);
+  assert.equal(library.data.items.some(item => item.id === nextSubmission.data.id), false, "withdrawn materials are not searchable");
   const reviewHistory = await (await fetch(`${base}/api/material-review?view=mine`, { headers: { Cookie: cookie } })).json();
   assert.ok(reviewHistory.items.some(item => item.id === submission && item.status === "superseded"));
   assert.ok(reviewHistory.items.some(item => item.id === nextSubmission.data.id && item.status === "withdrawn"));

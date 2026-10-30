@@ -1,3 +1,12 @@
+## 2026-10-30 — SA-EXT-03 / LEGACY_APPROVED_SNAPSHOT_BOUNDS — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузька функція)
+
+**Офіційний статус:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` тільки для перевірки історичних затверджених навчальних матеріалів за поточним контрактом конструктора; `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Батьківський SA-EXT-03 залишається OPEN.** Це не підтвердження повної готовності конструктора або production.
+
+- **Реалізація:** [PR #550](https://github.com/Oleksii-debug/scripture-archive/pull/550) **SQUASH MERGED**, точний інтеграційний `main@b1048e8b7a69ac5226ff17ae95dde271748f50fc`. Канонічний `app/api/material-review/route.ts` тепер відхиляє некоректні застарілі затверджені знімки, які перевищують наявні межі автора: заголовок 160, запитання 3000, посилання 200, відповідь/варіант 500, пояснення 2000; порожні варіанти й невідомі мови поза uk/ru/en не приймаються. Публічний список, відповідь і приватний редакційний перегляд користуються тією самою перевіркою без другої БД, зміни збережених даних або автоматичної публікації.
+- **Readback вихідного коду:** GitHub source blob `5adc368e9672ef1238394042f8b014216137fede`; тестовий blob `tests/material-review.test.mjs@e52a1411c233be147b1f528f2752ed5dbbe51a70`; `main` дорівнював merge SHA при перевірці, `behind_by=0`.
+- **Виконані тести:** [Actions #41021747995](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41021747995), exact feature head `f294b56b8a471f329a297cc83b50283f41b279d2`: **1159 Node PASS / 0 FAIL / 1 SKIP** з 1160; регресія восьми типів пошкодження × три реальні маршрути плюс відновлення правильного знімка; TypeScript, lint, source build, Python 2 PASS. **Повний CI FAIL:** disposable Wrangler Worker/D1 **21/22**, дві спроби, перезапуск Worker і HTTP 503 на `POST /api/editor-roles`; окремий відкритий PR #361. Не називати CI повністю GREEN.
+- **Залишок:** у межах цієї вузької функції реалізаційних задач немає. Браузер, фізичний NVDA, deployed Sites SHA, права/редакційне приймання всієї платформи, надійність Worker/D1 та решта батьківського SA-EXT-03 залишаються окремо OPEN. Повторна розробка саме цієї перевірки — лише за новим відтвореним дефектом чи затвердженою вимогою.
+
 # SCRIPTURE ARCHIVE — каталог розділів і план реалізації розширень
 
 ## 2026-10-30 — SA-EXT-01 / BOOKMARK_CANONICAL_EDITION_CHAPTER_BOUNDS — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)

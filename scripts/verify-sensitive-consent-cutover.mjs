@@ -10,7 +10,7 @@
  * backup/rollback policy, and post-deployment behavior (issue #689).
  */
 import { DatabaseSync } from "node:sqlite";
-import { readFileSync, statSync } from "node:fs";
+import { readFileSync, lstatSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -58,7 +58,15 @@ export function inspectConsentSnapshot(db) {
 
 /** A local file COPY only. Never opens the snapshot with write permissions. */
 function withSnapshot(path,read) {
-  if (!path || !statSync(path).isFile()) throw new Error("snapshot_file_required");
+  // Check the explicitly supplied snapshot itself, never a symbolic link that
+  // redirects a read-only preflight to a different (possibly live) database.
+  // This is a stable-path gate, not a claim of protection against hostile
+  // concurrent filesystem mutation or a production cutover.
+  let snapshotStat;
+  try { snapshotStat = path ? lstatSync(path) : null; }
+  catch { snapshotStat = null; }
+  if (!snapshotStat?.isFile() || snapshotStat.isSymbolicLink())
+    throw new Error("snapshot_file_required");
   const db = new DatabaseSync(path, { readOnly: true });
   try {
     db.exec("PRAGMA query_only = ON");

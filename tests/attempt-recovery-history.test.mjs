@@ -370,3 +370,49 @@ test('SA-EXT-02 grading history refuses malformed pending metadata and recovers 
     }
   } finally {f.db.close();}
 });
+
+
+test('SA-EXT-02 completed result refuses forged JSON or mismatched D1 scores and recovers',async()=>{
+  const f=fixture();
+  try {
+    f.seed('completed-alice'); f.seed('completed-bob',{user:'bob'});
+    assert.equal((await f.post('finalize',{attemptId:'completed-alice'})).status,200);
+    assert.equal((await f.post('finalize',{attemptId:'completed-bob'},'bob')).status,200);
+    const canonical=f.db.prepare("SELECT score,total,result_json FROM mission_attempts WHERE id='completed-alice'").get();
+    assert.equal((await f.get('current','completed-alice')).status,200);
+    const legitimate=JSON.parse(canonical.result_json);
+    for(const payload of [
+      'null','[]','"pretend"', '{}','not-json',
+      JSON.stringify({score:'1',total:canonical.total}),
+      JSON.stringify({...legitimate,score:canonical.total+1}),
+      JSON.stringify({...legitimate,total:0}),
+      JSON.stringify({...legitimate,score:-1}),
+      JSON.stringify({...legitimate,total:1.5}),
+    ]) {
+      f.db.prepare("UPDATE mission_attempts SET result_json=? WHERE id='completed-alice'").run(payload);
+      const count=f.db.prepare('SELECT total_changes() AS n').get().n;
+      for(const [action,call] of [
+        ['current',()=>f.get('current','completed-alice')],
+        ['finalize retry',()=>f.post('finalize',{attemptId:'completed-alice'})],
+      ]) {
+        const damaged=await call();
+        assert.equal(damaged.status,503,action+' payload '+payload);
+        assert.equal(damaged.data.error,'attempt_state_invalid');
+        assert.equal(Object.hasOwn(damaged.data,'completed'),false);
+      }
+      assert.equal(f.db.prepare('SELECT total_changes() AS n').get().n,count);
+      assert.equal((await f.get('current','completed-bob','bob')).status,200);
+    }
+    f.db.prepare("UPDATE mission_attempts SET result_json=? WHERE id='completed-alice'").run(canonical.result_json);
+    for(const [field,value] of [['score',canonical.score+1],['total',canonical.total+1],['score',null],['total',null]]) {
+      f.db.prepare(`UPDATE mission_attempts SET ${field}=? WHERE id='completed-alice'`).run(value);
+      assert.equal((await f.get('current','completed-alice')).status,503,field);
+      assert.equal((await f.post('finalize',{attemptId:'completed-alice'})).status,503);
+      f.db.prepare(`UPDATE mission_attempts SET ${field}=? WHERE id='completed-alice'`).run(canonical[field]);
+    }
+    const restored=await f.get('current','completed-alice');
+    assert.equal(restored.status,200);
+    assert.equal(restored.data.completed,true);
+    assert.equal(restored.data.result.score,canonical.score);
+  }finally{f.db.close();}
+});

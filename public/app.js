@@ -2326,13 +2326,53 @@ async function getSession() {
   let previousOwner = null, markerReadable = true;
   try { previousOwner = localStorage.getItem('sa.progressOwner'); }
   catch { markerReadable = false; }
-  const mustClear = !markerReadable || state.localReadingStorageUntrusted ||
+  // A logged-out tab cannot erase an unresolved orphan simply because its
+  // authenticated principal disappeared. Retry preservation on a verified login.
+  if (!state.user && state.unownedReadingPendingRecovery) return state.user;
+  // An absent marker cannot establish that cached reading belongs to the
+  // newly authenticated account. Retain exact unowned bytes for a separate,
+  // explicit recovery/import decision before replacing the active cache.
+  let unownedReading = false, preservedUnownedReading = true;
+  // An unreadable owner marker is as ambiguous as an absent one: preserve
+  // readable cached history before clearing or assigning a new principal.
+  if (state.user && (!markerReadable || !previousOwner)) {
+    try {
+      const legacyReading = localStorage.getItem('sa.readingHistory');
+      if (legacyReading !== null && legacyReading !== '[]' && legacyReading !== '') {
+        unownedReading = true;
+        const archiveKey = 'sa.unownedReadingHistory.v1';
+        const priorArchive = localStorage.getItem(archiveKey);
+        if (priorArchive === null) localStorage.setItem(archiveKey, legacyReading);
+        preservedUnownedReading = localStorage.getItem(archiveKey) === legacyReading;
+      }
+    } catch { preservedUnownedReading = false; }
+  }
+  if (!preservedUnownedReading) {
+    // Unknown ownerless history after a failed read, denied archival write, or
+    // conflicting archive: no wipe, ownership claim,
+    // account upload or misleading in-memory progress for this account.
+    state.localReadingStorageUntrusted = true;
+    state.unownedReadingPendingRecovery = true;
+    state.progressSyncStatus = 'unavailable';
+    state.missionProgress = { index: 0, correct: [], complete: false };
+    forgetActiveAttempt();
+    return state.user;
+  }
+  state.unownedReadingPendingRecovery = false;
+  const mustClear = unownedReading || !markerReadable || state.localReadingStorageUntrusted ||
     (priorPrincipal && priorPrincipal !== state.user?.id) ||
     (previousOwner && previousOwner !== state.user?.id);
   const cleared = mustClear ? clearPersonalProgress() : true;
+  // Do not trust a storage shim that silently ignored a write. An orphan must
+  // be absent from the active reading key before any new owner is certified.
+  let verifiedClear = cleared;
+  if (verifiedClear && unownedReading) {
+    try { verifiedClear = localStorage.getItem('sa.readingHistory') === '[]'; }
+    catch { verifiedClear = false; }
+  }
   // An incomplete wipe must NEVER be certified by assigning the old browser
   // reading history to the newly authenticated principal.
-  if (cleared) {
+  if (verifiedClear) {
     try {
       if (state.user) localStorage.setItem('sa.progressOwner', state.user.id);
       else localStorage.removeItem('sa.progressOwner');
@@ -2341,6 +2381,7 @@ async function getSession() {
     }
   } else {
     state.localReadingStorageUntrusted = true;
+    if (unownedReading) state.unownedReadingPendingRecovery = true;
   }
   return state.user;
 }
@@ -2984,7 +3025,11 @@ async function renderReader(parts) {
     readButton.dataset.saSaving='1';
     readButton.setAttribute('aria-busy','true');
     try {
-      const latestHistory=loadJSON('sa.readingHistory',[]);
+      if (state.unownedReadingPendingRecovery) {
+        announce(t('readerStorageUnavailable'));
+        return;
+      }
+      const latestHistory=state.localReadingStorageUntrusted ? [] : loadJSON('sa.readingHistory',[]);
       const readingHistory=Array.isArray(latestHistory)?latestHistory:[];
       if(!readingHistory.some(r=>r.book===meta.code&&r.chapter===chapter))
         readingHistory.push({book:meta.code,chapter,title:bookTitle(meta)});
@@ -3769,6 +3814,10 @@ async function authRequest(action, body = {}) {
 async function syncProgress() {
   const principal=state.user;
   if (!principal) return;
+  if (state.unownedReadingPendingRecovery) {
+    state.progressSyncStatus = 'unavailable';
+    return;
+  }
   const requestEpoch=(syncProgress._epoch=(syncProgress._epoch||0)+1);
   // A previous login or superseded refresh must never publish private data
   // into a later account's cache or UI.

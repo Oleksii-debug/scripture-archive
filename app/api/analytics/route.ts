@@ -79,10 +79,11 @@ export async function POST(request: Request) {
       (session_id,user_id,active_seconds,page_views,country,city,device,operating_system,browser,source)
       VALUES (?,?,?,?,?,?,?,?,?,?)
       ON CONFLICT(session_id) DO UPDATE SET
-        user_id=COALESCE(excluded.user_id,usage_sessions.user_id),
+        user_id=COALESCE(usage_sessions.user_id,excluded.user_id),
         last_seen_at=CURRENT_TIMESTAMP,
         active_seconds=usage_sessions.active_seconds+?,
-        page_views=usage_sessions.page_views+?`)
+        page_views=usage_sessions.page_views+?
+      WHERE usage_sessions.user_id IS NULL OR usage_sessions.user_id IS excluded.user_id`)
     .bind(sessionId, identity?.userId || null, activeSeconds, pageViews, dimensions.country, dimensions.city, dimensions.device, dimensions.operatingSystem, dimensions.browser, source, activeSeconds, pageViews)];
   if (action === "event") statements.push(env.DB.prepare(
     "INSERT INTO usage_events (id,session_id,user_id,event_type,page_name,value_json) VALUES (?,?,?,?,?,?)",

@@ -1956,6 +1956,11 @@ const EDITION_TRANSIENT_MESSAGES = {
   ru: "Браузер запретил сохранение: выбор перевода действует только в этой вкладке.",
   en: "Browser storage is unavailable: your edition selection lasts only in this tab.",
 };
+const LANGUAGE_TRANSIENT_MESSAGES = {
+  uk: "Мову змінено лише в цій вкладці: браузер заборонив збереження налаштувань.",
+  ru: "Язык изменён только в этой вкладке: браузер запретил сохранение настроек.",
+  en: "Language changed only for this tab because browser storage is unavailable.",
+};
 const requestedLang = new URLSearchParams(location.search).get("lang");
 const savedLang = storedPreference("sa.lang");
 const state = {
@@ -3266,7 +3271,7 @@ async function renderGroup(groupId) {
     };
   targetBook.onchange = updateTarget;
   targetChapter.oninput = updateTarget;
-  document.querySelector('#chapter-link').addEventListener('click',event=>{if(event.currentTarget?.isConnected===false||!groupPageCurrent(`groups/${groupId}`,principal))return;const lang=String(group.bibleEdition||state.lang).slice(0,2);if(EDITIONS[lang]){localStorage.setItem(`sa.edition.${lang}`,group.bibleEdition);state.lang=lang;localStorage.setItem('sa.lang',lang);setStaticI18n()}});
+  document.querySelector('#chapter-link').addEventListener('click',event=>{if(event.currentTarget?.isConnected===false||!groupPageCurrent(`groups/${groupId}`,principal))return;const lang=String(group.bibleEdition||state.lang).slice(0,2);if(["uk","ru","en"].includes(lang)){const edition=EDITIONS[lang].find(item=>item.id===group.bibleEdition);if(edition){const saved=storeReaderPreference(`sa.edition.${lang}`,edition.id);setEditionForTab(lang,edition.id);if(saved)transientEditionStorageDenied.delete(lang);else transientEditionStorageDenied.add(lang)}state.lang=lang;const savedLang=storeReaderPreference('sa.lang',lang);setStaticI18n();if(!savedLang)announce(LANGUAGE_TRANSIENT_MESSAGES[lang])}});
   if(group.marathonEnabled&&group.cohortStatus==='ready'&&data.membership==='owner'){document.querySelector('.cohort-card').insertAdjacentHTML('beforeend',`<button class="button primary" id="start-marathon">${state.lang==='uk'?'Почати марафон':state.lang==='ru'?'Начать марафон':'Start marathon'}</button>`);document.querySelector('#start-marathon').onclick=async event=>{const button=event?.currentTarget;if(button?.isConnected===false||!groupPageCurrent(`groups/${groupId}`,principal))return;try{await groupRequest('start','POST',{groupId:group.id});if(button?.isConnected===false||!groupPageCurrent(`groups/${groupId}`,principal))return;await renderGroup(group.id)}catch{if(groupPageCurrent(`groups/${groupId}`,principal))announce(t('groupError'))}};}
   if (document.querySelector("#session-form"))
     document.querySelector("#session-form").onsubmit = async (e) => {
@@ -4009,13 +4014,22 @@ async function route() {
 }
 
 langSelect.addEventListener("change", () => {
+  // Unsupported browser-supplied values cannot select a missing translation UI.
+  if (!["uk", "ru", "en"].includes(langSelect.value)) {
+    langSelect.value = state.lang;
+    return;
+  }
   const restorePickerFocus = document.activeElement === langSelect;
   state.lang = langSelect.value;
-  localStorage.setItem("sa.lang", state.lang);
+  const currentLanguage = state.lang;
+  const saved = storeReaderPreference("sa.lang", currentLanguage);
   state.mission = null;
   setStaticI18n();
   play("nav");
   void route().then(() => {
+    // A delayed old render cannot change focus or report the wrong language.
+    if (state.lang !== currentLanguage) return;
+    if (!saved) announce(LANGUAGE_TRANSIENT_MESSAGES[currentLanguage]);
     if (restorePickerFocus && document.activeElement === main && document.contains(langSelect)) {
       langSelect.focus({ preventScroll: true });
     }

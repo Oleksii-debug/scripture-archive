@@ -9,7 +9,7 @@ const code = source.slice(source.indexOf("const bookmarkCopy ="), source.indexOf
 function harness({ signedIn = true, fail = false, delayedRead = false } = {}) {
   let handler, current = [], writes = 0, releaseRead;
   const readGate = delayedRead ? new Promise(resolve => { releaseRead = resolve; }) : null;
-  const state = { lang: "en", user: signedIn ? { id: "one" } : null };
+  const state = { lang: "en", user: signedIn ? { id: "one" } : null, currentReader: { book: "GEN", chapter: 12 } };
   const button = { disabled: false, focus() {}, addEventListener(_name, fn) { handler = fn; } };
   const status = { textContent: "" };
   const panel = { isConnected: true, innerHTML: "", querySelector(selector) { return selector === "#toggle-bookmark" ? button : status; } };
@@ -31,6 +31,7 @@ function harness({ signedIn = true, fail = false, delayedRead = false } = {}) {
   return {
     panel, button, writes: () => writes,
     changeAccount: id => { state.user = id ? { id } : null; },
+    changeChapter: chapter => { state.currentReader = { book: "GEN", chapter }; },
     finishRead: () => releaseRead?.(),
     mount: () => context.mountReaderBookmarks({ code: "GEN" }, 12, { id: "en-web" }, [{ code: "GEN", title: "Genesis" }]),
     click: () => handler({ currentTarget: button }),
@@ -92,4 +93,33 @@ test("a bookmark click bound to an earlier account cannot mutate the next accoun
   h.changeAccount("two");
   await h.click();
   assert.equal(h.writes(), 0, "old principal's click handler must not send a write");
+});
+
+test("a delayed bookmark read cannot paint another chapter for the SAME signed-in user", async () => {
+  const h = harness({ delayedRead: true });
+  const pending = h.mount();
+  h.panel.innerHTML = "<p>New chapter 13 view</p>";
+  h.changeChapter(13);
+  h.finishRead();
+  await pending;
+  assert.equal(h.panel.innerHTML, "<p>New chapter 13 view</p>");
+  assert.equal(h.writes(), 0);
+});
+
+test("a delayed bookmark load failure cannot replace another chapter's error/status", async () => {
+  const h = harness({ delayedRead: true, fail: true });
+  const pending = h.mount();
+  h.panel.innerHTML = "<p>New chapter ready</p>";
+  h.changeChapter(13);
+  h.finishRead();
+  await pending;
+  assert.equal(h.panel.innerHTML, "<p>New chapter ready</p>");
+});
+
+test("a bookmark click from an old chapter cannot mutate the next chapter", async () => {
+  const h = harness();
+  await h.mount();
+  h.changeChapter(13);
+  await h.click();
+  assert.equal(h.writes(), 0, "old chapter handler must not issue a bookmark write");
 });

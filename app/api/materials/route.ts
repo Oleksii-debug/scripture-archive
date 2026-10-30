@@ -39,10 +39,18 @@ export async function GET(request: Request) {
       if (!data || typeof data !== "object" || Array.isArray(data))
         throw Error("invalid material payload");
       if (mine) return { ...row, data };
-      // Older owner-published rows remain visible, but cannot reveal answers.
-      const { answer: _answer, explanation: _explanation, ...publicData } = data as Record<string, unknown>;
-      void _answer; void _explanation;
-      return { ...row, data: publicData };
+      // Historical approved/public rows can contain arbitrary old JSON keys.
+      // A denylist of answer/explanation still leaks renamed answer keys,
+      // private notes or nested secrets. Emit only the fields the canonical
+      // public exercise UI actually needs and reject malformed old records.
+      const candidate = data as Record<string, unknown>;
+      const { prompt, reference, options } = candidate;
+      if (typeof prompt !== "string" || !prompt.trim() || prompt.length > 3000 ||
+          typeof reference !== "string" || !reference.trim() || reference.length > 200 ||
+          !Array.isArray(options) || options.length < 2 || options.length > 8 ||
+          !options.every(value => typeof value === "string" && value.trim() && value.length <= 500))
+        throw Error("invalid public material fields");
+      return { ...row, data: { prompt, reference, options } };
     });
     return Response.json({ materials }, { headers: { "Cache-Control": "no-store" } });
   } catch {

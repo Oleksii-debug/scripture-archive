@@ -1,3 +1,9 @@
+## 2026-10-30 — SA-EXT-02 / ATTEMPT_HISTORY_SCORE_FAILCLOSED — ВУЗЬКИЙ TERMINAL
+
+**CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** тільки для гарантії правдивих балів у приватній історії завершених місій. [PR #694](https://github.com/Oleksii-debug/scripture-archive/pull/694) **MERGED** `main@e9d14c5722c4206201ce81a28c6dd079d98a732d`; [exact-head CI #41056643516](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41056643516) **SUCCESS** (Node, TS, lint, build, disposable Worker/D1, Python). Реальний `GET /api/attempts?action=history` тепер відхиляє 10 класів пошкоджених score/total без фальшивого успіху, модифікації D1 або витоку іншого користувача. [Офіційний receipt](SA_EXT_02_ATTEMPT_HISTORY_SCORE_TERMINAL_20261030.md). `remaining_scoped_implementation=0`; `necessary_unmerged_PRs=0` для підфункції. **Весь SA-EXT-02 та всі 20 SA-EXT батьківських розділів OPEN**; фактичний сайт/NVDA та реліз окремі й не підтверджені. Жодного деплою.
+
+---
+
 ## 2026-10-30 — SA-EXT-01 / PROGRESS_EXPORT_METADATA_FAILCLOSED — SCOPED TERMINAL
 
 **CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** only for rejecting missing, typed-invalid or blank saved-progress mission IDs and update times in the canonical private export route. [PR #685](https://github.com/Oleksii-debug/scripture-archive/pull/685) **SQUASH MERGED** to exact `main@252e637a7993488cbc1be218d96cd8d2d15e93e2`. [Exact-head CI #41055352814](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41055352814) **SUCCESS**: native Node, TS, lint, build, disposable Worker/D1, Python. The repaired route and tests were read back from merged main; no necessary unmerged PR or remaining implementation for this narrow defect. [Full terminal receipt](SA_EXT_01_PROGRESS_EXPORT_METADATA_TERMINAL_20261030.md). **Parent SA-EXT-01 and all 20 complete SA-EXT sections remain OPEN**; production, browser/NVDA and translation rights not qualified. No deploy.

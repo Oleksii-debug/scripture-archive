@@ -14,6 +14,11 @@ const RESET_COPY={
   ru:{title:'Очистить отметки этого курса',detail:'Все отметки курса будут удалены только для текущего пользователя в этом браузере. Другие устройства не изменятся. Закройте другие вкладки курса, чтобы они снова не записали отметки.',confirm:'Я хочу удалить эти отметки из этого браузера',action:'Очистить отметки',confirmFirst:'Сначала подтвердите удаление отметок.',done:'Отметки удалены из этого браузера. Обновите страницу, чтобы продолжить.',uncertain:'Не удалось подтвердить удаление. Обновите страницу и проверьте состояние отметок.'},
   en:{title:'Clear this course’s markers',detail:'All course markers for the current user will be removed only from this browser. Other devices will not change. Close other course tabs to prevent them from saving markers again.',confirm:'I want to remove these markers from this browser',action:'Clear markers',confirmFirst:'Confirm removal first.',done:'Markers removed from this browser. Reload the page to continue.',uncertain:'Could not confirm removal. Reload the page and check the markers.'}
 };
+const SYNC_ERROR={
+  uk:'Не вдалося прочитати оновлені позначки з іншої вкладки. Оновіть сторінку й перевірте їх.',
+  ru:'Не удалось прочитать обновлённые отметки из другой вкладки. Обновите страницу и проверьте их.',
+  en:'Could not read the updated markers from another tab. Reload the page and check them.'
+};
 const languageOf=value=>LANGS.includes(value)?value:'uk';
 
 export function academyProgressKey(user){
@@ -67,7 +72,11 @@ export function academyMarkup(catalog,language,esc,progress) {
   return '<section class="academy-reading" data-academy-root aria-labelledby="academy-reading-title"><h2 id="academy-reading-title">'+esc(w.title)+'</h2><p>'+esc(w.intro)+'</p><p>'+esc(w.privacy)+'</p><p>'+esc(w.honesty)+'</p>'+(readOnly?'<p id="academy-reading-unavailable" role="alert">'+esc(w.unavailable)+'</p>':'<label for="academy-reading-progress">'+esc(w.progress)+'</label> <progress id="academy-reading-progress" max="'+total+'" value="'+count+'"></progress> <span id="academy-reading-status" role="status" aria-live="polite">'+esc(w.progress)+': '+count+'/'+total+'</span><p id="academy-reading-badge" role="status">'+(count===total?esc(w.badge):'')+'</p><p id="academy-reading-error" role="alert"></p>')+'<details><summary>'+esc(reset.title)+'</summary><p>'+esc(reset.detail)+'</p><label><input type="checkbox" id="academy-reset-confirm"> '+esc(reset.confirm)+'</label> <button type="button" class="button" id="academy-reset">'+esc(reset.action)+'</button><p id="academy-reset-status" role="status" aria-live="polite"></p></details><ol>'+lessons+'</ol></section>';
 }
 
-export function attachAcademy(document,storage,language,user,progress,isCurrent=()=>true,lockManager=undefined){
+let detachAcademyStorageListener=()=>{};
+export function attachAcademy(document,storage,language,user,progress,isCurrent=()=>true,lockManager=undefined,eventTarget=undefined){
+  // Replaced views must not accumulate live origin-wide listeners.
+  detachAcademyStorageListener();
+  detachAcademyStorageListener=()=>{};
   const root=document?.querySelector('[data-academy-root]');
   if(!root)return;
   const w=COPY[languageOf(language)],reset=RESET_COPY[languageOf(language)],key=academyProgressKey(user);
@@ -138,6 +147,33 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
     });
   }
   if(!progress?.available)return;
+  const events=eventTarget===undefined ? (typeof window==='undefined'?null:window) : eventTarget;
+  if(typeof key==='string' && events && typeof events.addEventListener==='function' && typeof events.removeEventListener==='function'){
+    const refresh=event=>{
+      if(!currentView())return;
+      if(event?.key!==key && event?.key!==null)return;
+      if(event?.storageArea && event.storageArea!==storage)return;
+      if(resetStatus)resetStatus.textContent='';
+      const latest=readAcademyProgress(storage,key);
+      if(!latest.available){
+        if(error)error.textContent=SYNC_ERROR[languageOf(language)];
+        return;
+      }
+      const selected=new Set(latest.completed);
+      for(const button of buttons){
+        const id=button.getAttribute('data-academy-lesson');
+        if(!academyLessonIds.includes(id))continue;
+        button.setAttribute('aria-pressed',String(selected.has(id)));
+        button.textContent=selected.has(id)?w.unmark:w.mark;
+      }
+      if(meter)meter.value=selected.size;
+      if(status)status.textContent=w.progress+': '+selected.size+'/'+academyLessonIds.length;
+      if(badge)badge.textContent=selected.size===academyLessonIds.length?w.badge:'';
+      if(error)error.textContent='';
+    };
+    events.addEventListener('storage',refresh);
+    detachAcademyStorageListener=()=>events.removeEventListener('storage',refresh);
+  }
   for(const button of buttons){
     const id=button.getAttribute('data-academy-lesson');
     if(!academyLessonIds.includes(id))continue;

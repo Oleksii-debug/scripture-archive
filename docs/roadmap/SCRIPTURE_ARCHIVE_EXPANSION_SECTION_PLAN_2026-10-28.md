@@ -1,3 +1,12 @@
+## 2026-10-30 — SA-EXT-01/16 / LOCAL_READING_HISTORY_BOOK_CODE_SHAPE — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
+
+**Остаточний стан конкретної підфункції:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. Повні батьківські SA-EXT-01, SA-EXT-16 та всі SA-EXT-01…20 залишаються **OPEN**.
+
+- **До виправлення:** `verifiedLocalReadingHistory` у справжньому `public/workspace.js` приймала псевдокоди `ABCD` і `1ABCD` за надто широким шаблоном `/^[1-3]?[A-Z]{2,4}$/`. Сторінка `/progress` помилково включала такі записи до підрахунку прочитаних глав і робила посилання `/reader/ABCD/1`. Усі 66 реальних кодів у канонічному каталозі задовольняють уже використовуваний в інших перевірках формат з 2–3 великих латинських букв і необов'язковим цифровим префіксом 1–3; другого довідника кодів не створено.
+- **Дійсна інтеграція:** [PR #582](https://github.com/Oleksii-debug/scripture-archive/pull/582) **SQUASH MERGED** до `main@314706f128fa6e2be8fb9cd2b078dabc8c26143b`. Перевірено blobs у main: `public/workspace.js@c1e555f03aa6cbfda540614c5925b0e4ea2faa84` та `tests/reading-history-dedup.test.mjs@c52dcd5ab4f62739f467d0d355b10c68daa0fe09`. Збережено нормальні `GEN`, `1CO`, `3JN`, обмеження історії 2048, дедуплікацію і головну сторінку. Доступ до пам'яті пристрою не змінено, збережені записи не стираються.
+- **Exact-HEAD CI:** [Actions #41026965760](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41026965760) на `head@269f4f74e318ad9205bbb98d03091e279593a98a`: Node native PASS, TypeScript PASS, lint PASS (0 errors), source build PASS, Python validators PASS. **Повний workflow FAIL:** на обох спробах окремий disposable Wrangler restart, `POST /api/editor-roles` повернув `503` замість `403` (21/22 інтеграційних сценаріїв). Цей самостійний блокер ведеться у [#361](https://github.com/Oleksii-debug/scripture-archive/pull/361); `E2E 22/22` не заявлено.
+- **Поза terminal scope:** не доведені deployed Cloudflare Sites SHA, фізичний NVDA, браузерне продакшн-приймання, повний план з 20 розділів або глобальний реліз. Повернути підпункт у роботу тільки за новим відтвореним дефектом чи новою вимогою.
+
 ## 2026-10-30 — SA-EXT-02/16 / READING_EXPORT_STRUCTURED_PROGRESS — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
 
 **Статус:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` лише для відмови експорту особистого прогресу зі збереженими JSON scalar/null/non-string records. `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Повні SA-EXT-02, SA-EXT-16 та інші SA-EXT-01…20 залишаються OPEN.**

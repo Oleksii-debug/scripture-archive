@@ -20,11 +20,11 @@ const task = {
   correct:[0],success:{uk:'Explanation',ru:'Explanation',en:'Explanation'},
 };
 
-function fixture(status='active',{expires_at='2099-01-01',owned=true,dbAvailable=true}={}){
+function fixture(status='active',{expires_at='2099-01-01',owned=true,dbAvailable=true,locale='uk'}={}){
   let lookups=0;
   const attempt={
     id:'attempt-1',actor_id:'alice',mission_id:'OT-AB-01',
-    book_id:'GEN',chapter:12,group_id:null,locale:'uk',
+    book_id:'GEN',chapter:12,group_id:null,locale,
     task_limit:1,current_index:0,status,expires_at,
     result_json:JSON.stringify({score:1,total:1}),
   };
@@ -60,7 +60,57 @@ function fixture(status='active',{expires_at='2099-01-01',owned=true,dbAvailable
       return {status:response.status,body:await response.json(),
         cache:response.headers.get('Cache-Control')};
     },
+    async post(action){
+      const response=await exports.POST(new Request('https://archive.invalid/api/attempts?action='+action,{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({attemptId:'attempt-1',taskIndex:1,selected:[0]}),
+      }));
+      return {status:response.status,body:await response.json(),cache:response.headers.get('Cache-Control')};
+    },
   };
+}
+
+
+// D1 is SQLite-affinity storage, not a runtime TypeScript Locale enum.
+// A corrupt stored locale previously returned 200 with a question-less task
+// (GET) or threw inside task.options[locale] during grading (POST).
+for (const badLocale of [
+  null, '', 'de', 'en-US', 'UK', [], ['en'], { locale: 'ru' },
+  0, 1, true, false, ' uk', 'ru ', 'en\\u0000',
+]) {
+  test('GET rejects corrupt stored locale before disclosing task '+JSON.stringify(badLocale),async()=>{
+    const h=fixture('active',{locale:badLocale}), result=await h.get();
+    assert.equal(result.status,409);
+    assert.equal(result.body.error,'attempt_state_invalid');
+    assert.ok(!('task' in result.body));
+    assert.match(result.cache,/no-store/);
+    assert.equal(h.lookups(),1);
+  });
+  test('POST answer refuses corrupt stored locale before grading mutation '+JSON.stringify(badLocale),async()=>{
+    const h=fixture('active',{locale:badLocale}), result=await h.post('answer');
+    assert.equal(result.status,409);
+    assert.equal(result.body.error,'attempt_state_invalid');
+    assert.ok(!('accepted' in result.body));
+    assert.match(result.cache,/no-store/);
+    assert.equal(h.lookups(),1);
+  });
+  test('POST finalize refuses corrupt grading locale before grading mutation '+JSON.stringify(badLocale),async()=>{
+    const h=fixture('grading',{locale:badLocale}), result=await h.post('finalize');
+    assert.equal(result.status,409);
+    assert.equal(result.body.error,'attempt_state_invalid');
+    assert.ok(!('completed' in result.body));
+    assert.match(result.cache,/no-store/);
+    assert.equal(h.lookups(),1);
+  });
+}
+for (const locale of ['uk','ru','en']) {
+  test('all approved persisted locales still disclose a readable public task '+locale,async()=>{
+    const result=await fixture('active',{locale}).get();
+    assert.equal(result.status,200);
+    assert.equal(result.body.task.question,'PRIVATE TEST TASK');
+    assert.deepEqual(Array.from(result.body.task.options),['A','B']);
+    assert.ok(!('correct' in result.body.task));
+  });
 }
 
 for(const status of ['revoked','paused','suspended','expired','ARCHIVED','', 'active ']){

@@ -236,8 +236,28 @@ export async function GET(request: Request) {
         typeof row.score === "number" && Number.isSafeInteger(row.score) && row.score >= 0 &&
         typeof row.total === "number" && Number.isSafeInteger(row.total) &&
         row.total > 0 && row.score <= row.total;
-      if ((history.results as Array<Record<string, unknown>>).some(row =>
-        !row || typeof row !== "object" || Array.isArray(row) || !scoreValid(row)))
+      // Saved rows can predate current constraints or be corrupted in D1.
+      // Invalid provenance must not be presented as an authentic chapter,
+      // completed timestamp, or group/personal history. This read never repairs
+      // another user's data or silently discards their record.
+      const contextValid = (row: Record<string, unknown>, dateField: string) =>
+        row && typeof row === "object" && !Array.isArray(row) &&
+        typeof row.id === "string" && row.id.length > 0 && row.id.length <= 80 &&
+        row.id.trim() === row.id &&
+        typeof row.book_id === "string" && row.book_id.length > 0 &&
+        row.book_id.length <= 8 && row.book_id.trim() === row.book_id &&
+        Number.isSafeInteger(row.chapter) && (row.chapter as number) > 0 &&
+        typeof row[dateField] === "string" &&
+        (row[dateField] as string).trim() === row[dateField] &&
+        Number.isFinite(Date.parse(row[dateField] as string));
+      const historyRows = history.results as Array<Record<string, unknown>>;
+      const pendingRows = pending.results as Array<Record<string, unknown>>;
+      if (historyRows.some(row =>
+        !contextValid(row, "completed_at") || !scoreValid(row) ||
+        (row.group_id != null &&
+          (typeof row.group_id !== "string" || row.group_id.length < 1 ||
+           row.group_id.length > 80 || row.group_id.trim() !== row.group_id))) ||
+        pendingRows.some(row => !contextValid(row, "started_at")))
         return json({ error: "attempt_history_unavailable" }, 503);
       return json({ attempts: (history.results as Array<Record<string, unknown>>).map(row => ({ id: row.id, book: row.book_id, chapter: row.chapter, mode: row.group_id ? "group" : "personal", score: row.score, total: row.total, completedAt: row.completed_at })), pending: (pending.results as Array<Record<string, unknown>>).map(row => ({id:row.id,book:row.book_id,chapter:row.chapter,startedAt:row.started_at})) });
     } catch { return json({ error: "database_unavailable" }, 503); }

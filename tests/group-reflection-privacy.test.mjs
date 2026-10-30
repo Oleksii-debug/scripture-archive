@@ -15,12 +15,12 @@ function fixture() {
   const groups = new Map([
     ["open", { id: "open", name: "Disposable open group", visibility: "public",
       roster_visibility: "private", member_activity_visibility: 0,
-      invite_code: "TESTCODE", member_count: 1, cohort_key: null,
+      invite_code: "TESTCODE", member_count: 1, cohort_size: 0, cohort_key: null,
       weekly_goal: 3, catchup_mode: "steady", session_count: 1,
       answers_correct: 1, answers_total: 2, chapters_completed: 1 }],
     ["closed", { id: "closed", name: "Disposable private group", visibility: "private",
       roster_visibility: "private", member_activity_visibility: 0,
-      invite_code: "HIDDEN", member_count: 1, cohort_key: null,
+      invite_code: "HIDDEN", member_count: 1, cohort_size: 0, cohort_key: null,
       weekly_goal: 3, catchup_mode: "steady", session_count: 1,
       answers_correct: 1, answers_total: 2, chapters_completed: 1 }],
   ]);

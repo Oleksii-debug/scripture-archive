@@ -137,6 +137,42 @@ for (const [field, changed] of [
   });
 }
 
+// An omitted/null optional value remains valid, but a supplied value of the
+// wrong JSON type must not be silently converted to a different saved record.
+for (const field of ['church','country','city','description']) {
+  for (const [kind,value] of [
+    ['boolean',true], ['number',42], ['array',['unexpected']],
+    ['object',{unexpected:'value'}],
+  ]) {
+    test('reject explicit '+kind+' group '+field+' before D1',async()=>{
+      const f=fixture();
+      try {
+        const response=await f.post('create',{...group,[field]:value});
+        assert.equal(response.status,400,field+' '+kind+' '+JSON.stringify(response.body));
+        assert.equal(response.body.error,'invalid_group');
+        assert.equal(f.writes,0,'wrong-type optional field must not reach D1');
+        assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM home_groups').get().n,1);
+      } finally {f.db.close();}
+    });
+  }
+}
+for (const [label,optionalFields] of [
+  ['omitted',{}],
+  ['explicit null',{church:null,country:null,city:null,description:null}],
+]) {
+  test('group create accepts '+label+' optional profile fields',async()=>{
+    const f=fixture();
+    try {
+      const response=await f.post('create',{...group,...optionalFields});
+      assert.equal(response.status,201,JSON.stringify(response.body));
+      const row=f.db.prepare('SELECT church,country,city,description FROM home_groups WHERE id=?')
+        .get(response.body.groupId);
+      for (const field of ['church','country','city','description'])
+        assert.equal(row[field],null,field+' should remain explicitly optional');
+    } finally {f.db.close();}
+  });
+}
+
 test('group creation persists the exact maximum authored fields',async()=>{
   const f=fixture();
   try{

@@ -320,7 +320,9 @@ export async function POST(request: Request) {
     ["city", 80], ["description", 600],
   ] as const).some(([key, max]) => {
     const value = body[key];
-    return typeof value === "string" && value.trim().length > max;
+    // An explicitly supplied non-string optional field must not be silently
+    // converted to null by clean() and reported as successfully saved.
+    return value != null && (typeof value !== "string" || value.trim().length > max);
   })) return Response.json({ error: "invalid_group" }, { status: 400 });
   const name = clean(body.name, 100);
   const weeklyGoal = integer(body.weeklyGoal, 1, 31);

@@ -1,4 +1,4 @@
-import { reviewText, submissionForm, historyMarkup, queueMarkup, auditMarkup, attachReviewControls, renderPublicMaterials, loadReviewData, editorRolesMarkup, attachEditorRoles } from './material-review.js';
+import { reviewText, submissionForm, historyMarkup, queueMarkup, auditMarkup, attachReviewControls, renderPublicMaterials, renderReviewedLibrary, loadReviewData, editorRolesMarkup, attachEditorRoles } from './material-review.js';
 import { dossierMarkup, dossierAtlasMarkup } from './scripture-dossiers.js';
 import { academyMarkup, academyProgressKey, readAcademyProgress, attachAcademy } from './scripture-academy.js';
 
@@ -249,11 +249,11 @@ export async function renderWorkspace(name,c) {
   }
   if(name==='library') {
     const copy=LIBRARY_COPY[state.lang] || LIBRARY_COPY.uk;
-    shell(`<section class="reviewed-library" aria-labelledby="reviewed-library-title"><div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1 id="reviewed-library-title">${esc(copy.title)}</h1></div></div><p class="lead">${esc(copy.lead)}</p><p>${esc(copy.scope)}</p><div id="public-materials" aria-live="polite"></div><p><a href="/builder">${esc(reviewText(state.lang).builder)}</a></p></section>`);
+    shell(`<section class="reviewed-library" aria-labelledby="reviewed-library-title"><div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1 id="reviewed-library-title">${esc(copy.title)}</h1></div></div><p class="lead">${esc(copy.lead)}</p><p>${esc(copy.scope)}</p><div id="public-materials"></div><p><a href="/builder">${esc(reviewText(state.lang).builder)}</a></p></section>`);
     // Reuse the canonical reviewed-material list and answer-check API: no
     // shadow library database or second publication/identity authority.
     const list=globalThis.document?.querySelector('#public-materials');
-    if(list)await renderPublicMaterials(list,reviewText(state.lang),esc,stillCurrent);
+    if(list)await renderReviewedLibrary(list,reviewText(state.lang),state.lang,esc,stillCurrent);
     return;
   }
   if(name==='campaigns') {

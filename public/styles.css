@@ -221,3 +221,8 @@ body{background:linear-gradient(180deg,#f8f6f0 0,#eef2f1 58%,#f8f6f0 100%)}
 .verse-cite:hover{background:var(--gold-soft)}
 .verse-cite:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 #reader-cite-status:not(:empty){font:500 .9rem/1.6 var(--sans);margin-block:1rem;color:#345165}
+
+/* The shared .button display must not override the library's hidden state. */
+.library-search-more[hidden]{display:none}
+.library-search{max-width:42rem;margin:1.5rem 0}
+.library-search-results>.card,.library-search-results section>.card{margin:1rem 0}

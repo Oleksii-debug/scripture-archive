@@ -19,7 +19,7 @@ function fixture() {
   function statement(sql,args=[]) {return {sql,args,
     first:async()=>db.prepare(sql).get(...args)??null,
     all:async()=>({success:true,results:db.prepare(sql).all(...args)}),
-    run:async()=>{if(beforeRun){const hook=beforeRun;beforeRun=null;hook();}const receipt={success:true,meta:{changes:Number(db.prepare(sql).run(...args).changes)}};if(afterRun){const hook=afterRun;afterRun=null;return hook(receipt);}return corruptSingleReceipt ? (corruptSingleReceipt=null,{success:true,meta:{}}) : receipt;},
+    run:async()=>{if(beforeRun){const hook=beforeRun;beforeRun=null;hook();}const receipt={success:true,meta:{changes:Number(db.prepare(sql).run(...args).changes)}};const mode=corruptSingleReceipt;corruptSingleReceipt=null;if(afterRun){const hook=afterRun;afterRun=null;return hook(receipt);}if(mode==='missing')return {success:true,meta:{}};if(mode==='failed')return {success:false,meta:{changes:receipt.meta.changes}};return receipt;},
   };}
   const D1={prepare(sql){return {...statement(sql),bind:(...args)=>statement(sql,args)};},async batch(statements){
     if(beforeBatch){const hook=beforeBatch;beforeBatch=null;hook();}

@@ -205,3 +205,19 @@ body{background:linear-gradient(180deg,#f8f6f0 0,#eef2f1 58%,#f8f6f0 100%)}
 .groups-hero .eyebrow,.lab-hero .eyebrow,.community-hero .eyebrow{color:#f0d89f}
 /* SA-04: selected deep-linked verse remains visible and keyboard readable. */
 .verse[data-selected-verse]{border-inline-start:3px solid var(--gold);padding-inline-start:.75rem;background:rgba(200,154,75,.08);scroll-margin-block:6rem}
+
+/* Accessible verse citations: native keyboard buttons and visible focus. */
+.verse-cite{
+  margin-inline-start:.55rem;
+  padding:.12rem .45rem;
+  border:1px solid var(--line);
+  border-radius:.35rem;
+  background:var(--surface);
+  color:#345165;
+  cursor:pointer;
+  font:600 .75rem/1.5 var(--sans);
+  vertical-align:baseline;
+}
+.verse-cite:hover{background:var(--gold-soft)}
+.verse-cite:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+#reader-cite-status:not(:empty){font:500 .9rem/1.6 var(--sans);margin-block:1rem;color:#345165}

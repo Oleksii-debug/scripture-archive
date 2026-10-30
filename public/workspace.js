@@ -5,7 +5,41 @@ import { academyMarkup, academyProgressKey, readAcademyProgress, attachAcademy }
 // The local reading cache is user/device-controlled JSON, not a trusted Bible
 // chapter receipt. Never let a malformed item break the progress route or
 // create a misleading chapter link; leave the stored bytes untouched for recovery.
-export function verifiedLocalReadingHistory(raw) {
+// Only a validated canonical inventory may authorize user-visible reading
+// history; approved editions can have different chapter divisions (JOL 4).
+export function canonicalReadingChapterBounds(catalog) {
+  const books = catalog?.books?.en;
+  if (!Array.isArray(books) || books.length !== 66) return null;
+  const bounds = new Map();
+  for (const book of books) {
+    if (!book || typeof book.code !== 'string' ||
+        !/^[1-3]?[A-Z]{2,3}$/.test(book.code) ||
+        !Number.isSafeInteger(book.chapters) || book.chapters < 1 ||
+        book.chapters > 150 || bounds.has(book.code)) return null;
+    bounds.set(book.code, book.chapters);
+  }
+  const editions = catalog?.editionBooks;
+  if (editions !== undefined) {
+    if (!editions || typeof editions !== 'object' || Array.isArray(editions)) return null;
+    for (const rows of Object.values(editions)) {
+      if (!Array.isArray(rows)) return null;
+      for (const book of rows) {
+        if (!book || typeof book.code !== 'string' || !bounds.has(book.code) ||
+            !Number.isSafeInteger(book.chapters) || book.chapters < 1 ||
+            book.chapters > 150) return null;
+        bounds.set(book.code, Math.max(bounds.get(book.code), book.chapters));
+      }
+    }
+  }
+  return bounds;
+}
+
+export function verifiedLocalReadingHistory(raw, canonicalBounds) {
+  // A missing or damaged catalog cannot authorize local source claims.
+  // The optional parameter preserves older standalone helper clients; the
+  // actual progress page always passes a validated Map or refuses display.
+  if (canonicalBounds !== undefined &&
+      (!(canonicalBounds instanceof Map) || canonicalBounds.size !== 66)) return [];
   if (!Array.isArray(raw)) return [];
   // Keep the newest entries. 1000 oldest entries could hide recent legitimate
   // chapters in a complete Bible-reading journey; 2048 bounds hostile caches.
@@ -13,6 +47,7 @@ export function verifiedLocalReadingHistory(raw) {
     item && typeof item === 'object' && !Array.isArray(item) &&
     typeof item.book === 'string' && /^[1-3]?[A-Z]{2,3}$/.test(item.book) &&
     Number.isSafeInteger(item.chapter) && item.chapter >= 1 && item.chapter <= 150 &&
+    (canonicalBounds === undefined || item.chapter <= (canonicalBounds.get(item.book) || 0)) &&
     typeof item.title === 'string' && item.title.trim().length > 0 && item.title.length <= 200);
   // Imported/legacy caches may contain the same chapter more than once.
   // Display and count only distinct chapters, retaining the newest accepted
@@ -239,13 +274,25 @@ export async function renderWorkspace(name,c) {
     if(state.user) try { history=await request('/api/attempts?action=history'); } catch { history={error:true}; }
     // A late history read belongs to its original route and account only.
     if(!stillCurrent())return;
+    // The account API validates chapters against the existing canonical Bible
+    // catalog and its approved edition-specific divisions. Local cache rows
+    // cannot authorize fabricated book links or impossible chapter counts.
+    let chapterBounds=null;
+    try { chapterBounds=canonicalReadingChapterBounds(await c.getCatalog()); }
+    catch { /* source unavailable: no fake progress; warn the reader */ }
+    if(!stillCurrent())return;
     const p=state.missionProgress;
     let read=[];
-    if (!state.localReadingStorageUntrusted && !state.unownedReadingPendingRecovery) {
-      try { read=verifiedLocalReadingHistory(c.loadJSON('sa.readingHistory',[])); }
+    if (chapterBounds && !state.localReadingStorageUntrusted && !state.unownedReadingPendingRecovery) {
+      try { read=verifiedLocalReadingHistory(c.loadJSON('sa.readingHistory',[]),chapterBounds); }
       catch { /* restricted storage must not block the progress page */ }
     }
-    shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${w.progress}</h1></div><p>${w.progressLead}</p></div>${syncWarning?`<p role="alert">${esc(syncWarning)}</p>`:''}<div class="card-grid"><article class="card progress-stat"><strong>${p.correct.length} / ${taskCount}</strong><p>${w.tasks}</p></article><article class="card progress-stat"><strong>${read.length}</strong><p>${w.chapters}</p></article><article class="card progress-stat"><strong>${p.complete?w.finished:p.index?w.inProgress:w.notStarted}</strong><p>${w.status}</p></article></div><section class="card resume-card"><h2>${esc((mission.title?.[state.lang]||t("missionTitle")))}</h2><progress aria-label="${w.tasks}" max="${taskCount||1}" value="${p.correct.length}"></progress><div class="action-row"><a class="button primary" href="/mission/abraham">${w.continue}</a><a class="button" href="/groups">${t('myGroups')}</a></div></section>${reviewScheduleMarkup(history,state.lang,esc)}${missionHistoryMarkup(history,state.lang,esc)}<section class="card resume-card"><h2>${w.readingHistory}</h2>${read.length?`<div class="reading-links">${read.slice().reverse().map(r=>`<a class="button" href="/reader/${encodeURIComponent(r.book)}/${Number(r.chapter)}">${esc(r.title)} ${Number(r.chapter)}</a>`).join('')}</div>`:`<p>${w.nothingRead}</p>`}</section>`);
+    const readingCatalogWarning={
+      uk:'Не вдалося перевірити біблійний каталог. Локальну історію читання тимчасово не показано.',
+      ru:'Не удалось проверить библейский каталог. Локальная история чтения временно скрыта.',
+      en:'The Bible catalog could not be verified. Local reading history is temporarily hidden.',
+    }[state.lang] || 'The Bible catalog could not be verified.';
+    shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${w.progress}</h1></div><p>${w.progressLead}</p></div>${syncWarning?`<p role="alert">${esc(syncWarning)}</p>`:''}<div class="card-grid"><article class="card progress-stat"><strong>${p.correct.length} / ${taskCount}</strong><p>${w.tasks}</p></article><article class="card progress-stat"><strong>${chapterBounds ? read.length : '—'}</strong><p>${w.chapters}</p></article><article class="card progress-stat"><strong>${p.complete?w.finished:p.index?w.inProgress:w.notStarted}</strong><p>${w.status}</p></article></div><section class="card resume-card"><h2>${esc((mission.title?.[state.lang]||t("missionTitle")))}</h2><progress aria-label="${w.tasks}" max="${taskCount||1}" value="${p.correct.length}"></progress><div class="action-row"><a class="button primary" href="/mission/abraham">${w.continue}</a><a class="button" href="/groups">${t('myGroups')}</a></div></section>${reviewScheduleMarkup(history,state.lang,esc)}${missionHistoryMarkup(history,state.lang,esc)}<section class="card resume-card"><h2>${w.readingHistory}</h2>${read.length?`<div class="reading-links">${read.slice().reverse().map(r=>`<a class="button" href="/reader/${encodeURIComponent(r.book)}/${Number(r.chapter)}">${esc(r.title)} ${Number(r.chapter)}</a>`).join('')}</div>`:`<p>${chapterBounds ? w.nothingRead : esc(readingCatalogWarning)}</p>`}</section>`);
     document.querySelector('#retry-mission-history')?.addEventListener('click',()=>renderWorkspace('progress',c));
     return;
   }

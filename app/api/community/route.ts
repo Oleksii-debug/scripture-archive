@@ -10,7 +10,7 @@ const json = (data: unknown, status = 200) => Response.json(data, { status, head
 function directoryInteger(raw: string | null, fallback: number, min: number, max: number) {
   // Do not return fractional/NaN pagination cursors while the array slice
   // silently truncates them. Non-decimal user input retains the safe default.
-  if (raw === null || !/^[0-9]{1,5}$/.test(raw)) return fallback;
+  if (raw === null || !/^[0-9]{1,15}$/.test(raw)) return fallback;
   const number = Number(raw);
   return Number.isSafeInteger(number) ? Math.max(min, Math.min(max, number)) : fallback;
 }

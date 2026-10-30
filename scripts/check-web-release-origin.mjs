@@ -10,6 +10,10 @@ export function normalizeSecureOrigin(value, label = 'origin') {
   // or whitespace into a seemingly approved public host.
   if (value !== value.trim() || /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\s]/u.test(value))
     throw new Error(`${label}: invalid URL whitespace or controls`);
+  // WHATWG URL also discards empty userinfo (`https://@host` or `https://:@host`),
+  // making a credential-bearing authority indistinguishable from a bare host.
+  if (/^https:\/\/[^/?#]*@/iu.test(value))
+    throw new Error(`${label}: invalid URL userinfo separator`);
   let url;
   try { url = new URL(value); }
   catch { throw new Error(`${label}: invalid URL`); }

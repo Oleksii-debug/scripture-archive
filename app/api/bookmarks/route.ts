@@ -62,6 +62,7 @@ function recoveryDescription(row: RecoveryRow): string {
   return [row.edition, row.book, row.chapter].map(text).join(" / ");
 }
 async function removeDamagedBookmark(owner: string, body: unknown) {
+  if (!env.DB) return json({ error: "database_unavailable" }, 503);
   const reference = (body as { recovery_ref?: unknown }).recovery_ref;
   if (typeof reference !== "string" || !/^[1-9][0-9]{0,15}\.[0-9a-f]{64}$/.test(reference))
     return json({ error: "invalid_recovery_reference" }, 400);

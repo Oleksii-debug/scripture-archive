@@ -1,3 +1,9 @@
+## 2026-10-30 — SA-EXT-02 / COMPLETED_RESULT_RECEIPT_CONSISTENCY — вузький TERMINAL
+
+**CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** тільки для перевірки відповідності збереженого JSON-результату та D1 балів завершеної місії. [PR #710](https://github.com/Oleksii-debug/scripture-archive/pull/710) **SQUASH MERGED** `main@8ff4618473d25551a6839ecd3a1bfaf7942fbf4e`; final exact-head [CI #41058847951](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41058847951) **SUCCESS** (Node, TS, lint, build, Worker/D1, Python), після виправлення старої тестової фікстури. Пошкоджені `result_json` / `score` / `total` більше не видаються за `completed:true`; приватний 503 і жодних D1 змін. [Офіційна квитанція](SA_EXT_02_COMPLETED_RESULT_CONSISTENCY_TERMINAL_20261030.md). `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` лише для цього дефекту. **Усі 20 повних SA-EXT-01…20 залишаються OPEN**; Sites/Windows/NVDA/production NOT_VERIFIED, деплою немає.
+
+---
+
 ## 2026-10-30 — SA-EXT-04 / GROUP_STUDY_AGGREGATE_FAILCLOSED — SCOPED TERMINAL
 
 **CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** тільки для коректних числових показників публічних і особистих груп. [Code PR #709](https://github.com/Oleksii-debug/scripture-archive/pull/709) **SQUASH MERGED** до `main@be9d32cf58fd671f7bb9920c69d89409f9ae1ed7`; [CI #41058471195](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41058471195) **SUCCESS** (Node/TS/lint/build/Worker-D1/Python); 40 API response-path сценаріїв, серед них 19 класів пошкодженого D1 агрегату. У разі невірних балів/підсумків/глав існуючий GET повертає private `503 groups_unavailable`, не вигадані відсотки. [Permanent receipt](SA_EXT_04_GROUP_AGGREGATE_INTEGRITY_TERMINAL_20261030.md). `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` для вузького дефекту. **SA-EXT-04 та всі батьківські SA-EXT-01…20 OPEN**; live/NVDA/SMTP/реліз не перевірені; без деплою.

@@ -80,7 +80,7 @@ function fixture(deadline){
   };
 }
 
-for(const bad of ['bad-date','',null,0,{},'Infinity',' 2099-01-01','2099-01-01 ']){
+for(const bad of ["2099-02-30","2099-04-31","2099-06-31","2099-02-29","2100-02-29","2099-00-01","2099-13-01","2099-01-00","2099-01-32","2099-01-01 24:00:00","2099-01-01 12:60:00","2099-01-01 12:00:60","2099-01-01T24:00:00Z","2099-01-01T12:60:00Z","2099-01-01T12:00:60Z","2099-01-01T12:00:00+03:00","2099-01-01T12:00:00","2099-01-01 1:00:00","2099-01-01T01:2:03Z","2099-01-01T01:02:03.123Z","2099-01-01T01:02:03z","2099/01/01","2099-01","2099","1","0"," 2099-01-01","2099-01-01 ","yesterday","Infinity","",null,0,{},[],"0099-12-31","0999-12-31","bad-date"]){
   test('corrupt stored deadline cannot disclose a task or accept an answer: '+JSON.stringify(bad),async()=>{
     const route=fixture(bad);
     const get=await route.get();
@@ -121,4 +121,22 @@ test('SQLite UTC datetime format remains a valid future attempt deadline',async(
   const get=await route.get();
   assert.equal(get.status,200);
   assert.equal(get.body.task.question,'SECRET TASK');
+});
+
+
+test('strict canonical future ISO UTC deadline retains a readable task',async()=>{
+  const route=fixture('2099-01-01T12:15:30Z');
+  const result=await route.get();
+  assert.equal(result.status,200);
+  assert.equal(result.body.task.question,'SECRET TASK');
+  assert.equal(route.mutations(),0);
+});
+test('Gregorian leap-day and canonical D1 deadline are accepted by the exact route',async()=>{
+  for(const deadline of ['2096-02-29 23:59:59','2096-02-29T23:59:59Z']){
+    const route=fixture(deadline);
+    const result=await route.get();
+    assert.equal(result.status,200);
+    assert.equal(result.body.task.question,'SECRET TASK');
+    assert.equal(route.mutations(),0);
+  }
 });

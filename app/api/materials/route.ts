@@ -2,6 +2,16 @@ import { env } from "cloudflare:workers";
 import { authenticateRequest, isVerifiedOwner, sameOrigin } from "../../../lib/auth";
 export const dynamic = "force-dynamic";
 const clean = (v: unknown, max: number) => typeof v === "string" ? v.trim().slice(0, max) : "";
+// An owner export must contain restorable structured drafts and review snapshots.
+// JSON.parse accepts null, scalar values and arrays, none of which the canonical
+// study-material/editorial schema can restore as a material or snapshot.
+function exportRecord(raw: unknown): Record<string, unknown> {
+  if (typeof raw !== "string") throw Error("invalid_export_record");
+  const value: unknown = JSON.parse(raw);
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw Error("invalid_export_record");
+  return value as Record<string, unknown>;
+}
 
 export async function GET(request: Request) {
   if (!env.DB) return Response.json({ error: "database_unavailable" }, { status: 503, headers: { "Cache-Control": "no-store" } });
@@ -21,8 +31,8 @@ export async function GET(request: Request) {
         env.DB.prepare("SELECT id,material_id,snapshot,provenance,rights_attested,status,submitted_at,reviewed_at,review_note,closed_at FROM material_submissions WHERE author_id=? ORDER BY submitted_at,id").bind(userId),
       ]);
       if (!drafts.success || !versions.success || !Array.isArray(drafts.results) || !Array.isArray(versions.results)) throw Error("export failed");
-      const items = (drafts.results as Record<string, unknown>[]).map(row => ({ ...row, data: JSON.parse(String(row.data)) }));
-      const history = (versions.results as Record<string, unknown>[]).map(row => ({ ...row, snapshot: JSON.parse(String(row.snapshot)) }));
+      const items = (drafts.results as Record<string, unknown>[]).map(row => ({ ...row, data: exportRecord(row.data) }));
+      const history = (versions.results as Record<string, unknown>[]).map(row => ({ ...row, snapshot: exportRecord(row.snapshot) }));
       return new Response(JSON.stringify({ format: "scripture-archive-materials-export", version: 1, exportedAt: new Date().toISOString(), materials: items, submissions: history }, null, 2), { headers: { "Content-Type": "application/json; charset=utf-8", "Content-Disposition": 'attachment; filename="scripture-archive-materials.json"', "Cache-Control": "no-store, private", "X-Content-Type-Options": "nosniff" } });
     } catch { return Response.json({ error: "export_unavailable" }, { status: 503, headers: { "Cache-Control": "no-store, private" } }); }
   }

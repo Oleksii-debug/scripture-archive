@@ -8,7 +8,7 @@ import vm from "node:vm";
 function fixture() {
   const db = new DatabaseSync(":memory:");
   db.exec("PRAGMA foreign_keys=ON");
-  for (const name of readdirSync(new URL("../drizzle/", import.meta.url)).filter(n => /^000[0-9]_.*\.sql$/.test(n)).sort())
+  for (const name of readdirSync(new URL("../drizzle/", import.meta.url)).filter(n => /^00(?:0[0-9]|10)_.*\.sql$/.test(n)).sort())
     db.exec(readFileSync(new URL("../drizzle/" + name, import.meta.url), "utf8"));
   db.prepare("INSERT INTO accounts (id,email,password_hash,password_salt,password_iterations,first_name,last_name) VALUES ('alice','alice@example.invalid','oldhash','oldsalt',1,'Alice','Test')").run();
   db.prepare("INSERT INTO auth_sessions(token_hash,user_id,session_version,user_agent_hash,expires_at) VALUES ('session','alice',1,'agent','2099-01-01')").run();

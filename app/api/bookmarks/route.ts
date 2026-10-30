@@ -37,11 +37,25 @@ function valid(body: unknown, remove = false): body is { edition: string; book: 
 // The reference binds a SQLite rowid to its complete observed row and owner;
 // the DELETE compares each original column again to reject concurrent edits.
 type RecoveryRow = { recovery_rowid?: unknown; edition?: unknown; book?: unknown; chapter?: unknown; created_at?: unknown };
+// A nonempty persisted timestamp is not necessarily a real date. D1 uses
+// UTC "YYYY-MM-DD HH:MM:SS"; keep existing date-only and ISO UTC imports
+// readable, but quarantine impossible/malformed values through the existing
+// explicit recovery UI rather than advertising them as healthy bookmarks.
+function validBookmarkTimestamp(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const match = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z)?)?$/.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
+  if (year < 1000 || month < 1 || month > 12 || day < 1 || day > 31) return false;
+  const canonical = new Date(Date.UTC(year, month - 1, day));
+  if (canonical.getUTCFullYear() !== year || canonical.getUTCMonth() + 1 !== month || canonical.getUTCDate() !== day) return false;
+  return match[4] === undefined || (Number(match[4]) < 24 && Number(match[5]) < 60 && Number(match[6]) < 60);
+}
 function usableBookmark(row: unknown): row is { edition: string; book: string; chapter: number; created_at: string } {
   if (!valid(row)) return false;
   const createdAt = (row as RecoveryRow).created_at;
   return LOCAL_EDITION_IDS.has(row.edition) && row.chapter <= bookChapterLimit(row.edition, row.book)
-    && typeof createdAt === "string" && Boolean(createdAt.trim());
+    && validBookmarkTimestamp(createdAt);
 }
 function primitiveField(value: unknown): value is string | number | null {
   return value === null || typeof value === "string"

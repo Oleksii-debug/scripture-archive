@@ -151,3 +151,39 @@ test('group paths and dynamic document titles are reduced to safe coarse route l
   assert.ok(!JSON.stringify([app.posts, app.gaEvents()]).includes(ADDRESS));
   assert.ok(!JSON.stringify([app.posts, app.gaEvents()]).includes(SECRET));
 });
+
+test('34 arbitrary analytics event identifiers are rejected before both analytics sinks', () => {
+  const app = boot();
+  const names = [
+    'unknown_event', 'john_doe_private', 'secret_1234567890',
+    'password_reset_abc', 'account_email_user', 'private_group_991',
+    'otp_123456', 'bearer_token_999', 'personal_note',
+    'identity_key_123', 'phone_12345678', 'session_key_abc',
+    'private_answer_1', 'journal_entry_22', 'group_invite_token',
+    'child_name_amy', 'mail_alice_example', 'confession_private',
+    'student_exam_result', 'sensitive_profile', 'donor_payment_ref',
+    'editor_draft_key', 'recovery_link_id', 'access_code_111',
+    'my_secret_token', 'group_membership', 'private_chat_party',
+    'phone_number_user', 'email_token_data', 'session_uuid_test',
+    'private_dossier_id', 'anonymous_leak', 'answer_phrase',
+    'account_search_key',
+  ];
+  assert.equal(names.length, 34);
+  for (const name of names)
+    app.window.saAnalytics.track(name, { destination: 'reader' });
+  assert.equal(app.posts.length, 0);
+  assert.deepEqual(app.gaEvents(), []);
+});
+
+test('all ten canonical events still reach both consented analytics sinks', () => {
+  const app = boot();
+  const allowed = [
+    'page_view', 'sign_up', 'sign_up_error', 'login', 'login_error',
+    'quiz_start', 'quiz_complete', 'navigation_click',
+    'support_click', 'client_error',
+  ];
+  for (const name of allowed)
+    app.window.saAnalytics.track(name, { destination: 'reader' });
+  assert.deepEqual(app.posts.map(item => item.payload.eventType), allowed);
+  assert.deepEqual(app.gaEvents().map(item => item.name), allowed);
+});

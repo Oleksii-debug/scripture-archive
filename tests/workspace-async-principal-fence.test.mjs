@@ -226,6 +226,6 @@ test('current builder save still refreshes and emits one successful accessible n
     await form.onsubmit({preventDefault(){},currentTarget:form});
     assert.equal(f.shells.length,2,'successful save must redraw the canonical builder');
     assert.equal(urls.filter(url=>url==='/api/materials').length,1,'POST must never replay');
-    assert.deepEqual(notices,['saved'],'one successful same-account announcement');
+    assert.deepEqual(notices,['Material saved.'],'one successful same-account announcement');
   }finally{globalThis.FormData=previousFormData;f.restore();}
 });

@@ -219,11 +219,13 @@ export async function POST(request: Request) {
     if (!account || !await verifyPassword(currentPassword, account.password_hash, account.password_salt, account.password_iterations))
       return json({ error: "invalid_credentials" }, 401);
     const passwordData = await hashPassword(newPassword);
-    await env.DB.batch([
+    const receipts = await env.DB.batch([
       env.DB.prepare("UPDATE accounts SET password_hash=?,password_salt=?,password_iterations=?,session_version=session_version+1,updated_at=CURRENT_TIMESTAMP WHERE id=?")
         .bind(passwordData.hash, passwordData.salt, passwordData.iterations, identity.userId),
       env.DB.prepare("UPDATE auth_sessions SET revoked_at=CURRENT_TIMESTAMP WHERE user_id=? AND revoked_at IS NULL").bind(identity.userId),
     ]);
+    if (!batchAcknowledged(receipts, 2) || receipts[0].meta.changes !== 1)
+      return json({ error: "password_change_unavailable" }, 503);
     return json({ ok: true, signedOut: true }, 200, { "Set-Cookie": clearSessionCookie(request) });
   }
 
@@ -235,7 +237,7 @@ export async function POST(request: Request) {
     if (!account || typeof password !== "string" || !await verifyPassword(password, account.password_hash, account.password_salt, account.password_iterations))
       return json({ error: "invalid_credentials" }, 401);
     try {
-    await env.DB.batch([
+    const receipts = await env.DB.batch([
       env.DB.prepare("DELETE FROM progress WHERE user_id=?").bind(identity.userId),
       env.DB.prepare("DELETE FROM reader_bookmarks WHERE user_id=?").bind(identity.userId),
       env.DB.prepare("DELETE FROM mission_attempt_answers WHERE attempt_id IN (SELECT id FROM mission_attempts WHERE actor_id=?)").bind(identity.userId),
@@ -260,6 +262,10 @@ export async function POST(request: Request) {
         .bind(`deleted-${identity.userId}@invalid.local`, identity.userId),
       env.DB.prepare("DELETE FROM auth_sessions WHERE user_id=?").bind(identity.userId),
     ]);
+    // All 19 statements, including shared-record redaction and final account
+    // update, must be acknowledged. Empty unrelated DELETEs may change 0 rows.
+    if (!batchAcknowledged(receipts, 19) || receipts[17].meta.changes !== 1)
+      throw Error("deletion_batch_unconfirmed");
     } catch {
       // D1 batch rejects atomically; do not pretend the account was erased.
       return json({ error: "deletion_failed" }, 503);

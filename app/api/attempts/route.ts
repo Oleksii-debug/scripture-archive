@@ -308,7 +308,11 @@ export async function POST(request: Request) {
   if (action === "answer") {
     const attemptId = clean(body.attemptId, 80), { currentActor, attempt } = await ownedAttempt(request, attemptId);
     if (!currentActor || !attempt) return json({ error: "attempt_not_found" }, 404);
-    if ((attempt.status === "grading" || attempt.status === "completed") && Number(body.taskIndex) === attempt.task_limit)
+    // Task cursors, including the idempotent grading path, must be JSON numbers.
+    const taskIndex = body.taskIndex;
+    if (typeof taskIndex !== "number" || !Number.isSafeInteger(taskIndex))
+      return json({ error: "invalid_answer" }, 400);
+    if ((attempt.status === "grading" || attempt.status === "completed") && taskIndex === attempt.task_limit)
       return finishAttempt(attempt, currentActor.id, currentActor.guest, true);
     if (attempt.status !== "active") return json({ error: attempt.status === "invalidated" ? "attempt_invalidated" : "attempt_closed" }, 409);
     if (Date.parse(attempt.expires_at) <= Date.now()) {
@@ -317,9 +321,13 @@ export async function POST(request: Request) {
       return json({ error: "attempt_expired" }, 410);
     }
     const tasks = tasksFor(attempt.book_id, attempt.chapter).slice(0, attempt.task_limit), task = tasks[attempt.current_index];
-    if (Number(body.taskIndex) < attempt.current_index + 1) return json({ error: "answer_already_submitted" }, 409);
-    if (!task || Number(body.taskIndex) !== attempt.current_index + 1 || !Array.isArray(body.selected)) return json({ error: "invalid_answer" }, 400);
-    const selected = [...new Set((body.selected as unknown[]).map(Number))].sort((a, b) => a - b);
+    if (taskIndex < attempt.current_index + 1) return json({ error: "answer_already_submitted" }, 409);
+    if (!task || taskIndex !== attempt.current_index + 1 || !Array.isArray(body.selected)) return json({ error: "invalid_answer" }, 400);
+    // Answer option indexes are numeric JSON values, not coercible strings,
+    // booleans or null. Reject ambiguous input before any durable grading write.
+    if ((body.selected as unknown[]).some(index => typeof index !== "number"))
+      return json({ error: "invalid_answer" }, 400);
+    const selected = [...new Set(body.selected as number[])].sort((a, b) => a - b);
     if (!selected.length || selected.some(index => !Number.isInteger(index) || index < 0 || index >= task.options[attempt.locale].length)) return json({ error: "invalid_answer" }, 400);
     const expected = [...task.correct].sort((a, b) => a - b), correct = JSON.stringify(selected) === JSON.stringify(expected);
     const nextIndex = attempt.current_index + 1;

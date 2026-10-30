@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 // transaction begins; execute the exact production SQL in transaction order.
 test('two stale receipt observations can produce only one attempt', () => {
   const source = readFileSync(new URL('../app/api/attempts/route.ts', import.meta.url), 'utf8');
-  const block = source.slice(source.indexOf('const started = await env.DB.batch(['), source.indexOf('if (!started[0].meta.changes)'));
+  const block = source.slice(source.indexOf('const started = await env.DB.batch(['), source.indexOf('const startChanges = confirmedBatch(started, 3)'));
   const sql = [...block.matchAll(/env\.DB\.prepare\("([^"]+)"\)/g)].map(match => match[1]);
   assert.equal(sql.length, 3);
   const db = new DatabaseSync(':memory:');
@@ -35,7 +35,7 @@ test('two stale receipt observations can produce only one attempt', () => {
 
 test('chapter opening and start serialize safely in either order across contexts', () => {
   const source = readFileSync(new URL('../app/api/attempts/route.ts', import.meta.url), 'utf8');
-  const startBlock = source.slice(source.indexOf('const started = await env.DB.batch(['), source.indexOf('if (!started[0].meta.changes)'));
+  const startBlock = source.slice(source.indexOf('const started = await env.DB.batch(['), source.indexOf('const startChanges = confirmedBatch(started, 3)'));
   const startSql = [...startBlock.matchAll(/env\.DB\.prepare\("([^"]+)"\)/g)].map(m => m[1]);
   const chapterStart = source.indexOf('if (action === "chapter") {', source.indexOf('export async function POST'));
   const chapterBlock = source.slice(chapterStart, source.indexOf('if (action === "read")', chapterStart));
@@ -59,7 +59,7 @@ test('chapter opening and start serialize safely in either order across contexts
 
 test('a failed receipt consumption rolls back the entire start transaction', () => {
   const source = readFileSync(new URL('../app/api/attempts/route.ts', import.meta.url), 'utf8');
-  const block = source.slice(source.indexOf('const started = await env.DB.batch(['), source.indexOf('if (!started[0].meta.changes)'));
+  const block = source.slice(source.indexOf('const started = await env.DB.batch(['), source.indexOf('const startChanges = confirmedBatch(started, 3)'));
   const sql = [...block.matchAll(/env\.DB\.prepare\("([^"]+)"\)/g)].map(m => m[1]);
   const db = new DatabaseSync(':memory:');
   try {

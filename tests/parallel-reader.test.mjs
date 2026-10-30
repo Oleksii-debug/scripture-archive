@@ -133,3 +133,29 @@ test('unverified second-edition provenance cannot disclose comparison verse text
   assert.match(good.result.innerHTML,/На початку/);
   assert.match(good.result.innerHTML,/creativecommons.org/);
 }));
+
+
+test('comparison refuses a declared wrong translation identity instead of misattributing verses',()=>withForm(async()=>{
+  const fallback={id:'UKRPAN',title:'Куліш',license:'Public Domain',source:'https://source.example/'};
+  for(const wrong of [
+    {id:'OTHER',title:'Wrong edition',license:'Wrong rights',source:'https://wrong.example/'},
+    {title:'No identity',license:'Wrong rights',source:'https://wrong.example/'},
+    null,
+  ]) {
+    const f=fixture({catalog:{translations:{'uk-kulish':wrong},editions:{uk:fallback}}});
+    await f.run();
+    assert.equal(f.result.innerHTML,'','mismatched or null declared identity cannot disclose comparison text');
+    assert.match(f.status.textContent,/Не вдалося/);
+    assert.equal(f.button.disabled,false);
+  }
+  const correct=fixture({catalog:{translations:{'uk-kulish':{
+    id:'uk-kulish',title:'Approved Kulish',license:'Verified rights',source:'https://source.example/kulish'
+  }},editions:{uk:fallback}}});
+  await correct.run();
+  assert.match(correct.result.innerHTML,/Approved Kulish/);
+  assert.match(correct.result.innerHTML,/На початку/);
+  const fallbackOnly=fixture({catalog:{translations:{},editions:{uk:fallback}}});
+  await fallbackOnly.run();
+  assert.match(fallbackOnly.result.innerHTML,/Куліш/);
+  assert.match(fallbackOnly.result.innerHTML,/На початку/);
+}));

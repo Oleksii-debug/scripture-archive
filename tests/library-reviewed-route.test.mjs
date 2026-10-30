@@ -106,3 +106,43 @@ test('library public API outage announces a recoverable error rather than an emp
     assert.match(f.list.innerHTML,/Не вдалося виконати дію/);
   }finally{f.restore();}
 });
+
+
+test('actual public library item submits its answer through existing reviewed-material API',async()=>{
+  const f=scenario('en'),originalFormData=globalThis.FormData;
+  const status={textContent:''},button={disabled:false},form={
+    isConnected:true,dataset:{id:'approved-lesson'},onsubmit:null,
+    querySelector:selector=>selector==='[role="status"]'?status:selector==='button'?button:null,
+  };
+  f.list.querySelectorAll=selector=>selector==='.public-material'?[form]:[];
+  const calls=[];
+  try {
+    globalThis.FormData=class {
+      constructor(target){assert.equal(target,form);}
+      get(name){assert.equal(name,'choice');return '1';}
+    };
+    globalThis.fetch=async (url,options)=>{
+      calls.push({url,options});
+      if(url==='/api/material-review?view=public') return Response.json({items:[{
+        id:'approved-lesson',title:'Source-verified study',reference:'GEN 12:2',
+        provenance:'Reviewed source',prompt:'Which answer is supported?',
+        options:['One','Two'],
+      }]});
+      if(url==='/api/material-review'){
+        assert.equal(options?.method,'POST');
+        assert.deepEqual(JSON.parse(options.body),{action:'answer',id:'approved-lesson',choice:1});
+        return Response.json({correct:true,explanation:'The referenced verse supports this response.'});
+      }
+      throw Error('unexpected second API');
+    };
+    await renderWorkspace('library',f.context);
+    assert.equal(typeof form.onsubmit,'function','real library form is wired');
+    let prevented=false;
+    await form.onsubmit({preventDefault(){prevented=true;}});
+    assert.equal(prevented,true);
+    assert.match(status.textContent,/Correct.*referenced verse/);
+    assert.equal(button.disabled,false);
+    assert.deepEqual(calls.map(item=>item.url),
+      ['/api/material-review?view=public','/api/material-review']);
+  }finally{globalThis.FormData=originalFormData;f.restore();}
+});

@@ -109,7 +109,9 @@ test('the dossier catalogue fails closed when edition provenance/metadata cannot
 
   const weird=dossierMarkup(catalog,'en','"><script>alert(1)</script>',esc);
   assert.doesNotMatch(weird,/<script>/);
-  assert.ok(weird.includes('Abraham'));
+  assert.match(weird,/role="alert"/);
+  assert.ok(!weird.includes('Abraham'),'unknown dossier must not impersonate a valid person');
+  assert.ok(weird.includes('href="/dossiers?id=abraham"'),'allow recovery through the real catalogue');
 });
 
 test('the public dossier workspace uses the shared catalog and actual source-graph module',()=>{
@@ -164,4 +166,21 @@ test('Ruth, Paul, Mary and Peter have localized source-linked dossiers in the re
   }
   assert.notEqual(scriptureDossiers.find(node=>node.id==='mary-mother')?.id, 'mary-magdalene',
     'Mary the mother is not silently identified as a different person');
+});
+
+
+test('unknown explicit dossier deep links fail visibly in all locales without fabricated source details',()=>{
+  for(const lang of ['uk','ru','en']){
+    const markup=dossierMarkup(catalog,lang,'no-such-dossier',esc);
+    assert.match(markup,/role="alert"/);
+    assert.ok(markup.includes('href="/dossiers?id=abraham"'),
+      'the accessible topic catalogue remains available for recovery');
+    assert.ok(!markup.includes('href="/reader/'),
+      'invalid dossier cannot borrow Abraham or anyone else\'s Scripture references');
+    assert.ok(!markup.includes('aria-current="page"'));
+    assert.ok(!markup.includes('href="/mission/abraham"'));
+  }
+  assert.match(dossierMarkup(catalog,'en','no-such-dossier',esc),/not found/);
+  assert.match(dossierMarkup(catalog,'uk',null,esc),/Авраам/,
+    'a missing selection still opens the established default introduction');
 });

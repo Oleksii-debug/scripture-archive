@@ -56,10 +56,13 @@ export async function PUT(request: Request) {
         (typeof body.id !== "string" || body.id.trim().length > 100))
       return Response.json({ error: "invalid_content_item" }, { status: 400 });
     const id = clean(body.id, 100) || crypto.randomUUID(), kind = clean(body.kind, 30), locale = clean(body.locale, 3);
-    const title = clean(body.title, 200), status = clean(body.status, 20);
+    // Author-supplied publication titles must never be silently truncated.
+    // An overlong edit is invalid rather than a different saved title.
+    const title = typeof body.title === "string" ? body.title.trim() : "";
+    const status = clean(body.status, 20);
     const itemData = body.data && typeof body.data === "object" && !Array.isArray(body.data) ? body.data : null;
     const encoded = JSON.stringify(itemData);
-    if (!KINDS.has(kind) || !LOCALES.has(locale) || !STATUSES.has(status) || !title || !itemData || encoded.length > 100_000)
+    if (!KINDS.has(kind) || !LOCALES.has(locale) || !STATUSES.has(status) || !title || title.length > 200 || !itemData || encoded.length > 100_000)
       return Response.json({ error: "invalid_content_item" }, { status: 400 });
     const snapshot = JSON.stringify({ id, kind, locale, title, status, data: itemData });
     const acknowledged = await contentBatchAcknowledged(() => env.DB!.batch([

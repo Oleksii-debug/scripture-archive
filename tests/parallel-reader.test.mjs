@@ -9,7 +9,7 @@ const catalog={translations:{},editions:{uk:{id:'UKRPAN',title:'Куліш',sour
 function fixture(overrides={}) {
   let isCurrent=true, locked=0, failed=0, reads=0, checked=0;
   const button={disabled:false}, status={textContent:''}, copied=[];
-  const result={innerHTML:'',replaceChildren(){this.innerHTML='';},addEventListener(name,callback){if(name==='click')this.handleClick=callback;}};
+  const result={innerHTML:'',replaceChildren(){this.innerHTML='';}};
   const form={onsubmit:null,querySelector:()=>button};
   const panel={isConnected:true,querySelector(selector){return selector==='.parallel-form'?form:selector==='.parallel-status'?status:result;}};
   const options={editions:[edition],catalog,lang:'uk',book:'GEN',bookTitle:'Буття',chapter:1,esc,
@@ -17,7 +17,7 @@ function fixture(overrides={}) {
     check:async()=>{checked++;return {invalidated:false};},current:()=>isCurrent,
     lock:()=>{locked++;},failClosed:()=>{failed++;},copyText:async text=>{copied.push(text);},...overrides};
   mountParallelReader(panel,options);
-  return {panel,form,status,result,button,copied,run:()=>form.onsubmit({preventDefault(){}}),cite:number=>result.handleClick({target:{closest:()=>({dataset:{parallelCite:String(number)}})}}),move:()=>{isCurrent=false;},reads:()=>reads,checked:()=>checked,locked:()=>locked,failed:()=>failed};
+  return {panel,form,status,result,button,copied,run:()=>form.onsubmit({preventDefault(){}}),cite:number=>result.onclick({target:{closest:()=>({dataset:{parallelCite:String(number)}})}}),move:()=>{isCurrent=false;},reads:()=>reads,checked:()=>checked,locked:()=>locked,failed:()=>failed};
 }
 async function withForm(callback){const original=globalThis.FormData;globalThis.FormData=class{get(){return edition.id;}};try{return await callback();}finally{globalThis.FormData=original;}}
 

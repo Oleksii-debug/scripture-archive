@@ -124,6 +124,42 @@ test("saved material ACK represents a committed owner-conditional write", async 
   } finally { f.db.close(); }
 });
 
+test("draft builder refuses silently dropped, truncated, or overflowed choice lists before any D1 write", async () => {
+  const invalid=[
+    ["first","second",""],
+    ["first","second",null],
+    ["first","second",false],
+    ["first","second",42],
+    ["first","second",{}],
+    ["first","second","x".repeat(501)],
+    ["first","second","   "],
+    ["first","second","third","fourth","fifth","sixth","seventh","eighth","ninth"],
+  ];
+  for (const options of invalid) {
+    const f=fixture();
+    try {
+      const result=await f.post({...valid,id:"invalid-options",options});
+      assert.equal(result.status,400,"must not save a silently changed option set");
+      assert.equal(result.body.error,"invalid_material");
+      assert.equal(f.db.prepare("SELECT COUNT(*) AS count FROM study_materials").get().count,0,
+        "malformed choices cannot create any private draft");
+    } finally { f.db.close(); }
+  }
+});
+
+test("valid boundary-size choice lists keep the submitted order and answer",async()=>{
+  const f=fixture();
+  try {
+    const options=["first","second","third","fourth","fifth","sixth","seventh","eighth"];
+    const result=await f.post({...valid,id:"eight-valid-choices",options});
+    assert.equal(result.status,201);
+    const row=f.db.prepare("SELECT data FROM study_materials WHERE id=?").get("eight-valid-choices");
+    const saved=JSON.parse(row.data);
+    assert.deepEqual(saved.options,options);
+    assert.equal(saved.answer,"first");
+  } finally { f.db.close(); }
+});
+
 test("false and missing D1 ACKs return 503 even when SQLite completed the write", async () => {
   for (const mode of ["failed", "missing", "negative", "text", "boolean", "null"]) {
     const f = fixture();

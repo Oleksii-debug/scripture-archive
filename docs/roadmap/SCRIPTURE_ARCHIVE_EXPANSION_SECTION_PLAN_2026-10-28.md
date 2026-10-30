@@ -4,6 +4,12 @@
 
 ---
 
+## 2026-10-30 — SA-EXT-03 / OWNER_CMS_MANAGED_ITEM_OBJECT_ROOT — SCOPED TERMINAL
+
+**РОЗДІЛ SA-EXT-03 / OWNER_CMS_MANAGED_ITEM_OBJECT_ROOT — ЗАКРИТО ЛИШЕ ЦЕЙ ПІДПУНКТ / CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL.** Канонічний owner-only `GET /api/content?admin=1` більше не показує пошкоджене збережене JSON `managed_content.data` (null/string/array/boolean/number) як успішні редакційні матеріали 200. [Source PR #733](https://github.com/Oleksii-debug/scripture-archive/pull/733) **SQUASH MERGED** у `main@fc0e7c69944b861402adc0310cd2f70a8734e97d`; [exact-head CI #41061929405](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41061929405) **SUCCESS**: Node 2077 PASS / 0 FAIL / 1 SKIP; Worker/D1 22/22; TS/lint/build; Python 2/2. Додано 56 source-executing позитивних/негативних сценаріїв; `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` тільки для цього дефекту. [Точна квитанція](SA_EXT_03_OWNER_CMS_ITEM_ROOT_INTEGRITY_TERMINAL_20261030.md). **Повний SA-EXT-03 і всі 20 батьківських розділів OPEN**, live Sites/browser/Windows/NVDA/SMTP не підтверджено; деплой не виконувався.
+
+---
+
 ## 2026-10-30 — SA-EXT-03 / PUBLIC_CONTENT_ROW_OBJECT_INTEGRITY — SCOPED TERMINAL
 
 **РОЗДІЛ SA-EXT-03 / PUBLIC_CONTENT_ROW_OBJECT_INTEGRITY — ЗАКРИТО ЛИШЕ ЦЕЙ ПІДПУНКТ / CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL.** [Source PR #729](https://github.com/Oleksii-debug/scripture-archive/pull/729) **SQUASH MERGED** у `main@aaee52099946714f51eecd507f60fd737827f4cf`. Exact PR-head [GitHub Actions #41061096456](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41061096456) **SUCCESS**: 2021 Node PASS / 0 FAIL / 1 SKIP, 22/22 disposable Worker/D1, TypeScript/lint/build і 2/2 Python. Canonical public `GET /api/content` відхиляє не-JSON-object root і некоректні D1 metadata з приватним 503 замість фальшивого публічного 200; легальні поточні/старі object-публікації і відсутній рядок збережені. `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` саме для вузького дефекту. [Постійний доказовий запис](SA_EXT_03_PUBLIC_CONTENT_ROW_INTEGRITY_TERMINAL_20261030.md). **Повний SA-EXT-03 та всі 20 батьківських SA-EXT-01…20 залишаються OPEN**; deployed Sites SHA, реальний браузер/Windows/NVDA/SMTP NOT_VERIFIED; деплой не виконано.

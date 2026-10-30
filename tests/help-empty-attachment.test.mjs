@@ -28,7 +28,7 @@ function fixture() {
       return statements.map(() => ({ success: true, meta: { changes: 1 } }));
     },
   };
-  const module = { exports: {} };
+  const fixtureModule = { exports: {} };
   new Function("require", "module", "exports", compiled.outputText)(
     specifier => {
       if (specifier === "cloudflare:workers") return { env: { DB } };
@@ -42,7 +42,7 @@ function fixture() {
         sendSupportRequestEmail: async () => { calls.mail++; return { delivered: false }; },
       };
       throw Error("Unexpected dependency: " + specifier);
-    }, module, module.exports,
+    }, fixtureModule, fixtureModule.exports,
   );
   async function submit(entries = []) {
     const form = new FormData();
@@ -51,7 +51,7 @@ function fixture() {
     form.set("message", "A disposable, entirely local test request.");
     form.set("acceptPrivacy", "yes");
     for (const item of entries) form.append("files", item);
-    const response = await module.exports.POST(new Request("https://scripture.invalid/api/help", {
+    const response = await fixtureModule.exports.POST(new Request("https://scripture.invalid/api/help", {
       method: "POST", headers: { Origin: "https://scripture.invalid" }, body: form,
     }));
     return { status: response.status, body: await response.json() };

@@ -48,8 +48,11 @@ let logs = "";
 let stopReadOnlyHeartbeat;
 try {
   await run([...wrangler, "d1", "migrations", "apply", "DB", "--local", "--persist-to", state, "--config", migrationConfig]);
-  // Vinext already emitted production-ready modules: no second Wrangler bundle or watcher.
-  worker = spawn(process.execPath, [...wrangler, "dev", "--no-bundle", "--local", "--persist-to", state,
+  // Wrangler's no-bundle dev ProxyWorker can drop the next POST after a
+  // bodyless early rejection (the misleading "worker restarted" 503).
+  // Compile only the already-immutable frozen build in a temporary directory;
+  // never watch or deploy the live app source, and never retry HTTP mutations.
+  worker = spawn(process.execPath, [...wrangler, "dev", "--local", "--persist-to", state,
     "--name", `scripture-integration-${port}`,
     "--config", builtConfig, "--ip", "127.0.0.1", "--port", String(port), "--inspector-port", "0",
     "--var", "AUTH_TEST_MODE:1", "--var", `APP_BASE_URL:${base}`], { ...options, stdio: ["ignore", "pipe", "pipe"] });

@@ -233,3 +233,34 @@ test('SA-EXT-05: verse search is exact, bounded and does not shadow chapter sear
   assert.equal(searchScriptureDossiers('en','Moses')[0]?.id,'moses','existing title discovery stays intact');
   assert.deepEqual(searchScriptureDossiers('en','GEN 17:15'.repeat(20),catalog),[],'oversized input rejected');
 });
+
+test('SA-EXT-05: exact chapter discovery includes the same public relation citations as verse discovery',()=>{
+  for(const lang of ['uk','ru','en']){
+    const genesis=catalog.books[lang].find(book=>book.code==='GEN');
+    assert.ok(genesis?.title);
+    for(const query of ['GEN 17',genesis.title+' 17']){
+      const ids=searchScriptureDossiers(lang,query,catalog).map(item=>item.id);
+      assert.deepEqual(ids,['abraham','sarah'],lang+' must include the published Abraham-to-Sarah citation');
+      const html=dossierMarkup(catalog,lang,'abraham',esc,query);
+      assert.match(html,/id="dossier-heading"/);
+      assert.ok(html.includes('href="/reader/GEN/17?verse=15"'),'relation witness retains canonical reader URL');
+      assert.ok(html.includes(resultLink('abraham',query)),'GET link retains the exact source filter');
+      const unrelated=dossierMarkup(catalog,lang,'moses',esc,query);
+      assert.match(unrelated,/role="alert"/);
+      assert.doesNotMatch(unrelated,/href="\/reader\//,'unrelated evidence must not leak');
+    }
+  }
+  const exodus=searchScriptureDossiers('en','EXO 12',catalog).map(item=>item.id);
+  assert.ok(exodus.includes('moses'),'Moses publicly cites Exodus 12 through its relation');
+  assert.ok(exodus.includes('exodus'),'direct citation remains searchable');
+  assert.ok(exodus.includes('egypt'),'other direct citation remains searchable');
+});
+
+test('SA-EXT-05: relation chapter witnesses must not match invented adjacent chapters',()=>{
+  for(const query of ['GEN 1','GEN 16','GEN 170','EXO 1','EXO 120']){
+    const ids=searchScriptureDossiers('en',query,catalog).map(item=>item.id);
+    if(query.startsWith('GEN '))assert.ok(!ids.includes('abraham'),'no unrelated Abraham chapter '+query);
+    if(query.startsWith('EXO '))assert.ok(!ids.includes('moses'),'no unrelated Moses relation chapter '+query);
+  }
+  assert.deepEqual(searchScriptureDossiers('en','GEN 17:14',catalog),[],'outside the published relation verse interval');
+});

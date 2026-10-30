@@ -177,14 +177,16 @@ export function searchScriptureDossiers(language,value,catalog=null) {
     const authored=[item.id,item.names[lang],item.summaries[lang],COPY[lang][item.type],
       ...item.prompts[lang]];
     if(authored.some(text=>normalize(text).includes(query)))return true;
-    // Match exact book+chapter labels from the actual canonical sources.
-    // Prefix matching would misreport GEN 12 for a query of GEN 1.
-    return item.sources.some(source=>{
+    // Match exact book+chapter labels from published sources AND their
+    // reader-linked relation witnesses, just as exact verse searches already
+    // do. Prefix matching would misreport GEN 12 for a query of GEN 1.
+    const cited=source=>{
       const title=bookNames.get(source.book);
       const references=[source.book+' '+source.chapter,
         ...(title?[title+' '+source.chapter]:[])];
       return references.some(label=>normalize(label)===query);
-    });
+    };
+    return item.sources.some(cited) || item.related.some(edge=>cited(edge.via));
   });
 }
 

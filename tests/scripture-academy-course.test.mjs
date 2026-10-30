@@ -116,3 +116,31 @@ test('source catalog failures never display a claimed course or locally confirme
   assert.ok(!html.includes('data-academy-lesson='));
   assert.ok(!html.includes('href="/reader/'));
 });
+
+
+test('simultaneous same-account academy views preserve newer lesson selections',()=>{
+  const storage=store(), user={id:'two-tab-account'}, key=academyProgressKey(user);
+  const first=view(),second=view(),start={available:true,completed:[]};
+  attachAcademy(first.document,storage,'en',user,start);
+  attachAcademy(second.document,storage,'en',user,start);
+  first.buttons[0].click(); // Abraham in one tab
+  second.buttons[1].click(); // Sarah in the other tab
+  assert.deepEqual(readAcademyProgress(storage,key).completed,['abraham','sarah'],
+    'a stale panel must not erase another tab\'s saved mark');
+  assert.equal(second.buttons[0].attrs['aria-pressed'],'true',
+    'the active panel must reflect the freshly loaded saved selection');
+  first.buttons[0].click();
+  assert.deepEqual(readAcademyProgress(storage,key).completed,['sarah'],
+    'removing one mark preserves marks introduced by the other tab');
+  assert.equal(first.buttons[1].attrs['aria-pressed'],'true');
+});
+
+test('academy never overwrites progress corrupted by another tab after rendering',()=>{
+  const storage=store(),user={id:'test-account'},key=academyProgressKey(user),ui=view();
+  attachAcademy(ui.document,storage,'en',user,{available:true,completed:[]});
+  storage.setItem(key,'{bad-json');
+  ui.buttons[0].click();
+  assert.equal(storage.getItem(key),'{bad-json');
+  assert.equal(ui.buttons[0].attrs['aria-pressed'],'false');
+  assert.match(ui.error.textContent,/could not be read or verified/);
+});

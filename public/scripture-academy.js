@@ -54,7 +54,6 @@ export function attachAcademy(document,storage,language,user,progress){
   const root=document?.querySelector('[data-academy-root]');
   if(!root)return;
   const w=COPY[languageOf(language)],key=academyProgressKey(user);
-  let selected=new Set(progress.completed);
   const buttons=[...root.querySelectorAll('button[data-academy-lesson]')];
   const status=root.querySelector('#academy-reading-status');
   const meter=root.querySelector('#academy-reading-progress');
@@ -64,7 +63,14 @@ export function attachAcademy(document,storage,language,user,progress){
     const id=button.getAttribute('data-academy-lesson');
     if(!academyLessonIds.includes(id))continue;
     button.addEventListener('click',()=>{
-      const next=new Set(selected);
+      // Another tab may have saved newer choices since this panel rendered.
+      // Never overwrite uncertain/corrupt account-scoped state.
+      const current=readAcademyProgress(storage,key);
+      if(!current.available){
+        if(error)error.textContent=w.unavailable;
+        return;
+      }
+      const next=new Set(current.completed);
       if(next.has(id))next.delete(id);else next.add(id);
       const completed=academyLessonIds.filter(x=>next.has(x));
       try{
@@ -74,9 +80,12 @@ export function attachAcademy(document,storage,language,user,progress){
         if(error)error.textContent=w.saveError;
         return;
       }
-      selected=next;
-      button.setAttribute('aria-pressed',String(next.has(id)));
-      button.textContent=next.has(id)?w.unmark:w.mark;
+      for(const updatedButton of buttons){
+        const updatedId=updatedButton.getAttribute('data-academy-lesson');
+        if(!academyLessonIds.includes(updatedId))continue;
+        updatedButton.setAttribute('aria-pressed',String(next.has(updatedId)));
+        updatedButton.textContent=next.has(updatedId)?w.unmark:w.mark;
+      }
       if(error)error.textContent='';
       if(meter)meter.value=completed.length;
       if(status)status.textContent=w.progress+': '+completed.length+'/'+academyLessonIds.length;

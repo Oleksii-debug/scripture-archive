@@ -12,16 +12,23 @@
   let heartbeatTimer = 0;
   let lastActiveAt = Date.now();
   const privateRoutes = new Set(["account", "mission", "progress", "editor"]);
+  // Only coarse, public route categories may leave this browser. Deep paths
+  // can include group identifiers, account reset keys or user-supplied slugs.
+  const publicRoutes = new Set(["home", "reader", "missions", "campaigns", "groups", "community",
+    "support", "help", "about", "privacy", "dossiers", "academy", "library", "terms"]);
   const firstPartyEvents = new Set(["page_view", "sign_up", "sign_up_error", "login", "login_error", "quiz_start", "quiz_complete", "navigation_click", "support_click", "client_error"]);
   const allowedParameters = new Set(["destination", "error", "language", "method", "mode", "page_location", "page_name", "page_title", "score", "total"]);
   const routeName = () => {
     const source = location.hash.startsWith("#/") ? location.hash.slice(2) : location.pathname.slice(1);
     return source.split("/").filter(Boolean)[0] || "home";
   };
-  const safeLocation = () => {
+  const safeRouteName = () => {
     const route = routeName();
-    const path = privateRoutes.has(route) ? `/${route}` : location.pathname;
-    return `${location.origin}${path || "/"}`;
+    return privateRoutes.has(route) || publicRoutes.has(route) ? route : "other";
+  };
+  const safeLocation = () => {
+    const route = safeRouteName();
+    return `${location.origin}${route === "home" ? "/" : "/" + route}`;
   };
   // Error messages may contain emails, reset URLs, answers or account data.
   // Both first-party and GA4 analytics receive only known machine-code labels.
@@ -31,14 +38,32 @@
   ]);
   const safeErrorCode = value =>
     typeof value === "string" && safeErrorCodes.has(value) ? value : "other";
-  const safeParameters = parameters => Object.fromEntries(
-    Object.entries(parameters || {})
-      .filter(([name, value]) => allowedParameters.has(name) && ["string", "number", "boolean"].includes(typeof value))
-      .map(([name, value]) => [
-        name, name === "error" ? safeErrorCode(value) :
-          typeof value === "string" ? value.slice(0, 80) : value,
-      ]),
-  );
+  // Analytics arguments are not a free-text channel. A URL, email, group
+  // name or recovery token must not be exported even by an accidental caller.
+  const allowedValues = {
+    destination: new Set([...privateRoutes, ...publicRoutes, "help_request", "monobank"]),
+    language: new Set(["uk", "ru", "en"]),
+    method: new Set(["password"]),
+    mode: new Set(["group", "personal"]),
+  };
+  const safeParameters = parameters => {
+    const safe = {};
+    for (const [name, value] of Object.entries(parameters || {})) {
+      if (!allowedParameters.has(name)) continue;
+      if (name === "error") { safe.error = safeErrorCode(value); continue; }
+      // All page descriptors are assigned below from a coarse trusted route
+      // during page_view, never accepted from caller-controlled arguments.
+      if (name === "page_location" || name === "page_name" || name === "page_title") continue;
+      if (name === "score" || name === "total") {
+        if (typeof value === "number" && Number.isFinite(value) && value >= 0 &&
+            value <= 1000000) safe[name] = value;
+        continue;
+      }
+      if (typeof value === "string" && allowedValues[name])
+        safe[name] = allowedValues[name].has(value) ? value : "other";
+    }
+    return safe;
+  };
   const sessionId = (() => {
     let stored = null;
     try { stored = sessionStorage.getItem(sessionKey); } catch {}
@@ -90,7 +115,7 @@
 
   function sendFirstParty(payload, beacon = false) {
     if (consent !== "granted") return;
-    const body = JSON.stringify({ sessionId, source: trafficSource(), pageName: routeName(), ...payload });
+    const body = JSON.stringify({ sessionId, source: trafficSource(), pageName: safeRouteName(), ...payload });
     if (beacon && navigator.sendBeacon) {
       navigator.sendBeacon("/api/analytics", new Blob([body], { type: "application/json" }));
       return;
@@ -116,8 +141,8 @@
     const values = safeParameters(parameters);
     if (name === "page_view") {
       values.page_location = safeLocation();
-      values.page_title = document.title.slice(0, 80);
-      values.page_name = routeName();
+      values.page_name = safeRouteName();
+      values.page_title = "Scripture Archive — " + values.page_name;
     }
     if (firstPartyEvents.has(name)) sendFirstParty({ action: "event", eventType: name, value: values });
     if (measurementId) {

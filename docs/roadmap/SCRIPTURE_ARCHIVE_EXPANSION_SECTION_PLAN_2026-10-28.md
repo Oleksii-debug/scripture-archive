@@ -1,3 +1,9 @@
+## 2026-10-30 — SA-EXT-16 / RESET_MAIL_DELIVERY_COPY — SCOPED TERMINAL
+
+**ЗАКРИТО ДЛЯ ПОВТОРНОЇ РОЗРОБКИ лише вузький дефект повідомлення відновлення пароля**, `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`: після `forgot-password` реальний `renderAccount` у UK/RU/EN більше не обіцяє доставку без підтвердження провайдера. [Feature PR #675](https://github.com/Oleksii-debug/scripture-archive/pull/675) **MERGED** в `main@6ecbf2260d5463a585e77ec8b3b58aa6aa57d3c7`. [Exact-head Actions #41053883269](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41053883269) **SUCCESS**: 1681 Node PASS/0 FAIL/1 SKIP, Worker/D1 22/22, TS/lint/build PASS, pytest 2/2 PASS. [Термінальний запис](SA_EXT_16_PASSWORD_RESET_MAIL_COPY_TERMINAL_20261030.md). **Усі батьківські 20 розділів SA-EXT-01…20 залишаються OPEN**; production, live browser, NVDA і реальна доставка пошти не перевірені. Немає незлитих PR для цієї підфункції.
+
+---
+
 ## 2026-10-30 — SA-EXT-01 / READING_EXPORT_CANONICAL_TITLE_BOUNDARY — ВУЗЬКИЙ ДЕФЕКТ ЗАКРИТО
 
 **CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** лише для експорту збереженої READING-історії: назва понад 100 символів більше не стає фальшивим restorable JSON-архівом. [PR #670](https://github.com/Oleksii-debug/scripture-archive/pull/670) SQUASH MERGED у точний `main@4cb564da6b705b1296e552c20ca8e2b7ade4f78f`. [CI #41053249167](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41053249167) **SUCCESS**: Node 1681 PASS/0 FAIL/1 SKIP, disposable Worker/D1 22/22, TypeScript/lint/build, Python 2/2. Реальна кодова інтеграція та exact-main readback підтверджені. [Повний термінальний запис](SA_EXT_01_READING_EXPORT_TITLE_BOUNDARY_TERMINAL_20261030.md). **Увесь батьківський SA-EXT-01 та всі SA-EXT-01…20 залишаються OPEN**; production Sites/SMTP/браузер/Windows/NVDA — NOT_VERIFIED. Ця документальна позначка не санкціонує деплой.

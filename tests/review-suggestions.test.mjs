@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { reviewSuggestions, reviewScheduleMarkup, missionHistoryMarkup } from '../public/workspace.js';
 
-const attempt=(day,score=4,mode='personal',chapter=12)=>({book:'GEN',chapter,mode,score,total:4,completedAt:`2026-01-${String(day).padStart(2,'0')} 18:00:00`});
+const attempt=(day,score=4,mode='personal',chapter=12)=>({id:`fixture-${day}-${mode}-${chapter}`,book:'GEN',chapter,mode,score,total:4,completedAt:`2026-01-${String(day).padStart(2,'0')} 18:00:00`});
 const now=new Date('2026-01-10T23:00:00Z');
 const esc=s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
 

@@ -60,6 +60,50 @@ function fixture() {
 const submission={action:'submit',materialId:'m1',provenance:'Original work, GEN 12',rightsConfirmed:true};
 const approve=id=>({action:'review',id,decision:'approve',sourceChecked:true,rightsChecked:true});
 
+// Route-executing SQLite checks for lossless editorial audit notes. The UI
+// already limits input to 2000, but direct JSON clients must not get a
+// successful review after their longer authored text was silently shortened.
+for (const decision of ['approve', 'reject']) {
+  test('overlong '+decision+' review note cannot mutate a pending decision', async () => {
+    const f=fixture();try {
+      const id=(await f.post(submission)).data.id;
+      const body=decision==='approve'
+        ? {...approve(id),note:'Ж'.repeat(2001)}
+        : {action:'review',id,decision:'reject',note:'Ж'.repeat(2001)};
+      const response=await f.post(body,'editor');
+      assert.equal(response.status,400);
+      assert.equal(response.data.error,'invalid_review');
+      const row=f.db.prepare('SELECT status,reviewed_by,review_note FROM material_submissions WHERE id=?').get(id);
+      assert.equal(row.status,'pending');
+      assert.equal(row.reviewed_by,null);
+      assert.ok(!row.review_note, 'no partial audit text may persist');
+    }finally{f.db.close();}
+  });
+}
+
+test('editor rejection persists an exact 2000-character Unicode rationale',async()=>{
+  const f=fixture();try{
+    const id=(await f.post(submission)).data.id;
+    const full='Ж'.repeat(2000);
+    assert.equal((await f.post({action:'review',id,decision:'reject',note:full},'editor')).status,200);
+    const row=f.db.prepare('SELECT status,review_note FROM material_submissions WHERE id=?').get(id);
+    assert.equal(row.status,'rejected');
+    assert.equal(row.review_note,full);
+    const history=(await f.get('mine','alice')).data.items.find(item=>item.id===id);
+    assert.equal(history.reviewNote,full);
+  }finally{f.db.close();}
+});
+
+test('surrounding whitespace is trimmed without shortening an exact-limit approval',async()=>{
+  const f=fixture();try{
+    const id=(await f.post(submission)).data.id;
+    const full='Д'.repeat(2000);
+    const response=await f.post({...approve(id),note:'   '+full+'   '},'editor');
+    assert.equal(response.status,200);
+    assert.equal(f.db.prepare('SELECT review_note FROM material_submissions WHERE id=?').get(id).review_note,full);
+  }finally{f.db.close();}
+});
+
 test('private draft requires consent and editor approval; public answers remain server-side',async()=>{
   const f=fixture();try {
     assert.equal((await f.post(submission,'','https://local.invalid')).status,401);

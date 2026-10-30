@@ -237,15 +237,18 @@ export async function POST(request: Request) {
   if (!body) return json({ error: "invalid_json" }, 400);
 
   if (action === "chapter") {
-    const book = clean(body.book, 8).toUpperCase(), chapter = requestedChapter(body.chapter);
+    const book = clean(body.book, 8).toUpperCase(), chapter = requestedChapter(body.chapter), groupId = clean(body.groupId, 80);
     if (!book || chapter === null) return json({ error: "invalid_chapter" }, 400);
     const currentActor = await actor(request);
     if (!currentActor) return json({ invalidated: false });
+    if (groupId && (!currentActor.identity || !await groupFacilitator(groupId, currentActor.identity.userId)))
+      return json({ error: "group_facilitator_required" }, 403);
     // Invalidate before reporting a match: a read-only lookup would reveal the
-    // active passage through enumeration. Group context must not bypass this.
+    // active passage through enumeration. Both group and personal context must
+    // be bound; opening the same chapter in another context is not a match.
     const result = await env.DB.batch([
-      env.DB.prepare("UPDATE mission_attempts SET status='invalidated',invalidated_at=CURRENT_TIMESTAMP,invalidation_reason='chapter_opened' WHERE actor_id=? AND book_id=? AND chapter=? AND status='active' AND expires_at>CURRENT_TIMESTAMP").bind(currentActor.id, book, chapter),
-      env.DB.prepare("UPDATE chapter_read_receipts SET consumed_at=CURRENT_TIMESTAMP WHERE actor_id=? AND book_id=? AND chapter=? AND consumed_at IS NULL").bind(currentActor.id, book, chapter),
+      env.DB.prepare("UPDATE mission_attempts SET status='invalidated',invalidated_at=CURRENT_TIMESTAMP,invalidation_reason='chapter_opened' WHERE actor_id=? AND book_id=? AND chapter=? AND COALESCE(group_id,'')=? AND status='active' AND expires_at>CURRENT_TIMESTAMP").bind(currentActor.id, book, chapter, groupId),
+      env.DB.prepare("UPDATE chapter_read_receipts SET consumed_at=CURRENT_TIMESTAMP WHERE actor_id=? AND book_id=? AND chapter=? AND COALESCE(group_id,'')=? AND consumed_at IS NULL").bind(currentActor.id, book, chapter, groupId),
     ]);
     const changes = confirmedBatch(result, 2);
     if (!changes) return json({ error: "database_unavailable" }, 503);
@@ -316,7 +319,7 @@ export async function POST(request: Request) {
     const started = await env.DB.batch([
       env.DB.prepare("INSERT INTO mission_attempts (id,actor_id,mission_id,book_id,chapter,group_id,locale,task_limit,expires_at) SELECT ?,?,?,?,?,?,?,?,datetime('now','+2 hours') WHERE EXISTS (SELECT 1 FROM chapter_read_receipts WHERE id=? AND actor_id=? AND consumed_at IS NULL) AND (?='' OR EXISTS (SELECT 1 FROM home_group_members WHERE group_id=? AND user_id=? AND role IN ('owner','facilitator')))")
         .bind(id, currentActor.id, MISSION_ID, book, chapter, groupId || null, selectedLocale, taskLimit, receipt.id, currentActor.id, groupId, groupId, currentActor.id),
-      env.DB.prepare("UPDATE mission_attempts SET status='invalidated',invalidated_at=CURRENT_TIMESTAMP,invalidation_reason='new_attempt' WHERE actor_id=? AND status='active' AND id<>? AND EXISTS (SELECT 1 FROM mission_attempts WHERE id=?)").bind(currentActor.id, id, id),
+      env.DB.prepare("UPDATE mission_attempts SET status='invalidated',invalidated_at=CURRENT_TIMESTAMP,invalidation_reason='new_attempt' WHERE actor_id=? AND status='active' AND id<>? AND COALESCE(group_id,'')=? AND EXISTS (SELECT 1 FROM mission_attempts WHERE id=?)").bind(currentActor.id, id, groupId, id),
       env.DB.prepare("UPDATE chapter_read_receipts SET consumed_at=CURRENT_TIMESTAMP WHERE id=? AND EXISTS (SELECT 1 FROM mission_attempts WHERE id=?)").bind(receipt.id, id),
     ]);
     const startChanges = confirmedBatch(started, 3);

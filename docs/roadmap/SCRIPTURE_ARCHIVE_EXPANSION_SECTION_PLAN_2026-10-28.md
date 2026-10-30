@@ -1,3 +1,9 @@
+## 2026-10-30 — SA-EXT-04 / GROUP_SETTINGS_EDIT — ВУЗЬКА ПІДФУНКЦІЯ ЗАКРИТА
+
+**CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** — тільки власницьке редагування налаштувань наявної домашньої групи; `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. [PR #668](https://github.com/Oleksii-debug/scripture-archive/pull/668) **SQUASH MERGED** у `main@ceffa24ff8b4fcbc3cd6ff17aa6810d02b986a3e`; exact-head [Actions #41052811616](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41052811616) **SUCCESS**: Node 1656 PASS / 1 SKIP, TS/lint/build, Worker/D1 22/22, Python 2/2. Існуючі UI та API підтримують повне редагування метаданих, CAS/owner право, підтвердження публікації, збереження чернетки, consent-фільтр і focus/readback. **Повний SA-EXT-04 та решта 20 SA-EXT-01…20 — OPEN**; Sites SHA/SMTP/браузер/NVDA НЕ ПІДТВЕРДЖЕНО. [Остаточний доказовий запис](SA_EXT_04_GROUP_SETTINGS_TERMINAL_20261030.md).
+
+---
+
 ## 2026-10-30 — SA-EXT-02 / ATTEMPT_LOCALE_TYPED_INPUT — ВУЗЬКИЙ ДЕФЕКТ ЗАКРИТО
 
 **CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** лише для типізованої мови POST створення навчальної спроби. [PR #666](https://github.com/Oleksii-debug/scripture-archive/pull/666) SQUASH MERGED у `main@cec6d59302e1a5bac1857591589986c3dff48e5f`; exact-head [Actions #41052618856](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41052618856) **SUCCESS**: Node 1662 PASS/0 FAIL/1 SKIP, Worker/D1 22/22, TypeScript/lint/build, Python 2/2. Модуль місій більше не підміняє нестроковий JSON `locale` на українську, а відхиляє 400 до D1; збережено default UK і діючі uk/ru/en. `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`; **усі 20 батьківських розділів SA-EXT-01…20 залишаються OPEN**, site SHA/фізичний NVDA не перевірено. [Термінальний запис](SA_EXT_02_ATTEMPT_LOCALE_TYPED_TERMINAL_20261030.md), центральна координація #297.

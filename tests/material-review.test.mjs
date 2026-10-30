@@ -16,7 +16,7 @@ function fixture() {
   const input = {prompt:'A valid question?',reference:'GEN 12',options:['one','two'],answer:'one',explanation:'Source based explanation'};
   db.prepare('INSERT INTO study_materials(id,owner_user_id,title,locale,data) VALUES (?,?,?,?,?)').run('m1','alice','Original','uk',JSON.stringify(input));
   db.prepare('INSERT INTO study_materials(id,owner_user_id,title,locale,data) VALUES (?,?,?,?,?)').run('m2','bob','Other','en',JSON.stringify(input));
-  let failRead = false, throwRead = false, failBatchAt = -1, afterDraftRead = null, afterRoleRead = null, submitReceiptMode = 'normal';
+  let failRead = false, throwRead = false, failBatchAt = -1, afterDraftRead = null, afterRoleRead = null, submitReceiptMode = 'normal', reviewReceiptMode = 'normal';
   const D1 = {prepare(sql){return {bind(...args){return {
     first:async()=>{const row=db.prepare(sql).get(...args)??null;if(sql.startsWith('SELECT title,locale,data') && afterDraftRead) {const hook=afterDraftRead;afterDraftRead=null;hook();}if(sql.startsWith('SELECT r.user_id') && afterRoleRead) {const hook=afterRoleRead;afterRoleRead=null;hook();}return row;},
     all:async()=>{if(throwRead)throw Error('offline');return failRead ? {success:false,results:[]} : {success:true,results:db.prepare(sql).all(...args)};},
@@ -28,7 +28,12 @@ function fixture() {
       }
       return {success:true,meta:{changes:Number(r.changes)}};},
   };}, all:async()=>{if(throwRead)throw Error('offline');return failRead ? {success:false,results:[]} : {success:true,results:db.prepare(sql).all()};}};},
-  async batch(statements){db.exec('BEGIN');try {const r=[];for(const [i,s] of statements.entries()){if(i===failBatchAt)throw Error('forced failure');r.push(await s.run());}db.exec('COMMIT');return r;}catch(e){db.exec('ROLLBACK');throw e;}}};
+  async batch(statements){db.exec('BEGIN');try {const r=[];for(const [i,s] of statements.entries()){if(i===failBatchAt)throw Error('forced failure');r.push(await s.run());}db.exec('COMMIT');
+    const mode=reviewReceiptMode;reviewReceiptMode='normal';
+    if(mode==='missing-first')r[0]={...r[0],meta:{}};
+    if(mode==='missing-last')r[1]={...r[1],meta:{}};
+    if(mode==='failed-last')r[1]={...r[1],success:false};
+    return r;}catch(e){db.exec('ROLLBACK');throw e;}}};
   const source=readFileSync(new URL('../app/api/material-review/route.ts',import.meta.url),'utf8');
   const js=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
   const exports={};
@@ -39,7 +44,7 @@ function fixture() {
   }});
   async function post(body,user='alice',origin='https://local.invalid') {const r=await exports.POST(new Request('https://local.invalid/api/material-review',{method:'POST',headers:{origin,'content-type':'application/json',...(user?{'x-user':user}:{})},body:JSON.stringify(body)}));return {status:r.status,data:await r.json()};}
   async function get(view,user='') {const r=await exports.GET(new Request('https://local.invalid/api/material-review?view='+view,{headers:user?{'x-user':user}:{}}));return {status:r.status,data:await r.json()};}
-  return {db,post,get,setReadFailure:value=>{failRead=value;},setReadThrow:value=>{throwRead=value;},setBatchFailure:value=>{failBatchAt=value;},afterDraftRead:hook=>{afterDraftRead=hook;},afterRoleRead:hook=>{afterRoleRead=hook;},setSubmitReceiptMode:mode=>{submitReceiptMode=mode;}};
+  return {db,post,get,setReadFailure:value=>{failRead=value;},setReadThrow:value=>{throwRead=value;},setBatchFailure:value=>{failBatchAt=value;},afterDraftRead:hook=>{afterDraftRead=hook;},afterRoleRead:hook=>{afterRoleRead=hook;},setSubmitReceiptMode:mode=>{submitReceiptMode=mode;},setReviewReceiptMode:mode=>{reviewReceiptMode=mode;}};
 }
 const submission={action:'submit',materialId:'m1',provenance:'Original work, GEN 12',rightsConfirmed:true};
 const approve=id=>({action:'review',id,decision:'approve',sourceChecked:true,rightsChecked:true});
@@ -214,4 +219,25 @@ test('repeat submission after an accepted write is rejected without duplicate pe
     assert.equal(repeated.status,409);
     assert.equal(f.db.prepare("SELECT COUNT(*) n FROM material_submissions WHERE material_id='m1' AND status='pending'").get().n,1);
   }finally{f.db.close();}
+});
+
+test('editor review cannot claim success when a committed D1 batch loses either mutation receipt', async () => {
+  for(const mode of ['missing-first','missing-last','failed-last']) {
+    const f=fixture();
+    try {
+      const submitted=await f.post(submission);
+      assert.equal(submitted.status,201);
+      f.setReviewReceiptMode(mode);
+      const response=await f.post(approve(submitted.data.id),'editor');
+      assert.equal(response.status,503,mode+' is an unacknowledged review');
+      assert.equal(response.data.error,'review_failed');
+      // A lost response receipt is NOT evidence the D1 transaction rolled back.
+      // An editor must re-read source-of-truth review history before retrying.
+      const persisted=(await f.get('history','editor')).data.items[0];
+      assert.equal(persisted.status,'approved',mode+' does not fabricate a rollback');
+      const retry=await f.post(approve(submitted.data.id),'editor');
+      assert.equal(retry.status,409,mode+' does not publish a duplicate');
+      assert.equal((await f.get('public')).data.items.length,1);
+    } finally { f.db.close(); }
+  }
 });

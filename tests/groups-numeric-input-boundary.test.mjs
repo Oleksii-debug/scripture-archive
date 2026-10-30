@@ -18,11 +18,11 @@ function fixture() {
   db.prepare("INSERT INTO home_groups(id,owner_user_id,name,invite_code,visibility,bible_edition) VALUES ('g','alice','Fixture group','AABBCCDD','private','en-web')").run();
   db.prepare("INSERT INTO home_group_members(group_id,user_id,display_name,role) VALUES ('g','alice','Alice','owner')").run();
 
-  let writes = 0;
+  let writes = 0, usageOverride = undefined;
   function statement(sql, args=[]) {
     return {
       bind(...values) { return statement(sql, values); },
-      async first() { return db.prepare(sql).get(...args) ?? null; },
+      async first() { if(sql.includes('SELECT COUNT(DISTINCT book_id') && usageOverride !== undefined) return usageOverride; return db.prepare(sql).get(...args) ?? null; },
       async all() { return {success:true,results:db.prepare(sql).all(...args)}; },
       async run() {
         const result=db.prepare(sql).run(...args); writes++;
@@ -70,7 +70,7 @@ function fixture() {
     const response=await exports.POST(request);
     return {status:response.status,body:await response.json()};
   }
-  return {db,post,get writes(){return writes;}};
+  return {db,post,setUsageOverride:value=>{usageOverride=value;},get writes(){return writes;}};
 }
 
 const meeting={groupId:'g',bookId:'GEN',chapter:12,answersCorrect:2,answersTotal:3,participantCount:4,meetingDate:'2026-10-28'};
@@ -132,4 +132,51 @@ test('accept genuine numeric JSON and decimal HTML-form numeric strings',async()
     assert.equal(created.status,201,JSON.stringify(created.body));
     assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM home_groups').get().n,2);
   } finally {f.db.close();}
+});
+
+
+function activeMarathon(f) {
+  // Exercise the shipped schema and authorization path, not a fake function
+  // invoked instead of POST /api/groups?action=session.
+  f.db.prepare("INSERT INTO group_marathon_registrations(id,group_id,weekly_goal,catchup_mode,cohort_key,status,start_date) VALUES('m','g',3,'steady','cohort','active',?)").run(meeting.meetingDate);
+}
+
+for (const [description, receipt] of [
+  ['missing SQL aggregate row', null],
+  ['empty SQL aggregate object', {}],
+  ['NULL count', {count:null}],
+  ['missing count', {count:undefined}],
+  ['non-numeric TEXT', {count:'bad'}],
+  ['coercible TEXT zero', {count:'0'}],
+  ['negative SQL count', {count:-1}],
+  ['fractional count', {count:0.5}],
+  ['non-finite Infinity', {count:Infinity}],
+  ['non-finite NaN', {count:NaN}]
+]) {
+  test('SA-EXT-04 marathon refuses '+description+' before creating a meeting',async()=>{
+    const f=fixture();try{
+      activeMarathon(f);
+      f.setUsageOverride(receipt);
+      const previous=f.writes;
+      const result=await f.post('session',meeting);
+      assert.equal(result.status,503,JSON.stringify(result.body));
+      assert.equal(result.body.error,'database_unavailable');
+      assert.equal(f.writes,previous,'unconfirmed count cannot write a group session');
+      assert.equal(f.db.prepare('SELECT COUNT(*) n FROM group_sessions').get().n,0);
+    }finally{f.db.close();}
+  });
+}
+
+test('SA-EXT-04 marathon permits real zero usage, refuses exhausted quota, and preserves exact count threshold',async()=>{
+  for(const [count,status] of [[0,200],[2,200],[3,409],[4,409]]) {
+    const f=fixture();try{
+      activeMarathon(f);
+      f.setUsageOverride({count});
+      const previous=f.writes;
+      const result=await f.post('session',meeting);
+      assert.equal(result.status,status,'count='+count+' '+JSON.stringify(result.body));
+      assert.equal(f.db.prepare('SELECT COUNT(*) n FROM group_sessions').get().n,status===200?1:0);
+      assert.equal(f.writes-previous,status===200?2:0);
+    }finally{f.db.close();}
+  }
 });

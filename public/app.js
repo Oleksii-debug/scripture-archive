@@ -1942,12 +1942,31 @@ const LIVE = new Set([
   "E15",
   "E18",
 ]);
+function storedPreference(key) {
+  try { return localStorage.getItem(key); }
+  catch { return null; }
+}
+function storeReaderPreference(key, value) {
+  try { localStorage.setItem(key, value); return true; }
+  catch { return false; }
+}
+const transientEditions = new Map();
+const transientEditionStorageDenied = new Set();
+function activeEdition(lang) {
+  return transientEditions.get(lang) || selectedEdition(lang);
+}
+const EDITION_TRANSIENT_MESSAGES = {
+  uk: "Браузер заборонив збереження: вибір перекладу діє лише в цій вкладці.",
+  ru: "Браузер запретил сохранение: выбор перевода действует только в этой вкладке.",
+  en: "Browser storage is unavailable: your edition selection lasts only in this tab.",
+};
 const requestedLang = new URLSearchParams(location.search).get("lang");
+const savedLang = storedPreference("sa.lang");
 const state = {
   lang: ["uk", "ru", "en"].includes(requestedLang)
     ? requestedLang
-    : localStorage.getItem("sa.lang") || "uk",
-  ukOriginal: localStorage.getItem("sa.ukSpelling") === "original",
+    : ["uk", "ru", "en"].includes(savedLang) ? savedLang : "uk",
+  ukOriginal: storedPreference("sa.ukSpelling") === "original",
   catalog: null,
   cms: null,
   user: null,
@@ -2260,7 +2279,7 @@ async function getSession() {
 }
 async function getBook(code, explicitEdition = null) {
   const requestLocale = state.lang;
-  const selected = explicitEdition || selectedEdition(requestLocale);
+  const selected = explicitEdition || activeEdition(requestLocale);
   if (explicitEdition && (!explicitEdition.local || !EDITIONS[requestLocale].includes(explicitEdition))) throw Error("Invalid local edition");
   const edition = selected.local ? selected : EDITIONS[requestLocale].find(e => e.local);
   const folder = edition.folder || requestLocale;
@@ -2291,7 +2310,7 @@ async function getBook(code, explicitEdition = null) {
   return state.bookCache.get(key);
 }
 function localEditionMetadata(catalog) {
-  const chosen = selectedEdition(state.lang);
+  const chosen = activeEdition(state.lang);
   const local = chosen.local ? chosen : EDITIONS[state.lang]?.find(e => e.local);
   if (!local) throw Error("local_edition_unavailable");
   // Locale defaults must not be used as attribution for a distinct edition.
@@ -2700,12 +2719,31 @@ function readerChapterNumber(value, maxChapters) {
   return Math.min(parsed, maxChapters);
 }
 
+async function onReaderEditionChange(event, parts) {
+  // Only trusted catalogue entries can be remembered or used for the current tab.
+  const lang = state.lang;
+  const nextEdition = EDITIONS[lang]?.find(item => item.id === event.target?.value);
+  if (!nextEdition) { announce(t("errorLoad")); return; }
+  const restoreFocus = document.activeElement === event.currentTarget;
+  const readerUrl = location.pathname + location.search + location.hash;
+  const saved = storeReaderPreference(`sa.edition.${lang}`, nextEdition.id);
+  transientEditions.set(lang, nextEdition);
+  if (saved) transientEditionStorageDenied.delete(lang);
+  else transientEditionStorageDenied.add(lang);
+  await renderReader(parts);
+  if (!saved && state.lang === lang && location.pathname + location.search + location.hash === readerUrl)
+    announce(EDITION_TRANSIENT_MESSAGES[lang]);
+  if (restoreFocus && document.activeElement === main &&
+      location.pathname + location.search + location.hash === readerUrl)
+    document.querySelector("#bible-edition")?.focus({preventScroll: true});
+}
+
 async function renderReader(parts) {
   const readerPrincipal = state.user;
   setActiveNav("reader");
   const catalog = await getCatalog();
   if (state.user !== readerPrincipal || (typeof location !== "undefined" && location.pathname && !location.pathname.startsWith("/reader"))) return;
-  const chosenEdition = selectedEdition(state.lang);
+  const chosenEdition = activeEdition(state.lang);
   const books = catalog.editionBooks?.[chosenEdition.id] || catalog.books[state.lang];
   const code = (parts[1] || state.reader.book || "GEN").toUpperCase();
   const meta = books.find((b) => b.code === code) || books[0];
@@ -2768,7 +2806,8 @@ async function renderReader(parts) {
   const selectedVerse = verseCoordinateMatches ? readerVerseFromUrl(location.href, verses.length) : null;
   // Do not replace the last readable bookmark when book loading fails.
   state.reader = { book: meta.code, chapter };
-  localStorage.setItem("sa.reader", JSON.stringify(state.reader));
+  // A denied preference store cannot prevent an already-authorized chapter from rendering.
+  storeReaderPreference("sa.reader", JSON.stringify(state.reader));
   const edition = localEditionMetadata(catalog),
     editionInfo = editionDetails(edition, meta.code);
   const citationCopy = {
@@ -2831,11 +2870,13 @@ async function renderReader(parts) {
       failClosed: () => { state.currentReader=null; shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1></section>`); },
     });
   }
-  const editionText=editionCopy[state.lang];
+  const editionText = transientEditionStorageDenied.has(state.lang)
+    ? {...editionCopy[state.lang], externalNote: EDITION_TRANSIENT_MESSAGES[state.lang]}
+    : editionCopy[state.lang];
   if(editionInfo.attribution) document.querySelector('.edition-card').insertAdjacentHTML('beforeend', `<p class="edition-attribution">${esc(editionInfo.attribution)}</p>`);
   if(editionInfo.licenseUrl) document.querySelector('.edition-card').insertAdjacentHTML('beforeend', `<a href="${esc(editionInfo.licenseUrl)}" target="_blank" rel="noreferrer">${esc(editionInfo.license)} ↗</a>`);
-  document.querySelector('.toolbar').insertAdjacentHTML('afterbegin',editionSelect(state.lang,esc));
-  document.querySelector('#bible-edition').onchange=async e=>{const restoreFocus=document.activeElement===e.currentTarget;const readerUrl=location.pathname+location.search+location.hash;localStorage.setItem(`sa.edition.${state.lang}`,e.target.value);await renderReader(parts);if(restoreFocus&&document.activeElement===main&&location.pathname+location.search+location.hash===readerUrl)document.querySelector('#bible-edition')?.focus({preventScroll:true})};
+  document.querySelector('.toolbar').insertAdjacentHTML('afterbegin',editionSelect(state.lang,esc,chosenEdition));
+  document.querySelector('#bible-edition').onchange = event => onReaderEditionChange(event, parts);
   if(!chosenEdition.local){document.querySelector('.verses').innerHTML=`<section class="publisher-reading"><p class="lead">${editionText.externalNote}</p><a class="button primary" target="_blank" rel="noreferrer" href="${editionUrl(chosenEdition,meta.code,chapter)}">${editionText.external} ↗</a></section>`;document.querySelector('.chapter-meta').textContent=chosenEdition.title;document.querySelector('.edition-card').innerHTML=`<h2>${t('edition')}</h2><p><strong>${esc(chosenEdition.title)}</strong></p><p>${editionText.whole}</p><a href="${chosenEdition.source}" target="_blank" rel="noreferrer">${t('sourceLink')} ↗</a>`;document.querySelector('#uk-spelling')?.remove();document.querySelector('#book-search').hidden=true;}
   const w=workspaceCopy(state.lang),attemptCopy=ATTEMPT_COPY[state.lang],missionManifest=await readerMissionManifest();
   if (!readerStillCurrent()) return;

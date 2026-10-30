@@ -2560,8 +2560,11 @@ function activateTimer() {
   };
   paint();
   timerInterval = setInterval(() => {
+    // Normalize may transition running -> completed at the deadline. The
+    // previous condition skipped the final paint, completion cue and sound.
+    const wasRunning = state.studyTimer?.running === true;
     const timer = normalizeTimer();
-    if (timer.running && timer.durationMinutes > 0) {
+    if ((wasRunning || timer.running) && timer.durationMinutes > 0) {
       paint();
       if (!timer.running) clearInterval(timerInterval);
     }

@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { authenticateRequest, sameOrigin } from "../../../lib/auth";
 import catalog from "../../../public/data/catalog.json";
 import { EDITIONS } from "../../../public/editions.js";
+import { validBookmarkTimestamp } from "../../../lib/bookmark-timestamp.js";
 
 export const dynamic = "force-dynamic";
 // Reuse canonical Bible chapter limits; avoid maintaining another book list.
@@ -41,16 +42,6 @@ type RecoveryRow = { recovery_rowid?: unknown; edition?: unknown; book?: unknown
 // UTC "YYYY-MM-DD HH:MM:SS"; keep existing date-only and ISO UTC imports
 // readable, but quarantine impossible/malformed values through the existing
 // explicit recovery UI rather than advertising them as healthy bookmarks.
-function validBookmarkTimestamp(value: unknown): value is string {
-  if (typeof value !== "string") return false;
-  const match = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z)?)?$/.exec(value);
-  if (!match) return false;
-  const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
-  if (year < 1000 || month < 1 || month > 12 || day < 1 || day > 31) return false;
-  const canonical = new Date(Date.UTC(year, month - 1, day));
-  if (canonical.getUTCFullYear() !== year || canonical.getUTCMonth() + 1 !== month || canonical.getUTCDate() !== day) return false;
-  return match[4] === undefined || (Number(match[4]) < 24 && Number(match[5]) < 60 && Number(match[6]) < 60);
-}
 function usableBookmark(row: unknown): row is { edition: string; book: string; chapter: number; created_at: string } {
   if (!valid(row)) return false;
   const createdAt = (row as RecoveryRow).created_at;

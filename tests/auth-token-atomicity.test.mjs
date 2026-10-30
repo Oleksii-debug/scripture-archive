@@ -12,9 +12,9 @@ function fixture() {
     db.exec(readFileSync(new URL("../drizzle/" + name, import.meta.url), "utf8"));
   db.prepare("INSERT INTO accounts (id,email,password_hash,password_salt,password_iterations,first_name,last_name) VALUES ('alice','alice@example.invalid','oldhash','oldsalt',1,'Alice','Test')").run();
   db.prepare("INSERT INTO auth_sessions(token_hash,user_id,session_version,user_agent_hash,expires_at) VALUES ('session','alice',1,'agent','2099-01-01')").run();
-  let failAt = -1, unconfirmedAt = -1, missingAt = -1, zeroAt = -1, emails = 0;
+  let failAt = -1, unconfirmedAt = -1, missingAt = -1, zeroAt = -1, emails = 0, failReadFragment = "";
   const D1 = { prepare(sql) { return { bind(...args) { return {
-    first: async () => db.prepare(sql).get(...args) || null,
+    first: async () => { if (failReadFragment && sql.includes(failReadFragment)) throw Error("simulated D1 read failure"); return db.prepare(sql).get(...args) || null; },
     run: async () => { const result = db.prepare(sql).run(...args); return { success: true, meta: { changes: Number(result.changes) } }; },
   }; } }; }, async batch(statements) {
     db.exec("BEGIN");
@@ -47,7 +47,7 @@ function fixture() {
   } });
   return { db, handler: exports, failAt: n => { failAt = n; },
     unconfirmedAt: n => { unconfirmedAt = n; }, missingAt: n => { missingAt = n; },
-    zeroAt: n => { zeroAt = n; }, emails: () => emails };
+    zeroAt: n => { zeroAt = n; }, failReadFor: text => { failReadFragment = text; }, emails: () => emails };
 }
 
 test("verification and token consumption roll back together and remain single-use", async () => {
@@ -55,7 +55,10 @@ test("verification and token consumption roll back together and remain single-us
   f.db.prepare("INSERT INTO auth_tokens(token_hash,user_id,purpose,expires_at) VALUES ('hash-code','alice','verify','2099-01-01')").run();
   const request = () => new Request("https://example.invalid/api/auth?action=verify&token=code");
   f.failAt(1);
-  await assert.rejects(f.handler.GET(request()), /simulated storage failure/);
+  const interrupted = await f.handler.GET(request());
+  assert.equal(interrupted.status, 503);
+  assert.equal((await interrupted.json()).error, "verification_unavailable");
+  assert.equal(interrupted.headers.get("location"), null);
   assert.equal(f.db.prepare("SELECT email_verified_at FROM accounts WHERE id='alice'").get().email_verified_at, null);
   assert.equal(f.db.prepare("SELECT used_at FROM auth_tokens WHERE token_hash='hash-code'").get().used_at, null);
   f.failAt(-1);
@@ -71,7 +74,10 @@ test("password reset, session revocation and token consumption roll back togethe
   f.db.prepare("INSERT INTO auth_tokens(token_hash,user_id,purpose,expires_at) VALUES ('hash-code','alice','reset','2099-01-01')").run();
   const request = () => new Request("https://example.invalid/api/auth?action=reset-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: "code", password: "new-password-123" }) });
   f.failAt(2);
-  await assert.rejects(f.handler.POST(request()), /simulated storage failure/);
+  const interrupted = await f.handler.POST(request());
+  assert.equal(interrupted.status, 503);
+  assert.equal((await interrupted.json()).error, "password_reset_unavailable");
+  assert.equal(interrupted.headers.get("set-cookie"), null);
   assert.equal(f.db.prepare("SELECT password_hash FROM accounts WHERE id='alice'").get().password_hash, "oldhash");
   assert.equal(f.db.prepare("SELECT revoked_at FROM auth_sessions WHERE token_hash='session'").get().revoked_at, null);
   assert.equal(f.db.prepare("SELECT used_at FROM auth_tokens WHERE token_hash='hash-code'").get().used_at, null);
@@ -224,5 +230,41 @@ test("R0.2: genuinely pre-existing email remains an explicit conflict with zero 
   assert.equal(result.status, 409);
   assert.equal((await result.json()).error, "email_in_use");
   assert.equal(f.emails(), 0);
+  f.db.close();
+});
+
+test("R0.2: verification clock or D1 availability errors never expose an unhandled 500 or consume a token", async () => {
+  const f = fixture();
+  f.db.prepare("INSERT INTO auth_tokens(token_hash,user_id,purpose,expires_at) VALUES ('hash-code','alice','verify','2099-01-01')").run();
+  f.failReadFor("SELECT CURRENT_TIMESTAMP");
+  const request = new Request("https://example.invalid/api/auth?action=verify&token=code");
+  const unavailable = await f.handler.GET(request);
+  assert.equal(unavailable.status, 503);
+  assert.equal((await unavailable.json()).error, "verification_unavailable");
+  assert.equal(unavailable.headers.get("location"), null);
+  assert.equal(f.db.prepare("SELECT email_verified_at FROM accounts WHERE id='alice'").get().email_verified_at, null);
+  assert.equal(f.db.prepare("SELECT used_at FROM auth_tokens WHERE token_hash='hash-code'").get().used_at, null);
+  f.failReadFor("");
+  assert.equal((await f.handler.GET(request)).status, 303);
+  f.db.close();
+});
+
+test("R0.2: password reset token lookup outage never mutates password, session or token", async () => {
+  const f = fixture();
+  f.db.prepare("INSERT INTO auth_tokens(token_hash,user_id,purpose,expires_at) VALUES ('hash-code','alice','reset','2099-01-01')").run();
+  f.failReadFor("SELECT token_hash,user_id FROM auth_tokens");
+  const request = () => new Request("https://example.invalid/api/auth?action=reset-password", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token: "code", password: "new-password-123" }),
+  });
+  const unavailable = await f.handler.POST(request());
+  assert.equal(unavailable.status, 503);
+  assert.equal((await unavailable.json()).error, "password_reset_unavailable");
+  assert.equal(unavailable.headers.get("set-cookie"), null);
+  assert.equal(f.db.prepare("SELECT password_hash FROM accounts WHERE id='alice'").get().password_hash, "oldhash");
+  assert.equal(f.db.prepare("SELECT revoked_at FROM auth_sessions WHERE token_hash='session'").get().revoked_at, null);
+  assert.equal(f.db.prepare("SELECT used_at FROM auth_tokens WHERE token_hash='hash-code'").get().used_at, null);
+  f.failReadFor("");
+  assert.equal((await f.handler.POST(request())).status, 200);
   f.db.close();
 });

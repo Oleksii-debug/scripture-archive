@@ -86,6 +86,7 @@ export async function GET(request: Request) {
   if (action !== "verify") return json({ error: "unknown_action" }, 400);
   const token = clean(url.searchParams.get("token"), 200);
   if (!token) return json({ error: "invalid_token" }, 400);
+  try {
   const tokenHash = await sha256(token);
   const checkedAt = await tokenCheckTime();
   // The account update and token consumption share one D1 transaction. A
@@ -100,6 +101,11 @@ export async function GET(request: Request) {
   if (result[0].meta.changes !== 1 || result[1].meta.changes !== 1)
     return json({ error: "invalid_or_expired_token" }, 400);
   return Response.redirect(`${baseUrl(request)}/account?verified=1`, 303);
+  } catch {
+    // Infrastructure failure must not become an unhandled 500 or a false
+    // invalid-token verdict. The D1 batch is atomic; a retry is safe.
+    return json({ error: "verification_unavailable" }, 503);
+  }
 }
 
 export async function POST(request: Request) {
@@ -196,6 +202,7 @@ export async function POST(request: Request) {
     const token = clean(data.token, 200), password = data.password;
     if (!token || !validPassword(password)) return json({ error: "invalid_reset" }, 400);
     if (!await rateLimit(`reset:${address}`, 8, 900)) return json({ error: "too_many_requests" }, 429);
+    try {
     const tokenHash = await sha256(token);
     const record = await env.DB.prepare("SELECT token_hash,user_id FROM auth_tokens WHERE token_hash=? AND purpose='reset' AND used_at IS NULL AND expires_at>CURRENT_TIMESTAMP").bind(tokenHash).first<{ token_hash: string; user_id: string }>();
     if (!record) return json({ error: "invalid_or_expired_token" }, 400);
@@ -215,6 +222,11 @@ export async function POST(request: Request) {
     if (result[0].meta.changes !== 1 || result[2].meta.changes !== 1)
       return json({ error: "invalid_or_expired_token" }, 400);
     return json({ ok: true }, 200, { "Set-Cookie": clearSessionCookie(request) });
+    } catch {
+      // Transient D1/clock/crypto failure is not an invalid reset token.
+      // Never acknowledge a partially applied password/session change.
+      return json({ error: "password_reset_unavailable" }, 503);
+    }
   }
 
   if (action === "change-password") {

@@ -347,3 +347,35 @@ test('SA-EXT-04 trims harmless date/reflection whitespace without clipping',asyn
     assert.equal(row.reflection,'A precise study reflection');
   }finally{f.db.close();}
 });
+
+
+// SA-EXT-04: overlength caller IDs must not normalize into an existing group.
+for (const [action, fields] of [
+  ['session', meeting],
+  ['rotate-invite', { expectedInviteCode: 'AABBCCDD', confirm: true }],
+  ['delete', { confirm: true }],
+]) {
+  test('reject overlength group identity for '+action+' without D1 write', async () => {
+    const f = fixture();
+    try {
+      const malformed = 'g' + ' '.repeat(80);
+      const before = f.writes;
+      const result = await f.post(action, { ...fields, groupId: malformed });
+      assert.notEqual(result.status, 200, action+' must not accept an aliased group');
+      assert.notEqual(result.status, 201, action+' must not accept an aliased group');
+      assert.equal(f.writes, before, 'invalid identifier must be rejected before any D1 mutation');
+      assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM home_groups').get().n, 1);
+      assert.equal(f.db.prepare("SELECT invite_code FROM home_groups WHERE id='g'").get().invite_code, 'AABBCCDD');
+      assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM group_sessions').get().n, 0);
+    } finally { f.db.close(); }
+  });
+}
+
+test('valid exact group identifier continues to create a real meeting', async () => {
+  const f = fixture();
+  try {
+    const result = await f.post('session', meeting);
+    assert.equal(result.status, 200, JSON.stringify(result.body));
+    assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM group_sessions').get().n, 1);
+  } finally { f.db.close(); }
+});

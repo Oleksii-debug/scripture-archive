@@ -40,6 +40,13 @@ function confirmedBatch(results: unknown, expected: number): number[] | null {
 }
 function clean(value: unknown, max = 100) { return typeof value === "string" ? value.trim().slice(0, max) : ""; }
 function locale(value: unknown): Locale { return value === "ru" || value === "en" ? value : "uk"; }
+// D1 is not an enum/date constraint: legacy or corrupt rows can contain invalid
+// deadlines. Date.parse(NaN) is never <= now, so such rows must fail closed.
+function attemptDeadline(raw: unknown): number | null {
+  if (typeof raw !== "string" || !raw || raw !== raw.trim()) return null;
+  const parsed = Date.parse(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+}
 function tasksFor(book: string, chapter: number) { return mission.tasks.filter(task => task.book === book && task.chapter === chapter); }
 function publicTask(task: MissionTask, selectedLocale: Locale, index: number, total: number) {
   return {
@@ -202,7 +209,9 @@ export async function GET(request: Request) {
   // Unknown/corrupt lifecycle states must never fall through to live task
   // disclosure. Only an explicitly active attempt can expose its next task.
   if (attempt.status !== "active") return json({ error: "attempt_state_invalid" }, 409);
-  if (Date.parse(attempt.expires_at) <= Date.now()) return json({ error: "attempt_expired" }, 410);
+  const deadline = attemptDeadline(attempt.expires_at);
+  if (deadline === null) return json({ error: "attempt_state_invalid" }, 409);
+  if (deadline <= Date.now()) return json({ error: "attempt_expired" }, 410);
   const tasks = tasksFor(attempt.book_id, attempt.chapter).slice(0, attempt.task_limit), task = tasks[attempt.current_index];
   if (!task) return json({ error: "attempt_state_invalid" }, 409);
   return json({ attemptId: attempt.id, task: publicTask(task, attempt.locale, attempt.current_index + 1, tasks.length) });
@@ -318,7 +327,9 @@ export async function POST(request: Request) {
     if ((attempt.status === "grading" || attempt.status === "completed") && taskIndex === attempt.task_limit)
       return finishAttempt(attempt, currentActor.id, currentActor.guest, true);
     if (attempt.status !== "active") return json({ error: attempt.status === "invalidated" ? "attempt_invalidated" : "attempt_closed" }, 409);
-    if (Date.parse(attempt.expires_at) <= Date.now()) {
+    const deadline = attemptDeadline(attempt.expires_at);
+    if (deadline === null) return json({ error: "attempt_state_invalid" }, 409);
+    if (deadline <= Date.now()) {
       const expired = await env.DB.prepare("UPDATE mission_attempts SET status='invalidated',invalidated_at=CURRENT_TIMESTAMP,invalidation_reason='expired' WHERE id=? AND status='active'").bind(attempt.id).run();
       if (confirmedChanges(expired) === null) return json({ error: "database_unavailable" }, 503);
       return json({ error: "attempt_expired" }, 410);

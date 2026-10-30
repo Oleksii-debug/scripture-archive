@@ -56,7 +56,7 @@ const consent = { acceptSensitive: true, tradition: "protestant",
 for (const [field, value] of [
   ["firstName", "А".repeat(81)],
   ["lastName", "Б".repeat(81)],
-  ["ageRange", "18-24extra"],
+  ["ageRange", "18-24extra-long"],
   ["tradition", "orthodox" + "x".repeat(40)],
   ["maritalStatus", "single" + "x".repeat(40)],
   ["gender", "woman" + "x".repeat(30)],

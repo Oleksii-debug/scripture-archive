@@ -19,6 +19,7 @@ const sourceUnderTest = [
 function fixture({ user = { id: "alice" }, prior = null, marker = null,
                    denyRead = false, denyFirstReadingRead = false,
                    denyWrites = false, denyDelete = false,
+                   silentlyIgnoreReadingWrites = false,
                    serverReading = [], oldReading = [] } = {}) {
   const initial = [
     ["sa.progressOwner", marker],
@@ -41,6 +42,7 @@ function fixture({ user = { id: "alice" }, prior = null, marker = null,
     setItem(key, value) {
       storageCalls.push(["set", key]);
       if (denyWrites) throw Error("QuotaExceededError");
+      if (silentlyIgnoreReadingWrites && key === "sa.readingHistory") return;
       entries.set(key, value);
     },
     removeItem(key) {
@@ -312,4 +314,18 @@ test("transient first ownerless-history read error never certifies or uploads fo
   assert.equal(f.entries.get("sa.readingHistory"),"[]");
   assert.equal(f.entries.get("sa.progressOwner"),"bob");
   assert.equal(f.state.unownedReadingPendingRecovery,false);
+});
+
+test("silent storage no-op cannot certify the wrong user's surviving history", async () => {
+  const legacy=[{book:"EXO",chapter:6,title:"unowned browser cache"}];
+  const f=fixture({user:{id:"new-user"},marker:null,oldReading:legacy,
+    silentlyIgnoreReadingWrites:true});
+  await f.session();
+  assert.equal(f.entries.get("sa.unownedReadingHistory.v1"),JSON.stringify(legacy));
+  assert.equal(f.entries.get("sa.readingHistory"),JSON.stringify(legacy));
+  assert.equal(f.entries.has("sa.progressOwner"),false);
+  assert.equal(f.state.unownedReadingPendingRecovery,true);
+  assert.equal(f.state.localReadingStorageUntrusted,true);
+  await f.sync();
+  assert.equal(f.apiCalls.length,0,"no cross-principal account transport");
 });

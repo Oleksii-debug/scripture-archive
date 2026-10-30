@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { authenticateRequest, isVerifiedOwner, parseCookies, rateLimit, requestAddress, sameOrigin, sha256 } from "../../../lib/auth";
 import { COMMUNITY_RUN_ID } from "../../../lib/community";
+import catalog from "../../../public/data/catalog.json";
 import { advanceCommunity, communityOwnerState, controlCommunity, leaseCommunityAgents } from "../../../lib/community-engine";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +17,13 @@ function directoryInteger(raw: string | null, fallback: number, min: number, max
 }
 type RealRow = { id: string; display_name: string; locale: string; joined_at: string; last_active_at: string | null; reading_data: string | null; mission_count: number };
 
+// Derive passage limits from the same authoritative catalogue as the private
+// READING account endpoint. Local editions may have different chapter divisions.
+const READING_CHAPTERS = new Map<string, number>(catalog.books.en.map(book => [book.code, book.chapters]));
+for (const books of Object.values(catalog.editionBooks)) {
+  for (const book of books) READING_CHAPTERS.set(book.code, Math.max(READING_CHAPTERS.get(book.code) ?? 0, book.chapters));
+}
+
 // A public progress badge is derived from a private persisted READING record.
 // Legacy/corrupt data must never be presented as zero or as fabricated chapters.
 // Mirror the canonical reader's bounded receipt shape without writing to D1.
@@ -30,7 +38,7 @@ function progressCount(raw: string | null): number {
     const receipt = entry as Record<string, unknown>;
     if (typeof receipt.book !== "string" || !/^[1-3]?[A-Z]{2,3}$/.test(receipt.book) ||
         typeof receipt.chapter !== "number" || !Number.isSafeInteger(receipt.chapter) ||
-        receipt.chapter < 1 || receipt.chapter > 151 ||
+        receipt.chapter < 1 || receipt.chapter > (READING_CHAPTERS.get(receipt.book) ?? 0) ||
         typeof receipt.title !== "string" || !receipt.title.trim() || receipt.title.length > 100)
       throw Error("invalid_public_reading_receipt");
     const key = receipt.book + ":" + receipt.chapter;

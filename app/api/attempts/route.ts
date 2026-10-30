@@ -63,6 +63,11 @@ function attemptDeadline(raw: unknown): number | null {
   const parsed = Date.parse(raw);
   return Number.isFinite(parsed) ? parsed : null;
 }
+// D1 can contain legacy/corrupt locale types despite TypeScript's static Locale.
+// Never emit a task missing its localized question/options or grade against it.
+function storedLocale(value: unknown): value is Locale {
+  return value === "uk" || value === "ru" || value === "en";
+}
 function tasksFor(book: string, chapter: number) { return mission.tasks.filter(task => task.book === book && task.chapter === chapter); }
 function publicTask(task: MissionTask, selectedLocale: Locale, index: number, total: number) {
   return {
@@ -142,6 +147,7 @@ async function completedResponse(attempt: Attempt, accepted = false) {
 async function finishAttempt(attempt: Attempt, actorId: string, guest: boolean, accepted = false) {
   if (attempt.status === "completed") return completedResponse(attempt, accepted);
   if (attempt.status !== "grading") return json({ error: "attempt_changed" }, 409);
+  if (!storedLocale(attempt.locale)) return json({ error: "attempt_state_invalid" }, 409);
   try {
     const tasks = tasksFor(attempt.book_id, attempt.chapter).slice(0, attempt.task_limit);
     if (!tasks.length || tasks.length !== attempt.task_limit || attempt.current_index !== tasks.length)
@@ -228,6 +234,7 @@ export async function GET(request: Request) {
   const deadline = attemptDeadline(attempt.expires_at);
   if (deadline === null) return json({ error: "attempt_state_invalid" }, 409);
   if (deadline <= Date.now()) return json({ error: "attempt_expired" }, 410);
+  if (!storedLocale(attempt.locale)) return json({ error: "attempt_state_invalid" }, 409);
   const tasks = tasksFor(attempt.book_id, attempt.chapter).slice(0, attempt.task_limit), task = tasks[attempt.current_index];
   if (!task) return json({ error: "attempt_state_invalid" }, 409);
   return json({ attemptId: attempt.id, task: publicTask(task, attempt.locale, attempt.current_index + 1, tasks.length) });
@@ -360,6 +367,7 @@ export async function POST(request: Request) {
     if ((attempt.status === "grading" || attempt.status === "completed") && taskIndex === attempt.task_limit)
       return finishAttempt(attempt, currentActor.id, currentActor.guest, true);
     if (attempt.status !== "active") return json({ error: attempt.status === "invalidated" ? "attempt_invalidated" : "attempt_closed" }, 409);
+    if (!storedLocale(attempt.locale)) return json({ error: "attempt_state_invalid" }, 409);
     const deadline = attemptDeadline(attempt.expires_at);
     if (deadline === null) return json({ error: "attempt_state_invalid" }, 409);
     if (deadline <= Date.now()) {

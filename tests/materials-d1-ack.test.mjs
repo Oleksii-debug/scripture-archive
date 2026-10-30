@@ -142,3 +142,37 @@ test("legacy public material list redacts answer and explanation", async () => {
     assert.deepEqual(data.options, ["first", "second"]);
   } finally { f.db.close(); }
 });
+
+test("corrupt legacy public materials fail closed without leaking a partial list", async () => {
+  const f = fixture();
+  try {
+    const insert = f.db.prepare("INSERT INTO study_materials(id,owner_user_id,title,locale,data,visibility) VALUES (?,?,?,?,?,?)");
+    insert.run("good", "alice", "Valid public lesson", "uk", JSON.stringify(valid), "public");
+    insert.run("damaged", "alice", "Corrupted old lesson", "uk", "{broken JSON", "public");
+    const result = await f.get();
+    assert.equal(result.status, 503);
+    assert.equal(result.body.error, "materials_unavailable");
+    assert.equal("materials" in result.body, false, "no partially disclosed public list");
+  } finally { f.db.close(); }
+});
+
+test("corrupt private drafts fail closed rather than rejecting with an uncaught error", async () => {
+  const f = fixture();
+  try {
+    f.db.prepare("INSERT INTO study_materials(id,owner_user_id,title,locale,data,visibility) VALUES (?,?,?,?,?,?)")
+      .run("damaged", "alice", "Private corrupt draft", "en", "null", "private");
+    const result = await f.get(true, "alice");
+    assert.equal(result.status, 503);
+    assert.equal(result.body.error, "materials_unavailable");
+    assert.equal("materials" in result.body, false);
+  } finally { f.db.close(); }
+});
+
+test("unavailable D1 material query returns a controlled private 503, not a thrown 500", async () => {
+  const f = fixture();
+  f.db.close();
+  const result = await f.get(true, "alice");
+  assert.equal(result.status, 503);
+  assert.equal(result.body.error, "materials_unavailable");
+  assert.equal("materials" in result.body, false);
+});

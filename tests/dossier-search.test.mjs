@@ -195,7 +195,7 @@ test('SA-EXT-05: chapter matches are exact, not ambiguous numeric prefixes',()=>
   assert.ok(!chapterOne.includes('egypt'),'GEN 1 must not claim a GEN 12 dossier');
   assert.ok(!chapterOne.includes('abraham'),'GEN 1 must not claim a GEN 12/15 dossier');
   const html=dossierMarkup(catalog,'en','egypt',esc,'GEN 1');
-  assert.doesNotMatch(html,/href="\\/reader\\//);
+  assert.ok(!html.includes('href="/reader/'),'unrelated Scripture passages stay hidden');
   assert.doesNotMatch(html,/id="dossier-heading"/);
   const legacy=searchScriptureDossiers('en','Moses');
   assert.equal(legacy[0]?.id,'moses','two-argument title search remains compatible');

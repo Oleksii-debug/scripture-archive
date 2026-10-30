@@ -6,6 +6,11 @@ export const dynamic = "force-dynamic";
 
 const EVENTS = new Set(["page_view", "sign_up", "sign_up_error", "login", "login_error", "quiz_start", "quiz_complete", "navigation_click", "support_click", "client_error"]);
 const VALUE_KEYS = new Set(["destination", "error", "language", "method", "mode", "score", "total"]);
+const PAGE_NAMES = new Set(["home", "reader", "missions", "campaigns", "groups",
+  "community", "support", "help", "about", "privacy", "dossiers", "academy",
+  "library", "terms", "account", "mission", "progress", "editor", "other",
+  "reading"]); // Retain the existing legacy readback label.
+
 const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const clean = (value: unknown, max: number) => typeof value === "string" ? value.trim().slice(0, max) : "";
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
@@ -22,11 +27,27 @@ function clientDimensions(request: Request) {
   return { device, operatingSystem, browser, country, city };
 }
 
-function safeValue(value: unknown) {
+function safeValue(value: unknown): Record<string, string | number> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  return Object.fromEntries(Object.entries(value as Record<string, unknown>)
-    .filter(([key, entry]) => VALUE_KEYS.has(key) && ["string", "number", "boolean"].includes(typeof entry))
-    .map(([key, entry]) => [key, typeof entry === "string" ? entry.slice(0, 80) : entry]));
+  const allowedStrings: Record<string, ReadonlySet<string>> = {
+    destination: new Set([...PAGE_NAMES, "help_request", "monobank"]),
+    error: new Set(["email_in_use", "email_not_verified", "too_many_requests",
+      "chapter_must_be_read", "sensitive_consent_required", "script_error"]),
+    language: new Set(["uk", "ru", "en"]),
+    method: new Set(["password"]),
+    mode: new Set(["group", "personal"]),
+  };
+  const safe: Record<string, string | number> = {};
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (!VALUE_KEYS.has(key)) continue;
+    if (key === "score" || key === "total") {
+      if (typeof entry === "number" && Number.isFinite(entry) &&
+          entry >= 0 && entry <= 1000000) safe[key] = entry;
+    } else if (typeof entry === "string" && allowedStrings[key]) {
+      safe[key] = allowedStrings[key].has(entry) ? entry : "other";
+    }
+  }
+  return safe;
 }
 
 export async function POST(request: Request) {
@@ -44,7 +65,9 @@ export async function POST(request: Request) {
   try { identity = await authenticateRequest(request); }
   catch { return unavailable(); }
   const dimensions = clientDimensions(request);
-  const pageName = clean(body.pageName, 40).replace(/[^a-z0-9_-]/gi, "") || "home";
+  const requestedPage = clean(body.pageName, 40);
+  const pageName = PAGE_NAMES.has(requestedPage) ? requestedPage
+    : requestedPage ? "other" : "home";
   const source = ["direct", "organic", "social", "referral", "campaign"].includes(clean(body.source, 20)) ? clean(body.source, 20) : "direct";
   const activeSeconds = action === "heartbeat" ? Math.min(60, Math.max(0, Math.round(Number(body.activeSeconds) || 0))) : 0;
   const eventType = clean(body.eventType, 40);

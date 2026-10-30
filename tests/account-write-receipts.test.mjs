@@ -14,9 +14,10 @@ const compiled = ts.transpileModule(source, {
 assert.equal(compiled.diagnostics?.length ?? 0, 0);
 
 function harness(mode, { readFailure = false } = {}) {
-  const calls = { run: 0, first: 0 };
+  const calls = { run: 0, first: 0, bound: [] };
   const database = { prepare() {
-    return { bind() {
+    return { bind(...values) {
+      calls.bound.push(values);
       return {
         async run() {
           calls.run++;
@@ -125,7 +126,7 @@ for (const field of ['tradition','denomination','church']) {
       const h=harness('ok');
       const result=await h.invoke('sensitive-consent',{...consentBaseline,[field]:value});
       assert.equal(result.status,400,field+' '+kind+' '+JSON.stringify(result.body));
-      assert.equal(result.body.error,'invalid_consent');
+      assert.equal(result.body.error,'invalid_profile_field');
       assert.equal(h.calls.run,0,'invalid consent metadata cannot write to D1');
       assert.equal(h.calls.first,0,'invalid consent metadata cannot read a saved profile');
     });
@@ -151,6 +152,8 @@ test('sensitive-consent accepts and saves Unicode exact 160-character fields',as
   assert.equal(result.status,200,JSON.stringify(result.body));
   assert.equal(h.calls.run,1);
   assert.equal(h.calls.first,1);
+  assert.equal(h.calls.bound[0][3],'Д'.repeat(160),'denomination must remain exact');
+  assert.equal(h.calls.bound[0][4],'Ц'.repeat(160),'church must remain exact');
 });
 test('sensitive-consent withdrawal remains possible with stale malformed metadata',async()=>{
   const h=harness('ok');

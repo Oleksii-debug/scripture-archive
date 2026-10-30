@@ -40,6 +40,14 @@ function json(data: unknown, status = 200, headers: HeadersInit = {}) {
 }
 function clean(value: unknown, max = 160) { return typeof value === "string" ? value.trim().slice(0, max) : ""; }
 function normalizeEmail(value: unknown) { return clean(value, 254).toLowerCase(); }
+// Registration age is a profile/privacy boundary. Accept JSON integers and
+// ordinary decimal HTML form values, never JavaScript-coercible arrays,
+// hex, exponents, whitespace or fractional values.
+function registrationAge(value: unknown): number | null {
+  if (typeof value !== "number" && (typeof value !== "string" || !/^[1-9][0-9]{0,2}$/.test(value))) return null;
+  const age = Number(value);
+  return Number.isSafeInteger(age) && age >= 13 && age <= 120 ? age : null;
+}
 function ageRange(age: number) {
   if (age <= 17) return "13-17";
   if (age <= 24) return "18-24";
@@ -119,13 +127,13 @@ export async function POST(request: Request) {
   if (action === "register") {
     const email = normalizeEmail(data.email), password = data.password;
     const firstName = clean(data.firstName, 80), lastName = clean(data.lastName, 80);
-    const age = Number(data.age), gender = clean(data.gender, 30), tradition = clean(data.tradition, 40);
+    const age = registrationAge(data.age), gender = clean(data.gender, 30), tradition = clean(data.tradition, 40);
     const maritalStatus = clean(data.maritalStatus, 40), denomination = clean(data.denomination, 160);
     const church = clean(data.church, 160), selectedLocale = locale(data.locale);
     const hasChildren = data.hasChildren === true ? 1 : data.hasChildren === false ? 0 : null;
     const sensitiveConsent = data.acceptSensitive === true;
     if (!await rateLimit(`register:${address}`, 5, 3600)) return json({ error: "too_many_requests" }, 429);
-    if (!EMAIL.test(email) || !validPassword(password) || !firstName || !lastName || !Number.isInteger(age) || age < 13 || age > 120 || !GENDERS.has(gender) || (tradition && !TRADITIONS.has(tradition)) || !MARITAL.has(maritalStatus) || data.acceptPrivacy !== true)
+    if (!EMAIL.test(email) || !validPassword(password) || !firstName || !lastName || age === null || !GENDERS.has(gender) || (tradition && !TRADITIONS.has(tradition)) || !MARITAL.has(maritalStatus) || data.acceptPrivacy !== true)
       return json({ error: "invalid_registration" }, 400);
     if (!sensitiveConsent && ((tradition && tradition !== "prefer_not") || denomination || church))
       return json({ error: "sensitive_consent_required" }, 400);

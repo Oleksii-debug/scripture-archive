@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { safeProvenanceHttpsUrl } from '../public/parallel-reader.js';
 
 const src = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
 const first=src.indexOf('function localEditionMetadata(');
@@ -16,7 +17,7 @@ function provenance(selected,lang='uk') {
     en:[{id:'en-web',contentId:'ENGWEBU',local:true}],
   };
   const state={lang};
-  const ctx=vm.createContext({state,EDITIONS:entries,URL,selectedEdition:()=>entries[lang].find(e=>e.id===selected)});
+  const ctx=vm.createContext({state,EDITIONS:entries,URL,safeProvenanceHttpsUrl,selectedEdition:()=>entries[lang].find(e=>e.id===selected)});
   vm.runInContext(functionSource,ctx);
   return c=>ctx.localEditionMetadata(c);
 }
@@ -62,4 +63,37 @@ test('catalog metadata without an HTTPS source does not silently enable the read
 });
 test('reader source URL is escaped before insertion in HTML attribute',()=>{
   assert.match(src,/href="\$\{esc\(editionInfo\.source\)\}"/);
+});
+
+
+test('primary reader refuses normalized-away source and licence provenance in all canonical locales',()=>{
+  // The original helper accepted these altered authorities and byte-stripped
+  // paths via new URL(), unlike the strict canonical comparison URL authority.
+  const deceptive=[
+    'https://@source.example/',
+    'https://:@source.example/',
+    'https://source.example\r.evil.example/',
+    'https://source.example/\nchapter',
+    'https://source.example/\tchapter',
+    ' https://source.example/',
+    'https://source.example/ ',
+    'https://source.example/\u007f',
+  ];
+  for(const [lang,edition] of [['uk','uk-ohiienko'],['ru','ru-synodal'],['en','en-web']]){
+    for(const bad of deceptive){
+      for(const field of ['source','licenseUrl']){
+        const modified=structuredClone(catalog);
+        const metadata=lang==='uk'?modified.translations['uk-ohiienko']:modified.editions[lang];
+        metadata[field]=bad;
+        assert.throws(()=>provenance(edition,lang)(modified),/unsafe_edition_source/,
+          lang+' '+field+' must reject raw normalized-away URL '+JSON.stringify(bad));
+      }
+    }
+  }
+  const valid=structuredClone(catalog);
+  valid.translations['uk-ohiienko'].source='HTTPS://publisher.example/path%20with%20spaces?name=a@b';
+  valid.translations['uk-ohiienko'].licenseUrl='https://rights.example/terms%20of%20use';
+  const result=provenance('uk-ohiienko')(valid);
+  assert.equal(result.source,valid.translations['uk-ohiienko'].source);
+  assert.equal(result.licenseUrl,valid.translations['uk-ohiienko'].licenseUrl);
 });

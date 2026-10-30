@@ -12,7 +12,7 @@ function fixture() {
     db.exec(readFileSync(new URL("../drizzle/" + name, import.meta.url), "utf8"));
   db.prepare("INSERT INTO accounts (id,email,password_hash,password_salt,password_iterations,first_name,last_name) VALUES ('alice','alice@example.invalid','oldhash','oldsalt',1,'Alice','Test')").run();
   db.prepare("INSERT INTO auth_sessions(token_hash,user_id,session_version,user_agent_hash,expires_at) VALUES ('session','alice',1,'agent','2099-01-01')").run();
-  let failAt = -1;
+  let failAt = -1, unconfirmedAt = -1, emails = 0;
   const D1 = { prepare(sql) { return { bind(...args) { return {
     first: async () => db.prepare(sql).get(...args) || null,
     run: async () => { const result = db.prepare(sql).run(...args); return { success: true, meta: { changes: Number(result.changes) } }; },
@@ -22,7 +22,8 @@ function fixture() {
       const results = [];
       for (let i = 0; i < statements.length; i++) {
         if (i === failAt) throw Error("simulated storage failure");
-        results.push(await statements[i].run());
+        const receipt = await statements[i].run();
+        results.push(i === unconfirmedAt ? { ...receipt, success: false } : receipt);
       }
       db.exec("COMMIT");
       return results;
@@ -35,11 +36,12 @@ function fixture() {
     if (id === "cloudflare:workers") return { env: { DB: D1 } };
     if (id.endsWith("lib/auth")) return { sameOrigin: () => true, requestAddress: () => "test", rateLimit: async () => true,
       sha256: async value => `hash-${value}`, hashPassword: async () => ({ hash: "newhash", salt: "newsalt", iterations: 99 }),
-      clearSessionCookie: () => "sa_session=; Max-Age=0" };
-    if (id.endsWith("lib/email")) return {};
+      clearSessionCookie: () => "sa_session=; Max-Age=0", randomToken: () => "fresh-local-token" };
+    if (id.endsWith("lib/email")) return { sendSecurityEmail: async () => { emails++; return { delivered: true }; } };
     throw Error("Unexpected dependency");
   } });
-  return { db, handler: exports, failAt: n => { failAt = n; } };
+  return { db, handler: exports, failAt: n => { failAt = n; },
+    unconfirmedAt: n => { unconfirmedAt = n; }, emails: () => emails };
 }
 
 test("verification and token consumption roll back together and remain single-use", async () => {
@@ -86,5 +88,42 @@ test("expired tokens cannot change an account or revoke a session", async () => 
   assert.equal(f.db.prepare("SELECT email_verified_at FROM accounts WHERE id='alice'").get().email_verified_at, null);
   assert.equal(f.db.prepare("SELECT password_hash FROM accounts WHERE id='alice'").get().password_hash, "oldhash");
   assert.equal(f.db.prepare("SELECT revoked_at FROM auth_sessions WHERE token_hash='session'").get().revoked_at, null);
+  f.db.close();
+});
+
+test("unconfirmed verification consumption never claims an email verified", async () => {
+  const f = fixture();
+  f.db.prepare("INSERT INTO auth_tokens(token_hash,user_id,purpose,expires_at) VALUES ('hash-code','alice','verify','2099-01-01')").run();
+  f.unconfirmedAt(1);
+  const response = await f.handler.GET(new Request("https://example.invalid/api/auth?action=verify&token=code"));
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).error, "verification_unavailable");
+  assert.equal(response.headers.get("location"), null);
+  f.db.close();
+});
+
+test("unconfirmed reset token consumption never claims password reset success", async () => {
+  const f = fixture();
+  f.db.prepare("INSERT INTO auth_tokens(token_hash,user_id,purpose,expires_at) VALUES ('hash-code','alice','reset','2099-01-01')").run();
+  f.unconfirmedAt(2);
+  const request = new Request("https://example.invalid/api/auth?action=reset-password", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token: "code", password: "new-password-123" }),
+  });
+  const response = await f.handler.POST(request);
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).error, "password_reset_unavailable");
+  f.db.close();
+});
+
+test("unconfirmed new verification token may not trigger any email dispatch", async () => {
+  const f = fixture();
+  f.unconfirmedAt(1);
+  const request = new Request("https://example.invalid/api/auth?action=resend-verification", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "alice@example.invalid" }),
+  });
+  await assert.rejects(f.handler.POST(request), /token_save_unconfirmed/);
+  assert.equal(f.emails(), 0);
   f.db.close();
 });

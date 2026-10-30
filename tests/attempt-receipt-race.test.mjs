@@ -83,9 +83,9 @@ test('a failed receipt consumption rolls back the entire start transaction', () 
 test('a new group attempt cannot invalidate another context even on the same chapter', () => {
   const source = readFileSync(new URL('../app/api/attempts/route.ts', import.meta.url), 'utf8');
   const block = source.slice(source.indexOf('const started = await env.DB.batch(['), source.indexOf('const startChanges = confirmedBatch(started, 3)'));
-  const sql = [...block.matchAll(/env\\.DB\\.prepare\\("([^"]+)"\\)/g)].map(match => match[1]);
+  const sql = [...block.matchAll(/env\.DB\.prepare\("([^"]+)"\)/g)].map(match => match[1]);
   assert.equal(sql.length, 3);
-  assert.match(sql[1], /COALESCE\\(group_id,''\\)=\\?/);
+  assert.match(sql[1], /COALESCE\(group_id,''\)=\?/);
   const db = new DatabaseSync(':memory:');
   try {
     db.exec(`CREATE TABLE home_group_members (group_id TEXT, user_id TEXT, role TEXT);

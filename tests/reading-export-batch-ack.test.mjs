@@ -6,6 +6,7 @@ import ts from "typescript";
 
 // Execute the production export route, not a model or a parallel implementation.
 const source = readFileSync(new URL("../app/api/reading-export/route.ts", import.meta.url), "utf8");
+const catalog = JSON.parse(readFileSync(new URL("../public/data/catalog.json", import.meta.url), "utf8"));
 const compiled = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   fileName: "app/api/reading-export/route.ts", reportDiagnostics: true,
@@ -43,6 +44,7 @@ function fixture({ results = standardRows(), dbPresent = true, identity = {
     exports, Response, Request, Date,
     require(moduleName) {
       if (moduleName === "cloudflare:workers") return { env: { DB: dbPresent ? db : null } };
+      if (moduleName === "../../../public/data/catalog.json") return { default: catalog };
       if (moduleName === "../../../lib/auth") return { authenticateRequest: async () => {
         authentications++;
         if (authError) throw authError;
@@ -265,4 +267,37 @@ test("canonical 2/3-character and numbered book records remain exportable withou
   const {response,body}=await outcome(fixture({results:rows}));
   assert.equal(response.status,200);
   assert.deepEqual(Array.from(body.progress[0].data, entry=>entry.book),["GEN","1CO","3JN","PSA"]);
+});
+
+test("READING export refuses syntactically valid but nonexistent books and impossible chapters", async () => {
+  // These used to be silently accepted by the 1..150 structural check, even
+  // though /api/account?action=reading and /progress reject them.
+  for (const item of [
+    {book:"FAK",chapter:2,title:"Invented"},
+    {book:"GEN",chapter:51,title:"Beyond Genesis"},
+    {book:"JOL",chapter:5,title:"Beyond every approved Joel edition"},
+    {book:"3JN",chapter:2,title:"Beyond 3 John"},
+  ]) {
+    const rows = standardRows();
+    rows[1].results[0].data = JSON.stringify([item]);
+    const { response, body } = await outcome(fixture({ results: rows }));
+    assert.equal(response.status, 503, JSON.stringify(item));
+    assert.deepEqual(body, { error:"export_unavailable" });
+    assert.equal(response.headers.get("content-disposition"), null);
+    assert.match(response.headers.get("cache-control"), /no-store, private/);
+  }
+});
+
+test("READING export preserves approved edition-specific Joel 4 without inventing chapters", async () => {
+  // The real Ohiienko edition numbers Joel through chapter 4.
+  const rows = standardRows();
+  rows[1].results[0].data = JSON.stringify([
+    {book:"GEN",chapter:50,title:"Last Genesis chapter"},
+    {book:"JOL",chapter:4,title:"Ohiienko Joel"},
+    {book:"PSA",chapter:150,title:"Final Psalm"},
+  ]);
+  const {response,body} = await outcome(fixture({results:rows}));
+  assert.equal(response.status,200);
+  assert.deepEqual(Array.from(body.progress[0].data, row=>row.book+":"+row.chapter),
+    ["GEN:50","JOL:4","PSA:150"]);
 });

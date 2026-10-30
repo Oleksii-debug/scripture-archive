@@ -1,9 +1,23 @@
 import { env } from "cloudflare:workers";
 import { authenticateRequest } from "../../../lib/auth";
+import catalog from "../../../public/data/catalog.json";
 
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "no-store, private", "X-Content-Type-Options": "nosniff" };
 const error = (message: string, status: number) => Response.json({ error: message }, { status, headers });
+
+// Reuse the actual 66-book Bible catalogue already used by /api/account.
+// Local editions can have different legitimate chapter divisions (e.g. JOL 4).
+// A structurally well-formed, invented book or impossible chapter must never
+// be advertised in a supposedly recoverable private READING export.
+const READING_CHAPTERS = new Map<string, number>(
+  catalog.books.en.map(book => [book.code, book.chapters]),
+);
+for (const books of Object.values(catalog.editionBooks)) {
+  for (const book of books) {
+    READING_CHAPTERS.set(book.code, Math.max(READING_CHAPTERS.get(book.code) ?? 0, book.chapters));
+  }
+}
 
 export async function GET(request: Request) {
   if (!env.DB) return error("database_unavailable", 503);
@@ -34,14 +48,15 @@ export async function GET(request: Request) {
       // receipts. A JSON object or malformed array is not a restorable reading
       // history, even if JSON.parse succeeded. Preserve other legacy mission
       // snapshot shapes (objects or arrays) without reinterpreting them.
-      // Match the canonical reader's *structural* admission contract before
-      // advertising a READING export as restorable. This deliberately does not
-      // invent a second 66-book catalogue or claim an edition/licensing check.
+      // Match the reader's actual canonical book/chapter bounds (including
+      // edition-specific chapter numbering), not just a plausible code shape.
+      // Read from the same source catalogue; do not invent a second registry.
       if (row.mission_id === "READING" &&
           (!Array.isArray(data) || data.some(entry => !entry || typeof entry !== "object" ||
             Array.isArray(entry) || typeof entry.book !== "string" ||
             !/^[1-3]?[A-Z]{2,3}$/.test(entry.book) ||
-            !Number.isSafeInteger(entry.chapter) || entry.chapter < 1 || entry.chapter > 150 ||
+            !Number.isSafeInteger(entry.chapter) || entry.chapter < 1 ||
+            entry.chapter > (READING_CHAPTERS.get(entry.book) ?? 0) ||
             typeof entry.title !== "string" || entry.title.trim().length === 0 ||
             entry.title.length > 200)))
         throw Error("invalid_reading_receipt");

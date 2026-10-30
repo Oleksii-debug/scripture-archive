@@ -84,3 +84,37 @@ test('the actual canonical workspace accepts GET query without another router or
   assert.match(source,/dossierMarkup\(catalog,state\.lang,selectedId,esc,searchQuery\)/);
   assert.match(source,/dossierAtlasMarkup\(catalog,state\.lang,esc\)/);
 });
+
+
+test('SA-EXT-05: explicit dossier outside current search is not presented as a matching cited result',()=>{
+  for(const [lang,query,excluded,expected] of [
+    ['uk','Мойсей','abraham','Це досьє не відповідає'],
+    ['ru','Моисей','abraham','Это досье не соответствует'],
+    ['en','Moses','abraham','This dossier does not match'],
+  ]){
+    const mismatch=dossierMarkup(catalog,lang,excluded,esc,query);
+    assert.match(mismatch,/role="alert"/);
+    assert.ok(mismatch.includes(expected));
+    assert.doesNotMatch(mismatch,/id="dossier-heading"/);
+    assert.doesNotMatch(mismatch,/href="\/reader\//);
+    assert.ok(mismatch.includes('href="/dossiers?id=moses"'));
+    assert.ok(mismatch.includes('href="/dossiers"'));
+    // The same result can be opened, but only if it actually matched.
+    const inResult=dossierMarkup(catalog,lang,'moses',esc,query);
+    assert.match(inResult,/id="dossier-heading"/);
+    assert.match(inResult,/href="\/reader\/EXO\/3\?verse=1"/);
+    assert.match(inResult,/aria-current="page"/);
+    assert.doesNotMatch(inResult,/role="alert"/);
+  }
+});
+
+test('SA-EXT-05: unknown explicit ID and no matches stay separately explained',()=>{
+  const unknown=dossierMarkup(catalog,'en','never-existed',esc,'Moses');
+  assert.match(unknown,/That dossier was not found/);
+  assert.doesNotMatch(unknown,/This dossier does not match/);
+  const noMatches=dossierMarkup(catalog,'en','abraham',esc,'zqxnonexistent');
+  assert.match(noMatches,/role="alert"/);
+  assert.doesNotMatch(noMatches,/href="\/reader\//);
+  const backwards=dossierMarkup(catalog,'en','abraham',esc);
+  assert.match(backwards,/href="\/reader\/GEN\/12\?verse=1"/);
+});

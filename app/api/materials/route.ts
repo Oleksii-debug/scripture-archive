@@ -81,6 +81,17 @@ export async function POST(request: Request) {
   if (!userId) return Response.json({ error: "authentication_required" }, { status: 401 });
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   if (!body) return Response.json({ error: "invalid_json" }, { status: 400 });
+  // The editor must review exactly what the author submitted. Silent slicing
+  // of required text fields previously returned ok:true for a different
+  // exercise, including a 501-character answer matching a 500-char option
+  // only *after* truncation. Refuse those requests before any D1 interaction.
+  if (([
+    ["title", 160], ["prompt", 3000], ["reference", 200],
+    ["explanation", 2000], ["answer", 500],
+  ] as const).some(([key, max]) => {
+    const value = body[key];
+    return typeof value !== "string" || value.trim().length > max;
+  })) return Response.json({ error: "invalid_material" }, { status: 400 });
   const title = clean(body.title, 160), prompt = clean(body.prompt, 3000), reference = clean(body.reference, 200),
     explanation = clean(body.explanation, 2000), answer = clean(body.answer, 500),
     // Do not silently drop malformed choices or truncate excess answers.

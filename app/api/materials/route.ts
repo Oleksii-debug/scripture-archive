@@ -140,9 +140,9 @@ export async function POST(request: Request) {
   try {
     const saved = await env.DB!.prepare("INSERT INTO study_materials (id,owner_user_id,title,locale,data,visibility) VALUES (?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,locale=excluded.locale,data=excluded.data,visibility=excluded.visibility,updated_at=CURRENT_TIMESTAMP WHERE study_materials.owner_user_id=excluded.owner_user_id")
       .bind(id, userId, title, locale, data, visibility).run();
-    // A D1 mutation receipt must already be a numeric count; never coerce one.
+    // This primary-key UPSERT can affect at most one row; a multi-row ACK is\n    // corrupted/uncertain evidence, not a saved-draft confirmation.\n    // A D1 mutation receipt must already be a numeric count; never coerce one.
     const changes = saved.meta?.changes;
-    if (!saved.success || !Number.isSafeInteger(changes) || changes < 0)
+    if (!saved.success || !Number.isSafeInteger(changes) || changes < 0 || changes > 1)
       return Response.json({ error: "material_save_failed" }, { status: 503 });
     if (changes === 0) return Response.json({ error: "forbidden" }, { status: 403 });
     return Response.json({ ok: true, id }, { status: existing ? 200 : 201 });
@@ -166,7 +166,9 @@ export async function DELETE(request: Request) {
   if (!id || id.length > 80) return Response.json({ error: "invalid_material" }, { status: 400 });
   try {
     const result = await env.DB.prepare("DELETE FROM study_materials WHERE id=? AND owner_user_id=?").bind(id, userId).run();
-    // A completed DELETE with a malformed ACK is an unknown outcome, not success.
+    // D1 meta.changes is sqlite3_total_changes(): a one-row DELETE may report
+    // several changes when linked editorial submissions cascade. Accept that
+    // legitimate total while rejecting missing, negative or unsafe receipts.
     const changes = result.meta?.changes;
     // A successful-looking D1 reply without an authoritative write receipt
     // cannot claim deletion, including when the service lost its ACK.

@@ -20,6 +20,8 @@ function fixture() {
     data TEXT NOT NULL, visibility TEXT NOT NULL DEFAULT 'private',
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`);
+  // D1 counts cascaded rows through sqlite3_total_changes(), not only direct sqlite3_changes().
+  db.exec("PRAGMA foreign_keys = ON; CREATE TABLE material_submissions (id TEXT PRIMARY KEY, material_id TEXT NOT NULL REFERENCES study_materials(id) ON DELETE CASCADE)");
   let ack = "normal", afterOwnerRead = null, prepareFailure = null, deleteAck = "normal";
   const D1 = { prepare(sql) {
     if (prepareFailure && sql.startsWith(prepareFailure)) throw Error("disposable D1 prepare failure");
@@ -33,7 +35,9 @@ function fixture() {
       },
       async all() { return { success: true, results: db.prepare(sql).all(...args) }; },
       async run() {
+        const beforeTotal = db.prepare("SELECT total_changes() AS n").get().n;
         const result = db.prepare(sql).run(...args);
+        const totalWritten = db.prepare("SELECT total_changes() AS n").get().n - beforeTotal;
         if (sql.startsWith("DELETE FROM study_materials") && deleteAck !== "normal") {
           const mode = deleteAck; deleteAck = "normal";
           if (mode === "missing") return { success: true, meta: {} };
@@ -41,6 +45,8 @@ function fixture() {
           if (mode === "text") return { success: true, meta: { changes: "1" } };
           if (mode === "boolean") return { success: true, meta: { changes: true } };
           if (mode === "null") return { success: true, meta: { changes: null } };
+          if (mode === "multi") return { success: true, meta: { changes: 2 } };
+          if (mode === "unsafe") return { success: true, meta: { changes: Number.MAX_SAFE_INTEGER + 1 } };
           return { success: false, meta: { changes: Number(result.changes) } };
         }
         if (sql.startsWith("INSERT INTO study_materials") && ack !== "normal") {
@@ -50,9 +56,11 @@ function fixture() {
           if (mode === "text") return { success: true, meta: { changes: "1" } };
           if (mode === "boolean") return { success: true, meta: { changes: true } };
           if (mode === "null") return { success: true, meta: { changes: null } };
+          if (mode === "multi") return { success: true, meta: { changes: 2 } };
+          if (mode === "unsafe") return { success: true, meta: { changes: Number.MAX_SAFE_INTEGER + 1 } };
           return { success: false, meta: { changes: Number(result.changes) } };
         }
-        return { success: true, meta: { changes: Number(result.changes) } };
+        return { success: true, meta: { changes: Number(totalWritten) } };
       },
     });
     return { bind: (...args) => statement(...args), ...statement() };
@@ -210,8 +218,10 @@ test("draft text permits surrounding whitespace but never drops meaningful text"
   } finally { f.db.close(); }
 });
 
-test("false and missing D1 ACKs return 503 even when SQLite completed the write", async () => {
-  for (const mode of ["failed", "missing", "negative", "text", "boolean", "null"]) {
+// Even a truthy, safely typed D1 receipt is untrustworthy if it claims
+// a single-primary-key write changed more than one row.
+test("false, missing or multi-row D1 ACKs return 503 even when SQLite completed the write", async () => {
+  for (const mode of ["failed", "missing", "negative", "text", "boolean", "null", "multi", "unsafe"]) {
     const f = fixture();
     try {
       f.setAck(mode);
@@ -324,8 +334,8 @@ test("a D1 delete prepare failure returns a stable error without losing a privat
   } finally { f.db.close(); }
 });
 
-test("missing, false, or invalid D1 delete receipts never claim success", async () => {
-  for (const ack of ["missing", "negative", "failed", "text", "boolean", "null"]) {
+test("missing, false or invalid D1 delete receipts never claim success", async () => {
+  for (const ack of ["missing", "negative", "failed", "text", "boolean", "null", "unsafe"]) {
     const f = fixture();
     try {
       assert.equal((await f.post({ ...valid, id: "lost-delete-ack" })).status, 201);
@@ -339,6 +349,24 @@ test("missing, false, or invalid D1 delete receipts never claim success", async 
         "repeated delete after a failed ACK remains an idempotent no-op");
     } finally { f.db.close(); }
   }
+});
+
+test("owner delete accepts a real cascading submission total_changes acknowledgement", async () => {
+  const f = fixture();
+  try {
+    assert.equal((await f.post({ ...valid, id: "reviewed-parent" })).status, 201);
+    f.db.prepare("INSERT INTO material_submissions(id,material_id) VALUES (?,?)")
+      .run("submission-child", "reviewed-parent");
+    assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM material_submissions").get().n, 1);
+    const before = f.db.prepare("SELECT total_changes() AS n").get().n;
+    const response = await f.remove("reviewed-parent");
+    const changed = f.db.prepare("SELECT total_changes() AS n").get().n - before;
+    assert.equal(changed, 2, "D1 reports parent plus ON DELETE CASCADE child");
+    assert.equal(response.status, 200, "valid cascade is not a corrupt D1 ACK");
+    assert.equal(response.body.ok, true);
+    assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM study_materials").get().n, 0);
+    assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM material_submissions").get().n, 0);
+  } finally { f.db.close(); }
 });
 
 test("delete preserves owner isolation and idempotence under a valid D1 receipt", async () => {

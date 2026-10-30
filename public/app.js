@@ -2784,8 +2784,10 @@ async function renderReader(parts) {
   document.querySelector(".verses")?.addEventListener("click", async event => {
     const button = event.target?.closest?.("button[data-verse-cite]");
     if (!button || !readerStillCurrent()) return;
-    const number = Number(button.dataset.verseCite);
-    if (!Number.isSafeInteger(number) || number < 1 || number > verses.length) return;
+    const rawVerse = button.dataset.verseCite;
+    if (!/^[1-9][0-9]*$/.test(rawVerse || "")) return;
+    const number = Number(rawVerse);
+    if (!Number.isSafeInteger(number) || number > verses.length) return;
     const status = document.querySelector("#reader-cite-status");
     if (!status) return;
     status.textContent = "";

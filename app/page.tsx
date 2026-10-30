@@ -17,6 +17,7 @@ export default function Home() {
           <a href="/campaigns" data-route="campaigns" data-workspace="campaigns">Кампанії</a>
           <a href="/reader" data-route="reader" data-i18n="reader">Читальня</a>
           <a href="/dossiers" data-route="dossiers" data-workspace="dossiers">Дослідницькі досьє</a>
+          <a href="/library" data-route="library" data-workspace="library">Бібліотека</a>
           <a href="/builder" data-route="builder" data-workspace="builder">Конструктор</a>
           <a href="/progress" data-route="progress" data-workspace="progress">Мій прогрес</a>
           <a href="/groups" data-route="groups" data-i18n="groups">Домашні групи</a>

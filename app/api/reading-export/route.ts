@@ -57,7 +57,7 @@ export async function GET(request: Request) {
       // supposedly recoverable backup even though the canonical progress
       // table requires these fields to identify the saved record.
       if (!row || typeof row.mission_id !== "string" || !row.mission_id.trim() ||
-          typeof row.updated_at !== "string" || !row.updated_at.trim())
+          !validBookmarkTimestamp(row.updated_at))
         throw Error("invalid_progress_metadata");
       // Valid JSON alone does not establish valid saved progress. A legacy D1
       // row containing "null", a scalar or a missing body must not produce a
@@ -110,8 +110,8 @@ export async function GET(request: Request) {
           row.chapter > (READING_CHAPTERS.get(row.book_id) ?? 0) ||
           !["uk", "ru", "en"].includes(row.locale) ||
           (row.group_id !== null && (typeof row.group_id !== "string" || !row.group_id.trim())) ||
-          typeof row.started_at !== "string" || !row.started_at.trim() ||
-          typeof row.completed_at !== "string" || !row.completed_at.trim())
+          !validBookmarkTimestamp(row.started_at) ||
+          !validBookmarkTimestamp(row.completed_at))
         throw Error("invalid_attempt_metadata");
       if (typeof row.result_json !== "string") throw Error("invalid_attempt_result");
       const result = JSON.parse(row.result_json);

@@ -514,3 +514,43 @@ for (const created_at of [
     assert.match(response.headers.get("content-disposition"),/attachment/);
   });
 }
+
+
+// SA-EXT-01/02: owner export is advertised as a recoverable complete record.
+// A success-marked D1 response containing impossible history dates is not one.
+for (const [field, index, invalid] of [
+  ['progress.updated_at',1,'2026-02-31'],
+  ['progress.updated_at',1,'1'],
+  ['progress.updated_at',1,'2026-10-30 25:00:00'],
+  ['attempt.started_at',3,'2026-02-30'],
+  ['attempt.started_at',3,'2026-10-30 24:00:00'],
+  ['attempt.completed_at',3,'2026-10-30T12:61:00Z'],
+  ['attempt.completed_at',3,'not a date'],
+]) {
+  test('private export rejects invalid '+field+': '+invalid,async()=>{
+    const rows=standardRows();
+    const key=field.split('.')[1];
+    rows[index].results[0][key]=invalid;
+    const f=fixture({results:rows});
+    const {response,body}=await outcome(f);
+    assert.equal(response.status,503,field+' must not produce a successful download');
+    assert.equal(body.error,'export_unavailable');
+    assert.equal(response.headers.get('content-disposition'),null);
+    assert.equal(f.batches,1);
+  });
+}
+
+for(const time of ['2026-10-30','2026-10-30 13:59:59','2026-10-30T13:59:59Z']){
+  test('private export retains canonical historical calendar time '+time,async()=>{
+    const rows=standardRows();
+    rows[1].results[0].updated_at=time;
+    rows[3].results[0].started_at=time;
+    rows[3].results[0].completed_at=time;
+    const {response,body}=await outcome(fixture({results:rows}));
+    assert.equal(response.status,200,JSON.stringify(body));
+    assert.equal(body.progress[0].updatedAt,time);
+    assert.equal(body.attemptHistory[0].startedAt,time);
+    assert.equal(body.attemptHistory[0].completedAt,time);
+    assert.match(response.headers.get('content-disposition'),/attachment/);
+  });
+}

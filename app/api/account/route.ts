@@ -89,7 +89,11 @@ export async function GET(request:Request){
 export async function POST(request:Request){return write(request)} export async function PUT(request:Request){return write(request)}
 async function write(request:Request){
   if(!sameOrigin(request))return privateJson({error:"cross_origin_request"},{status:403});
-  const id=await authenticateRequest(request);if(!id)return unauthorized();const action=new URL(request.url).searchParams.get("action")??"profile";const body=await request.json().catch(()=>null) as Record<string,unknown>|null;if(!body)return privateJson({error:"invalid_json"},{status:400});
+  if(!env.DB)return privateJson({error:"database_unavailable"},{status:503});
+  let id: Awaited<ReturnType<typeof authenticateRequest>>;
+  try{id=await authenticateRequest(request);}
+  catch{return privateJson({error:"account_state_unavailable"},{status:503});}
+  if(!id)return unauthorized();const action=new URL(request.url).searchParams.get("action")??"profile";const body=await request.json().catch(()=>null) as Record<string,unknown>|null;if(!body)return privateJson({error:"invalid_json"},{status:400});
   if(action==="reading"){
     if(!Array.isArray(body.reading)||body.reading.length>2000)return privateJson({error:"invalid_reading"},{status:400});
     // Reject the entire invalid request: silently filtering all entries used to return a false 200 ACK.

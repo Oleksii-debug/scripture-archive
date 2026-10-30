@@ -8,11 +8,11 @@ import vm from "node:vm";
 function fixture() {
   const db = new DatabaseSync(":memory:");
   db.exec("PRAGMA foreign_keys=ON");
-  for (const name of readdirSync(new URL("../drizzle/", import.meta.url)).filter(n => /^000[0-9]_.*\.sql$/.test(n)).sort())
+  for (const name of readdirSync(new URL("../drizzle/", import.meta.url)).filter(n => /^00(?:0[0-9]|10)_.*\.sql$/.test(n)).sort())
     db.exec(readFileSync(new URL("../drizzle/" + name, import.meta.url), "utf8"));
   db.prepare("INSERT INTO accounts (id,email,password_hash,password_salt,password_iterations,first_name,last_name) VALUES ('alice','alice@example.invalid','oldhash','oldsalt',1,'Alice','Test')").run();
   db.prepare("INSERT INTO auth_sessions(token_hash,user_id,session_version,user_agent_hash,expires_at) VALUES ('session','alice',1,'agent','2099-01-01')").run();
-  let failAt = -1, unconfirmedAt = -1, emails = 0;
+  let failAt = -1, unconfirmedAt = -1, missingAt = -1, zeroAt = -1, emails = 0;
   const D1 = { prepare(sql) { return { bind(...args) { return {
     first: async () => db.prepare(sql).get(...args) || null,
     run: async () => { const result = db.prepare(sql).run(...args); return { success: true, meta: { changes: Number(result.changes) } }; },
@@ -23,7 +23,9 @@ function fixture() {
       for (let i = 0; i < statements.length; i++) {
         if (i === failAt) throw Error("simulated storage failure");
         const receipt = await statements[i].run();
-        results.push(i === unconfirmedAt ? { ...receipt, success: false } : receipt);
+        results.push(i === unconfirmedAt ? { ...receipt, success: false } :
+          i === missingAt ? { success: true } :
+          i === zeroAt ? { success: true, meta: { changes: 0 } } : receipt);
       }
       db.exec("COMMIT");
       return results;
@@ -37,13 +39,15 @@ function fixture() {
     if (id.endsWith("lib/auth")) return { sameOrigin: () => true, requestAddress: () => "test", rateLimit: async () => true,
       sha256: async value => `hash-${value}`, hashPassword: async () => ({ hash: "newhash", salt: "newsalt", iterations: 99 }),
       clearSessionCookie: () => "sa_session=; Max-Age=0", randomToken: () => "fresh-local-token",
+      isAuthTestRequest: () => false,
       authenticateRequest: async () => ({ userId: "alice", provider: "password" }),
       verifyPassword: async password => password === "correct" };
     if (id.endsWith("lib/email")) return { sendSecurityEmail: async () => { emails++; return { delivered: true }; } };
     throw Error("Unexpected dependency");
   } });
   return { db, handler: exports, failAt: n => { failAt = n; },
-    unconfirmedAt: n => { unconfirmedAt = n; }, emails: () => emails };
+    unconfirmedAt: n => { unconfirmedAt = n; }, missingAt: n => { missingAt = n; },
+    zeroAt: n => { zeroAt = n; }, emails: () => emails };
 }
 
 test("verification and token consumption roll back together and remain single-use", async () => {
@@ -141,5 +145,84 @@ test("unacknowledged session revocation never reports password change success", 
   assert.equal(response.status, 503);
   assert.equal((await response.json()).error, "password_change_unavailable");
   assert.equal(response.headers.get("set-cookie"), null);
+  f.db.close();
+});
+
+function registrationRequest(email = "new-reader@example.invalid") {
+  return new Request("https://example.invalid/api/auth?action=register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email, password: "long-password-123", firstName: "New", lastName: "Reader",
+      age: 25, gender: "prefer_not", maritalStatus: "single", acceptPrivacy: true, locale: "uk",
+    }),
+  });
+}
+
+test("R0.2: registered account and profile have two confirmed D1 INSERT receipts before verification email", async () => {
+  const f = fixture();
+  const result = await f.handler.POST(registrationRequest());
+  assert.equal(result.status, 201);
+  assert.equal((await result.json()).verificationRequired, true);
+  assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM accounts WHERE email='new-reader@example.invalid'").get().n, 1);
+  assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM profiles WHERE email='new-reader@example.invalid'").get().n, 1);
+  assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM auth_tokens WHERE purpose='verify'").get().n, 1);
+  assert.equal(f.emails(), 1);
+  f.db.close();
+});
+
+for (const index of [0, 1]) {
+  test("R0.2: unconfirmed registration INSERT receipt " + index + " cannot claim 201 or send email", async () => {
+    const f = fixture();
+    f.unconfirmedAt(index);
+    const result = await f.handler.POST(registrationRequest());
+    assert.equal(result.status, 503);
+    assert.equal((await result.json()).error, "registration_save_unconfirmed");
+    // Underlying batch may have committed despite uncertain acknowledgement;
+    // never retry registration or send a token on this ambiguous state.
+    assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM accounts WHERE email='new-reader@example.invalid'").get().n, 1);
+    assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM auth_tokens WHERE purpose='verify'").get().n, 0);
+    assert.equal(f.emails(), 0);
+    f.db.close();
+  });
+
+  test("R0.2: missing registration metadata at INSERT " + index + " cannot become success", async () => {
+    const f = fixture();
+    f.missingAt(index);
+    const result = await f.handler.POST(registrationRequest());
+    assert.equal(result.status, 503);
+    assert.equal((await result.json()).error, "registration_save_unconfirmed");
+    assert.equal(f.emails(), 0);
+    f.db.close();
+  });
+
+  test("R0.2: zero-change registration INSERT receipt " + index + " is rejected", async () => {
+    const f = fixture();
+    f.zeroAt(index);
+    const result = await f.handler.POST(registrationRequest());
+    assert.equal(result.status, 503);
+    assert.equal((await result.json()).error, "registration_save_unconfirmed");
+    assert.equal(f.emails(), 0);
+    f.db.close();
+  });
+}
+
+test("R0.2: storage exception during account/profile batch is unavailable, not email collision", async () => {
+  const f = fixture();
+  f.failAt(1);
+  const result = await f.handler.POST(registrationRequest());
+  assert.equal(result.status, 503);
+  assert.equal((await result.json()).error, "registration_unavailable");
+  assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM accounts WHERE email='new-reader@example.invalid'").get().n, 0);
+  assert.equal(f.emails(), 0);
+  f.db.close();
+});
+
+test("R0.2: genuinely pre-existing email remains an explicit conflict with zero emails", async () => {
+  const f = fixture();
+  const result = await f.handler.POST(registrationRequest("alice@example.invalid"));
+  assert.equal(result.status, 409);
+  assert.equal((await result.json()).error, "email_in_use");
+  assert.equal(f.emails(), 0);
   f.db.close();
 });

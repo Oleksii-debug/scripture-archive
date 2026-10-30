@@ -61,7 +61,10 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
       // A changed native select must retire this request, even for the same reader/principal.
       if (!requestCurrent()) { announceUnsignalledChange(); return; }
       const data=await getBook(book,edition);
-      if (!panel.isConnected || !current() || !requestCurrent()) { announceUnsignalledChange(); return; }
+      // A change signalled by onchange fully retires the request. An
+      // unannounced programmatic selection change preserves the historical
+      // final chapter authorization check before suppressing the old text.
+      if (!panel.isConnected || !current() || requestRevision !== requestId) return;
       // Another tab or device may start an attempt while the second text loads.
       // Revalidate after that await and before exposing the comparison text.
       let finalGuard;

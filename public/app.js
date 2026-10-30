@@ -4313,21 +4313,21 @@ function renderPrivacy() {
       "Приватність і облікові записи",
       "Scripture Archive підтверджує електронну адресу одноразовим посиланням і зберігає пароль лише як стійкий криптографічний хеш. Захищені серверні сесії дають змогу синхронізувати профіль і прогрес між пристроями.",
       "Конфесія, конкретна церква, сімейний стан і стать є необов’язковими приватними даними. Вони не впливають на оцінювання. У спільноті ім’я, прізвище та навчальний поступ реального користувача показуються лише після окремої згоди; електронна адреса не публікується.",
-      "Аналітика вмикається лише після згоди на аналітичні cookie. Вона фіксує переглянуті розділи, тип пристрою, приблизну країну, виконані дії та активний час. Паролі, відповіді, назви груп і вміст профілю до аналітики не передаються; згоду можна скасувати очищенням налаштувань сайту у браузері.",
+      "Аналітика вмикається лише після згоди на аналітичні cookie. Вона фіксує переглянуті розділи, тип пристрою, приблизну країну, виконані дії та активний час. Паролі, відповіді, назви груп і вміст профілю до аналітики не передаються; згоду можна скасувати нижче.",
       "Дані профілю можна виправити в обліковому записі, а обліковий запис і пов’язані особисті дані — видалити там само. Для додаткового звернення: dordiaioleksii1@gmail.com.",
     ],
     ru: [
       "Приватность и учётные записи",
       "Scripture Archive подтверждает электронный адрес одноразовой ссылкой и хранит пароль только как стойкий криптографический хеш. Защищённые серверные сессии синхронизируют профиль и прогресс между устройствами.",
       "Конфессия, конкретная церковь, семейное положение и пол — необязательные приватные данные. Они не влияют на оценивание. В сообществе имя, фамилия и учебный прогресс реального пользователя показываются только после отдельного согласия; электронная почта не публикуется.",
-      "Аналитика включается только после согласия на аналитические cookie. Она фиксирует просмотренные разделы, тип устройства, примерную страну, выполненные действия и активное время. Пароли, ответы, названия групп и содержимое профиля в аналитику не передаются; согласие можно отменить, очистив настройки сайта в браузере.",
+      "Аналитика включается только после согласия на аналитические cookie. Она фиксирует просмотренные разделы, тип устройства, примерную страну, выполненные действия и активное время. Пароли, ответы, названия групп и содержимое профиля в аналитику не передаются; согласие можно отменить ниже.",
       "Данные профиля можно исправить в учётной записи, а учётную запись и связанные личные данные — удалить там же. Для дополнительного обращения: dordiaioleksii1@gmail.com.",
     ],
     en: [
       "Privacy and accounts",
       "Scripture Archive verifies an email address with a one-time link and stores the password only as a strong cryptographic hash. Secure server sessions synchronize the profile and progress across devices.",
       "Christian tradition, specific church, marital status, and gender are optional private data and never affect grading. A real member’s first name, last name, and learning progress appear in the community only after separate consent; email addresses are never published.",
-      "Analytics runs only after consent to analytics cookies. It records sections viewed, device type, approximate country, actions, and active time. Passwords, answers, group names, and profile content are never sent; consent can be withdrawn by clearing this site’s browser settings.",
+      "Analytics runs only after consent to analytics cookies. It records sections viewed, device type, approximate country, actions, and active time. Passwords, answers, group names, and profile content are never sent; consent can be withdrawn below.",
       "You can correct profile data in your account and delete the account and its associated personal data there. For an additional request, email dordiaioleksii1@gmail.com.",
     ],
   }[state.lang];
@@ -4335,8 +4335,21 @@ function renderPrivacy() {
     `<article class="prose"><p class="eyebrow">Scripture Archive</p><h1>${copy[0]}</h1>${copy
       .slice(1)
       .map((p) => `<p>${p}</p>`)
-      .join("")}</article>`,
+      .join("")}<button class="button" id="withdraw-analytics-consent" type="button">${({uk:"Відкликати згоду на аналітику",ru:"Отозвать согласие на аналитику",en:"Withdraw analytics consent"})[state.lang]}</button><p id="analytics-consent-status" role="status" aria-live="polite"></p></article>`,
   );
+  document.querySelector("#withdraw-analytics-consent").onclick = () => {
+    if (typeof window.saAnalytics?.withdrawConsent !== "function") {
+      document.querySelector("#analytics-consent-status").textContent = ({uk:"Налаштування аналітики недоступні. Очистьте налаштування сайту у браузері, щоб відкликати згоду.",ru:"Настройки аналитики недоступны. Очистите настройки сайта в браузере, чтобы отозвать согласие.",en:"Analytics settings are unavailable. Clear the site settings in your browser to withdraw consent."})[state.lang];
+      return;
+    }
+    const saved = window.saAnalytics.withdrawConsent();
+    const messages = {
+      uk: ["Аналітику вимкнено, вибір збережено в цьому браузері.", "Не вдалося зберегти вибір. Аналітику вимкнено на цій вкладці; очистьте налаштування сайту у браузері, щоб відкликати згоду для інших вкладок і наступних відвідувань."],
+      ru: ["Аналитика отключена, выбор сохранён в этом браузере.", "Не удалось сохранить выбор. Аналитика отключена в этой вкладке; очистите настройки сайта в браузере, чтобы отозвать согласие для других вкладок и следующих посещений."],
+      en: ["Analytics is disabled and your choice is saved in this browser.", "Your choice could not be saved. Analytics is disabled in this tab; clear the site settings in your browser to withdraw consent for other tabs and future visits."],
+    };
+    document.querySelector("#analytics-consent-status").textContent = messages[state.lang][saved ? 0 : 1];
+  };
 }
 
 function cleanPublicCopy() {

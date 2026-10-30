@@ -152,7 +152,18 @@
     }
   }
 
-  window.saAnalytics = { track, pageView: () => track("page_view") };
+  // Withdrawal takes effect in this tab even when persistence is blocked.
+  // A verified denial also informs other tabs through the storage event.
+  function withdrawConsent() {
+    consent = "denied";
+    if (heartbeatTimer) { window.clearInterval(heartbeatTimer); heartbeatTimer = 0; }
+    window.gtag?.("consent", "update", { analytics_storage: "denied" });
+    try {
+      localStorage.setItem(consentKey, "denied");
+      return localStorage.getItem(consentKey) === "denied";
+    } catch { return false; }
+  }
+  window.saAnalytics = { track, pageView: () => track("page_view"), withdrawConsent };
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") heartbeat(true);
     else lastActiveAt = Date.now();

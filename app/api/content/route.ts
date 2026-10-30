@@ -8,6 +8,7 @@ const KINDS = new Set(["book", "chapter", "translation", "mission", "question", 
 const LOCALES = new Set(["uk", "ru", "en", "all"]);
 const STATUSES = new Set(["draft", "published", "hidden"]);
 const clean = (value: unknown, max: number) => typeof value === "string" ? value.trim().slice(0, max) : "";
+const unavailable = () => Response.json({ error: "content_unavailable" }, { status: 503, headers: { "Cache-Control": "no-store, private" } });
 
 // A resolved D1 promise alone is not proof that both content changes committed.
 async function contentBatchAcknowledged(write: () => Promise<unknown>): Promise<boolean> {
@@ -22,6 +23,8 @@ async function contentBatchAcknowledged(write: () => Promise<unknown>): Promise<
 }
 
 export async function GET(request: Request) {
+  if (!env.DB) return unavailable();
+  try {
   const url = new URL(request.url);
   if (url.searchParams.get("admin") === "1") {
     const identity = await authenticateRequest(request);
@@ -32,11 +35,16 @@ export async function GET(request: Request) {
   }
   const row = await env.DB!.prepare("SELECT data,updated_at FROM site_content WHERE key='public'").first<{ data: string; updated_at: string }>();
   return Response.json(row ? { ...JSON.parse(row.data), updatedAt: row.updated_at } : EMPTY, { headers: { "Cache-Control": "no-store" } });
+  } catch { return unavailable(); }
 }
 
 export async function PUT(request: Request) {
   if (!sameOrigin(request)) return Response.json({ error: "cross_origin_request" }, { status: 403 });
-  const identity = await authenticateRequest(request), userId = identity?.userId;
+  if (!env.DB) return unavailable();
+  let identity: Awaited<ReturnType<typeof authenticateRequest>>;
+  try { identity = await authenticateRequest(request); }
+  catch { return unavailable(); }
+  const userId = identity?.userId;
   if (!userId || !isVerifiedOwner(identity)) return Response.json({ error: "forbidden" }, { status: 403 });
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   if (!body) return Response.json({ error: "invalid_json" }, { status: 400 });
@@ -72,6 +80,8 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
   if (!sameOrigin(request)) return Response.json({ error: "cross_origin_request" }, { status: 403 });
+  if (!env.DB) return unavailable();
+  try {
   const identity = await authenticateRequest(request);
   if (!isVerifiedOwner(identity)) return Response.json({ error: "forbidden" }, { status: 403 });
   const id = clean(new URL(request.url).searchParams.get("id"), 100);
@@ -83,4 +93,5 @@ export async function DELETE(request: Request) {
   ]));
   if (!acknowledged) return Response.json({ error: "content_hide_unconfirmed" }, { status: 503 });
   return Response.json({ ok: true });
+  } catch { return unavailable(); }
 }

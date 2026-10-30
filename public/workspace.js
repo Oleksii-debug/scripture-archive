@@ -119,6 +119,7 @@ async function request(path, options) {
   return data;
 }
 
+let builderViewEpoch=0;
 export async function renderWorkspace(name,c) {
   const {state,t,esc,shell,getMission,setActiveNav}=c, w=workspaceCopy(state.lang);
   setActiveNav(name);
@@ -161,16 +162,30 @@ export async function renderWorkspace(name,c) {
     return;
   }
   if(name==='builder') {
+    const principal=state.user, epoch=++builderViewEpoch;
+    const builderRoute=()=>{
+      const path=globalThis.location?.hash?.startsWith('#/')
+        ? globalThis.location.hash.slice(2)
+        : (globalThis.location?.pathname||'').replace(/^\/+/, '');
+      return path.replace(/\/+$/, '')==='builder';
+    };
+    const samePrincipalRoute=()=>state.user===principal&&!state.sessionUnavailable&&builderRoute();
+    const current=()=>samePrincipalRoute()&&builderViewEpoch===epoch;
     const review = reviewText(state.lang);
     if(!state.user) { shell(`<section class="gate-panel"><h1>${w.builder}</h1><p class="lead">${w.accountNeeded}</p><a class="button primary" href="/account">${w.signIn}</a></section><section class="card" id="public-materials" aria-live="polite"></section>`); await renderPublicMaterials(document.querySelector('#public-materials'),review,esc); return; }
     const role=await request('/api/editor-roles?view=me');
+    if(!current())return;
     const [data,reviews,roles,roleAudit]=await Promise.all([request('/api/materials?mine=1'),loadReviewData(role.editor),role.owner?request('/api/editor-roles'):Promise.resolve({editors:[]}),role.owner?request('/api/editor-roles?view=audit'):Promise.resolve({events:[]})]);
+    if(!current())return;
     let editing=null;
     function draw() {
+      if(!current())return;
       const d=editing?.data||{},form=(key,label,rows)=>`<label class="account-field"><span>${label}</span>${rows?`<textarea name="${key}" rows="${rows}" required>${esc(d[key]||'')}</textarea>`:`<input name="${key}" value="${esc(key==='title'?editing?.title||'':d[key]||'')}" required>`}</label>`;
       shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${w.builder}</h1></div><p>${w.builderLead}</p></div><div class="builder-layout"><section class="card"><h2>${editing?w.edit:w.newMaterial}</h2><form id="material-form" class="account-form">${form('title',w.title)}${form('prompt',w.prompt,3)}${form('reference',w.reference)}<label class="account-field"><span>${w.options}</span><textarea name="options" rows="4" required>${esc((d.options||[]).join('\n'))}</textarea></label>${form('answer',w.answer)}${form('explanation',w.explanation,3)}<button class="button primary">${w.save}</button><p id="material-status" role="status"></p></form></section><aside class="card"><h2>${w.myMaterials}</h2><div class="material-list">${data.materials.length?data.materials.map(m=>`<article><span class="status">${m.visibility==='public'?w.public:w.private}</span><h3>${esc(m.title)}</h3><p>${esc(m.data.reference)}</p><div class="action-row"><button class="button" data-edit="${esc(m.id)}">${w.edit}</button><button class="button" data-test="${esc(m.id)}">${w.test}</button><button class="button" data-delete="${esc(m.id)}">${review.remove}</button></div>${submissionForm(m,review,esc)}</article>`).join(''):`<p>${w.empty}</p>`}</div><button class="button" id="new-material">${w.newMaterial}</button> <a class="button" href="/api/materials?mine=1&amp;export=1" download>${w.export}</a></aside></div>${historyMarkup(reviews.mine,review,esc)}${role.editor?queueMarkup(reviews.queue,review,esc)+auditMarkup(reviews.history,review,esc):''}${role.owner?editorRolesMarkup(roles.editors,state.lang,esc,roleAudit.events):''}<section class="card" id="public-materials" aria-live="polite"></section>`);
-      attachReviewControls(document.querySelector('main'),review,()=>renderWorkspace('builder',c),c.announce);
-      if(role.owner) attachEditorRoles(document.querySelector('main'),state.lang,()=>renderWorkspace('builder',c),c.announce);
+      const refresh=()=>current()?renderWorkspace('builder',c):Promise.resolve();
+      const announce=message=>{if(samePrincipalRoute())c.announce(message);};
+      attachReviewControls(document.querySelector('main'),review,refresh,announce,current,samePrincipalRoute);
+      if(role.owner) attachEditorRoles(document.querySelector('main'),state.lang,refresh,announce,current,samePrincipalRoute);
       void renderPublicMaterials(document.querySelector('#public-materials'),review,esc);
       document.querySelector('#new-material').onclick=()=>{editing=null;draw()};
       document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{editing=data.materials.find(m=>m.id===b.dataset.edit);draw()});
@@ -187,6 +202,7 @@ export async function renderWorkspace(name,c) {
       };
     }
     function test(m) {
+      if(!current())return;
       shell(`<article class="card practice-card"><p class="eyebrow">${esc(m.data.reference)}</p><h1>${esc(m.title)}</h1><form id="practice-form"><fieldset class="options"><legend class="question">${esc(m.data.prompt)}</legend>${m.data.options.map((v,i)=>`<label class="option"><input type="radio" name="answer" value="${i}" required><span>${esc(v)}</span></label>`).join('')}</fieldset><button class="button primary">${w.check}</button></form><div id="practice-feedback" role="status"></div><button class="button" id="practice-back">${w.back}</button></article>`);
       document.querySelector('#practice-back').onclick=draw;
       document.querySelector('#practice-form').onsubmit=e=>{e.preventDefault();const index=Number(new FormData(e.currentTarget).get('answer')),ok=m.data.options[index]===m.data.answer;document.querySelector('#practice-feedback').innerHTML=`<div class="notice ${ok?'success':'info'}"><h2>${ok?w.correct:w.retry}</h2>${ok?`<p>${esc(m.data.explanation)}</p>`:''}</div>`;c.play(ok?'ok':'bad')};

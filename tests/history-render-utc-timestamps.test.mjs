@@ -12,12 +12,15 @@ const invalid = [
   '2026-04-31 06:00:00', '2026-00-30 06:00:00', '2026-13-30 06:00:00',
   '2026-10-00 06:00:00', '2026-10-32 06:00:00', '2026-10-30 24:00:00',
   '2026-10-30 27:00:00','2026-10-30 06:60:00','2026-10-30 06:00:60',
-  '2026-10-30T06:00:00Z','2026-10-30 06:00:00Z',
+  '2026-02-30T06:00:00Z','2026-10-30 06:00:00Z',
   '2026-10-30 06:00:00+00:00','2026-10-30 06:00',
   '2026-10-30 06:00:00.000','2026-10-30 06:00:00 UTC',
   '2026-10-30 06:00:00 ',' 2026-10-30 06:00:00',
   '2026-10-30 06:00:00\nextra','2026-10-30 06:00:00\u0000',
   '2026-1-30 06:00:00','0000-00-00 00:00:00',
+  '2026-10-30T27:00:00Z','2026-10-30T06:00:00.1234Z',
+  '2026-10-30T06:00:00+00:00','2026-10-30T06:00:00.1+00:00',
+  '2026-10-30T06:00:00.12','2026-04-31T06:00:00.3Z',
   null, true, 3, {}, ['2026-10-30 06:00:00']
 ];
 for(const [i,bad] of invalid.entries()){
@@ -57,3 +60,25 @@ test('legacy missing optional timestamps keep preexisting no-crash behavior',()=
   assert.doesNotMatch(a,/retry-mission-history/);
   assert.doesNotMatch(b,/retry-mission-history/);
 });
+
+for (const timestamp of [
+  '2026-10-30T06:00:00Z',
+  '2026-10-30T06:00:00.1Z',
+  '2026-10-30T06:00:00.12Z',
+  '2026-10-30T06:00:00.123Z',
+  '2024-02-29T23:59:59.999Z'
+]) {
+  test('canonical imported ISO UTC completed history and review remain reachable: '+timestamp,()=>{
+    const history={attempts:[{...completed,completedAt:timestamp}],pending:[]};
+    const html=missionHistoryMarkup(history,'uk',esc);
+    assert.match(html,/href="\/mission\/attempt\/one"/);
+    assert.doesNotMatch(html,/retry-mission-history/);
+    const schedule=reviewScheduleMarkup(history,'uk',esc,new Date('2026-11-04T12:00:00Z'));
+    assert.match(schedule,/href="\/reader\/GEN\/12"/);
+  });
+  test('canonical imported ISO UTC pending history can resume: '+timestamp,()=>{
+    const html=missionHistoryMarkup({attempts:[],pending:[{...pending,startedAt:timestamp}]},'en',esc);
+    assert.match(html,/href="\/mission\/attempt\/wait"/);
+    assert.doesNotMatch(html,/retry-mission-history/);
+  });
+}

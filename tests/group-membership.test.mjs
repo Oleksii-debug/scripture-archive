@@ -15,18 +15,18 @@ function fixture() {
   db.exec(`INSERT INTO home_groups(id,owner_user_id,name,invite_code,visibility,bible_edition) VALUES('g','alice','Group','AABBCCDD','private','en-web'),('other','alice','Other','other','private','en-web');
     INSERT INTO home_group_members(group_id,user_id,display_name,role) VALUES('g','alice','Alice','owner'),('g','bob','Bob','member'),('g','carol','Carol','facilitator'),('other','alice','Alice','owner');
     INSERT INTO group_sessions(id,group_id,created_by,book_id,chapter,meeting_date,reflection) VALUES('s','g','alice','GEN',12,'2026-10-28','private discussion');`);
-  let failure=-1, beforeBatch=null, beforeRun=null;
+  let failure=-1, beforeBatch=null, beforeRun=null, afterBatch=null, afterRun=null;
   function statement(sql,args=[]) {return {sql,args,
     first:async()=>db.prepare(sql).get(...args)??null,
     all:async()=>({success:true,results:db.prepare(sql).all(...args)}),
-    run:async()=>{if(beforeRun){const hook=beforeRun;beforeRun=null;hook();}return {success:true,meta:{changes:Number(db.prepare(sql).run(...args).changes)}};},
+    run:async()=>{if(beforeRun){const hook=beforeRun;beforeRun=null;hook();}const result={success:true,meta:{changes:Number(db.prepare(sql).run(...args).changes)}};if(afterRun){const hook=afterRun;afterRun=null;return hook(result);}return result;},
   };}
   const D1={prepare(sql){return {...statement(sql),bind:(...args)=>statement(sql,args)};},async batch(statements){
     if(beforeBatch){const hook=beforeBatch;beforeBatch=null;hook();}
     db.exec('BEGIN');try{const out=[];for(const [i,s] of statements.entries()) {
       if(i===failure)throw Error('injected storage outage');
       const r=db.prepare(s.sql).run(...s.args);out.push({success:true,meta:{changes:Number(r.changes)}});
-    }db.exec('COMMIT');return out;}catch(e){db.exec('ROLLBACK');throw e;}
+    }db.exec('COMMIT');if(afterBatch){const hook=afterBatch;afterBatch=null;return hook(out);}return out;}catch(e){db.exec('ROLLBACK');throw e;}
   }};
   function loadRoute(name) {
     const source=readFileSync(new URL(`../app/api/${name}/route.ts`,import.meta.url),'utf8');
@@ -47,7 +47,7 @@ function fixture() {
     db.prepare("INSERT INTO mission_attempts(id,actor_id,mission_id,book_id,chapter,group_id,locale,task_limit,status,expires_at) VALUES(?,?,'OT-AB-01','GEN',12,?,'en',5,?,datetime('now','+2 hours'))").run(id,user,group,status);
     db.prepare("INSERT INTO chapter_read_receipts(id,actor_id,book_id,chapter,group_id) VALUES(?,?,'GEN',12,?)").run(id,user,group);
   }
-  return {db,get,post,attempt,seedAttempt,beforeRun:fn=>{beforeRun=fn;},setFailure:n=>{failure=n;},beforeBatch:fn=>{beforeBatch=fn;}};
+  return {db,get,post,attempt,seedAttempt,beforeRun:fn=>{beforeRun=fn;},setFailure:n=>{failure=n;},beforeBatch:fn=>{beforeBatch=fn;},afterBatch:fn=>{afterBatch=fn;},afterRun:fn=>{afterRun=fn;}};
 }
 const owner=f=>f.db.prepare("SELECT owner_user_id FROM home_groups WHERE id='g'").get().owner_user_id;
 const roles=f=>f.db.prepare("SELECT user_id,role FROM home_group_members WHERE group_id='g' ORDER BY user_id").all().map(x=>[x.user_id,x.role]);
@@ -239,4 +239,51 @@ test('a former owner cannot start a marathon after ownership changed during the 
     assert.equal(f.db.prepare("SELECT status FROM group_marathon_registrations WHERE id='m'").get().status,'ready');
     assert.equal((await f.post('start',{},'bob')).status,200);
   } finally {f.db.close();}
+});
+
+test('create group rejects incomplete or failed D1 receipts and preserves rollback on transaction error',async()=>{
+  const f=fixture();try{
+    const body={name:'New group',weeklyGoal:3,catchupMode:'flexible',visibility:'private',rosterVisibility:'count',bibleEdition:'en-web'};
+    const count=()=>f.db.prepare('SELECT COUNT(*) AS n FROM home_groups').get().n, before=count();
+    f.setFailure(1);assert.equal((await f.post('create',body)).status,503);
+    assert.equal(count(),before,'failed transaction rolled back');
+    f.setFailure(-1);
+    for(const rewrite of [
+      receipts=>receipts.slice(0,1),
+      receipts=>receipts.map((r,i)=>i===1?{success:true,meta:{}}:r),
+      receipts=>receipts.map((r,i)=>i===0?{success:false,meta:{changes:1}}:r),
+      receipts=>receipts.map((r,i)=>i===0?{success:true,meta:{changes:-1}}:r),
+    ]){
+      f.afterBatch(rewrite);assert.equal((await f.post('create',body)).status,503);
+    }
+    const ok=await f.post('create',body);assert.equal(ok.status,201);
+    assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM home_group_members WHERE group_id=? AND role='owner'").get(ok.data.groupId).n,1);
+  }finally{f.db.close();}
+});
+
+test('join is idempotent but failed or missing mutation acknowledgments are not reported as success',async()=>{
+  const f=fixture();try{
+    f.beforeRun(()=>{throw Error('D1 outage');});
+    assert.equal((await f.post('join',{inviteCode:'AABBCCDD'},'outsider')).status,503);
+    f.afterRun(()=>({success:false,meta:{changes:1}}));
+    assert.equal((await f.post('join',{inviteCode:'AABBCCDD'},'outsider')).status,503);
+    assert.equal((await f.post('join',{inviteCode:'AABBCCDD'},'outsider')).status,200);
+    assert.equal((await f.post('join',{inviteCode:'AABBCCDD'},'outsider')).status,200);
+  }finally{f.db.close();}
+});
+
+test('group meeting and marathon promotion require valid D1 receipts',async()=>{
+  const f=fixture();try{
+    const meeting={bookId:'GEN',chapter:12,answersCorrect:0,answersTotal:0,meetingDate:'2026-10-28'};
+    f.afterBatch(receipts=>[receipts[0],{success:true,meta:{}}]);
+    assert.equal((await f.post('session',meeting,'carol')).status,503);
+    f.afterBatch(receipts=>receipts.slice(0,1));
+    assert.equal((await f.post('session',meeting,'carol')).status,503);
+    assert.equal((await f.post('session',meeting,'carol')).status,200);
+    f.db.exec("INSERT INTO group_marathon_registrations(id,group_id,weekly_goal,catchup_mode,cohort_key,status) VALUES('existing','g',3,'flexible','cohort','forming')");
+    const body={name:'Marathon',weeklyGoal:3,catchupMode:'flexible',visibility:'private',rosterVisibility:'count',bibleEdition:'en-web',marathonEnabled:true};
+    f.afterRun(()=>({success:true,meta:{}}));
+    assert.equal((await f.post('create',body)).status,503);
+    assert.equal((await f.post('create',body)).status,201);
+  }finally{f.db.close();}
 });

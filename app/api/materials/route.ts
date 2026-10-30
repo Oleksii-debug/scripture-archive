@@ -35,7 +35,7 @@ export async function GET(request: Request) {
         throw Error("invalid material payload");
       if (mine) return { ...row, data };
       // Older owner-published rows remain visible, but cannot reveal answers.
-      const { answer: _answer, explanation: _explanation, ...publicData } = data;
+      const { answer: _answer, explanation: _explanation, ...publicData } = data as Record<string, unknown>;
       void _answer; void _explanation;
       return { ...row, data: publicData };
     });

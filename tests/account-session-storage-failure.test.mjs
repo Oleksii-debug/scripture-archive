@@ -17,7 +17,7 @@ const sourceUnderTest = [
 ].join("\n");
 
 function fixture({ user = { id: "alice" }, prior = null, marker = null,
-                   denyRead = false, denyFirstReadingRead = false,
+                   denyRead = false, denyFirstReadingRead = false, denyOwnerMarkerRead = false,
                    denyWrites = false, denyDelete = false,
                    silentlyIgnoreReadingWrites = false,
                    serverReading = [], oldReading = [] } = {}) {
@@ -32,7 +32,7 @@ function fixture({ user = { id: "alice" }, prior = null, marker = null,
   const storage = {
     getItem(key) {
       storageCalls.push(["get", key]);
-      if (denyRead) throw Error("SecurityError");
+      if (denyRead || (denyOwnerMarkerRead && key === "sa.progressOwner")) throw Error("SecurityError");
       if (denyFirstReadingRead && key === "sa.readingHistory" && !firstReadingReadDenied) {
         firstReadingReadDenied = true;
         throw Error("SecurityError");
@@ -328,4 +328,32 @@ test("silent storage no-op cannot certify the wrong user's surviving history", a
   assert.equal(f.state.localReadingStorageUntrusted,true);
   await f.sync();
   assert.equal(f.apiCalls.length,0,"no cross-principal account transport");
+});
+
+
+test("unreadable owner marker quarantines readable legacy history before owner certification", async () => {
+  const legacy=[{book:"GEN",chapter:8,title:"belongs to an unknown account"}];
+  const f=fixture({user:{id:"bob"},marker:"unknown",oldReading:legacy,
+    denyOwnerMarkerRead:true});
+  await f.session();
+  assert.equal(f.entries.get("sa.unownedReadingHistory.v1"),JSON.stringify(legacy));
+  assert.equal(f.entries.get("sa.readingHistory"),"[]");
+  assert.equal(f.entries.get("sa.progressOwner"),"bob");
+  assert.equal(f.state.localReadingStorageUntrusted,false);
+  await f.sync();
+  const uploaded=f.apiCalls.find(([action,method])=>action==="reading"&&method==="PUT");
+  if (uploaded) assert.equal(JSON.stringify(uploaded[2]).includes("unknown account"),false);
+});
+
+test("unreadable owner marker and history leaves ambiguous bytes intact and never syncs", async () => {
+  const legacy=[{book:"EXO",chapter:2,title:"keep this"}];
+  const f=fixture({user:{id:"bob"},marker:"unknown",oldReading:legacy,
+    denyOwnerMarkerRead:true,denyFirstReadingRead:true});
+  await f.session();
+  assert.equal(f.entries.get("sa.readingHistory"),JSON.stringify(legacy));
+  assert.equal(f.entries.get("sa.progressOwner"),"unknown");
+  assert.equal(f.state.unownedReadingPendingRecovery,true);
+  assert.equal(f.state.localReadingStorageUntrusted,true);
+  await f.sync();
+  assert.equal(f.apiCalls.length,0);
 });

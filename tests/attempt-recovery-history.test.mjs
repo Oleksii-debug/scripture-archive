@@ -152,10 +152,17 @@ test('history is private, omits answers, and is hidden while an attempt is activ
   }finally{f.db.close();}
 });
 
-test('history markup escapes stored text and offers rereading only for mistakes',()=>{
+test('history markup rejects invalid book codes, escapes stored text and offers rereading only for mistakes',()=>{
   const esc=s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
-  const html=missionHistoryMarkup({attempts:[{id:'a"',book:'<script>',chapter:12,score:1,total:2,completedAt:'<date>'},{id:'b',book:'GEN',chapter:13,score:2,total:2}]},'en',esc);
-  assert.ok(!html.includes('<script>'));assert.ok(html.includes('&lt;script&gt;'));assert.equal((html.match(/Read and try again/g)||[]).length,1);
+  const malformed=missionHistoryMarkup({attempts:[{id:'a"',book:'<script>',chapter:12,score:1,total:2,completedAt:'<date>'},{id:'b',book:'GEN',chapter:13,score:2,total:2}]},'en',esc);
+  assert.ok(!malformed.includes('<script>'));
+  assert.ok(!malformed.includes('&lt;script&gt;'),'invalid book evidence must not be rendered as a valid history row');
+  assert.match(malformed,/retry-mission-history/);
+  assert.doesNotMatch(malformed,/href="/);
+  const html=missionHistoryMarkup({attempts:[{id:'a"',book:'GEN',chapter:12,score:1,total:2,completedAt:'<date>'},{id:'b',book:'GEN',chapter:13,score:2,total:2}]},'en',esc);
+  assert.ok(!html.includes('<date>'));
+  assert.ok(html.includes('&lt;date&gt;'));
+  assert.equal((html.match(/Read and try again/g)||[]).length,1);
   assert.ok(missionHistoryMarkup({error:true},'uk',esc).includes('retry-mission-history'));
   assert.ok(missionHistoryMarkup({attempts:[],pending:[{id:'pending',book:'GEN',chapter:12}]},'en',esc).includes('Finish saving the result: GEN 12'));
 });

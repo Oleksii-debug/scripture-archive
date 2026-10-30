@@ -1,3 +1,14 @@
+## 2026-10-30 — SA-EXT-01/16 / BOOKMARK_GET_INVALID_ROW_FAILCLOSED — ЗАКРИТО ДЛЯ РОЗРОБКИ ВУЗЬКИЙ ДЕФЕКТ
+
+**Лише цей встановлений дефект:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Повні батьківські SA-EXT-01…20 залишаються OPEN**; статус не є фактичним production / браузерним / NVDA прийманням.
+
+- **Відтворений дефект у канонічному інтерфейсі закладок:** `GET /api/bookmarks` на `D1 all().success===true` без перевірки рядків повертав HTTP 200 із неіснуючим виданням, книгами, неможливими главами, відсутньою датою. Це не відповідало вже завершеним перевіркам `PUT /api/bookmarks` і створювало оманливу збережену навігацію.
+- **Реалізація та інтеграція:** [PR #627](https://github.com/Oleksii-debug/scripture-archive/pull/627) SQUASH MERGED в exact `main@222abe74418f737c6e792f99ab431692eb6975fe`. Перевірено поточні main blobs `app/api/bookmarks/route.ts@25f4989275b5f94ef6dc6229ace8fc22f8f007af`, `tests/bookmarks-read-errors.test.mjs@971efbf385a156352a7eb76bf0d0fd6deee6a36a`, `tests/bookmark-auth-availability.test.mjs@faf9c622042f92a0c084e6324eda9219cb8e887a`. Повторно використано існуючі валідатори `valid`, `LOCAL_EDITION_IDS`, `bookChapterLimit` (включно з Ohiienko `JOL:4`), без дублювання БД чи API; пошкоджений D1 рядок -> private GET 503 без ілюзії наявних закладок. Legacy `DELETE` очищення збережено.
+- **Фактична CI:** перша [Actions #41039000252](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41039000252) виявила застарілу позитивну fixture `edition=en` без timestamp (1 Node fail). Оновлена test fixture без послаблення валідатора. Наступна [Actions #41039141197](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41039141197): **1482 Node PASS / 0 FAIL / 1 SKIP**, але TypeScript виявив unsafe cast (TS2352); виправлено narrowed local `createdAt`. Фінальна exact PR head `a74721468f27d51f676099afd2267cb6995e2731`, [Actions #41039303238](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41039303238): **1482 Node PASS / 0 FAIL / 1 SKIP**, TypeScript/lint/source build/Python 2/2 PASS. Загальний CI **FAIL** на старому disposable Worker/D1 restart `tests/api-flow.test.mjs` `Your worker restarted mid-request` HTTP503 двічі. Повний E2E **NOT VERIFIED**.
+- **Залишок:** для цього вузького source-дефекту 0 реалізаційних завдань і необхідних незлитих PR; release, реальний Sites SHA/браузер/NVDA та всі 20 повних parent sections не прийняті. Повторна розробка тільки при новому конкретному дефекті. Координація [#297](https://github.com/Oleksii-debug/scripture-archive/issues/297).
+
+---
+
 ## 2026-10-30 — SA-EXT-04 / GROUP_MEETING_EXACT_DATE_REFLECTION — РОЗРОБКУ ВУЗЬКОГО ДЕФЕКТУ ЗАКРИТО
 
 **Лише цей вузький компонент:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. Повний SA-EXT-04 та решта **SA-EXT-01…20 OPEN**.

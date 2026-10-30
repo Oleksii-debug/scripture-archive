@@ -1,6 +1,7 @@
 import { reviewText, submissionForm, historyMarkup, queueMarkup, auditMarkup, attachReviewControls, renderPublicMaterials, renderReviewedLibrary, loadReviewData, editorRolesMarkup, attachEditorRoles } from './material-review.js';
 import { dossierMarkup, dossierAtlasMarkup } from './scripture-dossiers.js';
 import { academyMarkup, academyProgressKey, readAcademyProgress, attachAcademy } from './scripture-academy.js';
+import { safeProvenanceHttpsUrl } from './parallel-reader.js';
 
 // The local reading cache is user/device-controlled JSON, not a trusted Bible
 // chapter receipt. Never let a malformed item break the progress route or
@@ -218,14 +219,14 @@ const EDITION_ABOUT = {
   ru: {title:'Библейские издания',intro:'Издания хранятся отдельно. Название перевода остаётся рядом с текстом.',local:'Издания для чтения на платформе',external:'Другие издания',externalText:'Переводы Хоменко, Турконяка и другие издания можно открыть на сайтах их издателей из читальни.',source:'Источник',license:'Условия использования',missing:'Сведения об этом издании недоступны.'},
   en: {title:'Bible editions',intro:'Editions are stored separately. The translation name stays beside the text.',local:'Editions available on the platform',external:'Other editions',externalText:'Khomenko, Turkoniak and other editions can be opened on their publishers’ websites from the reader.',source:'Source',license:'Terms of use',missing:'Details for this edition are unavailable.'},
 };
-const httpsUrl=value=>{try {const url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password?url.href:'';} catch {return '';}};
+// Reuse the identical raw-URL provenance authority as the live parallel reader.
 
 export function editionAboutMarkup(catalog,lang,esc) {
   const w=EDITION_ABOUT[lang]||EDITION_ABOUT.uk;
   const editions=[catalog?.translations?.['uk-ohiienko'],catalog?.editions?.uk,catalog?.editions?.ru,catalog?.editions?.en];
   const entries=editions.map(edition=>{
     if(!edition||typeof edition.title!=='string')return `<li>${w.missing}</li>`;
-    const source=httpsUrl(edition.source),license=httpsUrl(edition.licenseUrl);
+    const source=safeProvenanceHttpsUrl(edition.source),license=safeProvenanceHttpsUrl(edition.licenseUrl);
     return `<li><strong>${esc(edition.title)}</strong> — ${esc(edition.license||'—')}${source?` · <a href="${esc(source)}" rel="noreferrer">${w.source}</a>`:''}${license?` · <a href="${esc(license)}" rel="noreferrer">${w.license}</a>`:''}${edition.attribution?`<p>${esc(edition.attribution)}</p>`:''}${edition.formatting?`<p>${esc(edition.formatting)}</p>`:''}</li>`;
   }).join('');
   return `<h2>${w.title}</h2><p>${w.intro}</p><h3>${w.local}</h3><ul>${entries}</ul><h3>${w.external}</h3><p>${w.externalText}</p>`;

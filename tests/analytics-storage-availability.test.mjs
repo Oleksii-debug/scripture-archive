@@ -9,8 +9,8 @@ const script = readFileSync(new URL('../public/analytics.js', import.meta.url), 
 
 function boot(options = {}) {
   const behavior = { ...options };
-  const events = new Map(), posts = [], externalScripts = [], writes = [];
-  const persisted = { consent: behavior.storedConsent ?? null, session: null };
+  const events = new Map(), posts = [], externalScripts = [], writes = [], clearedTimers = [];
+  const persisted = { consent: behavior.storedConsent ?? null, session: behavior.storedSession ?? null };
   let banner = null;
   const localStorage = {
     getItem(key) {
@@ -57,6 +57,7 @@ function boot(options = {}) {
   const window = {
     addEventListener: (name, callback) => events.set(name, callback),
     setInterval: () => 1,
+    clearInterval: id => clearedTimers.push(id),
   };
   const location = {
     origin: 'https://scripture-archive.com', hostname: 'scripture-archive.com',
@@ -64,7 +65,7 @@ function boot(options = {}) {
   };
   runInNewContext(script, {
     document, window, localStorage, sessionStorage, location,
-    crypto: { randomUUID: () => 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb' },
+    crypto: { randomUUID: () => 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' },
     navigator: {}, Blob, URL, URLSearchParams, Date,
     fetch: async (url, options) => {
       posts.push({ url, body: JSON.parse(options.body) });
@@ -78,7 +79,7 @@ function boot(options = {}) {
   const gaEvents = () => Array.from(window.dataLayer || [])
     .filter(args => args[0] === 'event')
     .map(args => ({ name: args[1], data: args[2] }));
-  return { behavior, persisted, writes, banner, window, posts, externalScripts, events, click, gaEvents };
+  return { behavior, persisted, writes, banner, window, posts, externalScripts, events, clearedTimers, click, gaEvents };
 }
 
 test('localStorage read SecurityError does not break page bootstrap or imply consent', () => {
@@ -214,4 +215,63 @@ test('unknown stored values with GA4 configured do not load its script', () => {
   assert.equal(a.externalScripts.length, 0);
   assert.ok(a.banner);
   assert.equal(a.posts.length, 0);
+});
+
+test('cross-tab consent denial immediately stops first-party and GA4 events and heartbeat', () => {
+  const a = boot({ storedConsent: 'granted' });
+  a.window.saAnalytics.pageView();
+  assert.equal(a.posts.length, 1);
+  assert.equal(a.gaEvents().length, 1);
+  a.events.get('storage')({ key: 'sa.analyticsConsent', newValue: 'denied' });
+  a.window.saAnalytics.pageView();
+  a.window.saAnalytics.track('login', { method: 'password' });
+  assert.equal(a.posts.length, 1);
+  assert.equal(a.gaEvents().length, 1);
+  assert.deepEqual(a.clearedTimers, [1]);
+  assert.ok(Array.from(a.window.dataLayer).some(args =>
+    args[0] === 'consent' && args[1] === 'update' && args[2].analytics_storage === 'denied'));
+});
+
+test('cross-tab clearing consent also stops a previously granted tab', () => {
+  for (const [key, newValue] of [['sa.analyticsConsent', null], [null, null], ['sa.analyticsConsent', 'corrupt']]) {
+    const a = boot({ storedConsent: 'granted' });
+    a.events.get('storage')({ key, newValue });
+    a.window.saAnalytics.pageView();
+    assert.equal(a.posts.length, 0);
+    assert.equal(a.gaEvents().length, 0);
+    assert.deepEqual(a.clearedTimers, [1]);
+  }
+});
+
+test('unrelated storage changes cannot revoke consent, and remote grant never enables it', () => {
+  const granted = boot({ storedConsent: 'granted' });
+  granted.events.get('storage')({ key: 'unrelated', newValue: null });
+  granted.window.saAnalytics.pageView();
+  assert.equal(granted.posts.length, 1);
+  assert.deepEqual(granted.clearedTimers, []);
+  const denied = boot({ storedConsent: 'denied' });
+  denied.events.get('storage')({ key: 'sa.analyticsConsent', newValue: 'granted' });
+  denied.window.saAnalytics.pageView();
+  assert.equal(denied.posts.length, 0);
+  assert.equal(denied.externalScripts.length, 0);
+});
+
+test('malformed persisted session IDs are retired before analytics sends', () => {
+  for (const storedSession of ['------------------------------------',
+    'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+    'aaaaaaaa-aaaa-4aaa-1aaa-aaaaaaaaaaaa',
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaaZ']) {
+    const a = boot({ storedConsent: 'granted', storedSession });
+    a.window.saAnalytics.pageView();
+    assert.equal(a.persisted.session, 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+    assert.equal(a.posts[0].body.sessionId, a.persisted.session);
+  }
+});
+
+test('valid version-four stored analytics session identity remains stable', () => {
+  const storedSession = '11111111-2222-4333-8abc-555555555555';
+  const a = boot({ storedConsent: 'granted', storedSession });
+  a.window.saAnalytics.pageView();
+  assert.equal(a.persisted.session, storedSession);
+  assert.equal(a.posts[0].body.sessionId, storedSession);
 });

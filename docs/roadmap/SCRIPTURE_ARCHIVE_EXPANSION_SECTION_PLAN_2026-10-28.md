@@ -124,3 +124,16 @@
 - Перед записом повторно прочитано зміни **саме з main@d23a1a7346c39f800de8918f4392ad824813b0c3** та підтверджено злиття обох PR. Докази, блоби, невирішені перевірки та порядок роботи: [issue #297, receipt](https://github.com/Oleksii-debug/scripture-archive/issues/297#issuecomment-6514539428).
 - **Уточнення історичної примітки вище:** твердження «кожен цілий workflow RED» стосується *лише названих там старіших запусків*. Пізніші конкретні запуски **40997819315** і **40999615203** завершилися SUCCESS разом із локальним Worker/D1; в інших перевірках ця ж тимчасова інфраструктура давала HTTP 503. Незавершена чернетка [#361](https://github.com/Oleksii-debug/scripture-archive/pull/361) не злита й не доводить постійного усунення нестабільності.
 - **Не заявлено:** весь SA-EXT-01…20 як закритий; нову production-версію, реальний production SHA, HOSTiQ/Cloudflare deploy, перевірену пошту/DNS, права на всі майбутні видання, живий браузер або фізичне NVDA-приймання. Жодної зміни на сайт цим документом не внесено.
+
+
+---
+
+### SA-EXT-16 / SUPPORT_SELECTED_EMPTY_FILE_LOSS — scoped terminal, 2026-10-30
+
+**Статус конкретної підфункції:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`; залишок реалізації цього дефекту — **0**; потрібних незлитих PR для нього — **0**. **Статус повного розділу SA-EXT-16: OPEN**, як і всіх 20 розділів загалом.
+
+- **Дефект:** вибраний користувачем і названий порожній файл (`File.size=0`) раніше тихо відкидався до фіксації запиту підтримки; API підтверджував приймання звернення без вибраного вкладення. Неправильно сформоване текстове поле `files` могло так само не викликати помилки.
+- **Функція:** канонічний `app/api/help/route.ts` тепер відхиляє такі вхідні файли/поля з `400 invalid_attachment` до будь-якого D1-запису або надсилання листа; нормальний порожній placeholder браузерного file-input і запити без вкладень працюють далі. Жодного окремого сервера, альтернативного support-store або фіктивного UI не додано.
+- **Інтеграція:** [PR #478](https://github.com/Oleksii-debug/scripture-archive/pull/478) **squash MERGED**; точний перевірений `main` SHA `4b79da7a29aa1843e8e057ae379e692e1019ce6b`. GitHub commit/readback: **рівно два шляхи**, `app/api/help/route.ts` blob `f8341b24030e4630b306e604dd504b9a3f5ed35d` і `tests/help-empty-attachment.test.mjs` blob `7a0bab06094b2bcd4433ab8b46d6d34e56240c59`; PR closed/merged.
+- **Тести:** [exact-head GitHub Actions #41001780118](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41001780118): **897 native Node PASS / 1 SKIP / 0 FAIL**, 9 доданих source-executing позитивних/негативних кейсів; TypeScript, lint (0 errors), build, Python-валідатори PASS. **Загальний CI — RED**: окремий давно відомий Worker/D1 restart HTTP 503 у disposable E2E (21/22 двічі), відкритий [PR #361](https://github.com/Oleksii-debug/scripture-archive/pull/361). Не називати це повним E2E PASS.
+- **Реліз:** не розгорталося; live-SHA, реальна доставка підтримки та фізичне NVDA-приймання не встановлені. Цей scoped дефект не слід заново розробляти без нового конкретного регресійного доказу.

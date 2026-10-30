@@ -159,7 +159,15 @@ integration("account, progress, attempts, groups, marathon limit and password re
   consentChange = await request("/api/account?action=sensitive-consent", { method: "PUT", origin: "https://attacker.invalid", body: { acceptSensitive: false } });
   assert.equal(consentChange.response.status, 403);
   consentChange = await request("/api/account?action=sensitive-consent", { method: "PUT", body: { acceptSensitive: true, tradition: "other", denomination: "Example denomination", church: "Example church" } });
-  assert.equal(consentChange.response.status, 200);
+  // A bare 503 hides whether the local Worker/D1 failed authentication,
+  // mutation acknowledgement, or the post-write readback. Log only the
+  // canonical public error CODE (never account/consent fields or a raw body).
+  const consentErrorCode = consentChange.data &&
+    typeof consentChange.data.error === 'string' &&
+    /^[a-z_]{1,64}$/.test(consentChange.data.error)
+    ? consentChange.data.error : 'missing_or_noncanonical';
+  assert.equal(consentChange.response.status, 200,
+    `Sensitive-consent E2E: expected HTTP 200; error_code=${consentErrorCode}`);
   assert.equal(consentChange.data.user.sensitiveConsent, true);
   await request("/api/account?action=visibility", { method: "PUT", body: { church: true } });
   consentChange = await request("/api/account?action=sensitive-consent", { method: "PUT", body: { acceptSensitive: false } });

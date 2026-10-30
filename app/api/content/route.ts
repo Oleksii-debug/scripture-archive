@@ -55,6 +55,11 @@ export async function PUT(request: Request) {
     if (body.id !== undefined && body.id !== null &&
         (typeof body.id !== "string" || body.id.trim().length > 100))
       return Response.json({ error: "invalid_content_item" }, { status: 400 });
+    // Keep authored CMS item titles lossless. The previous clean(title,200)
+    // silently shortened an overlong owner title while acknowledging success
+    // and recording the altered text in the immutable revision history.
+    if (typeof body.title !== "string" || body.title.trim().length > 200)
+      return Response.json({ error: "invalid_content_item" }, { status: 400 });
     const id = clean(body.id, 100) || crypto.randomUUID(), kind = clean(body.kind, 30), locale = clean(body.locale, 3);
     // Author-supplied publication titles must never be silently truncated.
     // An overlong edit is invalid rather than a different saved title.

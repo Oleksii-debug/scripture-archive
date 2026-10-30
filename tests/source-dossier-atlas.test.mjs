@@ -65,3 +65,26 @@ test('unknown language is safely mapped to the actual supported Ukrainian editio
   assert.ok(html.includes('Біблійний атлас: текстова лабораторія'));
   assert.ok(html.includes('href="/reader/GEN/12?verse=1"'));
 });
+
+test('the atlas exposes all verified place-source passages as native keyboard links in each language',()=>{
+  const places=scriptureDossiers.filter(item=>item.type==='place');
+  assert.ok(places.length>=1);
+  for(const lang of ['uk','ru','en']){
+    const html=dossierAtlasMarkup(catalog,lang,esc);
+    for(const place of places){
+      const anchor='<th scope="row"><a href="/dossiers?id='+place.id+'">';
+      const start=html.indexOf(anchor);
+      assert.ok(start>=0,lang+' '+place.id+' place row must exist');
+      const end=html.indexOf('</tr>',start);
+      assert.ok(end>start,lang+' '+place.id+' row must be bounded');
+      const row=html.slice(start,end);
+      assert.ok(row.includes('<ol>') && row.includes('</ol>'),lang+' '+place.id+' accessible source list');
+      assert.equal((row.match(/<li>/g)||[]).length,place.sources.length,lang+' '+place.id+' lists every source');
+      for(const source of place.sources){
+        const link='href="/reader/'+source.book+'/'+source.chapter+'?verse='+source.first+'"';
+        assert.ok(row.includes(link),lang+' '+place.id+' missing '+link);
+      }
+    }
+    assert.ok(!html.includes('onclick=') && !html.includes('<iframe'),lang+' remains native keyboard HTML');
+  }
+});

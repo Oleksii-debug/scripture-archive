@@ -1,3 +1,9 @@
+## 2026-10-30 — SA-EXT-02 / STORED_ATTEMPT_LOCALE_FAILCLOSED — ВУЗЬКЕ ЗАКРИТТЯ
+
+**CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** тільки для захисту GET/POST/finalize від пошкодженого persisted locale у D1. [PR #676](https://github.com/Oleksii-debug/scripture-archive/pull/676) SQUASH MERGED, exact `main@f83954934c8b53f6664fa48a57b51c27600c3d9f`. [CI #41054194991](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41054194991) **SUCCESS**: Node 1738 PASS / 0 FAIL / 1 SKIP, Worker/D1 22/22, TS/lint/build, Python 2/2. **48** real-route locale integrity cases: 15 bad stored locale variants × GET/answer/finalize та 3 valid. Результат: HTTP 409 без частково локалізованого task або grading write, valid uk/ru/en збережені. [Остаточний terminal receipt](SA_EXT_02_STORED_ATTEMPT_LOCALE_TERMINAL_20261030.md). **Батьківський SA-EXT-02 і всі 20 повних SA-EXT-01…20 OPEN**, live Sites SMTP browser/NVDA НЕ ВЕРИФІКОВАНІ; жодного деплою.
+
+---
+
 ## 2026-10-30 — SA-EXT-03 / MATERIAL_DRAFT_UPSERT_ACK_BOUND — ВУЗЬКЕ ЗАКРИТТЯ
 
 **CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** лише для точного D1 підтвердження чернеткового UPSERT, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. [PR #671](https://github.com/Oleksii-debug/scripture-archive/pull/671) SQUASH MERGED `main@b0b2fbcd04e04461f84846d13b8992d13b64ce4d`, exact-head [Actions #41053959435](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41053959435) **SUCCESS**. Повторний Worker/D1 виявив, що `ON DELETE CASCADE` законно збільшує `total_changes`; кандидат виправлено до merge, strict `changes<=1` діє тільки для UPSERT. **Повний SA-EXT-03 та решта 20 батьківських SA-EXT-01…20 залишаються OPEN**. [Остаточний запис](SA_EXT_03_MATERIAL_UPSERT_ACK_TERMINAL_20261030.md). Сайт/NVDA/продукційна БД не прийняті.

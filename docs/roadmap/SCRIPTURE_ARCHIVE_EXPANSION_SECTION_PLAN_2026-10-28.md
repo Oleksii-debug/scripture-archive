@@ -1,3 +1,14 @@
+## 2026-10-30 — SA-EXT-01 / PARALLEL_EDITION_SELECTION_ASYNC_LEASE — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
+
+**РОЗДІЛ № SA-EXT-01 — лише підпункт PARALLEL_EDITION_SELECTION_ASYNC_LEASE: CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL.** `remaining_scoped_implementation=0`; `necessary_unmerged_PRs=0` для цього відтвореного дефекту. **Увесь батьківський SA-EXT-01 та інші 19 повних SA-EXT залишаються OPEN.**
+
+- **Реальна помилка:** у штатному паралельному читачі вибір видання B під час асинхронного завантаження A міг показати застарілий текст A під вибраним B і помилковий успішний статус. Actual-source V8 із вихідним blob `c9030e086a0ee4d8d93fe8cb4478dbc424d50047`: RED підтверджено.
+- **Інтеграція:** [PR #562](https://github.com/Oleksii-debug/scripture-archive/pull/562) SQUASH MERGED у точний `main@4bf3cd86a620c0561de798ff5c57a94c2340d486`. Канонічний `public/parallel-reader.js` blob `8b8a7f7cbc069d823e7195f66c0df5d34218c4ac`, `tests/parallel-reader.test.mjs` blob `be6a36131f6417d90c0ace11aad3a82d8ad4e076` перевірено в main. Захист після першого та останнього server check відкидає старий selection; статус повтору перекладено uk/ru/en; права/джерела, читальна сесія, коректне блокування глав, фокус збережено; три нові регресійні тести.
+- **Фактично перевірено:** V8 exact-source 11/11 focused PASS; [GitHub Actions #41024254433](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41024254433): native Node suite PASS, TypeScript PASS, ESLint PASS, source build PASS, canonical Python validators PASS. **Повний workflow FAIL:** disposable Worker/D1 `tests/api-flow.test.mjs` двічі отримав окремий Wrangler restart / HTTP 503 замість 200/403, існуючий infra [#361](https://github.com/Oleksii-debug/scripture-archive/pull/361). НЕ заявлено E2E 22/22 PASS.
+- **Поза закриттям:** весь SA-EXT-01, права на всі переклади, deployed Sites SHA, дійсний браузер/Windows/NVDA, DNS/email та випуск. Немає нового production deploy. Вузький підпункт не призначати на повторну реалізацію без відтвореної нової регресії або нової затвердженої вимоги.
+
+---
+
 ## 2026-10-30 — SA-EXT-01/16 / READER_MARK_READ_INVALID_DECODED_HISTORY — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
 
 **Статус:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` тільки для безпечної відмови від позначення глави прочитаною, якщо **вже декодована** локальна історія містить неправильний тип записів, наприклад `[null]`, `false`, `{book:'GEN',chapter:'1'}`, чи замість масиву є об'єкт. Для цього конкретного дефекту `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Батьківські SA-EXT-01, SA-EXT-16 і всі 20 SA-EXT-01…20 залишаються OPEN.**

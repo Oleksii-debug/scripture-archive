@@ -312,3 +312,61 @@ test('SA-EXT-02: persisted history refuses impossible scores without erasing rea
     }
   } finally { f.db.close(); }
 });
+
+
+test('SA-EXT-02 persisted history rejects corrupt chapter/source/time/group metadata without mutating records', async () => {
+  const f=fixture();
+  try {
+    f.seed('history-alice');
+    f.seed('history-bob',{user:'bob'});
+    assert.equal((await f.post('finalize',{attemptId:'history-alice'})).status,200);
+    assert.equal((await f.post('finalize',{attemptId:'history-bob'},'bob')).status,200);
+    assert.equal((await f.get('history')).status,200);
+    const original=f.db.prepare("SELECT chapter,book_id,completed_at,group_id FROM mission_attempts WHERE id='history-alice'").get();
+    for(const [field,bad] of [
+      ['chapter',-1], ['chapter',1.5], ['chapter','unknown'],
+      ['book_id',''], ['book_id','X'.repeat(9)],
+      ['completed_at',null], ['completed_at','not-a-date'],
+      ['group_id',''], ['group_id','G'.repeat(81)], ['group_id',' leading']
+    ]) {
+      f.db.prepare(`UPDATE mission_attempts SET ${field}=? WHERE id='history-alice'`).run(bad);
+      const changes=f.db.prepare('SELECT total_changes() AS n').get().n;
+      const damaged=await f.get('history');
+      assert.equal(damaged.status,503,field+': '+String(bad));
+      assert.equal(damaged.data.error,'attempt_history_unavailable');
+      assert.equal(Object.hasOwn(damaged.data,'attempts'),false);
+      assert.equal(f.db.prepare('SELECT total_changes() AS n').get().n,changes,'GET must never mutate D1');
+      const other=await f.get('history','','bob');
+      assert.equal(other.status,200);
+      assert.deepEqual(other.data.attempts.map(item=>item.id),['history-bob']);
+      f.db.prepare(`UPDATE mission_attempts SET ${field}=? WHERE id='history-alice'`).run(original[field]);
+      assert.equal((await f.get('history')).status,200,'history recovers after legitimate data repair');
+    }
+  } finally {f.db.close();}
+});
+
+test('SA-EXT-02 grading history refuses malformed pending metadata and recovers read-only', async () => {
+  const f=fixture();
+  try {
+    f.seed('pending-alice');
+    f.seed('pending-bob',{user:'bob'});
+    assert.equal((await f.get('history')).status,200);
+    const original=f.db.prepare("SELECT started_at,chapter,book_id FROM mission_attempts WHERE id='pending-alice'").get();
+    for(const [field,bad] of [
+      ['started_at','invalid'], ['started_at',''],
+      ['chapter',-1], ['chapter','not-a-chapter'], ['book_id','']
+    ]) {
+      f.db.prepare(`UPDATE mission_attempts SET ${field}=? WHERE id='pending-alice'`).run(bad);
+      const mutations=f.db.prepare('SELECT total_changes() AS n').get().n;
+      const damaged=await f.get('history');
+      assert.equal(damaged.status,503,field+': '+String(bad));
+      assert.equal(damaged.data.error,'attempt_history_unavailable');
+      assert.equal(f.db.prepare('SELECT total_changes() AS n').get().n,mutations);
+      const other=await f.get('history','','bob');
+      assert.equal(other.status,200);
+      assert.deepEqual(other.data.pending.map(item=>item.id),['pending-bob']);
+      f.db.prepare(`UPDATE mission_attempts SET ${field}=? WHERE id='pending-alice'`).run(original[field]);
+      assert.equal((await f.get('history')).status,200);
+    }
+  } finally {f.db.close();}
+});

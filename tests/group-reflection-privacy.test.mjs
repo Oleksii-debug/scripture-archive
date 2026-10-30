@@ -101,6 +101,7 @@ test("anonymous visitor retains aggregate meeting metrics but not discussion tex
   const result = await response.json();
   assert.equal(response.status, 200);
   assert.equal(result.sessions[0].answers_total, 2);
+  assert.equal(result.sessions[0].participant_count, null, "private roster cannot leak meeting attendance");
   assert.equal(result.sessions[0].reflection, null);
   assert.ok(!JSON.stringify(result).includes(privateNote));
   assert.ok(!Object.hasOwn(result.group, "inviteCode"));
@@ -112,6 +113,7 @@ test("another authenticated profile cannot read public-group discussion text", a
   const result = await response.json();
   assert.equal(response.status, 200);
   assert.equal(result.membership, null);
+  assert.equal(result.sessions[0].participant_count, null, "outsiders cannot infer roster size from attendance");
   assert.equal(result.sessions[0].reflection, null);
   assert.ok(!JSON.stringify(result).includes(privateNote));
 });
@@ -122,6 +124,7 @@ test("existing group member retains access to the own-group discussion", async (
   const result = await response.json();
   assert.equal(response.status, 200);
   assert.equal(result.membership, "member");
+  assert.equal(result.sessions[0].participant_count, 3, "members retain attendance");
   assert.equal(result.sessions[0].reflection, privateNote);
 });
 

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parallelControls, mountParallelReader } from '../public/parallel-reader.js';
@@ -179,3 +180,27 @@ test('corrupt, sparse or empty comparison verse records are never labelled as Sc
   assert.match(good.result.innerHTML,/Вірш другий/);
   assert.match(good.status.textContent,/завантажено/);
 }));
+
+test('a principal change during a pending comparison cannot repopulate a connected reader',()=>withForm(async()=>{
+  let release;
+  const pending=new Promise(resolve=>{release=resolve;});
+  const f=fixture({getBook:async()=>pending});
+  const run=f.run();
+  for (let n=0; n<6; n++) await Promise.resolve();
+  f.move(); // the captured principal-aware guard is now false
+  assert.equal(f.panel.isConnected,true);
+  release({chapters:[['PRIVATE PREVIOUS ACCOUNT TEXT']]});
+  await run;
+  assert.equal(f.result.innerHTML,'');
+  assert.equal(f.button.disabled,false);
+}));
+
+test('canonical comparison wiring reuses the primary principal-aware reader guard',()=>{
+  const source=readFileSync(new URL('../public/app.js', import.meta.url),'utf8');
+  assert.match(source,/const readerStillCurrent = \(\) => state\.currentReader === readerContext && state\.user === readerPrincipal;/);
+  const start=source.indexOf('mountParallelReader(panel, {');
+  assert.ok(start>0,'canonical reader mounts the comparison module');
+  const end=source.indexOf('\n    });',start);
+  const contract=source.slice(start,end>start?end:undefined);
+  assert.match(contract,/current: readerStillCurrent,/);
+});

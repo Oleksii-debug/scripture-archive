@@ -7,6 +7,12 @@ const COPY = {
   ru: {index:'Каталог досье',sources:'Библейские свидетельства',relations:'Связи с другими досье',questions:'Вопросы для исследования',person:'Человек',place:'Место',event:'Событие',read:'Открыть источник в читальне',narrative:'Связь в библейском повествовании',interpretive:'Тематическое сопоставление, не независимое историческое доказательство',scope:'Это навигационное исследование библейских текстов, а не археологический вывод. Сравнивайте переводы в читальне; права и происхождение конкретного издания приведены там.',selected:'Текущее досье',invalid:'Данные источников этого досье не проверены. Просмотр временно недоступен.',none:'Выберите тему из списка.',unknown:'Такое досье не найдено. Выберите тему в каталоге.',mission:'Перейти к миссии Авраама'},
   en: {index:'Dossier catalogue',sources:'Scripture references',relations:'Connections to other dossiers',questions:'Study questions',person:'Person',place:'Place',event:'Event',read:'Open source in reader',narrative:'Connection in the biblical narrative',interpretive:'Thematic comparison, not independent historical proof',scope:'This navigates biblical texts; it does not assert independent archaeological proof. Compare editions in the reader, where individual source and licensing details are shown.',selected:'Current dossier',invalid:'The sources for this dossier could not be validated. Viewing is temporarily unavailable.',none:'Choose a topic from the list.',unknown:'That dossier was not found. Choose a topic from the catalogue.',mission:'Open Abraham mission'},
 };
+// Native GET discovery on the existing /dossiers route; no second data authority.
+const SEARCH_COPY = {
+  uk: { label:'Пошук досьє', submit:'Знайти', clear:'Очистити пошук', empty:'За запитом досьє не знайдено.', results:'Знайдено досьє' },
+  ru: { label:'Поиск досье', submit:'Найти', clear:'Очистить поиск', empty:'По запросу досье не найдены.', results:'Найдено досье' },
+  en: { label:'Search dossiers', submit:'Find', clear:'Clear search', empty:'No dossiers match this search.', results:'Dossiers found' },
+};
 const ref=(book,chapter,first,last,kind='narrative')=>({book,chapter,first,last,kind});
 const nodes=[
  {id:'abraham',type:'person',names:{uk:'Авраам (Аврам)',ru:'Авраам (Аврам)',en:'Abraham (Abram)'},
@@ -137,21 +143,41 @@ export function validateDossierGraph(catalog) {
     item.related.every(link=>link && known.has(link.to) && link.to!==item.id && validRef(link.via)));
 }
 
-export function dossierMarkup(catalog,language,requestedId,esc) {
+// Search only the existing source-validated dossier graph, with no private IO.
+export function searchScriptureDossiers(language,value) {
+  const lang=LANGS.includes(language)?language:'uk';
+  if(typeof value!=='string')return [];
+  const query=value.normalize('NFC').trim().toLocaleLowerCase(lang);
+  if(query.length>120)return [];
+  if(!query)return [...nodes];
+  return nodes.filter(item=>[item.id,item.names[lang],item.summaries[lang],COPY[lang][item.type]]
+    .some(text=>text.normalize('NFC').toLocaleLowerCase(lang).includes(query)));
+}
+
+export function dossierMarkup(catalog,language,requestedId,esc,searchQuery='') {
   const lang=LANGS.includes(language)?language:'uk',w=COPY[lang];
   if(!validateDossierGraph(catalog)) return `<p role="alert">${esc(w.invalid)}</p>`;
   // An absent query selects the introduction. An invalid explicit ID must
   // never be silently presented as a different person's source dossier.
-  const selected=(requestedId===null || requestedId===undefined)
-    ? nodes[0]
-    : nodes.find(item=>item.id===requestedId);
+  const matches=searchScriptureDossiers(lang,searchQuery);
+  const activeSearch=typeof searchQuery==='string' && searchQuery.trim().length>0;
+  const noMatch=activeSearch && matches.length===0;
+  const selected=noMatch?null:((requestedId===null || requestedId===undefined)
+    ? (activeSearch?matches[0]:nodes[0])
+    : nodes.find(item=>item.id===requestedId));
   const bookNames=new Map(catalog.books[lang].map(book=>[book.code,book.title]));
   const cite=source=>{
     const label=`${bookNames.get(source.book)} ${source.chapter}:${source.first}–${source.last}`;
     return `<a href="/reader/${source.book}/${source.chapter}?verse=${source.first}" aria-label="${esc(w.read)}: ${esc(label)}">${esc(label)}</a>`;
   };
-  const index=`<nav aria-label="${esc(w.index)}"><h2>${esc(w.index)}</h2><ol>${nodes.map(item=>`<li><a href="/dossiers?id=${item.id}"${selected && item.id===selected.id?' aria-current="page"':''}>${esc(item.names[lang])}</a> — ${esc(w[item.type])}</li>`).join('')}</ol></nav>`;
-  if(!selected) return `<div class="dossier-layout"><aside class="card dossier-index">${index}</aside><p role="alert">${esc(w.unknown)}</p></div>`;
+  const matching=searchScriptureDossiers(lang,searchQuery);
+  const hasQuery=typeof searchQuery==='string' && searchQuery.trim().length>0;
+  const searchLabel=SEARCH_COPY[lang];
+  const shownQuery=typeof searchQuery==='string'?searchQuery.trim().slice(0,120):'';
+  const searchForm=`<form action="/dossiers" method="get" role="search"><label for="dossier-search">${esc(searchLabel.label)}</label><input id="dossier-search" name="q" type="search" maxlength="120" value="${esc(shownQuery)}"><button type="submit">${esc(searchLabel.submit)}</button></form>`;
+  const clearSearch=hasQuery?`<p><a href="/dossiers">${esc(searchLabel.clear)}</a></p><p role="status">${esc(searchLabel.results)}: ${matching.length}</p>`:'';
+  const index=`<nav aria-label="${esc(w.index)}"><h2>${esc(w.index)}</h2>${searchForm}${clearSearch}<ol>${matching.map(item=>`<li><a href="/dossiers?id=${item.id}"${selected && item.id===selected.id?' aria-current="page"':''}>${esc(item.names[lang])}</a> — ${esc(w[item.type])}</li>`).join('')}</ol></nav>`;
+  if(!selected) return `<div class="dossier-layout"><aside class="card dossier-index">${index}</aside><p role="alert">${esc(noMatch?SEARCH_COPY[lang].empty:w.unknown)}</p></div>`;
   const references=`<ol>${selected.sources.map(source=>`<li>${cite(source)} — ${esc(w[source.kind])}</li>`).join('')}</ol>`;
   const relations=`<ul>${selected.related.map(link=>`<li><a href="/dossiers?id=${link.to}">${esc(nodes.find(item=>item.id===link.to).names[lang])}</a> — ${cite(link.via)} — ${esc(w[link.via.kind])}</li>`).join('')}</ul>`;
   const questions=`<ol>${selected.prompts[lang].map(prompt=>`<li>${esc(prompt)}</li>`).join('')}</ol>`;

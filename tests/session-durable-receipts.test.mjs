@@ -62,7 +62,7 @@ test('logout revokes only its token and accepts an already absent token as idemp
   const f=fixture(),a=await f.auth.sha256('alice-token'),b=await f.auth.sha256('bob-token');
   f.db.prepare("INSERT INTO auth_sessions(token_hash,user_id,expires_at) VALUES (?,'alice','2099-01-01'),(?,'bob','2099-01-01')").run(a,b);
   let response=await f.handlers.POST(req('logout','sa_session=alice-token'));
-  assert.equal(response.status,200);assert.match(response.headers.get('set-cookie'),/^sa_session=;/);
+  assert.equal(response.status,200);assert.equal(response.headers.get('set-cookie'),null,'server revocation must not clear a newer browser login');
   assert.ok(f.db.prepare('SELECT revoked_at FROM auth_sessions WHERE token_hash=?').get(a).revoked_at);
   assert.equal(f.db.prepare('SELECT revoked_at FROM auth_sessions WHERE token_hash=?').get(b).revoked_at,null);
   response=await f.handlers.POST(req('logout','sa_session=unknown'));

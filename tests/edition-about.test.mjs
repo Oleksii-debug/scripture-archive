@@ -45,3 +45,45 @@ test('about page rejects credential-bearing provenance and licence URLs',()=>{
   assert.ok(safe.includes('href="https://publisher.example/read"'));
   assert.ok(!safe.includes('licenses.example'));
 });
+
+
+test('SA-EXT-01 edition about reuses strict raw HTTPS source and licence admission in three languages',()=>{
+  // Old standalone helper silently normalized away CR/LF/TAB and empty @
+  // credentials; this public rights screen must not link altered provenance.
+  const deceptive=[
+    'https://@source.example/',
+    'https://:@source.example/',
+    'https://source.example\r.evil.example/',
+    'https://source.example/\nchapter',
+    'https://source.example/\tchapter',
+    ' https://source.example/',
+    'https://source.example/ ',
+    'https://source.example/\u007f',
+  ];
+  for(const lang of ['uk','ru','en']){
+    for(const bad of deceptive){
+      for(const field of ['source','licenseUrl']){
+        const edition={
+          title:'Source verification',license:'Public Domain',
+          source:'https://good-source.example/path',
+          licenseUrl:'https://good-license.example/terms'
+        };
+        edition[field]=bad;
+        const html=editionAboutMarkup({translations:{'uk-ohiienko':edition},editions:{}},lang,esc);
+        assert.ok(html.includes('Source verification'),'the original edition remains listed');
+        assert.ok(!html.includes('source.example'),
+          'normalized-away '+field+' URI is never linked in '+lang+': '+JSON.stringify(bad));
+        const stillSafe=field==='source'?'https://good-license.example/terms':'https://good-source.example/path';
+        assert.ok(html.includes('href="'+stillSafe+'"'),
+          'the other independently valid source/license link stays available');
+      }
+    }
+  }
+  const legitimate=editionAboutMarkup({translations:{'uk-ohiienko':{
+    title:'Approved',license:'Public Domain',
+    source:'HTTPS://publisher.example/path%20with%20spaces?name=a@b',
+    licenseUrl:'https://license.example/terms%20of%20use'
+  }},editions:{}},'en',esc);
+  assert.match(legitimate,/href="https:\/\/publisher\.example\/path%20with%20spaces\?name=a@b"/);
+  assert.match(legitimate,/href="https:\/\/license\.example\/terms%20of%20use"/);
+});

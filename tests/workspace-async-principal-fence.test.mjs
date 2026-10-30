@@ -51,8 +51,8 @@ test('progress treats non-array legacy cache records as empty without crashing',
       globalThis.fetch = async () => answer({attempts:[]});
       await renderWorkspace('progress', f.context);
       assert.equal(f.shells.length, 1);
-      assert.doesNotMatch(f.shells[0], /untrusted|broken history|\\/reader\\//);
-      assert.match(f.shells[0], /reading-links|nothingRead/);
+      assert.doesNotMatch(f.shells[0], /untrusted|broken history|\/reader\//);
+      assert.match(f.shells[0], /Mark completed chapters in the reader to return/);
     } finally { f.restore(); }
   }
 });
@@ -75,9 +75,9 @@ test('progress rejects malformed chapter links and preserves valid localized his
     assert.equal(f.shells.length,1);
     assert.match(f.shells[0], /Valid Genesis/);
     assert.match(f.shells[0], /Valid Corinthians/);
-    assert.match(f.shells[0], /\\/reader\\/GEN\\/12/);
-    assert.match(f.shells[0], /\\/reader\\/1CO\\/16/);
-    assert.doesNotMatch(f.shells[0], /Wrong chapter type|Unsafe book|Zero chapter|Invalid title|\\/reader\\/GEN\\/0/);
+    assert.match(f.shells[0], /\/reader\/GEN\/12/);
+    assert.match(f.shells[0], /\/reader\/1CO\/16/);
+    assert.doesNotMatch(f.shells[0], /Wrong chapter type|Unsafe book|Zero chapter|Invalid title|\/reader\/GEN\/0/);
   } finally { f.restore(); }
 });
 
@@ -89,7 +89,7 @@ test('progress bounds valid legacy-history projection to the most recent 200 ent
     }));
     globalThis.fetch = async () => answer({attempts:[]});
     await renderWorkspace('progress', f.context);
-    const links=f.shells[0].match(/href="\\/reader\\/GEN\\/12"/g) || [];
+    const links=f.shells[0].match(/href="\/reader\/GEN\/12"/g) || [];
     assert.equal(links.length,200);
     assert.doesNotMatch(f.shells[0], /History entry 0</);
     assert.match(f.shells[0], /History entry 219/);

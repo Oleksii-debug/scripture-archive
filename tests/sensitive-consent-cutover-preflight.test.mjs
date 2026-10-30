@@ -6,9 +6,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { inspectConsentSnapshot, verifyConsentFile } from "../scripts/verify-sensitive-consent-cutover.mjs";
+import { inspectConsentSnapshot, inspectConsentGuard, verifyConsentFile, verifyGuardedConsentFile } from "../scripts/verify-sensitive-consent-cutover.mjs";
 
 const migration = readFileSync(new URL("../drizzle/0010_sensitive_consent_evidence.sql", import.meta.url), "utf8");
+const guardMigration = readFileSync(new URL("../drizzle/0013_public_church_consent_guard.sql", import.meta.url), "utf8");
 const account = readFileSync(new URL("../app/api/account/route.ts", import.meta.url), "utf8");
 // Use the EXACT shipped guarded visibility SQL rather than a newly invented policy.
 const actualWriter = account.match(/UPDATE profiles SET public_first_name=\?,public_last_name=\?,public_church=CASE WHEN sensitive_consent=1 AND sensitive_consent_version=1 THEN \? ELSE 0 END,public_progress=\?,updated_at=CURRENT_TIMESTAMP WHERE user_id=\?/);
@@ -123,4 +124,58 @@ test("preflight rejects malformed consent flags even when visibility is private"
     f.db.prepare("UPDATE profiles SET sensitive_consent=1,sensitive_consent_version=1,public_church=0").run();
     assert.deepEqual(verifyConsentFile(f.path), { total: 1, unsafe: 0, safe: true });
   } finally { f.close(); }
+});
+
+
+test("release gate requires the exact installed 0013 triggers, not a clean 0010-only snapshot", () => {
+  const f=fixture();
+  try {
+    f.db.exec(migration);
+    assert.deepEqual(verifyConsentFile(f.path),{total:1,unsafe:0,safe:true},
+      'legacy aggregate API remains stable');
+    assert.equal(inspectConsentGuard(f.db),false);
+    assert.deepEqual(verifyGuardedConsentFile(f.path),{
+      total:1,unsafe:0,safe:true,guardInstalled:false,
+    });
+    const script=fileURLToPath(new URL("../scripts/verify-sensitive-consent-cutover.mjs", import.meta.url));
+    const before=spawnSync(process.execPath,[script,f.path],{encoding:"utf8"});
+    assert.equal(before.status,2,'0010-only clean data is not protected against old writes');
+    const beforeReceipt=JSON.parse(before.stdout);
+    assert.equal(beforeReceipt.status,"SNAPSHOT_GUARD_MISSING");
+    assert.equal(beforeReceipt.guard_installed,false);
+    assert.doesNotMatch(before.stdout+before.stderr,/Confidential|legacy|@/);
+
+    // Apply the REAL checked-in 0013 schema, not reconstructed test triggers.
+    f.db.exec(guardMigration);
+    assert.equal(inspectConsentGuard(f.db),true);
+    assert.deepEqual(verifyGuardedConsentFile(f.path),{
+      total:1,unsafe:0,safe:true,guardInstalled:true,
+    });
+    const after=spawnSync(process.execPath,[script,f.path],{encoding:"utf8"});
+    assert.equal(after.status,0);
+    const afterReceipt=JSON.parse(after.stdout);
+    assert.equal(afterReceipt.status,"SNAPSHOT_GATE_PASS");
+    assert.equal(afterReceipt.guard_installed,true);
+    assert.equal(afterReceipt.old_writer_cutover_gate_still_required,true,
+      'schema protection does not waive the production coexistence/backup gate');
+    assert.doesNotMatch(after.stdout+after.stderr,/Confidential|legacy|@/);
+    assert.throws(()=>f.db.exec("UPDATE profiles SET public_church=1 WHERE user_id='legacy'"),
+      /public_church_requires_current_explicit_consent/);
+  } finally {f.close();}
+});
+
+test("release gate fails closed if a trigger is missing or replaced by a same-name no-op",()=>{
+  const f=fixture();
+  try{
+    f.db.exec(migration);
+    f.db.exec(guardMigration);
+    assert.equal(inspectConsentGuard(f.db),true);
+    f.db.exec("DROP TRIGGER profiles_public_church_consent_update_v1");
+    assert.equal(inspectConsentGuard(f.db),false,'missing UPDATE fence cannot pass');
+    // Matching a trigger name is not enough; compare its installed SQL against
+    // the exact reviewed migration to catch permissive substitutions.
+    f.db.exec("CREATE TRIGGER profiles_public_church_consent_update_v1 BEFORE UPDATE ON profiles WHEN 0 BEGIN SELECT RAISE(ABORT, 'public_church_requires_current_explicit_consent'); END;");
+    assert.equal(inspectConsentGuard(f.db),false,'same-name no-op trigger cannot pass');
+    assert.equal(verifyGuardedConsentFile(f.path).guardInstalled,false);
+  } finally {f.close();}
 });

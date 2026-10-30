@@ -236,7 +236,7 @@ test('unsafe canonical book codes fail closed before dossier or atlas link rende
           dossierAtlasMarkup(damaged,lang,esc),
         ]){
           assert.match(markup,/role="alert"/,lang+' '+code);
-          assert.doesNotMatch(markup,/href="\\/reader\\//,lang+' '+code);
+          assert.equal(markup.includes('href="/reader/'),false,lang+' '+code);
           assert.doesNotMatch(markup,/onfocus=|onclick=|onerror=/,
             'never publish attacker-controlled HTML attributes');
         }

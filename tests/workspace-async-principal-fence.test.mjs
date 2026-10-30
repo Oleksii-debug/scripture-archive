@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { renderWorkspace } from '../public/workspace.js';
+import { renderWorkspace, verifiedLocalReadingHistory } from '../public/workspace.js';
 
 function deferred() {
   let resolve;
@@ -41,6 +41,26 @@ test('progress rechecks trust after a delayed history request and keeps trusted 
       assert.equal(f.shells[0].includes('Reading title'), !revoke);
     } finally { f.restore(); }
   }
+});
+
+test('reading projection keeps the latest chapters after more than 1000 valid records', () => {
+  const records=Array.from({length:1189},(_,i)=>({
+    book:'PSA',chapter:(i % 150)+1,title:'Reading '+i
+  }));
+  const result=verifiedLocalReadingHistory(records);
+  assert.equal(result.length,1189);
+  assert.equal(result[0].title,'Reading 0');
+  assert.equal(result.at(-1).title,'Reading 1188');
+});
+
+test('reading projection remains bounded and prefers the most recent cache records', () => {
+  const records=Array.from({length:2100},(_,i)=>({
+    book:'PSA',chapter:(i % 150)+1,title:'Reading '+i
+  }));
+  const result=verifiedLocalReadingHistory(records);
+  assert.equal(result.length,2048);
+  assert.equal(result[0].title,'Reading 52');
+  assert.equal(result.at(-1).title,'Reading 2099');
 });
 
 function scenario(pathname = '/builder') {

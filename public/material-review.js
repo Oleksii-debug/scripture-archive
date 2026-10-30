@@ -89,18 +89,40 @@ export function attachReviewControls(root, w, refresh, announce, isCurrent = () 
     catch (error) { if (active(form)) { status.textContent = error?.message === 'self_review_forbidden' ? w.selfReview : w.error; buttons.forEach(item => { item.disabled = false; }); } }
   }));
 }
-export async function renderPublicMaterials(root, w, esc) {
+export async function renderPublicMaterials(root, w, esc, isCurrent = () => true) {
+  // This public panel shares the builder shell with private editor state.
+  // A response from an old account, route or render epoch may not repaint it
+  // or leave behind an active answer form after its principal has changed.
+  const active = () => {
+    try { return root?.isConnected !== false && isCurrent() === true; }
+    catch { return false; }
+  };
+  if (!active()) return;
   try {
     const {items} = await api('/api/material-review?view=public');
-    if (!root.isConnected) return;
+    if (!active()) return;
     root.innerHTML = `<h2>${w.publicTitle}</h2>${items.length ? items.map(item=>`<article class="card"><h3>${esc(item.title)}</h3><p>${esc(item.reference)}</p><p>${esc(item.provenance)}</p><form class="public-material" data-id="${esc(item.id)}"><fieldset><legend>${esc(item.prompt)}</legend>${item.options.map((option,index)=>`<label class="option"><input type="radio" name="choice" value="${index}" required><span>${esc(option)}</span></label>`).join('')}</fieldset><button class="button" type="submit">${w.check}</button><p role="status"></p></form></article>`).join('') : `<p>${w.empty}</p>`}`;
     root.querySelectorAll('.public-material').forEach(form => form.onsubmit = async event => {
-      event.preventDefault(); const status=form.querySelector('[role="status"]'), button=form.querySelector('button'), choice = new FormData(form).get('choice');
-      if (choice === null) return; button.disabled=true;
-      try { const result=await post({action:'answer',id:form.dataset.id,choice:Number(choice)}); status.textContent=result.correct ? `${w.correct} ${result.explanation || ''}` : w.wrong; }
-      catch { status.textContent=w.answerError; } finally { button.disabled=false; }
+      event.preventDefault();
+      if (!active() || form.isConnected === false) return;
+      const status=form.querySelector('[role="status"]'), button=form.querySelector('button');
+      if (button.disabled) return;
+      const choice = new FormData(form).get('choice');
+      if (choice === null) return;
+      button.disabled=true;
+      try {
+        const result=await post({action:'answer',id:form.dataset.id,choice:Number(choice)});
+        if (active() && form.isConnected !== false)
+          status.textContent=result.correct ? `${w.correct} ${result.explanation || ''}` : w.wrong;
+      } catch {
+        if (active() && form.isConnected !== false) status.textContent=w.answerError;
+      } finally {
+        if (active() && form.isConnected !== false) button.disabled=false;
+      }
     });
-  } catch { if (root.isConnected) root.innerHTML=`<h2>${w.publicTitle}</h2><p role="alert">${w.error}</p>`; }
+  } catch {
+    if (active()) root.innerHTML=`<h2>${w.publicTitle}</h2><p role="alert">${w.error}</p>`;
+  }
 }
 export async function loadReviewData(isEditor) {
   const [mine, queue, history] = await Promise.all([api('/api/material-review?view=mine'), isEditor ? api('/api/material-review?view=queue') : Promise.resolve({items:[]}), isEditor ? api('/api/material-review?view=history') : Promise.resolve({items:[]})]);

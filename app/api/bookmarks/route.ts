@@ -73,8 +73,12 @@ async function write(request: Request, remove: boolean) {
     if (result?.success !== true || !Number.isInteger(result.meta?.changes) || result.meta.changes < 0)
       return json({ error: "bookmark_save_failed" }, 503);
     if (result.meta.changes === 0) {
-      const existing = await env.DB.prepare("SELECT 1 FROM reader_bookmarks WHERE user_id=? AND edition=? AND book=? AND chapter=?").bind(id, body.edition, body.book, body.chapter).first();
-      if (!existing) return json({ error: "bookmark_limit" }, 409);
+      // A zero-change INSERT is ambiguous: a genuine duplicate or the 500-bookmark cap.
+      // A truthy, malformed D1 probe is not evidence that this user's bookmark exists.
+      const existing = await env.DB.prepare("SELECT 1 AS present FROM reader_bookmarks WHERE user_id=? AND edition=? AND book=? AND chapter=?").bind(id, body.edition, body.book, body.chapter).first();
+      if (existing == null) return json({ error: "bookmark_limit" }, 409);
+      if (typeof existing !== "object" || Array.isArray(existing) || (existing as Record<string, unknown>).present !== 1)
+        return json({ error: "bookmark_save_failed" }, 503);
     }
     return json({ ok: true });
   } catch {

@@ -17,7 +17,7 @@ assert.equal(compiled.diagnostics?.length || 0, 0, "real route transpiles");
 const mark = { edition: "en-web", book: "GEN", chapter: 12 };
 
 function fixture({ outcome = { success: true, meta: { changes: 1 } },
-  found = { row: 1 }, identity = { userId: "reader", provider: "password" },
+  found = { present: 1 }, identity = { userId: "reader", provider: "password" },
   dbPresent = true } = {}) {
   const calls = [];
   const DB = {
@@ -84,7 +84,7 @@ test("bookmark DELETE never claims success from an unavailable D1 write", async 
 test("bookmark writes retain normal success, deletion idempotency and duplicate readback", async () => {
   await expectResponse(fixture(), 200);
   await expectResponse(fixture({ outcome: { success: true, meta: { changes: 0 } } }), 200, null, "DELETE");
-  const duplicate = fixture({ outcome: { success: true, meta: { changes: 0 } }, found: { row: 1 } });
+  const duplicate = fixture({ outcome: { success: true, meta: { changes: 0 } }, found: { present: 1 } });
   await expectResponse(duplicate, 200);
   assert.equal(duplicate.calls.length, 2);
   const full = fixture({ outcome: { success: true, meta: { changes: 0 } }, found: null });

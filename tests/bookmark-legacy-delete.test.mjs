@@ -15,16 +15,17 @@ const compiled = ts.transpileModule(source, {
 assert.equal(compiled.diagnostics?.length || 0, 0);
 
 function fixture({ identity = { userId: "reader", provider: "password" },
-  receipt = { success: true, meta: { changes: 1 } } } = {}) {
+  receipt = { success: true, meta: { changes: 1 } }, probe = null } = {}) {
   const statements = [];
+  const bindings = [];
   const exports = {};
   const database = {
     prepare(sql) {
       statements.push(sql);
       return {
-        bind() { return this; },
+        bind(...values) { bindings.push(values); return this; },
         async run() { return receipt; },
-        async first() { return null; },
+        async first() { return probe; },
       };
     },
   };
@@ -50,7 +51,7 @@ function fixture({ identity = { userId: "reader", provider: "password" },
     return { status: response.status, body: await response.json(),
       cache: response.headers.get("cache-control") };
   }
-  return { send, statements };
+  return { send, statements, bindings };
 }
 const bookmark = { edition: "en-web", book: "GEN", chapter: 1 };
 
@@ -104,4 +105,43 @@ test("cleanup cannot bypass the same-origin and principal boundaries", async () 
   const foreign = fixture();
   assert.equal((await foreign.send("DELETE", value, "https://untrusted.example")).status, 403);
   assert.equal(foreign.statements.length, 0);
+});
+
+test("zero-change PUT confirms a real own-user duplicate, not just a truthy object", async () => {
+  const f = fixture({
+    receipt: { success: true, meta: { changes: 0 } },
+    probe: { present: 1 },
+  });
+  const result = await f.send("PUT", bookmark);
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body, { ok: true });
+  assert.equal(f.statements.length, 2);
+  assert.match(f.statements[1], /SELECT 1 AS present FROM reader_bookmarks WHERE user_id=\?/);
+  assert.equal(JSON.stringify(f.bindings[1]), JSON.stringify(["reader", "en-web", "GEN", 1]));
+});
+
+test("a full bookmark quota without an existing duplicate stays a 409", async () => {
+  const f = fixture({ receipt: { success: true, meta: { changes: 0 } }, probe: null });
+  const result = await f.send("PUT", bookmark);
+  assert.equal(result.status, 409);
+  assert.deepEqual(result.body, { error: "bookmark_limit" });
+});
+
+test("malformed non-null D1 duplicate evidence must not claim bookmark creation", async () => {
+  for (const probe of [{}, { present: 0 }, { present: "1" }, { present: true }, false, [], { error: "unavailable" }]) {
+    const f = fixture({ receipt: { success: true, meta: { changes: 0 } }, probe });
+    const result = await f.send("PUT", bookmark);
+    assert.equal(result.status, 503, JSON.stringify(probe));
+    assert.deepEqual(result.body, { error: "bookmark_save_failed" });
+  }
+});
+
+test("positive insert ACK never needs duplicate SELECT, and missing ACK is not success", async () => {
+  const inserted = fixture({ probe: { present: 0 } });
+  assert.equal((await inserted.send("PUT", bookmark)).status, 200);
+  assert.equal(inserted.statements.length, 1);
+  const denied = fixture({ receipt: { success: false, meta: { changes: 0 } }, probe: { present: 1 } });
+  const result = await denied.send("PUT", bookmark);
+  assert.equal(result.status, 503);
+  assert.equal(denied.statements.length, 1);
 });

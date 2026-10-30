@@ -23,6 +23,7 @@ function scenario({ locale = 'uk', signedIn = true, cloud = [true], refuseAttemp
   const history = store.has('sa.readingHistory') ? JSON.parse(store.get('sa.readingHistory')) : [];
   const meta = { code: 'GEN' }, alreadyRead = false;
   const state = { user: signedIn ? { id: 'person-1' } : null }, hasTasks = true, groupId = '';
+  const principal = state.user, readerStillCurrent = () => state.user === principal;
   const w = { readMarked: 'Read marked' }, bookTitle = () => 'Genesis';
   let saved = [], cloudCalls = 0, attemptCalls = 0;
   const cloudReadings = [];
@@ -52,7 +53,7 @@ function scenario({ locale = 'uk', signedIn = true, cloud = [true], refuseAttemp
     readingSyncPending: copy[locale].pending,
     errorLoad: 'Load failed',
   })[key];
-  const args = { document, history, loadJSON, meta, chapter, alreadyRead, state,
+  const args = { document, history, loadJSON, meta, chapter, alreadyRead, state, readerStillCurrent,
     hasTasks, groupId, w, bookTitle, localStorage, accountRequest, attemptRequest, announce, t };
   const init = new Function(...Object.keys(args),
     statement + '\nreturn document.querySelector("#mark-read").onclick;');
@@ -60,6 +61,7 @@ function scenario({ locale = 'uk', signedIn = true, cloud = [true], refuseAttemp
   const nextButton = { disabled: false, textContent: 'Next chapter' };
   const nextQuestions = { unlocked: false, removeAttribute() { this.unlocked = true; } };
   return {
+    switchAccount() { state.user = { id: 'person-2' }; },
     navigateAway() {
       document.querySelector = selector => selector === '#mark-read' ? nextButton : selector === '#start-questions' ? nextQuestions : null;
     },
@@ -199,3 +201,45 @@ for (const locale of ['uk', 'ru', 'en']) {
     assert.deepEqual(reopened.initialHistory.map(row => row.chapter), [1, 2]);
   });
 }
+
+test('account replacement while reading save is pending cannot unlock the next user', async () => {
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const h = scenario({ cloud: [true], cloudGate: gate });
+  const pending = h.click();
+  assert.equal(h.cloudCalls, 1);
+  h.switchAccount();
+  release();
+  await pending;
+  assert.equal(h.attemptCalls, 0, 'no attempt receipt under the new session');
+  assert.equal(h.questions.unlocked, false);
+  assert.deepEqual(h.announcements, []);
+  assert.equal(h.button.disabled, false);
+  assert.equal(h.button.attrs['aria-busy'], undefined);
+});
+
+test('account replacement during attempt receipt cannot announce or unlock old read completion', async () => {
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const h = scenario({ cloud: [true], attemptGate: gate });
+  const pending = h.click();
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+  assert.equal(h.attemptCalls, 1);
+  h.switchAccount();
+  release();
+  await pending;
+  assert.equal(h.questions.unlocked, false);
+  assert.deepEqual(h.announcements, []);
+  assert.equal(h.button.disabled, false);
+  assert.equal(h.button.attrs['aria-busy'], undefined);
+});
+
+test('a retained old-account read-completion handler cannot initiate a new write', async () => {
+  const h = scenario();
+  h.switchAccount();
+  await h.click();
+  assert.equal(h.cloudCalls, 0);
+  assert.equal(h.attemptCalls, 0);
+  assert.deepEqual(h.saved, []);
+  assert.equal(h.button.dataset.saSaving, undefined);
+});

@@ -1,0 +1,13 @@
+# SA-EXT-04 / GROUP_STUDY_AGGREGATE_FAILCLOSED — terminal scoped receipt
+
+**2026-10-30 — CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** for this exact public/member group study-score integrity gap, not for the SA-EXT-04 parent.
+
+- **Actual defect:** existing `GET /api/groups` and `?mine=1` rendered D1 successful group aggregates using `Number(row.answers_correct || 0)` and related coercions. Corrupt/null, text, fractional, negative, unsafe or over-total values could become a false 0, JSON null or >100% completion rather than an unavailable group report.
+- **Source behavior:** existing `app/api/groups/route.ts`, no new route. Group presentation now rejects malformed `answers_correct`, `answers_total`, `chapters_completed` and impossible `correct > total` before returning JSON groups. Existing GET failure contract returns private no-store HTTP 503 `groups_unavailable`; no mutation of D1 or hiding another group's genuine data behind success.
+- **Source integration:** [PR #709](https://github.com/Oleksii-debug/scripture-archive/pull/709) **SQUASH MERGED** into `main@be9d32cf58fd671f7bb9920c69d89409f9ae1ed7`. Exact route blob `2a3930a48a75ee0adb248757d7f204c670df7d1e`, regression test blob `9452c401b8cb92a3701a2387c23422d695cd906d` read back from merged main.
+- **Actual negative/positive coverage:** `tests/groups-public-aggregate-integrity.test.mjs` executes the canonical TS GET in V8, tests success and expected 50% legitimate scores, plus 19 corrupt score/total/chapter-count variants separately via both public discovery and authenticated member view (**40 response-path checks**).
+- **Exact PR-head CI:** [GitHub Actions #41058471195](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41058471195) **SUCCESS** for head `87ddf8223d8806f6a31b3c1c9ea090eb10e3cdb6`: native Node, TS, lint, build, disposable Worker/D1 and Python validators.
+- **Remaining scoped implementation = 0; required unmerged PRs for this defect = 0.** Rework only with a new reproduced regression or approved requirement; do not reopen this exact completed subfeature for aspirational work.
+- **Boundary:** entire SA-EXT-04, real two-group/user acceptance, privacy/ownership throughout groups, production Site SHA, actual Chrome/NVDA and broader marathon release acceptance **remain OPEN / unverified**, along with all 20 SA-EXT parent sections. No deploy, migration, automatic accounts, payments or user data edits.
+
+Continue first five unmet approved parent requirements through [#297](https://github.com/Oleksii-debug/scripture-archive/issues/297) and [central plan](SCRIPTURE_ARCHIVE_EXPANSION_SECTION_PLAN_2026-10-28.md).

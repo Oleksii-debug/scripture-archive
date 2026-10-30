@@ -1,3 +1,14 @@
+## 2026-10-30 — SA-EXT-07 / ACADEMY_CROSS_TAB_ATOMICITY — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
+
+**РОЗДІЛ SA-EXT-07, тільки підфункція одночасного збереження позначок у вкладках — ЗАКРИТО / CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL**; `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Батьківський SA-EXT-07 і всі двадцять SA-EXT-01…20 залишаються OPEN**, жодного загального приймання не приписано.
+
+- **Функція:** одне Web Locks exclusive origin/account key охоплює справжні read/modify/write/verified-readback у `public/scripture-academy.js`; не допускає втрати прогресу між двома вкладками, перевіряє principal та route після очікування, зберігає v1-позначки, відмовляє без безпечного lock із доступним повідомленням UK/RU/EN.
+- **Головна інтеграція:** [PR #592](https://github.com/Oleksii-debug/scripture-archive/pull/592) SQUASH MERGED; функціональний `main@124dca2ac80599b82ebd2709546342b29d48d8d5`; source blob `c40af0959ff69968bd54781c41c9f8b661f695b8`, тест `512c470a5670d62f97e914f3d750bf55930ccddb`; Issue #591 закрито. Той самий канонічний Academy UI, локальний v1-store та account gate; друга платформа/сховище відсутні.
+- **Фактична кваліфікація:** 10/10 V8 source-executing fake-DOM; [GitHub Actions #41029627675](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41029627675) native Node **1377 PASS / 0 FAIL / 1 SKIP**, TypeScript/lint/source-build PASS, Python **2 PASS**. **Весь CI workflow FAIL** через незалежний disposable Wrangler/D1 restart HTTP 503 на обох спробах (21/22); чинний [#361](https://github.com/Oleksii-debug/scripture-archive/pull/361). Це НЕ E2E PASS.
+- **Не доведено:** поточний deployed Sites SHA, справжній браузер, Windows/NVDA, повний Academy/SA-EXT-07 або весь продукт. Повторна source-розробка цієї підфункції заборонена без відтвореного дефекту або нової вимоги. Координація #297; #591 — terminal issue receipt.
+
+---
+
 ## 2026-10-30 — SA-EXT-03 / DRAFT_CHOICE_ARRAY_REFUSAL — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
 
 **Статус:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` лише для канонічного збереження варіантів відповіді авторської вправи, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Увесь SA-EXT-03 та всі двадцять батьківських розділів OPEN**: це не закриття конструктора/редакційного процесу, не реліз і не браузерне/NVDA-приймання.

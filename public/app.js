@@ -2,7 +2,7 @@ import { parallelControls, mountParallelReader } from './parallel-reader.js';
 import {renderWorkspace, workspaceCopy, groupManagementCopy, groupManagementMarkup} from './workspace.js';
 import {supportSection} from './support.js';
 import {homePage} from './home.js';
-import {EDITIONS, editionCopy, selectedEdition, editionUrl, editionSelect} from './editions.js';
+import {EDITIONS, editionCopy, selectedEdition, editionUrl, editionSelect, setEditionForTab} from './editions.js';
 
 const I18N = {
   uk: {
@@ -1950,11 +1950,7 @@ function storeReaderPreference(key, value) {
   try { localStorage.setItem(key, value); return true; }
   catch { return false; }
 }
-const transientEditions = new Map();
 const transientEditionStorageDenied = new Set();
-function activeEdition(lang) {
-  return transientEditions.get(lang) || selectedEdition(lang);
-}
 const EDITION_TRANSIENT_MESSAGES = {
   uk: "Браузер заборонив збереження: вибір перекладу діє лише в цій вкладці.",
   ru: "Браузер запретил сохранение: выбор перевода действует только в этой вкладке.",
@@ -2279,7 +2275,7 @@ async function getSession() {
 }
 async function getBook(code, explicitEdition = null) {
   const requestLocale = state.lang;
-  const selected = explicitEdition || activeEdition(requestLocale);
+  const selected = explicitEdition || selectedEdition(requestLocale);
   if (explicitEdition && (!explicitEdition.local || !EDITIONS[requestLocale].includes(explicitEdition))) throw Error("Invalid local edition");
   const edition = selected.local ? selected : EDITIONS[requestLocale].find(e => e.local);
   const folder = edition.folder || requestLocale;
@@ -2310,7 +2306,7 @@ async function getBook(code, explicitEdition = null) {
   return state.bookCache.get(key);
 }
 function localEditionMetadata(catalog) {
-  const chosen = activeEdition(state.lang);
+  const chosen = selectedEdition(state.lang);
   const local = chosen.local ? chosen : EDITIONS[state.lang]?.find(e => e.local);
   if (!local) throw Error("local_edition_unavailable");
   // Locale defaults must not be used as attribution for a distinct edition.
@@ -2727,7 +2723,7 @@ async function onReaderEditionChange(event, parts) {
   const restoreFocus = document.activeElement === event.currentTarget;
   const readerUrl = location.pathname + location.search + location.hash;
   const saved = storeReaderPreference(`sa.edition.${lang}`, nextEdition.id);
-  transientEditions.set(lang, nextEdition);
+  setEditionForTab(lang, nextEdition.id);
   if (saved) transientEditionStorageDenied.delete(lang);
   else transientEditionStorageDenied.add(lang);
   await renderReader(parts);
@@ -2743,7 +2739,7 @@ async function renderReader(parts) {
   setActiveNav("reader");
   const catalog = await getCatalog();
   if (state.user !== readerPrincipal || (typeof location !== "undefined" && location.pathname && !location.pathname.startsWith("/reader"))) return;
-  const chosenEdition = activeEdition(state.lang);
+  const chosenEdition = selectedEdition(state.lang);
   const books = catalog.editionBooks?.[chosenEdition.id] || catalog.books[state.lang];
   const code = (parts[1] || state.reader.book || "GEN").toUpperCase();
   const meta = books.find((b) => b.code === code) || books[0];

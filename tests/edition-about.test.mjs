@@ -28,3 +28,20 @@ test('about page escapes catalogue text, rejects unsafe links and reports missin
   assert.ok(html.includes('&lt;script&gt;bad&lt;/script&gt;'));
   assert.equal((html.match(/Details for this edition are unavailable/g)||[]).length,3);
 });
+
+test('about page rejects credential-bearing provenance and licence URLs',()=>{
+  const bad={translations:{'uk-ohiienko':{
+    title:'Test edition',source:'https://publisher.example@attacker.example/read',
+    licenseUrl:'https://user:secret@licenses.example/terms',license:'Public Domain'
+  }},editions:{}};
+  const html=editionAboutMarkup(bad,'en',esc);
+  assert.ok(html.includes('Test edition'));
+  assert.ok(!html.includes('attacker.example')&&!html.includes('licenses.example'),
+    'credentialed URLs must not be presented as verified provenance links');
+  const mixed={translations:{'uk-ohiienko':{
+    ...bad.translations['uk-ohiienko'],source:'https://publisher.example/read'
+  }},editions:{}};
+  const safe=editionAboutMarkup(mixed,'en',esc);
+  assert.ok(safe.includes('href="https://publisher.example/read"'));
+  assert.ok(!safe.includes('licenses.example'));
+});

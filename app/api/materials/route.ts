@@ -51,8 +51,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  if (!env.DB) return Response.json({ error: "database_unavailable" }, { status: 503 });
+  // Reject cross-origin mutations before consulting the session or storage.
   if (!sameOrigin(request)) return Response.json({ error: "cross_origin_request" }, { status: 403 });
+  if (!env.DB) return Response.json({ error: "database_unavailable" }, { status: 503 });
   let identity: Awaited<ReturnType<typeof authenticateRequest>>;
   try { identity = await authenticateRequest(request); }
   catch {
@@ -104,8 +105,9 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  if (!env.DB) return Response.json({ error: "database_unavailable" }, { status: 503 });
+  // Reject cross-origin mutations before consulting the session or storage.
   if (!sameOrigin(request)) return Response.json({ error: "cross_origin_request" }, { status: 403 });
+  if (!env.DB) return Response.json({ error: "database_unavailable" }, { status: 503 });
   let identity: Awaited<ReturnType<typeof authenticateRequest>>;
   try { identity = await authenticateRequest(request); }
   catch {

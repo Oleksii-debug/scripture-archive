@@ -7,7 +7,9 @@ const error = (message: string, status: number) => Response.json({ error: messag
 
 export async function GET(request: Request) {
   if (!env.DB) return error("database_unavailable", 503);
-  const identity = await authenticateRequest(request);
+  let identity: Awaited<ReturnType<typeof authenticateRequest>>;
+  try { identity = await authenticateRequest(request); }
+  catch { return error("export_unavailable", 503); }
   if (!identity || identity.provider === "agent") return error("authentication_required", 401);
   try {
     const [profile, progress, bookmarks, attempts] = await env.DB.batch([

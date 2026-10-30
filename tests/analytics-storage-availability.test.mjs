@@ -347,16 +347,17 @@ test('failed consent readback attempts to undo a possibly successful grant write
 });
 
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
-test('verified session conflict rotates once and retries without associating a prior principal', async () => {
+test('verified session conflict rotates for future events without replaying the old event', async () => {
   let count=0;
   const ids=['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'];
   const a=boot({storedConsent:'granted',randomUUID:()=>ids.shift(),fetchOverride:async()=>++count===1
     ? {status:409,json:async()=>({error:'analytics_session_conflict'})} : {status:202}});
   a.window.saAnalytics.pageView();await tick();
-  assert.equal(a.posts.length,2);
+  assert.equal(a.posts.length,1);
   assert.equal(a.posts[0].body.sessionId,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
-  assert.equal(a.posts[1].body.sessionId,'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
-  assert.equal(a.persisted.session,a.posts[1].body.sessionId);
+  assert.equal(a.persisted.session,'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+  a.window.saAnalytics.pageView();
+  assert.equal(a.posts[1].body.sessionId,a.persisted.session);
 });
 test('generic failures and unrelated conflicts never rotate or retry analytics', async () => {
   for(const response of [{status:503},{status:409,json:async()=>({error:'other'})}]) {
@@ -377,8 +378,9 @@ test('simultaneous conflicting requests share one replacement identifier', async
   const a=boot({storedConsent:'granted',randomUUID:()=>{issued++;return ids.shift()},fetchOverride:async()=>++calls<=2
     ? {status:409,json:async()=>({error:'analytics_session_conflict'})} : {status:202}});
   a.window.saAnalytics.pageView();a.window.saAnalytics.pageView();await tick();
-  assert.equal(issued,2);assert.equal(a.posts.length,4);
-  assert.equal(a.posts[2].body.sessionId,a.posts[3].body.sessionId);
+  assert.equal(issued,2);assert.equal(a.posts.length,2);
+  a.window.saAnalytics.pageView();
+  assert.equal(a.posts[2].body.sessionId,'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
 });
 
 test('old conflicting request is not retried after withdrawal and a new grant', async () => {

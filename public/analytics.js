@@ -134,7 +134,8 @@
         sessionId = crypto.randomUUID();
         try { sessionStorage.setItem(sessionKey, sessionId); } catch {}
       }
-      if (consent === "granted") await send({ ...data, sessionId });
+      // Do not replay this event: authentication may have changed again while
+      // the request was in flight. Future events use the new identifier.
     }).catch(() => {});
   }
 

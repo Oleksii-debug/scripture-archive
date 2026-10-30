@@ -203,10 +203,13 @@ export async function POST(request: Request) {
     if(!/^(?:[A-F0-9]{8}|[A-F0-9]{32})$/.test(code))return Response.json({error:"invalid_invite"},{status:404});
     const group = await env.DB!.prepare("SELECT id FROM home_groups WHERE invite_code=?").bind(code).first<{ id: string }>();
     if (!group) return Response.json({ error: "invalid_invite" }, { status: 404 });
-    await env.DB!.prepare("INSERT OR IGNORE INTO home_group_members (group_id,user_id,display_name,role,public_name,public_activity) SELECT id,?,?,'member',?,? FROM home_groups WHERE id=? AND invite_code=?")
-      .bind(id.userId, `${person.first_name} ${person.last_name}`.trim(), body.publicName === true ? 1 : 0, body.publicActivity === true ? 1 : 0, group.id, code).run();
-    if(!await membership(group.id,id.userId))return Response.json({error:"invalid_invite"},{status:404});
-    return Response.json({ ok: true, groupId: group.id });
+    try {
+      const joined=await env.DB!.prepare("INSERT OR IGNORE INTO home_group_members (group_id,user_id,display_name,role,public_name,public_activity) SELECT id,?,?,'member',?,? FROM home_groups WHERE id=? AND invite_code=?")
+        .bind(id.userId, `${person.first_name} ${person.last_name}`.trim(), body.publicName === true ? 1 : 0, body.publicActivity === true ? 1 : 0, group.id, code).run();
+      if(!acknowledgedWrite(joined))return Response.json({error:"database_unavailable"},{status:503});
+      if(!await membership(group.id,id.userId))return Response.json({error:"invalid_invite"},{status:404});
+      return Response.json({ok:true,groupId:group.id});
+    } catch {return Response.json({error:"database_unavailable"},{status:503});}
   }
 
   if (action === "session") {
@@ -249,6 +252,7 @@ export async function POST(request: Request) {
     ]);
     if(!acknowledgedBatch(saved,2))return Response.json({error:"database_unavailable"},{status:503});
     if(!saved[0].meta.changes)return forbidden(403);
+    if(saved[0].meta.changes!==1||saved[1].meta.changes!==1)return Response.json({error:"database_unavailable"},{status:503});
     } catch {return Response.json({error:"database_unavailable"},{status:503});}
     return Response.json({ ok: true });
   }
@@ -277,20 +281,15 @@ export async function POST(request: Request) {
       .bind(groupId, id.userId, `${person.first_name} ${person.last_name}`.trim(), body.publicOwnerName === true ? 1 : 0, body.publicOwnerActivity === true ? 1 : 0)
   ];
   if (marathonEnabled) statements.push(env.DB!.prepare("INSERT INTO group_marathon_registrations (id,group_id,weekly_goal,catchup_mode,cohort_key,status) VALUES (?,?,?,?,?,?)").bind(marathonId, groupId, weeklyGoal, catchupMode, cohortKey, cohortStatus));
+  // Publish the group and transition its matching marathon cohort in one D1 transaction.
+  const promoteCohort=marathonEnabled&&cohortStatus==="ready";
+  if(promoteCohort) statements.push(env.DB!.prepare("UPDATE group_marathon_registrations SET status='ready' WHERE cohort_key=? AND status='forming'").bind(cohortKey));
   try {
     const results=await env.DB!.batch(statements);
-    // Only an acknowledged committed group, owner membership and optional
-    // cohort registration can be returned as created. A lost D1 ACK is
-    // uncertain, not proof of a rollback: users can inspect their group list.
-    if(!Array.isArray(results)||results.length!==statements.length||
-      results.some(result=>!result?.success||
-        !Number.isSafeInteger(result.meta?.changes)||result.meta.changes!==1))
+    // A lost ACK is uncertain, not proof of rollback: the owner may read back the group.
+    if(!acknowledgedBatch(results,statements.length)||
+      results.some((result,index)=>!(promoteCohort&&index===statements.length-1)&&result.meta.changes!==1))
       return Response.json({error:"group_creation_unconfirmed"},{status:503,headers:{"Cache-Control":"no-store"}});
-    if(marathonEnabled && cohortStatus==="ready") {
-      const updated=await env.DB!.prepare("UPDATE group_marathon_registrations SET status='ready' WHERE cohort_key=? AND status='forming'").bind(cohortKey).run();
-      if(!updated.success||!Number.isSafeInteger(updated.meta?.changes)||updated.meta.changes<0)
-        return Response.json({error:"group_creation_unconfirmed"},{status:503,headers:{"Cache-Control":"no-store"}});
-    }
     return Response.json({ok:true,groupId,cohortStatus},{status:201});
   } catch {
     return Response.json({error:"group_creation_unconfirmed"},{status:503,headers:{"Cache-Control":"no-store"}});

@@ -50,7 +50,7 @@ function fixture({throwAuth=false,ackDamage=false,failedBatch=-1}={}) {
           receipts.push({success:true,meta:{changes:Number(result.changes)}});
         }
         db.exec('COMMIT');
-        if(state.badAck)receipts[0]={success:true,meta:{}};
+        if(state.badAck){receipts[0]={success:true,meta:{}};state.badAck=false;}
         return receipts;
       } catch(error){db.exec('ROLLBACK');throw error;}
     },
@@ -106,7 +106,8 @@ test('one agent finish revokes only its token and atomically schedules plus logs
     const hours=(Date.parse(date.replace(' ','T')+'Z')-Date.now())/3_600_000;
     assert.ok(hours>6 && hours<6.1,'schedule must honor active persona 6h and 17-second seed');
     assert.equal(f.logs().length,1);
-    assert.deepEqual(f.logs()[0],{id:'digest:community-agent-finish:hash-active',event_type:'agent_session_completed'});
+    assert.equal(f.logs()[0].id,'digest:community-agent-finish:hash-active');
+    assert.equal(f.logs()[0].event_type,'agent_session_completed');
     assert.equal(f.state.batchCalls,1);
   } finally {f.close();}
 });

@@ -19,6 +19,9 @@ function integer(value: unknown, min: number, max: number) {
 function forbidden(status = 401) {
   return Response.json({ error: status === 401 ? "authentication_required" : "forbidden" }, { status });
 }
+function unavailableWrite() {
+  return Response.json({ error: "database_unavailable" }, { status: 503, headers: { "Cache-Control": "no-store, private" } });
+}
 
 // No handler may treat a success-marked D1 batch with absent mutation metadata
 // as a completed role, membership, ownership or session transition.
@@ -110,6 +113,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return Response.json({ error: "cross_origin_request" }, { status: 403 });
+  if (!env.DB) return unavailableWrite();
+  // Session validation and D1 preflight reads are part of the write boundary.
+  try {
   const id = await authenticateRequest(request);
   if (!id) return forbidden();
   const body = await request.json().catch(() => null) as Row | null;
@@ -308,4 +314,5 @@ export async function POST(request: Request) {
   } catch {
     return Response.json({error:"group_creation_unconfirmed"},{status:503,headers:{"Cache-Control":"no-store"}});
   }
+  } catch { return unavailableWrite(); }
 }

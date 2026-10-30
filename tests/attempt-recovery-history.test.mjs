@@ -416,3 +416,55 @@ test('SA-EXT-02 completed result refuses forged JSON or mismatched D1 scores and
     assert.equal(restored.data.result.score,canonical.score);
   }finally{f.db.close();}
 });
+
+
+test('SA-EXT-02 history never publishes parseable but forged completed timestamps', async () => {
+  const f=fixture();
+  try {
+    f.seed('clock-alice');
+    f.seed('clock-bob',{user:'bob'});
+    assert.equal((await f.post('finalize',{attemptId:'clock-alice'})).status,200);
+    assert.equal((await f.post('finalize',{attemptId:'clock-bob'},'bob')).status,200);
+    const original=f.db.prepare("SELECT completed_at FROM mission_attempts WHERE id='clock-alice'").get().completed_at;
+    assert.equal((await f.get('history')).status,200,'canonical SQLite timestamp remains accepted');
+    for (const invalid of ['0','2026','2026-02-30 12:34:56','2026-13-01 01:02:03',
+      '2026-10-30 25:02:03','2026-10-30T12:34:56+01:00','2026-10-30',
+      '2026-10-30 12:34','2026-10-30T12:34:56.1234Z']) {
+      f.db.prepare("UPDATE mission_attempts SET completed_at=? WHERE id='clock-alice'").run(invalid);
+      const before=f.db.prepare('SELECT total_changes() AS n').get().n;
+      const response=await f.get('history');
+      assert.equal(response.status,503,'not an authentic saved timestamp: '+invalid);
+      assert.equal(response.data.error,'attempt_history_unavailable');
+      assert.equal(Object.hasOwn(response.data,'attempts'),false);
+      assert.equal(f.db.prepare('SELECT total_changes() AS n').get().n,before);
+      assert.equal((await f.get('history','','bob')).status,200,
+        'another account must remain unaffected');
+      f.db.prepare("UPDATE mission_attempts SET completed_at=? WHERE id='clock-alice'").run(original);
+      assert.equal((await f.get('history')).status,200,'recovery after legitimate repair');
+    }
+    f.db.prepare("UPDATE mission_attempts SET completed_at=? WHERE id='clock-alice'")
+      .run('2026-10-30T12:34:56.123Z');
+    assert.equal((await f.get('history')).status,200,'canonical ISO UTC migration timestamp is valid');
+  } finally { f.db.close(); }
+});
+
+test('SA-EXT-02 pending attempt timestamp rejects shorthand and invalid calendar dates', async () => {
+  const f=fixture();
+  try {
+    f.seed('pending-clock-a');
+    f.seed('pending-clock-b',{user:'bob'});
+    const original=f.db.prepare("SELECT started_at FROM mission_attempts WHERE id='pending-clock-a'").get().started_at;
+    assert.equal((await f.get('history')).status,200);
+    for (const bad of ['0','2026','2026-02-31 02:03:04','2026-10-30T25:12:30Z','2026-10-30T12:34:56+00:00']) {
+      f.db.prepare("UPDATE mission_attempts SET started_at=? WHERE id='pending-clock-a'").run(bad);
+      const before=f.db.prepare('SELECT total_changes() AS n').get().n;
+      const response=await f.get('history');
+      assert.equal(response.status,503,bad);
+      assert.equal(response.data.error,'attempt_history_unavailable');
+      assert.equal(f.db.prepare('SELECT total_changes() AS n').get().n,before);
+      assert.equal((await f.get('history','','bob')).status,200);
+      f.db.prepare("UPDATE mission_attempts SET started_at=? WHERE id='pending-clock-a'").run(original);
+      assert.equal((await f.get('history')).status,200);
+    }
+  } finally { f.db.close(); }
+});

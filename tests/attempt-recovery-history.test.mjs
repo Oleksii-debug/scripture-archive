@@ -223,7 +223,9 @@ test('SA-EXT-02: mission chapter mutation actions refuse coercion and preserve a
 
 function seedActiveAttemptMarathon(f) {
   const migration=readFileSync(new URL('../drizzle/0004_accounts_attempts.sql',import.meta.url),'utf8');
-  const receiptDDL=migration.match(/CREATE TABLE `chapter_read_receipts` \\([\\s\\S]*?\\);/)?.[0];
+  const tableStart=migration.indexOf('CREATE TABLE `chapter_read_receipts` (');
+  const tableEnd=tableStart >= 0 ? migration.indexOf(');',tableStart) : -1;
+  const receiptDDL=tableStart >= 0 && tableEnd >= 0 ? migration.slice(tableStart,tableEnd+2) : null;
   assert.ok(receiptDDL,'real chapter receipt migration required');
   f.db.exec(receiptDDL);
   f.db.prepare("INSERT INTO chapter_read_receipts(id,actor_id,book_id,chapter,group_id) VALUES('ready','alice','GEN',12,'g')").run();

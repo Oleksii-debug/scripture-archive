@@ -88,3 +88,27 @@ test('the atlas exposes all verified place-source passages as native keyboard li
     assert.ok(!html.includes('onclick=') && !html.includes('<iframe'),lang+' remains native keyboard HTML');
   }
 });
+
+test('atlas evidence labels distinguish interpretive Scripture references from narrative evidence',()=>{
+  const vocabulary={
+    uk:{interpretive:'Тематичне зіставлення, не незалежний історичний доказ',narrative:'Зв’язок у біблійній оповіді'},
+    ru:{interpretive:'Тематическое сопоставление, не независимое историческое доказательство',narrative:'Связь в библейском повествовании'},
+    en:{interpretive:'Thematic comparison, not independent historical proof',narrative:'Connection in the biblical narrative'},
+  };
+  for(const lang of ['uk','ru','en']){
+    const html=dossierAtlasMarkup(catalog,lang,esc);
+    for(const place of scriptureDossiers.filter(dossier=>dossier.type==='place')){
+      const start=html.indexOf('<th scope="row"><a href="/dossiers?id='+place.id+'">');
+      const end=html.indexOf('</tr>',start);
+      assert.ok(start>=0&&end>start,lang+' '+place.id+' exists in atlas');
+      const row=html.slice(start,end);
+      for(const source of place.sources){
+        const link='href="/reader/'+source.book+'/'+source.chapter+'?verse='+source.first+'"';
+        const citation=row.indexOf(link),label=esc(vocabulary[lang][source.kind]);
+        assert.ok(citation>=0,lang+' '+place.id+' must contain '+link);
+        assert.ok(row.slice(citation).includes(' — '+label+'</li>'),lang+' '+place.id+' labels '+source.kind);
+      }
+    }
+    assert.match(html,/not a historical|не датування|не датировка/,'no invented history');
+  }
+});

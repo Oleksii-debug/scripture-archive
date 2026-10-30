@@ -4,6 +4,12 @@
 
 ---
 
+## 2026-10-30 — SA-EXT-16 / CONSENT_CUTOVER_READONLY_PREFLIGHT — SCOPED TERMINAL
+
+**РОЗДІЛ SA-EXT-16, тільки підпункт `CONSENT_CUTOVER_READONLY_PREFLIGHT`: ЗАКРИТО / `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`.** `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. [PR #692](https://github.com/Oleksii-debug/scripture-archive/pull/692) **SQUASH MERGED** у `main@35dd1e7a252bb8345bb93faf05be355a79b3e0d8`. Exact-head [Actions #41056322891](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41056322891) **SUCCESS** (Node 1769 PASS/0 FAIL/1 SKIP, Worker/D1 22/22, TS/lint/build, Python 2 PASS). Збережено єдиний існуючий SQL consent authority; локальний SQLite snapshot читається тільки read-only, детектуються застарілі `public_church` після 0010, не друкується приватна інформація. [Повна машинно-відтворювана квитанція](SA_EXT_16_CONSENT_CUTOVER_READONLY_PREFLIGHT_SCOPED_TERMINAL_20261030.md). **Усі 20 повних батьківських SA-EXT-01…20 залишаються OPEN**; production cutover [#689](https://github.com/Oleksii-debug/scripture-archive/issues/689), Sites SHA/SMTP/browser/NVDA не підтверджено, жодного deployment не виконано.
+
+---
+
 ## 2026-10-30 — SA-EXT-01 / PROGRESS_EXPORT_METADATA_FAILCLOSED — SCOPED TERMINAL
 
 **CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** only for rejecting missing, typed-invalid or blank saved-progress mission IDs and update times in the canonical private export route. [PR #685](https://github.com/Oleksii-debug/scripture-archive/pull/685) **SQUASH MERGED** to exact `main@252e637a7993488cbc1be218d96cd8d2d15e93e2`. [Exact-head CI #41055352814](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41055352814) **SUCCESS**: native Node, TS, lint, build, disposable Worker/D1, Python. The repaired route and tests were read back from merged main; no necessary unmerged PR or remaining implementation for this narrow defect. [Full terminal receipt](SA_EXT_01_PROGRESS_EXPORT_METADATA_TERMINAL_20261030.md). **Parent SA-EXT-01 and all 20 complete SA-EXT sections remain OPEN**; production, browser/NVDA and translation rights not qualified. No deploy.

@@ -1,3 +1,14 @@
+## 2026-10-30 — SA-EXT-03 / PUBLIC_REVIEWED_ANSWER_RECEIPT_BOOLEAN — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
+
+**РОЗДІЛ № SA-EXT-03 — підпункт PUBLIC_REVIEWED_ANSWER_RECEIPT_BOOLEAN: CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL**, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Увесь SA-EXT-03 та всі SA-EXT-01…20 залишаються OPEN**, це не завершення конструктора/редакційного процесу чи production.
+
+- **Відтворена несправність:** публічна вправа в канонічному `public/material-review.js` приймала JSON `{"correct":"false","explanation":"FORGED CORRECT ANSWER"}` як позитивну відповідь, показувала «Правильно» й стороннє пояснення. Exact-source blob до виправлення `ac6f29177a53f8d6c082595d44c0fae27786f142`, V8 FakeDOM RED.
+- **Виправлення:** [PR #572](https://github.com/Oleksii-debug/scripture-archive/pull/572) SQUASH MERGED у точний `main@c94485fc3e647c8918b131e25e8abf52a3e69ba4`. Production-модуль blob `c163ce5404e5b44b0ba471d3a37eba7d5751aca4`; Node-regression tests blob `74a81de0d4552c35f6fbad58f274d29a75158822` у тому самому main; суворий boolean-result, reject malformed explanation, збережені маршрут, статус, keyboard focus та повторна спроба. Додано 8 real Node regression cases; ізольовано виконано 10/10 V8 source checks PASS.
+- **CI:** [Run 41025203758](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41025203758) — native Node PASS, TypeScript PASS, ESLint PASS, build PASS, canonical Python validators PASS; загальний workflow FAIL: disposable Worker/D1 21/22, `tests/api-flow.test.mjs:394` через `POST /api/attempts 503`, окремий existing #361. Не було дозволеного автоматичного повтору без точного restart-signature. Не видавати за повне E2E/PASS.
+- **Межі:** Cloudflare Sites deployed SHA, browser, Windows, фізичний NVDA, редакторська QA всіх матеріалів і всі повні SA-EXT залишаються NOT_VERIFIED/OPEN. Вузький код не переписувати без конкретного нового дефекту чи зміненої вимоги; production не оновлювали.
+
+---
+
 ## 2026-10-30 — SA-EXT-01 / LEGACY_BOOKMARK_OUT_OF_RANGE_DELETE — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузький дефект)
 
 **Статус:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` **лише** для безпечного видалення історичних некоректних закладок з номером глави понад 151; `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Увесь батьківський SA-EXT-01 та SA-EXT-02…20 залишаються OPEN.** Нові вимоги/конкретні регресії окремі.

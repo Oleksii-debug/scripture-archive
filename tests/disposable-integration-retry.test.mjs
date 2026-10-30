@@ -97,3 +97,29 @@ test('exact proxy body used as a status assertion message also qualifies one dis
   assert.equal(isDisposableWorkerRestart(direct+"\n  AssertionError: wrong ownership persisted"),false);
   assert.equal(isDisposableWorkerRestart(failedRun("AssertionError [ERR_ASSERTION]: Your worker restarted mid-request but context unknown")),false);
 });
+
+test('exact Worker restart HTTP 503 in a single assertion permits only a fresh-state whole-suite retry', async () => {
+  const actualRestart = failedRun(
+    'AssertionError [ERR_ASSERTION]: Your worker restarted mid-request. Please try sending the request again. Only GET or HEAD requests are retried automatically.\n\n  503 !== 200'
+  );
+  assert.equal(isDisposableWorkerRestart(actualRestart), true);
+  let runs = 0;
+  const result = await runWithFreshState(async () => ++runs === 1
+    ? {code:1,log:actualRestart} : {code:0,log:'22 of 22 passed'});
+  assert.deepEqual(result,{attempts:2,recovered:true});
+  assert.equal(runs,2);
+});
+
+test('mixed assertion, unrelated restart banner, or non-503 evidence cannot trigger retry', async () => {
+  const phrase = 'Your worker restarted mid-request. Please try sending the request again. Only GET or HEAD requests are retried automatically.';
+  const rejected = [
+    failedRun('AssertionError [ERR_ASSERTION]: data was not durable\n  503 !== 200\n  '+phrase),
+    failedRun('AssertionError [ERR_ASSERTION]: '+phrase+'\n  502 !== 200'),
+    failedRun('AssertionError [ERR_ASSERTION]: '+phrase+'\n  503 !== 200\n  AssertionError: another failure'),
+    failedRun('AssertionError [ERR_ASSERTION]: '+phrase+'\n  503 !== 200',{count:2}),
+    failedRun('AssertionError [ERR_ASSERTION]: 503 Service Unavailable\n  503 !== 200',{trailer:'[wrangler:info] '+phrase}),
+  ];
+  for(const log of rejected) {
+    assert.equal(isDisposableWorkerRestart(log), false, log);
+  }
+});

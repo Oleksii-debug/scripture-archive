@@ -19,6 +19,8 @@ export function isDisposableWorkerRestart(log) {
   const recognized = /AssertionError \[ERR_ASSERTION\]: (?:Cross-origin mutation must be rejected; local Worker response: Your worker restarted mid-request\.|Your worker restarted mid-request\. Please try sending the request again\. Only GET or HEAD requests are retried automatically\.)/u;
   const remaining = failures.replace(recognized, '');
   if (/(?:^|\n)\s*AssertionError\b|Expected values to be strictly equal/u.test(remaining)) return false;
+  if (/(?:^|\n)\s*AssertionError \[ERR_ASSERTION\]:/u.test(failures) &&
+      !/\b503 !== (?:200|201|202|204|400|401|403|404|409)\b/u.test(failures)) return false;
   return /Your worker restarted mid-request/u.test(failures);
 }
 
@@ -42,7 +44,7 @@ async function executeOnce() {
     let log='';
     const append=(stream, data)=>{
       stream.write(data);
-      log=(log+String(data)).slice(-20000);
+      log=(log+String(data)).slice(-131072);
     };
     child.stdout.on('data', data => append(process.stdout,data));
     child.stderr.on('data', data => append(process.stderr,data));

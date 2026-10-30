@@ -27,8 +27,10 @@ export async function GET(request: Request) {
     if (!isVerifiedOwner(identity)) return json({ error: "forbidden" }, 403);
     return json(await communityOwnerState());
   }
+  // GET is strictly read-only: only owner-controlled POST and the existing
+  // scheduled lease path may advance waves or create community members.
+  // A public page view, crawler or release preflight must never trigger writes.
   try {
-  await advanceCommunity(now);
   const url = new URL(request.url), page = Math.max(1, Math.min(10000, Number(url.searchParams.get("page")) || 1));
   const pageSize = Math.max(12, Math.min(48, Number(url.searchParams.get("pageSize")) || 24));
   const query = clean(url.searchParams.get("q"), 60).toLocaleLowerCase();

@@ -65,15 +65,15 @@ test('SA-EXT-01 edition about reuses strict raw HTTPS source and licence admissi
       for(const field of ['source','licenseUrl']){
         const edition={
           title:'Source verification',license:'Public Domain',
-          source:'https://good-source.example/path',
-          licenseUrl:'https://good-license.example/terms'
+          source:'https://publisher.safe.test/path',
+          licenseUrl:'https://rights.safe.test/terms'
         };
         edition[field]=bad;
         const html=editionAboutMarkup({translations:{'uk-ohiienko':edition},editions:{}},lang,esc);
         assert.ok(html.includes('Source verification'),'the original edition remains listed');
         assert.ok(!html.includes('source.example'),
           'normalized-away '+field+' URI is never linked in '+lang+': '+JSON.stringify(bad));
-        const stillSafe=field==='source'?'https://good-license.example/terms':'https://good-source.example/path';
+        const stillSafe=field==='source'?'https://rights.safe.test/terms':'https://publisher.safe.test/path';
         assert.ok(html.includes('href="'+stillSafe+'"'),
           'the other independently valid source/license link stays available');
       }

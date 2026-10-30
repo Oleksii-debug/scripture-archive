@@ -55,13 +55,20 @@ function validPassword(value: unknown): value is string {
 function locale(value: unknown) { const result = clean(value, 2); return LOCALES.has(result) ? result : "uk"; }
 function baseUrl(request: Request) { return (env.APP_BASE_URL || new URL(request.url).origin).replace(/\/$/, ""); }
 async function body(request: Request) { return request.json().catch(() => null) as Promise<Body | null>; }
+// A returned D1 batch is not a durable success receipt unless every
+// statement was acknowledged with a concrete change count.
+function batchAcknowledged(receipts: unknown, count: number): receipts is Array<{ success: true; meta: { changes: number } }> {
+  return Array.isArray(receipts) && receipts.length === count &&
+    receipts.every(receipt => receipt?.success === true && Number.isSafeInteger(receipt?.meta?.changes) && receipt.meta.changes >= 0);
+}
 async function createOneTimeToken(userId: string, purpose: "verify" | "reset", minutes: number) {
   const token = randomToken();
-  await env.DB!.batch([
+  const receipts = await env.DB!.batch([
     env.DB!.prepare("UPDATE auth_tokens SET used_at=CURRENT_TIMESTAMP WHERE user_id=? AND purpose=? AND used_at IS NULL").bind(userId, purpose),
     env.DB!.prepare("INSERT INTO auth_tokens (token_hash,user_id,purpose,expires_at) VALUES (?,?,?,datetime('now',?))")
       .bind(await sha256(token), userId, purpose, `+${minutes} minutes`),
   ]);
+  if (!batchAcknowledged(receipts, 2) || receipts[1].meta.changes !== 1) throw Error('token_save_unconfirmed');
   return token;
 }
 
@@ -89,7 +96,9 @@ export async function GET(request: Request) {
     env.DB.prepare(`UPDATE auth_tokens SET used_at=CURRENT_TIMESTAMP WHERE token_hash=? AND purpose='verify' AND used_at IS NULL AND expires_at>?
       AND user_id IN (SELECT id FROM accounts WHERE deleted_at IS NULL)`).bind(tokenHash, checkedAt),
   ]);
-  if (!result[0].meta.changes) return json({ error: "invalid_or_expired_token" }, 400);
+  if (!batchAcknowledged(result, 2)) return json({ error: "verification_unavailable" }, 503);
+  if (result[0].meta.changes !== 1 || result[1].meta.changes !== 1)
+    return json({ error: "invalid_or_expired_token" }, 400);
   return Response.redirect(`${baseUrl(request)}/account?verified=1`, 303);
 }
 
@@ -194,7 +203,9 @@ export async function POST(request: Request) {
       env.DB.prepare(`UPDATE auth_tokens SET used_at=CURRENT_TIMESTAMP WHERE token_hash=? AND user_id=? AND purpose='reset' AND used_at IS NULL AND expires_at>?
         AND user_id IN (SELECT id FROM accounts WHERE deleted_at IS NULL)`).bind(tokenHash, record.user_id, checkedAt),
     ]);
-    if (!result[0].meta.changes) return json({ error: "invalid_or_expired_token" }, 400);
+    if (!batchAcknowledged(result, 3)) return json({ error: "password_reset_unavailable" }, 503);
+    if (result[0].meta.changes !== 1 || result[2].meta.changes !== 1)
+      return json({ error: "invalid_or_expired_token" }, 400);
     return json({ ok: true }, 200, { "Set-Cookie": clearSessionCookie(request) });
   }
 

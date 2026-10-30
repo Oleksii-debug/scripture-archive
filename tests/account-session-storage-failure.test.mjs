@@ -442,3 +442,57 @@ test("logged-out guest with unsigned local mission does not lose it on page refr
   assert.equal(f.entries.has("sa.unownedMissionProgress.v1"),false);
   assert.equal(f.entries.has("sa.progressOwner"),false);
 });
+
+
+test("D1 progress outage cannot revive ownerless mission under a new signed-in principal", async () => {
+  const legacy={index:5,correct:["A-1"],complete:true};
+  const f=fixture({user:{id:"bob"},marker:null,oldReading:[]});
+  f.entries.set("sa.mission.OTAB01",JSON.stringify(legacy));
+  f.state.missionProgress=legacy;
+  await f.session();
+  assert.equal(f.entries.get("sa.unownedMissionProgress.v1"),JSON.stringify(legacy));
+  assert.equal(f.state.missionProgress.index,0);
+  f.ctx.accountRequest=async (action,method,payload)=>{
+    f.apiCalls.push([action,method,payload]);
+    if(action==="reading")return {reading:[]};
+    if(action==="progress")throw Error("D1 progress read failed");
+    throw Error("unexpected call");
+  };
+  await f.sync();
+  assert.equal(f.state.progressSyncStatus,"unavailable");
+  assert.equal(f.state.missionProgress.index,0);
+  assert.equal(f.entries.get("sa.mission.OTAB01"),JSON.stringify({index:0,correct:[],complete:false}));
+  assert.equal(f.entries.get("sa.progressOwner"),"bob");
+  assert.equal(f.entries.get("sa.unownedMissionProgress.v1"),JSON.stringify(legacy));
+  assert.equal(f.apiCalls.some(([action,method])=>action==="reading"&&method==="PUT"),false);
+});
+
+test("archived unowned mission survives a fresh authenticated reload without auto-import", async () => {
+  const legacy={index:6,correct:["B-2"],complete:true};
+  const first=fixture({user:{id:"bob"},marker:null,oldReading:[]});
+  first.entries.set("sa.mission.OTAB01",JSON.stringify(legacy));
+  await first.session();
+  const archive=first.entries.get("sa.unownedMissionProgress.v1");
+  const second=fixture({user:{id:"bob"},marker:"bob",oldReading:[]});
+  second.state.missionProgress={index:0,correct:[],complete:false};
+  for(const [key,value] of first.entries)second.entries.set(key,value);
+  await second.session();
+  assert.equal(second.entries.get("sa.unownedMissionProgress.v1"),archive);
+  assert.equal(second.entries.get("sa.mission.OTAB01"),
+    JSON.stringify({index:0,correct:[],complete:false}));
+  assert.equal(second.entries.get("sa.progressOwner"),"bob");
+  assert.equal(second.state.missionProgress.index,0);
+});
+
+test("quota denial while preserving orphan mission leaves its original bytes and owner unmodified", async () => {
+  const f=fixture({user:{id:"bob"},marker:null,oldReading:[],denyWrites:true});
+  const before=f.entries.get("sa.mission.OTAB01");
+  await f.session();
+  assert.equal(f.entries.get("sa.mission.OTAB01"),before);
+  assert.equal(f.entries.has("sa.progressOwner"),false);
+  assert.equal(f.entries.has("sa.unownedMissionProgress.v1"),false);
+  assert.equal(f.state.unownedReadingPendingRecovery,true);
+  assert.equal(f.state.missionProgress.index,0);
+  await f.sync();
+  assert.equal(f.apiCalls.length,0);
+});

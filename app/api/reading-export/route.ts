@@ -75,13 +75,17 @@ export async function GET(request: Request) {
       // 101..200-character legacy title is not a restorable reader receipt,
       // even though the old export accepted it as a successful backup.
       if (row.mission_id === "READING" &&
-          (!Array.isArray(data) || data.some(entry => !entry || typeof entry !== "object" ||
+          (!Array.isArray(data) || data.length > 2000 || data.some(entry => !entry || typeof entry !== "object" ||
             Array.isArray(entry) || typeof entry.book !== "string" ||
             !/^[1-3]?[A-Z]{2,3}$/.test(entry.book) ||
             !Number.isSafeInteger(entry.chapter) || entry.chapter < 1 ||
             entry.chapter > (READING_CHAPTERS.get(entry.book) ?? 0) ||
             typeof entry.title !== "string" || entry.title.trim().length === 0 ||
-            entry.title.length > 100)))
+            entry.title.length > 100) ||
+            // A restorable READING export must preserve exactly the canonical
+            // unique book/chapter receipts. Legacy duplicate rows would be
+            // silently collapsed when written back through /api/account.
+            new Set(data.map(entry => entry.book + ":" + entry.chapter)).size !== data.length))
         throw Error("invalid_reading_receipt");
       return { mission: row.mission_id, data, updatedAt: row.updated_at };
     });

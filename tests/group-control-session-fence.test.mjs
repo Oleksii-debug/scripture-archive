@@ -20,12 +20,12 @@ function deferred() {
   let resolve;
   return {promise: new Promise(r => {resolve = r;}), resolve};
 }
-function fixture({detail = false, pendingAction = '', holdSecondCatalog = false} = {}) {
+function fixture({detail = false, pendingAction = '', holdSecondCatalog = false, settings = false, postError = '', postResult = {ok:true,groupId:'g1'}} = {}) {
   const state = {
     user: {id:'alice',profileComplete:true}, lang:'en', sessionUnavailable:false,
   };
   const location = {pathname:detail?'/groups/g1':'/groups',hash:''};
-  const events = {requests:[],navigation:[],announcements:[],confirmations:0,html:[]};
+  const events = {requests:[],navigation:[],announcements:[],confirmations:0,html:[],focus:[]};
   const groupForm = {isConnected:true,values:{name:'Study Group',weeklyGoal:'3'}};
   const joinForm = {isConnected:true,values:{inviteCode:'invite-code'}};
   const sessionForm = {isConnected:true,values:{bookId:'GEN',chapter:'12',meetingDate:'2026-10-30'}};
@@ -37,10 +37,15 @@ function fixture({detail = false, pendingAction = '', holdSecondCatalog = false}
   const readingPreview = {textContent:''};
   const readingLink = {href:'',isConnected:true,addEventListener() {}};
   const status = {isConnected:true,textContent:''};
+  const settingsSave={isConnected:true,disabled:false};
+  const settingsForm={isConnected:true,values:{name:'Edited',church:'',country:'Ukraine',city:'Kyiv',description:'Draft text',visibility:'private',rosterVisibility:'count'},querySelector:()=>settingsSave};
+  const settingsReload={isConnected:true};
+  const settingsSummary={focus:()=>events.focus.push('settings')};
   const controls = {
     '#group-form':groupForm,'#join-form':joinForm,
     '#session-form':sessionForm,'#leave-group':leave,'#delete-group':remove,
     '#rotate-group-invite':rotate,
+    ...(settings?{'#group-settings-form':settingsForm,'#group-settings-status':status,'#reload-group-settings':settingsReload,'#group-settings-summary':settingsSummary}:{}),
     '#target-book':readingBook,'#target-chapter':readingChapter,
     '#reading-preview':readingPreview,'#chapter-link':readingLink,
     '#group-manage-status':status,'#group-form-state':status,'#join-state':status,'#session-state':status,
@@ -50,7 +55,7 @@ function fixture({detail = false, pendingAction = '', holdSecondCatalog = false}
     querySelectorAll: () => [],
   };
   const group = {
-    id:'g1',name:'Group',description:'',church:'',city:'',country:'',
+    id:'g1',name:'Group',description:'',church:'',city:'',country:'',visibility:'private',rosterVisibility:'count',
     inviteCode:'private-invite',memberCount:1,chaptersCompleted:0,answersCorrect:0,
     answersTotal:0,qualityPercent:null,weeklyGoal:3,catchupMode:'steady',
     marathonEnabled:false,bibleEdition:'en-kjv',
@@ -64,13 +69,14 @@ function fixture({detail = false, pendingAction = '', holdSecondCatalog = false}
     state,location,document,FormData:FakeFormData,
     window:{confirm:() => {events.confirmations++; return true;}},
     setActiveNav() {}, t: key => key, esc: String,
-    field: () => '', groupStatus:()=>'',groupMetrics:()=>'',groupCard:()=>'',groupManagementMarkup:()=>'',groupManagementCopy:()=>({leaveConfirm:'Leave?',deleteConfirm:'Delete?',left:'Left',deleted:'Deleted',rotateConfirm:'Rotate?',rotated:'Rotated',error:'Error'}),
+    field: () => '', groupStatus:()=>'',groupMetrics:()=>'',groupCard:()=>'',groupManagementMarkup:()=>'',groupManagementCopy:()=>({leaveConfirm:'Leave?',deleteConfirm:'Delete?',left:'Left',deleted:'Deleted',rotateConfirm:'Rotate?',rotated:'Rotated',error:'Error',settingsSaved:'Settings saved',settingsConflict:'Conflict',settingsUnconfirmed:'Unconfirmed',publishConfirm:'Publish?',reloadConfirm:'Reload?'}),
     shell: html => {events.html.push(html);},
     groupRequest: async (action,method,payload,query) => {
       events.requests.push({action,method,payload,query});
       if(method==='GET')return action==='' && query?.includes('groupId=')?data:{groups:[]};
       if(action===pendingAction)await postGate.promise;
-      return {ok:true,groupId:'g1'};
+      if(postError)throw Error(postError);
+      return postResult;
     },
     navigateTo:path=>events.navigation.push(path),
     announce:message=>events.announcements.push(message),
@@ -86,7 +92,7 @@ function fixture({detail = false, pendingAction = '', holdSecondCatalog = false}
     console,
   };
   const controller = vm.runInNewContext(production,ctx);
-  return {state,location,events,groupForm,joinForm,sessionForm,leave,remove,rotate,readingBook,readingChapter,postGate,catalogReadback,secondCatalogStarted,...controller,
+  return {state,location,events,groupForm,joinForm,sessionForm,settingsForm,settingsSave,settingsReload,status,group,leave,remove,rotate,readingBook,readingChapter,postGate,catalogReadback,secondCatalogStarted,...controller,
     posts() {return events.requests.filter(x=>x.method==='POST');},
   };
 }
@@ -187,4 +193,44 @@ test('same owner still hears successful rotation after the asynchronous detail r
   assert.equal(f.posts().length,1);
   assert.equal(f.events.html.length,2,'current detail is refreshed');
   assert.deepEqual(f.events.announcements,['Rotated']);
+});
+
+for(const change of ['account','route','session-outage','detached'])test('settings retained form cannot write after '+change,async()=>{
+  const f=fixture({detail:true,settings:true});await f.renderGroup('g1');
+  if(change==='account')f.state.user={id:'bob'};
+  if(change==='route')f.location.pathname='/account';
+  if(change==='session-outage')f.state.sessionUnavailable=true;
+  if(change==='detached')f.settingsForm.isConnected=false;
+  await submit(f.settingsForm);await f.settingsReload.onclick();
+  assert.equal(f.posts().length,0);assert.equal(f.events.confirmations,0);
+});
+
+test('settings keeps draft and reports conflict or uncertain acknowledgement without success',async()=>{
+  for(const options of [{postError:'group_settings_changed_or_forbidden',message:'Conflict'},{postError:'database_unavailable',message:'Unconfirmed'},{postResult:{},message:'Unconfirmed'}]) {
+    const f=fixture({detail:true,settings:true,...options});await f.renderGroup('g1');
+    await submit(f.settingsForm);
+    assert.equal(f.status.textContent,options.message);assert.equal(f.settingsForm.values.description,'Draft text');
+    assert.equal(f.settingsSave.disabled,false);assert.deepEqual(f.events.announcements,[]);
+    assert.equal(f.events.html.length,1,'failed save must not replace the form');
+  }
+});
+
+test('settings sends exact snapshot, confirms public exposure and restores focus after save readback',async()=>{
+  const f=fixture({detail:true,settings:true});await f.renderGroup('g1');
+  f.settingsForm.values.visibility='public';
+  await submit(f.settingsForm);
+  const payload=f.posts()[0].payload;
+  assert.equal(payload.expected.name,'Group');assert.equal(payload.expected.visibility,'private');
+  assert.equal(payload.settings.name,'Edited');assert.equal(payload.settings.church,null);
+  assert.equal(payload.settings.description,'Draft text');assert.equal(payload.settings.visibility,'public');
+  assert.equal(f.events.confirmations,1);assert.deepEqual(f.events.focus,['settings']);
+  assert.deepEqual(f.events.announcements,['Settings saved']);
+});
+
+test('a late settings save must not reload or announce to a different account',async()=>{
+  const f=fixture({detail:true,settings:true,pendingAction:'settings'});await f.renderGroup('g1');
+  const pending=submit(f.settingsForm);assert.equal(f.settingsSave.disabled,true);
+  await submit(f.settingsForm);assert.equal(f.posts().length,1,'prevent duplicate click while pending');
+  f.state.user={id:'bob'};f.postGate.resolve();await pending;
+  assert.equal(f.events.html.length,1);assert.deepEqual(f.events.announcements,[]);assert.deepEqual(f.events.focus,[]);
 });

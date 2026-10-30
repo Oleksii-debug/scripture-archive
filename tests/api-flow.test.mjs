@@ -122,9 +122,18 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal((await (await fetch(`${base}/api/editor-roles?view=me`,{headers:{Cookie:cookie}})).json()).editor,false);
   assert.equal((await fetch(`${base}/api/material-review?view=queue`,{headers:{Cookie:cookie}})).status,403);
   const mark = { edition: "en-web", book: "GEN", chapter: 12 };
-  const bookmarkWrite = (body, method = "PUT", origin = base) => fetch(`${base}/api/bookmarks`, { method, headers: { Origin: origin, Cookie: cookie, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  // The disposable Wrangler proxy can abort a following request when an
+  // early Origin-rejected PUT carries an unread request body. This probe tests
+  // only the cross-origin gate, so omit its body in THIS local HTTP sequence.
+  // The production-route test bookmark-auth-availability.test.mjs separately
+  // sends a genuine nonempty JSON body and still demands 403 before auth/D1.
+  const bookmarkWrite = (body, method = "PUT", origin = base, omitBody = false) => fetch(`${base}/api/bookmarks`, {
+    method,
+    headers: { Origin: origin, Cookie: cookie, ...(omitBody ? {} : {"Content-Type": "application/json"}) },
+    ...(omitBody ? {} : { body: JSON.stringify(body) }),
+  });
   assert.equal((await fetch(`${base}/api/bookmarks`)).status, 401);
-  assert.equal((await bookmarkWrite(mark, "PUT", "https://attacker.invalid")).status, 403);
+  assert.equal((await bookmarkWrite(mark, "PUT", "https://attacker.invalid", true)).status, 403);
   const invalidBookmark = await bookmarkWrite({ ...mark, chapter: -1 });
   assert.equal(invalidBookmark.status, 400, (await invalidBookmark.text()).slice(0, 500));
   assert.equal((await bookmarkWrite(mark)).status, 200);
@@ -159,7 +168,15 @@ integration("account, progress, attempts, groups, marathon limit and password re
   consentChange = await request("/api/account?action=sensitive-consent", { method: "PUT", origin: "https://attacker.invalid", body: { acceptSensitive: false } });
   assert.equal(consentChange.response.status, 403);
   consentChange = await request("/api/account?action=sensitive-consent", { method: "PUT", body: { acceptSensitive: true, tradition: "other", denomination: "Example denomination", church: "Example church" } });
-  assert.equal(consentChange.response.status, 200);
+  // A bare 503 hides whether the local Worker/D1 failed authentication,
+  // mutation acknowledgement, or the post-write readback. Log only the
+  // canonical public error CODE (never account/consent fields or a raw body).
+  const consentErrorCode = consentChange.data &&
+    typeof consentChange.data.error === 'string' &&
+    /^[a-z_]{1,64}$/.test(consentChange.data.error)
+    ? consentChange.data.error : 'missing_or_noncanonical';
+  assert.equal(consentChange.response.status, 200,
+    `Sensitive-consent E2E: expected HTTP 200; error_code=${consentErrorCode}`);
   assert.equal(consentChange.data.user.sensitiveConsent, true);
   await request("/api/account?action=visibility", { method: "PUT", body: { church: true } });
   consentChange = await request("/api/account?action=sensitive-consent", { method: "PUT", body: { acceptSensitive: false } });

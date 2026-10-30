@@ -1,3 +1,14 @@
+## 2026-10-30 — SA-EXT-16 / REGISTER_AGE_TYPED_INPUT — РОЗРОБКУ ВУЗЬКОГО ДЕФЕКТУ ЗАКРИТО
+
+**Лише верифікований підпункт:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`; `remaining_scoped_implementation=0`; `necessary_unmerged_PRs=0`. **Повний SA-EXT-16 і всі батьківські SA-EXT-01…20 залишаються OPEN.**
+
+- **Доведена проблема:** `POST /api/auth?action=register` перетворював недовірений вік через `Number(data.age)`: `[18]`, `"0x12"`, `"1.8e1"`, рядки з пробілами тощо могли створити справжній акаунт і профіль з нібито коректним віком, викликати створення verification-токена і надсилання листа.
+- **Основна реалізація:** [PR #611](https://github.com/Oleksii-debug/scripture-archive/pull/611) **SQUASH MERGED** у точний `main@ddf0d37afc93f6d5b99c60e699c8b79bb9d856c2`; файл `app/api/auth/route.ts`, blob `8727cf43018fbb36e47741d876ab86bcb0e79715`. `registrationAge` допускає лише цілі JSON-числа та звичайні десяткові рядки HTML-form у межах 13–120 і відхиляє всі інші типи/формати **до** будь-якого D1 write. Жодного нового маршруту, сховища, мови, бекенду або deployment.
+- **Реальні перевірки:** `tests/auth-token-atomicity.test.mjs`, blob `65ac2729b65b1fe93723110af50fea0526fb1893`: чинний транспільований auth-маршрут та SQLite, **44 негативні + 4 позитивні варіанти віку у двох native Node regression tests**; перевірено відсутність account/token/email побічних ефектів і точний age/age_range для дозволених запитів. Exact-head [Actions #41035362340](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41035362340): **native Node, TypeScript, lint, build, Python — PASS**; **повний workflow FAIL**, disposable Wrangler Worker/D1 повторно **21/22** з `Your worker restarted mid-request`, HTTP 503 на незалежному `tests/api-flow.test.mjs` (рядки 120 і 103), контроль [draft PR #361](https://github.com/Oleksii-debug/scripture-archive/pull/361). Не приписувати цьому source-fix повний E2E PASS.
+- **Окремо не верифіковано:** installed Sites SHA/HTTPS, production D1, browser/physical NVDA, остаточні 20 батьківських секцій, email/DNS та публічний реліз. Повторно не розробляти цей точний дефект без нової доведеної регресії. Центральна координація [#297](https://github.com/Oleksii-debug/scripture-archive/issues/297).
+
+---
+
 ## 2026-10-30 — SA-EXT-02 / MISSION_CHAPTER_TYPED_INPUT_BOUNDARY — РОЗРОБКУ ПІДФУНКЦІЇ ЗАКРИТО
 
 **РІВНО ЦЕЙ ПІДПУНКТ:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`; `remaining_scoped_implementation=0`; `necessary_unmerged_PRs=0`. Повні батьківські **SA-EXT-01…20 залишаються OPEN**; це не завершення місій, не реліз, не приймання NVDA.

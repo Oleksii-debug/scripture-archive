@@ -13,7 +13,7 @@ const compiled = ts.transpileModule(source, {
 });
 assert.equal(compiled.diagnostics?.length ?? 0, 0);
 
-function fixture({ anonymous = false, dbAvailable = true } = {}) {
+function fixture({ anonymous = false, dbAvailable = true, profile = {} } = {}) {
   const calls = { auth: 0, reads: 0 };
   const db = {
     prepare(sql) {
@@ -22,7 +22,7 @@ function fixture({ anonymous = false, dbAvailable = true } = {}) {
       return {
         bind(userId) {
           assert.equal(userId, "reader-a");
-          return { async first() { return { first_name: "Private", last_name: "Reader", locale: "uk" }; } };
+          return { async first() { return { first_name: "Private", last_name: "Reader", locale: "uk", ...profile }; } };
         },
       };
     },
@@ -111,4 +111,35 @@ test("missing database still fails before reading identity or returning profile"
   assert.equal(result.status, 503);
   assert.equal(result.body.error, "database_unavailable");
   assert.deepEqual(f.calls, { auth: 0, reads: 0 });
+});
+
+test("private account GET exposes consent and church visibility only for exact numeric v1 flags", async () => {
+  const scenarios = [
+    [0, 0, 0, false, false],
+    [0, 1, 0, false, false],
+    [1, 0, 1, false, false],
+    [1, 1, 0, true, false],
+    [1, 1, 1, true, true],
+    [2, 1, 1, false, false],
+    [-1, 1, 1, false, false],
+    ["1", 1, 1, false, false],
+    [1, 2, 1, false, false],
+    [1, "1", 1, false, false],
+    [1, 1, 2, true, false],
+    [1, 1, "1", true, false],
+  ];
+  for (const [consent, version, visibility, expectedConsent, expectedChurch] of scenarios) {
+    const f = fixture({ profile: {
+      sensitive_consent: consent,
+      sensitive_consent_version: version,
+      public_church: visibility,
+      church: "Private affiliation",
+    } });
+    const result = await f.get("me");
+    assert.equal(result.status, 200);
+    assert.equal(result.body.user.sensitiveConsent, expectedConsent, JSON.stringify([consent,version,visibility]));
+    assert.equal(result.body.user.visibility.church, expectedChurch, JSON.stringify([consent,version,visibility]));
+    assert.match(result.cache, /no-store, private/);
+    assert.deepEqual(f.calls, { auth: 1, reads: 1 });
+  }
 });

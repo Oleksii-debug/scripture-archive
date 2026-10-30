@@ -274,3 +274,41 @@ test('SA-EXT-02/04 mission start accepts real remaining quota and rejects exhaus
     }finally{f.db.close();}
   }
 });
+
+
+test('SA-EXT-02: persisted history refuses impossible scores without erasing real achievements', async () => {
+  const f = fixture();
+  try {
+    f.seed('valid-alice');
+    f.seed('valid-bob', {user:'bob'});
+    assert.equal((await f.post('finalize',{attemptId:'valid-alice'})).status,200);
+    assert.equal((await f.post('finalize',{attemptId:'valid-bob'},'bob')).status,200);
+    const baseline = f.db.prepare("SELECT score,total FROM mission_attempts WHERE id='valid-alice'").get();
+    assert.equal((await f.get('history')).status,200);
+
+    for (const [field,value] of [
+      ['score',null],['score','not-a-score'],['score',-1],
+      ['score',0.5],['score',baseline.total+1],
+      ['total',null],['total','not-a-total'],['total',0],
+      ['total',-1],['total',1.5],
+    ]) {
+      f.db.prepare(`UPDATE mission_attempts SET ${field}=? WHERE id='valid-alice'`).run(value);
+      const before=f.db.prepare('SELECT total_changes() AS n').get().n;
+      const response=await f.get('history');
+      assert.equal(response.status,503,field+'='+String(value));
+      assert.equal(response.data.error,'attempt_history_unavailable');
+      assert.equal(Object.hasOwn(response.data,'attempts'),false,
+        'a damaged row cannot become an empty or fabricated successful history');
+      assert.equal(f.db.prepare('SELECT total_changes() AS n').get().n,before,
+        'private history read must not mutate records while reporting corruption');
+      const other=await f.get('history','','bob');
+      assert.equal(other.status,200,'another principal retains a valid history');
+      assert.deepEqual(other.data.attempts.map(row=>row.id),['valid-bob']);
+      f.db.prepare("UPDATE mission_attempts SET score=?,total=? WHERE id='valid-alice'")
+        .run(baseline.score,baseline.total);
+      const recovered=await f.get('history');
+      assert.equal(recovered.status,200,'valid history remains readable after repair');
+      assert.deepEqual(recovered.data.attempts.map(row=>row.id),['valid-alice']);
+    }
+  } finally { f.db.close(); }
+});

@@ -219,6 +219,17 @@ export async function GET(request: Request) {
       ]);
       if (!active.success || !history.success || !pending.success || !Array.isArray(active.results) || !Array.isArray(history.results) || !Array.isArray(pending.results)) return json({ error: "database_unavailable" }, 503);
       if (active.results.length) return json({ locked: true, attempts: [] });
+      // A successful batch can still contain a legacy/corrupt summary. Never
+      // publish an impossible score as a completed learning achievement.
+      // Keep the saved result immutable: this GET only validates, never fixes
+      // or deletes another user's historical attempts.
+      const scoreValid = (row: Record<string, unknown>) =>
+        typeof row.score === "number" && Number.isSafeInteger(row.score) && row.score >= 0 &&
+        typeof row.total === "number" && Number.isSafeInteger(row.total) &&
+        row.total > 0 && row.score <= row.total;
+      if ((history.results as Array<Record<string, unknown>>).some(row =>
+        !row || typeof row !== "object" || Array.isArray(row) || !scoreValid(row)))
+        return json({ error: "attempt_history_unavailable" }, 503);
       return json({ attempts: (history.results as Array<Record<string, unknown>>).map(row => ({ id: row.id, book: row.book_id, chapter: row.chapter, mode: row.group_id ? "group" : "personal", score: row.score, total: row.total, completedAt: row.completed_at })), pending: (pending.results as Array<Record<string, unknown>>).map(row => ({id:row.id,book:row.book_id,chapter:row.chapter,startedAt:row.started_at})) });
     } catch { return json({ error: "database_unavailable" }, 503); }
   }

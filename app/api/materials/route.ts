@@ -166,11 +166,11 @@ export async function DELETE(request: Request) {
   if (!id || id.length > 80) return Response.json({ error: "invalid_material" }, { status: 400 });
   try {
     const result = await env.DB.prepare("DELETE FROM study_materials WHERE id=? AND owner_user_id=?").bind(id, userId).run();
-    // The primary-key owner-scoped DELETE can affect zero or one row only;\n    // malformed or multi-row ACK is an unknown outcome, not success.
+    // D1 meta.changes is sqlite3_total_changes(): a one-row DELETE may report\n    // several changes when linked editorial submissions cascade. Accept that\n    // legitimate total while rejecting missing, negative or unsafe receipts.
     const changes = result.meta?.changes;
     // A successful-looking D1 reply without an authoritative write receipt
     // cannot claim deletion, including when the service lost its ACK.
-    if (!result.success || !Number.isSafeInteger(changes) || changes < 0 || changes > 1)
+    if (!result.success || !Number.isSafeInteger(changes) || changes < 0)
       return Response.json({ error: "delete_failed" }, { status: 503, headers: { "Cache-Control": "no-store, private" } });
     // Zero affected rows is an idempotent no-op: do not disclose whether a
     // private draft exists or belongs to another user.

@@ -9,11 +9,11 @@ const folder = new URL('../drizzle/', import.meta.url);
 const scripts = readdirSync(folder).filter(name => /^\d{4}_.+\.sql$/.test(name)).sort();
 const apply = (db, name) => db.exec(readFileSync(new URL(name, folder), 'utf8'));
 const old = scripts.filter(name => Number(name.slice(0, 4)) <= 9);
-const next = scripts.filter(name => Number(name.slice(0, 4)) >= 10 && Number(name.slice(0, 4)) <= 12);
+const next = scripts.filter(name => Number(name.slice(0, 4)) >= 10 && Number(name.slice(0, 4)) <= 13);
 
 test('v9 data survives the real consent and editorial migrations with privacy defaults', () => {
   assert.deepEqual(old.map(name => name.slice(0,4)), Array.from({length:10}, (_,i)=>String(i).padStart(4,'0')));
-  assert.deepEqual(next.map(name=>name.slice(0,4)), ['0010','0011','0012']);
+  assert.deepEqual(next.map(name=>name.slice(0,4)), ['0010','0011','0012','0013']);
   const db=new DatabaseSync(':memory:');
   try {
     db.exec('PRAGMA foreign_keys = ON');
@@ -52,4 +52,41 @@ test('v9 data survives the real consent and editorial migrations with privacy de
     assert.equal(db.prepare("SELECT COUNT(*) AS n FROM editorial_role_events WHERE subject_user_id='bob' AND action='grant'").get().n,1);
     assert.equal(db.prepare('PRAGMA foreign_key_check').all().length,0);
   } finally { db.close(); }
+});
+
+test('0013 prevents the historical writer from undoing 0010 consent privacy after upgrade', () => {
+  const db=new DatabaseSync(':memory:');
+  try {
+    db.exec('PRAGMA foreign_keys = ON');
+    for(const name of old)apply(db,name);
+    db.exec(`
+      INSERT INTO accounts(id,email,password_hash,password_salt,password_iterations,first_name,last_name)
+        VALUES ('alice','alice@example.invalid','hash','salt',100000,'Alice','Reader');
+      INSERT INTO profiles(user_id,email,first_name,last_name,age_range,church,sensitive_consent,public_church)
+        VALUES ('alice','alice@example.invalid','Alice','Reader','25-34','Private church',1,1);
+    `);
+    apply(db,'0010_sensitive_consent_evidence.sql');
+    const read=()=>db.prepare("SELECT sensitive_consent, sensitive_consent_version, public_church, church FROM profiles WHERE user_id='alice'").get();
+    assert.equal(read().public_church,0,'0010 clears legacy visibility before explicit reconsent');
+    // Reproduce the dangerous old Sites UPDATE between 0010 and guard install.
+    db.exec("UPDATE profiles SET public_church=1 WHERE user_id='alice'");
+    assert.equal(read().public_church,1,'pre-0013 old writer can undo 0010: regression reproduced');
+    for(const name of ['0011_material_review.sql','0012_editor_roles.sql','0013_public_church_consent_guard.sql'])
+      apply(db,name);
+    assert.equal(read().public_church,0,'0013 removes stale public flag reintroduced by old writer');
+    assert.equal(read().church,'Private church','guard preserves private source data');
+    assert.throws(()=>db.exec("UPDATE profiles SET public_church=1 WHERE user_id='alice'"),/public_church_requires_current_explicit_consent/);
+    assert.equal(read().public_church,0,'rejected legacy UPDATE has no partial visibility effect');
+    assert.throws(()=>db.exec("INSERT INTO profiles(user_id,email,first_name,last_name,age_range,church,sensitive_consent,public_church) VALUES ('bad','bad@example.invalid','Bad','Profile','25-34','Private',1,1)"),/public_church_requires_current_explicit_consent/);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM profiles WHERE user_id='bad'").get().n,0);
+    // A new, current-version explicit consent is still allowed to publish.
+    db.exec("UPDATE profiles SET sensitive_consent=1, sensitive_consent_version=1, public_church=1 WHERE user_id='alice'");
+    assert.equal(read().public_church,1);
+    // Withdrawal must remove visibility in the same atomic update.
+    assert.throws(()=>db.exec("UPDATE profiles SET sensitive_consent=0 WHERE user_id='alice'"),/public_church_requires_current_explicit_consent/);
+    assert.equal(read().sensitive_consent,1,'unconfirmed update cannot leave visible private data');
+    db.exec("UPDATE profiles SET sensitive_consent=0, public_church=0 WHERE user_id='alice'");
+    assert.deepEqual([read().sensitive_consent,read().public_church],[0,0]);
+    assert.equal(db.prepare('PRAGMA foreign_key_check').all().length,0);
+  } finally {db.close();}
 });

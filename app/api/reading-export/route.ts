@@ -51,6 +51,13 @@ export async function GET(request: Request) {
     if ([profile, progress, bookmarks, attempts].some(result => result?.success !== true || !Array.isArray(result.results)))
       return error("export_unavailable", 503);
     const records = (progress.results as Array<{ mission_id: string; data: string; updated_at: string }>).map(row => {
+      // A successful D1 batch does not validate individual progress metadata.
+      // Missing/blank mission keys or update times would be exported as a
+      // supposedly recoverable backup even though the canonical progress
+      // table requires these fields to identify the saved record.
+      if (!row || typeof row.mission_id !== "string" || !row.mission_id.trim() ||
+          typeof row.updated_at !== "string" || !row.updated_at.trim())
+        throw Error("invalid_progress_metadata");
       // Valid JSON alone does not establish valid saved progress. A legacy D1
       // row containing "null", a scalar or a missing body must not produce a
       // seemingly complete and restorable owner data-export archive.

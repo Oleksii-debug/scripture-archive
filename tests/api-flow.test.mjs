@@ -438,7 +438,13 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.deepEqual(await otherActorReopen.json(), { invalidated: false });
   result = await request(`/api/attempts?action=current&attemptId=${encodeURIComponent(invalidatedId)}`);
   assert.equal(result.response.status, 200, "unrelated readers and cross-origin requests must not invalidate an attempt");
-  const reopened = await Promise.all([0, 1].map(() => request("/api/attempts?action=chapter", { method: "POST", body: { book: "GEN", chapter: 12, groupId: "unrelated-group" } })));
+  // A guessed group id cannot invalidate another scope's attempt.
+  const unrelatedGroup = await Promise.all([0, 1].map(() => request("/api/attempts?action=chapter", { method: "POST", body: { book: "GEN", chapter: 12, groupId: "unrelated-group" } })));
+  assert.deepEqual(unrelatedGroup.map(item => item.response.status), [403, 403]);
+  for (const item of unrelatedGroup) assert.deepEqual(item.data, { error: "group_facilitator_required" });
+  result = await request(`/api/attempts?action=current&attemptId=${encodeURIComponent(invalidatedId)}`);
+  assert.equal(result.response.status, 200, "a forged group context cannot invalidate the personal attempt");
+  const reopened = await Promise.all([0, 1].map(() => request("/api/attempts?action=chapter", { method: "POST", body: { book: "GEN", chapter: 12 } })));
   assert.deepEqual(reopened.map(item => item.response.status), [200, 200]);
   assert.deepEqual(reopened.map(item => item.data.invalidated).sort(), [false, true]);
   for (const item of reopened) assert.deepEqual(Object.keys(item.data), ["invalidated"]);

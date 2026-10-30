@@ -161,8 +161,11 @@ test('history markup rejects invalid book codes, escapes stored text and offers 
   assert.doesNotMatch(malformed,/href="/);
   const html=missionHistoryMarkup({attempts:[{id:'a"',book:'GEN',chapter:12,score:1,total:2,completedAt:'<date>'},{id:'b',book:'GEN',chapter:13,score:2,total:2}]},'en',esc);
   assert.ok(!html.includes('<date>'));
-  assert.ok(html.includes('&lt;date&gt;'));
-  assert.equal((html.match(/Read and try again/g)||[]).length,1);
+  assert.ok(!html.includes('&lt;date&gt;'),'corrupt time metadata must not appear as a verified UTC record');
+  assert.match(html,/retry-mission-history/);
+  assert.doesNotMatch(html,/href="/);
+  const validHtml=missionHistoryMarkup({attempts:[{id:'a"',book:'GEN',chapter:12,score:1,total:2,completedAt:'2026-10-30 06:00:00'},{id:'b',book:'GEN',chapter:13,score:2,total:2}]},'en',esc);
+  assert.equal((validHtml.match(/Read and try again/g)||[]).length,1);
   assert.ok(missionHistoryMarkup({error:true},'uk',esc).includes('retry-mission-history'));
   assert.ok(missionHistoryMarkup({attempts:[],pending:[{id:'pending',book:'GEN',chapter:12}]},'en',esc).includes('Finish saving the result: GEN 12'));
 });

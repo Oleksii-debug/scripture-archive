@@ -312,6 +312,16 @@ export async function POST(request: Request) {
   }
 
   if (action !== "create") return Response.json({ error: "unknown_action" }, { status: 400 });
+  // Group owners must not receive a 201 for a silently rewritten profile.
+  // Validate authored fields *before* clean() can slice meaningful text, and
+  // before group/membership/cohort records can be inserted into D1.
+  if (typeof body.name !== "string" || ([
+    ["name", 100], ["church", 160], ["country", 80],
+    ["city", 80], ["description", 600],
+  ] as const).some(([key, max]) => {
+    const value = body[key];
+    return typeof value === "string" && value.trim().length > max;
+  })) return Response.json({ error: "invalid_group" }, { status: 400 });
   const name = clean(body.name, 100);
   const weeklyGoal = integer(body.weeklyGoal, 1, 31);
   const catchupMode = clean(body.catchupMode, 16);

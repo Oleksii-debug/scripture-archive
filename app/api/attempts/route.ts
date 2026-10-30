@@ -76,6 +76,23 @@ function attemptDeadline(raw: unknown): number | null {
 }
 // D1 can contain legacy/corrupt locale types despite TypeScript's static Locale.
 // Never emit a task missing its localized question/options or grade against it.
+// Current D1 writes use UTC CURRENT_TIMESTAMP; imported ISO UTC rows remain valid.
+// Date.parse alone also accepts strings like "0" or calendar-overflow dates,
+// which are not authentic saved learning timestamps.
+function validStoredHistoryTime(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const parts = /^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2}):(\d{2})|T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?Z)$/.exec(value);
+  if (!parts) return false;
+  const year = Number(parts[1]), month = Number(parts[2]), day = Number(parts[3]);
+  const hour = Number(parts[4] ?? parts[7]);
+  const minute = Number(parts[5] ?? parts[8]), second = Number(parts[6] ?? parts[9]);
+  const instant = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+  return Number.isFinite(instant.getTime()) &&
+    instant.getUTCFullYear() === year && instant.getUTCMonth() + 1 === month &&
+    instant.getUTCDate() === day && instant.getUTCHours() === hour &&
+    instant.getUTCMinutes() === minute && instant.getUTCSeconds() === second;
+}
+
 function storedLocale(value: unknown): value is Locale {
   return value === "uk" || value === "ru" || value === "en";
 }
@@ -266,7 +283,7 @@ export async function GET(request: Request) {
         Number.isSafeInteger(row.chapter) && (row.chapter as number) > 0 &&
         typeof row[dateField] === "string" &&
         (row[dateField] as string).trim() === row[dateField] &&
-        Number.isFinite(Date.parse(row[dateField] as string));
+        validStoredHistoryTime(row[dateField]);
       const historyRows = history.results as Array<Record<string, unknown>>;
       const pendingRows = pending.results as Array<Record<string, unknown>>;
       if (historyRows.some(row =>

@@ -29,7 +29,7 @@ test('public reviewed-material library is discoverable in canonical Next route, 
   assert.match(router,/PUBLIC_ROUTES[^\n]*"library"/);
   assert.match(router,/library: \{ title:/);
   assert.match(shell,/href="\/library" data-route="library" data-workspace="library"/);
-  assert.match(sitemap,/\["\\/library", "weekly", "0\\.6"\]/);
+  assert.ok(sitemap.includes('["/library", "weekly", "0.6"]'));
   assert.match(client,/\["home-groups", "live", "campaigns", "dossiers", "library",/);
   assert.match(client,/renderWorkspace\(name==='home-groups'\?'live':name/);
 });

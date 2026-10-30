@@ -30,10 +30,11 @@ function harness({ signedIn = true, fail = false, delayedRead = false } = {}) {
   vm.runInContext(code, context);
   return {
     panel, button, writes: () => writes,
+    seedBookmarks: rows => { current = rows; },
     changeAccount: id => { state.user = id ? { id } : null; },
     changeChapter: chapter => { state.currentReader = { book: "GEN", chapter }; },
     finishRead: () => releaseRead?.(),
-    mount: () => context.mountReaderBookmarks({ code: "GEN" }, 12, { id: "en-web" }, [{ code: "GEN", title: "Genesis" }]),
+    mount: ({ book = "GEN", chapter = 12, edition = "en-web", books = [{ code: "GEN", title: "Genesis", chapters: 50 }] } = {}) => context.mountReaderBookmarks({ code: book }, chapter, { id: edition }, books),
     click: () => handler({ currentTarget: button }),
   };
 }
@@ -122,4 +123,35 @@ test("a bookmark click from an old chapter cannot mutate the next chapter", asyn
   h.changeChapter(13);
   await h.click();
   assert.equal(h.writes(), 0, "old chapter handler must not issue a bookmark write");
+});
+
+test("corrupted, out-of-range or null bookmark rows never hide valid reader links", async () => {
+  const h = harness();
+  h.seedBookmarks([
+    null, {}, { edition: "en-web", book: "GEN", chapter: 51 },
+    { edition: "en-web", book: "GEN", chapter: Number.MAX_SAFE_INTEGER },
+    { edition: "en-web", book: "GEN", chapter: "12" },
+    { edition: "en-web", book: "GEN", chapter: 12 },
+    { edition: "en-web", book: "GEN", chapter: 50 },
+  ]);
+  await h.mount();
+  assert.match(h.panel.innerHTML, /\/reader\/GEN\/12/);
+  assert.match(h.panel.innerHTML, /\/reader\/GEN\/50/);
+  assert.doesNotMatch(h.panel.innerHTML, /\/reader\/GEN\/51/);
+  assert.doesNotMatch(h.panel.innerHTML, /9007199254740991/);
+  assert.doesNotMatch(h.panel.innerHTML, /role="alert"/);
+});
+
+test("bookmark ranges use the selected edition book, not the English chapter count", async () => {
+  const h = harness();
+  h.seedBookmarks([
+    { edition: "uk-ohiienko", book: "JOL", chapter: 4 },
+    { edition: "uk-ohiienko", book: "JOL", chapter: 5 },
+  ]);
+  await h.mount({
+    book: "JOL", chapter: 4, edition: "uk-ohiienko",
+    books: [{ code: "JOL", title: "Joel", chapters: 4 }],
+  });
+  assert.match(h.panel.innerHTML, /\/reader\/JOL\/4/);
+  assert.doesNotMatch(h.panel.innerHTML, /\/reader\/JOL\/5/);
 });

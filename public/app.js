@@ -2805,7 +2805,14 @@ async function mountReaderBookmarks(meta, chapter, edition, books) {
     const data = await response.json();
     if (!Array.isArray(data.bookmarks)) throw Error("bookmark_load_failed");
     if (!isCurrent()) return;
-    const items = data.bookmarks.filter(item => item.edition === edition.id && books.some(book => book.code === item.book) && Number.isInteger(item.chapter) && item.chapter > 0);
+    // Historical or corrupt bookmarks must never generate links to chapters that
+    // do not exist in the selected edition, or hide otherwise valid entries.
+    const items = data.bookmarks.filter(item => {
+      if (item?.edition !== edition.id) return false;
+      const sourceBook = books.find(book => book.code === item.book);
+      return Number.isSafeInteger(item.chapter) && item.chapter > 0 &&
+        Number.isSafeInteger(sourceBook?.chapters) && item.chapter <= sourceBook.chapters;
+    });
     const saved = items.some(item => item.book === meta.code && item.chapter === chapter);
     panel.innerHTML = `<h2>${copy.title}</h2><button class="button" type="button" id="toggle-bookmark" aria-pressed="${saved}">${saved ? copy.remove : copy.save}</button><p role="status" id="bookmark-status"></p>${items.length ? `<ul>${items.map(item => { const book = books.find(value => value.code === item.book); return `<li><a href="/reader/${encodeURIComponent(item.book)}/${item.chapter}">${esc(bookTitle(book))} ${item.chapter}</a></li>`; }).join("")}</ul>` : `<p>${copy.empty}</p>`}`;
     panel.querySelector("#toggle-bookmark").addEventListener("click", async event => {

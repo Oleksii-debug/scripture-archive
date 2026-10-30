@@ -53,6 +53,13 @@ export async function GET(request: Request) {
   // broken private/profile query into a fabricated zero-activity public 200.
   if ([accountCount, realOnline, realRows].some(receipt => receipt?.success !== true || !Array.isArray(receipt?.results)))
     return json({ error: "community_unavailable" }, 503);
+  // SQLite COUNT always returns exactly one nonnegative integer. An empty
+  // or corrupted count receipt must not be misrepresented as zero people.
+  if ([accountCount, realOnline].some(receipt => receipt.results.length !== 1 ||
+      typeof (receipt.results[0] as {total?:unknown})?.total !== "number" ||
+      !Number.isSafeInteger((receipt.results[0] as {total:number}).total) ||
+      (receipt.results[0] as {total:number}).total < 0))
+    return json({ error: "community_unavailable" }, 503);
   const real = (realRows.results as unknown as RealRow[]).map(row => {
     const online = Boolean(row.last_active_at && new Date(`${row.last_active_at.replace(" ", "T")}Z`).getTime() >= now.getTime() - 300_000);
     return { id: row.id, displayName: row.display_name, locale: row.locale, countryCode: null, joinedAt: row.joined_at, online,

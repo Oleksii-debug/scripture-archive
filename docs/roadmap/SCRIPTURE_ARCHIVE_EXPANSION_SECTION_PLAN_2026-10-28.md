@@ -1,4 +1,14 @@
 # SCRIPTURE ARCHIVE — каталог розділів і план реалізації розширень
+## 2026-10-30 — SA-EXT-05 / DOSSIER_SEARCH — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузька функція)
+
+**Статус:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` для пошуку по *наявному каталогу досьє*. **Батьківський SA-EXT-05 і всі SA-EXT-01…20 лишаються OPEN; це НЕ повний реліз чи приймання фізичним NVDA.**
+
+- **Готова функція:** канонічний маршрут `/dossiers?q=...` шукає людей, місця й події за локалізованими назвами, описами, типами й ідентифікаторами українською, російською та англійською; форма `method=get`/підписаний `type=search`, клавіатурний submit, очищення фільтра, статус кількості результатів, помилка без підставленого досьє за відсутності збігів. Межі 120 символів і HTML-екранування; справжні посилання на читальню та source-graph authority збережені, іншого API/БД/серверу немає.
+- **GitHub:** [PR #518](https://github.com/Oleksii-debug/scripture-archive/pull/518) **squash MERGED** до `main@4fff3bd6f88ae6628642d8fce3eccd2a7057307b` (GitHub merged+ref+tree readback). Рівно 4 змінені шляхи: `public/scripture-dossiers.js`, `public/workspace.js`, `tests/dossier-search.test.mjs`, `tests/source-dossier-graph.test.mjs`. Зміни чужих concurrent main гілок збережені.
+- **Фактична перевірка:** 37/37 ізольованих V8 source/catalog assertions PASS; [GitHub Actions #41014274024](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41014274024) exact head `bb40936812d91560c7454b0490e282567b7a42bf`: **1118 Node PASS, 0 FAIL, 1 SKIP** (нові 8 тестів), TypeScript PASS, lint PASS (12 warnings, 0 errors), production source build PASS, Python validators **2 PASS**. Повний CI — **FAIL** виключно на відомому окремому disposable Worker/D1 restart HTTP503: **21/22** на двох свіжих спробах. Розслідування у [PR #361](https://github.com/Oleksii-debug/scripture-archive/pull/361), не приховувати цю недоведеність.
+- **Окремо не підтверджено:** реальний browser/keyboard E2E, фізичний NVDA, production deploy/version SHA, незалежні біблійні/видавничі права для всього SA-EXT-05. Вони не входять у статус закритої вузької функції та не змінюються цим записом.
+- **Governance:** повторне розроблення саме цього пошуку лише за новою вимогою або відтвореним дефектом, без перезапуску S/SA-EXT батьківського розділу.
+
 **Дата:** 2026-10-28 | **Статус:** OWNER_APPROVED_PLANNING_SCOPE
 **Мета:** не зупинити випуск чинного продукту, а зареєструвати повний майбутній зміст і критерії готовності.
 **Обов'язкова класифікація:** EXISTING_SOURCE / INCOMPLETE_RELEASE / PLANNED_NEW / SEPARATE_PRODUCT. Це НЕ відсоток готовності.

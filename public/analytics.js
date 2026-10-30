@@ -152,18 +152,43 @@
     }
   }
 
+  let banner = null;
+  function grantConsent() {
+    try {
+      localStorage.setItem(consentKey, "granted");
+      if (localStorage.getItem(consentKey) !== "granted") throw Error("consent not persisted");
+    } catch {
+      // Best effort rollback: a write may have succeeded before readback failed.
+      try { localStorage.setItem(consentKey, "denied"); } catch {}
+      // Never retain a stale grant when durable consent cannot be verified.
+      consent = "denied";
+      if (heartbeatTimer) { window.clearInterval(heartbeatTimer); heartbeatTimer = 0; }
+      window.gtag?.("consent", "update", { analytics_storage: "denied" });
+      return false;
+    }
+    const wasGranted = consent === "granted";
+    consent = "granted";
+    window.gtag?.("consent", "update", { analytics_storage: "granted" });
+    loadGoogleAnalytics();
+    startEngagement();
+    if (!wasGranted) track("page_view");
+    banner?.remove();
+    return true;
+  }
+
   // Withdrawal takes effect in this tab even when persistence is blocked.
   // A verified denial also informs other tabs through the storage event.
   function withdrawConsent() {
     consent = "denied";
     if (heartbeatTimer) { window.clearInterval(heartbeatTimer); heartbeatTimer = 0; }
     window.gtag?.("consent", "update", { analytics_storage: "denied" });
+    banner?.remove();
     try {
       localStorage.setItem(consentKey, "denied");
       return localStorage.getItem(consentKey) === "denied";
     } catch { return false; }
   }
-  window.saAnalytics = { track, pageView: () => track("page_view"), withdrawConsent };
+  window.saAnalytics = { track, pageView: () => track("page_view"), withdrawConsent, grantConsent };
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") heartbeat(true);
     else lastActiveAt = Date.now();
@@ -192,7 +217,7 @@
     en: ["Analytics cookies", "With your consent, anonymous statistics measure pages, actions, and active time. Passwords, answers, and profile content are never sent.", "Allow", "Decline", "Your browser could not save consent. Analytics is not enabled; you can decline cookies."],
   };
   const language = document.documentElement.lang in copy ? document.documentElement.lang : "uk", text = copy[language];
-  const banner = document.createElement("section");
+  banner = document.createElement("section");
   banner.className = "cookie-banner";
   banner.setAttribute("role", "dialog");
   banner.setAttribute("aria-labelledby", "cookie-title");
@@ -205,29 +230,15 @@
     const value = event.target.closest("button")?.dataset.consent;
     if (value !== "granted" && value !== "denied") return;
     if (value === "granted") {
-      // Consent must be durably recorded before any analytics is enabled.
-      try {
-        localStorage.setItem(consentKey, value);
-        // A browser shim may silently discard writes; require exact readback.
-        if (localStorage.getItem(consentKey) !== value) throw Error("consent not persisted");
-      } catch {
+      if (!grantConsent()) {
         notice.textContent = text[4];
         notice.hidden = false;
-        return;
+      } else {
+        notice.hidden = true;
       }
     } else {
-      // Denial must work even when persistence is unavailable.
-      try { localStorage.setItem(consentKey, value); } catch {}
+      withdrawConsent();
     }
-    consent = value;
-    notice.hidden = true;
-    window.gtag?.("consent", "update", { analytics_storage: value });
-    if (value === "granted") {
-      loadGoogleAnalytics();
-      startEngagement();
-      track("page_view");
-    }
-    banner.remove();
   });
   document.body.appendChild(banner);
 })();

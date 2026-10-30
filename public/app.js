@@ -4335,8 +4335,18 @@ function renderPrivacy() {
     `<article class="prose"><p class="eyebrow">Scripture Archive</p><h1>${copy[0]}</h1>${copy
       .slice(1)
       .map((p) => `<p>${p}</p>`)
-      .join("")}<button class="button" id="withdraw-analytics-consent" type="button">${({uk:"Відкликати згоду на аналітику",ru:"Отозвать согласие на аналитику",en:"Withdraw analytics consent"})[state.lang]}</button><p id="analytics-consent-status" role="status" aria-live="polite"></p></article>`,
+      .join("")}<button class="button" id="withdraw-analytics-consent" type="button">${({uk:"Відкликати згоду на аналітику",ru:"Отозвать согласие на аналитику",en:"Withdraw analytics consent"})[state.lang]}</button> <button class="button" id="grant-analytics-consent" type="button">${({uk:"Дозволити аналітику",ru:"Разрешить аналитику",en:"Allow analytics"})[state.lang]}</button><p id="analytics-consent-status" role="status" aria-live="polite"></p></article>`,
   );
+  document.querySelector("#grant-analytics-consent").onclick = () => {
+    const messages = {
+      uk: ["Згоду збережено, аналітику ввімкнено в цій вкладці.", "Не вдалося зберегти згоду. Аналітику вимкнено в цій вкладці. Щоб заборонити її в інших вкладках і під час наступних відвідувань, очистьте налаштування сайту у браузері.", "Налаштування аналітики недоступні. Спробуйте оновити сторінку."],
+      ru: ["Согласие сохранено, аналитика включена в этой вкладке.", "Не удалось сохранить согласие. Аналитика отключена в этой вкладке. Чтобы запретить её в других вкладках и при следующих посещениях, очистите настройки сайта в браузере.", "Настройки аналитики недоступны. Попробуйте обновить страницу."],
+      en: ["Consent is saved and analytics is enabled in this tab.", "Consent could not be saved. Analytics is disabled in this tab. Clear the site settings in your browser to disable it in other tabs and future visits.", "Analytics settings are unavailable. Try refreshing the page."],
+    };
+    const grant = window.saAnalytics?.grantConsent;
+    const result = typeof grant === "function" ? (grant() ? 0 : 1) : 2;
+    document.querySelector("#analytics-consent-status").textContent = messages[state.lang][result];
+  };
   document.querySelector("#withdraw-analytics-consent").onclick = () => {
     if (typeof window.saAnalytics?.withdrawConsent !== "function") {
       document.querySelector("#analytics-consent-status").textContent = ({uk:"Налаштування аналітики недоступні. Очистьте налаштування сайту у браузері, щоб відкликати згоду.",ru:"Настройки аналитики недоступны. Очистите настройки сайта в браузере, чтобы отозвать согласие.",en:"Analytics settings are unavailable. Clear the site settings in your browser to withdraw consent."})[state.lang];

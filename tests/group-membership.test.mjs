@@ -282,8 +282,12 @@ test('group meeting and marathon promotion require valid D1 receipts',async()=>{
     assert.equal((await f.post('session',meeting,'carol')).status,200);
     f.db.exec("INSERT INTO group_marathon_registrations(id,group_id,weekly_goal,catchup_mode,cohort_key,status) VALUES('existing','g',3,'flexible','cohort','forming')");
     const body={name:'Marathon',weeklyGoal:3,catchupMode:'flexible',visibility:'private',rosterVisibility:'count',bibleEdition:'en-web',marathonEnabled:true};
-    f.afterRun(()=>({success:true,meta:{}}));
-    assert.equal((await f.post('create',body)).status,503);
+    const before=f.db.prepare('SELECT COUNT(*) AS n FROM home_groups').get().n;
+    f.setFailure(3);assert.equal((await f.post('create',body)).status,503);
+    assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM home_groups').get().n,before,'cohort promotion failure must roll back group creation');
+    f.setFailure(-1);
+    f.afterBatch(receipts=>receipts.map((r,i)=>i===3?{success:true,meta:{}}:r));
+    assert.equal((await f.post('create',body)).status,503,'unacknowledged cohort update is not reported as success');
     assert.equal((await f.post('create',body)).status,201);
   }finally{f.db.close();}
 });

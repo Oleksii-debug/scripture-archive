@@ -1,3 +1,14 @@
+## 2026-10-30 — SA-EXT-01/16 / BOOKMARK_SINGLE_ROW_TYPED_D1_ACK — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузька підфункція)
+
+**РОЗДІЛ № SA-EXT-01/16 — лише підпункт BOOKMARK_SINGLE_ROW_TYPED_D1_ACK: `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`.** `remaining_scoped_implementation=0`; `necessary_unmerged_PRs=0`. **Обидва повні батьківські SA-EXT-01 і SA-EXT-16, а також усі SA-EXT-01…20 залишаються OPEN**. Повторно переробляти підпункт лише за новим конкретним дефектом або затвердженою вимогою.
+
+- **Виявлена вада:** канонічні `PUT` і `DELETE /api/bookmarks` безпідставно повертали `{ok:true}`, якщо D1 для одного первинного ключа повертав `meta.changes=2` чи небезпечне ціле число. PK у `drizzle/0009_reader_bookmarks.sql` гарантує максимум один змінений рядок для цих запитів.
+- **Дійсна реалізація та інтеграція:** [PR #607](https://github.com/Oleksii-debug/scripture-archive/pull/607) **SQUASH MERGED** у точний `main@8d3e632b6150e7b751083a18e4227bf12b60f709`. Прочитано після merge: `app/api/bookmarks/route.ts` blob `438a32b26e45ff000693106eaa4ed027d1b9296c`; `tests/bookmarks-write-errors.test.mjs` blob `6780edd5788d323b0b270f01708fce32656c47b7`. Тепер підтвердження D1 має бути safe integer 0 або 1, інакше приватний 503. Збережено справжні PUT=1, DELETE=1, ідемпотентний DELETE=0 і перевірку дубля PUT=0; другий сервер чи база не створені.
+- **Фактично виконані перевірки:** [GitHub Actions #41034307029](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41034307029), точний PR head `6536df261dded012360cc613077aa64e052af263`: native Node **1395 PASS / 0 FAIL** (додано 10 сценаріїв помилкового D1 ACK і 2 позитивні сценарії у справжньому маршруті); TypeScript, lint (0 errors), source build і Python **2 PASS**. Загальний CI **FAIL**: незалежний disposable Wrangler/D1 restart на `POST /api/editor-roles` двічі дав `503` замість `403`, **21/22** в кожній спробі, [спільний blocker #361](https://github.com/Oleksii-debug/scripture-archive/pull/361). Це не проходження повного E2E.
+- **Поза цим закриттям:** живий Sites deployed SHA, реальний Cloudflare D1, браузер/NVDA, email/DNS, права всіх перекладів, повний SA-EXT-01/16 і реліз **NOT VERIFIED**. Жодних production-змін/cron/розсилок/нових мов. Координація [#297](https://github.com/Oleksii-debug/scripture-archive/issues/297).
+
+---
+
 ## 2026-10-30 — SA-EXT-01 / READING_LEGACY_CANONICAL_CHAPTER_SQL_GUARD — РОЗРОБКУ ПІДФУНКЦІЇ ЗАКРИТО
 
 **РІВНО ЦЕЙ ПІДПУНКТ:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`; `remaining_scoped_implementation=0`; `necessary_unmerged_PRs=0`. **Усі повні SA-EXT-01…20 залишаються OPEN**; це не завершення продукту, публічного сайту чи фізичне NVDA-приймання.

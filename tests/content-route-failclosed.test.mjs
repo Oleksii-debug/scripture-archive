@@ -55,7 +55,7 @@ function harness({ dbPresent = true, auth = "ok", dbMode = "ok", isOwner = false
     const request = new Request(url, {
       method,
       headers: { Origin: origin, "Content-Type": "application/json" },
-      ...(method === "PUT" ? { body: "{}" } : {}),
+      ...(method === "PUT" ? { body: JSON.stringify({liveNote:{uk:"",ru:"",en:""}}) } : {}),
     });
     const response = await exports[method](request);
     return { status: response.status, body: await response.json(), cache: response.headers.get("cache-control") };

@@ -47,7 +47,8 @@ export async function PUT(request: Request) {
   const userId = identity?.userId;
   if (!userId || !isVerifiedOwner(identity)) return Response.json({ error: "forbidden" }, { status: 403 });
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
-  if (!body) return Response.json({ error: "invalid_json" }, { status: 400 });
+  if (!body || typeof body !== "object" || Array.isArray(body))
+    return Response.json({ error: "invalid_json" }, { status: 400 });
   if (body.action === "upsert-item") {
     const id = clean(body.id, 100) || crypto.randomUUID(), kind = clean(body.kind, 30), locale = clean(body.locale, 3);
     const title = clean(body.title, 200), status = clean(body.status, 20);
@@ -63,7 +64,15 @@ export async function PUT(request: Request) {
     if (!acknowledged) return Response.json({ error: "content_save_unconfirmed" }, { status: 503 });
     return Response.json({ ok: true, id });
   }
-  const note = body.liveNote && typeof body.liveNote === "object" ? body.liveNote as Record<string, unknown> : {};
+  // The editor has two explicit commands: a reviewed item upsert above, or
+  // a complete three-language note here. A typo/empty payload must never
+  // silently clear already-published notes and still return HTTP 200.
+  if (body.action !== undefined || !Object.prototype.hasOwnProperty.call(body, "liveNote") ||
+      !body.liveNote || typeof body.liveNote !== "object" || Array.isArray(body.liveNote))
+    return Response.json({ error: "invalid_content_command" }, { status: 400 });
+  const note = body.liveNote as Record<string, unknown>;
+  if (!["uk", "ru", "en"].every(locale => typeof note[locale] === "string"))
+    return Response.json({ error: "invalid_content_note" }, { status: 400 });
   const liveNote = {
     uk: typeof note.uk === "string" ? note.uk.trim().slice(0, 600) : "",
     ru: typeof note.ru === "string" ? note.ru.trim().slice(0, 600) : "",

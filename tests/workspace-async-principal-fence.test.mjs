@@ -283,6 +283,8 @@ test('progress ignores damaged reading cache types instead of breaking navigatio
 
 test('progress preserves verified chapters but omits malformed local entries and unsafe links', async () => {
   const f = scenario('/progress');
+  // Exercise production escaping; the shared race-test fixture uses String.
+  f.context.esc = value => String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
   try {
     f.context.loadJSON = () => [
       {book:'GEN',chapter:12,title:'Genesis'}, null,

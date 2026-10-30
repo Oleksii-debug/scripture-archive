@@ -75,7 +75,7 @@ test("confirmed community D1 snapshots preserve the actual public directory", as
   assert.equal(response.body.summary.online, 1);
   assert.equal(response.body.summary.visible, 1);
   assert.equal(response.body.members[0].displayName, "Public Volunteer");
-  assert.deepEqual(f.calls, { advance: 1, batch: 1, auth: 0 });
+  assert.deepEqual(f.calls, { advance: 0, batch: 1, auth: 0 });
 });
 
 test("failed first count receipt is unavailable, never a fabricated zero-success summary", async () => {
@@ -127,12 +127,23 @@ test("thrown public D1 batch exception is 503 JSON, not unhandled 500", async ()
   assert.equal(f.calls.batch, 1);
 });
 
-test("advanceCommunity lease failure does not publish directory or run D1 snapshot", async () => {
+test("public GET cannot invoke a failing or state-changing wave advancement", async () => {
   const f = fixture({ throwAdvance: true });
   const response = await f.get();
-  assert.equal(response.status, 503);
-  assert.equal(response.body.error, "community_unavailable");
-  assert.equal(f.calls.batch, 0);
+  assert.equal(response.status, 200);
+  assert.equal(response.body.summary.registered, 3);
+  assert.equal(f.calls.advance, 0);
+  assert.equal(f.calls.batch, 1);
+});
+
+test("repeated public GET and summary preflight never create community advancement", async () => {
+  const f = fixture();
+  const first = await f.get();
+  const second = await f.get();
+  assert.equal(first.status, 200);
+  assert.equal(second.status, 200);
+  assert.equal(first.body.summary.registered, second.body.summary.registered);
+  assert.deepEqual(f.calls, { advance: 0, batch: 2, auth: 0 });
 });
 
 test("missing D1 retains 503 without calling the community scheduler", async () => {

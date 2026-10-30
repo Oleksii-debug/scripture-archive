@@ -52,13 +52,38 @@ const HISTORY = {
   en: { title:'Attempt history', login:'Sign in to see saved attempt history on other devices.', empty:'There are no completed attempts yet.', locked:'History is hidden during an active attempt.', error:'Could not load attempt history.', retry:'Try again', details:'View result', reread:'Read and try again', limit:'Showing the latest 100 completed attempts.', score:'Correct answers', pending:'An answer was saved, but its result still needs to be finalized.', resume:'Finish saving the result', personal:'Personal attempt', group:'Group attempt' },
 };
 
+function validAttemptHistoryPayload(history) {
+  if (!Array.isArray(history?.attempts) || history.attempts.length > 100 ||
+      (history.pending !== undefined &&
+       (!Array.isArray(history.pending) || history.pending.length > 20))) return false;
+  // A fulfilled HTTP response is not evidence that its rows are valid.
+  // Never turn malformed history into "no attempts" or broken navigation.
+  const safeId = id => {
+    if (typeof id !== 'string' || !id || id.length > 80) return false;
+    try { encodeURIComponent(id); return true; } catch { return false; }
+  };
+  const safeChapter = row =>
+    row && typeof row === 'object' && !Array.isArray(row) &&
+    typeof row.book === 'string' && row.book.length > 0 && row.book.length <= 32 &&
+    Number.isInteger(row.chapter) && row.chapter >= 1 && row.chapter <= 151 &&
+    safeId(row.id);
+  return history.attempts.every(row =>
+    safeChapter(row) && Number.isInteger(row.score) && Number.isInteger(row.total) &&
+    row.total >= 1 && row.score >= 0 && row.score <= row.total &&
+    (row.mode === undefined || row.mode === 'personal' || row.mode === 'group') &&
+    (row.completedAt === undefined || typeof row.completedAt === 'string')) &&
+    (history.pending === undefined || history.pending.every(row =>
+      safeChapter(row) && (row.startedAt === undefined || typeof row.startedAt === 'string')));
+}
+
 export function missionHistoryMarkup(history, lang, esc) {
   const w=HISTORY[lang] || HISTORY.uk;
   let content;
   if(history.guest) content=`<p>${w.login}</p>`;
   else if(history.error) content=`<p role="status">${w.error}</p><button class="button" id="retry-mission-history">${w.retry}</button>`;
   else if(history.locked) content=`<p>${w.locked}</p>`;
-  else if(!history.attempts?.length) content=`<p>${w.empty}</p>`;
+  else if(!validAttemptHistoryPayload(history)) content=`<p role="status">${w.error}</p><button class="button" id="retry-mission-history">${w.retry}</button>`;
+  else if(!history.attempts.length) content=`<p>${w.empty}</p>`;
   else content=`<p>${w.limit}</p><ol>${history.attempts.map(item=>`<li><p>${esc(item.book)} ${Number(item.chapter)} — ${item.mode==='group'?w.group:w.personal}; ${w.score}: ${Number(item.score)} / ${Number(item.total)}; ${esc(item.completedAt || '')} UTC</p><div class="action-row"><a class="button" href="/mission/attempt/${encodeURIComponent(item.id)}">${w.details}: ${esc(item.book)} ${Number(item.chapter)} — ${esc(item.completedAt || '')} UTC</a>${Number(item.score)<Number(item.total)?`<a class="button" href="/reader/${encodeURIComponent(item.book)}/${Number(item.chapter)}">${w.reread}: ${esc(item.book)} ${Number(item.chapter)}</a>`:''}</div></li>`).join('')}</ol>`;
   const pending=!history.guest&&!history.error&&!history.locked&&history.pending?.length?`<p>${w.pending}</p><ul>${history.pending.map(item=>`<li><a class="button" href="/mission/attempt/${encodeURIComponent(item.id)}">${w.resume}: ${esc(item.book)} ${Number(item.chapter)} — ${esc(item.startedAt || '')} UTC</a></li>`).join('')}</ul>`:'';
   return `<section class="card resume-card"><h2>${w.title}</h2>${pending}${content}</section>`;
@@ -90,7 +115,7 @@ const REVIEW_COPY={
   en:{title:'Suggested review',description:'Based on the latest 100 completed attempts. Only personal attempts count; these are reminders, not a measure of mastery.',empty:'Complete a personal attempt to receive suggestions.',due:'Ready to review',later:'Suggested from',open:'Read the chapter again'},
 };
 export function reviewScheduleMarkup(history,lang,esc,now=new Date()) {
-  if(history.guest||history.error||history.locked)return '';
+  if(history.guest||history.error||history.locked||!validAttemptHistoryPayload(history))return '';
   const w=REVIEW_COPY[lang]||REVIEW_COPY.uk,suggestions=reviewSuggestions(history.attempts,now);
   return `<section class="card resume-card"><h2>${w.title}</h2><p>${w.description}</p>${suggestions.length?`<ol>${suggestions.map(item=>`<li><p>${esc(item.book)} ${item.chapter} — ${item.due?w.due:w.later} <time datetime="${item.dueAt}">${item.dueAt}</time> UTC</p><a class="button" href="/reader/${encodeURIComponent(item.book)}/${item.chapter}">${w.open}: ${esc(item.book)} ${item.chapter}</a></li>`).join('')}</ol>`:`<p>${w.empty}</p>`}</section>`;
 }

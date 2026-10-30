@@ -2501,7 +2501,12 @@ function activateTimer() {
       status.textContent = t("timerDone");
       play("done");
     }
-    if (!saveTimer() && !status.textContent)
+    // A transient storage denial must not leave an incorrect warning after
+    // later successful writes (including a running timer's scheduled ticks).
+    const stored = saveTimer();
+    if (stored && Object.values(TIMER_EPHEMERAL_COPY).includes(status.textContent))
+      status.textContent = "";
+    else if (!stored && !status.textContent)
       status.textContent = TIMER_EPHEMERAL_COPY[state.lang] || TIMER_EPHEMERAL_COPY.uk;
   };
   input.onchange = () => {

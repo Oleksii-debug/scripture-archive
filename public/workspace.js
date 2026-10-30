@@ -119,8 +119,15 @@ async function request(path, options) {
   return data;
 }
 
+let workspaceRenderEpoch = 0;
+
 export async function renderWorkspace(name,c) {
   const {state,t,esc,shell,getMission,setActiveNav}=c, w=workspaceCopy(state.lang);
+  const epoch=++workspaceRenderEpoch, principal=state.user;
+  const path=globalThis.location?.pathname, search=globalThis.location?.search, hash=globalThis.location?.hash;
+  const stillCurrent=()=>epoch===workspaceRenderEpoch && state.user===principal &&
+    !state.sessionUnavailable && globalThis.location?.pathname===path &&
+    globalThis.location?.search===search && globalThis.location?.hash===hash;
   setActiveNav(name);
   if(name==='about') {
     const catalog=await c.getCatalog();
@@ -156,6 +163,8 @@ export async function renderWorkspace(name,c) {
     const syncWarning=state.progressSyncStatus==='partial'?w.progressSyncPartial:state.progressSyncStatus==='unavailable'?w.progressSyncUnavailable:'';
     let history={guest:true};
     if(state.user) try { history=await request('/api/attempts?action=history'); } catch { history={error:true}; }
+    // A late history read belongs to its original route and account only.
+    if(!stillCurrent())return;
     shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${w.progress}</h1></div><p>${w.progressLead}</p></div>${syncWarning?`<p role="alert">${esc(syncWarning)}</p>`:''}<div class="card-grid"><article class="card progress-stat"><strong>${p.correct.length} / ${taskCount}</strong><p>${w.tasks}</p></article><article class="card progress-stat"><strong>${read.length}</strong><p>${w.chapters}</p></article><article class="card progress-stat"><strong>${p.complete?w.finished:p.index?w.inProgress:w.notStarted}</strong><p>${w.status}</p></article></div><section class="card resume-card"><h2>${esc((mission.title?.[state.lang]||t("missionTitle")))}</h2><progress aria-label="${w.tasks}" max="${taskCount||1}" value="${p.correct.length}"></progress><div class="action-row"><a class="button primary" href="/mission/abraham">${w.continue}</a><a class="button" href="/groups">${t('myGroups')}</a></div></section>${reviewScheduleMarkup(history,state.lang,esc)}${missionHistoryMarkup(history,state.lang,esc)}<section class="card resume-card"><h2>${w.readingHistory}</h2>${read.length?`<div class="reading-links">${read.slice().reverse().map(r=>`<a class="button" href="/reader/${encodeURIComponent(r.book)}/${Number(r.chapter)}">${esc(r.title)} ${Number(r.chapter)}</a>`).join('')}</div>`:`<p>${w.nothingRead}</p>`}</section>`);
     document.querySelector('#retry-mission-history')?.addEventListener('click',()=>renderWorkspace('progress',c));
     return;
@@ -164,32 +173,36 @@ export async function renderWorkspace(name,c) {
     const review = reviewText(state.lang);
     if(!state.user) { shell(`<section class="gate-panel"><h1>${w.builder}</h1><p class="lead">${w.accountNeeded}</p><a class="button primary" href="/account">${w.signIn}</a></section><section class="card" id="public-materials" aria-live="polite"></section>`); await renderPublicMaterials(document.querySelector('#public-materials'),review,esc); return; }
     const role=await request('/api/editor-roles?view=me');
+    if(!stillCurrent())return;
     const [data,reviews,roles,roleAudit]=await Promise.all([request('/api/materials?mine=1'),loadReviewData(role.editor),role.owner?request('/api/editor-roles'):Promise.resolve({editors:[]}),role.owner?request('/api/editor-roles?view=audit'):Promise.resolve({events:[]})]);
+    if(!stillCurrent())return;
     let editing=null;
     function draw() {
+      if(!stillCurrent())return;
       const d=editing?.data||{},form=(key,label,rows)=>`<label class="account-field"><span>${label}</span>${rows?`<textarea name="${key}" rows="${rows}" required>${esc(d[key]||'')}</textarea>`:`<input name="${key}" value="${esc(key==='title'?editing?.title||'':d[key]||'')}" required>`}</label>`;
       shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${w.builder}</h1></div><p>${w.builderLead}</p></div><div class="builder-layout"><section class="card"><h2>${editing?w.edit:w.newMaterial}</h2><form id="material-form" class="account-form">${form('title',w.title)}${form('prompt',w.prompt,3)}${form('reference',w.reference)}<label class="account-field"><span>${w.options}</span><textarea name="options" rows="4" required>${esc((d.options||[]).join('\n'))}</textarea></label>${form('answer',w.answer)}${form('explanation',w.explanation,3)}<button class="button primary">${w.save}</button><p id="material-status" role="status"></p></form></section><aside class="card"><h2>${w.myMaterials}</h2><div class="material-list">${data.materials.length?data.materials.map(m=>`<article><span class="status">${m.visibility==='public'?w.public:w.private}</span><h3>${esc(m.title)}</h3><p>${esc(m.data.reference)}</p><div class="action-row"><button class="button" data-edit="${esc(m.id)}">${w.edit}</button><button class="button" data-test="${esc(m.id)}">${w.test}</button><button class="button" data-delete="${esc(m.id)}">${review.remove}</button></div>${submissionForm(m,review,esc)}</article>`).join(''):`<p>${w.empty}</p>`}</div><button class="button" id="new-material">${w.newMaterial}</button> <a class="button" href="/api/materials?mine=1&amp;export=1" download>${w.export}</a></aside></div>${historyMarkup(reviews.mine,review,esc)}${role.editor?queueMarkup(reviews.queue,review,esc)+auditMarkup(reviews.history,review,esc):''}${role.owner?editorRolesMarkup(roles.editors,state.lang,esc,roleAudit.events):''}<section class="card" id="public-materials" aria-live="polite"></section>`);
       attachReviewControls(document.querySelector('main'),review,()=>renderWorkspace('builder',c),c.announce);
       if(role.owner) attachEditorRoles(document.querySelector('main'),state.lang,()=>renderWorkspace('builder',c),c.announce);
       void renderPublicMaterials(document.querySelector('#public-materials'),review,esc);
-      document.querySelector('#new-material').onclick=()=>{editing=null;draw()};
-      document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{editing=data.materials.find(m=>m.id===b.dataset.edit);draw()});
-      document.querySelectorAll('[data-test]').forEach(b=>b.onclick=()=>test(data.materials.find(m=>m.id===b.dataset.test)));
+      document.querySelector('#new-material').onclick=()=>{if(!stillCurrent())return;editing=null;draw()};
+      document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{if(!stillCurrent())return;editing=data.materials.find(m=>m.id===b.dataset.edit);draw()});
+      document.querySelectorAll('[data-test]').forEach(b=>b.onclick=()=>{if(stillCurrent())test(data.materials.find(m=>m.id===b.dataset.test));});
       document.querySelectorAll('[data-delete]').forEach(button=>button.onclick=async()=>{
-        if(!window.confirm(review.confirm))return; button.disabled=true;
+        if(!stillCurrent()||!window.confirm(review.confirm))return; button.disabled=true;
         try{await request(`/api/materials?id=${encodeURIComponent(button.dataset.delete)}`,{method:'DELETE'});await renderWorkspace('builder',c);c.announce(review.removed)}
         catch{document.querySelector('#material-status').textContent=review.error;button.disabled=false}
       });
       document.querySelector('#material-form').onsubmit=async e=>{
-        e.preventDefault();const f=new FormData(e.currentTarget),payload=Object.fromEntries(f);
+        e.preventDefault();if(!stillCurrent())return;const f=new FormData(e.currentTarget),payload=Object.fromEntries(f);
         payload.options=payload.options.split(/\r?\n/).map(v=>v.trim()).filter(Boolean);payload.locale=state.lang;if(editing)payload.id=editing.id;
         try{await request('/api/materials',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});await renderWorkspace('builder',c);c.announce(w.saved)}catch{document.querySelector('#material-status').textContent=w.error}
       };
     }
     function test(m) {
+      if(!stillCurrent())return;
       shell(`<article class="card practice-card"><p class="eyebrow">${esc(m.data.reference)}</p><h1>${esc(m.title)}</h1><form id="practice-form"><fieldset class="options"><legend class="question">${esc(m.data.prompt)}</legend>${m.data.options.map((v,i)=>`<label class="option"><input type="radio" name="answer" value="${i}" required><span>${esc(v)}</span></label>`).join('')}</fieldset><button class="button primary">${w.check}</button></form><div id="practice-feedback" role="status"></div><button class="button" id="practice-back">${w.back}</button></article>`);
       document.querySelector('#practice-back').onclick=draw;
-      document.querySelector('#practice-form').onsubmit=e=>{e.preventDefault();const index=Number(new FormData(e.currentTarget).get('answer')),ok=m.data.options[index]===m.data.answer;document.querySelector('#practice-feedback').innerHTML=`<div class="notice ${ok?'success':'info'}"><h2>${ok?w.correct:w.retry}</h2>${ok?`<p>${esc(m.data.explanation)}</p>`:''}</div>`;c.play(ok?'ok':'bad')};
+      document.querySelector('#practice-form').onsubmit=e=>{e.preventDefault();if(!stillCurrent())return;const index=Number(new FormData(e.currentTarget).get('answer')),ok=m.data.options[index]===m.data.answer;document.querySelector('#practice-feedback').innerHTML=`<div class="notice ${ok?'success':'info'}"><h2>${ok?w.correct:w.retry}</h2>${ok?`<p>${esc(m.data.explanation)}</p>`:''}</div>`;c.play(ok?'ok':'bad')};
     }
     draw();
   }

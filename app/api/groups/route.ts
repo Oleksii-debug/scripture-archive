@@ -284,20 +284,19 @@ export async function POST(request: Request) {
       .bind(groupId, id.userId, `${person.first_name} ${person.last_name}`.trim(), body.publicOwnerName === true ? 1 : 0, body.publicOwnerActivity === true ? 1 : 0)
   ];
   if (marathonEnabled) statements.push(env.DB!.prepare("INSERT INTO group_marathon_registrations (id,group_id,weekly_goal,catchup_mode,cohort_key,status) VALUES (?,?,?,?,?,?)").bind(marathonId, groupId, weeklyGoal, catchupMode, cohortKey, cohortStatus));
+  // The cohort transition and its triggering group creation must be atomic.
+  // Previously a separate UPDATE could fail after a successful group INSERT,
+  // leaving another cohort member in "forming" after the response failed.
+  const promoteCohort=marathonEnabled && cohortStatus==="ready";
+  if(promoteCohort) statements.push(env.DB!.prepare("UPDATE group_marathon_registrations SET status='ready' WHERE cohort_key=? AND status='forming'").bind(cohortKey));
   try {
     const results=await env.DB!.batch(statements);
-    // Only an acknowledged committed group, owner membership and optional
-    // cohort registration can be returned as created. A lost D1 ACK is
-    // uncertain, not proof of a rollback: users can inspect their group list.
+    // All inserts must acknowledge exactly one row. Cohort promotion can
+    // legitimately update zero rows on a concurrent, already-ready cohort.
     if(!Array.isArray(results)||results.length!==statements.length||
-      results.some(result=>!result?.success||
-        !Number.isSafeInteger(result.meta?.changes)||result.meta.changes!==1))
+      results.some((result,index)=>!acknowledgedWrite(result)||
+        (!(promoteCohort && index===statements.length-1) && result.meta.changes!==1)))
       return Response.json({error:"group_creation_unconfirmed"},{status:503,headers:{"Cache-Control":"no-store"}});
-    if(marathonEnabled && cohortStatus==="ready") {
-      const updated=await env.DB!.prepare("UPDATE group_marathon_registrations SET status='ready' WHERE cohort_key=? AND status='forming'").bind(cohortKey).run();
-      if(!updated.success||!Number.isSafeInteger(updated.meta?.changes)||updated.meta.changes<0)
-        return Response.json({error:"group_creation_unconfirmed"},{status:503,headers:{"Cache-Control":"no-store"}});
-    }
     return Response.json({ok:true,groupId,cohortStatus},{status:201});
   } catch {
     return Response.json({error:"group_creation_unconfirmed"},{status:503,headers:{"Cache-Control":"no-store"}});

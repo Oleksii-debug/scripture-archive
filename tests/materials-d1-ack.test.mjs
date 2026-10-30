@@ -266,3 +266,44 @@ test("delete preserves owner isolation and idempotence under a valid D1 receipt"
     assert.equal(f.db.prepare("SELECT COUNT(*) AS total FROM study_materials").get().total, 0);
   } finally { f.db.close(); }
 });
+
+
+test("legacy public material response includes only the three visible exercise fields", async () => {
+  const f=fixture();
+  try {
+    const legacy={...valid, extraComment:"not-for-display", alternateAnswer:"unpublished"};
+    f.db.prepare("INSERT INTO study_materials(id,owner_user_id,title,locale,data,visibility) VALUES (?,?,?,?,?,?)")
+      .run("legacy-extra", "owner", "Historic", "uk", JSON.stringify(legacy), "public");
+    const result=await f.get();
+    assert.equal(result.status,200);
+    assert.deepEqual(JSON.parse(JSON.stringify(result.body.materials[0].data)),
+      {prompt:valid.prompt,reference:valid.reference,options:valid.options});
+    assert.ok(!JSON.stringify(result.body).includes("not-for-display"));
+    assert.ok(!JSON.stringify(result.body).includes("unpublished"));
+  }finally{f.db.close();}
+});
+
+test("invalid public legacy options reject the entire read",async()=>{
+  const f=fixture();
+  try{
+    const insert=f.db.prepare("INSERT INTO study_materials(id,owner_user_id,title,locale,data,visibility) VALUES (?,?,?,?,?,?)");
+    insert.run("good","owner","Good","uk",JSON.stringify(valid),"public");
+    insert.run("bad","owner","Bad","uk",JSON.stringify({...valid,options:["one",{label:"two"}]}),"public");
+    const result=await f.get();
+    assert.equal(result.status,503);
+    assert.equal(result.body.error,"materials_unavailable");
+    assert.equal("materials" in result.body,false);
+  }finally{f.db.close();}
+});
+
+test("private author view still includes the complete authored draft",async()=>{
+  const f=fixture();
+  try{
+    f.db.prepare("INSERT INTO study_materials(id,owner_user_id,title,locale,data,visibility) VALUES (?,?,?,?,?,?)")
+      .run("owned","alice","Owned draft","en",JSON.stringify(valid),"private");
+    const result=await f.get(true,"alice");
+    assert.equal(result.status,200);
+    assert.equal(result.body.materials[0].data.answer,valid.answer);
+    assert.equal(result.body.materials[0].data.explanation,valid.explanation);
+  }finally{f.db.close();}
+});

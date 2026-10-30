@@ -1,3 +1,15 @@
+## 2026-10-30 — SA-EXT-02 / PRIVATE_ATTEMPT_HISTORY_DUPLICATE_ID_FAILCLOSED — SOURCE SCOPED TERMINAL
+
+**ЗАКРИТО ДЛЯ РОЗРОБКИ ЛИШЕ ЦЕЙ ПІДПУНКТ / `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`.** [PR #795](https://github.com/Oleksii-debug/scripture-archive/pull/795) **SQUASH MERGED** у exact `main@588f2da45f46691026edd532d6c251a434f0c370`. Канонічна історія навчання відхиляє повторювані ID завершених/незавершених спроб замість вигаданого повторення та прогресу. Перевірено дублікати, колізії, перестановку, доступний retry UK/RU/EN і коректні окремі спроби. Exact-head [CI #41077317717](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41077317717) **SUCCESS** (native Node, TypeScript, lint, build, disposable Worker/D1, Python). [Фінальна квитанція](SA_EXT_02_PRIVATE_HISTORY_DUPLICATE_ATTEMPT_ID_TERMINAL_20261030.md). `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` саме тут. **Повний SA-EXT-02 і всі 20 батьківських розділів OPEN**; production/Sites/Windows/NVDA/D1 NOT_VERIFIED. Без деплою.
+
+---
+
+## 2026-10-30 — SA-EXT-01…05 / 40 EXACT SOURCE READBACKS — AUDIT ONLY, NOT A PARENT CLOSURE
+
+40/40 канонічних файлів коду, тестів і міграцій відчитано з фіксованого `main@a2a0e0a7c95a85fd3cd4a801bc5e1fbbe1151be7` із SHA й перевіркою основних маркерів. [Перелік і залишкові критерії](SA_EXT_01_05_40_LIVE_MAIN_SOURCE_READBACKS_20261030.md). **Жоден батьківський SA-EXT-01…20 автоматично не закрито**: source presence ≠ повний затверджений функціонал чи production/NVDA acceptance.
+
+---
+
 ## 2026-10-30 — SA-EXT-01 / PRIMARY_READER_PROVENANCE_URL_RAW_AUTHORITY — SOURCE SCOPED TERMINAL
 
 **ЗАКРИТО ДЛЯ РОЗРОБКИ лише цей підтверджений підпункт / `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`.** [PR #792](https://github.com/Oleksii-debug/scripture-archive/pull/792) **SQUASH MERGED** у `main@970d66db7b295bfd57155aa3ab96943619abddd6`. Основна читальня в `public/app.js` тепер використовує єдину перевірку сирих HTTPS URL джерела/ліцензії, уже наявну в паралельній читальні. 48 негативних UK/RU/EN сценаріїв і позитивний HTTPS-контроль; exact-head [CI #41075816618](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41075816618) **SUCCESS** (Node/TS/lint/build/Worker-D1/Python). [Квитанція](SA_EXT_01_PRIMARY_SOURCE_URL_INTEGRITY_TERMINAL_20261030.md); `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` саме тут. **Повний SA-EXT-01 і всі 20 батьківських SA-EXT залишаються OPEN**, Sites/NVDA/SMTP/D1 NOT_VERIFIED, без деплою.

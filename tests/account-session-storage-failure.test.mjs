@@ -133,7 +133,8 @@ test("logout and account deletion cleanup do not throw on denied storage", () =>
   assert.equal(f.state.missionProgress.index,0);
   assert.equal(f.state.localReadingStorageUntrusted,true);
   assert.ok(f.storageCalls.filter(([action])=>action==="set").length>=2);
-  assert.ok(f.storageCalls.some(([action])=>action==="remove"));
+  assert.equal(f.storageCalls.some(([action])=>action==="remove"),false,
+    "never discard owner marker when prior private cache writes were denied");
 });
 
 test("a failed server account read is still unavailable, not a fabricated login", async () => {
@@ -161,4 +162,26 @@ test("marker persistence failure also forbids reuse of local history", async () 
   assert.equal(f.state.localReadingStorageUntrusted,true);
   await f.sync();
   assert.equal(f.apiCalls.some(([action,method])=>action==="reading"&&method==="PUT"),false);
+});
+
+test("denied cleanup never reassigns surviving private history to the new owner", async () => {
+  const f=fixture({user:{id:"bob"},prior:"alice",marker:"alice",
+    denyWrites:true,denyDelete:false,oldReading:[{book:"GEN",chapter:12}]});
+  await f.session();
+  assert.equal(f.entries.get("sa.progressOwner"),"alice",
+    "old owner marker must survive while old private history survives");
+  assert.equal(f.state.localReadingStorageUntrusted,true);
+  assert.equal(f.storageCalls.some(([action,key])=>action==="remove"&&key==="sa.progressOwner"),false);
+  await f.sync();
+  assert.equal(f.apiCalls.some(([action,method])=>action==="reading"&&method==="PUT"),false);
+});
+
+test("recovered storage cannot relabel a previously untrusted same-user cache", async () => {
+  const f=fixture({user:{id:"alice"},prior:"alice",marker:"alice",
+    oldReading:[{book:"EXO",chapter:5}]});
+  f.state.localReadingStorageUntrusted=true;
+  await f.session();
+  assert.equal(f.entries.get("sa.readingHistory"),"[]");
+  assert.equal(f.entries.get("sa.progressOwner"),"alice");
+  assert.equal(f.state.localReadingStorageUntrusted,false);
 });

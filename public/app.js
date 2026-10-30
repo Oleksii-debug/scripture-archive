@@ -2290,13 +2290,20 @@ async function getSession() {
   let previousOwner = null, markerReadable = true;
   try { previousOwner = localStorage.getItem('sa.progressOwner'); }
   catch { markerReadable = false; }
-  if (!markerReadable || (priorPrincipal && priorPrincipal !== state.user?.id) ||
-      (previousOwner && previousOwner !== state.user?.id))
-    clearPersonalProgress();
-  try {
-    if (state.user) localStorage.setItem('sa.progressOwner', state.user.id);
-    else localStorage.removeItem('sa.progressOwner');
-  } catch {
+  const mustClear = !markerReadable || state.localReadingStorageUntrusted ||
+    (priorPrincipal && priorPrincipal !== state.user?.id) ||
+    (previousOwner && previousOwner !== state.user?.id);
+  const cleared = mustClear ? clearPersonalProgress() : true;
+  // An incomplete wipe must NEVER be certified by assigning the old browser
+  // reading history to the newly authenticated principal.
+  if (cleared) {
+    try {
+      if (state.user) localStorage.setItem('sa.progressOwner', state.user.id);
+      else localStorage.removeItem('sa.progressOwner');
+    } catch {
+      state.localReadingStorageUntrusted = true;
+    }
+  } else {
     state.localReadingStorageUntrusted = true;
   }
   return state.user;
@@ -3766,9 +3773,14 @@ function clearPersonalProgress() {
     try { localStorage.setItem(key, value); }
     catch { cacheCleared = false; }
   }
-  try { localStorage.removeItem("sa.progressOwner"); }
-  catch { cacheCleared = false; }
+  // If any private key survived, preserve the OLD owner marker. Deleting it
+  // would allow a later login to misclassify the old history as guest data.
+  if (cacheCleared) {
+    try { localStorage.removeItem("sa.progressOwner"); }
+    catch { cacheCleared = false; }
+  }
   state.localReadingStorageUntrusted = !cacheCleared;
+  return cacheCleared;
 }
 function field(name, label, type = "text", extra = "") {
   return `<label class="account-field"><span>${label}</span><input name="${name}" type="${type}" ${extra}></label>`;

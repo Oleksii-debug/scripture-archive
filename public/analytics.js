@@ -137,7 +137,8 @@
   }
 
   function track(name, parameters = {}) {
-    if (consent !== "granted" || !/^[a-z][a-z0-9_]{0,39}$/.test(name)) return;
+    // Event names also reach GA4: never let a caller encode private data as a name.
+    if (consent !== "granted" || !firstPartyEvents.has(name)) return;
     const values = safeParameters(parameters);
     if (name === "page_view") {
       values.page_location = safeLocation();

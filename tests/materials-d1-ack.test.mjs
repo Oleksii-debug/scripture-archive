@@ -38,12 +38,18 @@ function fixture() {
           const mode = deleteAck; deleteAck = "normal";
           if (mode === "missing") return { success: true, meta: {} };
           if (mode === "negative") return { success: true, meta: { changes: -1 } };
+          if (mode === "text") return { success: true, meta: { changes: "1" } };
+          if (mode === "boolean") return { success: true, meta: { changes: true } };
+          if (mode === "null") return { success: true, meta: { changes: null } };
           return { success: false, meta: { changes: Number(result.changes) } };
         }
         if (sql.startsWith("INSERT INTO study_materials") && ack !== "normal") {
           const mode = ack; ack = "normal";
           if (mode === "missing") return { success: true, meta: {} };
           if (mode === "negative") return { success: true, meta: { changes: -1 } };
+          if (mode === "text") return { success: true, meta: { changes: "1" } };
+          if (mode === "boolean") return { success: true, meta: { changes: true } };
+          if (mode === "null") return { success: true, meta: { changes: null } };
           return { success: false, meta: { changes: Number(result.changes) } };
         }
         return { success: true, meta: { changes: Number(result.changes) } };
@@ -119,7 +125,7 @@ test("saved material ACK represents a committed owner-conditional write", async 
 });
 
 test("false and missing D1 ACKs return 503 even when SQLite completed the write", async () => {
-  for (const mode of ["failed", "missing", "negative"]) {
+  for (const mode of ["failed", "missing", "negative", "text", "boolean", "null"]) {
     const f = fixture();
     try {
       f.setAck(mode);
@@ -233,7 +239,7 @@ test("a D1 delete prepare failure returns a stable error without losing a privat
 });
 
 test("missing, false, or invalid D1 delete receipts never claim success", async () => {
-  for (const ack of ["missing", "negative", "failed"]) {
+  for (const ack of ["missing", "negative", "failed", "text", "boolean", "null"]) {
     const f = fixture();
     try {
       assert.equal((await f.post({ ...valid, id: "lost-delete-ack" })).status, 201);

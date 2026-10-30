@@ -19,10 +19,10 @@ function fixture() {
   }
   db.exec('CREATE TABLE progress (user_id TEXT NOT NULL,mission_id TEXT NOT NULL,data TEXT NOT NULL,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,mission_id))');
   db.exec("INSERT INTO home_groups(id,owner_user_id,name,invite_code) VALUES('g','alice','Group','invite'); INSERT INTO home_group_members(group_id,user_id,display_name,role) VALUES('g','alice','Alice','owner')");
-  let failBatchAt=-1, failAnswerRead=false, afterAttemptRead=null;
+  let failBatchAt=-1, failAnswerRead=false, afterAttemptRead=null, marathonUsageOverride=undefined;
   function statement(sql,args=[]) {
     return {sql,args,
-      first:async()=>{const row=db.prepare(sql).get(...args)??null;if(sql.startsWith('SELECT * FROM mission_attempts')&&afterAttemptRead){const hook=afterAttemptRead;afterAttemptRead=null;hook();}return row;},
+      first:async()=>{const row=sql.includes('SELECT COUNT(DISTINCT book_id') && marathonUsageOverride!==undefined ? marathonUsageOverride : db.prepare(sql).get(...args)??null;if(sql.startsWith('SELECT * FROM mission_attempts')&&afterAttemptRead){const hook=afterAttemptRead;afterAttemptRead=null;hook();}return row;},
       all:async()=>failAnswerRead&&sql.startsWith('SELECT task_id,selected_json')?{success:false,results:[]}:{success:true,results:db.prepare(sql).all(...args)},
       run:async()=>{const r=db.prepare(sql).run(...args);return {success:true,meta:{changes:Number(r.changes)}};},
     };
@@ -48,7 +48,7 @@ function fixture() {
   }
   async function get(action,id='',user='alice'){const req=new Request(`https://local.invalid/api/attempts?action=${action}&attemptId=${id}`,{headers:user?{'x-user':user}:{}});const r=await exports.GET(req);return {status:r.status,data:await r.json()};}
   async function post(action,body,user='alice',origin='https://local.invalid'){const r=await exports.POST(new Request('https://local.invalid/api/attempts?action='+action,{method:'POST',headers:{origin,'content-type':'application/json',...(user?{'x-user':user}:{})},body:JSON.stringify(body)}));return {status:r.status,data:await r.json()};}
-  return {db,seed,get,post,setFailBatch:n=>{failBatchAt=n;},setFailRead:v=>{failAnswerRead=v;},afterAttemptRead:fn=>{afterAttemptRead=fn;}};
+  return {db,seed,get,post,setFailBatch:n=>{failBatchAt=n;},setFailRead:v=>{failAnswerRead=v;},afterAttemptRead:fn=>{afterAttemptRead=fn;},setMarathonUsageOverride:value=>{marathonUsageOverride=value;}};
 }
 
 test('failed finalization rolls back and concurrent retries save exactly one group report',async()=>{
@@ -218,4 +218,57 @@ test('SA-EXT-02: mission chapter mutation actions refuse coercion and preserve a
     assert.equal(valid.data.invalidated,true);
     assert.equal(f.db.prepare("SELECT status FROM mission_attempts WHERE id='chapter-type'").get().status,'invalidated');
   }finally{f.db.close();}
+});
+
+
+function seedActiveAttemptMarathon(f) {
+  const migration=readFileSync(new URL('../drizzle/0004_accounts_attempts.sql',import.meta.url),'utf8');
+  const receiptDDL=migration.match(/CREATE TABLE `chapter_read_receipts` \\([\\s\\S]*?\\);/)?.[0];
+  assert.ok(receiptDDL,'real chapter receipt migration required');
+  f.db.exec(receiptDDL);
+  f.db.prepare("INSERT INTO chapter_read_receipts(id,actor_id,book_id,chapter,group_id) VALUES('ready','alice','GEN',12,'g')").run();
+  // Start at UTC midnight today so real Date.now() always resolves to week 0
+  // without a test-environment calendar dependency.
+  const today=new Date().toISOString().slice(0,10);
+  f.db.prepare("INSERT INTO group_marathon_registrations(id,group_id,weekly_goal,catchup_mode,cohort_key,status,start_date) VALUES('marathon','g',3,'steady','cohort','active',?)").run(today);
+}
+const marathonStart={missionId:'OT-AB-01',book:'GEN',chapter:12,groupId:'g',locale:'en'};
+for(const [description,aggregate] of [
+  ['no COUNT row',null],
+  ['no count property',{}],
+  ['SQL NULL',{count:null}],
+  ['undefined count',{count:undefined}],
+  ['numeric string',{count:'0'}],
+  ['untrusted text',{count:'oops'}],
+  ['negative count',{count:-1}],
+  ['fractional count',{count:0.5}],
+  ['Infinity',{count:Infinity}],
+  ['NaN',{count:NaN}]
+]) {
+  test('SA-EXT-02/04 marathon attempt refuses '+description+' with no mutation',async()=>{
+    const f=fixture();try{
+      seedActiveAttemptMarathon(f);
+      f.setMarathonUsageOverride(aggregate);
+      const before=f.db.prepare('SELECT total_changes() n').get().n;
+      const result=await f.post('start',marathonStart);
+      assert.equal(result.status,503,'failed aggregate '+description);
+      assert.equal(result.data.error,'database_unavailable');
+      assert.equal(f.db.prepare('SELECT total_changes() n').get().n,before);
+      assert.equal(f.db.prepare('SELECT COUNT(*) n FROM mission_attempts').get().n,0);
+      assert.equal(f.db.prepare("SELECT consumed_at FROM chapter_read_receipts WHERE id='ready'").get().consumed_at,null);
+    }finally{f.db.close();}
+  });
+}
+
+test('SA-EXT-02/04 mission start accepts real remaining quota and rejects exhausted quota',async()=>{
+  for(const [count,status] of [[0,201],[2,201],[3,409],[4,409]]) {
+    const f=fixture();try{
+      seedActiveAttemptMarathon(f);
+      f.setMarathonUsageOverride({count});
+      const result=await f.post('start',marathonStart);
+      assert.equal(result.status,status,'aggregate count '+count+' '+JSON.stringify(result.data));
+      assert.equal(f.db.prepare('SELECT COUNT(*) n FROM mission_attempts').get().n,status===201?1:0);
+      assert.equal(Boolean(f.db.prepare("SELECT consumed_at FROM chapter_read_receipts WHERE id='ready'").get().consumed_at),status===201);
+    }finally{f.db.close();}
+  }
 });

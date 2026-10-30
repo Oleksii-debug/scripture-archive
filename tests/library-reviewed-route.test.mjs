@@ -24,10 +24,12 @@ function scenario(lang='en') {
 test('public reviewed-material library is discoverable in canonical Next route, navigation and client router',()=>{
   const router=readFileSync(new URL('../app/[...slug]/page.tsx',import.meta.url),'utf8');
   const shell=readFileSync(new URL('../app/page.tsx',import.meta.url),'utf8');
+  const sitemap=readFileSync(new URL('../app/sitemap.xml/route.ts',import.meta.url),'utf8');
   const client=readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
   assert.match(router,/PUBLIC_ROUTES[^\n]*"library"/);
   assert.match(router,/library: \{ title:/);
   assert.match(shell,/href="\/library" data-route="library" data-workspace="library"/);
+  assert.match(sitemap,/\["\\/library", "weekly", "0\\.6"\]/);
   assert.match(client,/\["home-groups", "live", "campaigns", "dossiers", "library",/);
   assert.match(client,/renderWorkspace\(name==='home-groups'\?'live':name/);
 });

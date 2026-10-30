@@ -1,3 +1,15 @@
+## 2026-10-30 — SA-EXT-02 / MISSION_CHAPTER_TYPED_INPUT_BOUNDARY — РОЗРОБКУ ПІДФУНКЦІЇ ЗАКРИТО
+
+**РІВНО ЦЕЙ ПІДПУНКТ:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`; `remaining_scoped_implementation=0`; `necessary_unmerged_PRs=0`. Повні батьківські **SA-EXT-01…20 залишаються OPEN**; це не завершення місій, не реліз, не приймання NVDA.
+
+- **Дефект:** три справжні дії `POST /api/attempts?action=chapter/read/start` використовували `Number(body.chapter)`. Значення JSON `true`, `0xc`, `12e0`, неправильні рядкові/дробові числа могли перетворюватися на існуючу главу та небезпечно інвалідувати активну спробу, створити хибний read receipt або дозволити неправильний запуск. Це незалежно від уже виправленої перевірки індексів варіантів відповідей.
+- **Канонічна реалізація:** [PR #608](https://github.com/Oleksii-debug/scripture-archive/pull/608) **SQUASH MERGED** у `main@1f91550db7c6b98705c7480f3b0d7708e19fa51f`. Справжній `app/api/attempts/route.ts` blob `0cb9c3e9930f94fa8374571756698f7df7d5289e` додає один спільний parser додатного безпечного цілого з точним десятковим HTML-рядком; усі три шляхи перед D1 мутаціями повертають 400 `invalid_chapter` на некоректних значеннях. Збережено обробку звичайних `12` і `"12"`, автентифікацію, чинні місії й ті самі D1-таблиці.
+- **Тести:** існуючий `tests/attempt-recovery-history.test.mjs` blob `54b13e0e593f56b53987cbae3588f996fb7a66bf` доповнено source-executing Node/SQLite регресією: 12 неправильних типів/форм × 3 mutating actions, незмінений статус і `total_changes()`, легітимна `"12"` інвалідує тільки відповідну спробу. Для позитивної перевірки використовується реальна `drizzle/0004_accounts_attempts.sql` міграція.
+- **Exact-head CI:** [Actions #41034841579](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41034841579), source head `762352b707e3a8a42d493b7f755df6438b0978aa`: Node **1396 PASS / 0 FAIL / 1 SKIP**, TypeScript/lint/build PASS, Python **2/2 PASS**. **Повний CI FAIL**: disposable Wrangler Worker/D1 двічі **21/22** з явно відтвореним `Your worker restarted mid-request` / HTTP 503 у нерелевантному інтеграційному POST; виправлення CI окремо у [PR #361](https://github.com/Oleksii-debug/scripture-archive/pull/361). Перші дві перевірки виявили тільки неповний тестовий SQLite fixture; їх виправлено без послаблення product guard.
+- **Межі:** production SHA, реальний веббраузер і NVDA, усі джерела/переклади, повна місійна система, всі 20 повних розділів та release НЕ ВЕРИФІКОВАНО. Повторення цієї конкретної розробки — лише за новим відтвореним дефектом або вимогою; центральна координація [#297](https://github.com/Oleksii-debug/scripture-archive/issues/297).
+
+---
+
 ## 2026-10-30 — SA-EXT-01/16 / BOOKMARK_SINGLE_ROW_TYPED_D1_ACK — ЗАКРИТО ДЛЯ РОЗРОБКИ (вузька підфункція)
 
 **РОЗДІЛ № SA-EXT-01/16 — лише підпункт BOOKMARK_SINGLE_ROW_TYPED_D1_ACK: `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`.** `remaining_scoped_implementation=0`; `necessary_unmerged_PRs=0`. **Обидва повні батьківські SA-EXT-01 і SA-EXT-16, а також усі SA-EXT-01…20 залишаються OPEN**. Повторно переробляти підпункт лише за новим конкретним дефектом або затвердженою вимогою.

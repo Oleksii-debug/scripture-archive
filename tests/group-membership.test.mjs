@@ -490,3 +490,80 @@ for(const defect of [
     } finally {f.db.close();}
   });
 }
+
+const editableSettings=group=>Object.fromEntries(['name','church','country','city','description','visibility','rosterVisibility'].map(key=>[key,group[key]]));
+
+test('owner edits complete group metadata and privacy without modifying cohort or other members',async()=>{
+  const f=fixture();try {
+    const before=(await f.get()).data.group,expected=editableSettings(before);
+    const settings={name:'  New group  ',church:'Community',country:'Україна',city:'Київ',description:'Line one\nLine two',visibility:'public',rosterVisibility:'names'};
+    for(const user of ['bob','carol','outsider'])assert.equal((await f.post('settings',{expected,settings},user)).status,409);
+    assert.equal((await f.post('settings',{expected,settings},'')).status,401);
+    assert.equal((await f.post('settings',{expected,settings},'alice','https://evil.invalid')).status,403);
+    assert.equal((await f.post('settings',{expected,settings})).status,200);
+    const after=(await f.get()).data.group;assert.deepEqual(editableSettings(after),settings);
+    for(const key of ['inviteCode','weeklyGoal','catchupMode','marathonEnabled','studyRoute','bibleEdition','memberCount','sessionCount'])assert.equal(after[key],before[key],key);
+    assert.equal((await f.get('outsider')).status,200);
+    assert.equal((await f.get('outsider')).data.sessions[0].reflection,null);
+    assert.deepEqual((await f.get('outsider')).data.members,[],'public roster still requires individual name consent');
+    assert.equal((await f.post('settings',{expected:settings,settings:{...settings,visibility:'private'}})).status,200);
+    assert.equal((await f.get('outsider')).status,404);
+    assert.equal((await f.get('bob')).status,200);
+  }finally{f.db.close();}
+});
+
+test('concurrent settings edits and transferred ownership cannot overwrite a newer group',async()=>{
+  const f=fixture();try {
+    const expected=editableSettings((await f.get()).data.group);
+    const responses=await Promise.all(['First','Second'].map(name=>f.post('settings',{expected,settings:{...expected,name}})));
+    assert.deepEqual(responses.map(x=>x.status).sort(),[200,409]);
+    assert.equal((await f.get()).data.group.name,'First');
+    const current=editableSettings((await f.get()).data.group);
+    f.beforeRun(()=>f.db.exec("UPDATE home_groups SET owner_user_id='bob' WHERE id='g'; UPDATE home_group_members SET role=CASE WHEN user_id='bob' THEN 'owner' ELSE 'member' END WHERE group_id='g' AND user_id IN ('alice','bob')"));
+    assert.equal((await f.post('settings',{expected:current,settings:{...current,name:'Stale owner'}})).status,409);
+    assert.equal((await f.get('bob')).data.group.name,'First');
+  }finally{f.db.close();}
+});
+
+test('group settings preserve full text and reject malformed or overlong fields before mutation',async()=>{
+  const f=fixture();try {
+    const expected=editableSettings((await f.get()).data.group);
+    const bad=[null,[],{}, {...expected,weeklyGoal:5}, {...expected,name:' '}, {...expected,visibility:['public']}, {...expected,rosterVisibility:'all'}];
+    for(const [key,max] of [['name',100],['church',160],['country',80],['city',80],['description',600]])
+      for(const value of ['x'.repeat(max+1),false,1,['text'],{}])bad.push({...expected,[key]:value});
+    for(const settings of bad)assert.equal((await f.post('settings',{expected,settings})).status,400,JSON.stringify(settings));
+    assert.equal((await f.post('settings',{expected:{...expected,description:undefined},settings:expected})).status,400);
+    assert.deepEqual(editableSettings((await f.get()).data.group),expected);
+    const boundary={...expected,name:'x'.repeat(100),church:'x'.repeat(160),country:'x'.repeat(80),city:'x'.repeat(80),description:'x'.repeat(599)+'\n'};
+    assert.equal((await f.post('settings',{expected,settings:boundary})).status,200);
+    assert.deepEqual(editableSettings((await f.get()).data.group),boundary);
+  }finally{f.db.close();}
+});
+
+test('settings D1 failures never claim a save and uncertain acknowledgements require fresh readback',async()=>{
+  const f=fixture();try {
+    let expected=editableSettings((await f.get()).data.group);
+    f.beforeRun(()=>{throw Error('storage outage');});
+    assert.equal((await f.post('settings',{expected,settings:{...expected,name:'Not written'}})).status,503);
+    assert.deepEqual(editableSettings((await f.get()).data.group),expected);
+    for(const receipt of ['missing','failed']) {
+      const settings={...expected,name:'Committed but not acknowledged '+receipt};
+      f.setSingleReceiptMode(receipt);assert.equal((await f.post('settings',{expected,settings})).status,503);
+      assert.equal((await f.post('settings',{expected,settings})).status,409,'stale retry cannot claim success');
+      expected=editableSettings((await f.get()).data.group);assert.deepEqual(expected,settings);
+    }
+  }finally{f.db.close();}
+});
+
+test('owner settings have native labelled controls, exact values and escaped descriptions',()=>{
+  const esc=s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
+  const group={name:'<Group>',church:'"Church"',country:null,city:null,description:'</textarea><script>attack</script>',visibility:'private',rosterVisibility:'names'};
+  for(const lang of ['uk','ru','en']) {
+    const html=groupManagementMarkup({membership:'owner',group},lang,esc);
+    assert.ok(html.includes('id="group-settings-form"'));assert.ok(html.includes('role="status"'));
+    assert.ok(html.includes('value="private" selected'));assert.ok(html.includes('value="names" selected'));
+    assert.ok(html.includes('&lt;/textarea&gt;&lt;script&gt;'));assert.ok(!html.includes('<script>'));
+    for(const key of ['name','church','country','city','description','visibility','rosterVisibility'])assert.ok(html.includes(`name="${key}"`));
+    assert.ok(!groupManagementMarkup({membership:'member',group},lang,esc).includes('group-settings-form'));
+  }
+});

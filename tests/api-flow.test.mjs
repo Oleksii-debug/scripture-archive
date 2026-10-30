@@ -493,11 +493,24 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const lifecycleId = result.data.groupId;
   result = await request(`/api/groups?groupId=${lifecycleId}`);
   const lifecycleInvite = result.data.group.inviteCode;
+  const lifecycleSettings=Object.fromEntries(['name','church','country','city','description','visibility','rosterVisibility'].map(key=>[key,result.data.group[key]]));
   assert.match(lifecycleInvite,/^[A-F0-9]{32}$/);
   async function managerGroup(action, body) {
     return fetch(`${base}/api/groups?action=${action}`, {method:'POST',headers:{Cookie:ownerCookie,Origin:base,'Content-Type':'application/json'},body:JSON.stringify(body)});
   }
   assert.equal((await managerGroup('join',{inviteCode:lifecycleInvite})).status,200);
+  const editedSettings={...lifecycleSettings,name:'Updated group',description:'Full description\nSecond line',visibility:'public',city:'Kyiv'};
+  assert.equal((await managerGroup('settings',{groupId:lifecycleId,expected:lifecycleSettings,settings:editedSettings})).status,409);
+  result=await request('/api/groups?action=settings',{method:'POST',body:{groupId:lifecycleId,expected:lifecycleSettings,settings:editedSettings}});
+  assert.equal(result.response.status,200);
+  const visitorSettings=await (await fetch(`${base}/api/groups?groupId=${lifecycleId}`)).json();
+  assert.equal(visitorSettings.group.name,'Updated group');assert.equal(visitorSettings.group.description,editedSettings.description);
+  result=await request('/api/groups?action=settings',{method:'POST',body:{groupId:lifecycleId,expected:lifecycleSettings,settings:editedSettings}});
+  assert.equal(result.response.status,409,'a stale editor cannot overwrite new metadata');
+  result=await request('/api/groups?action=settings',{method:'POST',body:{groupId:lifecycleId,expected:editedSettings,settings:{...editedSettings,visibility:'private'}}});
+  assert.equal(result.response.status,200);
+  assert.equal((await fetch(`${base}/api/groups?groupId=${lifecycleId}`)).status,404);
+
   const memberView = await (await fetch(`${base}/api/groups?groupId=${lifecycleId}`,{headers:{Cookie:ownerCookie}})).json();
   assert.deepEqual(memberView.managementMembers,[]);
   assert.equal((await managerGroup('delete',{groupId:lifecycleId,confirm:true})).status,403);

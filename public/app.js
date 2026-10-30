@@ -3494,6 +3494,46 @@ async function renderGroup(groupId) {
       if (button.isConnected) button.disabled = false;
     }
   }
+  const settingsForm = document.querySelector('#group-settings-form');
+  if (settingsForm) {
+    const keys=['name','church','country','city','description','visibility','rosterVisibility'];
+    const expected=Object.fromEntries(keys.map(key=>[key,group[key]]));
+    const settingsStatus=document.querySelector('#group-settings-status');
+    const save=settingsForm.querySelector('button[type="submit"]');
+    let busy=false;
+    const current=()=>settingsForm.isConnected!==false&&groupPageCurrent(`groups/${groupId}`,principal);
+    settingsForm.onsubmit=async event=>{
+      event.preventDefault();
+      if(busy||!current())return;
+      const form=new FormData(settingsForm),settings=Object.fromEntries(form);
+      for(const key of ['church','country','city','description'])if(settings[key]==='')settings[key]=null;
+      if(expected.visibility!=='public'&&settings.visibility==='public'&&!window.confirm(manageCopy.publishConfirm))return;
+      if(!current())return;
+      busy=true;save.disabled=true;settingsStatus.textContent='';
+      try {
+        const result=await groupRequest('settings','POST',{groupId:group.id,expected,settings});
+        if(!current())return;
+        if(result?.ok!==true)throw Error('unconfirmed');
+        await renderGroup(group.id);
+        if(!groupPageCurrent(`groups/${groupId}`,principal))return;
+        document.querySelector('#group-settings-summary')?.focus({preventScroll:true});
+        announce(manageCopy.settingsSaved);
+      } catch(error) {
+        if(current())settingsStatus.textContent=error.message==='group_settings_changed_or_forbidden'?manageCopy.settingsConflict:manageCopy.settingsUnconfirmed;
+      } finally {
+        busy=false;if(save.isConnected!==false)save.disabled=false;
+      }
+    };
+    document.querySelector('#reload-group-settings').onclick=async()=>{
+      if(busy||!current()||!window.confirm(manageCopy.reloadConfirm)||!current())return;
+      busy=true;
+      try {
+        await renderGroup(group.id);
+        if(groupPageCurrent(`groups/${groupId}`,principal))document.querySelector('#group-settings-summary')?.focus({preventScroll:true});
+      } catch {if(current())settingsStatus.textContent=manageCopy.settingsUnconfirmed;}
+      finally {busy=false;}
+    };
+  }
   const leaveButton = document.querySelector('#leave-group');
   if (leaveButton) leaveButton.onclick = () => {
     if (leaveButton.isConnected!==false && groupPageCurrent(`groups/${groupId}`,principal) && window.confirm(manageCopy.leaveConfirm)) void manageGroup('leave', {}, leaveButton, manageCopy.left);

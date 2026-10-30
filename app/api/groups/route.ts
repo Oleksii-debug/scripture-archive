@@ -40,6 +40,18 @@ function acknowledgedBatch(receipts: unknown, count: number) {
   return Array.isArray(receipts) && receipts.length===count && receipts.every(acknowledgedWrite);
 }
 
+const SETTINGS_KEYS = ['name','church','country','city','description','visibility','rosterVisibility'] as const;
+function groupSettings(value: unknown): Row | null {
+  if(!value || typeof value!=='object' || Array.isArray(value))return null;
+  const row=value as Row;
+  if(Object.keys(row).length!==SETTINGS_KEYS.length || SETTINGS_KEYS.some(key=>!Object.hasOwn(row,key)))return null;
+  if(typeof row.name!=='string' || !row.name.trim() || row.name.length>100)return null;
+  for(const [key,max] of [['church',160],['country',80],['city',80],['description',600]] as const)
+    if(row[key]!==null && (typeof row[key]!=='string' || (row[key] as string).length>max))return null;
+  if(!['public','private'].includes(row.visibility as string) || !['count','names','private'].includes(row.rosterVisibility as string))return null;
+  return row;
+}
+
 async function profile(id: Identity) {
   return env.DB!.prepare("SELECT first_name,last_name FROM profiles WHERE user_id=?").bind(id.userId).first<{ first_name: string; last_name: string }>();
 }
@@ -135,6 +147,21 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null) as Row | null;
   if (!body) return Response.json({ error: "invalid_json" }, { status: 400 });
   const action = new URL(request.url).searchParams.get("action") || "create";
+
+  if (action === "settings") {
+    // Exact values make both the authored text and the conflict check lossless.
+    const next=groupSettings(body.settings), previous=groupSettings(body.expected);
+    const groupId=body.groupId;
+    if(typeof groupId!=='string'||!groupId||groupId.length>80||!next||!previous)
+      return Response.json({error:"invalid_group_settings"},{status:400});
+    const saved=await env.DB.prepare(`UPDATE home_groups SET name=?,church=?,country=?,city=?,description=?,visibility=?,roster_visibility=?,updated_at=CURRENT_TIMESTAMP
+      WHERE id=? AND owner_user_id=? AND EXISTS (SELECT 1 FROM home_group_members WHERE group_id=? AND user_id=? AND role='owner')
+      AND name IS ? AND church IS ? AND country IS ? AND city IS ? AND description IS ? AND visibility IS ? AND roster_visibility IS ?`)
+      .bind(...SETTINGS_KEYS.map(key=>next[key]),groupId,id.userId,groupId,id.userId,...SETTINGS_KEYS.map(key=>previous[key])).run();
+    if(!acknowledgedWrite(saved))return unavailableWrite();
+    if(saved.meta.changes!==1)return Response.json({error:"group_settings_changed_or_forbidden"},{status:409});
+    return Response.json({ok:true},{headers:{"Cache-Control":"no-store, private"}});
+  }
 
   if (action === "rotate-invite") {
     const groupId=clean(body.groupId,80), previous=clean(body.expectedInviteCode,32);

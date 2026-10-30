@@ -3159,7 +3159,17 @@ function renderAttemptResult(result, book, chapter, groupId = "", groupRecorded)
   play("done");
 }
 
+let missionViewEpoch = 0;
+function activeMissionPath() {
+  const active = location.hash.startsWith("#/")
+    ? location.hash.slice(2) : location.pathname.replace(/^\/+/, "");
+  return active.replace(/\/+$/, "");
+}
 async function renderMission(parts = []) {
+  // A prior account's late grading/result response may never render into the
+  // current account, a newer mission load, or a different browser route.
+  const principal = state.user, path = activeMissionPath(), epoch = ++missionViewEpoch;
+  const isCurrent = () => state.user === principal && missionViewEpoch === epoch && activeMissionPath() === path;
   setActiveNav("missions");
   state.currentReader = null;
   const copy = ATTEMPT_COPY[state.lang], attemptId = parts[2] || sessionStorage.getItem("sa.activeAttempt");
@@ -3170,9 +3180,12 @@ async function renderMission(parts = []) {
   let data;
   try {
     data = await attemptRequest("current", "GET", undefined, `attemptId=${encodeURIComponent(attemptId)}`);
+    if (!isCurrent()) return;
     if (data.grading) data = await attemptRequest("finalize", "POST", { attemptId });
+    if (!isCurrent()) return;
   }
   catch (error) {
+    if (!isCurrent()) return;
     if (["attempt_invalidated", "attempt_expired", "attempt_closed"].includes(error.message)) {
       if(sessionStorage.getItem("sa.activeAttempt")===attemptId)sessionStorage.removeItem("sa.activeAttempt");
       renderLockedChapter("GEN", 12); return;
@@ -3191,18 +3204,21 @@ async function renderMission(parts = []) {
   shell(`<div class="section-head"><div><p class="eyebrow">${t("missionTitle")}</p><h1>${copy.prepareTitle}</h1></div><p>${copy.memory}</p></div><div class="mission-shell public"><article class="mission-main"><div class="mission-progress"><span style="width:${Math.round((task.index - 1) * 100 / task.total)}%"></span></div><p><strong>${t("task")} ${task.index} ${t("of")} ${task.total}</strong></p><form id="answer-form"><fieldset class="options"><legend class="question">${esc(task.question)}</legend><p>${task.type === "multi" ? t("selectAll") : t("selectOne")}</p>${options}</fieldset><div class="action-row"><button class="button primary" type="submit">${copy.submit}</button></div><p id="answer-state" role="status"></p></form></article></div>`);
   document.querySelector("#answer-form").onsubmit = async event => {
     event.preventDefault();
+    if (!isCurrent()) return;
     const selected = [...document.querySelectorAll('input[name="answer"]:checked')].map(input => Number(input.value)).sort((a, b) => a - b);
     if (!selected.length) { announce(t("selectOne")); return; }
     const button = event.currentTarget.querySelector("button[type=submit]"), status = document.querySelector("#answer-state");
     button.disabled = true;
     try {
       const response = await attemptRequest("answer", "POST", { attemptId, taskIndex: task.index, selected });
+      if (!isCurrent()) return;
       if (response.completed) {
         sessionStorage.removeItem("sa.activeAttempt");
         attemptChannel?.postMessage({ type: "attempt-completed", attemptId });
         renderAttemptResult(response.result, response.book, response.chapter, response.groupId, response.groupRecorded);
       } else await renderMission(["mission", "attempt", attemptId]);
     } catch (error) {
+      if (!isCurrent()) return;
       if (["attempt_changed", "answer_already_submitted", "attempt_closed"].includes(error.message)) { await renderMission(["mission", "attempt", attemptId]); return; }
       status.textContent = error.message === "attempt_invalidated" ? copy.lockedText : t("errorLoad");
       button.disabled = false;

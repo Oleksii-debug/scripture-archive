@@ -330,6 +330,9 @@ test('SA-EXT-02 persisted history rejects corrupt chapter/source/time/group meta
       ['chapter',-1], ['chapter',1.5], ['chapter','unknown'],
       ['book_id',''], ['book_id','X'.repeat(9)],
       ['completed_at',null], ['completed_at','not-a-date'],
+      ['completed_at','1'],['completed_at','2026-02-31 12:00:00'],
+      ['completed_at','2026-10-30 24:00:00'],
+      ['completed_at','2026-10-30T06:00:00Z'],
       ['group_id',''], ['group_id','G'.repeat(81)], ['group_id',' leading']
     ]) {
       f.db.prepare(`UPDATE mission_attempts SET ${field}=? WHERE id='history-alice'`).run(bad);
@@ -357,6 +360,9 @@ test('SA-EXT-02 grading history refuses malformed pending metadata and recovers 
     const original=f.db.prepare("SELECT started_at,chapter,book_id FROM mission_attempts WHERE id='pending-alice'").get();
     for(const [field,bad] of [
       ['started_at','invalid'], ['started_at',''],
+      ['started_at','1'],['started_at','2026-02-31 12:00:00'],
+      ['started_at','2026-10-30 27:00:00'],
+      ['started_at','2026-10-30 06:00:00Z'],
       ['chapter',-1], ['chapter','not-a-chapter'], ['book_id','']
     ]) {
       f.db.prepare(`UPDATE mission_attempts SET ${field}=? WHERE id='pending-alice'`).run(bad);

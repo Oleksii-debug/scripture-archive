@@ -449,3 +449,37 @@ test("private export preserves valid non-READING mission keys and update time", 
   assert.equal(body.progress[1].updatedAt, "2026-10-30 12:55:00");
   assert.equal(body.progress[1].data.completed, true);
 });
+
+
+test("owner READING export preserves two distinct canonical passages without rewriting metadata", async () => {
+  const rows = standardRows();
+  rows[1].results[0].data = JSON.stringify([
+    {book:"GEN",chapter:1,title:"Буття 1"},
+    {book:"GEN",chapter:2,title:"Буття 2"},
+  ]);
+  const {response,body} = await outcome(fixture({results:rows}));
+  assert.equal(response.status,200);
+  assert.equal(body.progress[0].data.length,2);
+  assert.deepEqual(body.progress[0].data.map(r=>r.chapter),[1,2]);
+  assert.equal(body.progress[0].updatedAt,"2026-10-29");
+});
+
+for(const [name, reading] of [
+  ["duplicate book/chapter with different titles",[
+    {book:"GEN",chapter:1,title:"Genesis"}, {book:"GEN",chapter:1,title:"Genesis chapter 1"}]],
+  ["identical duplicate rows",[
+    {book:"1CO",chapter:2,title:"Paul"}, {book:"1CO",chapter:2,title:"Paul"}]],
+  ["excessive historical receipts", Array.from({length:2001},(_,i)=>({book:"GEN",chapter:i+1,title:"Genesis"}))],
+]){
+  test("owner export rejects "+name+" rather than providing a falsely restorable reading archive", async ()=>{
+    const rows = standardRows();
+    rows[1].results[0].data=JSON.stringify(reading);
+    const f=fixture({results:rows});
+    const {response,body}=await outcome(f);
+    assert.equal(response.status,503);
+    assert.equal(body.error,"export_unavailable");
+    assert.equal(response.headers.get("content-disposition"),null);
+    assert.equal(f.batches,1);
+    assert.equal(f.statements.every(statement=>statement.params[0]==="reader-a"),true);
+  });
+}

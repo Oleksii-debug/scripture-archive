@@ -9,6 +9,10 @@ const helperStart = source.indexOf("function readerChapterNumber(");
 const helperEnd = source.indexOf("\nasync function renderReader(", helperStart);
 assert.ok(helperStart >= 0 && helperEnd > helperStart, "production reader chapter validator exists");
 const helper = source.slice(helperStart, helperEnd);
+const activeStart=source.indexOf("function rememberActiveAttempt(");
+const activeEnd=source.indexOf("async function getSession() {",activeStart);
+assert.ok(activeStart>=0 && activeEnd>activeStart,"canonical assessment session storage helper exists");
+const activeHelpers=source.slice(activeStart,activeEnd);
 
 function harness(reply, loadBook) {
   const events = [];
@@ -25,7 +29,7 @@ function harness(reply, loadBook) {
     shell: html => events.push(["render", html]),
     t: key => key,
   });
-  vm.runInContext(helper + "\n" + reader, context);
+  vm.runInContext(activeHelpers + "\n" + helper + "\n" + reader, context);
   return { context, events, run: () => context.renderReader(["reader", "GEN", "12"]) };
 }
 
@@ -69,7 +73,7 @@ test("locked mission navigation renders in every language without passage metada
   for (const lang of ["uk", "ru", "en"]) {
     let html;
     const context = vm.createContext({ state: { lang }, setActiveNav() {}, getMission: async () => ({ locked: true, taskCount: 5 }), sessionStorage: { getItem: () => "opaque-attempt-id" }, shell: value => { html = value; } });
-    vm.runInContext(copy + missions, context);
+    vm.runInContext(activeHelpers + "\n" + copy + missions, context);
     await context.renderMissions();
     assert.match(html, /href="\/mission\/attempt\/opaque-attempt-id"/);
     assert.doesNotMatch(html, /OT-AB-01|GEN|Abraham|Авраам|Буття|Бытие|Genesis/);

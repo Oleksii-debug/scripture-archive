@@ -10,6 +10,7 @@ function excerpt(first, next) {
   return source.slice(a, b);
 }
 const sourceUnderTest = [
+  excerpt("function rememberActiveAttempt(", "async function getSession() {"),
   excerpt("async function getSession() {", "\nasync function getBook("),
   excerpt("async function syncProgress() {", "\nfunction clearPersonalProgress() {"),
   excerpt("function clearPersonalProgress() {", "\nfunction field("),
@@ -51,6 +52,7 @@ function fixture({ user = { id: "alice" }, prior = null, marker = null,
   };
   const ctx = vm.createContext({
     state, localStorage: storage,
+    sessionStorage: { removeItem() {} },
     fetch: async () => ({ ok: true, json: async () => ({user}) }),
     accountRequest: async (action, method, payload) => {
       apiCalls.push([action,method,payload]);

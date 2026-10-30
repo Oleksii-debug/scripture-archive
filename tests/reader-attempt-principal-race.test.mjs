@@ -9,6 +9,10 @@ const source = readFileSync(new URL("../public/app.js", import.meta.url), "utf8"
 const start = source.indexOf("document.querySelector('#confirm-attempt')?.addEventListener");
 const end = source.indexOf('\n  document.querySelector("#uk-spelling")', start);
 assert.ok(start > 0 && end > start, "canonical reader attempt-start listener remains mounted");
+const activeStart=source.indexOf("function rememberActiveAttempt(");
+const activeEnd=source.indexOf("async function getSession() {",activeStart);
+assert.ok(activeStart>=0 && activeEnd>activeStart,"canonical assessment storage helper must be present");
+const activeHelpers=source.slice(activeStart,activeEnd);
 
 function deferred() {
   let resolve, reject;
@@ -38,7 +42,7 @@ function fixture({ response, groupId = "" } = {}) {
     t: key => key,
   };
   trigger.addEventListener = (_, fn) => { listener = fn; };
-  vm.runInNewContext(source.slice(start, end), context);
+  vm.runInNewContext(activeHelpers+"\n"+source.slice(start, end), context);
   assert.equal(typeof listener, "function");
   return {
     events, state, status, trigger,

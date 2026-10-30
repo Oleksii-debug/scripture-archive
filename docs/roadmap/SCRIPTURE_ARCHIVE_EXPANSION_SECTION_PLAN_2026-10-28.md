@@ -1,3 +1,14 @@
+## 2026-10-30 — SA-EXT-03/14 / MATERIAL_LOCALE_TYPED_BOUNDARY — РОЗРОБКУ ВУЗЬКОЇ ФУНКЦІЇ ЗАКРИТО
+
+**Лише цей конкретний integrity-fix:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`; `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Повні SA-EXT-03/14 та інші SA-EXT-01…20 залишаються OPEN.**
+
+- **Помилка:** канонічний `POST /api/materials` з `String(body.locale)` перетворював JSON-масив `["en"]` на англійську локаль, а будь-яку явно вказану, проте непідтримувану мову `sk`, `en-US` тощо мовчки записував як `uk`. Це змінювало мовну атрибуцію авторського уроку, який надалі проходить редакторську перевірку.
+- **Інтеграція:** [PR #622](https://github.com/Oleksii-debug/scripture-archive/pull/622) **SQUASH MERGED** у `main@dd20becc0f6ce970ebf533bdcc44c3d25469bb20`, `app/api/materials/route.ts` blob `04c3f03660452819ce200c4a6ede28f1a51d5eca`. Введена локаль приймається лише як точний рядок `uk/ru/en`; явно помилкові об'єкти/масиви/невідомі мовні коди дають HTTP 400 **до** D1 UPSERT. Відсутнє/`null`/порожнє стандартне HTML-поле лишається `uk`, приватність і editorial approval не змінюються. Це **не** запуск 82 перекладів і **не** створення недозволеного корпусу.
+- **Перевірки:** `tests/materials-d1-ack.test.mjs` blob `bce642f1914d76f91642dbed86b876371ca8d2d3`, справжній transpiled TS material POST + SQLite: **30 некоректних + 6 чинних/дефолтних сценаріїв** з перевіркою, що невірні локалі не створюють урок і дозволені зберігають точний `locale` та `private`. Exact-head [Actions #41038056499](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41038056499): native Node, TypeScript, lint, source build, Python **PASS**; загальний CI **FAIL** у незалежному disposable Wrangler Worker/D1 restart (див. центральний #297), тому не називати E2E green.
+- **Не завершено:** весь multi-language corpus/rights, повна редакторська функціональність SA-EXT-03/14, live site SHA, фізичний NVDA, owner approval, деплой. Немає неприйнятого релізу або нових сервісів. Координація [#297](https://github.com/Oleksii-debug/scripture-archive/issues/297).
+
+---
+
 ## 2026-10-30 — SA-EXT-16 / HELP_RAW_FIELD_TRUNCATION — РОЗРОБКУ ВУЗЬКОГО ДЕФЕКТУ ЗАКРИТО
 
 **Лише цей дефект:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`; `remaining_scoped_implementation=0`; `necessary_unmerged_PRs=0`. Повний **SA-EXT-16 та всі SA-EXT-01…20 залишаються OPEN**.

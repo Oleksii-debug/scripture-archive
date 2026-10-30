@@ -137,3 +137,16 @@
 - **Інтеграція:** [PR #478](https://github.com/Oleksii-debug/scripture-archive/pull/478) **squash MERGED**; точний перевірений `main` SHA `4b79da7a29aa1843e8e057ae379e692e1019ce6b`. GitHub commit/readback: **рівно два шляхи**, `app/api/help/route.ts` blob `f8341b24030e4630b306e604dd504b9a3f5ed35d` і `tests/help-empty-attachment.test.mjs` blob `7a0bab06094b2bcd4433ab8b46d6d34e56240c59`; PR closed/merged.
 - **Тести:** [exact-head GitHub Actions #41001780118](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41001780118): **897 native Node PASS / 1 SKIP / 0 FAIL**, 9 доданих source-executing позитивних/негативних кейсів; TypeScript, lint (0 errors), build, Python-валідатори PASS. **Загальний CI — RED**: окремий давно відомий Worker/D1 restart HTTP 503 у disposable E2E (21/22 двічі), відкритий [PR #361](https://github.com/Oleksii-debug/scripture-archive/pull/361). Не називати це повним E2E PASS.
 - **Реліз:** не розгорталося; live-SHA, реальна доставка підтримки та фізичне NVDA-приймання не встановлені. Цей scoped дефект не слід заново розробляти без нового конкретного регресійного доказу.
+
+
+---
+
+### SA-EXT-16 / SUPPORT_RECEIPT_TRUTHFUL_UI — scoped terminal, 2026-10-30
+
+**Статус підфункції:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`; залишкових задач реалізації цієї вузької функції — **0**; потрібних незлитих PR — **0**. **Повний SA-EXT-16 і всі SA-EXT-01–20 — OPEN.**
+
+- **Дефект:** після успішного `POST /api/help` вебформа в усіх трьох мовах обіцяла відповідь електронною поштою, ігнорувала підтверджений сервером `requestId` та `mailStatus=delivery_unknown` / `delivery_record_pending`. Збереження звернення не засвідчує фактичної доставки листа.
+- **Функція:** чинний `public/app.js` показує реальний номер збереженого звернення в наявному `role=status` / `aria-live`, повідомляє про невизначену доставку українською, російською та англійською; не оголошує успіх або не очищає форму, коли HTTP 2xx не містить достовірного UUID; виводить номер лише через `textContent`. Звичайний випадок та помилки зберігають наявний маршрут інтерфейсу.
+- **GitHub main:** [PR #480](https://github.com/Oleksii-debug/scripture-archive/pull/480) **squash MERGED** у `main@4a639cc81e377a5aa4429d877b8643cdcbaf920d`, рівно два шляхи: `public/app.js` (blob `14fb5c0e4470f7cc5a6e302412cafb32d7a0f780`), `tests/help-receipt-ui.test.mjs` (blob `545a7f8763c73b00a8880fa19dd8bbfd505b6e5a`); окремо перевірено `main`, `PR.merged` та обидва файли.
+- **Тести:** [точний PR-head GitHub Actions #41002420320](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41002420320): **917 native Node PASS, 1 SKIP, 0 FAIL**, включно з 20 тестами живого рендера трьома мовами; TypeScript, lint (0 errors), source build, Python-валідатори PASS. **Загальний CI — RED** через відомий нестабільний Worker/D1 HTTP503 restart (21/22 двічі), окрема чинна [#361](https://github.com/Oleksii-debug/scripture-archive/pull/361). Це не E2E PASS.
+- **Межі:** реальна доставка пошти, production-реліз/SHA, Windows/NVDA не підтверджені. Повторна розробка цього конкретного коду допускається лише за новим дефектом; відкриті майбутні функції батьківського розділу не терміналізовано.

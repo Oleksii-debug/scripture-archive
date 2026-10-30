@@ -2826,7 +2826,7 @@ async function mountReaderBookmarks(meta, chapter, edition, books) {
     // attributes. Descriptions are untrusted legacy database text.
     const recoverable = Array.isArray(data.invalid_bookmarks)
       ? data.invalid_bookmarks.filter(entry => typeof entry?.reference === "string"
-        && /^[1-9][0-9]{0,15}\\.[0-9a-f]{64}$/.test(entry.reference)
+        && /^[1-9][0-9]{0,15}\.[0-9a-f]{64}$/.test(entry.reference)
         && typeof entry.description === "string" && entry.description.length <= 256) : [];
     const recoveryMarkup = recoverable.length ? `<section aria-label="${copy.recoveryTitle}"><h3>${copy.recoveryTitle}</h3><ul>${recoverable.map((entry, index) => `<li><span>${esc(entry.description)}</span> <button class="button" type="button" data-recovery-index="${index}">${copy.recoveryAction}</button></li>`).join("")}</ul></section>` : "";
     panel.innerHTML = `<h2>${copy.title}</h2>${data.warning === "partial_bookmarks" ? `<p role="alert">${copy.partial}</p>` : ""}<button class="button" type="button" id="toggle-bookmark" aria-pressed="${saved}">${saved ? copy.remove : copy.save}</button><p role="status" id="bookmark-status" aria-live="polite"></p>${items.length ? `<ul>${items.map(item => { const book = books.find(value => value.code === item.book); return `<li><a href="/reader/${encodeURIComponent(item.book)}/${item.chapter}">${esc(bookTitle(book))} ${item.chapter}</a></li>`; }).join("")}</ul>` : `<p>${data.warning === "partial_bookmarks" ? "" : copy.empty}</p>`}${recoveryMarkup}`;
@@ -2835,7 +2835,7 @@ async function mountReaderBookmarks(meta, chapter, edition, books) {
       const entry = recoverable[index];
       if (!entry) return;
       button.addEventListener("click", async () => {
-        if (!isCurrent() || globalThis.confirm?.(copy.recoveryConfirm + "\\n" + entry.description) !== true || !isCurrent()) return;
+        if (!isCurrent() || globalThis.confirm?.(copy.recoveryConfirm + "\n" + entry.description) !== true || !isCurrent()) return;
         button.disabled = true;
         try {
           const response = await fetch("/api/bookmarks", {

@@ -138,3 +138,30 @@ test('new Joseph, Bethlehem and birth dossiers are independently navigable with 
     }
   }
 });
+
+test('Ruth, Paul, Mary and Peter have localized source-linked dossiers in the real catalogue',()=>{
+  const expected={
+    ruth:['RUT/1?verse=1','RUT/1?verse=16','RUT/4?verse=13','RUT/1?verse=19'],
+    paul:['ACT/9?verse=1','ACT/22?verse=6','GAL/1?verse=11','1CO/10?verse=1'],
+    'mary-mother':['LUK/1?verse=26','LUK/2?verse=1','ACT/1?verse=12'],
+    peter:['MAT/16?verse=13','LUK/22?verse=54','ACT/2?verse=14'],
+  };
+  for(const lang of ['uk','ru','en']){
+    for(const [id,links] of Object.entries(expected)){
+      const item=scriptureDossiers.find(node=>node.id===id);
+      assert.ok(item,'distinct stable ID for '+id);
+      assert.equal(item.type,'person');
+      assert.ok(item.summaries[lang]?.length>30,lang+' '+id);
+      assert.equal(item.prompts[lang]?.length,2,lang+' '+id);
+      const markup=dossierMarkup(catalog,lang,id,esc);
+      assert.ok(markup.includes(esc(item.names[lang])),lang+' '+id);
+      assert.match(markup,/aria-current="page"/);
+      assert.match(markup,/aria-labelledby="dossier-heading"/);
+      for(const link of links)
+        assert.ok(markup.includes('href="/reader/'+link+'"'),lang+' '+id+' '+link);
+      assert.doesNotMatch(markup,/<iframe|onclick=/);
+    }
+  }
+  assert.notEqual(scriptureDossiers.find(node=>node.id==='mary-mother')?.id, 'mary-magdalene',
+    'Mary the mother is not silently identified as a different person');
+});

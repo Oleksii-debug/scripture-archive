@@ -85,7 +85,7 @@ test('completed original-account submission must not refresh or announce after a
   const s = setup();
   try {
     const gate = deferred();
-    s.setFetch(() => s.countedFetch().then(() => gate.promise));
+    s.setFetch(async () => { const response = s.countedFetch(); await gate.promise; return response; });
     const action = s.submission.onsubmit({preventDefault() {}});
     assert.equal(s.posts(), 1);
     s.setCurrent(false);

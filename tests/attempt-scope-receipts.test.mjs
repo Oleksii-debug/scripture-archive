@@ -96,45 +96,49 @@ test("consumed receipts cannot authorize another attempt; newest valid receipt w
   } finally { f.db.close(); }
 });
 
-test("production chapter-open SQL invalidates all matching contexts, but never another actor or chapter", () => {
-  const f = openDatabase();
-  try {
-    samples(f);
-    for (const [id, actor, book, chapter, group, status, expiry] of [
-      ["personal", "alice", "GEN", 12, null],
-      ["group-one", "alice", "GEN", 12, "group-one"],
-      ["group-two", "alice", "GEN", 12, "group-two"],
-      ["other-actor", "bob", "GEN", 12, "group-one"],
-      ["other-book", "alice", "EXO", 12, "group-one"],
-      ["other-chapter", "alice", "GEN", 13, "group-one"],
-      ["completed", "alice", "GEN", 12, "group-one", "completed"],
-      ["expired", "alice", "GEN", 12, "group-one", "active", "2000-01-01"],
-    ]) f.addAttempt(id, actor, book, chapter, group, status, expiry);
-    f.db.exec("BEGIN");
+test("production chapter-open SQL fences only the matching personal or group context", () => {
+  for (const context of ["", "group-one", "group-two"]) {
+    const f = openDatabase();
     try {
-      const first = f.db.prepare(chapterUpdates[0]).run("alice", "GEN", 12);
-      const second = f.db.prepare(chapterUpdates[1]).run("alice", "GEN", 12);
-      assert.equal(Number(first.changes), 3);
-      assert.equal(Number(second.changes), 3);
-      f.db.exec("COMMIT");
-    } catch (error) { f.db.exec("ROLLBACK"); throw error; }
-    for (const id of ["personal", "group-one", "group-two"]) {
-      assert.equal(f.db.prepare("SELECT status FROM mission_attempts WHERE id=?").get(id).status, "invalidated");
-      assert.ok(f.db.prepare("SELECT invalidated_at FROM mission_attempts WHERE id=?").get(id).invalidated_at);
-    }
-    for (const id of ["other-actor", "other-book", "other-chapter", "expired"]) {
-      assert.equal(f.db.prepare("SELECT status FROM mission_attempts WHERE id=?").get(id).status, "active");
-    }
-    assert.equal(f.db.prepare("SELECT status FROM mission_attempts WHERE id='completed'").get().status, "completed");
-    for (const id of ["a-personal", "a-group-1", "a-group-2"]) {
-      assert.ok(f.db.prepare("SELECT consumed_at FROM chapter_read_receipts WHERE id=?").get(id).consumed_at);
-    }
-    for (const id of ["other-actor", "other-chapter", "other-book"]) {
-      assert.equal(f.db.prepare("SELECT consumed_at FROM chapter_read_receipts WHERE id=?").get(id).consumed_at, null);
-    }
-  } finally { f.db.close(); }
+      samples(f);
+      for (const [id, actor, book, chapter, group, status, expiry] of [
+        ["personal", "alice", "GEN", 12, null],
+        ["group-one", "alice", "GEN", 12, "group-one"],
+        ["group-two", "alice", "GEN", 12, "group-two"],
+        ["other-actor", "bob", "GEN", 12, "group-one"],
+        ["other-book", "alice", "EXO", 12, "group-one"],
+        ["other-chapter", "alice", "GEN", 13, "group-one"],
+        ["completed", "alice", "GEN", 12, "group-one", "completed"],
+        ["expired", "alice", "GEN", 12, "group-one", "active", "2000-01-01"],
+      ]) f.addAttempt(id, actor, book, chapter, group, status, expiry);
+      f.db.exec("BEGIN");
+      try {
+        const first = f.db.prepare(chapterUpdates[0]).run("alice", "GEN", 12, context);
+        const second = f.db.prepare(chapterUpdates[1]).run("alice", "GEN", 12, context);
+        assert.equal(Number(first.changes), 1);
+        assert.equal(Number(second.changes), 1);
+        f.db.exec("COMMIT");
+      } catch (error) { f.db.exec("ROLLBACK"); throw error; }
+      const target = context || "personal";
+      for (const id of ["personal", "group-one", "group-two"]) {
+        const row = f.db.prepare("SELECT status,invalidated_at FROM mission_attempts WHERE id=?").get(id);
+        assert.equal(row.status, id === target ? "invalidated" : "active", context + ": " + id);
+        assert.equal(Boolean(row.invalidated_at), id === target, context + ": " + id);
+      }
+      for (const id of ["other-actor", "other-book", "other-chapter", "expired"]) {
+        assert.equal(f.db.prepare("SELECT status FROM mission_attempts WHERE id=?").get(id).status, "active");
+      }
+      assert.equal(f.db.prepare("SELECT status FROM mission_attempts WHERE id='completed'").get().status, "completed");
+      for (const [id, group] of [["a-personal", ""], ["a-group-1", "group-one"], ["a-group-2", "group-two"]]) {
+        const consumed = f.db.prepare("SELECT consumed_at FROM chapter_read_receipts WHERE id=?").get(id).consumed_at;
+        assert.equal(Boolean(consumed), group === context, context + ": " + id);
+      }
+      for (const id of ["other-actor", "other-chapter", "other-book"]) {
+        assert.equal(f.db.prepare("SELECT consumed_at FROM chapter_read_receipts WHERE id=?").get(id).consumed_at, null);
+      }
+    } finally { f.db.close(); }
+  }
 });
-
 for (const journal of ["DELETE", "WAL"]) {
   test(`scope and consumption survive a real SQLite close/reopen (${journal})`, async () => {
     const directory = await mkdtemp(join(tmpdir(), "scripture-scope-"));

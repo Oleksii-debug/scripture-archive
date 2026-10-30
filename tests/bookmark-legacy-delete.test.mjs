@@ -1,3 +1,4 @@
+import { validBookmarkTimestamp } from "../lib/bookmark-timestamp.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -32,6 +33,7 @@ function fixture({ identity = { userId: "reader", provider: "password" },
   vm.runInNewContext(compiled.outputText, {
     exports, Request, Response,
     require(name) {
+      if (name.endsWith("lib/bookmark-timestamp.js")) return { validBookmarkTimestamp };
       if (name === "cloudflare:workers") return { env: { DB: database } };
       if (name.endsWith("/public/data/catalog.json")) return { default: catalog };
       if (name.endsWith("/public/editions.js")) return { EDITIONS };

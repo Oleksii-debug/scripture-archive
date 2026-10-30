@@ -288,7 +288,7 @@ export async function POST(request: Request) {
       // A SQL COUNT query must return one well-formed, nonnegative integer.
       // Missing/corrupt D1 read evidence is not an empty marathon week:
       // treating it as zero silently unlocks an extra group session.
-      if (!Number.isSafeInteger(used?.count) || used.count < 0)
+      if (!used || !Number.isSafeInteger(used.count) || used.count < 0)
         return unavailableWrite();
       if (!repeated && used.count >= allowed) return Response.json({error:"weekly_limit_reached"},{status:409});
     }

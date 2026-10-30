@@ -99,6 +99,11 @@ export async function POST(request: Request) {
     return Response.json({error:"editorial_review_required"}, {status:409});
   }
   const visibility = "private";
+  // The identifier is an ownership key. Truncating an explicit long ID could
+  // silently turn it into another saved draft's existing ID and overwrite it.
+  // Empty or omitted IDs remain the existing create-new-draft flow.
+  if (body.id != null && (typeof body.id !== "string" || body.id.trim().length > 80))
+    return Response.json({ error: "invalid_material" }, { status: 400 });
   const id = clean(body.id, 80) || crypto.randomUUID();
   // The preflight is not authoritative for ownership (the UPSERT still checks
   // it atomically), but a failed D1 read must never escape as an uncaught 500.

@@ -343,3 +343,24 @@ test("private author view still includes the complete authored draft",async()=>{
     assert.equal(result.body.materials[0].data.explanation,valid.explanation);
   }finally{f.db.close();}
 });
+
+
+test("explicit oversized or malformed draft IDs cannot alias a shorter owned draft", async()=>{
+  const f=fixture();try {
+    const existingId="i".repeat(80);
+    assert.equal((await f.post({...valid,id:existingId,title:"Original private draft"})).status,201);
+    for(const id of [existingId+"suffix", existingId+"  z", 42, true, [], {}, ["other-id"]]){
+      const response=await f.post({...valid,id,title:"Alias overwrite"});
+      assert.equal(response.status,400,JSON.stringify(id));
+      assert.equal(response.body.error,"invalid_material");
+      assert.equal(f.db.prepare("SELECT title FROM study_materials WHERE id=?").get(existingId).title,"Original private draft");
+      assert.equal(f.db.prepare("SELECT count(*) n FROM study_materials").get().n,1);
+    }
+    // Preserve regular update, new-draft UUID generation and a trim-safe ID.
+    assert.equal((await f.post({...valid,id:existingId,title:"Intended update"})).status,200);
+    assert.equal(f.db.prepare("SELECT title FROM study_materials WHERE id=?").get(existingId).title,"Intended update");
+    assert.equal((await f.post({...valid,id:"   "})).status,201);
+    assert.equal(f.db.prepare("SELECT count(*) n FROM study_materials").get().n,2);
+    assert.equal((await f.post({...valid,id:"  fresh-id  "})).body.id,"fresh-id");
+  }finally{f.db.close();}
+});

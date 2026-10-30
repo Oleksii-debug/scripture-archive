@@ -83,7 +83,12 @@ export async function POST(request: Request) {
   if (!body) return Response.json({ error: "invalid_json" }, { status: 400 });
   const title = clean(body.title, 160), prompt = clean(body.prompt, 3000), reference = clean(body.reference, 200),
     explanation = clean(body.explanation, 2000), answer = clean(body.answer, 500),
-    options = Array.isArray(body.options) ? body.options.slice(0, 8).map(v => clean(v, 500)).filter(Boolean) : [];
+    // Do not silently drop malformed choices or truncate excess answers.
+    // Doing so changes the authored choice set while still reporting a saved
+    // canonical exercise and can misalign the editor's intended answer.
+    options = Array.isArray(body.options) && body.options.length >= 2 && body.options.length <= 8 &&
+      body.options.every(value => typeof value === "string" && value.trim().length > 0 && value.length <= 500)
+      ? body.options.map(value => value.trim()) : [];
   if (title.length < 3 || prompt.length < 8 || reference.length < 3 || !answer || explanation.length < 8 || options.length < 2 || new Set(options).size !== options.length || !options.includes(answer))
     return Response.json({ error: "invalid_material" }, { status: 400 });
   const locale = ["uk", "ru", "en"].includes(String(body.locale)) ? String(body.locale) : "uk";

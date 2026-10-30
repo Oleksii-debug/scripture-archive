@@ -187,3 +187,20 @@ test('unknown explicit dossier deep links fail visibly in all locales without fa
   assert.match(dossierMarkup(catalog,'uk',null,esc),/Авраам/,
     'a missing selection still opens the established default introduction');
 });
+
+test('explicit empty dossier query is invalid; only an absent query opens the default introduction',()=>{
+  assert.equal(new URLSearchParams('?id=').get('id'),'');
+  assert.equal(new URLSearchParams('').get('id'),null);
+  for(const lang of ['uk','ru','en']){
+    const unknown=dossierMarkup(catalog,lang,'',esc);
+    assert.match(unknown,/role="alert"/,'empty explicit ID must show a localized error');
+    assert.ok(unknown.includes('href="/dossiers?id=abraham"'),'keep genuine keyboard navigation for recovery');
+    assert.doesNotMatch(unknown,/id="dossier-heading"/,'must not attribute Abraham dossier to the empty ID');
+    assert.doesNotMatch(unknown,/href="\\/reader\\//,'must not borrow citations from any dossier');
+    assert.doesNotMatch(unknown,/aria-current="page"/,'invalid selection cannot be current');
+    assert.doesNotMatch(unknown,/href="\\/mission\\/abraham"/,'unknown ID cannot launch Abraham mission');
+    const introduction=dossierMarkup(catalog,lang,null,esc);
+    assert.match(introduction,/id="dossier-heading"/,'missing query still selects default introduction');
+  }
+  assert.match(dossierMarkup(catalog,'en',undefined,esc),/id="dossier-heading"/);
+});

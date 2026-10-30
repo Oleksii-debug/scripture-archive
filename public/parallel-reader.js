@@ -1,7 +1,7 @@
 const COPY = {
-  uk: { title:'Порівняти видання', choose:'Друге видання', open:'Показати другу версію глави', loading:'Завантаження…', ready:'Другу версію глави завантажено нижче.', fail:'Не вдалося завантажити другу версію. Спробуйте ще раз.', changed:'Вибране видання змінилося. Натисніть кнопку ще раз, щоб порівняти його.', unavailable:'У цьому виданні такої глави немає.', note:'Нумерація віршів у виданнях може відрізнятися. Тексти наведено окремо.', source:'Джерело', license:'Умови використання' },
-  ru: { title:'Сравнить издания', choose:'Второе издание', open:'Показать вторую версию главы', loading:'Загрузка…', ready:'Вторая версия главы загружена ниже.', fail:'Не удалось загрузить вторую версию. Попробуйте ещё раз.', changed:'Выбранное издание изменилось. Нажмите кнопку ещё раз, чтобы сравнить его.', unavailable:'В этом издании такой главы нет.', note:'Нумерация стихов в изданиях может отличаться. Тексты приведены отдельно.', source:'Источник', license:'Условия использования' },
-  en: { title:'Compare editions', choose:'Second edition', open:'Show the second chapter text', loading:'Loading…', ready:'The second chapter text is available below.', fail:'Could not load the second text. Please try again.', changed:'The selected edition changed. Submit again to compare the current selection.', unavailable:'This chapter is not available in that edition.', note:'Verse numbering may differ between editions. The texts are presented separately.', source:'Source', license:'Terms of use' },
+  uk: { title:'Порівняти видання', choose:'Друге видання', open:'Показати другу версію глави', loading:'Завантаження…', ready:'Другу версію глави завантажено нижче.', fail:'Не вдалося завантажити другу версію. Спробуйте ще раз.', changed:'Вибране видання змінилося. Натисніть кнопку ще раз, щоб порівняти його.', unavailable:'У цьому виданні такої глави немає.', note:'Нумерація віршів у виданнях може відрізнятися. Тексти наведено окремо.', source:'Джерело', license:'Умови використання', cite:'Цитувати вірш', cited:'Цитату з джерелом скопійовано.', citeFail:'Не вдалося скопіювати цитату.' },
+  ru: { title:'Сравнить издания', choose:'Второе издание', open:'Показать вторую версию главы', loading:'Загрузка…', ready:'Вторая версия главы загружена ниже.', fail:'Не удалось загрузить вторую версию. Попробуйте ещё раз.', changed:'Выбранное издание изменилось. Нажмите кнопку ещё раз, чтобы сравнить его.', unavailable:'В этом издании такой главы нет.', note:'Нумерация стихов в изданиях может отличаться. Тексты приведены отдельно.', source:'Источник', license:'Условия использования', cite:'Цитировать стих', cited:'Цитата с источником скопирована.', citeFail:'Не удалось скопировать цитату.' },
+  en: { title:'Compare editions', choose:'Second edition', open:'Show the second chapter text', loading:'Loading…', ready:'The second chapter text is available below.', fail:'Could not load the second text. Please try again.', changed:'The selected edition changed. Submit again to compare the current selection.', unavailable:'This chapter is not available in that edition.', note:'Verse numbering may differ between editions. The texts are presented separately.', source:'Source', license:'Terms of use', cite:'Cite verse', cited:'Verse and source copied.', citeFail:'Could not copy the citation.' },
 };
 const https = value => { try { const url = new URL(value); return url.protocol === 'https:' && !url.username && !url.password ? url.href : ''; } catch { return ''; } };
 
@@ -12,7 +12,7 @@ export function parallelControls(editions, lang, esc) {
 
 // The same chapter guard as the reader runs again before loading another text.
 // Detached panels and a changed reader context cannot be repopulated by a late response.
-export function mountParallelReader(panel, { editions, catalog, lang, book, bookTitle, chapter, getBook, check, current, lock, failClosed, esc }) {
+export function mountParallelReader(panel, { editions, catalog, lang, book, bookTitle, chapter, getBook, check, current, lock, failClosed, esc, copyText = text => navigator.clipboard.writeText(text) }) {
   const copy = COPY[lang] || COPY.uk;
   const form=panel.querySelector('.parallel-form'), status=panel.querySelector('.parallel-status'), result=panel.querySelector('.parallel-result');
   let selectionRevision = 0;
@@ -24,6 +24,7 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
     result.replaceChildren();
     status.textContent = copy.changed;
   };
+  let citation = null;
   form.onsubmit=async event=>{
     event.preventDefault();
     const button=form.querySelector('button'), id=String(new FormData(form).get('edition') || ''), edition=editions.find(item=>item.id===id && item.local);
@@ -36,7 +37,7 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
     // nobody has focused another control in the meantime.
     const hadSubmitFocus = typeof document !== 'undefined' &&
       document.activeElement === button;
-    button.disabled=true; status.textContent=copy.loading; result.replaceChildren();
+    button.disabled=true; status.textContent=copy.loading; citation=null; result.replaceChildren();
     try {
       let guard;
       try { guard=await check(book,chapter); }
@@ -84,7 +85,8 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
           || !source || (metadata.licenseUrl!=null && !license)) {
         throw Error('missing or unsafe edition provenance');
       }
-      result.innerHTML=`<section aria-labelledby="parallel-title"><h3 id="parallel-title">${esc(metadata.title)} — ${esc(bookTitle)} ${chapter}</h3><p>${copy.note}</p><p>${copy.license}: ${esc(metadata.license || '—')}</p>${metadata.attribution?`<p>${esc(metadata.attribution)}</p>`:''}${source?`<p><a href="${esc(source)}" target="_blank" rel="noreferrer">${copy.source}</a></p>`:''}${license?`<p><a href="${esc(license)}" target="_blank" rel="noreferrer">${copy.license}</a></p>`:''}<ol>${verses.map(verse=>`<li>${esc(verse)}</li>`).join('')}</ol></section>`;
+      result.innerHTML=`<section aria-labelledby="parallel-title"><h3 id="parallel-title">${esc(metadata.title)} — ${esc(bookTitle)} ${chapter}</h3><p>${copy.note}</p><p>${copy.license}: ${esc(metadata.license || '—')}</p>${metadata.attribution?`<p>${esc(metadata.attribution)}</p>`:''}${source?`<p><a href="${esc(source)}" target="_blank" rel="noreferrer">${copy.source}</a></p>`:''}${license?`<p><a href="${esc(license)}" target="_blank" rel="noreferrer">${copy.license}</a></p>`:''}<ol>${verses.map((verse,index)=>`<li><span>${esc(verse)}</span> <button type="button" class="parallel-cite" data-parallel-cite="${index+1}" aria-label="${esc(copy.cite)}: ${esc(bookTitle)} ${chapter}:${index+1}">${esc(copy.cite)}</button></li>`).join('')}</ol></section>`;
+      citation={ editionId:id, title:metadata.title, license:metadata.license, attribution:typeof metadata.attribution==='string'?metadata.attribution:'', source, licenseUrl:license, verses:verses.slice() };
       status.textContent=copy.ready;
     } catch { if (panel.isConnected && current()) status.textContent=selectionCurrent() ? copy.fail : copy.changed; }
     finally {
@@ -94,6 +96,38 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
         try { if (current()) button.focus({preventScroll:true}); }
         catch { /* A torn-down reader must never steal focus on recovery. */ }
       }
+    }
+  };
+  // Copy only the validated *second* edition's verses and their own rights
+  // metadata; never borrow the primary edition's license or source.
+  result.onclick=async event => {
+    const button=event.target?.closest?.('button[data-parallel-cite]');
+    if (!button || !citation || button.disabled || !panel.isConnected || !current()) return;
+    const record=citation, raw=button.dataset.parallelCite;
+    if (!/^[1-9][0-9]*$/.test(raw || '')) return;
+    const verseNumber=Number(raw);
+    if (!Number.isSafeInteger(verseNumber) || verseNumber>record.verses.length) return;
+    const selected=()=>String(new FormData(form).get('edition') || '')===record.editionId;
+    if (!selected()) { status.textContent=copy.changed; return; }
+    // Recheck active assessments immediately before a clipboard disclosure.
+    let guard;
+    try { guard=await check(book,chapter); }
+    catch { if (panel.isConnected && current()) failClosed(); return; }
+    if (!panel.isConnected || !current() || citation!==record || !selected()) return;
+    if (!guard || typeof guard.invalidated!=='boolean') { failClosed(); return; }
+    if (guard.invalidated) { lock(); return; }
+    const citationText=[
+      `${bookTitle} ${chapter}:${verseNumber}. ${record.verses[verseNumber-1]}`,
+      `${record.title} · ${record.license}`,
+      record.attribution, record.source, record.licenseUrl,
+    ].filter(Boolean).join('\n');
+    try {
+      await copyText(citationText);
+      if (panel.isConnected && current() && citation===record && selected())
+        status.textContent=copy.cited;
+    } catch {
+      if (panel.isConnected && current() && citation===record && selected())
+        status.textContent=copy.citeFail;
     }
   };
 }

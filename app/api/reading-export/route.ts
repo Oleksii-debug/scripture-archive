@@ -63,6 +63,19 @@ export async function GET(request: Request) {
       return { mission: row.mission_id, data, updatedAt: row.updated_at };
     });
     const attemptHistory = (attempts.results as Array<{id:string;mission_id:string;book_id:string;chapter:number;group_id:string|null;locale:string;started_at:string;completed_at:string;result_json:string}>).map(row => {
+      // A saved export is not restorable when D1 returns a malformed completed
+      // attempt identity/passage. Reuse the same authoritative chapter catalogue
+      // as private READING receipts, including local edition chapter variants.
+      if (!row || typeof row.id !== "string" || !row.id.trim() ||
+          typeof row.mission_id !== "string" || !row.mission_id.trim() ||
+          typeof row.book_id !== "string" || !READING_CHAPTERS.has(row.book_id) ||
+          !Number.isSafeInteger(row.chapter) || row.chapter < 1 ||
+          row.chapter > (READING_CHAPTERS.get(row.book_id) ?? 0) ||
+          !["uk", "ru", "en"].includes(row.locale) ||
+          (row.group_id !== null && (typeof row.group_id !== "string" || !row.group_id.trim())) ||
+          typeof row.started_at !== "string" || !row.started_at.trim() ||
+          typeof row.completed_at !== "string" || !row.completed_at.trim())
+        throw Error("invalid_attempt_metadata");
       if (typeof row.result_json !== "string") throw Error("invalid_attempt_result");
       const result = JSON.parse(row.result_json);
       if (!result || typeof result !== "object" || Array.isArray(result)) throw Error("invalid_attempt_result");

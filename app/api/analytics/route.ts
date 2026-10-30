@@ -9,6 +9,7 @@ const VALUE_KEYS = new Set(["destination", "error", "language", "method", "mode"
 const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const clean = (value: unknown, max: number) => typeof value === "string" ? value.trim().slice(0, max) : "";
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
+const unavailable = () => Response.json({ error: "analytics_unavailable" }, { status: 503, headers: { "Cache-Control": "no-store, private" } });
 
 function clientDimensions(request: Request) {
   const ua = request.headers.get("user-agent") || "";
@@ -31,12 +32,18 @@ function safeValue(value: unknown) {
 export async function POST(request: Request) {
   if (!env.DB) return json({ error: "database_unavailable" }, 503);
   if (!sameOrigin(request)) return json({ error: "cross_origin_request" }, 403);
-  if (!await rateLimit(`analytics:${requestAddress(request)}`, 1500, 3600)) return json({ error: "too_many_requests" }, 429);
+  let allowed: boolean;
+  try { allowed = await rateLimit(`analytics:${requestAddress(request)}`, 1500, 3600); }
+  catch { return unavailable(); }
+  if (!allowed) return json({ error: "too_many_requests" }, 429);
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   const sessionId = clean(body?.sessionId, 36), action = clean(body?.action, 20);
   if (!body || !SESSION_ID.test(sessionId) || !["event", "heartbeat"].includes(action)) return json({ error: "invalid_analytics" }, 400);
 
-  const identity = await authenticateRequest(request), dimensions = clientDimensions(request);
+  let identity: Awaited<ReturnType<typeof authenticateRequest>>;
+  try { identity = await authenticateRequest(request); }
+  catch { return unavailable(); }
+  const dimensions = clientDimensions(request);
   const pageName = clean(body.pageName, 40).replace(/[^a-z0-9_-]/gi, "") || "home";
   const source = ["direct", "organic", "social", "referral", "campaign"].includes(clean(body.source, 20)) ? clean(body.source, 20) : "direct";
   const activeSeconds = action === "heartbeat" ? Math.min(60, Math.max(0, Math.round(Number(body.activeSeconds) || 0))) : 0;
@@ -44,6 +51,7 @@ export async function POST(request: Request) {
   if (action === "event" && !EVENTS.has(eventType)) return json({ error: "invalid_event" }, 400);
   const pageViews = action === "event" && eventType === "page_view" ? 1 : 0;
 
+  try {
   const statements = [env.DB.prepare(`INSERT INTO usage_sessions
       (session_id,user_id,active_seconds,page_views,country,city,device,operating_system,browser,source)
       VALUES (?,?,?,?,?,?,?,?,?,?)
@@ -56,16 +64,24 @@ export async function POST(request: Request) {
   if (action === "event") statements.push(env.DB.prepare(
     "INSERT INTO usage_events (id,session_id,user_id,event_type,page_name,value_json) VALUES (?,?,?,?,?,?)",
   ).bind(crypto.randomUUID(), sessionId, identity?.userId || null, eventType, pageName, JSON.stringify(safeValue(body.value))));
-  await env.DB.batch(statements);
+  const saved = await env.DB.batch(statements);
+  // An HTTP 202 must follow an acknowledged D1 write, not a resolved promise.
+  if (!Array.isArray(saved) || saved.length !== statements.length ||
+      saved.some(row => row?.success !== true || !Number.isSafeInteger(row?.meta?.changes) || row.meta.changes !== 1))
+    return unavailable();
   return json({ ok: true }, 202);
+  } catch { return unavailable(); }
 }
 
 export async function GET(request: Request) {
   if (!env.DB) return json({ error: "database_unavailable" }, 503);
-  const identity = await authenticateRequest(request);
+  let identity: Awaited<ReturnType<typeof authenticateRequest>>;
+  try { identity = await authenticateRequest(request); }
+  catch { return unavailable(); }
   if (!isVerifiedOwner(identity)) return json({ error: "forbidden" }, 403);
   const requested = Number(new URL(request.url).searchParams.get("days")), days = [7, 30, 90].includes(requested) ? requested : 30;
   const since = `-${days - 1} days`;
+  try {
   const [accounts, summary, daily, countries, devices, browsers, pages, events, recentUsers] = await env.DB.batch([
     env.DB.prepare("SELECT COUNT(*) total, SUM(CASE WHEN email_verified_at IS NOT NULL THEN 1 ELSE 0 END) verified, SUM(CASE WHEN created_at>=datetime('now',?) THEN 1 ELSE 0 END) new_accounts FROM accounts WHERE deleted_at IS NULL").bind(since),
     env.DB.prepare("SELECT COUNT(*) sessions,COUNT(DISTINCT user_id) signed_in_users,COALESCE(SUM(page_views),0) page_views,COALESCE(SUM(active_seconds),0) active_seconds FROM usage_sessions WHERE started_at>=datetime('now',?)").bind(since),
@@ -81,6 +97,9 @@ export async function GET(request: Request) {
       FROM accounts a LEFT JOIN usage_sessions s ON s.user_id=a.id
       WHERE a.deleted_at IS NULL GROUP BY a.id ORDER BY a.created_at DESC LIMIT 100`),
   ]);
+  if (![accounts, summary, daily, countries, devices, browsers, pages, events, recentUsers]
+      .every(row => row?.success === true && Array.isArray(row.results))) return unavailable();
   const community = await ownerCommunityState();
   return json({ days, accounts: accounts.results[0] || {}, summary: summary.results[0] || {}, daily: daily.results, countries: countries.results, devices: devices.results, browsers: browsers.results, pages: pages.results, events: events.results, recentUsers: recentUsers.results, community });
+  } catch { return unavailable(); }
 }

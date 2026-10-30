@@ -182,6 +182,15 @@ export async function renderWorkspace(name,c) {
     let editing=null;
     const refreshBuilder=()=>stillCurrent()?renderWorkspace('builder',c):Promise.resolve();
     const announceBuilder=message=>{if(samePrincipalRoute())c.announce(message);};
+    // The next builder render invalidates this one's epoch. Save the new epoch
+    // and do not announce after a newer view has superseded that refresh.
+    const refreshMutation=async message=>{
+      if(!stillCurrent())return;
+      const refresh=renderWorkspace('builder',c);
+      const refreshedEpoch=workspaceRenderEpoch;
+      await refresh;
+      if(refreshedEpoch===workspaceRenderEpoch)announceBuilder(message);
+    };
     function draw() {
       if(!stillCurrent())return;
       const d=editing?.data||{},form=(key,label,rows)=>`<label class="account-field"><span>${label}</span>${rows?`<textarea name="${key}" rows="${rows}" required>${esc(d[key]||'')}</textarea>`:`<input name="${key}" value="${esc(key==='title'?editing?.title||'':d[key]||'')}" required>`}</label>`;
@@ -193,14 +202,14 @@ export async function renderWorkspace(name,c) {
       document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{if(!stillCurrent())return;editing=data.materials.find(m=>m.id===b.dataset.edit);draw()});
       document.querySelectorAll('[data-test]').forEach(b=>b.onclick=()=>{if(stillCurrent())test(data.materials.find(m=>m.id===b.dataset.test));});
       document.querySelectorAll('[data-delete]').forEach(button=>button.onclick=async()=>{
-        if(!stillCurrent()||!window.confirm(review.confirm))return; button.disabled=true;
-        try{await request(`/api/materials?id=${encodeURIComponent(button.dataset.delete)}`,{method:'DELETE'});if(!stillCurrent())return;await renderWorkspace('builder',c);announceBuilder(review.removed)}
+        if(!stillCurrent()||button.isConnected===false||!window.confirm(review.confirm))return; button.disabled=true;
+        try{await request(`/api/materials?id=${encodeURIComponent(button.dataset.delete)}`,{method:'DELETE'});if(!stillCurrent())return;await refreshMutation(review.removed)}
         catch{if(!stillCurrent())return;document.querySelector('#material-status').textContent=review.error;button.disabled=false}
       });
       document.querySelector('#material-form').onsubmit=async e=>{
-        e.preventDefault();if(!stillCurrent())return;const f=new FormData(e.currentTarget),payload=Object.fromEntries(f);
+        e.preventDefault();if(!stillCurrent()||e.currentTarget?.isConnected===false)return;const f=new FormData(e.currentTarget),payload=Object.fromEntries(f);
         payload.options=payload.options.split(/\r?\n/).map(v=>v.trim()).filter(Boolean);payload.locale=state.lang;if(editing)payload.id=editing.id;
-        try{await request('/api/materials',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(!stillCurrent())return;await renderWorkspace('builder',c);announceBuilder(w.saved)}catch{if(!stillCurrent())return;document.querySelector('#material-status').textContent=w.error}
+        try{await request('/api/materials',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(!stillCurrent())return;await refreshMutation(w.saved)}catch{if(!stillCurrent())return;document.querySelector('#material-status').textContent=w.error}
       };
     }
     function test(m) {

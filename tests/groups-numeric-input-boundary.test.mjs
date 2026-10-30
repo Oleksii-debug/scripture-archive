@@ -1,0 +1,135 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync, readdirSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
+import ts from 'typescript';
+import vm from 'node:vm';
+
+// Execute the actual production POST handler and its SQL with an isolated
+// SQLite/D1-compatible fixture; no production account, D1 or live site touched.
+function fixture() {
+  const db = new DatabaseSync(':memory:');
+  db.exec('PRAGMA foreign_keys=ON');
+  const root = new URL('../drizzle/', import.meta.url);
+  for (const name of readdirSync(root).filter(n => /^\d{4}_.+\.sql$/.test(n)).sort()) {
+    db.exec(readFileSync(new URL(name, root), 'utf8'));
+  }
+  db.prepare("INSERT INTO profiles(user_id,email,first_name,last_name,age_range) VALUES ('alice','alice@example.invalid','Alice','Test','18-24')").run();
+  db.prepare("INSERT INTO home_groups(id,owner_user_id,name,invite_code,visibility,bible_edition) VALUES ('g','alice','Fixture group','AABBCCDD','private','en-web')").run();
+  db.prepare("INSERT INTO home_group_members(group_id,user_id,display_name,role) VALUES ('g','alice','Alice','owner')").run();
+
+  let writes = 0;
+  function statement(sql, args=[]) {
+    return {
+      bind(...values) { return statement(sql, values); },
+      async first() { return db.prepare(sql).get(...args) ?? null; },
+      async all() { return {success:true,results:db.prepare(sql).all(...args)}; },
+      async run() {
+        const result=db.prepare(sql).run(...args); writes++;
+        return {success:true,meta:{changes:Number(result.changes)}};
+      },
+      sql, args,
+    };
+  }
+  const D1={
+    prepare(sql) { return statement(sql); },
+    async batch(statements) {
+      db.exec('BEGIN');
+      try {
+        const receipts=[];
+        for (const s of statements) {
+          const result=db.prepare(s.sql).run(...s.args);
+          writes++;
+          receipts.push({success:true,meta:{changes:Number(result.changes)}});
+        }
+        db.exec('COMMIT');
+        return receipts;
+      } catch(error) { db.exec('ROLLBACK'); throw error; }
+    },
+  };
+  const actual=readFileSync(new URL('../app/api/groups/route.ts', import.meta.url), 'utf8');
+  const compiled=ts.transpileModule(actual,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+  const exports={};
+  vm.runInNewContext(compiled,{
+    exports,Request,Response,URL,crypto,
+    require(path) {
+      if (path==='cloudflare:workers') return {env:{DB:D1}};
+      if (path.endsWith('catalog.json')) return {default:JSON.parse(readFileSync(new URL('../public/data/catalog.json',import.meta.url),'utf8'))};
+      if (path.endsWith('/auth')) return {
+        sameOrigin:request=>request.headers.get('origin')==='https://local.invalid',
+        authenticateRequest:async()=>({userId:'alice',provider:'password',emailVerified:true}),
+      };
+      throw Error('Unexpected dependency '+path);
+    },
+  });
+  async function post(action, payload) {
+    const request=new Request('https://local.invalid/api/groups?action='+action,{
+      method:'POST',headers:{origin:'https://local.invalid','content-type':'application/json'},
+      body:JSON.stringify(payload),
+    });
+    const response=await exports.POST(request);
+    return {status:response.status,body:await response.json()};
+  }
+  return {db,post,get writes(){return writes;}};
+}
+
+const meeting={groupId:'g',bookId:'GEN',chapter:12,answersCorrect:2,answersTotal:3,participantCount:4,meetingDate:'2026-10-28'};
+const group={name:'Fixture second group',weeklyGoal:3,catchupMode:'steady',visibility:'private',rosterVisibility:'count',bibleEdition:'en-web'};
+// These values were previously coerced by Number(value). Some are valid only
+// because Number(true)===1, Number([])===0 and Number('0xC')===12.
+const malformed=[
+  ['chapter',true],['chapter',[12]],['chapter','0xC'],['chapter','1.2e1'],
+  ['chapter','0b1100'],['chapter','0o14'],['chapter',null],
+  ['chapter',{}],['chapter',''],['chapter','  '],['chapter','+12'],
+  ['chapter','12.0'],['chapter','12foo'],['chapter',false],
+  ['answersCorrect',false],['answersCorrect',[]],['answersCorrect',[2]],
+  ['answersCorrect','0x2'],['answersCorrect','2e0'],['answersCorrect','2.0'],
+  ['answersCorrect',null],['answersCorrect',{}],['answersCorrect',''],
+  ['answersTotal',false],['answersTotal',[]],['answersTotal',[3]],
+  ['answersTotal','0x3'],['answersTotal','3e0'],['answersTotal','3.0'],
+  ['answersTotal',null],['answersTotal',{}],['answersTotal',''],
+  ['participantCount',true],['participantCount',[4]],['participantCount','0x4'],
+  ['participantCount','4e0'],['participantCount',{}],['participantCount',' '],
+  ['participantCount',false],
+];
+for (const [field,value] of malformed) {
+  test('reject malformed meeting '+field+' '+JSON.stringify(value),async()=>{
+    const f=fixture();
+    try {
+      const previous=f.writes;
+      const response=await f.post('session',{...meeting,[field]:value});
+      assert.equal(response.status,400,JSON.stringify(response.body));
+      assert.equal(f.writes,previous,'invalid field must not reach a database mutation');
+      assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM group_sessions').get().n,0);
+    } finally { f.db.close(); }
+  });
+}
+for(const value of [true,false,[],[3],null,{},'', ' ', '0x3','3e0','3.0','+3','0b11','0o3']) {
+  test('reject malformed group weeklyGoal '+JSON.stringify(value),async()=>{
+    const f=fixture();
+    try {
+      const response=await f.post('create',{...group,weeklyGoal:value});
+      assert.equal(response.status,400,JSON.stringify(response.body));
+      assert.equal(f.writes,0,'invalid weekly goal must not mutate group state');
+      assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM home_groups').get().n,1);
+    } finally {f.db.close();}
+  });
+}
+
+test('accept genuine numeric JSON and decimal HTML-form numeric strings',async()=>{
+  const f=fixture();
+  try {
+    for(const fields of [
+      {chapter:12,answersCorrect:2,answersTotal:3,participantCount:4},
+      {chapter:'12',answersCorrect:'2',answersTotal:'3',participantCount:'4'},
+      {chapter:' 12 ',answersCorrect:'02',answersTotal:'03',participantCount:''},
+    ]) {
+      const outcome=await f.post('session',{...meeting,...fields});
+      assert.equal(outcome.status,200,JSON.stringify(outcome.body));
+    }
+    assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM group_sessions').get().n,3);
+    const created=await f.post('create',{...group,weeklyGoal:'3'});
+    assert.equal(created.status,200,JSON.stringify(created.body));
+    assert.equal(f.db.prepare('SELECT COUNT(*) AS n FROM home_groups').get().n,2);
+  } finally {f.db.close();}
+});

@@ -5,7 +5,12 @@ const clean = (v: unknown, max: number) => typeof v === "string" ? v.trim().slic
 
 export async function GET(request: Request) {
   if (!env.DB) return Response.json({ error: "database_unavailable" }, { status: 503, headers: { "Cache-Control": "no-store" } });
-  const identity = await authenticateRequest(request), userId = identity?.userId;
+  let identity: Awaited<ReturnType<typeof authenticateRequest>>;
+  try { identity = await authenticateRequest(request); }
+  catch {
+    return Response.json({ error: "materials_unavailable" }, { status: 503, headers: { "Cache-Control": "no-store, private" } });
+  }
+  const userId = identity?.userId;
   const url = new URL(request.url), mine = url.searchParams.get("mine") === "1";
   if (mine && !userId) return Response.json({ error: "authentication_required" }, { status: 401 });
   if (url.searchParams.get("export") === "1") {
@@ -48,7 +53,12 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   if (!env.DB) return Response.json({ error: "database_unavailable" }, { status: 503 });
   if (!sameOrigin(request)) return Response.json({ error: "cross_origin_request" }, { status: 403 });
-  const identity = await authenticateRequest(request), userId = identity?.userId;
+  let identity: Awaited<ReturnType<typeof authenticateRequest>>;
+  try { identity = await authenticateRequest(request); }
+  catch {
+    return Response.json({ error: "materials_unavailable" }, { status: 503, headers: { "Cache-Control": "no-store, private" } });
+  }
+  const userId = identity?.userId;
   if (!userId) return Response.json({ error: "authentication_required" }, { status: 401 });
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   if (!body) return Response.json({ error: "invalid_json" }, { status: 400 });
@@ -96,7 +106,12 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   if (!env.DB) return Response.json({ error: "database_unavailable" }, { status: 503 });
   if (!sameOrigin(request)) return Response.json({ error: "cross_origin_request" }, { status: 403 });
-  const identity = await authenticateRequest(request), userId = identity?.userId;
+  let identity: Awaited<ReturnType<typeof authenticateRequest>>;
+  try { identity = await authenticateRequest(request); }
+  catch {
+    return Response.json({ error: "materials_unavailable" }, { status: 503, headers: { "Cache-Control": "no-store, private" } });
+  }
+  const userId = identity?.userId;
   if (!userId) return Response.json({ error: "authentication_required" }, { status: 401 });
   const id = new URL(request.url).searchParams.get("id") || "";
   if (!id || id.length > 80) return Response.json({ error: "invalid_material" }, { status: 400 });

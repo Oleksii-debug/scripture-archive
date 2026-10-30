@@ -27,7 +27,7 @@ test('bookmark reads report failure without false successful data',async()=>{
   assert.equal(response.status,200); assert.equal((await response.json()).bookmarks[0].book,'GEN');
 });
 
-test('bookmark GET refuses corrupt legacy/nonlocal or impossible stored rows without false navigation success',async()=>{
+test('bookmark GET returns only valid entries and warns when legacy rows are corrupt',async()=>{
   const bad = [
     null, {}, {edition:'en-web',book:'GEN',chapter:1},
     {edition:'en-web',book:'GEN',chapter:1,created_at:''},
@@ -42,10 +42,9 @@ test('bookmark GET refuses corrupt legacy/nonlocal or impossible stored rows wit
   ];
   for (const row of bad) {
     const response=await handler({success:true,results:[{edition:'en-web',book:'GEN',chapter:1,created_at:'2026-10-30'},row]});
-    assert.equal(response.status,503,JSON.stringify(row));
+    assert.equal(response.status,200,JSON.stringify(row));
     const body=await response.json();
-    assert.deepEqual(body,{error:'bookmarks_unavailable'});
-    assert.equal('bookmarks' in body,false);
+    assert.deepEqual(body,{bookmarks:[{edition:'en-web',book:'GEN',chapter:1,created_at:'2026-10-30'}],warning:'partial_bookmarks'});
     assert.match(response.headers.get('cache-control'),/no-store/);
   }
 });

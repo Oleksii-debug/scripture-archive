@@ -33,6 +33,60 @@ function valid(body: unknown, remove = false): body is { edition: string; book: 
     && typeof value.chapter === "number" && Number.isSafeInteger(value.chapter) && value.chapter >= 1 && (remove || value.chapter <= 151);
 }
 
+// Recover malformed legacy rows without ever treating them as reader links.
+// The reference binds a SQLite rowid to its complete observed row and owner;
+// the DELETE compares each original column again to reject concurrent edits.
+type RecoveryRow = { recovery_rowid?: unknown; edition?: unknown; book?: unknown; chapter?: unknown; created_at?: unknown };
+function usableBookmark(row: unknown): row is { edition: string; book: string; chapter: number; created_at: string } {
+  if (!valid(row)) return false;
+  const createdAt = (row as RecoveryRow).created_at;
+  return LOCAL_EDITION_IDS.has(row.edition) && row.chapter <= bookChapterLimit(row.edition, row.book)
+    && typeof createdAt === "string" && Boolean(createdAt.trim());
+}
+function primitiveField(value: unknown): value is string | number | null {
+  return value === null || typeof value === "string"
+    || (typeof value === "number" && Number.isFinite(value));
+}
+async function recoveryReference(owner: string, row: RecoveryRow): Promise<string | null> {
+  const rowid = row.recovery_rowid;
+  if (!Number.isSafeInteger(rowid) || (rowid as number) < 1) return null;
+  const parts = [owner, rowid, row.edition, row.book, row.chapter, row.created_at];
+  if (!parts.every(primitiveField)) return null;
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(parts)));
+  return String(rowid) + "." + Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+}
+function recoveryDescription(row: RecoveryRow): string {
+  const text = (value: unknown) => value == null ? "(missing)"
+    : typeof value === "string" ? value.slice(0, 72)
+    : typeof value === "number" && Number.isFinite(value) ? String(value).slice(0, 72) : "(invalid type)";
+  return [row.edition, row.book, row.chapter].map(text).join(" / ");
+}
+async function removeDamagedBookmark(owner: string, body: unknown) {
+  const reference = (body as { recovery_ref?: unknown }).recovery_ref;
+  if (typeof reference !== "string" || !/^[1-9][0-9]{0,15}\.[0-9a-f]{64}$/.test(reference))
+    return json({ error: "invalid_recovery_reference" }, 400);
+  const rowid = Number(reference.slice(0, reference.indexOf(".")));
+  if (!Number.isSafeInteger(rowid)) return json({ error: "invalid_recovery_reference" }, 400);
+  try {
+    const row: RecoveryRow | null = await env.DB.prepare(
+      "SELECT rowid AS recovery_rowid,edition,book,chapter,created_at FROM reader_bookmarks WHERE user_id=? AND rowid=?"
+    ).bind(owner, rowid).first();
+    if (!row || typeof row !== "object" || Array.isArray(row)
+        || usableBookmark(row) || await recoveryReference(owner, row) !== reference)
+      return json({ error: "recovery_stale" }, 409);
+    const result = await env.DB.prepare(
+      "DELETE FROM reader_bookmarks WHERE user_id=? AND rowid=? AND edition IS ? AND book IS ? AND chapter IS ? AND created_at IS ?"
+    ).bind(owner, rowid, row.edition, row.book, row.chapter, row.created_at).run();
+    if (result?.success !== true || !Number.isSafeInteger(result.meta?.changes)
+        || result.meta.changes < 0 || result.meta.changes > 1)
+      return json({ error: "bookmarks_unavailable" }, 503);
+    if (result.meta.changes !== 1) return json({ error: "recovery_stale" }, 409);
+    return json({ ok: true });
+  } catch {
+    return json({ error: "bookmarks_unavailable" }, 503);
+  }
+}
+
 export async function GET(request: Request) {
   if (!env.DB) return json({ error: "database_unavailable" }, 503);
   // An identity-store outage is not the same as a signed-out reader.
@@ -41,21 +95,25 @@ export async function GET(request: Request) {
   catch { return json({ error: "bookmarks_unavailable" }, 503); }
   if (!id) return json({ error: "authentication_required" }, 401);
   try {
-    const rows = await env.DB.prepare("SELECT edition,book,chapter,created_at FROM reader_bookmarks WHERE user_id=? ORDER BY created_at DESC,book,chapter LIMIT 500").bind(id).all();
+    const rows = await env.DB.prepare("SELECT rowid AS recovery_rowid,edition,book,chapter,created_at FROM reader_bookmarks WHERE user_id=? ORDER BY created_at DESC,book,chapter LIMIT 500").bind(id).all();
     if (!rows.success || !Array.isArray(rows.results)) return json({ error: "bookmarks_unavailable" }, 503);
     // A successful SELECT is not evidence that every legacy row is a usable
     // local bookmark. The PUT path already has the canonical edition, book and
     // chapter contract; apply it before advertising saved navigation state.
-    const validRows = rows.results.filter((row: unknown) => {
-      if (!valid(row)) return false;
-      const createdAt = (row as { created_at?: unknown }).created_at;
-      return LOCAL_EDITION_IDS.has(row.edition) &&
-        row.chapter <= bookChapterLimit(row.edition, row.book) &&
-        typeof createdAt === "string" && Boolean(createdAt.trim());
+    const validRows = rows.results.filter(usableBookmark).map((row: unknown) => {
+      const value = row as { edition: string; book: string; chapter: number; created_at: string };
+      return { edition: value.edition, book: value.book, chapter: value.chapter, created_at: value.created_at };
     });
-    // Preserve invalid records in D1 for recovery; never expose them as links
-    // or present the valid subset as a complete account of saved bookmarks.
-    return json({ bookmarks: validRows, ...(validRows.length !== rows.results.length ? { warning: "partial_bookmarks" } : {}) });
+    const damaged = rows.results.filter((row: unknown) => !usableBookmark(row));
+    const recoverable = await Promise.all(damaged.map(async (row: unknown) => {
+      if (!row || typeof row !== "object" || Array.isArray(row)) return null;
+      const reference = await recoveryReference(id, row as RecoveryRow);
+      return reference ? { reference, description: recoveryDescription(row as RecoveryRow) } : null;
+    }));
+    // Never advertise damaged rows as valid links, and never delete on GET.
+    return json({ bookmarks: validRows,
+      ...(damaged.length ? { warning: "partial_bookmarks",
+        invalid_bookmarks: recoverable.filter((row): row is { reference: string; description: string } => row !== null) } : {}) });
   } catch { return json({ error: "bookmarks_unavailable" }, 503); }
 }
 
@@ -68,6 +126,9 @@ async function write(request: Request, remove: boolean) {
   catch { return json({ error: "bookmarks_unavailable" }, 503); }
   if (!id) return json({ error: "authentication_required" }, 401);
   const body: unknown = await request.json().catch(() => null);
+  if (remove && body && typeof body === "object" && !Array.isArray(body)
+      && Object.prototype.hasOwnProperty.call(body, "recovery_ref"))
+    return removeDamagedBookmark(id, body);
   // Reject nonexistent chapters on PUT. Keep DELETE able to clean up old invalid entries.
   if (!valid(body, remove) || (!remove && (!LOCAL_EDITION_IDS.has(body.edition) || body.chapter > bookChapterLimit(body.edition, body.book))))
     return json({ error: "invalid_bookmark" }, 400);

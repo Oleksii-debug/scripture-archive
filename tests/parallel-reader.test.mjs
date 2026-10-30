@@ -8,15 +8,16 @@ const edition={id:'uk-kulish',contentId:'UKRPAN',title:'Куліш',local:true};
 const catalog={translations:{},editions:{uk:{id:'UKRPAN',title:'Куліш',source:'https://source.example/',license:'Public Domain'}}};
 function fixture(overrides={}) {
   let isCurrent=true, locked=0, failed=0, reads=0, checked=0;
-  const button={disabled:false}, status={textContent:''}, result={innerHTML:'',replaceChildren(){this.innerHTML='';}};
+  const button={disabled:false}, status={textContent:''}, copied=[];
+  const result={innerHTML:'',replaceChildren(){this.innerHTML='';},addEventListener(name,callback){if(name==='click')this.handleClick=callback;}};
   const form={onsubmit:null,querySelector:()=>button};
   const panel={isConnected:true,querySelector(selector){return selector==='.parallel-form'?form:selector==='.parallel-status'?status:result;}};
   const options={editions:[edition],catalog,lang:'uk',book:'GEN',bookTitle:'Буття',chapter:1,esc,
     getBook:async()=>{reads++;return {chapters:[['На початку','<script>']]};},
     check:async()=>{checked++;return {invalidated:false};},current:()=>isCurrent,
-    lock:()=>{locked++;},failClosed:()=>{failed++;},...overrides};
+    lock:()=>{locked++;},failClosed:()=>{failed++;},copyText:async text=>{copied.push(text);},...overrides};
   mountParallelReader(panel,options);
-  return {panel,form,status,result,button,run:()=>form.onsubmit({preventDefault(){}}),move:()=>{isCurrent=false;},reads:()=>reads,checked:()=>checked,locked:()=>locked,failed:()=>failed};
+  return {panel,form,status,result,button,copied,run:()=>form.onsubmit({preventDefault(){}}),cite:number=>result.handleClick({target:{closest:()=>({dataset:{parallelCite:String(number)}})}}),move:()=>{isCurrent=false;},reads:()=>reads,checked:()=>checked,locked:()=>locked,failed:()=>failed};
 }
 async function withForm(callback){const original=globalThis.FormData;globalThis.FormData=class{get(){return edition.id;}};try{return await callback();}finally{globalThis.FormData=original;}}
 
@@ -276,3 +277,64 @@ test('edition selection changes during the first chapter guard avoid unnecessary
     assert.equal(f.button.disabled,false);
   } finally {globalThis.FormData=original;}
 });
+
+test('comparison cites the exact selected edition and all verified rights metadata',()=>withForm(async()=>{
+  const f=fixture({catalog:{translations:{},editions:{uk:{
+    id:'UKRPAN',title:'Alternate edition',license:'CC BY-SA 4.0',
+    attribution:'Original translator',source:'https://source.example/alternate',
+    licenseUrl:'https://creativecommons.org/licenses/by-sa/4.0/'
+  }}}});
+  await f.run();
+  assert.match(f.result.innerHTML,/data-parallel-cite="1"/);
+  assert.match(f.result.innerHTML,/type="button"/);
+  assert.match(f.result.innerHTML,/aria-label="Цитувати вірш: Буття 1:1"/);
+  await f.cite(2);
+  assert.equal(f.copied.length,1);
+  assert.match(f.copied[0],/^Буття 1:2\. <script>/);
+  assert.match(f.copied[0],/Alternate edition · CC BY-SA 4.0/);
+  assert.match(f.copied[0],/Original translator/);
+  assert.match(f.copied[0],/https:\/\/source\.example\/alternate/);
+  assert.match(f.copied[0],/creativecommons.org/);
+  assert.match(f.status.textContent,/скопійовано/);
+}));
+
+test('comparison citation rechecks chapter protection and refuses invalid numbers',()=>withForm(async()=>{
+  let checks=0;
+  const f=fixture({check:async()=>({invalidated:++checks===3})});
+  await f.run();
+  assert.equal(checks,2);
+  for (const bad of ['0','-1','3','1.5','NaN',Number.MAX_SAFE_INTEGER+1]) await f.cite(bad);
+  assert.equal(checks,2,'invalid requested verses never reach chapter guard');
+  await f.cite(1);
+  assert.equal(checks,3);
+  assert.equal(f.locked(),1);
+  assert.equal(f.copied.length,0);
+}));
+
+test('failed comparison clipboard write reports an accessible error and supports retry',()=>withForm(async()=>{
+  let fails=0, captured='';
+  const f=fixture({copyText:async text=>{ if(++fails===1)throw Error('clipboard denied'); captured=text; }});
+  await f.run();
+  await f.cite(1);
+  assert.equal(f.copied.length,0);
+  assert.match(f.status.textContent,/Не вдалося/);
+  await f.cite(1);
+  assert.equal(fails,2);
+  assert.match(captured,/На початку/);
+  assert.match(f.status.textContent,/скопійовано/);
+}));
+
+test('no pending comparison citation may copy after reader/principal changed',()=>withForm(async()=>{
+  let unblock, reached;
+  const pending=new Promise(resolve=>{unblock=resolve;});
+  const entered=new Promise(resolve=>{reached=resolve;});
+  let checks=0;
+  const f=fixture({check:async()=>{if(++checks===3){reached();return pending;}return {invalidated:false};}});
+  await f.run();
+  const request=f.cite(1);
+  await entered;
+  f.move();
+  unblock({invalidated:false});
+  await request;
+  assert.equal(f.copied.length,0);
+}));

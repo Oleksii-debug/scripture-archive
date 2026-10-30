@@ -84,3 +84,12 @@ test("a late bookmark read failure cannot overwrite another account's UI", async
   assert.equal(h.panel.innerHTML, "<p>New account view</p>");
   assert.equal(h.writes(), 0);
 });
+
+test("a bookmark click bound to an earlier account cannot mutate the next account", async () => {
+  const h = harness();
+  await h.mount();
+  assert.match(h.panel.innerHTML, /Bookmark this chapter/);
+  h.changeAccount("two");
+  await h.click();
+  assert.equal(h.writes(), 0, "old principal's click handler must not send a write");
+});

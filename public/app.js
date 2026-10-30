@@ -2281,9 +2281,26 @@ async function getSession() {
   }
   state.user = authenticatedUser;
   state.sessionUnavailable = false;
-  const previousOwner=localStorage.getItem('sa.progressOwner');
-  if(previousOwner&&previousOwner!==state.user?.id)clearPersonalProgress();
-  if(state.user)localStorage.setItem('sa.progressOwner',state.user.id);else localStorage.removeItem('sa.progressOwner');
+  // Browser storage availability is not evidence about server authentication.
+  // A denied owner read/write must never break a verified session or let one
+  // account's cached reading records flow into another account's D1 progress.
+  let localCacheTrusted = false;
+  try {
+    const previousOwner = localStorage.getItem('sa.progressOwner');
+    const cleared = previousOwner && previousOwner !== state.user?.id
+      ? clearPersonalProgress() : true;
+    if (cleared) {
+      if (state.user) localStorage.setItem('sa.progressOwner', state.user.id);
+      else localStorage.removeItem('sa.progressOwner');
+      localCacheTrusted = true;
+    }
+  } catch {
+    // Retain a non-throwing logout/reset even if the storage policy forbids all
+    // operations. The next server sync must ignore any unowned local reading.
+    clearPersonalProgress();
+  }
+  state.localReadingCacheTrusted = localCacheTrusted;
+  if (!localCacheTrusted) state.progressSyncStatus = "unavailable";
   return state.user;
 }
 async function getBook(code, explicitEdition = null) {
@@ -3698,7 +3715,10 @@ async function syncProgress() {
     // A successful-looking HTTP reply with no reading array is not evidence
     // of empty reading history; never overwrite the local cache on that basis.
     if(!Array.isArray(readingData.reading))throw Error("missing_reading_history");
-    const localReading=loadJSON('sa.readingHistory',[]);
+    // An unverified browser owner marker cannot authorize a local-to-server
+    // merge after account switch or a denied storage operation.
+    const localReading = state.localReadingCacheTrusted === false
+      ? [] : loadJSON('sa.readingHistory',[]);
     if(!Array.isArray(localReading))throw Error("invalid_local_reading_history");
     const mergedReading=[...new Map([...readingData.reading,...localReading].map(r=>[r.book+':'+r.chapter,r])).values()];
     if(!current())return;
@@ -3729,11 +3749,24 @@ async function syncProgress() {
 }
 function clearPersonalProgress() {
   state.progressSyncStatus=null;
+  state.localReadingCacheTrusted=false;
   syncProgress._epoch=(syncProgress._epoch||0)+1;
   state.missionProgress={index:0,correct:[],complete:false};
-  localStorage.setItem("sa.mission.OTAB01",JSON.stringify(state.missionProgress));
-  localStorage.setItem("sa.readingHistory","[]");
-  localStorage.removeItem("sa.progressOwner");
+  // Attempt independent cleanup of every private key even if one write fails.
+  // Never erase the ownership marker while old private values might survive:
+  // a later login must still detect that this cache belongs to someone else.
+  let missionCleared=false, readingCleared=false;
+  try {
+    localStorage.setItem("sa.mission.OTAB01",JSON.stringify(state.missionProgress));
+    missionCleared=true;
+  } catch {}
+  try {
+    localStorage.setItem("sa.readingHistory","[]");
+    readingCleared=true;
+  } catch {}
+  if (!missionCleared || !readingCleared) return false;
+  try { localStorage.removeItem("sa.progressOwner"); return true; }
+  catch { return false; }
 }
 function field(name, label, type = "text", extra = "") {
   return `<label class="account-field"><span>${label}</span><input name="${name}" type="${type}" ${extra}></label>`;

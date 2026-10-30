@@ -5,6 +5,7 @@
 
 ## Перевірені вузькі закриття (не закриття батьківського розділу)
 
+- **R0 / SA-EXT-16 — перевірка оголошеного HTTPS-домену:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` для непомітних керівних символів і порожнього userinfo. [PR #784](https://github.com/Oleksii-debug/scripture-archive/pull/784) злито в `main@0d9bf08f00794e75a6c91c0f5d6f95a21de63ef0`; [CI #41072585585](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41072585585) **SUCCESS**. [Квитанція](roadmap/R0_DECLARED_ORIGIN_CONTROLS_SCOPED_TERMINAL_20261030.md). Жодного деплою, усі 20 батьківських розділів **OPEN**.
 - **R0 / SA-EXT-16 — офлайнова перевірка SQLite-копії, захист від символьного посилання:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`. Виправлення [PR #781](https://github.com/Oleksii-debug/scripture-archive/pull/781) злито в `main@bb8a0af98cdfca93464ebbc5fbe548460415dd97`; [нативна CI #41071493589](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41071493589) **SUCCESS**. [Постійна квитанція](roadmap/R0_CONSENT_SNAPSHOT_SYMLINK_SCOPED_TERMINAL_20261030.md). Повний SA-EXT-16 та решта 20 батьківських розділів **OPEN**; робочий production-реліз не підтверджений.
 
 ## Канонічні документи

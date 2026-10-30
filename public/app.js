@@ -2783,9 +2783,10 @@ async function attemptRequest(action, method = "GET", body, params = "") {
   return data;
 }
 
-function renderLockedChapter(book, chapter) {
+function renderLockedChapter(book, chapter, groupId = "") {
   const copy = ATTEMPT_COPY[state.lang];
-  shell(`<section class="gate-panel attempt-locked" role="alert"><p class="eyebrow">Scripture Archive</p><h1>${copy.lockedTitle}</h1><p class="lead">${copy.lockedText}</p><a class="button primary" href="/reader/${book}/${chapter}">${copy.reread}</a></section>`);
+  const contextPath = groupId ? `/group/${encodeURIComponent(groupId)}` : "";
+  shell(`<section class="gate-panel attempt-locked" role="alert"><p class="eyebrow">Scripture Archive</p><h1>${copy.lockedTitle}</h1><p class="lead">${copy.lockedText}</p><a class="button primary" href="/reader/${book}/${chapter}${contextPath}">${copy.reread}</a></section>`);
 }
 
 const bookmarkCopy = {
@@ -2877,9 +2878,9 @@ async function mountReaderBookmarks(meta, chapter, edition, books) {
 
 attemptChannel?.addEventListener("message", event => {
   const message = event.data;
-  if (message?.type === "attempt-started" && state.currentReader?.book === message.book && state.currentReader?.chapter === message.chapter) {
+  if (message?.type === "attempt-started" && state.currentReader?.book === message.book && state.currentReader?.chapter === message.chapter && (state.currentReader?.groupId || "") === (message.groupId || "")) {
     state.currentReader = null;
-    renderLockedChapter(message.book, message.chapter);
+    renderLockedChapter(message.book, message.chapter, message.groupId || "");
   }
 });
 
@@ -2946,11 +2947,11 @@ async function renderReader(parts) {
   const meta = books.find((b) => b.code === code) || books[0];
   const chapter = readerChapterNumber(parts[2] || state.reader.chapter || 1, meta.chapters);
   const groupId = parts[3] === "group" ? parts[4] || "" : "";
-  state.currentReader = { book: meta.code, chapter };
+  state.currentReader = { book: meta.code, chapter, groupId };
   const readerContext = state.currentReader;
   const readerStillCurrent = () => state.currentReader === readerContext && state.user === readerPrincipal;
   try {
-    const attemptState = await attemptRequest("chapter", "POST", { book: meta.code, chapter });
+    const attemptState = await attemptRequest("chapter", "POST", { book: meta.code, chapter, ...(groupId ? { groupId } : {}) });
     if (!readerStillCurrent()) return;
     if (!attemptState || typeof attemptState.invalidated !== "boolean") {
       throw new Error("invalid_attempt_guard_response");
@@ -2959,7 +2960,7 @@ async function renderReader(parts) {
       forgetActiveAttempt();
       state.mission = null;
       state.currentReader = null;
-      renderLockedChapter(meta.code, chapter);
+      renderLockedChapter(meta.code, chapter, groupId);
       return;
     }
   } catch {
@@ -2981,14 +2982,14 @@ async function renderReader(parts) {
   // Prevent the async reader from undoing an invalidation in another tab.
   if (!readerStillCurrent()) return;
   try {
-    const finalState = await attemptRequest("chapter", "POST", { book: meta.code, chapter });
+    const finalState = await attemptRequest("chapter", "POST", { book: meta.code, chapter, ...(groupId ? { groupId } : {}) });
     if (!readerStillCurrent()) return;
     if (!finalState || typeof finalState.invalidated !== "boolean") throw Error("invalid_attempt_guard_response");
     if (finalState.invalidated) {
       forgetActiveAttempt();
       state.mission = null;
       state.currentReader = null;
-      renderLockedChapter(meta.code, chapter);
+      renderLockedChapter(meta.code, chapter, groupId);
       return;
     }
   } catch {
@@ -3062,9 +3063,9 @@ async function renderReader(parts) {
     aside.insertAdjacentHTML('beforeend', parallelControls(parallelEditions, state.lang, esc));
     const panel = aside.querySelector('.parallel-reader');
     mountParallelReader(panel, { editions: parallelEditions, catalog, lang: state.lang, book: meta.code, bookTitle: bookTitle(meta), chapter, getBook, esc,
-      check: (code, number) => attemptRequest('chapter', 'POST', { book: code, chapter: number }),
+      check: (code, number) => attemptRequest('chapter', 'POST', { book: code, chapter: number, ...(groupId ? { groupId } : {}) }),
       current: readerStillCurrent,
-      lock: () => { forgetActiveAttempt(); state.mission=null; state.currentReader=null; renderLockedChapter(meta.code,chapter); },
+      lock: () => { forgetActiveAttempt(); state.mission=null; state.currentReader=null; renderLockedChapter(meta.code,chapter,groupId); },
       failClosed: () => { state.currentReader=null; shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1></section>`); },
     });
   }
@@ -3171,7 +3172,7 @@ async function renderReader(parts) {
       rememberActiveAttempt(attempt);
       state.mission = null;
       window.saAnalytics?.track("quiz_start", { language: state.lang, mode: groupId ? "group" : "personal" });
-      attemptChannel?.postMessage({ type: 'attempt-started', attemptId: attempt.attemptId, book: meta.code, chapter });
+      attemptChannel?.postMessage({ type: 'attempt-started', attemptId: attempt.attemptId, book: meta.code, chapter, ...(groupId ? { groupId } : {}) });
       document.querySelector('#attempt-dialog').close();
       state.currentReader = null;
       navigateTo(`/mission/attempt/${attempt.attemptId}`, true);

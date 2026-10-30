@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { renderWorkspace, verifiedLocalReadingHistory } from '../public/workspace.js';
 
 function deferred() {
@@ -43,24 +44,31 @@ test('progress rechecks trust after a delayed history request and keeps trusted 
   }
 });
 
-test('reading projection keeps the latest chapters after more than 1000 valid records', () => {
-  const records=Array.from({length:1189},(_,i)=>({
-    book:'PSA',chapter:(i % 150)+1,title:'Reading '+i
-  }));
+test('reading projection retains all 1189 distinct real Bible chapters', () => {
+  // Use actual approved Bible book/chapter metadata, not 1189 repeated
+  // Psalm entries (which represent only 150 distinct chapters).
+  const catalog=JSON.parse(readFileSync(new URL('../public/data/catalog.json',import.meta.url),'utf8'));
+  const records=catalog.books.en.flatMap(book=>Array.from({length:book.chapters},(_,i)=>({
+    book:book.code,chapter:i+1,title:book.title+' '+(i+1),
+  })));
+  assert.equal(records.length,1189);
   const result=verifiedLocalReadingHistory(records);
   assert.equal(result.length,1189);
-  assert.equal(result[0].title,'Reading 0');
-  assert.equal(result.at(-1).title,'Reading 1188');
+  assert.deepEqual(result,records);
 });
 
-test('reading projection remains bounded and prefers the most recent cache records', () => {
-  const records=Array.from({length:2100},(_,i)=>({
-    book:'PSA',chapter:(i % 150)+1,title:'Reading '+i
-  }));
+test('reading projection bounds hostile history and keeps the latest duplicate', () => {
+  // This legacy sequence exceeds the 2048-entry bounded window. Multiple
+  // visits to one Psalm chapter must never inflate the unique-chapter count.
+  const records=[{book:'GEN',chapter:1,title:'Out-of-window'}].concat(
+    Array.from({length:2100},(_,i)=>({
+      book:'PSA',chapter:(i % 150)+1,title:'Reading '+i
+    })));
   const result=verifiedLocalReadingHistory(records);
-  assert.equal(result.length,2048);
-  assert.equal(result[0].title,'Reading 52');
+  assert.equal(result.length,150);
+  assert.equal(result[0].title,'Reading 1950');
   assert.equal(result.at(-1).title,'Reading 2099');
+  assert.equal(result.some(row=>row.title==='Out-of-window'),false);
 });
 
 function scenario(pathname = '/builder') {

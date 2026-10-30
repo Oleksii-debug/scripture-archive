@@ -133,7 +133,7 @@ test("start preserves chapter-not-read 409 for confirmed zero-row insertion",asy
 test("start acknowledges a fully confirmed three-statement transition",async()=>{
   const r=await scenario({action:"start"}).invoke();
   assert.equal(r.status,201);
-  assert.equal(r.body.attemptId,"attempt-1".replace("attempt-1",r.body.attemptId));
+  assert.match(r.body.attemptId,/^[0-9a-f-]{36}$/i);
   assert.equal(r.body.task.index,1);
 });
 

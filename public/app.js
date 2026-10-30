@@ -2688,8 +2688,10 @@ function readerChapterNumber(value, maxChapters) {
 }
 
 async function renderReader(parts) {
+  const readerPrincipal = state.user;
   setActiveNav("reader");
   const catalog = await getCatalog();
+  if (state.user !== readerPrincipal || (typeof location !== "undefined" && location.pathname && !location.pathname.startsWith("/reader"))) return;
   const chosenEdition = selectedEdition(state.lang);
   const books = catalog.editionBooks?.[chosenEdition.id] || catalog.books[state.lang];
   const code = (parts[1] || state.reader.book || "GEN").toUpperCase();
@@ -2698,9 +2700,10 @@ async function renderReader(parts) {
   const groupId = parts[3] === "group" ? parts[4] || "" : "";
   state.currentReader = { book: meta.code, chapter };
   const readerContext = state.currentReader;
+  const readerStillCurrent = () => state.currentReader === readerContext && state.user === readerPrincipal;
   try {
     const attemptState = await attemptRequest("chapter", "POST", { book: meta.code, chapter });
-    if (state.currentReader !== readerContext) return;
+    if (!readerStillCurrent()) return;
     if (!attemptState || typeof attemptState.invalidated !== "boolean") {
       throw new Error("invalid_attempt_guard_response");
     }
@@ -2712,7 +2715,7 @@ async function renderReader(parts) {
       return;
     }
   } catch {
-    if (state.currentReader !== readerContext) return;
+    if (!readerStillCurrent()) return;
     state.currentReader = null;
     shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1></section>`);
     return;
@@ -2720,10 +2723,10 @@ async function renderReader(parts) {
   const book = await getBook(meta.code);
   // A different device may start a new attempt while the Bible JSON loads.
   // Prevent the async reader from undoing an invalidation in another tab.
-  if (state.currentReader !== readerContext) return;
+  if (!readerStillCurrent()) return;
   try {
     const finalState = await attemptRequest("chapter", "POST", { book: meta.code, chapter });
-    if (state.currentReader !== readerContext) return;
+    if (!readerStillCurrent()) return;
     if (!finalState || typeof finalState.invalidated !== "boolean") throw Error("invalid_attempt_guard_response");
     if (finalState.invalidated) {
       sessionStorage.removeItem("sa.activeAttempt");
@@ -2733,7 +2736,7 @@ async function renderReader(parts) {
       return;
     }
   } catch {
-    if (state.currentReader !== readerContext) return;
+    if (!readerStillCurrent()) return;
     state.currentReader = null;
     shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1></section>`);
     return;
@@ -2783,6 +2786,7 @@ async function renderReader(parts) {
   document.querySelector('#bible-edition').onchange=async e=>{const restoreFocus=document.activeElement===e.currentTarget;const readerUrl=location.pathname+location.search+location.hash;localStorage.setItem(`sa.edition.${state.lang}`,e.target.value);await renderReader(parts);if(restoreFocus&&document.activeElement===main&&location.pathname+location.search+location.hash===readerUrl)document.querySelector('#bible-edition')?.focus({preventScroll:true})};
   if(!chosenEdition.local){document.querySelector('.verses').innerHTML=`<section class="publisher-reading"><p class="lead">${editionText.externalNote}</p><a class="button primary" target="_blank" rel="noreferrer" href="${editionUrl(chosenEdition,meta.code,chapter)}">${editionText.external} ↗</a></section>`;document.querySelector('.chapter-meta').textContent=chosenEdition.title;document.querySelector('.edition-card').innerHTML=`<h2>${t('edition')}</h2><p><strong>${esc(chosenEdition.title)}</strong></p><p>${editionText.whole}</p><a href="${chosenEdition.source}" target="_blank" rel="noreferrer">${t('sourceLink')} ↗</a>`;document.querySelector('#uk-spelling')?.remove();document.querySelector('#book-search').hidden=true;}
   const w=workspaceCopy(state.lang),attemptCopy=ATTEMPT_COPY[state.lang],missionManifest=await readerMissionManifest();
+  if (!readerStillCurrent()) return;
   const hasTasks=Array.isArray(missionManifest?.chapters)&&missionManifest.chapters.some(item=>item?.book===meta.code&&Number(item.chapter)===chapter);
   document.querySelector('.chapter-nav').insertAdjacentHTML('beforebegin',`<div class="read-completion"><button class="button primary" id="mark-read">${attemptCopy.finishReading}</button>${hasTasks?`<button class="button" id="start-questions" disabled>${attemptCopy.transition}</button>`:""}<a href="/progress">${w.progress}</a></div>${hasTasks?`<dialog id="attempt-dialog" class="attempt-dialog" aria-labelledby="attempt-dialog-title"><form method="dialog"><h2 id="attempt-dialog-title">${attemptCopy.prepareTitle}</h2><p>${attemptCopy.prepareText}</p><ul>${attemptCopy.prepareRules.map(rule=>`<li>${rule}</li>`).join("")}</ul><div class="action-row"><button class="button" value="cancel">${attemptCopy.cancel}</button><button class="button primary" id="confirm-attempt" value="default">${attemptCopy.begin}</button></div><p id="attempt-state" role="status"></p></form></dialog>`:""}`);
   if (!missionManifest) {
@@ -2792,8 +2796,35 @@ async function renderReader(parts) {
     );
   }
   document.querySelector('#mark-read').onclick=async()=>{const readButton=document.querySelector('#mark-read');if(readButton.dataset.saSaving==='1')return;readButton.dataset.saSaving='1';readButton.setAttribute('aria-busy','true');try{const latestHistory=loadJSON('sa.readingHistory',[]),readingHistory=Array.isArray(latestHistory)?latestHistory:[];if(!readingHistory.some(r=>r.book===meta.code&&r.chapter===chapter))readingHistory.push({book:meta.code,chapter,title:bookTitle(meta)});localStorage.setItem('sa.readingHistory',JSON.stringify(readingHistory));if(state.user)try{await accountRequest('reading','PUT',{reading:readingHistory})}catch{if(document.querySelector('#mark-read')===readButton){readButton.textContent=t('readingSyncRetry');announce(t('readingSyncPending'))}return}if(document.querySelector('#mark-read')!==readButton)return;try{if(hasTasks)await attemptRequest('read','POST',{book:meta.code,chapter,groupId:groupId||undefined});if(document.querySelector('#mark-read')!==readButton)return;document.querySelector('#start-questions')?.removeAttribute('disabled');const restoreFocus=document.activeElement===readButton;readButton.disabled=true;readButton.textContent=w.readMarked;if(restoreFocus)(document.querySelector('#start-questions')||document.querySelector('.read-completion a'))?.focus({preventScroll:true});announce(w.readMarked)}catch{if(document.querySelector('#mark-read')===readButton)announce(t('errorLoad'))}}finally{delete readButton.dataset.saSaving;readButton.removeAttribute('aria-busy')}};
-  document.querySelector('#start-questions')?.addEventListener('click',()=>document.querySelector('#attempt-dialog').showModal());
-  document.querySelector('#confirm-attempt')?.addEventListener('click',async event=>{event.preventDefault();const status=document.querySelector('#attempt-state');try{const attempt=await attemptRequest('start','POST',{missionId:'OT-AB-01',book:meta.code,chapter,locale:state.lang,groupId:groupId||undefined});sessionStorage.setItem('sa.activeAttempt',attempt.attemptId);state.activeAttempt=attempt;state.mission=null;window.saAnalytics?.track("quiz_start",{language:state.lang,mode:groupId?"group":"personal"});attemptChannel?.postMessage({type:'attempt-started',attemptId:attempt.attemptId,book:meta.code,chapter});document.querySelector('#attempt-dialog').close();state.currentReader=null;navigateTo(`/mission/attempt/${attempt.attemptId}`,true)}catch(error){window.saAnalytics?.track("quiz_start_error",{error:String(error.message).slice(0,60)});status.textContent=error.message==='chapter_must_be_read'?attemptCopy.readRequired:t('errorLoad')}});
+  document.querySelector('#start-questions')?.addEventListener('click', () => {
+    if (readerStillCurrent()) document.querySelector('#attempt-dialog')?.showModal();
+  });
+  document.querySelector('#confirm-attempt')?.addEventListener('click', async event => {
+    event.preventDefault();
+    const trigger = event.currentTarget;
+    if (!readerStillCurrent() || document.querySelector('#confirm-attempt') !== trigger) return;
+    const status = document.querySelector('#attempt-state');
+    try {
+      const attempt = await attemptRequest('start', 'POST', {
+        missionId: 'OT-AB-01', book: meta.code, chapter, locale: state.lang, groupId: groupId || undefined
+      });
+      // The server may have started the attempt for the original principal.
+      // Never publish its ID, broadcast or navigate a subsequently switched account.
+      if (!readerStillCurrent() || document.querySelector('#confirm-attempt') !== trigger) return;
+      sessionStorage.setItem('sa.activeAttempt', attempt.attemptId);
+      state.activeAttempt = attempt;
+      state.mission = null;
+      window.saAnalytics?.track("quiz_start", { language: state.lang, mode: groupId ? "group" : "personal" });
+      attemptChannel?.postMessage({ type: 'attempt-started', attemptId: attempt.attemptId, book: meta.code, chapter });
+      document.querySelector('#attempt-dialog').close();
+      state.currentReader = null;
+      navigateTo(`/mission/attempt/${attempt.attemptId}`, true);
+    } catch (error) {
+      if (!readerStillCurrent() || document.querySelector('#confirm-attempt') !== trigger) return;
+      window.saAnalytics?.track("quiz_start_error", { error: String(error.message).slice(0, 60) });
+      status.textContent = error.message === 'chapter_must_be_read' ? attemptCopy.readRequired : t('errorLoad');
+    }
+  });
   document.querySelector("#uk-spelling")?.addEventListener("click", () => {
     state.ukOriginal = !state.ukOriginal;
     localStorage.setItem(

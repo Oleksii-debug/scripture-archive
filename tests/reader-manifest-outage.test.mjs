@@ -52,6 +52,7 @@ function runGate(missionManifest) {
     "(async () => {" + gate + "\nreturn {hasTasks};})",
     {
       readerMissionManifest: async () => missionManifest,
+      readerStillCurrent: () => true,
       workspaceCopy: () => ({}),
       loadJSON: () => [],
       ATTEMPT_COPY: { uk: {} },

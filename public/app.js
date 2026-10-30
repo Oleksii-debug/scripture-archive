@@ -2622,6 +2622,10 @@ async function mountReaderBookmarks(meta, chapter, edition, books) {
   const panel = document.querySelector("#reader-bookmarks");
   if (!panel) return;
   const copy = bookmarkCopy[state.lang] || bookmarkCopy.uk;
+  // A response started under one principal must never paint into another
+  // principal's reader, even if the panel node has not been detached yet.
+  const principal = state.user;
+  const isCurrent = () => panel.isConnected && state.user === principal;
   if (!state.user) { panel.innerHTML = `<h2>${copy.title}</h2><p>${copy.login}</p>`; return; }
   const current = { edition: edition.id, book: meta.code, chapter };
   async function load() {
@@ -2629,22 +2633,28 @@ async function mountReaderBookmarks(meta, chapter, edition, books) {
     if (!response.ok) throw Error("bookmark_load_failed");
     const data = await response.json();
     if (!Array.isArray(data.bookmarks)) throw Error("bookmark_load_failed");
-    if (!panel.isConnected) return;
+    if (!isCurrent()) return;
     const items = data.bookmarks.filter(item => item.edition === edition.id && books.some(book => book.code === item.book) && Number.isInteger(item.chapter) && item.chapter > 0);
     const saved = items.some(item => item.book === meta.code && item.chapter === chapter);
     panel.innerHTML = `<h2>${copy.title}</h2><button class="button" type="button" id="toggle-bookmark" aria-pressed="${saved}">${saved ? copy.remove : copy.save}</button><p role="status" id="bookmark-status"></p>${items.length ? `<ul>${items.map(item => { const book = books.find(value => value.code === item.book); return `<li><a href="/reader/${encodeURIComponent(item.book)}/${item.chapter}">${esc(bookTitle(book))} ${item.chapter}</a></li>`; }).join("")}</ul>` : `<p>${copy.empty}</p>`}`;
     panel.querySelector("#toggle-bookmark").addEventListener("click", async event => {
+      if (!isCurrent()) return;
       const button = event.currentTarget;
       button.disabled = true;
       try {
         const response = await fetch("/api/bookmarks", { method: saved ? "DELETE" : "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(current) });
         if (!response.ok) throw Error("bookmark_save_failed");
         await load();
-        panel.querySelector("#toggle-bookmark")?.focus();
-      } catch { const status = panel.querySelector("#bookmark-status"); if (status) status.textContent = copy.error; button.disabled = false; }
+        if (isCurrent()) panel.querySelector("#toggle-bookmark")?.focus();
+      } catch {
+        if (!isCurrent()) return;
+        const status = panel.querySelector("#bookmark-status");
+        if (status) status.textContent = copy.error;
+        button.disabled = false;
+      }
     });
   }
-  try { await load(); } catch { if (panel.isConnected) panel.innerHTML = `<h2>${copy.title}</h2><p role="alert">${copy.error}</p>`; }
+  try { await load(); } catch { if (isCurrent()) panel.innerHTML = `<h2>${copy.title}</h2><p role="alert">${copy.error}</p>`; }
 }
 
 attemptChannel?.addEventListener("message", event => {

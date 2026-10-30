@@ -135,8 +135,8 @@ test("malformed legacy bookmarks do not hide valid same-edition chapters", async
   ] });
   await h.mount();
   assert.match(h.panel.innerHTML, /Remove this bookmark/);
-  assert.match(h.panel.innerHTML, /\\/reader\\/GEN\\/12/);
-  assert.doesNotMatch(h.panel.innerHTML, /\\/reader\\/GEN\\/51/);
+  assert.match(h.panel.innerHTML, /\/reader\/GEN\/12/);
+  assert.doesNotMatch(h.panel.innerHTML, /\/reader\/GEN\/51/);
   assert.doesNotMatch(h.panel.innerHTML, /role="alert"/);
   assert.equal(h.writes(), 0);
 });

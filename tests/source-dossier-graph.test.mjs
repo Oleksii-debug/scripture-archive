@@ -196,9 +196,9 @@ test('explicit empty dossier query is invalid; only an absent query opens the de
     assert.match(unknown,/role="alert"/,'empty explicit ID must show a localized error');
     assert.ok(unknown.includes('href="/dossiers?id=abraham"'),'keep genuine keyboard navigation for recovery');
     assert.doesNotMatch(unknown,/id="dossier-heading"/,'must not attribute Abraham dossier to the empty ID');
-    assert.doesNotMatch(unknown,/href="\\/reader\\//,'must not borrow citations from any dossier');
+    assert.ok(!unknown.includes('href="/reader/'),'must not borrow citations from any dossier');
     assert.doesNotMatch(unknown,/aria-current="page"/,'invalid selection cannot be current');
-    assert.doesNotMatch(unknown,/href="\\/mission\\/abraham"/,'unknown ID cannot launch Abraham mission');
+    assert.ok(!unknown.includes('href="/mission/abraham"'),'unknown ID cannot launch Abraham mission');
     const introduction=dossierMarkup(catalog,lang,null,esc);
     assert.match(introduction,/id="dossier-heading"/,'missing query still selects default introduction');
   }

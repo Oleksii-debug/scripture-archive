@@ -195,6 +195,16 @@ async function write(request:Request){
   if(action==="sensitive-consent"){
     if(id.provider==="agent")return privateJson({error:"forbidden"},{status:403});
     if(typeof body.acceptSensitive!=="boolean")return privateJson({error:"invalid_consent"},{status:400});
+    // Consenting to save sensitive self-description must not ACK silently
+    // truncated or silently discarded author-entered fields. Withdrawal is
+    // deliberately exempt: rejecting stale form metadata must never prevent
+    // revoking sensitive-data consent.
+    if(body.acceptSensitive===true && ([
+      ["tradition",40], ["denomination",160], ["church",160],
+    ] as const).some(([key,max])=>{
+      const value=body[key];
+      return value != null && (typeof value!=="string" || value.trim().length>max);
+    }))return privateJson({error:"invalid_consent"},{status:400});
     const accepted=body.acceptSensitive, tradition=clean(body.tradition,40), denomination=clean(body.denomination,160), church=clean(body.church,160);
     if(accepted&&tradition&&!TRADITIONS.has(tradition))return privateJson({error:"invalid_profile_option"},{status:400});
     try {

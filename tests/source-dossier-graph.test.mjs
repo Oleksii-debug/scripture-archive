@@ -110,7 +110,10 @@ test('the dossier catalogue fails closed when edition provenance/metadata cannot
   const weird=dossierMarkup(catalog,'en','"><script>alert(1)</script>',esc);
   assert.doesNotMatch(weird,/<script>/);
   assert.match(weird,/role="alert"/);
-  assert.ok(!weird.includes('Abraham'),'unknown dossier must not impersonate a valid person');
+  assert.ok(!weird.includes('id="dossier-heading"'),
+    'unknown dossier must not impersonate any valid dossier article');
+  assert.ok(!weird.includes('href="/reader/'),
+    'unknown dossier must not borrow a valid person\'s cited passage');
   assert.ok(weird.includes('href="/dossiers?id=abraham"'),'allow recovery through the real catalogue');
 });
 

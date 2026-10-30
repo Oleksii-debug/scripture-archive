@@ -4,6 +4,7 @@ const routes = [
   ["/", "weekly", "1.0"],
   ["/reader", "weekly", "0.9"],
   ["/campaigns", "weekly", "0.8"],
+  ["/library", "weekly", "0.6"],
   ["/missions", "weekly", "0.8"],
   ["/groups", "weekly", "0.7"],
   ["/community", "daily", "0.8"],

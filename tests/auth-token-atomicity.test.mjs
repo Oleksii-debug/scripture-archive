@@ -12,13 +12,15 @@ function fixture() {
     db.exec(readFileSync(new URL("../drizzle/" + name, import.meta.url), "utf8"));
   db.prepare("INSERT INTO accounts (id,email,password_hash,password_salt,password_iterations,first_name,last_name) VALUES ('alice','alice@example.invalid','oldhash','oldsalt',1,'Alice','Test')").run();
   db.prepare("INSERT INTO auth_sessions(token_hash,user_id,session_version,user_agent_hash,expires_at) VALUES ('session','alice',1,'agent','2099-01-01')").run();
-  let failAt = -1, unconfirmedAt = -1, missingAt = -1, zeroAt = -1, emails = 0, failReadFragment = "";
+  let failAt = -1, unconfirmedAt = -1, missingAt = -1, zeroAt = -1, emails = 0, failReadFragment = "", batchCalls = 0, failBatchNumber = -1;
   const D1 = { prepare(sql) { return { bind(...args) { return {
     first: async () => { if (failReadFragment && sql.includes(failReadFragment)) throw Error("simulated D1 read failure"); return db.prepare(sql).get(...args) || null; },
     run: async () => { const result = db.prepare(sql).run(...args); return { success: true, meta: { changes: Number(result.changes) } }; },
   }; } }; }, async batch(statements) {
     db.exec("BEGIN");
+    batchCalls++;
     try {
+      if (batchCalls === failBatchNumber) throw Error("simulated token batch failure");
       const results = [];
       for (let i = 0; i < statements.length; i++) {
         if (i === failAt) throw Error("simulated storage failure");
@@ -47,7 +49,8 @@ function fixture() {
   } });
   return { db, handler: exports, failAt: n => { failAt = n; },
     unconfirmedAt: n => { unconfirmedAt = n; }, missingAt: n => { missingAt = n; },
-    zeroAt: n => { zeroAt = n; }, failReadFor: text => { failReadFragment = text; }, emails: () => emails };
+    zeroAt: n => { zeroAt = n; }, failReadFor: text => { failReadFragment = text; },
+    failBatchNumber: n => { failBatchNumber = n; }, emails: () => emails };
 }
 
 test("verification and token consumption roll back together and remain single-use", async () => {
@@ -135,7 +138,9 @@ test("unconfirmed new verification token may not trigger any email dispatch", as
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email: "alice@example.invalid" }),
   });
-  await assert.rejects(f.handler.POST(request), /token_save_unconfirmed/);
+  const unavailable = await f.handler.POST(request);
+  assert.equal(unavailable.status, 503);
+  assert.equal((await unavailable.json()).error, "verification_unavailable");
   assert.equal(f.emails(), 0);
   f.db.close();
 });
@@ -266,5 +271,65 @@ test("R0.2: password reset token lookup outage never mutates password, session o
   assert.equal(f.db.prepare("SELECT used_at FROM auth_tokens WHERE token_hash='hash-code'").get().used_at, null);
   f.failReadFor("");
   assert.equal((await f.handler.POST(request())).status, 200);
+  f.db.close();
+});
+
+
+test("R0.2: account/profile persisted but verification-token transaction fails: no success and no email", async () => {
+  const f = fixture();
+  f.failBatchNumber(2);
+  const result = await f.handler.POST(registrationRequest("token-outage@example.invalid"));
+  assert.equal(result.status, 503);
+  assert.equal((await result.json()).error, "verification_unavailable");
+  assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM accounts WHERE email='token-outage@example.invalid'").get().n, 1);
+  assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM profiles WHERE email='token-outage@example.invalid'").get().n, 1);
+  assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM auth_tokens WHERE purpose='verify'").get().n, 0);
+  assert.equal(f.emails(), 0);
+  f.db.close();
+});
+
+test("R0.2: resend verification token-store outage is private 503, not an uncaught error or email", async () => {
+  const f = fixture();
+  f.failAt(1);
+  const req = new Request("https://example.invalid/api/auth?action=resend-verification", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "alice@example.invalid" }),
+  });
+  const result = await f.handler.POST(req);
+  assert.equal(result.status, 503);
+  assert.equal((await result.json()).error, "verification_unavailable");
+  assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM auth_tokens WHERE user_id='alice'").get().n, 0);
+  assert.equal(f.emails(), 0);
+  f.db.close();
+});
+
+test("R0.2: password recovery token-store outage returns 503 without sending an invalid link", async () => {
+  const f = fixture();
+  f.db.prepare("UPDATE accounts SET email_verified_at=CURRENT_TIMESTAMP WHERE id='alice'").run();
+  f.failAt(1);
+  const req = new Request("https://example.invalid/api/auth?action=forgot-password", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "alice@example.invalid" }),
+  });
+  const result = await f.handler.POST(req);
+  assert.equal(result.status, 503);
+  assert.equal((await result.json()).error, "password_reset_unavailable");
+  assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM auth_tokens WHERE user_id='alice'").get().n, 0);
+  assert.equal(f.emails(), 0);
+  f.db.close();
+});
+
+test("R0.2: unknown email still returns the same accepted generic resend/recovery response", async () => {
+  const f = fixture();
+  for (const action of ["resend-verification", "forgot-password"]) {
+    const req = new Request("https://example.invalid/api/auth?action=" + action, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "nobody@example.invalid" }),
+    });
+    const response = await f.handler.POST(req);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { ok: true });
+  }
+  assert.equal(f.emails(), 0);
   f.db.close();
 });

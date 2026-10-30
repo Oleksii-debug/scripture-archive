@@ -150,7 +150,11 @@ export async function POST(request: Request) {
       // A transient database outage is not evidence that the email is taken.
       return json({ error: "registration_unavailable" }, 503);
     }
-    const token = await createOneTimeToken(id, "verify", 24 * 60);
+    // Account/profile may be durable even if the second token transaction is
+    // unavailable. Do not send a link or claim successful registration then.
+    let token: string;
+    try { token = await createOneTimeToken(id, "verify", 24 * 60); }
+    catch { return json({ error: "verification_unavailable" }, 503); }
     const delivery = await sendSecurityEmail(email, selectedLocale, "verify", `${baseUrl(request)}/api/auth?action=verify&token=${encodeURIComponent(token)}`);
     return json({ ok: true, verificationRequired: true, emailDelivered: delivery.delivered, ...(isAuthTestRequest(request) ? { testToken: token } : {}) }, 201);
   }
@@ -177,17 +181,23 @@ export async function POST(request: Request) {
   if (action === "resend-verification") {
     const email = normalizeEmail(data.email);
     if (!await rateLimit(`verify:${address}:${email}`, 3, 3600)) return json({ error: "too_many_requests" }, 429);
+    try {
     const account = await env.DB.prepare("SELECT a.id,a.email,a.email_verified_at,p.locale FROM accounts a LEFT JOIN profiles p ON p.user_id=a.id WHERE a.email=? AND a.deleted_at IS NULL").bind(email).first<Account>();
     if (account && !account.email_verified_at) {
       const token = await createOneTimeToken(account.id, "verify", 24 * 60);
       await sendSecurityEmail(account.email, account.locale || "uk", "verify", `${baseUrl(request)}/api/auth?action=verify&token=${encodeURIComponent(token)}`);
     }
     return json({ ok: true });
+    } catch {
+      // Do not leak infrastructure exceptions or claim an email was queued.
+      return json({ error: "verification_unavailable" }, 503);
+    }
   }
 
   if (action === "forgot-password") {
     const email = normalizeEmail(data.email);
     if (!await rateLimit(`forgot:${address}:${email}`, 3, 3600)) return json({ error: "too_many_requests" }, 429);
+    try {
     const account = await env.DB.prepare("SELECT a.id,a.email,a.email_verified_at,p.locale FROM accounts a LEFT JOIN profiles p ON p.user_id=a.id WHERE a.email=? AND a.deleted_at IS NULL").bind(email).first<Account>();
     let testToken: string | undefined;
     if (account?.email_verified_at) {
@@ -196,6 +206,10 @@ export async function POST(request: Request) {
       await sendSecurityEmail(account.email, account.locale || "uk", "reset", `${baseUrl(request)}/account?reset=${encodeURIComponent(token)}`);
     }
     return json({ ok: true, ...(testToken ? { testToken } : {}) });
+    } catch {
+      // Database/token generation failed: this is not evidence of no account.
+      return json({ error: "password_reset_unavailable" }, 503);
+    }
   }
 
   if (action === "reset-password") {

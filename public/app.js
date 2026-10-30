@@ -3041,7 +3041,7 @@ function groupCard(group) {
 function groupPageCurrent(expected, principal) {
   const active = location.hash.startsWith("#/")
     ? location.hash.slice(2) : location.pathname.replace(/^\/+/, "");
-  return state.user === principal && active.replace(/\/+$/, "") === expected;
+  return state.user === principal && !state.sessionUnavailable && active.replace(/\/+$/, "") === expected;
 }
 
 async function renderGroups() {
@@ -3069,31 +3069,42 @@ async function renderGroups() {
   if (document.querySelector("#group-form"))
     document.querySelector("#group-form").onsubmit = async (e) => {
       e.preventDefault();
-      const form = new FormData(e.currentTarget),
+      const control=e.currentTarget;
+      if(control?.isConnected===false||!groupPageCurrent("groups",principal))return;
+      const form = new FormData(control),
         data = Object.fromEntries(form);
       data.weeklyGoal = Number(data.weeklyGoal);
       data.publicOwnerName = form.has("publicOwnerName");
       try {
         const result = await groupRequest("create", "POST", data);
+        if(control?.isConnected===false||!groupPageCurrent("groups",principal))return;
         announce(t("groupSaved"));
         navigateTo(`/groups/${result.groupId}`);
       } catch {
-        document.querySelector("#group-form-state").textContent =
-          t("groupError");
+        if(control?.isConnected!==false&&groupPageCurrent("groups",principal)){
+          const status=document.querySelector("#group-form-state");
+          if(status)status.textContent=t("groupError");
+        }
       }
     };
   if (document.querySelector("#join-form"))
     document.querySelector("#join-form").onsubmit = async (e) => {
       e.preventDefault();
-      const form = new FormData(e.currentTarget),
+      const control=e.currentTarget;
+      if(control?.isConnected===false||!groupPageCurrent("groups",principal))return;
+      const form = new FormData(control),
         data = Object.fromEntries(form);
       data.publicName = form.has("publicName");
       try {
         const result = await groupRequest("join", "POST", data);
+        if(control?.isConnected===false||!groupPageCurrent("groups",principal))return;
         announce(t("joined"));
         navigateTo(`/groups/${result.groupId}`);
       } catch {
-        document.querySelector("#join-state").textContent = t("groupError");
+        if(control?.isConnected!==false&&groupPageCurrent("groups",principal)){
+          const status=document.querySelector("#join-state");
+          if(status)status.textContent=t("groupError");
+        }
       }
     };
 }
@@ -3151,6 +3162,7 @@ async function renderGroup(groupId) {
   const manageCopy = groupManagementCopy(state.lang);
   const manageStatus = document.querySelector('#group-manage-status');
   async function manageGroup(action, payload, button, successText) {
+    if(button?.isConnected===false||!groupPageCurrent(`groups/${groupId}`,principal))return;
     button.disabled = true;
     if (manageStatus) manageStatus.textContent = '';
     try {
@@ -3161,28 +3173,30 @@ async function renderGroup(groupId) {
       else await renderGroup(group.id);
       announce(successText);
     } catch {
-      if (manageStatus?.isConnected) manageStatus.textContent = manageCopy.error;
+      if (manageStatus?.isConnected && groupPageCurrent(`groups/${groupId}`,principal)) manageStatus.textContent = manageCopy.error;
     } finally {
       if (button.isConnected) button.disabled = false;
     }
   }
   const leaveButton = document.querySelector('#leave-group');
   if (leaveButton) leaveButton.onclick = () => {
-    if (window.confirm(manageCopy.leaveConfirm)) void manageGroup('leave', {}, leaveButton, manageCopy.left);
+    if (leaveButton.isConnected!==false && groupPageCurrent(`groups/${groupId}`,principal) && window.confirm(manageCopy.leaveConfirm)) void manageGroup('leave', {}, leaveButton, manageCopy.left);
   };
   const transferForm = document.querySelector('#transfer-group');
   if (transferForm) transferForm.onsubmit = event => {
     event.preventDefault();
+    if(transferForm.isConnected===false||!groupPageCurrent(`groups/${groupId}`,principal))return;
     const select = transferForm.elements.namedItem('targetUserId');
     if (window.confirm(manageCopy.transferConfirm + select.selectedOptions[0].textContent))
       void manageGroup('transfer', {targetUserId:select.value}, transferForm.querySelector('button'), manageCopy.transferred);
   };
   const rotateButton = document.querySelector('#rotate-group-invite');
   if (rotateButton) rotateButton.onclick = () => {
-    if (window.confirm(manageCopy.rotateConfirm)) void manageGroup('rotate-invite', {expectedInviteCode:group.inviteCode,confirm:true}, rotateButton, manageCopy.rotated);
+    if (rotateButton.isConnected!==false && groupPageCurrent(`groups/${groupId}`,principal) && window.confirm(manageCopy.rotateConfirm)) void manageGroup('rotate-invite', {expectedInviteCode:group.inviteCode,confirm:true}, rotateButton, manageCopy.rotated);
   };
   document.querySelectorAll('.group-role-button').forEach(button => {
     button.onclick = () => {
+      if(button.isConnected===false||!groupPageCurrent(`groups/${groupId}`,principal))return;
       const member = data.managementMembers.find(item => item.user_id === button.dataset.userId);
       if (member && window.confirm(manageCopy.roleConfirm + member.display_name))
         void manageGroup('role', {targetUserId:member.user_id,expectedRole:member.role,role:member.role==='facilitator'?'member':'facilitator'}, button, manageCopy.roleSaved);
@@ -3190,11 +3204,12 @@ async function renderGroup(groupId) {
   });
   const deleteButton = document.querySelector('#delete-group');
   if (deleteButton) deleteButton.onclick = () => {
-    if (window.confirm(manageCopy.deleteConfirm)) void manageGroup('delete', {confirm:true}, deleteButton, manageCopy.deleted);
+    if (deleteButton.isConnected!==false && groupPageCurrent(`groups/${groupId}`,principal) && window.confirm(manageCopy.deleteConfirm)) void manageGroup('delete', {confirm:true}, deleteButton, manageCopy.deleted);
   };
   const targetBook = document.querySelector("#target-book"),
     targetChapter = document.querySelector("#target-chapter"),
     updateTarget = () => {
+      if(targetBook?.isConnected===false||targetChapter?.isConnected===false||!groupPageCurrent(`groups/${groupId}`,principal))return;
       const code = targetBook.value,
         chapter = Math.max(1, Number(targetChapter.value) || 1);
       document.querySelector("#reading-preview").textContent =
@@ -3204,12 +3219,14 @@ async function renderGroup(groupId) {
     };
   targetBook.onchange = updateTarget;
   targetChapter.oninput = updateTarget;
-  document.querySelector('#chapter-link').addEventListener('click',()=>{const lang=String(group.bibleEdition||state.lang).slice(0,2);if(EDITIONS[lang]){localStorage.setItem(`sa.edition.${lang}`,group.bibleEdition);state.lang=lang;localStorage.setItem('sa.lang',lang);setStaticI18n()}});
-  if(group.marathonEnabled&&group.cohortStatus==='ready'&&data.membership==='owner'){document.querySelector('.cohort-card').insertAdjacentHTML('beforeend',`<button class="button primary" id="start-marathon">${state.lang==='uk'?'Почати марафон':state.lang==='ru'?'Начать марафон':'Start marathon'}</button>`);document.querySelector('#start-marathon').onclick=async()=>{try{await groupRequest('start','POST',{groupId:group.id});await renderGroup(group.id)}catch{announce(t('groupError'))}};}
+  document.querySelector('#chapter-link').addEventListener('click',event=>{if(event.currentTarget?.isConnected===false||!groupPageCurrent(`groups/${groupId}`,principal))return;const lang=String(group.bibleEdition||state.lang).slice(0,2);if(EDITIONS[lang]){localStorage.setItem(`sa.edition.${lang}`,group.bibleEdition);state.lang=lang;localStorage.setItem('sa.lang',lang);setStaticI18n()}});
+  if(group.marathonEnabled&&group.cohortStatus==='ready'&&data.membership==='owner'){document.querySelector('.cohort-card').insertAdjacentHTML('beforeend',`<button class="button primary" id="start-marathon">${state.lang==='uk'?'Почати марафон':state.lang==='ru'?'Начать марафон':'Start marathon'}</button>`);document.querySelector('#start-marathon').onclick=async event=>{const button=event?.currentTarget;if(button?.isConnected===false||!groupPageCurrent(`groups/${groupId}`,principal))return;try{await groupRequest('start','POST',{groupId:group.id});if(button?.isConnected===false||!groupPageCurrent(`groups/${groupId}`,principal))return;await renderGroup(group.id)}catch{if(groupPageCurrent(`groups/${groupId}`,principal))announce(t('groupError'))}};}
   if (document.querySelector("#session-form"))
     document.querySelector("#session-form").onsubmit = async (e) => {
       e.preventDefault();
-      const form = new FormData(e.currentTarget),
+      const control=e.currentTarget;
+      if(control?.isConnected===false||!groupPageCurrent(`groups/${groupId}`,principal))return;
+      const form = new FormData(control),
         payload = Object.fromEntries(form);
       payload.groupId = group.id;
       payload.chapter = Number(payload.chapter);
@@ -3220,10 +3237,14 @@ async function renderGroup(groupId) {
       payload.answersTotal = 0;
       try {
         await groupRequest("session", "POST", payload);
+        if(control?.isConnected===false||!groupPageCurrent(`groups/${groupId}`,principal))return;
         announce(t("meetingSaved"));
         await renderGroup(group.id);
       } catch {
-        document.querySelector("#session-state").textContent = t("groupError");
+        if(control?.isConnected!==false&&groupPageCurrent(`groups/${groupId}`,principal)){
+          const status=document.querySelector("#session-state");
+          if(status)status.textContent=t("groupError");
+        }
       }
     };
 }

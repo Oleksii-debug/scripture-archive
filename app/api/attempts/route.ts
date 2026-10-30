@@ -78,7 +78,7 @@ function attemptDeadline(raw: unknown): number | null {
 // timestamp text. Date.parse('1') and overflow days accept false history;
 // match the canonical D1 CURRENT_TIMESTAMP UTC seconds (and the reader guard).
 function canonicalHistoryUtcTimestamp(value: unknown): boolean {
-  if (typeof value !== "string" || !/^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}$/.test(value)) return false;
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)) return false;
   const date = new Date(value.replace(" ", "T") + "Z");
   return Number.isFinite(date.getTime()) &&
     date.toISOString().slice(0, 19).replace("T", " ") === value;

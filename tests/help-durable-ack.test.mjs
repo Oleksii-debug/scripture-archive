@@ -22,8 +22,12 @@ function harness(batchResult) {
       if (batchResult === "throws") throw Error("simulated D1 outage");
       if (batchResult === "missing") return null;
       if (batchResult === "short") return [];
-      if (batchResult === "failed") return statements.map(() => ({ success: false }));
-      return statements.map(() => ({ success: true }));
+      if (batchResult === "failed") return statements.map(() => ({ success: false, meta: { changes: 0 } }));
+      if (batchResult === "missing-receipt") return statements.map(() => ({ success: true }));
+      if (batchResult === "zero") return statements.map(() => ({ success: true, meta: { changes: 0 } }));
+      if (batchResult === "multiple") return statements.map(() => ({ success: true, meta: { changes: 2 } }));
+      if (batchResult === "string") return statements.map(() => ({ success: true, meta: { changes: "1" } }));
+      return statements.map(() => ({ success: true, meta: { changes: 1 } }));
     },
   };
   const requireFake = id => {
@@ -51,7 +55,7 @@ function harness(batchResult) {
   return { state, response: fixtureModule.exports.POST(request) };
 }
 
-for (const mode of ["throws", "missing", "short", "failed"]) {
+for (const mode of ["throws", "missing", "short", "failed", "missing-receipt", "zero", "multiple", "string"]) {
   test("support inbox refuses " + mode + " D1 batch without external mail", async () => {
     const { state, response } = harness(mode);
     const result = await response;

@@ -12,7 +12,7 @@ const transpiled = ts.transpileModule(source, {
 assert.equal(transpiled.diagnostics?.length ?? 0, 0);
 
 function harness({ sent = true, receipt = { success: true, meta: { changes: 1 } },
-  batchReceipts = [{ success: true }] } = {}) {
+  batchReceipts = [{ success: true, meta: { changes: 1 } }] } = {}) {
   const state = { emails: 0, updates: 0, batches: 0, ids: [] };
   const DB = {
     prepare(sql) {
@@ -105,7 +105,7 @@ test("mail failure preserves accepted request without a false delivery receipt",
 });
 
 test("unsaved support requests are never sent as emails", async () => {
-  for (const batchReceipts of [[{ success: false }], [], new Error("db-write-outage")]) {
+  for (const batchReceipts of [[{ success: false }], [{ success: true }], [{ success: true, meta: { changes: 0 } }], [{ success: true, meta: { changes: 2 } }], [], new Error("db-write-outage")]) {
     const h = harness({ batchReceipts });
     const response = await h.submit();
     assert.equal(response.status, 503);

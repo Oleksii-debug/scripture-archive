@@ -28,7 +28,7 @@ function harness({ dbPresent = true, db = "ok", auth = "anonymous", limit = "all
     async batch(statements) {
       calls.batch++;
       if (db === "batch-throw") throw Error("D1 write failed");
-      return statements.map(() => ({ success: db !== "failed-ack" }));
+      return statements.map(() => ({ success: db !== "failed-ack", meta: { changes: db === "failed-ack" ? 0 : 1 } }));
     },
   };
   const exports = {};

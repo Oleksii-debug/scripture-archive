@@ -253,6 +253,19 @@ test("valid chapter receipts yield exact public reading counts without any write
   assert.deepEqual(f.calls, { advance: 0, batch: 1, auth: 0 });
 });
 
+test("public chapter counts use the private reader's canonical local-edition limits", async () => {
+  const receipts = validReceipts();
+  receipts[2].results[0].reading_data = JSON.stringify([
+    { book: "GEN", chapter: 50, title: "Буття 50" },
+    { book: "JOL", chapter: 4, title: "Йоіл 4" },
+  ]);
+  const f = fixture({ receipts });
+  const response = await f.get();
+  assert.equal(response.status, 200);
+  assert.equal(response.body.members[0].chaptersRead, 2);
+  assert.deepEqual(f.calls, { advance: 0, batch: 1, auth: 0 });
+});
+
 for (const [name, history] of [
   ["malformed JSON", "{broken"],
   ["nonarray object", '{"book":"GEN"}'],
@@ -261,6 +274,10 @@ for (const [name, history] of [
   ["invalid entry", "[null]"],
   ["invented code shape", '[{"book":"FAKE","chapter":1,"title":"not real"}]'],
   ["zero chapter", '[{"book":"GEN","chapter":0,"title":"Genesis"}]'],
+  ["invented canonical-shaped book", '[{"book":"XYZ","chapter":1,"title":"Not a Bible book"}]'],
+  ["Genesis chapter beyond the canon", '[{"book":"GEN","chapter":51,"title":"Genesis 51"}]'],
+  ["Joel above the largest local edition", '[{"book":"JOL","chapter":5,"title":"Joel 5"}]'],
+  ["Revelation above chapter 22", '[{"book":"REV","chapter":23,"title":"Revelation 23"}]'],
   ["fractional chapter", '[{"book":"GEN","chapter":1.5,"title":"Genesis"}]'],
   ["missing title", '[{"book":"GEN","chapter":1}]'],
   ["blank title", '[{"book":"GEN","chapter":1,"title":"  "}]'],

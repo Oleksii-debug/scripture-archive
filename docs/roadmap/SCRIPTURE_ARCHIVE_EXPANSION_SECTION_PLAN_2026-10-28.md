@@ -163,3 +163,16 @@
 - **GitHub:** [PR #481](https://github.com/Oleksii-debug/scripture-archive/pull/481) squash MERGED в `main@d60a3df68c8bfb308334a37304206498d0faede7`, реальний GitHub readback після merge; рівно **2 шляхи**: `public/parallel-reader.js` blob `fa95634b4b7bf0682593b081e6338bc61323e5d9`, `tests/parallel-reader.test.mjs` blob `c19b2e838226adcdbee3989ba21611211ef1d156`.
 - **Перевірка:** 36/36 source-executed V8 case matrix PASS (ізольовані DOM/URL/FormData test doubles, не повноцінний браузер); [Actions exact-head #41002762651](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41002762651): **918 Node PASS / 0 FAIL / 1 SKIP**, включно з новими негативними й позитивними сценаріями; TS/lint/build/2 Python-валідатори PASS. **Повний workflow FAIL** через окремий вже відомий Wrangler Worker/D1 restart 503 у `tests/api-flow.test.mjs`: 21/22 двічі; баг [#361](https://github.com/Oleksii-debug/scripture-archive/pull/361) відкритий. Не представляти цей факт як зелений E2E.
 - **Межі приймання:** production deployment, license audit інших видань, реальний браузер/клавіатура та фізичний NVDA не виконані цим вузьким виправленням. Переробка цієї підфункції без нового відтворюваного дефекту не потрібна; загальний release gate R0.1–R0.5 і ширший SA-EXT-01 залишаються відкритими.
+
+
+---
+
+### R0.2 / RESET_MAIL_DELIVERY_CLAIM — scoped terminal, 2026-10-30
+
+**Конкретна підфункція `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`**; залишкова реалізація саме цього дефекту — **0**, необхідних незлитих PR — **0**. **Повний R0.2 (SMTP/DNS і реальне підтвердження адреси) — OPEN; SA-EXT-01…20 усі OPEN.**
+
+- **Дефект:** API `forgot-password` умисно повертає неідентифікаційну `{ok:true}` без підтвердження доставки листа (для відсутнього облікового запису та для існуючого, де mail-provider може не підтвердити доставку); стара форма `/account` усіма трьома мовами неправдиво говорила «лист уже надіслано».
+- **Виправлено:** канонічний `public/app.js` тепер розрізняє прийнятий запит і непідтверджену email-доставку; текст для uk/ru/en пояснює перевірку пошти та папки «Спам». Захист від перебирання облікових записів, серверна авторизація і відновлення пароля не змінені. Жодного другого API та неперевіреної email-обіцянки.
+- **GitHub:** [PR #484](https://github.com/Oleksii-debug/scripture-archive/pull/484) **SQUASH MERGED**, точний SHA `main@3b95c816cd4660b57a09387ee945cb993929336a`; GitHub commit/readback — рівно `public/app.js` (blob `beb01f296d01d72fad8331b178a3fdebf0c62531`) та `tests/password-reset-delivery-copy.test.mjs` (blob `c9fd74ddd5b8541080e16dc17d7b5c79a4387f52`).
+- **Перевірки:** [точний PR-head run #41003011421](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41003011421): **924 native Node PASS, 1 SKIP, 0 FAIL**, шість нових вихідно-залежних перевірок; TypeScript, lint 0 errors, build, Python 2/2 PASS. **Увесь CI RED** тільки через відомий нестабільний disposable Worker/D1 503 restart (21/22 двічі), власник виправлення [#361](https://github.com/Oleksii-debug/scripture-archive/pull/361). Не вважати E2E/production доставку перевіреною.
+- **Обмеження:** production SHA, реальна email-доставка/SPF/DKIM/DMARC, фізичний Windows/NVDA, доступ до Sites та реліз лишаються відкритими. Повторне призначення цього конкретного виправлення — лише за регресійним дефектом.

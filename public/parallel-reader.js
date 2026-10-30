@@ -79,10 +79,17 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
       if (!Array.isArray(verses)) { status.textContent=copy.unavailable; return; }
       // A corrupt or empty chapter must never be presented as verified Scripture.
       // An indexed loop also rejects sparse arrays (Array#every skips their holes).
-      if (verses.length===0) throw Error('empty edition chapter');
+      // A damaged imported chapter must not materialize an unbounded number
+      // of buttons/text nodes or huge private clipboard-ready strings. Psalm
+      // 119 has 176 verses; these bounds leave room for edition differences.
+      // Validate before creating ANY verse DOM or citation snapshot.
+      if (verses.length===0 || verses.length>256) throw Error('invalid edition chapter size');
+      let chapterCharacters=0;
       for (let i=0; i<verses.length; i++) {
         if (typeof verses[i]!=='string' || !verses[i].trim())
           throw Error('invalid edition verse record');
+        chapterCharacters+=verses[i].length;
+        if (chapterCharacters>131072) throw Error('oversized edition chapter');
       }
       // Never attribute a new/unrecognized local edition to the primary one.
       const fallback=catalog.editions?.[lang];

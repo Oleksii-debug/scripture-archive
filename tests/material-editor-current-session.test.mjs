@@ -8,7 +8,7 @@ const deferred = () => {
   return { promise: new Promise(resolve => { release = resolve; }), release };
 };
 
-function setup() {
+function setup(onRefresh = async () => {}) {
   const original = {fetch: globalThis.fetch, FormData: globalThis.FormData};
   globalThis.FormData = class {
     constructor(form) { this.form = form; }
@@ -41,7 +41,7 @@ function setup() {
     querySelector: () => status,
   };
   const w = reviewText('en');
-  attachReviewControls(root, w, async () => { refreshed++; }, () => { announced++; }, () => current);
+  attachReviewControls(root, w, async () => { refreshed++; await onRefresh(); }, () => { announced++; }, () => current, () => current);
   return {
     root, submission, withdraw, review, decisionButton, status,
     setCurrent: value => { current = value; }, setFetch: fn => { globalThis.fetch = fn; },
@@ -106,7 +106,7 @@ test('a current editor still completes a genuine independent review and announce
   } finally {s.restore();}
 });
 
-function editorFixture() {
+function editorFixture(onRefresh = async () => {}) {
   const original = {fetch: globalThis.fetch, FormData: globalThis.FormData};
   let current = true, posts = 0, refreshed = 0, announced = 0;
   globalThis.FormData = class { get() { return 'editor@example.invalid'; } };
@@ -120,7 +120,7 @@ function editorFixture() {
     querySelector: selector => selector === '#editor-role-status' ? status : form,
     querySelectorAll: () => [revoke],
   };
-  attachEditorRoles(root, 'en', async () => {refreshed++;}, () => {announced++;}, () => current);
+  attachEditorRoles(root, 'en', async () => {refreshed++; await onRefresh();}, () => {announced++;}, () => current, () => current);
   return {
     form, revoke, setCurrent: val => {current = val;}, setFetch: fn => {globalThis.fetch = fn;},
     posts: () => posts, tick: () => {posts++;}, refreshed: () => refreshed, announced: () => announced,
@@ -144,6 +144,28 @@ test('old account owner cannot grant/revoke an editor; late role response cannot
     gate.release(success());
     await action;
     assert.equal(e.refreshed(), 0);
+    assert.equal(e.announced(), 0);
+  } finally {e.restore();}
+});
+
+test('submit response cannot announce into a replacement principal after its refresh completes', async () => {
+  let s;
+  s = setup(async () => { s.setCurrent(false); });
+  try {
+    await s.submission.onsubmit({preventDefault() {}});
+    assert.equal(s.posts(), 1);
+    assert.equal(s.refreshed(), 1);
+    assert.equal(s.announced(), 0);
+  } finally {s.restore();}
+});
+
+test('owner role response cannot announce into a replacement principal after its refresh completes', async () => {
+  let e;
+  e = editorFixture(async () => { e.setCurrent(false); });
+  try {
+    await e.revoke.onclick();
+    assert.equal(e.posts(), 1);
+    assert.equal(e.refreshed(), 1);
     assert.equal(e.announced(), 0);
   } finally {e.restore();}
 });

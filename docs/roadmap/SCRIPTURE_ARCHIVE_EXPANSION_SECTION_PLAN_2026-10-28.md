@@ -1,3 +1,14 @@
+## 2026-10-30 — SA-EXT-02/04 / ATTEMPT_MARATHON_COUNT_READ_FAILCLOSED — РОЗРОБКУ ПІДФУНКЦІЇ ЗАКРИТО
+
+**Виключно цей bounded authorization defect:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`; `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Повні SA-EXT-02, SA-EXT-04 та всі батьківські SA-EXT-01…20 залишаються OPEN.**
+
+- **Відтворена проблема:** `POST /api/attempts?action=start` авторизував старт місії в активному груповому марафоні за `Number(used?.count || 0)`: `NULL`, відсутнє або пошкоджене значення SQL `COUNT(DISTINCT ...)` перетворювалося на нуль і могло помилково дозволити нову спробу.
+- **Реальна інтеграція:** [PR #615](https://github.com/Oleksii-debug/scripture-archive/pull/615) **SQUASH MERGED** у `main@333668ba34788a3bf443bddbec535bc062a8017b`. `app/api/attempts/route.ts` blob `8944f7baacb838fccb8481f3365c9dff44810dc6` вимагає існуючого D1 рядка з додатним або нульовим safe integer count; інакше приватний HTTP 503 до читання/споживання chapter receipt й запису mission attempt. Канонічний actor/auth, DB, редакція `#608` і route залишились без альтернативних реалізацій.
+- **Перевірки:** `tests/attempt-recovery-history.test.mjs` blob `99f48e4ddd04cdaa90ee9b81074da0e6d5099503` — реальний transpiled POST, канонічний `0001/0004` SQLite DDL, активний марафон, **10 відхилених malformed/missing count кейсів + 4 успішні/межові 201/409 кейси**. Перший exact-head Actions #41036963594 виявив неправильний тестовий regex для extraction DDL; виправлено з виділенням реальних SQL bytes за явними межами. Повторний [Actions #41037114122](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41037114122): native Node, TypeScript, lint, source build, Python **PASS**. Загальний workflow **FAIL**, disposable Wrangler/D1 дві спроби **21/22** і `Your worker restarted mid-request`, 503 замість 403/200 у `tests/api-flow.test.mjs:100/103`; незалежний CI-blocker [draft PR #361](https://github.com/Oleksii-debug/scripture-archive/pull/361).
+- **Поза завершеним підпунктом:** поточний Cloudflare Sites deployment, production DB, інші групові й редакційні приймальні сценарії, фізичний NVDA, live email і всі батьківські секції. Немає нового release authorization. Центральна координація [#297](https://github.com/Oleksii-debug/scripture-archive/issues/297).
+
+---
+
 ## 2026-10-30 — SA-EXT-04 / GROUP_MARATHON_COUNT_READ_FAILCLOSED — РОЗРОБКУ ПІДПУНКТУ ЗАКРИТО
 
 **Лише встановлений вузький дефект:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`, `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **Повний SA-EXT-04 і всі батьківські SA-EXT-01…20 залишаються OPEN.**

@@ -99,6 +99,26 @@ for (const index of [0, 1, 2]) {
   });
 }
 
+for (const index of [0, 1]) {
+  test("empty SQLite COUNT result at index " + index + " cannot falsely become zero", async () => {
+    const receipts = validReceipts();
+    receipts[index] = { success: true, results: [] };
+    const result = await fixture({ receipts }).get();
+    assert.equal(result.status, 503);
+    assert.equal(result.body.error, "community_unavailable");
+  });
+}
+
+for (const total of [null, -1, 1.5]) {
+  test("corrupt community COUNT value " + String(total) + " is unavailable", async () => {
+    const receipts = validReceipts();
+    receipts[0] = { success: true, results: [{ total }] };
+    const result = await fixture({ receipts }).get();
+    assert.equal(result.status, 503);
+    assert.equal(result.body.error, "community_unavailable");
+  });
+}
+
 test("thrown public D1 batch exception is 503 JSON, not unhandled 500", async () => {
   const f = fixture({ throwBatch: true });
   const response = await f.get();

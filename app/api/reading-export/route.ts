@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { authenticateRequest } from "../../../lib/auth";
 import catalog from "../../../public/data/catalog.json";
 import { EDITIONS } from "../../../public/editions.js";
+import { validBookmarkTimestamp } from "../../../lib/bookmark-timestamp.js";
 
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "no-store, private", "X-Content-Type-Options": "nosniff" };
@@ -94,7 +95,7 @@ export async function GET(request: Request) {
           typeof row.book !== "string" || !/^[1-3]?[A-Z]{2,3}$/.test(row.book) ||
           !Number.isSafeInteger(row.chapter) || row.chapter < 1 ||
           row.chapter > bookmarkChapterLimit(row.edition, row.book) ||
-          typeof row.created_at !== "string" || !row.created_at.trim())
+          !validBookmarkTimestamp(row.created_at))
         throw Error("invalid_bookmark_record");
       return row;
     });

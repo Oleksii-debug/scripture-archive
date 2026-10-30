@@ -1,3 +1,4 @@
+import { validBookmarkTimestamp } from "../lib/bookmark-timestamp.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
@@ -21,6 +22,7 @@ async function read(rows) {
   vm.runInNewContext(compiled.outputText, {
     exports, Response,
     require(id) {
+      if (id.endsWith("lib/bookmark-timestamp.js")) return { validBookmarkTimestamp };
       if (id === "cloudflare:workers") return { env: { DB: {
         prepare(sql) {
           calls.push(sql);

@@ -1,3 +1,4 @@
+import { validBookmarkTimestamp } from "../lib/bookmark-timestamp.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { webcrypto } from "node:crypto";
@@ -46,6 +47,7 @@ function fixture({ rows = [valid, damaged], owner = "alice", available = true, c
   vm.runInNewContext(compiled.outputText, {
     exports, Request, Response, TextEncoder, crypto: webcrypto,
     require(name) {
+      if (name.endsWith("lib/bookmark-timestamp.js")) return { validBookmarkTimestamp };
       if (name === "cloudflare:workers") return { env: { DB: available ? database : undefined } };
       if (name.endsWith("lib/auth")) return {
         authenticateRequest: async () => principal ? { userId: principal, provider: "password" } : null,

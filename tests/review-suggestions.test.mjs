@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { reviewSuggestions, reviewScheduleMarkup, missionHistoryMarkup } from '../public/workspace.js';
+import {readFileSync} from 'node:fs';
+import { canonicalReadingChapterBounds, reviewSuggestions, reviewScheduleMarkup, missionHistoryMarkup } from '../public/workspace.js';
+
+const sourceCatalog=JSON.parse(readFileSync(new URL('../public/data/catalog.json',import.meta.url),'utf8'));
+const realChapters=canonicalReadingChapterBounds(sourceCatalog);
 
 const attempt=(day,score=4,mode='personal',chapter=12)=>({id:`fixture-${day}-${mode}-${chapter}`,book:'GEN',chapter,mode,score,total:4,completedAt:`2026-01-${String(day).padStart(2,'0')} 18:00:00`});
 const now=new Date('2026-01-10T23:00:00Z');
@@ -45,4 +49,29 @@ test('suggestions are accessible text links and hidden when history is unavailab
   assert.ok(html.includes('not a measure of mastery'));
   assert.equal(reviewScheduleMarkup({locked:true},'en',esc,now),'');
   assert.equal(reviewScheduleMarkup({error:true},'en',esc,now),'');
+});
+
+test('review calendar never suggests forged book/chapter pairs from historical receipts',()=>{
+  assert.equal(realChapters.size,66);
+  for(const [book,chapter] of [['FAK',2],['GEN',51],['JOL',5],['PSA',151],['REV',23]]) {
+    const row={...attempt(1),book,chapter};
+    assert.deepEqual(reviewSuggestions([row],now,realChapters),[],
+      'no suggestion from unverified passage '+book+':'+chapter);
+    const html=reviewScheduleMarkup({attempts:[row],pending:[]},'en',esc,now,realChapters);
+    assert.equal(html,'','inconsistent history is not an empty verified review schedule');
+  }
+  const joel={...attempt(1),book:'JOL',chapter:4};
+  const suggestions=reviewSuggestions([joel],now,realChapters);
+  assert.equal(suggestions.length,1,'approved Ukrainian edition has Joel chapter 4');
+  assert.equal(suggestions[0].book,'JOL');
+  const html=reviewScheduleMarkup({attempts:[joel],pending:[]},'en',esc,now,realChapters);
+  assert.match(html,/href="\/reader\/JOL\/4"/);
+});
+
+test('unavailable catalog never creates optimistic scheduled reviews',()=>{
+  const row=attempt(1);
+  for(const invalid of [null,new Map(),new Map([['FAK',150]])]){
+    assert.deepEqual(reviewSuggestions([row],now,invalid),[]);
+    assert.equal(reviewScheduleMarkup({attempts:[row],pending:[]},'en',esc,now,invalid),'');
+  }
 });

@@ -15,7 +15,7 @@ function fixture() {
   db.exec(`INSERT INTO home_groups(id,owner_user_id,name,invite_code,visibility,bible_edition) VALUES('g','alice','Group','AABBCCDD','private','en-web'),('other','alice','Other','other','private','en-web');
     INSERT INTO home_group_members(group_id,user_id,display_name,role) VALUES('g','alice','Alice','owner'),('g','bob','Bob','member'),('g','carol','Carol','facilitator'),('other','alice','Alice','owner');
     INSERT INTO group_sessions(id,group_id,created_by,book_id,chapter,meeting_date,reflection) VALUES('s','g','alice','GEN',12,'2026-10-28','private discussion');`);
-  let failure=-1, beforeBatch=null, beforeRun=null, corruptCreateReceipt=null, corruptSingleReceipt=null, failAll=false, throwAll=false;
+  let failure=-1, beforeBatch=null, beforeRun=null, corruptCreateReceipt=null, corruptSingleReceipt=null, failAll=false, throwAll=false, throwAuth=false;
   function statement(sql,args=[]) {return {sql,args,
     first:async()=>db.prepare(sql).get(...args)??null,
     all:async()=>{if(throwAll)throw Error('D1 read unavailable');return failAll?{success:false,results:[]}:{success:true,results:db.prepare(sql).all(...args)};},
@@ -40,7 +40,7 @@ function fixture() {
       if(id==='cloudflare:workers')return {env:{DB:D1}};
       if(id.endsWith('catalog.json'))return {default:JSON.parse(readFileSync(new URL('../public/data/catalog.json',import.meta.url),'utf8'))};
       if(id.endsWith('mission-abraham.json'))return {default:JSON.parse(readFileSync(new URL('../content/mission-abraham.json',import.meta.url),'utf8'))};
-      if(id.endsWith('/auth'))return {sameOrigin:r=>r.headers.get('origin')==='https://local.invalid',authenticateRequest:async r=>{const user=r.headers.get('x-user');return user?{userId:user,emailVerified:true,provider:'password'}:null;}};
+      if(id.endsWith('/auth'))return {sameOrigin:r=>r.headers.get('origin')==='https://local.invalid',authenticateRequest:async r=>{if(throwAuth)throw Error('session_store_offline');const user=r.headers.get('x-user');return user?{userId:user,emailVerified:true,provider:'password'}:null;}};
       throw Error('unexpected import '+id);
     }});return exports;
   }
@@ -53,7 +53,7 @@ function fixture() {
     db.prepare("INSERT INTO mission_attempts(id,actor_id,mission_id,book_id,chapter,group_id,locale,task_limit,status,expires_at) VALUES(?,?,'OT-AB-01','GEN',12,?,'en',5,?,datetime('now','+2 hours'))").run(id,user,group,status);
     db.prepare("INSERT INTO chapter_read_receipts(id,actor_id,book_id,chapter,group_id) VALUES(?,?,'GEN',12,?)").run(id,user,group);
   }
-  return {db,get,list,post,attempt,seedAttempt,beforeRun:fn=>{beforeRun=fn;},setFailure:n=>{failure=n;},beforeBatch:fn=>{beforeBatch=fn;},setCreateReceiptMode:mode=>{corruptCreateReceipt=mode;},setSingleReceiptMode:mode=>{corruptSingleReceipt=mode;},setReadFailure:v=>{failAll=v;},setReadThrow:v=>{throwAll=v;}};
+  return {db,get,list,post,attempt,seedAttempt,beforeRun:fn=>{beforeRun=fn;},setFailure:n=>{failure=n;},beforeBatch:fn=>{beforeBatch=fn;},setCreateReceiptMode:mode=>{corruptCreateReceipt=mode;},setSingleReceiptMode:mode=>{corruptSingleReceipt=mode;},setReadFailure:v=>{failAll=v;},setReadThrow:v=>{throwAll=v;},setAuthFailure:v=>{throwAuth=v;}};
 }
 const owner=f=>f.db.prepare("SELECT owner_user_id FROM home_groups WHERE id='g'").get().owner_user_id;
 const roles=f=>f.db.prepare("SELECT user_id,role FROM home_group_members WHERE group_id='g' ORDER BY user_id").all().map(x=>[x.user_id,x.role]);
@@ -420,5 +420,30 @@ test('empty but successful group list preserves truthful 200 rather than a spuri
     const response=await f.list('');
     assert.equal(response.status,200);
     assert.deepEqual(response.data.groups,[]);
+  }finally{f.db.close();}
+});
+
+
+test('SA-EXT-04 public group discovery survives session storage outage without private member data',async()=>{
+  const f=fixture();
+  try{
+    f.db.prepare("UPDATE home_groups SET visibility='public',roster_visibility='private' WHERE id='g'").run();
+    f.setAuthFailure(true);
+    const publicResult=await f.list();
+    assert.equal(publicResult.status,200);
+    assert.equal(publicResult.data.groups.length,1);
+    assert.equal(publicResult.data.groups[0].id,'g');
+    assert.equal(publicResult.data.groups[0].memberCount,null);
+    assert.equal(Object.hasOwn(publicResult.data.groups[0],'inviteCode'),false);
+    // Any group-specific lookup might read a private roster or reflection.
+    // Never turn an uncertain principal into an anonymous member or permit
+    // authenticated-only membership discovery through a guessed group ID.
+    assert.equal((await f.get('alice','g')).status,503);
+    assert.equal((await f.list('alice',true)).status,503);
+    f.setAuthFailure(false);
+    const member=await f.get('alice','g');
+    assert.equal(member.status,200);
+    assert.equal(member.data.membership,'owner');
+    assert.equal(member.data.managementMembers.length,3);
   }finally{f.db.close();}
 });

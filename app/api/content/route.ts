@@ -39,7 +39,16 @@ export async function GET(request: Request) {
     return Response.json({ items: itemsRead.results.map(item => ({ ...item, data: JSON.parse(String(item.data)) })), revisions: revisionsRead.results }, { headers: { "Cache-Control": "no-store" } });
   }
   const row = await env.DB!.prepare("SELECT data,updated_at FROM site_content WHERE key='public'").first<{ data: string; updated_at: string }>();
-  return Response.json(row ? { ...JSON.parse(row.data), updatedAt: row.updated_at } : EMPTY, { headers: { "Cache-Control": "no-store" } });
+  if (!row) return Response.json(EMPTY, { headers: { "Cache-Control": "no-store" } });
+  // A successful D1 read is not proof that its persisted public JSON is an
+  // object. Spreading a JSON string/array/scalar produced a misleading 200
+  // with invented keys or an empty apparent publication. Never publish it.
+  if (typeof row.data !== "string" || typeof row.updated_at !== "string" ||
+      !row.updated_at.trim()) return unavailable();
+  const published: unknown = JSON.parse(row.data);
+  if (!published || typeof published !== "object" || Array.isArray(published))
+    return unavailable();
+  return Response.json({ ...published, updatedAt: row.updated_at }, { headers: { "Cache-Control": "no-store" } });
   } catch { return unavailable(); }
 }
 

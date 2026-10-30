@@ -62,20 +62,21 @@ function recoveryDescription(row: RecoveryRow): string {
   return [row.edition, row.book, row.chapter].map(text).join(" / ");
 }
 async function removeDamagedBookmark(owner: string, body: unknown) {
-  if (!env.DB) return json({ error: "database_unavailable" }, 503);
+  const db = env.DB;
+  if (!db) return json({ error: "database_unavailable" }, 503);
   const reference = (body as { recovery_ref?: unknown }).recovery_ref;
   if (typeof reference !== "string" || !/^[1-9][0-9]{0,15}\.[0-9a-f]{64}$/.test(reference))
     return json({ error: "invalid_recovery_reference" }, 400);
   const rowid = Number(reference.slice(0, reference.indexOf(".")));
   if (!Number.isSafeInteger(rowid)) return json({ error: "invalid_recovery_reference" }, 400);
   try {
-    const row: RecoveryRow | null = await env.DB.prepare(
+    const row: RecoveryRow | null = await db.prepare(
       "SELECT rowid AS recovery_rowid,edition,book,chapter,created_at FROM reader_bookmarks WHERE user_id=? AND rowid=?"
     ).bind(owner, rowid).first();
     if (!row || typeof row !== "object" || Array.isArray(row)
         || usableBookmark(row) || await recoveryReference(owner, row) !== reference)
       return json({ error: "recovery_stale" }, 409);
-    const result = await env.DB.prepare(
+    const result = await db.prepare(
       "DELETE FROM reader_bookmarks WHERE user_id=? AND rowid=? AND edition IS ? AND book IS ? AND chapter IS ? AND created_at IS ?"
     ).bind(owner, rowid, row.edition, row.book, row.chapter, row.created_at).run();
     if (result?.success !== true || !Number.isSafeInteger(result.meta?.changes)

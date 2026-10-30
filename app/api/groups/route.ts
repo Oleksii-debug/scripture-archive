@@ -87,8 +87,12 @@ async function checkedGroupRows<T>(result: {success?: boolean;results?: T[]}): P
 export async function GET(request: Request) {
   try {
   const url = new URL(request.url);
-  const id = await authenticateRequest(request);
   const groupId = clean(url.searchParams.get("groupId"), 80);
+  // Public group discovery includes no private membership or invite data.
+  // Do not make that public endpoint depend on a failing/corrupt session;
+  // details and mine remain fully authenticated and fail closed on auth errors.
+  const id = (groupId || url.searchParams.get("mine") === "1")
+    ? await authenticateRequest(request) : null;
   if (groupId) {
     const member = id ? await membership(groupId, id.userId) : null;
     const row = await env.DB!.prepare(`${groupSelect} WHERE g.id=? AND (g.visibility='public' OR ?=1)`).bind(groupId, member ? 1 : 0).first<Row>();

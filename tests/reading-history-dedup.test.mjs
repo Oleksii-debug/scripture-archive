@@ -114,6 +114,7 @@ test('duplicate filtering never promotes malformed codes or non-positive chapter
     row('gen',1,'lowercase'),row('GEN',0,'zero'),
     row('GEN',-1,'negative'),row('GEN',NaN,'NaN'),
     row('GEN',Infinity,'Infinity'),row('../GEN',1,'path'),
+    row('ABCD',1,'four-letter fabricated book'),row('1ABCD',1,'numeric fabricated book'),
     row('GEN',1,'Approved'),
   ];
   assert.deepEqual(verifiedLocalReadingHistory(records),[row('GEN',1,'Approved')]);

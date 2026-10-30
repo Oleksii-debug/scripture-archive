@@ -186,7 +186,7 @@ export async function POST(request: Request) {
   }
 
   if (action === "rotate-invite") {
-    const groupId=boundedIdentifier(body.groupId), previous=clean(body.expectedInviteCode,32);
+    const groupId=boundedIdentifier(body.groupId), previous=boundedIdentifier(body.expectedInviteCode,32);
     if(!groupId||!previous||body.confirm!==true)return Response.json({error:"confirmation_required"},{status:400});
     const inviteCode=crypto.randomUUID().replaceAll('-','').toUpperCase();
     try {

@@ -22,7 +22,7 @@ test('two stale receipt observations can produce only one attempt', () => {
       db.exec('BEGIN');
       try {
         const inserted = db.prepare(sql[0]).run(id,'actor','mission','GEN',12,null,'en',1,'receipt','actor','','','actor').changes;
-        db.prepare(sql[1]).run('actor',id,id);
+        db.prepare(sql[1]).run('actor',id,'',id);
         db.prepare(sql[2]).run('receipt',id);
         db.exec('COMMIT'); return inserted;
       } catch (error) { db.exec('ROLLBACK'); throw error; }
@@ -49,8 +49,8 @@ test('chapter opening and start serialize safely in either order across contexts
         CREATE TABLE mission_attempts (id TEXT PRIMARY KEY, actor_id TEXT, mission_id TEXT, book_id TEXT, chapter INTEGER, group_id TEXT, locale TEXT, task_limit INTEGER, expires_at TEXT, status TEXT DEFAULT 'active', invalidated_at TEXT, invalidation_reason TEXT);`);
       db.prepare('INSERT INTO chapter_read_receipts VALUES (?,?,?,?,?,NULL)').run('receipt','actor','GEN',12,group);
       db.prepare('INSERT INTO chapter_read_receipts VALUES (?,?,?,?,?,NULL)').run('other','other','GEN',12,group);
-      const open = () => { db.exec('BEGIN'); for (const sql of chapterSql) db.prepare(sql).run('actor','GEN',12); db.exec('COMMIT'); };
-      const start = () => { db.exec('BEGIN'); const n=db.prepare(startSql[0]).run('attempt','actor','mission','GEN',12,group,'en',1,'receipt','actor',group || '',group || '','actor').changes; db.prepare(startSql[1]).run('actor','attempt','attempt'); db.prepare(startSql[2]).run('receipt','attempt'); db.exec('COMMIT'); return n; };
+      const open = () => { db.exec('BEGIN'); for (const sql of chapterSql) db.prepare(sql).run('actor','GEN',12,group || ''); db.exec('COMMIT'); };
+      const start = () => { db.exec('BEGIN'); const n=db.prepare(startSql[0]).run('attempt','actor','mission','GEN',12,group,'en',1,'receipt','actor',group || '',group || '','actor').changes; db.prepare(startSql[1]).run('actor','attempt',group || '','attempt'); db.prepare(startSql[2]).run('receipt','attempt'); db.exec('COMMIT'); return n; };
       if (openFirst) { open(); assert.equal(start(),0); } else { assert.equal(start(),1); open(); assert.equal(db.prepare("SELECT status FROM mission_attempts WHERE id='attempt'").get().status,'invalidated'); }
       assert.equal(db.prepare("SELECT consumed_at FROM chapter_read_receipts WHERE id='other'").get().consumed_at,null);
     } finally { db.close(); }
@@ -71,7 +71,7 @@ test('a failed receipt consumption rolls back the entire start transaction', () 
       CREATE TRIGGER fail_consumption BEFORE UPDATE ON chapter_read_receipts BEGIN SELECT RAISE(ABORT,'test failure'); END;`);
     db.exec('BEGIN');
     db.prepare(sql[0]).run('new','actor','mission','GEN',12,null,'en',1,'receipt','actor','','','actor');
-    db.prepare(sql[1]).run('actor','new','new');
+    db.prepare(sql[1]).run('actor','new','','new');
     assert.throws(() => db.prepare(sql[2]).run('receipt','new'), /test failure/);
     db.exec('ROLLBACK');
     assert.deepEqual(db.prepare('SELECT id,status FROM mission_attempts').all().map(row => ({...row})), [{id:'existing',status:'active'}]);

@@ -14,7 +14,8 @@ test('the real campaigns route opens a canonical, trilingual and source-validate
   assert.equal(new Set(academyLessonIds).size,7);
   assert.ok(workspace.includes("from './scripture-academy.js'"));
   assert.ok(workspace.includes('academyMarkup(catalog,state.lang,esc,courseProgress)'));
-  assert.ok(workspace.includes('attachAcademy(globalThis.document,storage,state.lang,state.user,courseProgress)'));
+  assert.ok(workspace.includes('attachAcademy(globalThis.document,storage,state.lang,state.user,courseProgress,'), 'Academy must mount a current-principal callback');
+  assert.ok(workspace.includes('!state.sessionUnavailable'), 'current session must gate Academy writes');
   for(const lang of ['uk','ru','en']){
     const html=academyMarkup(catalog,lang,esc,{available:true,completed:[]});
     assert.ok(html.includes('data-academy-root'));
@@ -143,4 +144,35 @@ test('academy never overwrites progress corrupted by another tab after rendering
   assert.equal(storage.getItem(key),'{bad-json');
   assert.equal(ui.buttons[0].attrs['aria-pressed'],'false');
   assert.match(ui.error.textContent,/could not be read or verified/);
+});
+
+test('academy controls cannot mutate an old account after a principal switch or session outage',()=>{
+  const storage=store(),ui=view(),owner={id:'alice'},
+    context={user:owner,sessionUnavailable:false},
+    key=academyProgressKey(owner);
+  attachAcademy(ui.document,storage,'en',owner,{available:true,completed:[]},
+    ()=>!context.sessionUnavailable&&context.user?.id===owner.id);
+  context.user={id:'bob'};
+  ui.buttons[0].click();
+  assert.equal(storage.getItem(key),null,'old account must not acquire new progress');
+  context.user=owner;context.sessionUnavailable=true;
+  ui.buttons[0].click();
+  assert.equal(storage.getItem(key),null,'uncertain session must not write');
+  context.sessionUnavailable=false;
+  ui.buttons[0].click();
+  assert.deepEqual(readAcademyProgress(storage,key).completed,['abraham'],
+    'the same verified principal can still save progress');
+});
+
+test('academy callbacks from a replaced route must not update device progress',()=>{
+  const storage=store(),ui=view(),user={id:'alice'},key=academyProgressKey(user);
+  const original=ui.document.querySelector;
+  attachAcademy(ui.document,storage,'en',user,{available:true,completed:[]});
+  ui.document.querySelector=()=>null;
+  ui.buttons[0].click();
+  assert.equal(storage.getItem(key),null,'detached view must not write');
+  assert.equal(ui.buttons[0].attrs['aria-pressed'],'false');
+  ui.document.querySelector=original;
+  ui.buttons[0].click();
+  assert.deepEqual(readAcademyProgress(storage,key).completed,['abraham']);
 });

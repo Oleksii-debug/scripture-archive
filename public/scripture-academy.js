@@ -49,7 +49,7 @@ export function academyMarkup(catalog,language,esc,progress) {
   return '<section class="academy-reading" data-academy-root aria-labelledby="academy-reading-title"><h2 id="academy-reading-title">'+esc(w.title)+'</h2><p>'+esc(w.intro)+'</p><p>'+esc(w.privacy)+'</p><p>'+esc(w.honesty)+'</p><label for="academy-reading-progress">'+esc(w.progress)+'</label> <progress id="academy-reading-progress" max="'+total+'" value="'+count+'"></progress> <span id="academy-reading-status" role="status" aria-live="polite">'+esc(w.progress)+': '+count+'/'+total+'</span><p id="academy-reading-badge" role="status">'+(count===total?esc(w.badge):'')+'</p><p id="academy-reading-error" role="alert"></p><ol>'+lessons+'</ol></section>';
 }
 
-export function attachAcademy(document,storage,language,user,progress){
+export function attachAcademy(document,storage,language,user,progress,isCurrent=()=>true){
   if(!progress?.available)return;
   const root=document?.querySelector('[data-academy-root]');
   if(!root)return;
@@ -63,6 +63,12 @@ export function attachAcademy(document,storage,language,user,progress){
     const id=button.getAttribute('data-academy-lesson');
     if(!academyLessonIds.includes(id))continue;
     button.addEventListener('click',()=>{
+      // An account switch, session outage, or route replacement must retire
+      // stale controls before they can mutate a prior principal's device data.
+      let active=false;
+      try { active=Boolean(isCurrent()) && document?.querySelector('[data-academy-root]')===root; }
+      catch {}
+      if(!active)return;
       // Another tab may have saved newer choices since this panel rendered.
       // Never overwrite uncertain/corrupt account-scoped state.
       const current=readAcademyProgress(storage,key);

@@ -82,6 +82,12 @@ function publicGroup(row: Row, includePrivate = false) {
       !Number.isSafeInteger(value) || value < 0) ||
       (row.answers_correct as number) > (row.answers_total as number))
     throw Error("invalid_group_study_aggregate");
+  // SQLite COUNT() is always a nonnegative integer. A corrupted/malformed
+  // D1 response cannot be coerced into a false membership or meeting count.
+  const publicCounts = [row.member_count, row.session_count, row.cohort_size];
+  if (publicCounts.some(value => typeof value !== "number" ||
+      !Number.isSafeInteger(value) || value < 0))
+    throw Error("invalid_group_public_count");
   const total = row.answers_total as number;
   return {
     id: row.id, name: row.name, church: row.church, country: row.country, city: row.city,

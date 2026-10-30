@@ -5,6 +5,7 @@ import vm from "node:vm";
 import ts from "typescript";
 
 // Call the current canonical TypeScript account endpoints, not copied ACK logic.
+const catalog = JSON.parse(readFileSync(new URL("../public/data/catalog.json", import.meta.url), "utf8"));
 const source = readFileSync(new URL("../app/api/account/route.ts", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -40,6 +41,7 @@ function harness(mode, { readFailure = false } = {}) {
     exports, Request, Response, URL,
     require(specifier) {
       if (specifier === "cloudflare:workers") return { env: { DB: database } };
+      if (specifier === "../../../public/data/catalog.json") return { default: catalog };
       if (specifier === "../../../content/mission-abraham.json") return { default: { tasks: [] } };
       if (specifier === "../../../lib/auth") return {
         sameOrigin: request => request.headers.get("origin") === new URL(request.url).origin,

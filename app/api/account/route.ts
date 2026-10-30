@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { authenticateRequest, isVerifiedOwner, sameOrigin, type Identity } from "../../../lib/auth";
 import mission from "../../../content/mission-abraham.json";
+import catalog from "../../../public/data/catalog.json";
 export const dynamic = "force-dynamic";
 const AGE_RANGES = new Set(["13-17", "18-24", "25-34", "35-44", "45-54", "55-64", "65+"]);
 const ALLOWED_LOCALES = new Set(["uk", "ru", "en"]);
@@ -17,11 +18,21 @@ function confirmedD1Changes(result:unknown):number|null{
 }
 function clean(value:unknown,max=120){return typeof value==="string"?value.trim().slice(0,max):""}
 // The reader renders every receipt as a book/chapter/title. Do not ACK damaged arrays.
+// Reading receipts do not store an edition. Accept the chapter when it is
+// present in at least one canonical LOCAL Bible edition, including translated
+// chapter-number differences (e.g. Ohiienko Joel/JOL chapter 4). Never accept
+// invented books/chapters merely because they match the reference shape.
+const READING_CHAPTERS=new Map<string,number>(catalog.books.en.map(book=>[book.code,book.chapters]));
+for(const books of Object.values(catalog.editionBooks)){
+  for(const book of books){
+    READING_CHAPTERS.set(book.code,Math.max(READING_CHAPTERS.get(book.code)??0,book.chapters));
+  }
+}
 function validReadingReceipt(value:unknown):value is {book:string;chapter:number;title:string}{
   if(!value||typeof value!=="object"||Array.isArray(value))return false;
   const row=value as Record<string,unknown>;
   return typeof row.book==="string"&&/^[1-3]?[A-Z]{2,3}$/.test(row.book)
-    &&typeof row.chapter==="number"&&Number.isInteger(row.chapter)&&row.chapter>0&&row.chapter<=151
+    &&typeof row.chapter==="number"&&Number.isInteger(row.chapter)&&row.chapter>0&&row.chapter<=(READING_CHAPTERS.get(row.book as string)??0)
     &&typeof row.title==="string"&&row.title.length<=100;
 }
 function publicUser(id:Identity,row:Record<string,unknown>|null){return {id:id.userId,email:id.email,emailVerified:id.emailVerified,authProvider:id.provider,fullName:id.fullName,firstName:row?.first_name??"",lastName:row?.last_name??"",ageRange:row?.age_range??"",age:row?.age??null,tradition:row?.tradition??"",denomination:row?.denomination??"",church:row?.church??"",maritalStatus:row?.marital_status??"",gender:row?.gender??"",hasChildren:row?.has_children==null?null:Boolean(row.has_children),locale:row?.locale??"uk",sensitiveConsent:Boolean(row?.sensitive_consent && row?.sensitive_consent_version===1),visibility:{firstName:Boolean(row?.public_first_name),lastName:Boolean(row?.public_last_name),church:Boolean(row?.public_church && row?.sensitive_consent && row?.sensitive_consent_version===1),progress:Boolean(row?.public_progress)},profileComplete:Boolean(row),isOwner:isVerifiedOwner(id)}}
@@ -105,7 +116,7 @@ async function write(request:Request){
     // Reject the entire invalid request: silently filtering all entries used to return a false 200 ACK.
     if(!body.reading.every(r=>r&&typeof r==="object"&&!Array.isArray(r)&&typeof r.title==="string"))
       return privateJson({error:"invalid_reading"},{status:400});
-    const reading=body.reading.map(r=>({book:clean(r.book,4),chapter:Number(r.chapter),title:clean(r.title,100)}));
+    const reading=body.reading.map(r=>({book:clean(r.book,4),chapter:r.chapter,title:clean(r.title,100)}));
     if(!reading.every(validReadingReceipt))return privateJson({error:"invalid_reading"},{status:400});
     const unique=[...new Map(reading.map(r=>[`${r.book}:${r.chapter}`,r])).values()];
     // Serialize the merge in one canonical D1 statement. Never replace a newer read receipt with a stale snapshot.

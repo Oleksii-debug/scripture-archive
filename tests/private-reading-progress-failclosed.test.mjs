@@ -5,6 +5,7 @@ import vm from "node:vm";
 import ts from "typescript";
 
 // Exercise the shipping account GET handlers, not copied business logic.
+const catalog = JSON.parse(readFileSync(new URL("../public/data/catalog.json", import.meta.url), "utf8"));
 const source = readFileSync(new URL("../app/api/account/route.ts", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -23,6 +24,7 @@ function worker({ first = async () => null, all = async () => ({ success: true, 
   vm.runInNewContext(compiled, {
     exports, Request, Response, URL, require(specifier) {
       if (specifier === "cloudflare:workers") return { env: { DB: dbAvailable ? db : null } };
+      if (specifier === "../../../public/data/catalog.json") return { default: catalog };
       if (specifier === "../../../content/mission-abraham.json")
         return { default: { tasks: [{ id: "T-1" }, { id: "T-2" }] } };
       if (specifier === "../../../lib/auth") return {

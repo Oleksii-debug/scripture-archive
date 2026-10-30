@@ -5,6 +5,7 @@ import vm from "node:vm";
 import ts from "typescript";
 
 // Execute the actual shipping account route, not a copy of its guard.
+const catalog = JSON.parse(readFileSync(new URL("../public/data/catalog.json", import.meta.url), "utf8"));
 const source = readFileSync(new URL("../app/api/account/route.ts", import.meta.url), "utf8");
 const transpiled = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -26,6 +27,7 @@ function handler({ dbAvailable = true, authFailure = false, anonymous = false } 
     require(specifier) {
       if (specifier === "cloudflare:workers")
         return { env: { DB: dbAvailable ? database : undefined } };
+      if (specifier === "../../../public/data/catalog.json") return { default: catalog };
       if (specifier === "../../../content/mission-abraham.json")
         return { default: { tasks: [] } };
       if (specifier === "../../../lib/auth") return {

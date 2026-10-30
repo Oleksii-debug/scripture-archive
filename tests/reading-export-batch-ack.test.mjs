@@ -144,6 +144,47 @@ test("corrupt progress or attempt result JSON refuses export without false succe
     assert.equal(body.error, "export_unavailable");
   }
 });
+test("owner data export retains genuine object and array mission progress without reinterpretation", async () => {
+  const rows = standardRows();
+  rows[1].results.push({
+    mission_id: "COURSE-01",
+    data: '{"mastery":{"chapter":3},"completed":true}',
+    updated_at: "2026-10-30",
+  });
+  const { response, body } = await outcome(fixture({ results: rows }));
+  assert.equal(response.status, 200);
+  assert.equal(body.progress.length, 2);
+  assert.equal(body.progress[0].data[0].book, "GEN");
+  assert.equal(body.progress[1].data.mastery.chapter, 3);
+  assert.equal(body.progress[1].data.completed, true);
+});
+
+for (const data of ["null", "0", "12.5", "false", '"completed"']) {
+  test("owner export refuses valid-JSON scalar progress rather than delivering a false backup: "+data, async () => {
+    const rows = standardRows();
+    rows[1].results[0].data = data;
+    const f = fixture({ results: rows });
+    const { response, body } = await outcome(f);
+    assert.equal(response.status, 503);
+    assert.deepEqual(body, { error: "export_unavailable" });
+    assert.equal(response.headers.get("content-disposition"), null);
+    assert.equal(f.batches, 1);
+    assert.equal(f.statements.every(item => item.params[0] === "reader-a"), true);
+  });
+}
+
+for (const data of [null, undefined, 12, { forged: "progress" }]) {
+  test("owner export refuses non-text legacy D1 progress rows: "+String(data), async () => {
+    const rows = standardRows();
+    rows[1].results[0].data = data;
+    const { response, body } = await outcome(fixture({ results: rows }));
+    assert.equal(response.status, 503);
+    assert.equal(body.error, "export_unavailable");
+    assert.equal("progress" in body, false);
+    assert.equal(response.headers.get("content-disposition"), null);
+  });
+}
+
 test("missing D1 binding refuses before authentication or database reads", async () => {
   const f = fixture({ dbPresent: false });
   const { response, body } = await outcome(f);

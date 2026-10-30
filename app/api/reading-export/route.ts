@@ -23,9 +23,15 @@ export async function GET(request: Request) {
     // null/missing bookmarks, incorrectly presenting lost data as a complete backup.
     if ([profile, progress, bookmarks, attempts].some(result => result?.success !== true || !Array.isArray(result.results)))
       return error("export_unavailable", 503);
-    const records = (progress.results as Array<{ mission_id: string; data: string; updated_at: string }>).map(row => ({
-      mission: row.mission_id, data: JSON.parse(row.data), updatedAt: row.updated_at,
-    }));
+    const records = (progress.results as Array<{ mission_id: string; data: string; updated_at: string }>).map(row => {
+      // Valid JSON alone does not establish valid saved progress. A legacy D1
+      // row containing "null", a scalar or a missing body must not produce a
+      // seemingly complete and restorable owner data-export archive.
+      if (typeof row.data !== "string") throw Error("invalid_progress_data");
+      const data: unknown = JSON.parse(row.data);
+      if (data === null || typeof data !== "object") throw Error("invalid_progress_data");
+      return { mission: row.mission_id, data, updatedAt: row.updated_at };
+    });
     const attemptHistory = (attempts.results as Array<{id:string;mission_id:string;book_id:string;chapter:number;group_id:string|null;locale:string;started_at:string;completed_at:string;result_json:string}>).map(row => {
       if (typeof row.result_json !== "string") throw Error("invalid_attempt_result");
       const result = JSON.parse(row.result_json);

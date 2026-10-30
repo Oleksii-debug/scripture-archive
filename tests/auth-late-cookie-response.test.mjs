@@ -136,7 +136,7 @@ for (const action of ["logout", "change-password", "reset-password", "delete-acc
     if (action === "logout") {
       assert.equal(f.revoked(), 1, "revocation must still happen");
     } else {
-      assert.ok(f.authority.some(sql => /(?:UPDATE|DELETE) auth_sessions/.test(sql)),
+      assert.ok(f.authority.some(sql => /(?:UPDATE\s+auth_sessions|DELETE\s+FROM\s+auth_sessions)/.test(sql)),
         "the account transition must still revoke server-side sessions");
     }
   });

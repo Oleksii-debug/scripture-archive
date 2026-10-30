@@ -301,3 +301,36 @@ test("READING export preserves approved edition-specific Joel 4 without inventin
   assert.deepEqual(Array.from(body.progress[0].data, row=>row.book+":"+row.chapter),
     ["GEN:50","JOL:4","PSA:150"]);
 });
+
+
+test("private export refuses corrupt completed-attempt metadata rather than claiming a restorable backup", async () => {
+  const badRows = [
+    {id:""}, {mission_id:""}, {book_id:"FAK"}, {book_id:"GEN",chapter:51},
+    {book_id:"JOL",chapter:5}, {book_id:"3JN",chapter:2},
+    {chapter:0}, {chapter:1.5}, {chapter:"1"}, {locale:"de"},
+    {group_id:false}, {group_id:""}, {started_at:null}, {completed_at:""},
+  ];
+  for (const mutation of badRows) {
+    const rows = standardRows();
+    rows[3].results[0] = {...rows[3].results[0], ...mutation};
+    const f = fixture({results:rows});
+    const {response,body} = await outcome(f);
+    assert.equal(response.status,503,JSON.stringify(mutation));
+    assert.deepEqual(body,{error:"export_unavailable"});
+    assert.equal(response.headers.get("content-disposition"),null);
+    assert.match(response.headers.get("cache-control"),/no-store, private/);
+    assert.equal(f.batches,1);
+  }
+});
+
+test("valid completed-attempt export preserves canonical local chapter exceptions and group identity", async () => {
+  const rows=standardRows();
+  rows[3].results[0]={...rows[3].results[0],book_id:"JOL",chapter:4,locale:"en",group_id:"class-1"};
+  const {response,body}=await outcome(fixture({results:rows}));
+  assert.equal(response.status,200);
+  assert.equal(body.attemptHistory[0].book,"JOL");
+  assert.equal(body.attemptHistory[0].chapter,4);
+  assert.equal(body.attemptHistory[0].groupId,"class-1");
+  assert.equal(body.attemptHistory[0].locale,"en");
+  assert.equal(body.attemptHistory[0].result.score,1);
+});

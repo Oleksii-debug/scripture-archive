@@ -160,6 +160,56 @@ test("valid boundary-size choice lists keep the submitted order and answer",asyn
   } finally { f.db.close(); }
 });
 
+// Real production API + SQLite: no authored field may be clipped and then
+// acknowledged as a legitimate draft for editorial review.
+const overLimitDrafts = [
+  ["title", {title:"T".repeat(161)}],
+  ["prompt", {prompt:"P".repeat(3001)}],
+  ["reference", {reference:"R".repeat(201)}],
+  ["explanation", {explanation:"E".repeat(2001)}],
+  ["answer", {answer:"A".repeat(501),options:["A".repeat(500),"second"]}],
+];
+for (const [field, changed] of overLimitDrafts) {
+  test("authored "+field+" overflow cannot save a silently shortened draft", async () => {
+    const f=fixture();
+    try {
+      const response=await f.post({...valid,...changed,id:"overlimit-"+field});
+      assert.equal(response.status,400,field);
+      assert.equal(response.body.error,"invalid_material");
+      assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM study_materials").get().n,0,
+        "oversized authored text cannot reach the canonical D1 mutation");
+    } finally { f.db.close(); }
+  });
+}
+
+test("all five authored text fields persist complete exact-boundary values", async () => {
+  const f=fixture();
+  try {
+    const full={
+      ...valid,id:"maximum-authored-text",
+      title:"T".repeat(160),prompt:"P".repeat(3000),reference:"R".repeat(200),
+      explanation:"E".repeat(2000),answer:"A".repeat(500),options:["A".repeat(500),"second"],
+    };
+    const response=await f.post(full);
+    assert.equal(response.status,201);
+    const row=f.db.prepare("SELECT title,data FROM study_materials WHERE id=?").get(full.id);
+    assert.equal(row.title,full.title);
+    const persisted=JSON.parse(row.data);
+    for (const field of ["prompt","reference","explanation","answer","options"])
+      assert.deepEqual(persisted[field],full[field],field);
+  } finally { f.db.close(); }
+});
+
+test("draft text permits surrounding whitespace but never drops meaningful text",async()=>{
+  const f=fixture();
+  try {
+    const full="T".repeat(160);
+    const result=await f.post({...valid,title:"  "+full+"  ",id:"trim-exact-boundary"});
+    assert.equal(result.status,201);
+    assert.equal(f.db.prepare("SELECT title FROM study_materials WHERE id=?").get("trim-exact-boundary").title,full);
+  } finally { f.db.close(); }
+});
+
 test("false and missing D1 ACKs return 503 even when SQLite completed the write", async () => {
   for (const mode of ["failed", "missing", "negative", "text", "boolean", "null"]) {
     const f = fixture();

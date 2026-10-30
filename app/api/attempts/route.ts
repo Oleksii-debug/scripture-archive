@@ -19,6 +19,8 @@ type Attempt = {
   status: string;
   expires_at: string;
   result_json: string | null;
+  score: number | null;
+  total: number | null;
 };
 
 const MISSION_ID = "OT-AB-01";
@@ -139,7 +141,22 @@ function resultFor(tasks: MissionTask[], answers: Array<Record<string, unknown>>
 async function completedResponse(attempt: Attempt, accepted = false) {
   try {
     if (!attempt.result_json) return json({ error: "attempt_state_invalid" }, 503);
-    const result = JSON.parse(attempt.result_json);
+    // D1 can contain a legacy or damaged completed row. JSON.parse succeeds
+    // for arrays, strings and forged score objects; none is a legitimate
+    // assessment result. Never announce completed:true with inconsistent
+    // persisted score/total, even on a retry after a network interruption.
+    let parsed: unknown;
+    try { parsed = JSON.parse(attempt.result_json); }
+    catch { return json({ error: "attempt_state_invalid" }, 503); }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+      return json({ error: "attempt_state_invalid" }, 503);
+    const result = parsed as Record<string, unknown>;
+    if (typeof result.score !== "number" || typeof result.total !== "number" ||
+        !Number.isSafeInteger(result.score) || !Number.isSafeInteger(result.total) ||
+        result.total < 1 || result.score < 0 || result.score > result.total ||
+        !Number.isSafeInteger(attempt.score) || !Number.isSafeInteger(attempt.total) ||
+        attempt.score !== result.score || attempt.total !== result.total)
+      return json({ error: "attempt_state_invalid" }, 503);
     let groupRecorded: boolean | undefined;
     if (attempt.group_id && result.completionVersion === 1) {
       const session = await env.DB!.prepare("SELECT id FROM group_sessions WHERE id=? AND group_id=?")

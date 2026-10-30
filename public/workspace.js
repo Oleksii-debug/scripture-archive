@@ -130,12 +130,19 @@ const HISTORY = {
 };
 
 function canonicalHistoryUtcTimestamp(value) {
-  // SQLite/D1 history timestamps are canonical UTC seconds, never a local
-  // calendar guess. Date parsing alone normalizes impossible dates silently.
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)) return false;
-  const date = new Date(value.replace(' ', 'T') + 'Z');
-  return Number.isFinite(date.getTime()) &&
-    date.toISOString().slice(0, 19).replace('T', ' ') === value;
+  // D1 may retain SQL UTC seconds or an imported ISO UTC timestamp with
+  // 1-3 decimal second digits. Reject calendar overflow, offsets and guesses.
+  if (typeof value !== 'string') return false;
+  const sql = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value);
+  const iso = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,3}))?Z$/.exec(value);
+  if (!sql && !iso) return false;
+  const date = new Date(sql ? value.replace(' ', 'T') + 'Z' : value);
+  if (!Number.isFinite(date.getTime())) return false;
+  const roundTrip = date.toISOString();
+  return sql
+    ? roundTrip.slice(0, 19).replace('T', ' ') === value
+    : roundTrip.slice(0, 19) === iso[1] &&
+        roundTrip.slice(20, 23) === (iso[2] || '').padEnd(3, '0');
 }
 
 function validAttemptHistoryPayload(history, chapterBounds) {
@@ -190,8 +197,8 @@ export function reviewSuggestions(attempts, now=new Date(), chapterBounds) {
     if(item?.mode!=='personal'||typeof item.book!=='string'||!/^([1-3])?[A-Z]{2,3}$/.test(item.book)||!Number.isInteger(item.chapter)||item.chapter<1||item.chapter>151||
        (chapterBounds !== undefined && item.chapter > (chapterBounds.get(item.book) || 0)))continue;
     const key=`${item.book}:${item.chapter}`;
-    if(!Number.isInteger(item.score)||!Number.isInteger(item.total)||item.total<1||item.score<0||item.score>item.total||typeof item.completedAt!=='string'||!/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/.test(item.completedAt)) {invalid.add(key);continue;}
-    const completed=new Date(item.completedAt.replace(' ','T')+'Z');
+    if(!Number.isInteger(item.score)||!Number.isInteger(item.total)||item.total<1||item.score<0||item.score>item.total||!canonicalHistoryUtcTimestamp(item.completedAt)) {invalid.add(key);continue;}
+    const completed=new Date(item.completedAt.includes('T') ? item.completedAt : item.completedAt.replace(' ','T')+'Z');
     if(!Number.isFinite(completed.getTime())||completed.toISOString().slice(0,10)!==item.completedAt.slice(0,10)){invalid.add(key);continue;}
     const previous=passages.get(key),streak=item.score===item.total?(previous?.streak||0)+1:0;
     const interval=intervals[Math.max(0,Math.min(streak-1,intervals.length-1))];

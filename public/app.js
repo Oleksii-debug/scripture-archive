@@ -2955,8 +2955,17 @@ function groupCard(group) {
       : t("regularGroup");
   return `<article class="group-card">${groupStatus(group)}<h3>${esc(group.name)}</h3>${group.church ? `<p class="group-church">${esc(group.church)}</p>` : ""}${place ? `<p>${esc(place)}</p>` : ""}<p>${esc(group.description || "")}</p><p class="pace">${pace}</p><p>${esc(edition || "")}</p>${groupMetrics(group)}<a class="button" href="/groups/${esc(group.id)}">${t("openGroup")}</a></article>`;
 }
+// Do not render a departed account's private group membership or invite code
+// after an asynchronous request or a navigation to a different route.
+function groupPageCurrent(expected, principal) {
+  const active = location.hash.startsWith("#/")
+    ? location.hash.slice(2) : location.pathname.replace(/^\/+/, "");
+  return state.user === principal && active.replace(/\/+$/, "") === expected;
+}
+
 async function renderGroups() {
   setActiveNav("groups");
+  const principal = state.user;
   const publicData = await groupRequest("", "GET"),
     groups = publicData.groups || [];
   let mine = [];
@@ -2964,6 +2973,7 @@ async function renderGroups() {
     try {
       mine = (await groupRequest("", "GET", undefined, "mine=1")).groups || [];
     } catch {}
+  if (!groupPageCurrent("groups", principal)) return;
   const paceOptions = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21]
     .map((value) => `<option value="${value}">${value}</option>`)
     .join("");
@@ -3009,13 +3019,15 @@ async function renderGroups() {
 
 async function renderGroup(groupId) {
   setActiveNav("groups");
+  const principal = state.user;
   const data = await groupRequest(
       "",
       "GET",
       undefined,
       `groupId=${encodeURIComponent(groupId)}`,
-    ),
-    group = data.group,
+    );
+  if (!groupPageCurrent(`groups/${groupId}`, principal)) return;
+  const group = data.group,
     catalog = await getCatalog(),
     books = catalog.books[state.lang],
     bookOptions = books
@@ -3028,6 +3040,7 @@ async function renderGroup(groupId) {
       const found = books.find((book) => book.code === code);
       return found ? bookTitle(found) : code;
     };
+  if (!groupPageCurrent(`groups/${groupId}`, principal)) return;
   const names = (data.members || [])
       .map(
         (member) =>
@@ -3062,7 +3075,7 @@ async function renderGroup(groupId) {
     try {
       await groupRequest(action, 'POST', {groupId:group.id, ...payload});
       // A completed request must not navigate away from a page opened meanwhile.
-      if (!button.isConnected) return;
+      if (!button.isConnected || !groupPageCurrent(`groups/${groupId}`, principal)) return;
       if (['leave','delete'].includes(action)) navigateTo('/groups');
       else await renderGroup(group.id);
       announce(successText);

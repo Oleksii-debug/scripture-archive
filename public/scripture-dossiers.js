@@ -235,7 +235,7 @@ export function dossierMarkup(catalog,language,requestedId,esc,searchQuery='') {
   const bookNames=new Map(catalog.books[lang].map(book=>[book.code,book.title]));
   const cite=source=>{
     const label=`${bookNames.get(source.book)} ${source.chapter}:${source.first}–${source.last}`;
-    return `<a href="/reader/${source.book}/${source.chapter}?verse=${source.first}" aria-label="${esc(w.read)}: ${esc(label)}">${esc(label)}</a>`;
+    return `<a href="/reader/${source.book}/${source.chapter}?verse=${source.first}" aria-label="${esc(w.read)}: ${esc(label)} — ${esc(w[source.kind])}">${esc(label)}</a>`;
   };
   const matching=searchScriptureDossiers(lang,searchQuery,catalog);
   const hasQuery=typeof searchQuery==='string' && searchQuery.trim().length>0;
@@ -277,7 +277,7 @@ export function dossierAtlasMarkup(catalog,language,esc) {
   const bookNames=new Map(catalog.books[lang].map(book=>[book.code,book.title]));
   const passage=source=>{
     const label=bookNames.get(source.book)+' '+source.chapter+':'+source.first+'–'+source.last;
-    return '<a href="/reader/'+source.book+'/'+source.chapter+'?verse='+source.first+'" aria-label="'+esc(w.read)+': '+esc(label)+'">'+esc(label)+'</a>';
+    return '<a href="/reader/'+source.book+'/'+source.chapter+'?verse='+source.first+'" aria-label="'+esc(w.read)+': '+esc(label)+' — '+esc(w[source.kind])+'">'+esc(label)+'</a>';
   };
   const subject=item=>'<a href="/dossiers?id='+item.id+'">'+esc(item.names[lang])+'</a>';
   const history=order.map((id,i)=>{

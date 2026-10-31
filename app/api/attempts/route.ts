@@ -320,7 +320,13 @@ export async function GET(request: Request) {
     } catch { return json({ error: "database_unavailable" }, 503); }
   }
   const attemptId = requestedAttemptId(url.searchParams.get("attemptId"));
-  if (attemptId === null) return json({ error: "attempt_not_found" }, 404);
+  if (attemptId === null) {
+    // Preserve the existing identity-service outage contract. A missing or
+    // forged ID must not disguise an unavailable authenticator as a 404.
+    // Never query a durable attempt or mutate D1 for this invalid identity.
+    await actor(request);
+    return json({ error: "attempt_not_found" }, 404);
+  }
   const { attempt } = await ownedAttempt(request, attemptId);
   if (!attempt) return json({ error: "attempt_not_found" }, 404);
   if (attempt.status === "invalidated") return json({ error: "attempt_invalidated" }, 409);

@@ -52,18 +52,18 @@ export async function GET(request: Request) {
   if (view !== "mine" && view !== "queue" && view !== "history") return json({ error: "unknown_view" }, 400);
   if ((view === "queue" || view === "history") && !await editor(identity)) return json({ error: "forbidden" }, 403);
   const query = view === "mine"
-    ? env.DB.prepare("SELECT id,material_id,snapshot,provenance,status,submitted_at,reviewed_at,review_note,closed_at FROM material_submissions WHERE author_id=? ORDER BY submitted_at DESC,id DESC LIMIT 200").bind(identity.userId)
+    ? env.DB.prepare("SELECT id,material_id,snapshot,provenance,status,submitted_at,reviewed_at,review_note,closed_at,(SELECT reason FROM material_takedowns WHERE submission_id=material_submissions.id) AS takedown_reason FROM material_submissions WHERE author_id=? ORDER BY submitted_at DESC,id DESC LIMIT 200").bind(identity.userId)
     : view === "queue"
       ? env.DB.prepare("SELECT id,material_id,snapshot,provenance,status,submitted_at,reviewed_at,review_note,closed_at,author_id,reviewed_by,source_checked,rights_checked FROM material_submissions WHERE status='pending' AND (?=1 OR EXISTS (SELECT 1 FROM editorial_roles r JOIN accounts a ON a.id=r.user_id WHERE r.user_id=? AND a.deleted_at IS NULL AND a.email_verified_at IS NOT NULL)) ORDER BY submitted_at,id LIMIT 200").bind(owner(identity) ? 1 : 0,identity.userId)
-      : env.DB.prepare("SELECT id,material_id,snapshot,provenance,status,submitted_at,reviewed_at,review_note,closed_at,author_id,reviewed_by,source_checked,rights_checked FROM material_submissions WHERE (?=1 OR EXISTS (SELECT 1 FROM editorial_roles r JOIN accounts a ON a.id=r.user_id WHERE r.user_id=? AND a.deleted_at IS NULL AND a.email_verified_at IS NOT NULL)) ORDER BY submitted_at DESC,id DESC LIMIT 200").bind(owner(identity) ? 1 : 0,identity.userId);
-  const rows = await query.all<{id:string;material_id:string;snapshot:string;provenance:string;status:string;submitted_at:string;reviewed_at:string|null;review_note:string;closed_at:string|null;author_id?:string;reviewed_by?:string|null;source_checked?:number;rights_checked?:number}>();
+      : env.DB.prepare("SELECT id,material_id,snapshot,provenance,status,submitted_at,reviewed_at,review_note,closed_at,author_id,reviewed_by,source_checked,rights_checked,(SELECT reason FROM material_takedowns WHERE submission_id=material_submissions.id) AS takedown_reason,(SELECT actor_user_id FROM material_takedowns WHERE submission_id=material_submissions.id) AS takedown_actor FROM material_submissions WHERE (?=1 OR EXISTS (SELECT 1 FROM editorial_roles r JOIN accounts a ON a.id=r.user_id WHERE r.user_id=? AND a.deleted_at IS NULL AND a.email_verified_at IS NOT NULL)) ORDER BY submitted_at DESC,id DESC LIMIT 200").bind(owner(identity) ? 1 : 0,identity.userId);
+  const rows = await query.all<{id:string;material_id:string;snapshot:string;provenance:string;status:string;submitted_at:string;reviewed_at:string|null;review_note:string;closed_at:string|null;author_id?:string;reviewed_by?:string|null;source_checked?:number;rights_checked?:number;takedown_reason?:string|null;takedown_actor?:string|null}>();
   if (!rows.success || !Array.isArray(rows.results)) return json({ error: "materials_unavailable" }, 503);
   const items = [];
   for (const row of rows.results) {
     const snapshot = readSnapshot(row.snapshot);
     if (!snapshot) return json({ error: "materials_unavailable" }, 503);
-    items.push({ id: row.id, materialId: row.material_id, snapshot, provenance: row.provenance, status: row.status, submittedAt: row.submitted_at, reviewedAt: row.reviewed_at, reviewNote: row.review_note, closedAt: row.closed_at,
-      ...(view === "mine" ? {} : { authorId: row.author_id, reviewerId: row.reviewed_by, sourceChecked: Boolean(row.source_checked), rightsChecked: Boolean(row.rights_checked) }) });
+    items.push({ id: row.id, materialId: row.material_id, snapshot, provenance: row.provenance, status: row.status, submittedAt: row.submitted_at, reviewedAt: row.reviewed_at, reviewNote: row.review_note, closedAt: row.closed_at, takedownReason: row.takedown_reason || null,
+      ...(view === "mine" ? {} : { authorId: row.author_id, reviewerId: row.reviewed_by, sourceChecked: Boolean(row.source_checked), rightsChecked: Boolean(row.rights_checked), takedownActor: row.takedown_actor || null }) });
   }
   return json({ items });
   } catch { return json({ error: "materials_unavailable" }, 503); }
@@ -179,6 +179,28 @@ export async function POST(request: Request) {
       return json({ error: "withdraw_failed" }, 503);
     return changes === 1 ? json({ ok: true }) : json({ error: "not_found_or_closed" }, 409);
     } catch { return json({ error: "withdraw_failed" }, 503); }
+  }
+  if (body.action === "takedown") {
+    try { if (!await editor(identity)) return json({ error: "forbidden" }, 403); }
+    catch { return json({ error: "takedown_failed" }, 503); }
+    if (!validId(body.id) || typeof body.reason !== "string" ||
+        body.reason.trim().length < 3 || body.reason.trim().length > 2000)
+      return json({ error: "invalid_takedown" }, 400);
+    try {
+      const receipts = await env.DB.batch([
+        env.DB.prepare(`UPDATE material_submissions SET status='withdrawn',closed_at=CURRENT_TIMESTAMP
+          WHERE id=? AND status='approved' AND (?=1 OR EXISTS
+          (SELECT 1 FROM editorial_roles r JOIN accounts a ON a.id=r.user_id
+           WHERE r.user_id=? AND a.deleted_at IS NULL AND a.email_verified_at IS NOT NULL))`)
+          .bind(body.id, owner(identity) ? 1 : 0, identity.userId),
+        env.DB.prepare("INSERT INTO material_takedowns(submission_id,actor_user_id,reason) SELECT ?,?,? WHERE changes()=1")
+          .bind(body.id, identity.userId, body.reason.trim()),
+      ]);
+      if (!Array.isArray(receipts) || receipts.length !== 2 || receipts.some(r =>
+        !r?.success || !Number.isSafeInteger(r.meta?.changes) || r.meta.changes < 0 || r.meta.changes > 1) ||
+        receipts[0].meta.changes !== receipts[1].meta.changes) return json({ error: "takedown_failed" }, 503);
+      return receipts[0].meta.changes === 1 ? json({ ok:true }) : json({ error:"not_found_or_closed" }, 409);
+    } catch { return json({ error: "takedown_failed" }, 503); }
   }
   if (body.action === "review") {
     try { if (!await editor(identity)) return json({ error: "forbidden" }, 403); }

@@ -90,3 +90,22 @@ test('0013 prevents the historical writer from undoing 0010 consent privacy afte
     assert.equal(db.prepare('PRAGMA foreign_key_check').all().length,0);
   } finally {db.close();}
 });
+
+test('0014 adds takedown audit without changing previously approved material',()=>{
+  const db=new DatabaseSync(':memory:');
+  try {
+    db.exec('PRAGMA foreign_keys=ON');
+    for(const name of old)apply(db,name);
+    for(const name of ['0010_sensitive_consent_evidence.sql','0011_material_review.sql','0012_editor_roles.sql','0013_public_church_consent_guard.sql'])apply(db,name);
+    db.exec("INSERT INTO study_materials(id,owner_user_id,title,locale,data) VALUES ('m','alice','Study','en','{}')");
+    db.exec("INSERT INTO material_submissions(id,material_id,author_id,snapshot,provenance,rights_attested,status,reviewed_at,reviewed_by,source_checked,rights_checked) VALUES ('s','m','alice','{}','source',1,'approved',CURRENT_TIMESTAMP,'editor',1,1)");
+    apply(db,'0014_material_takedowns.sql');
+    assert.equal(db.prepare("SELECT status FROM material_submissions WHERE id='s'").get().status,'approved');
+    assert.equal(db.prepare('SELECT count(*) n FROM material_takedowns').get().n,0);
+    assert.throws(()=>db.exec("INSERT INTO material_takedowns(submission_id,actor_user_id,reason) VALUES('s','editor','  ')"));
+    db.exec("INSERT INTO material_takedowns(submission_id,actor_user_id,reason) VALUES('s','editor','Rights concern')");
+    db.exec("DELETE FROM study_materials WHERE id='m'");
+    assert.equal(db.prepare('SELECT count(*) n FROM material_takedowns').get().n,0);
+    assert.equal(db.prepare('PRAGMA foreign_key_check').all().length,0);
+  }finally{db.close();}
+});

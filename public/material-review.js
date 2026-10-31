@@ -13,7 +13,12 @@ const SELF_REVIEW_TEXT = {
   ru: 'Собственный материал должен проверить другой редактор.',
   en: 'Your own material must be reviewed by another editor.',
 };
-export function reviewText(lang) { return { ...(TEXT[lang] || TEXT.uk), ...(DELETE_TEXT[lang] || DELETE_TEXT.uk), selfReview: SELF_REVIEW_TEXT[lang] || SELF_REVIEW_TEXT.uk }; }
+const TAKEDOWN_TEXT = {
+  uk:{takeDown:'Зняти з публікації',takeDownReason:'Причина зняття з публікації',takeDownSaved:'Матеріал знято з публікації.',takeDownLabel:'Знято з публікації: ',takeDownActor:'Зняв редактор'},
+  ru:{takeDown:'Снять с публикации',takeDownReason:'Причина снятия с публикации',takeDownSaved:'Материал снят с публикации.',takeDownLabel:'Снято с публикации: ',takeDownActor:'Снял редактор'},
+  en:{takeDown:'Remove from publication',takeDownReason:'Reason for removal',takeDownSaved:'Material removed from publication.',takeDownLabel:'Removed from publication: ',takeDownActor:'Removed by editor'},
+};
+export function reviewText(lang) { return { ...(TEXT[lang] || TEXT.uk), ...(DELETE_TEXT[lang] || DELETE_TEXT.uk), ...(TAKEDOWN_TEXT[lang] || TAKEDOWN_TEXT.uk), selfReview: SELF_REVIEW_TEXT[lang] || SELF_REVIEW_TEXT.uk }; }
 async function api(path, options) {
   const response = await fetch(path, options);
   const data = await response.json().catch(() => ({}));
@@ -26,13 +31,13 @@ export function submissionForm(material, w, esc) {
   return `<details><summary>${w.submit}</summary><form class="material-submit" data-id="${esc(material.id)}"><label class="account-field"><span>${w.source}</span><textarea name="provenance" minlength="3" maxlength="1000" required></textarea></label><label class="account-check"><input name="rights" type="checkbox" required><span>${w.rights}</span></label><button class="button" type="submit">${w.send}</button><p role="status"></p></form></details>`;
 }
 export function historyMarkup(items, w, esc) {
-  return `<section class="card"><h2>${w.history}</h2>${items.length ? `<ol>${items.map(item=>`<li><strong>${esc(item.snapshot.title)}</strong> — ${esc(w[item.status] || item.status)}${item.reviewNote ? `<p>${esc(item.reviewNote)}</p>` : ''}${['pending','approved'].includes(item.status) ? `<button class="button material-withdraw" data-id="${esc(item.id)}">${w.withdraw}</button>` : ''}</li>`).join('')}</ol>` : `<p>${w.empty}</p>`}<p class="review-history-status" role="status"></p></section>`;
+  return `<section class="card"><h2>${w.history}</h2>${items.length ? `<ol>${items.map(item=>`<li><strong>${esc(item.snapshot.title)}</strong> — ${esc(w[item.status] || item.status)}${item.reviewNote ? `<p>${esc(item.reviewNote)}</p>` : ''}${item.takedownReason ? `<p>${w.takeDownLabel}${esc(item.takedownReason)}</p>` : ''}${['pending','approved'].includes(item.status) ? `<button class="button material-withdraw" data-id="${esc(item.id)}">${w.withdraw}</button>` : ''}</li>`).join('')}</ol>` : `<p>${w.empty}</p>`}<p class="review-history-status" role="status"></p></section>`;
 }
 export function queueMarkup(items, w, esc) {
   return `<section class="card"><h2>${w.queue}</h2>${items.length ? items.map(item=>`<article><h3>${esc(item.snapshot.title)}</h3><p>${esc(item.snapshot.data.reference)} — ${esc(item.snapshot.data.prompt)}</p><ul>${item.snapshot.data.options.map(option=>`<li>${esc(option)}</li>`).join('')}</ul><p>${esc(item.snapshot.data.answer)}</p><p>${esc(item.snapshot.data.explanation)}</p><p><strong>${w.provenance}:</strong> ${esc(item.provenance)}</p><form class="material-review" data-id="${esc(item.id)}"><label class="account-field"><span>${w.note}</span><textarea name="note" maxlength="2000"></textarea></label><label class="account-check"><input type="checkbox" name="source"><span>${w.sourceChecked}</span></label><label class="account-check"><input type="checkbox" name="rights"><span>${w.rightsChecked}</span></label><button class="button" type="button" data-decision="approve">${w.approve}</button><button class="button" type="button" data-decision="reject">${w.reject}</button><p role="status"></p></form></article>`).join('') : `<p>${w.noQueue}</p>`}</section>`;
 }
 export function auditMarkup(items, w, esc) {
-  return `<details class="card"><summary>${w.audit}</summary>${items.length ? `<ol>${items.map(item=>`<li><strong>${esc(item.snapshot.title)}</strong> — ${esc(w[item.status] || item.status)}; ${esc(item.submittedAt)}; ${w.author}: ${esc(item.authorId || '')}${item.reviewerId ? `; ${w.reviewer}: ${esc(item.reviewerId)}` : ''}${item.reviewNote ? `<p>${esc(item.reviewNote)}</p>` : ''}</li>`).join('')}</ol>` : `<p>${w.noQueue}</p>`}</details>`;
+  return `<details class="card"><summary>${w.audit}</summary>${items.length ? `<ol>${items.map(item=>`<li><strong>${esc(item.snapshot.title)}</strong> — ${esc(w[item.status] || item.status)}; ${esc(item.submittedAt)}; ${w.author}: ${esc(item.authorId || '')}${item.reviewerId ? `; ${w.reviewer}: ${esc(item.reviewerId)}` : ''}${item.reviewNote ? `<p>${esc(item.reviewNote)}</p>` : ''}${item.takedownReason ? `<p>${w.takeDownLabel}${esc(item.takedownReason)}${item.takedownActor ? `; ${w.takeDownActor}: ${esc(item.takedownActor)}` : ''}</p>` : ''}${item.status==='approved' ? `<form class="material-takedown" data-id="${esc(item.id)}"><label class="account-field"><span>${w.takeDownReason}</span><textarea name="reason" minlength="3" maxlength="2000" required></textarea></label><button class="button" type="submit">${w.takeDown}</button><p role="status"></p></form>` : ''}</li>`).join('')}</ol>` : `<p>${w.noQueue}</p>`}</details>`;
 }
 // Mutation callbacks redraw the builder and detach its focused button.
 // Restore a visible heading for keyboard/NVDA only when the user had focused
@@ -77,6 +82,14 @@ export function attachReviewControls(root, w, refresh, announce, isCurrent = () 
     const hadFocus = wasEditorialControlFocused(root, button.parentElement || button);
     button.disabled = true; try { await post({action:'withdraw',id:button.dataset.id}); if (!active(button)) return; await refresh(); if (!present()) return; restoreEditorialFocus(root, hadFocus); announce(w.withdrawn); }
     catch { if (active(button)) { root.querySelector('.review-history-status').textContent = w.error; button.disabled = false; } }
+  });
+  root.querySelectorAll('.material-takedown').forEach(form => form.onsubmit = async event => {
+    event.preventDefault(); if (!active(form)) return;
+    const reason=new FormData(form).get('reason'), button=form.querySelector('button'), status=form.querySelector('[role="status"]');
+    if (typeof reason!=='string' || reason.trim().length<3 || reason.trim().length>2000) { status.textContent=w.error; return; }
+    const hadFocus=wasEditorialControlFocused(root,form); button.disabled=true;
+    try { await post({action:'takedown',id:form.dataset.id,reason}); if (!active(form)) return; await refresh(); if (!present()) return; restoreEditorialFocus(root,hadFocus); announce(w.takeDownSaved); }
+    catch { if (active(form)) { status.textContent=w.error; button.disabled=false; } }
   });
   root.querySelectorAll('.material-review').forEach(form => form.querySelectorAll('[data-decision]').forEach(button => button.onclick = async () => {
     if (!active(form)) return;

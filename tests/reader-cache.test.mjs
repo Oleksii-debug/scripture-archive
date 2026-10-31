@@ -269,7 +269,7 @@ test('reader chapter hash and saved checkpoint normalize to server-safe integers
   const helperAt = source.indexOf('function readerChapterNumber(');
   const helperEnd = source.indexOf('\nasync function renderReader(', helperAt);
   assert.ok(helperAt >= 0 && helperEnd > helperAt, 'canonical production chapter validator');
-  const chapterAssignment = source.slice(readerAt, groupAt).match(/  const chapter = readerChapterNumber\(parts\[2\] \|\| state\.reader\.chapter \|\| 1, meta\.chapters\);/);
+  const chapterAssignment = source.slice(readerAt, groupAt).match(/  const chapter = readerChapterNumber\(parts\[2\] \|\| state\.reader\?\.chapter \|\| 1, meta\.chapters\);/);
   assert.ok(chapterAssignment, 'canonical renderReader chapter selection');
   const calculate = vm.runInNewContext(source.slice(helperAt, helperEnd) + '\n(parts, state, meta) => { ' + chapterAssignment[0] + '; return chapter; }');
   const scenarios = [

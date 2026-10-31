@@ -53,6 +53,39 @@ for(const action of ['delete','password','logout']){
     assert.equal(h.state.user,null);assert.ok(h.calls.includes('clear'));assert.ok(h.calls.includes('shell'));
   });
 }
+// An HTTP 200 alone is not proof that the destructive D1 batch committed.
+// The canonical API returns an explicit {ok:true} only after every receipt.
+for (const [name, receipt] of [
+  ['missing body', undefined],
+  ['null body', null],
+  ['empty object', {}],
+  ['explicit false', {ok:false}],
+  ['numeric ok', {ok:1}],
+  ['provider error', {error:'deletion_failed'}],
+  ['array body', []],
+]) {
+  test(`account deletion rejects unconfirmed successful HTTP reply: ${name}`, async () => {
+    const h = fixture(), control = h.controls['#delete-form'];
+    const operation = control.onsubmit({preventDefault(){},currentTarget:control});
+    h.pending.resolve(receipt);
+    await operation;
+    assert.equal(h.state.user,h.alice,'do not claim account deletion');
+    assert.equal(h.calls.includes('clear'),false,'preserve private local progress');
+    assert.match(h.status.textContent,/could not be completed/i);
+  });
+}
+
+test('late unconfirmed deletion response cannot change another principal or announce failure', async () => {
+  const h=fixture(),control=h.controls['#delete-form'];
+  const operation=control.onsubmit({preventDefault(){},currentTarget:control});
+  h.state.user=h.bob;
+  h.pending.resolve({});
+  await operation;
+  assert.equal(h.state.user,h.bob);
+  assert.equal(h.calls.includes('clear'),false);
+  assert.equal(h.status.textContent,'');
+});
+
 for(const action of ['delete','password','logout']){
   test(`detached ${action} control cannot issue a request`,async()=>{
     const h=fixture(),key=action==='delete'?'#delete-form':action==='password'?'#password-form':'#logout-button',control=h.controls[key];

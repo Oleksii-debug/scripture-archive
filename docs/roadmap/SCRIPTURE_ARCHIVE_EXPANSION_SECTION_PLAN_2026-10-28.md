@@ -1,3 +1,9 @@
+## 2026-10-31 — SA-EXT-05 / FILTERED_DOSSIER_COMPARISON_GET_CONTINUITY — ЗАКРИТО ЛИШЕ ПІДФУНКЦІЮ
+
+`CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` для втрати GET-пошуку `q` під час порівняння двох наявних джерельно верифікованих досьє у штатному `/dossiers`. [PR #933](https://github.com/Oleksii-debug/scripture-archive/pull/933) **SQUASH MERGED** у `main@88d630663097e939673103cc3ada4c498503d22f`. [Exact-head Actions #41190160528](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41190160528) **SUCCESS**: Node 3073 PASS/0 FAIL/1 SKIP; Worker/D1 22 PASS; Python 2 PASS; TS/lint/build PASS. [Термінальний акт і точні blobs](SA_EXT_05_FILTERED_DOSSIER_COMPARISON_SCOPED_TERMINAL_20261031.md). `remaining_scoped_implementation=0`; `necessary_unmerged_scoped_feature_PRs=0`. **Повний SA-EXT-05 і решта незакритих батьківських розділів залишаються OPEN; SA-EXT-03/04 parent TERMINAL.** Production Sites, Windows/NVDA та реліз не перевірено; деплою немає.
+
+---
+
 ## 2026-10-31 — SA-EXT-16 / ANALYTICS_CONSENT_OWN_LOCALE — ВУЗЬКИЙ ТЕРМІНАЛЬНИЙ ДЕФЕКТ
 
 Канонічний consent dialog (`public/analytics.js`) не приймає успадковані JavaScript-ключі за мови; коректні українські/російські/англійські написи та явний вибір аналітики збережено. [PR #901](https://github.com/Oleksii-debug/scripture-archive/pull/901) MERGED `main@a55849fcaac59623b33df9f1f247d6a0bb948cd5`, [CI #41179127156](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41179127156) SUCCESS (2894 Node PASS / 0 FAIL / 1 SKIP, 22 D1 PASS, 2 Python PASS). [Scoped receipt](SA_EXT_16_ANALYTICS_CONSENT_OWN_LOCALE_SCOPED_TERMINAL_20261031.md); `remaining_scoped_implementation=0` лише тут, **батьківський SA-EXT-16 OPEN**. Production/NVDA/Windows не перевірено, реліз не публікувався.

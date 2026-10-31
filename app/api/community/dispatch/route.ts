@@ -6,6 +6,13 @@ import { rateLimit, requestAddress } from "../../../../lib/auth";
 
 export const dynamic="force-dynamic";
 const json=(data:unknown,status=200)=>Response.json(data,{status,headers:{"Cache-Control":"no-store"}});
+// No DB write or credential access: only identifies a deployment that
+// supports the signed runner dispatch contract. The POST below retains the
+// independent exact OIDC verification and owner-controlled start policy.
+export function GET(){
+  return new Response(null,{status:204,headers:{"Cache-Control":"no-store","X-Scripture-Runner-Protocol":"github-oidc-v1"}});
+}
+
 export async function POST(request:Request){
   if(!env.DB)return json({error:"database_unavailable"},503);
   if(!await rateLimit(`community-dispatch:${requestAddress(request)}`,30,60))return json({error:"too_many_requests"},429);

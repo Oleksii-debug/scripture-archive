@@ -47,6 +47,10 @@ function fixture() {
   const exports=loadRoute('groups'),attempts=loadRoute('attempts');
   async function attempt(action,body={},user='carol') {const r=await attempts.POST(new Request('https://local.invalid/api/attempts?action='+action,{method:'POST',headers:{origin:'https://local.invalid','content-type':'application/json','x-user':user},body:JSON.stringify({missionId:'OT-AB-01',book:'GEN',chapter:12,groupId:'g',locale:'en',...body})}));return {status:r.status,data:await r.json()};}
   async function get(user='alice',groupId='g'){const r=await exports.GET(new Request('https://local.invalid/api/groups?groupId='+groupId,{headers:user?{'x-user':user}:{}}));return {status:r.status,data:await r.json()};}
+  async function noteRead(user='alice',sessionId='s',groupId='g'){
+    const r=await exports.GET(new Request('https://local.invalid/api/groups?action=meeting-notes&groupId='+encodeURIComponent(groupId)+'&sessionId='+encodeURIComponent(sessionId),{headers:user?{'x-user':user}:{}}));
+    return {status:r.status,data:await r.json()};
+  }
   async function meetings(user='alice',before=null,groupId='g'){
     const r=await exports.GET(new Request('https://local.invalid/api/groups?action=meetings&groupId='+encodeURIComponent(groupId)+(before===null?'':'&before='+encodeURIComponent(before)),{headers:user?{'x-user':user}:{}}));
     return {status:r.status,data:await r.json(),cache:r.headers.get('cache-control')};
@@ -58,7 +62,7 @@ function fixture() {
     db.prepare("INSERT INTO mission_attempts(id,actor_id,mission_id,book_id,chapter,group_id,locale,task_limit,status,expires_at) VALUES(?,?,'OT-AB-01','GEN',12,?,'en',5,?,datetime('now','+2 hours'))").run(id,user,group,status);
     db.prepare("INSERT INTO chapter_read_receipts(id,actor_id,book_id,chapter,group_id) VALUES(?,?,'GEN',12,?)").run(id,user,group);
   }
-  return {db,get,list,post,nameChoice,meetings,beforeAll:fn=>{beforeAll=fn;},attempt,seedAttempt,beforeRun:fn=>{beforeRun=fn;},setFailure:n=>{failure=n;},beforeBatch:fn=>{beforeBatch=fn;},setCreateReceiptMode:mode=>{corruptCreateReceipt=mode;},setSingleReceiptMode:mode=>{corruptSingleReceipt=mode;},setReadFailure:v=>{failAll=v;},setReadThrow:v=>{throwAll=v;},setAuthFailure:v=>{throwAuth=v;}};
+  return {db,get,list,post,nameChoice,meetings,noteRead,beforeAll:fn=>{beforeAll=fn;},attempt,seedAttempt,beforeRun:fn=>{beforeRun=fn;},setFailure:n=>{failure=n;},beforeBatch:fn=>{beforeBatch=fn;},setCreateReceiptMode:mode=>{corruptCreateReceipt=mode;},setSingleReceiptMode:mode=>{corruptSingleReceipt=mode;},setReadFailure:v=>{failAll=v;},setReadThrow:v=>{throwAll=v;},setAuthFailure:v=>{throwAuth=v;}};
 }
 const owner=f=>f.db.prepare("SELECT owner_user_id FROM home_groups WHERE id='g'").get().owner_user_id;
 const roles=f=>f.db.prepare("SELECT user_id,role FROM home_group_members WHERE group_id='g' ORDER BY user_id").all().map(x=>[x.user_id,x.role]);
@@ -708,5 +712,61 @@ test('meeting history refuses corrupt stored grades and dates instead of renderi
       f.db.exec('UPDATE group_sessions SET '+sql);
       assert.equal((await f.meetings()).status,503,sql);
     }
+  }finally{f.db.close();}
+});
+
+
+test('owners can correct any meeting notes; facilitators can correct only meetings they authored',async()=>{
+  const f=fixture();try{
+    f.db.exec("INSERT INTO group_sessions(id,group_id,created_by,book_id,chapter,meeting_date,reflection) VALUES('carol-meeting','g','carol','GEN',13,'2026-10-28','Carol notes')");
+    const before=f.db.prepare("SELECT book_id,chapter,meeting_date,answers_correct,answers_total,created_by FROM group_sessions WHERE id='s'").get();
+    assert.equal((await f.meetings('alice')).data.sessions.every(s=>s.canEdit),true);
+    assert.deepEqual((await f.meetings('carol')).data.sessions.filter(s=>s.canEdit).map(s=>s.id),['carol-meeting']);
+    assert.equal((await f.meetings('bob')).data.sessions.some(s=>s.canEdit),false);
+    const old={reflection:'private discussion',participantCount:null},notes={reflection:'  Revised notes\nSecond line  ',participantCount:12};
+    const payload={sessionId:'s',expected:old,notes,bookId:'JHN',chapter:1,answersCorrect:100};
+    for(const user of ['bob','carol','outsider'])assert.equal((await f.post('meeting-notes',payload,user)).status,409);
+    const saved=await f.post('meeting-notes',payload);assert.equal(saved.status,200);assert.deepEqual(saved.data.notes,notes);
+    assert.deepEqual((await f.noteRead()).data.notes,notes);
+    assert.deepEqual(f.db.prepare("SELECT book_id,chapter,meeting_date,answers_correct,answers_total,created_by FROM group_sessions WHERE id='s'").get(),before);
+    assert.equal((await f.post('meeting-notes',{sessionId:'carol-meeting',expected:{reflection:'Carol notes',participantCount:null},notes:{reflection:null,participantCount:2}},'carol')).status,200);
+    for(const user of ['bob','carol','outsider'])assert.equal((await f.noteRead(user)).status,404);
+    assert.equal((await f.noteRead('carol','carol-meeting')).status,200);
+    assert.equal((await f.post('meeting-notes',payload,'')).status,401);
+    assert.equal((await f.post('meeting-notes',payload,'alice','https://evil.invalid')).status,403);
+  }finally{f.db.close();}
+});
+
+test('meeting corrections refuse stale values, role changes and forged owner membership at write time',async()=>{
+  const f=fixture();try{
+    const old={reflection:'private discussion',participantCount:null},notes={reflection:'Revised',participantCount:3};
+    const payload={sessionId:'s',expected:old,notes};
+    f.beforeRun(()=>f.db.exec("UPDATE group_sessions SET reflection='Newer draft' WHERE id='s'"));
+    assert.equal((await f.post('meeting-notes',payload)).status,409);
+    assert.equal((await f.noteRead()).data.notes.reflection,'Newer draft');
+    f.db.exec("UPDATE group_sessions SET reflection='private discussion',created_by='carol' WHERE id='s'");
+    f.beforeRun(()=>f.db.exec("UPDATE home_group_members SET role='member' WHERE user_id='carol'"));
+    assert.equal((await f.post('meeting-notes',payload,'carol')).status,409);
+    f.beforeRun(()=>f.db.exec("UPDATE home_groups SET owner_user_id='bob' WHERE id='g'"));
+    assert.equal((await f.post('meeting-notes',payload)).status,409,'stale owner role alone is insufficient');
+    assert.equal(f.db.prepare("SELECT reflection FROM group_sessions WHERE id='s'").get().reflection,'private discussion');
+    assert.equal((await f.meetings()).data.sessions[0].canEdit,false);
+  }finally{f.db.close();}
+});
+
+test('meeting notes require exact identifiers, bounded text and typed attendance; uncertain writes can be read back',async()=>{
+  const f=fixture();try{
+    const old={reflection:'private discussion',participantCount:null},notes={reflection:'x'.repeat(1200),participantCount:500};
+    for(const invalid of [{reflection:1,participantCount:null},{reflection:'x'.repeat(1201),participantCount:null},{reflection:null,participantCount:true},{reflection:null,participantCount:'3'},{reflection:null,participantCount:0},{reflection:null,participantCount:501},{reflection:null},{...notes,extra:true}]){
+      assert.equal((await f.post('meeting-notes',{sessionId:'s',expected:old,notes:invalid})).status,400);
+    }
+    for(const sessionId of [' s','s ','x'.repeat(81),null])assert.equal((await f.post('meeting-notes',{sessionId,expected:old,notes})).status,400);
+    assert.equal((await f.post('meeting-notes',{groupId:'other',sessionId:'s',expected:old,notes})).status,409);
+    f.setSingleReceiptMode('missing');assert.equal((await f.post('meeting-notes',{sessionId:'s',expected:old,notes})).status,503);
+    assert.deepEqual((await f.noteRead()).data.notes,notes,'readback resolves a committed write with missing acknowledgement');
+    assert.equal((await f.post('meeting-notes',{sessionId:'s',expected:old,notes})).status,409);
+    assert.equal((await f.post('meeting-notes',{sessionId:'s',expected:notes,notes:{reflection:null,participantCount:null}})).status,200);
+    f.db.exec("UPDATE group_sessions SET participant_count='broken' WHERE id='s'");
+    assert.equal((await f.noteRead()).status,503);
   }finally{f.db.close();}
 });

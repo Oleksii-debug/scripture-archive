@@ -42,3 +42,13 @@ test("R0.4 recovers on clean SSR after a malformed nesting refusal",async()=>{
   assert.equal(await ready('<html><body>'+'<div>'.repeat(4097)+MARKER+'</div>'.repeat(4097)+'</body></html>'),false);
   assert.equal(await ready(`<html><body>${MARKER}</body></html>`),true);
 });
+
+test("R0.4 HTML non-void self-closing syntax cannot escape hidden ancestor",async()=>{
+  assert.equal(await ready('<html><body><div hidden/>'+MARKER+'</body></html>'),false);
+});
+test("R0.4 HTML script slash is not a self-closing escape into fake page markers",async()=>{
+  assert.equal(await ready('<html><body><script/>const fake="'+MARKER+'";</body></html>'),false);
+});
+test("R0.4 genuine HTML void tag does not trap real navigation",async()=>{
+  assert.equal(await ready('<html><body><br/>'+MARKER+'</body></html>'),true);
+});

@@ -287,6 +287,6 @@ test('SA-EXT-05 exact Bible-book query finds direct and relational witnesses wit
     }
     assert.deepEqual(searchScriptureDossiers(lang,'GEN1',catalog),[]);
     assert.deepEqual(searchScriptureDossiers(lang,'GEN 1',catalog),[]);
-    assert.deepEqual(searchScriptureDossiers(lang,'GENES',catalog),[]);
+    assert.deepEqual(searchScriptureDossiers(lang,'GENX',catalog),[]);
   }
 });

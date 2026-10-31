@@ -75,3 +75,43 @@ test('invalid authenticated account cannot mutate guest progress even with a sta
   assert.equal(store.calls.filter(([method])=>method==='set').length,1,
     'only fixture setup may have written anonymous data');
 });
+
+
+test('inherited, accessor and array IDs never select another account’s private Academy markers', () => {
+  const inherited=Object.create({id:'alice'});
+  const accessor={get id(){return 'alice';}};
+  const array=Object.assign([], {id:'alice'});
+  const hostile=new Proxy({}, {getOwnPropertyDescriptor(){throw Error('unreadable principal');}});
+  const store=storage();
+  const alice=academyProgressKey({id:'alice'});
+  store.setItem(alice,JSON.stringify({version:1,completed:['abraham']}));
+  const original=store.values.get(alice);
+  for(const user of [inherited,accessor,array,hostile]){
+    assert.equal(academyProgressKey(user),null,'unverified principal must not select Alice');
+    const before=store.calls.length;
+    assert.deepEqual(readAcademyProgress(store,academyProgressKey(user)),{available:false,completed:[]});
+    assert.equal(store.calls.length,before,'invalid identity must not touch storage');
+  }
+  assert.equal(store.values.get(alice),original);
+  const own=Object.assign(Object.create(null),{id:'alice'});
+  assert.equal(academyProgressKey(own),alice,'legitimate own data-property IDs remain valid');
+});
+
+test('stale Academy controls cannot write through a prototype-inherited principal ID', () => {
+  const store=storage();
+  const alice=academyProgressKey({id:'alice'});
+  store.setItem(alice,JSON.stringify({version:1,completed:['abraham']}));
+  const original=store.values.get(alice);
+  let click=()=>{};
+  const button={
+    getAttribute:()=> 'sarah',
+    addEventListener(_event,callback){click=callback;},
+  };
+  const root={querySelectorAll:()=>[button],querySelector:()=>({textContent:''})};
+  const document={querySelector:value=>value==='[data-academy-root]'?root:null};
+  attachAcademy(document,store,'en',Object.create({id:'alice'}),{available:true,completed:[]});
+  const before=store.calls.length;
+  click();
+  assert.equal(store.calls.length,before,'no read or write through inherited principal');
+  assert.equal(store.values.get(alice),original);
+});

@@ -62,17 +62,34 @@ export async function verifyPassword(password: string, expectedHash: string, sal
   return difference === 0;
 }
 
+// Cookies can legitimately share a name when browsers send different Path
+// scopes. Never let the last of two session/agent values silently win: the
+// server cannot identify which identity the browser intended. Track repeated
+// names even when a value is malformed, so a corrupt first cookie cannot be
+// replaced by a valid-looking second value.
+function readCookies(request: Request) {
+  const cookies = new Map<string, string>();
+  const seen = new Set<string>();
+  const repeated = new Set<string>();
+  for (const raw of (request.headers.get("cookie") || "").split(";")) {
+    const pair = raw.trim();
+    const separator = pair.indexOf("=");
+    if (separator <= 0) continue;
+    const name = pair.slice(0, separator);
+    if (seen.has(name)) {
+      repeated.add(name);
+      cookies.delete(name);
+      continue;
+    }
+    seen.add(name);
+    try { cookies.set(name, decodeURIComponent(pair.slice(separator + 1))); }
+    catch { /* Malformed percent-encoding is never an authenticated cookie. */ }
+  }
+  return { cookies, repeated };
+}
+
 export function parseCookies(request: Request) {
-  return new Map(
-    (request.headers.get("cookie") || "")
-      .split(";")
-      .map(part => part.trim().split("="))
-      .filter(parts => parts.length >= 2)
-      .flatMap(([key, ...rest]) => {
-        try { return [[key, decodeURIComponent(rest.join("="))] as const]; }
-        catch { return []; }
-      }),
-  );
+  return readCookies(request).cookies;
 }
 
 export function sessionCookie(request: Request, token: string, maxAge = 60 * 60 * 24 * 30) {
@@ -169,7 +186,11 @@ export async function createSession(request: Request, userId: string, version: n
 }
 
 export async function revokeCurrentSession(request: Request) {
-  const token = parseCookies(request).get(SESSION_COOKIE);
+  const { cookies, repeated } = readCookies(request);
+  // Refuse an ambiguous logout rather than claiming a revocation that could
+  // leave one still-live scoped cookie behind.
+  if (repeated.has(SESSION_COOKIE)) throw new Error("ambiguous_session_cookie");
+  const token = cookies.get(SESSION_COOKIE);
   if (!token) return;
   if (!env.DB) throw new Error("session_revoke_unavailable");
   const receipt=await env.DB.prepare("UPDATE auth_sessions SET revoked_at=CURRENT_TIMESTAMP WHERE token_hash=?").bind(await sha256(token)).run();

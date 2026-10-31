@@ -194,6 +194,8 @@ function resultFor(tasks: MissionTask[], answers: Array<Record<string, unknown>>
 // not carry a link to their randomly generated group-session IDs.
 async function completedResponse(attempt: Attempt, accepted = false) {
   try {
+    // A corrupt or legacy D1 row must never present another mission as completed.
+    if (attempt.mission_id !== MISSION_ID) return json({ error: "attempt_state_invalid" }, 503);
     if (!attempt.result_json) return json({ error: "attempt_state_invalid" }, 503);
     // D1 can contain a legacy or damaged completed row. JSON.parse succeeds
     // for arrays, strings and forged score objects; none is a legitimate
@@ -227,6 +229,8 @@ async function completedResponse(attempt: Attempt, accepted = false) {
 async function finishAttempt(attempt: Attempt, actorId: string, guest: boolean, accepted = false) {
   if (attempt.status === "completed") return completedResponse(attempt, accepted);
   if (attempt.status !== "grading") return json({ error: "attempt_changed" }, 409);
+  // Do not grade or write progress under this route for a foreign stored mission.
+  if (attempt.mission_id !== MISSION_ID) return json({ error: "attempt_state_invalid" }, 503);
   if (!storedLocale(attempt.locale)) return json({ error: "attempt_state_invalid" }, 409);
   try {
     const tasks = tasksFor(attempt.book_id, attempt.chapter).slice(0, attempt.task_limit);

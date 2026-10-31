@@ -4,11 +4,12 @@ const COPY = {
   en: { title:'Compare editions', choose:'Second edition', open:'Show the second chapter text', loading:'Loading…', ready:'The second chapter text is available below.', fail:'Could not load the second text. Please try again.', changed:'The selected edition changed. Submit again to compare the current selection.', unavailable:'This chapter is not available in that edition.', note:'Verse numbering may differ between editions. The texts are presented separately.', source:'Source', license:'Terms of use', cite:'Cite verse', cited:'Verse and source copied.', citeFail:'Could not copy the citation.' },
 };
 // Provenance URL admission must inspect the *raw* string first: WHATWG URL
-// silently strips tabs/newlines and empty user-info delimiters. Such a rewrite
-// can silently change which source or licence we attribute Bible text to.
+// silently strips tabs/newlines and empty user-info delimiters; it also
+// percent-encodes raw C1, bidi/isolate and invisible controls in URI paths.
+// Refuse them before parsing instead of silently changing source/licence links.
 const https = value => {
   if (typeof value !== 'string' || !/^https:\/\//i.test(value) ||
-      /[\u0000-\u0020\u007f]/u.test(value)) return '';
+      /[\u0000-\u0020\u007f-\u009f\u061c\u200b\u2028-\u202e\u2066-\u2069\ufeff]/u.test(value)) return '';
   const authority = value.slice(value.indexOf('://') + 3).split(/[/?#]/u, 1)[0];
   if (!authority || authority.includes('@')) return '';
   try {

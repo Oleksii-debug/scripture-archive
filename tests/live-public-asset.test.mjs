@@ -5,7 +5,7 @@ import { comparePublicAppBytes, requireExactCleanHead, MAX_PUBLIC_ASSET_BYTES, m
 const origin = 'https://scripture-archive.com';
 const original = Buffer.from('console.log("chapter accepted");\n', 'utf8');
 const sha = '0123456789abcdef0123456789abcdef01234567';
-const response = (body, init = {}) => new Response(body, {status: 200, headers: {'content-type':'application/javascript'}, ...init});
+const response = (body, init = {}) => new Response(body, {status: 200, ...init, headers: {'content-type':'application/javascript', ...(init.headers || {})}});
 
 test('exact public byte match is explicitly scoped, read-only and credential-free', async () => {
   const calls = [];
@@ -26,6 +26,28 @@ test('exact public byte match is explicitly scoped, read-only and credential-fre
   assert.equal(calls[0][1].cache, 'no-store');
   assert.equal(calls[0][1].headers['Cache-Control'], 'no-cache');
   assert.equal(calls[0][1].headers['Accept-Encoding'], 'identity');
+});
+
+
+test('refuses byte-identical JS served as HTML, JSON, unknown MIME or conflicting charset', async () => {
+  const invalid = [
+    response(original,{headers:{'content-type':'text/html'}}),
+    response(original,{headers:{'content-type':'application/json'}}),
+    response(original,{headers:{'content-type':'application/javascript; charset=iso-8859-1'}}),
+    response(original,{headers:{'content-type':'application/javascript-extra'}}),
+    new Response(original,{status:200}),
+  ];
+  for(const asset of invalid){
+    await assert.rejects(comparePublicAppBytes({
+      origin,sourceBytes:original,fetchImpl:async()=>asset,
+    }),/JavaScript Content-Type with UTF-8 required/);
+  }
+  for(const type of ['text/javascript','application/javascript; charset=utf-8',
+    'text/javascript; charset="utf-8"','application/ecmascript']){
+    const asset=response(original,{headers:{'content-type':type}});
+    const result=await comparePublicAppBytes({origin,sourceBytes:original,fetchImpl:async()=>asset});
+    assert.equal(result.verdict,'PUBLIC_APP_JS_BYTE_MATCH');
+  }
 });
 
 test('historical/different public JS produces a mismatch, not a deployment-ready claim', async () => {

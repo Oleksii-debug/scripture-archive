@@ -2435,11 +2435,26 @@ async function getBook(code, explicitEdition = null) {
         const expectedChapters = entries?.find((entry) => entry.code === code)?.chapters;
         if (!book || book.bookCode !== code || book.locale !== requestLocale ||
             book.editionId !== (edition.contentId || edition.id) || !Array.isArray(book.chapters) ||
-            !book.chapters.length ||
-            (expectedChapters && book.chapters.length !== expectedChapters) ||
-            book.chapters.some((chapter) => !Array.isArray(chapter) || !chapter.length ||
-              chapter.some((verse) => typeof verse !== "string" || !verse.trim()))) {
+            !book.chapters.length || book.chapters.length > 200 ||
+            (expectedChapters && book.chapters.length !== expectedChapters)) {
           throw Error("Invalid Bible book data");
+        }
+        // Primary reading and parallel reading must enforce the same chapter
+        // resource bounds before rendering Scripture or creating citations.
+        // Index-based checks reject sparse arrays skipped by Array#some.
+        for (let chapterIndex = 0; chapterIndex < book.chapters.length; chapterIndex += 1) {
+          const chapter = book.chapters[chapterIndex];
+          if (!Array.isArray(chapter) || !chapter.length || chapter.length > 256)
+            throw Error("Invalid Bible book data");
+          let characters = 0;
+          for (let verseIndex = 0; verseIndex < chapter.length; verseIndex += 1) {
+            const verse = chapter[verseIndex];
+            if (typeof verse !== "string" || !verse.trim())
+              throw Error("Invalid Bible book data");
+            characters += verse.length;
+            if (characters > 131072)
+              throw Error("Invalid Bible book data");
+          }
         }
         return book;
       })

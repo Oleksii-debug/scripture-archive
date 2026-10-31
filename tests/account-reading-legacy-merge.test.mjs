@@ -82,3 +82,50 @@ test('fresh account keeps canonical write and malformed JSON fails closed withou
   assert.equal(h.stored(),before);
   h.sqlite.close();
 });
+
+
+test('atomic merge refuses the 2001st saved receipt instead of stranding private GET',async()=>{
+  const h=harness();
+  const previous=Array.from({length:2000},(_,i)=>({book:'GEN',chapter:1,title:'Legacy '+i}));
+  const exact=JSON.stringify(previous);
+  h.setStored(exact);
+  const result=await h.put([{book:'EXO',chapter:1,title:'Exodus'}]);
+  assert.equal(result.status,503,'a rejected overflow cannot be falsely acknowledged');
+  assert.equal(result.body.error,'reading_save_failed');
+  assert.equal(h.stored(),exact,'overflow cannot mutate old private history');
+  h.sqlite.close();
+});
+
+test('boundary accepts the 2000th receipt but refuses two new chapters from 1999',async()=>{
+  const h=harness();
+  const old=Array.from({length:1999},(_,i)=>({book:'GEN',chapter:1,title:'Legacy '+i}));
+  h.setStored(JSON.stringify(old));
+  let result=await h.put([{book:'EXO',chapter:1,title:'Exodus'}]);
+  assert.equal(result.status,200);
+  assert.equal(JSON.parse(h.stored()).length,2000);
+  const stable=h.stored();
+  result=await h.put([{book:'PSA',chapter:1,title:'Psalm'},{book:'EXO',chapter:2,title:'Exodus 2'}]);
+  assert.equal(result.status,503);
+  assert.equal(result.body.error,'reading_save_failed');
+  assert.equal(h.stored(),stable,'multi-chapter overflow cannot partially persist');
+  h.sqlite.close();
+});
+
+test('a repeat of an existing chapter at capacity does not consume a new slot',async()=>{
+  const h=harness();
+  const old=Array.from({length:2000},(_,i)=>({book:'GEN',chapter:1,title:'Legacy '+i}));
+  h.setStored(JSON.stringify(old));
+  const result=await h.put([{book:'GEN',chapter:1,title:'New client snapshot'}]);
+  assert.equal(result.status,200);
+  assert.deepEqual(result.body,{ok:true});
+  assert.deepEqual(JSON.parse(h.stored()),old,'duplicate replay is safe and idempotent');
+  h.sqlite.close();
+});
+
+test('fresh saved histories remain independent of the capacity guard',async()=>{
+  const h=harness();
+  const result=await h.put([{book:'JOL',chapter:4,title:'Joel chapter 4'}]);
+  assert.equal(result.status,200);
+  assert.deepEqual(JSON.parse(h.stored()),[{book:'JOL',chapter:4,title:'Joel chapter 4'}]);
+  h.sqlite.close();
+});

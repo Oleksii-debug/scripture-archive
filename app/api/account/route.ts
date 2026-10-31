@@ -197,8 +197,22 @@ async function write(request:Request){
           )
         ),
         updated_at=CURRENT_TIMESTAMP
+        -- The private GET contract rejects histories longer than 2000.
+        -- Check FINAL merged length in this atomic UPSERT. A stale client's
+        -- snapshot may overlap old chapters. Legacy histories can have 2000
+        -- entries. Never ACK a write that would make the private GET fail.
+        WHERE json_array_length(progress.data) + (
+          SELECT COUNT(*) FROM json_each(excluded.data) AS incoming
+          WHERE NOT EXISTS (
+            SELECT 1 FROM json_each(progress.data) AS existing
+            WHERE json_extract(existing.value,'$.book')=json_extract(incoming.value,'$.book')
+              AND json_extract(existing.value,'$.chapter')=json_extract(incoming.value,'$.chapter')
+          )
+        ) <= 2000
     `).bind(id.userId,JSON.stringify(unique),chapterLimits,chapterLimits).run();
     const written=confirmedD1Changes(result);
+    // A zero-change receipt may be a capacity refusal OR an uncertain D1
+    // write. Preserve the existing fail-closed 503 contract for both.
     if(written===null||written===0)return privateJson({error:"reading_save_failed"},{status:503});
     return privateJson({ok:true});
     }catch{return privateJson({error:"reading_state_unavailable"},{status:503});}

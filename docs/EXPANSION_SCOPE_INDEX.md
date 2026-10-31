@@ -5,6 +5,9 @@
 
 ## Перевірені вузькі закриття (не закриття батьківського розділу)
 
+- **SA-EXT-02 / приватна історія читання (HTTP read projection і межі):** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` для видалення додаткових історичних JSON полів із API, захисту обсягу 2 000 записів та помилок D1. [PR #852](https://github.com/Oleksii-debug/scripture-archive/pull/852) **MERGED** `main@f0a827916bc105a64e29161e211d7c9ec9b91bd4`; [CI #41169869208](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41169869208) **SUCCESS**; [офіційна квитанція](roadmap/SA_EXT_02_READING_RECEIPT_GET_PROJECTION_BOUNDS_SCOPED_TERMINAL_20261031.md). **Батьківські SA-EXT-02 і SA-EXT-16 OPEN**, реліз/Chrome/Windows/NVDA не підтверджено.
+
+
 - **SA-EXT-01 — ідентичність перекладу основної читальні:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` лише для відмови від підстановки чужого ліцензійного джерела за неправильного ID. [PR #842](https://github.com/Oleksii-debug/scripture-archive/pull/842) **MERGED** у `main@12abfeae78f132b5fe07a29abde15f5185d56233`, exact-head [CI #41168210300](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41168210300) **SUCCESS**; [доказ](roadmap/SA_EXT_01_PRIMARY_TRANSLATION_IDENTITY_SCOPED_TERMINAL_20261031.md). Повний SA-EXT-01 OPEN; live Sites/browser/NVDA/Windows NOT_VERIFIED, деплою немає.
 
 

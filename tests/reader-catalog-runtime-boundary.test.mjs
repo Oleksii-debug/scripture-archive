@@ -7,7 +7,8 @@ const source = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8'
 const start = source.indexOf('function validBibleCatalog(');
 const end = source.indexOf('\nasync function getCatalog(', start);
 assert.ok(start >= 0 && end > start, 'production reader catalog validator exists');
-const validate = new Function(source.slice(start, end) + '\nreturn validBibleCatalog;')();
+const { validate, choose } = new Function(source.slice(start, end) +
+  '\nreturn { validate: validBibleCatalog, choose: catalogBooksForEdition };')();
 const catalog = JSON.parse(readFileSync(new URL('../public/data/catalog.json', import.meta.url), 'utf8'));
 const clone = () => structuredClone(catalog);
 
@@ -62,4 +63,40 @@ test('rejects a sparse approved-edition inventory before reader cache and citati
     assert.equal(validate(damaged), false, editionId);
   }
   assert.equal(validate(catalog), true, 'healthy catalog recovers without mutation');
+});
+
+test('rejects inherited source and edition metadata rather than accepting prototype values', () => {
+  const cases = [
+    c => { c.books = Object.create(c.books); },
+    c => { c.editions = Object.create(c.editions); },
+    c => { c.books.uk[0] = Object.create(c.books.uk[0]); },
+    c => { c.editions.uk = Object.create(c.editions.uk); },
+    c => { const value = c.books; delete c.books; Object.setPrototypeOf(c, {books:value}); },
+    c => { const value = c.editions; delete c.editions; Object.setPrototypeOf(c, {editions:value}); },
+    c => { const value = c.editionBooks; delete c.editionBooks; Object.setPrototypeOf(c, {editionBooks:value}); },
+  ];
+  for (const [index, corrupt] of cases.entries()) {
+    const damaged = clone();
+    corrupt(damaged);
+    assert.equal(validate(damaged), false, 'inherited source case '+index);
+    assert.equal(validate(catalog), true, 'canonical source remains usable');
+  }
+});
+
+test('never selects a forged inherited alternate inventory for reader or book fetch', () => {
+  const damaged = clone();
+  const alternate = damaged.editionBooks['uk-ohiienko'];
+  delete damaged.editionBooks['uk-ohiienko'];
+  alternate[0].title = 'UNVERIFIED INHERITED TITLE';
+  Object.setPrototypeOf(damaged.editionBooks, {'uk-ohiienko':alternate});
+  assert.equal(validate(damaged), false, 'validator rejects uninspected inherited edition');
+  assert.equal(choose(damaged, 'uk-ohiienko', 'uk'), damaged.books.uk,
+    'reader and book fetch use only an own-key approved alternate');
+  assert.equal(choose(catalog, 'uk-ohiienko', 'uk'), catalog.editionBooks['uk-ohiienko'],
+    'healthy local Ohiienko edition remains selected');
+  assert.equal(choose(catalog, 'uk-kulish', 'uk'), catalog.books.uk,
+    'primary historical Ukrainian edition retains its fallback');
+  const nullPrototype = clone();
+  Object.setPrototypeOf(nullPrototype.editionBooks, null);
+  assert.equal(validate(nullPrototype), true, 'safe null-prototype own-key inventory remains valid');
 });

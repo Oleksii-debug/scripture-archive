@@ -1,3 +1,11 @@
+## 2026-10-31 — SA-EXT-16 / SUPPORT_DOCX_LOCAL_HEADER_INTEGRITY — CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL
+
+**ЗАКРИТО ЛИШЕ ЦЮ ПІДФУНКЦІЮ; SA-EXT-16 parent OPEN.** Канонічний `POST /api/help` тепер звіряє центральні та локальні ZIP-заголовки DOCX: сигнатуру, буквальні байти імені, flags, method, offset і розміри. Підроблені центральні назви вже не достатні для приймання вкладення. [PR #1042](https://github.com/Oleksii-debug/scripture-archive/pull/1042) **SQUASH MERGED**, feature `main@8cc20ce895dcf68f3863e44e270da0f6d667ea69`; [exact-head CI #41242568090](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41242568090) **SUCCESS**: Node/TS/lint/build/disposable Worker-D1/Python; 11 нових реальних source-helper регресій. `remaining_scoped_implementation=0`, `required_unmerged_scoped_PRs=0`. Live Sites/D1/backup, email, Windows/browser/NVDA, release #689 **NOT_VERIFIED**. Жодного деплою, міграції чи відправлення листів.
+
+[Scoped terminal receipt](SA_EXT_16_SUPPORT_DOCX_LOCAL_HEADER_INTEGRITY_SCOPED_TERMINAL_20261031.md).
+
+---
+
 ## 2026-10-31 — R0.4 / PUBLIC_SUMMARY_CACHE_AND_ANON_EXACT_SHAPE — CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL
 
 **ЗАКРИТО ДЛЯ ПОВТОРНОЇ РОЗРОБКИ ЛИШЕ ЦЕ P0-ВИПРАВЛЕННЯ, НЕ ВЕСЬ R0.4, SA-EXT-10/16 ЧИ РЕЛІЗ.** Read-only `lib/community-smoke.mjs::communityDeploymentReady` тепер не визнає готовим кешований `/api/community?public=summary` без окремого `Cache-Control: no-store`, а також анонімний `/api/account?action=me` з будь-яким зайвим полем поряд із `user:null`. Канонічні GET уже забезпечують `no-store` та `{user:null}`. Це доведена локальна хибнопозитивна перевірка готовності, **не** доказ реального витоку чи злому production.

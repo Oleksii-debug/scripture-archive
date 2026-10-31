@@ -154,6 +154,35 @@ test('new submissions require bounded structured rights and canonical HTTPS for 
   }finally{f.db.close();}
 });
 
+test('license provenance rejects raw Unicode controls and credential authorities before D1 writes and public reads',async()=>{
+  const f=fixture();try {
+    const hidden=[0x0085,0x00a0,0x061c,0x200b,0x200e,0x202e,0x2066,0xfeff,0xd800].map(x=>String.fromCharCode(x));
+    for(const control of hidden) {
+      const raw='https://publisher.example/license'+control+'terms';
+      const response=await f.post({...submission,rightsBasis:'open_license',licenseUrl:raw});
+      assert.equal(response.status,400,'forbid raw U+'+control.codePointAt(0).toString(16));
+    }
+    for(const url of ['https://@publisher.example/license','https://agent@publisher.example/license',
+      'https://publisher.example/'+String.fromCharCode(10)+'license','http://publisher.example/license']) {
+      assert.equal((await f.post({...submission,rightsBasis:'permission',licenseUrl:url})).status,400);
+    }
+    assert.equal(f.db.prepare('SELECT count(*) n FROM material_submissions').get().n,0);
+    const safe='https://publisher.example/a%20b?source=a@b';
+    const accepted=await f.post({...submission,rightsBasis:'open_license',licenseUrl:safe});
+    assert.equal(accepted.status,201);
+    assert.equal(f.db.prepare('SELECT license_url FROM material_submissions WHERE id=?').get(accepted.data.id).license_url,safe);
+    assert.equal((await f.post(approve(accepted.data.id),'editor')).status,200);
+    assert.equal((await f.get('public')).data.items[0].rights.licenseUrl,safe);
+    // Restore/imported D1 data bypasses the submission admission path.
+    // The public catalogue and search must fail closed for old malformed URLs.
+    f.db.prepare('UPDATE material_submissions SET license_url=? WHERE id=?')
+      .run('https://publisher.example/license'+String.fromCharCode(0x202e)+'hidden',accepted.data.id);
+    assert.equal((await f.get('public')).status,503);
+    assert.equal((await f.get('mine','alice')).status,503);
+    assert.equal((await f.post({action:'librarySearch',query:'',cursor:null},'')).status,503);
+  }finally{f.db.close();}
+});
+
 test('legacy null rights remain explicit while partial or malformed stored rights fail every catalogue read closed',async()=>{
   const f=fixture();try {
     const id=(await f.post(submission)).data.id;

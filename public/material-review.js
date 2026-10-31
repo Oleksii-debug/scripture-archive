@@ -54,7 +54,13 @@ export function submissionForm(material, w, esc) {
 }
 const RIGHTS_BASES = new Set(['original','permission','open_license','public_domain']);
 function canonicalPublicHttps(value) {
-  if(typeof value!=='string'||value.length<9||value.length>500||value.trim()!==value||/[\u0000-\u0020\u007f]/.test(value))return null;
+  // A source-link parser canonicalizes raw bidi and invisible characters to
+  // percent-encoded text; refuse the original input, just like the server and
+  // the primary Bible reader, before any public catalogue HTML is created.
+  if(typeof value!=='string'||value.length<9||value.length>500||value.trim()!==value||
+     !/^https:\/\//i.test(value)||/[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}\s]/u.test(value))return null;
+  const authority=value.slice(value.indexOf('://')+3).split(/[/?#]/u,1)[0];
+  if(!authority||authority.includes('@'))return null;
   try {const url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password?url.href:null;} catch {return null;}
 }
 function validRightsMetadata(rights) {

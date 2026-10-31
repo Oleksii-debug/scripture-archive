@@ -52,13 +52,13 @@ test('invalid pasted range cannot open an unrelated dossier reader passage in GE
   for (const lang of ['uk','ru','en']) {
     const html = dossierMarkup(catalog, lang, 'abraham', esc, 'GEN 12:1-257');
     assert.match(html, /role="alert"/);
-    assert.doesNotMatch(html, /href="\\/reader\\//);
+    assert.ok(!html.includes('href="/reader/'), "no canonical reader link for rejected range");
     assert.doesNotMatch(html, /id="dossier-heading"/);
   }
 });
 
 test('legal citation still opens existing canonical reader link', () => {
   const html = dossierMarkup(catalog, 'uk', 'abraham', esc, 'GEN 12:1-256');
-  assert.match(html, /href="\\/reader\\/GEN\\/12\\?verse=1"/);
+  assert.ok(html.includes('href="/reader/GEN/12?verse=1"'), "canonical reader navigation retained");
   assert.match(html, /id="dossier-heading"/);
 });

@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {dossierAtlasMarkup,scriptureDossiers,searchScriptureDossiers,validateDossierGraph} from '../public/scripture-dossiers.js';
+import {dossierAtlasMarkup,dossierMarkup,scriptureDossiers,searchScriptureDossiers,validateDossierGraph} from '../public/scripture-dossiers.js';
 const catalog=JSON.parse(readFileSync(new URL('../public/data/catalog.json',import.meta.url),'utf8'));
 const esc=v=>String(v).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const order=['abraham','sarah','joseph','moses','exodus','david','nativity'];
+const resultLink=(id,q)=>'href="/dossiers?'+new URLSearchParams({id,q}).toString().replaceAll('&','&amp;')+'"';
 const kind={
   uk:{narrative:'Зв’язок у біблійній оповіді',interpretive:'Тематичне зіставлення, не незалежний історичний доказ'},
   ru:{narrative:'Связь в библейском повествовании',interpretive:'Тематическое сопоставление, не независимое историческое доказательство'},
@@ -102,9 +103,9 @@ test('filtered atlas uses the same proven source search as its adjacent dossier 
   for(const [lang,query] of [['uk','Мойсей'],['ru','Моисей'],['en','Moses']]){
     const html=dossierAtlasMarkup(catalog,lang,esc,query);
     assert.match(html,/role="status"/,lang+' search feedback');
-    assert.match(html,/href="\/dossiers\?id=moses"/,lang+' matching dossier');
+    assert.ok(html.includes(resultLink('moses',query)),lang+' matching dossier keeps its GET filter');
     assert.match(html,/href="\/reader\/EXO\/3\?verse=1"/,lang+' real cited chapter');
-    assert.doesNotMatch(html,/href="\/dossiers\?id=abraham"/,lang+' unrelated dossier not displayed');
+    assert.ok(!html.includes(resultLink('abraham',query)),lang+' unrelated dossier not displayed');
     assert.doesNotMatch(html,/href="\/reader\/GEN\/12\?verse=1"/,lang+' unrelated chapter not displayed');
     assert.equal((html.match(/<table>/g)||[]).length,2,lang+' still has native accessible atlas tables');
     assert.ok(!html.includes('onclick=')&&!html.includes('<iframe'),lang+' native keyboard navigation');
@@ -143,10 +144,48 @@ test('atlas filtered witness links stay inside the matching canonical graph',()=
     const matches=new Set(searchScriptureDossiers(lang,query,catalog).map(item=>item.id));
     assert.ok(matches.size>0);
     for(const item of scriptureDossiers){
-      const anchor='href="/dossiers?id='+item.id+'"';
+      const anchor=resultLink(item.id,query);
       assert.equal(html.includes(anchor),matches.has(item.id),lang+' '+item.id+' exact subject filter');
     }
     assert.ok(!html.includes('javascript:'));
     assert.ok(!html.includes('<script'));
+  }
+});
+
+
+test('SA-EXT-06: filtered atlas subject and relation links retain query across native GET roundtrip',()=>{
+  assert.equal(validateDossierGraph(catalog),true);
+  for(const [lang,query,id] of [
+    ['en','Moses','moses'],
+    ['uk','Мойсей','moses'],
+    ['ru','Моисей','moses'],
+    ['en','GEN 17:15','abraham'],
+    ['en','GEN 17:15','sarah'],
+    ['en','GEN 12','egypt'],
+    ['en',' Abraham ','abraham'],
+  ]){
+    const trimmed=query.trim();
+    const html=dossierAtlasMarkup(catalog,lang,esc,query);
+    const href=resultLink(id,trimmed);
+    assert.ok(html.includes(href),lang+' '+id+' preserves the selected atlas search');
+    assert.ok(!html.includes('href="/dossiers?id='+id+'"'),'filtered subject cannot silently drop q');
+    const route=new URL(href.slice('href="'.length,-1).replaceAll('&amp;','&'),'https://scripture-archive.example');
+    assert.equal(route.pathname,'/dossiers');
+    assert.equal(route.searchParams.get('id'),id);
+    assert.equal(route.searchParams.get('q'),trimmed);
+    const dossier=dossierMarkup(catalog,lang,route.searchParams.get('id'),esc,route.searchParams.get('q'));
+    assert.match(dossier,/id="dossier-heading"/,'selected real dossier remains visible after navigation');
+    assert.ok(dossier.includes(href),'canonical dossier index keeps the same filter');
+    assert.ok(!html.includes('onclick=')&&!html.includes('<iframe'),'native keyboard links only');
+  }
+  for(const lang of ['uk','ru','en']){
+    const legacy=dossierAtlasMarkup(catalog,lang,esc);
+    assert.ok(legacy.includes('href="/dossiers?id=abraham"'),'unfiltered deep links unchanged');
+    assert.ok(!legacy.includes('href="/dossiers?id=abraham&amp;q='),'no phantom empty query');
+    for(const invalid of ['x'.repeat(121),'zqxneverexists','<img src=x onerror=1>']){
+      const html=dossierAtlasMarkup(catalog,lang,esc,invalid);
+      assert.ok(!html.includes('href="/dossiers?id='),'invalid/no-match query cannot leak atlas dossier links');
+      assert.ok(!html.includes('<img'),'untrusted query cannot inject markup');
+    }
   }
 });

@@ -350,7 +350,14 @@ export function dossierAtlasMarkup(catalog,language,esc,query='') {
     const label=bookNames.get(source.book)+' '+source.chapter+':'+source.first+'–'+source.last;
     return '<a href="/reader/'+source.book+'/'+source.chapter+'?verse='+source.first+'" aria-label="'+esc(w.read)+': '+esc(label)+' — '+esc(w[source.kind])+'">'+esc(label)+'</a>';
   };
-  const subject=item=>'<a href="/dossiers?id='+item.id+'">'+esc(item.names[lang])+'</a>';
+  // Atlas links must keep the active native GET search, like dossier index links.
+  // Otherwise opening a filtered atlas subject silently resets the dossier view.
+  // URLSearchParams encodes the query; esc() protects the HTML attribute.
+  const subject=item=>{
+    const params=new URLSearchParams({id:item.id});
+    if(filtered)params.set('q',query.trim());
+    return '<a href="'+esc('/dossiers?'+params.toString())+'">'+esc(item.names[lang])+'</a>';
+  };
   const history=order.filter(id=>visible(byId.get(id))).map((id,i)=>{
     const item=byId.get(id);
     // Each narrative row must expose all its canonical witness passages, not

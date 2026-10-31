@@ -2992,10 +2992,22 @@ async function onReaderEditionChange(event, parts) {
 }
 
 async function renderReader(parts) {
+  // A later same-account navigation owns every pending reader continuation.
+  // The token is transient and non-enumerable, so it is not saved as account data.
+  const readerRenderToken = {};
+  Object.defineProperty(state, "__readerRenderToken", {
+    value: readerRenderToken, writable: true, configurable: true,
+  });
   const readerPrincipal = state.user;
+  const readerRoute = typeof location === "undefined" ? null :
+    `${location.pathname || ""}${location.search || ""}${location.hash || ""}`;
+  const readerInvocationCurrent = () =>
+    state.__readerRenderToken === readerRenderToken &&
+    (readerRoute === null || (typeof location !== "undefined" &&
+      `${location.pathname || ""}${location.search || ""}${location.hash || ""}` === readerRoute));
   setActiveNav("reader");
   const catalog = await getCatalog();
-  if (state.user !== readerPrincipal || (typeof location !== "undefined" && location.pathname && !location.pathname.startsWith("/reader"))) return;
+  if (state.user !== readerPrincipal || !readerInvocationCurrent() || (typeof location !== "undefined" && location.pathname && !location.pathname.startsWith("/reader"))) return;
   const chosenEdition = selectedEdition(state.lang);
   const books = catalog.editionBooks && Object.hasOwn(catalog.editionBooks, chosenEdition.id)
     ? catalog.editionBooks[chosenEdition.id] : catalog.books[state.lang];
@@ -3015,7 +3027,7 @@ async function renderReader(parts) {
   const groupId = parts[3] === "group" ? parts[4] || "" : "";
   state.currentReader = { book: meta.code, chapter };
   const readerContext = state.currentReader;
-  const readerStillCurrent = () => state.currentReader === readerContext && state.user === readerPrincipal;
+  const readerStillCurrent = () => readerInvocationCurrent() && state.currentReader === readerContext && state.user === readerPrincipal;
   try {
     const attemptState = await attemptRequest("chapter", "POST", { book: meta.code, chapter });
     if (!readerStillCurrent()) return;

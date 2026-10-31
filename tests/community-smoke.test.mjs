@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { communityDeploymentReady } from "../lib/community-smoke.mjs";
+const SHELL_HTML = "<html><body><a href=\"/community\" data-route=\"community\">Community</a><main id=\"main\"></main></body></html>";
 
 function deployed(url){
   const path=new URL(url).pathname;
@@ -9,7 +10,7 @@ function deployed(url){
   if(path==="/api/account")return Response.json({user:null},{headers:{"Cache-Control":"no-store, private"}});
   if(path==="/robots.txt")return new Response("User-agent: *\nSitemap: https://scripture-archive.com/sitemap.xml");
   if(path==="/sitemap.xml")return new Response('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>');
-  return new Response("<html>Community</html>",{headers:{"Content-Type":"text/html; charset=utf-8"}});
+  return new Response(SHELL_HTML,{headers:{"Content-Type":"text/html; charset=utf-8"}});
 }
 test("automatic activation waits until all public routes exist",async()=>{
   assert.equal(await communityDeploymentReady("https://scripture-archive.com",async url=>new URL(url).pathname==="/community"?new Response("missing",{status:404}):deployed(url)),false);
@@ -197,11 +198,59 @@ test("P0: real HTML page recovers after a transient 200 maintenance placeholder"
     if(new URL(url).pathname === "/community")
       return maintenance
         ? new Response("maintenance",{headers:{"Content-Type":"text/plain"}})
-        : new Response("<html>Community</html>",{headers:{"Content-Type":"TEXT/HTML; charset=UTF-8"}});
+        : new Response(SHELL_HTML,{headers:{"Content-Type":"TEXT/HTML; charset=UTF-8"}});
     return deployed(url);
   };
   assert.equal(await communityDeploymentReady("https://scripture-archive.com",fetcher),false);
   maintenance = false;
   assert.equal(await communityDeploymentReady("https://scripture-archive.com",fetcher),true);
   assert.deepEqual(methods,Array(12).fill("GET"));
+});
+
+test("P0: HTML 200 maintenance, login and truncated shell do not certify release", async () => {
+  const invalid = [
+    "<html><body>Maintenance in progress</body></html>",
+    "<html><body><form>Sign in</form></body></html>",
+    SHELL_HTML.replace('id="main"', 'id="login"'),
+    SHELL_HTML.replace('data-route="community"', 'data-route="account"'),
+    SHELL_HTML.replace("</html>", ""),
+  ];
+  for (const html of invalid) {
+    const methods = [];
+    const ready = await communityDeploymentReady("https://scripture-archive.com", async (url, options) => {
+      methods.push(options.method || "GET");
+      return new URL(url).pathname === "/community"
+        ? new Response(html, {headers:{"Content-Type":"text/html; charset=utf-8"}}) : deployed(url);
+    });
+    assert.equal(ready, false, "a placeholder or partial shell is not release evidence");
+    assert.deepEqual(methods, Array(6).fill("GET"));
+  }
+});
+
+test("P0: bounded HTML shell probe rejects oversized and invalid UTF-8 bodies", async () => {
+  const invalid = [
+    new Response(SHELL_HTML + "x".repeat(2 * 1024 * 1024), {headers:{"Content-Type":"text/html"}}),
+    new Response(new Uint8Array([60,104,116,109,108,62,195,40,60,47,104,116,109,108,62]),
+      {headers:{"Content-Type":"text/html"}}),
+  ];
+  for (const response of invalid) {
+    assert.equal(await communityDeploymentReady("https://scripture-archive.com", async url =>
+      new URL(url).pathname === "/community" ? response : deployed(url)), false);
+  }
+});
+
+test("P0: a fresh real app shell recovers after temporary HTML maintenance", async () => {
+  let maintenance = true;
+  const methods = [];
+  const fetcher = async (url, options) => {
+    methods.push(options.method || "GET");
+    return new URL(url).pathname === "/community"
+      ? new Response(maintenance ? "<html>Maintenance</html>" : SHELL_HTML,
+          {headers:{"Content-Type":"text/html; charset=utf-8"}})
+      : deployed(url);
+  };
+  assert.equal(await communityDeploymentReady("https://scripture-archive.com", fetcher), false);
+  maintenance = false;
+  assert.equal(await communityDeploymentReady("https://scripture-archive.com", fetcher), true);
+  assert.deepEqual(methods, Array(12).fill("GET"));
 });

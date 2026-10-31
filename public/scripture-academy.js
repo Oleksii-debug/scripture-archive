@@ -149,9 +149,29 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
     for(const button of buttons){
       const id=button.getAttribute('data-academy-lesson');
       if(!academyAllLessonIds.includes(id))continue;
+      // A successful verified read is the only path that restores editable
+      // private markers after a corrupted cross-tab storage event.
+      button.disabled=false;
       button.setAttribute('aria-pressed',String(selected.has(id)));
       button.textContent=selected.has(id)?w.unmark:w.mark;
     }
+  };
+  const redactUnreadableProgress=()=>{
+    // A storage event may replace a previously complete private record with
+    // corrupt/unreadable bytes. The old DOM must not keep announcing another
+    // account's or an obsolete tab's completion while the readback is denied.
+    for(const button of buttons){
+      if(!academyAllLessonIds.includes(button.getAttribute('data-academy-lesson')))continue;
+      button.disabled=true;
+      button.setAttribute('aria-pressed','false');
+      button.textContent=w.mark;
+    }
+    if(meter)meter.value=0;
+    if(status)status.textContent=w.unavailable;
+    if(badge)badge.textContent='';
+    if(placeMeter)placeMeter.value=0;
+    if(placeStatus)placeStatus.textContent=w.unavailable;
+    if(placeBadge)placeBadge.textContent='';
   };
   const currentView=()=>{
     try{return Boolean(isCurrent()) && document?.querySelector('[data-academy-root]')===root;}
@@ -308,6 +328,7 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
       if(resetStatus)resetStatus.textContent='';
       const latest=readAcademyProgress(storage,key);
       if(!latest.available){
+        redactUnreadableProgress();
         if(error)error.textContent=SYNC_ERROR[languageOf(language)];
         return;
       }

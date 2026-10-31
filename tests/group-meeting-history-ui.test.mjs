@@ -81,3 +81,38 @@ test('history mounts each correction form once and updates the matching displaye
   note.value='';attendance.value='';await form.onsubmit({preventDefault(){}});
   assert.equal(reflection.hidden,true);assert.equal(attendanceView.textContent,'');
 });
+
+
+const invalidDates=['0000-01-01','2026-00-01','2026-13-01','2026-01-00',
+  '2026-01-32','2025-02-29','2024-02-30','1900-02-29','2026-04-31',
+  '2026-11-31','2026-06-31','2026-09-31'];
+const invalidBooks=['GEN ',' GEN','X'.repeat(65),'X'.repeat(256),
+  'X'.repeat(1024),'X'.repeat(4096),'  GEN  ','GEN\t','GEN\n',
+  '0'.repeat(66),'1'.repeat(70),'a'.repeat(101)];
+const oversizedReflections=[1201,1202,1300,1500,2000,3000,4096,8192,16384,32000];
+const invalidMeetingRows=[
+  ...invalidDates.map(meeting_date=>({meeting_date})),
+  ...invalidBooks.map(book_id=>({book_id})),
+  ...oversizedReflections.map(n=>({reflection:'X'.repeat(n)})),
+];
+for(const [index,mutation] of invalidMeetingRows.entries()){
+  test('meeting history rejects malformed/oversized server row '+(index+1),async()=>{
+    let calls=0;
+    const f=fixture(async()=>++calls===1?page(0):{
+      sessions:[{...row('new'),...mutation}],nextCursor:null,
+    });
+    await f.ready;
+    await f.load();
+    assert.equal(f.headings.length,12,'untrusted row must not enter existing private DOM');
+    assert.equal(f.status.textContent,f.copy.error);
+    assert.equal(f.button.disabled,false,'user can retry when backend recovers');
+  });
+}
+for(const validDate of ['2024-02-29','2000-02-29','2026-10-28','1900-02-28']){
+  test('meeting history preserves real Gregorian date '+validDate,async()=>{
+    const f=fixture(async()=>({sessions:[{...row('good'),meeting_date:validDate}],nextCursor:null}));
+    await f.ready;
+    assert.equal(f.headings.length,1);
+    assert.match(f.status.textContent,/1/);
+  });
+}

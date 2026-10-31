@@ -49,3 +49,56 @@ test('invalid authored dossier metadata fails closed before any reader/source li
   }
   assert.equal(validateDossierGraph(catalog), true, 'authoritative source remains intact after negative cases');
 });
+
+
+test('dossier catalogue chapter limits match the canonical primary Bible reader', () => {
+  assert.equal(validateDossierGraph(catalog), true, 'shipped catalog is admissible');
+  for (const lang of ['uk', 'ru', 'en']) {
+    const oversized = structuredClone(catalog);
+    const book = oversized.books[lang].find(item => item.code === 'GEN');
+    assert.ok(book, 'GEN is present in the actual ' + lang + ' catalog');
+    book.chapters = 201;
+    assert.equal(validateDossierGraph(oversized), false, lang + ': 201 chapters must fail closed');
+    for (const rendered of [
+      dossierMarkup(oversized, lang, 'abraham', esc),
+      dossierAtlasMarkup(oversized, lang, esc),
+    ]) {
+      assert.match(rendered, /role="alert"/, lang + ': visible unavailable state');
+      assert.doesNotMatch(rendered, /href="\/reader\//, lang + ': no reader link on corrupt catalog');
+    }
+    const boundary = structuredClone(catalog);
+    boundary.books[lang].find(item => item.code === 'GEN').chapters = 200;
+    assert.equal(validateDossierGraph(boundary), true, lang + ': max 200 chapters remains supported');
+  }
+});
+
+test('dossier citations and relationship witnesses cannot exceed reader verse bounds', () => {
+  assert.equal(validateDossierGraph(catalog), true);
+  const original = scriptureDossiers[0];
+  const cases = [
+    ['first verse 257', node => { node.sources[0].first = 257; node.sources[0].last = 257; }],
+    ['last verse 257', node => { node.sources[0].last = 257; }],
+    ['relationship witness last verse 257', node => { node.related[0].via.last = 257; }],
+    ['relationship witness first verse 257', node => { node.related[0].via.first = 257; node.related[0].via.last = 257; }],
+  ];
+  try {
+    for (const [label, change] of cases) {
+      const mutated = structuredClone(original);
+      change(mutated);
+      scriptureDossiers[0] = mutated;
+      assert.equal(validateDossierGraph(catalog), false, label);
+      for (const lang of ['uk', 'ru', 'en']) {
+        assert.match(dossierMarkup(catalog, lang, 'abraham', esc), /role="alert"/, label + ' ' + lang);
+        assert.match(dossierAtlasMarkup(catalog, lang, esc), /role="alert"/, label + ' atlas ' + lang);
+      }
+    }
+    const boundary = structuredClone(original);
+    boundary.sources[0].first = 256;
+    boundary.sources[0].last = 256;
+    scriptureDossiers[0] = boundary;
+    assert.equal(validateDossierGraph(catalog), true, 'a bounded 256th verse is structurally admissible');
+  } finally {
+    scriptureDossiers[0] = original;
+  }
+  assert.equal(validateDossierGraph(catalog), true, 'original authored source restored');
+});

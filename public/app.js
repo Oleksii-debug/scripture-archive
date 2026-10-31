@@ -1,5 +1,5 @@
 import {meetingHistoryCopy,meetingHistoryMarkup,meetingRowsMarkup,mountMeetingHistory} from './group-meeting-history.js';
-import { parallelControls, mountParallelReader, safeProvenanceHttpsUrl } from './parallel-reader.js';
+import { parallelControls, mountParallelReader, safeProvenanceHttpsUrl, validEditionRightsMetadata } from './parallel-reader.js';
 import {routeSourceFromLocation, legacyRouteHashChanged} from './route-location.js';
 import {renderWorkspace, retirePrivateWorkspaceOnPageHide, resumePrivateWorkspaceAfterSession, workspaceCopy, groupManagementCopy, groupManagementMarkup, mountGroupNamePrivacy} from './workspace.js';
 import {supportSection} from './support.js';
@@ -2467,11 +2467,16 @@ function localEditionMetadata(catalog) {
   if (!metadata || typeof metadata.title !== "string" || !metadata.title.trim() ||
       typeof metadata.license !== "string" || !metadata.license.trim() ||
       typeof metadata.source !== "string") throw Error("local_edition_provenance_unavailable");
-  // Use the single raw-URL rights authority also used by the comparison
-  // and About screens. URL() alone silently strips dangerous source bytes.
-  if (!safeProvenanceHttpsUrl(metadata.source) ||
-      (metadata.licenseUrl && !safeProvenanceHttpsUrl(metadata.licenseUrl)))
-    throw Error("unsafe_edition_source");
+  // Reuse the parallel-reader's exact publisher/rights length and type
+  // contract. Reject a malformed attribution, giant license/title or URI
+  // before any primary-reader DOM or private clipboard citation is created.
+  if (!validEditionRightsMetadata(metadata)) {
+    // Retain the existing distinct URL failure for unsafe source authorities.
+    if (!safeProvenanceHttpsUrl(metadata.source) ||
+        (metadata.licenseUrl!=null && !safeProvenanceHttpsUrl(metadata.licenseUrl)))
+      throw Error("unsafe_edition_source");
+    throw Error("local_edition_provenance_unavailable");
+  }
   return metadata;
 }
 async function getMission() {

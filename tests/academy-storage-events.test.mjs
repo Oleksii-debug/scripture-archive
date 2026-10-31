@@ -36,7 +36,7 @@ test('corrupt cross-tab readback redacts stale private Academy markers without w
   assert.equal(h.meter.value,0,'unverified previous completion is not displayed');
   assert.equal(h.buttons[0].attrs['aria-pressed'],'false');
   assert.equal(h.buttons[0].disabled,true,'private marker actions are read-only during uncertainty');
-  assert.match(h.status.textContent,/Could not read/);
+  assert.match(h.status.textContent,/Local lesson markers could not be read/);
   assert.match(h.error.textContent,/Could not read the updated markers/);
   assert.equal(h.badge.textContent,'');
   assert.deepEqual(h.writes,[],'storage corruption never triggers a destructive repair');

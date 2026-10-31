@@ -1,3 +1,13 @@
+## 2026-10-31 — R0.4 / PUBLIC_SUMMARY_CACHE_AND_ANON_EXACT_SHAPE — CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL
+
+**ЗАКРИТО ДЛЯ ПОВТОРНОЇ РОЗРОБКИ ЛИШЕ ЦЕ P0-ВИПРАВЛЕННЯ, НЕ ВЕСЬ R0.4, SA-EXT-10/16 ЧИ РЕЛІЗ.** Read-only `lib/community-smoke.mjs::communityDeploymentReady` тепер не визнає готовим кешований `/api/community?public=summary` без окремого `Cache-Control: no-store`, а також анонімний `/api/account?action=me` з будь-яким зайвим полем поряд із `user:null`. Канонічні GET уже забезпечують `no-store` та `{user:null}`. Це доведена локальна хибнопозитивна перевірка готовності, **не** доказ реального витоку чи злому production.
+
+[Source PR #1040](https://github.com/Oleksii-debug/scripture-archive/pull/1040) **SQUASH MERGED** у `main@afb33edac75af68395fe8b9ac8c52b64e5dea26f`. Production blob `4db3745fc538ad67c17b9a4e6e4e2134b0eea522`, 34 нові Node негативні/recovery сценарії `c1417bdaaa65611ca0a6fe27f80311413d23644a`. [Exact PR-head CI #41242395430](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41242395430) **COMPLETED SUCCESS**: **3625 native Node PASS / 1 SKIP**, **30 Worker/D1 PASS**, **2 Python PASS**, TypeScript/lint/build SUCCESS. [Офіційний scoped акт](docs/roadmap/R0_4_SUMMARY_CACHE_AND_ANON_EXACT_SHAPE_SCOPED_TERMINAL_20261031.md). `remaining_scoped_implementation=0`; `necessary_unmerged_scoped_PRs=0`; **CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** лише цей дефект.
+
+**Батьківські R0.4, SA-EXT-10/16 і release #689 OPEN.** Sites deployed SHA/D1, backup, email, live scheduler, Windows/Chrome/NVDA і фінальний реліз NOT_VERIFIED. Жодних deployment, міграцій, змін користувацьких даних чи автоматичного старту спільноти.
+
+---
+
 ## 2026-10-31 — SA-EXT-01 / CANONICAL_66_BOOK_CODE_ANCHOR — CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL
 
 **ЗАКРИТО ЛИШЕ ОДНУ ВУЗЬКУ ПІДФУНКЦІЮ, НЕ ВЕСЬ SA-EXT-01.** У чинному `public/app.js::validBibleCatalog` український список із 66 книг раніше слугував сам собі еталоном. Узгоджена перестановка GEN/EXO або GEN/REV в усіх локалях і виданнях, або підміна GEN на вигаданий код `ZZZ`, проходила перевірку та могла приписувати текстам неправильну канонічну ідентичність. Тепер перевірка вимагає точний затверджений порядок 66 кодів перед reader/fetch/citation; окремі легальні числа глав різних видань збережені. Це перевірка **пошкодженого in-memory каталогу**, не твердження про production-атаку; окремого джерела текстів чи сервера не створено.

@@ -115,6 +115,13 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
     try{return Boolean(isCurrent()) && document?.querySelector('[data-academy-root]')===root;}
     catch{return false;}
   };
+  // Disabling a focused button may move Chromium's focus to the body.
+  // Restore only if the same view remains mounted and focus did not move on.
+  const restoreActionFocus=(button,wasFocused)=>{
+    if(!wasFocused || !currentView() || button?.isConnected===false ||
+       !document?.body || document.activeElement!==document.body || typeof button.focus!=='function')return;
+    try { button.focus({preventScroll:true}); } catch { /* status remains available */ }
+  };
   const resumeButton=root.querySelector('#academy-resume');
   const resumeStatus=root.querySelector('#academy-resume-status');
   const resume=RESUME_COPY[languageOf(language)];
@@ -166,6 +173,7 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
       if(typeof key!=='string' || !locks || typeof locks.request!=='function'){
         if(importStatus)importStatus.textContent=importCopy.lock;return;
       }
+      const hadFocus=document?.activeElement===importButton;
       importing=true;importButton.disabled=true;
       try {
         const text=await file.text();
@@ -207,7 +215,7 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
           importFile.value='';
         });
       } catch {if(currentView()&&importStatus)importStatus.textContent=importCopy.uncertain;}
-      finally {importing=false;importButton.disabled=false;}
+      finally {importing=false;importButton.disabled=false;restoreActionFocus(importButton,hadFocus);}
     });
   }
   if(resetButton && typeof resetButton.addEventListener==='function' && resetConfirm){
@@ -220,6 +228,7 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
         if(resetStatus)resetStatus.textContent=w.lockUnavailable;
         return;
       }
+      const hadFocus=document?.activeElement===resetButton;
       resetButton.disabled=true;
       const remove=()=>{
         if(!currentView() || !resetConfirm.checked)return;
@@ -244,7 +253,7 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
         if(unavailable)unavailable.textContent='';
         if(resetStatus)resetStatus.textContent=reset.done;
       };
-      const finish=()=>{resetButton.disabled=false;};
+      const finish=()=>{resetButton.disabled=false;restoreActionFocus(resetButton,hadFocus);};
       if(nonBrowserFixture){try{remove();}finally{finish();}return;}
       try{
         Promise.resolve(locks.request('sa-academy-progress:'+key,{mode:'exclusive'},remove))

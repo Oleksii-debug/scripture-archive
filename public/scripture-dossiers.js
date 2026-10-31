@@ -18,6 +18,14 @@ const COMPARE_COPY = {
   ru:{choose:'Сравнить с другим досье',prompt:'Выберите досье',submit:'Сравнить источники',heading:'Сравнение библейских источников',scope:'Сравниваются только опубликованные отрывки: пересечение стихов не означает независимого свидетельства или исторического тождества событий.',shared:'Общие стихи',overlap:'Пересекающиеся диапазоны стихов',none:'Опубликованные диапазоны источников этих досье не пересекаются.',unknown:'Второе досье не найдено или выбрано то же досье.'},
   en:{choose:'Compare with another dossier',prompt:'Choose a dossier',submit:'Compare sources',heading:'Scripture source comparison',scope:'Only published passage ranges are compared. Overlapping verses do not prove independent witnesses or identical historical events.',shared:'Shared verses',overlap:'Overlapping verse ranges',none:'The published source ranges of these dossiers do not overlap.',unknown:'The second dossier was not found or is the same dossier.'}
 };
+// GET search must not reinterpret invisible separators/bidi controls as a
+// different visible Scripture citation, or echo them into form/link labels.
+// Keep the exact raw input bound; do not normalize away unsafe characters.
+const validDossierSearchQuery = value => typeof value === 'string' &&
+  value.length <= 120 &&
+  // Historical empty-search/whitespace GET is an intentional unfiltered atlas.
+  (value.trim().length === 0 ||
+    !/[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\ud800-\udfff]/u.test(value));
 const ref=(book,chapter,first,last,kind='narrative')=>({book,chapter,first,last,kind});
 const nodes=[
  {id:'abraham',type:'person',names:{uk:'Авраам (Аврам)',ru:'Авраам (Аврам)',en:'Abraham (Abram)'},
@@ -175,7 +183,7 @@ export function searchScriptureDossiers(language,value,catalog=null) {
   // The public GET form and atlas cap the *raw* q at 120 UTF-16 units.
   // Whitespace-only padding must not bypass that bound via trim/normalize,
   // which would otherwise process arbitrarily large untrusted input first.
-  if(typeof value!=='string' || value.length>120)return [];
+  if(!validDossierSearchQuery(value))return [];
   const query=value.normalize('NFC').trim().toLocaleLowerCase(lang);
   if(query.length>120)return [];
   if(!query)return [...nodes];
@@ -258,7 +266,7 @@ export function dossierMarkup(catalog,language,requestedId,esc,searchQuery='',co
   // instead of re-rendering a truncated, falsely selectable search result.
   // A malformed programmatic q must not be treated as an absent filter:
   // otherwise the default dossier's unrelated Scripture links are exposed.
-  if(typeof searchQuery!=='string' || searchQuery.length>120)
+  if(!validDossierSearchQuery(searchQuery))
     return `<p role="alert">${esc(w.invalid)}</p>`;
   // An absent query selects the introduction. An invalid explicit ID must
   // never be silently presented as a different person's source dossier.
@@ -352,7 +360,7 @@ export function dossierAtlasMarkup(catalog,language,esc,query='') {
   if(!validateDossierGraph(catalog))return '<p role="alert">'+esc(w.invalid)+'</p>';
   // Reuse the dossier GET search rather than displaying unrelated atlas witnesses
   // beside a filtered dossier result. Default (no query) is unchanged.
-  if(typeof query!=='string'||query.length>120)return '<p role="alert">'+esc(w.invalid)+'</p>';
+  if(!validDossierSearchQuery(query))return '<p role="alert">'+esc(w.invalid)+'</p>';
   const filtered=query.trim().length>0;
   const visibleIds=filtered?new Set(searchScriptureDossiers(lang,query,catalog).map(item=>item.id)):null;
   const visible=item=>Boolean(item)&&(!visibleIds||visibleIds.has(item.id));

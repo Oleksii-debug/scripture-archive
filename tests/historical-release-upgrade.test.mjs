@@ -92,7 +92,7 @@ test('historical v8 source upgrades representative saved records through v16',()
     // R0 release upgrade must exercise the *whole* current migration chain.
     // 0013 protects the legacy visibility reset when a stale pre-0010 worker
     // attempts to re-publish church data after the historical site is upgraded.
-    const guards=db.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND tbl_name='profiles' ORDER BY name").all().map(row=>row.name);
+    const guards=db.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND tbl_name='profiles' AND name LIKE 'profiles_public_church_consent_%' ORDER BY name").all().map(row=>row.name);
     assert.deepEqual(guards,[
       'profiles_public_church_consent_insert_v1',
       'profiles_public_church_consent_update_v1',

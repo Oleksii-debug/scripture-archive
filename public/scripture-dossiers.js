@@ -23,8 +23,9 @@ const COMPARE_COPY = {
 // Keep the exact raw input bound; do not normalize away unsafe characters.
 const validDossierSearchQuery = value => typeof value === 'string' &&
   value.length <= 120 &&
-  // Historical empty-search/whitespace GET is an intentional unfiltered atlas.
-  (value.trim().length === 0 ||
+  // Only ordinary space/TAB preserve the historical blank GET behavior.
+  // Unicode separators, BOM, CR/LF and format controls fail closed, even alone.
+  (/^[ \t]*$/u.test(value) ||
     !/[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\ud800-\udfff]/u.test(value));
 const ref=(book,chapter,first,last,kind='narrative')=>({book,chapter,first,last,kind});
 const nodes=[

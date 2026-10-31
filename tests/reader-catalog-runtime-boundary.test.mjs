@@ -115,3 +115,36 @@ test('never selects a forged inherited alternate inventory for reader or book fe
   Object.setPrototypeOf(nullPrototype.editionBooks, null);
   assert.equal(validate(nullPrototype), true, 'safe null-prototype own-key inventory remains valid');
 });
+
+
+test('rejects coordinated all-locale source reordering and valid-looking invented codes', () => {
+  // A self-consistent but damaged Ukrainian list must not become its own
+  // canonical authority: all three locales and alternate editions can agree
+  // on a false 66-book sequence. Exercise the exact production validator.
+  const allInventories = value => [
+    ...Object.values(value.books), ...Object.values(value.editionBooks),
+  ];
+  for (let index = 0; index < 66; index++) {
+    const damaged = clone();
+    for (const books of allInventories(damaged)) books[index].code = 'ZZZ';
+    assert.equal(validate(damaged), false, 'invented book code at index ' + index);
+  }
+  for (let index = 1; index < 66; index++) {
+    const damaged = clone();
+    for (const books of allInventories(damaged))
+      [books[0], books[index]] = [books[index], books[0]];
+    assert.equal(validate(damaged), false, 'all-inventory canonical reorder at index ' + index);
+  }
+  // Never read an inherited accessor before checking ownership of source
+  // fields: corrupt catalogue objects must fail closed without executing it.
+  const inheritedGetter = clone();
+  inheritedGetter.books.uk[0] = Object.create({
+    get code() { throw Error('untrusted inherited source getter'); },
+  });
+  assert.equal(validate(inheritedGetter), false, 'inherited source getter is not consulted');
+  const intact = clone();
+  assert.equal(validate(intact), true, 'original 66-book catalogue remains accepted');
+  // Edition-specific chapter counts are legitimate, unlike a changed code/order.
+  intact.books.uk.find(book => book.code === 'JOL').chapters = 4;
+  assert.equal(validate(intact), true, 'legitimate edition chapter variation is preserved');
+});

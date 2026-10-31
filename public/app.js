@@ -2229,6 +2229,10 @@ function play(kind) {
   audio.play().catch(()=>{});
 }
 function validBibleCatalog(catalog) {
+  // The received uk catalogue cannot certify its own identity after
+  // coordinated source damage across all locales/editions. This fixed
+  // 66-code sequence is an admission guard, not a second Bible text source.
+  const expectedBookCodes = "GEN EXO LEV NUM DEU JOS JDG RUT 1SA 2SA 1KI 2KI 1CH 2CH EZR NEH EST JOB PSA PRO ECC SNG ISA JER LAM EZK DAN HOS JOL AMO OBA JON MIC NAM HAB ZEP HAG ZEC MAL MAT MRK LUK JHN ACT ROM 1CO 2CO GAL EPH PHP COL 1TH 2TH 1TI 2TI TIT PHM HEB JAS 1PE 2PE 1JN 2JN 3JN JUD REV".split(" ");
   if (!catalog || catalog.schemaVersion !== 1 ||
       !Object.hasOwn(catalog, "books") || !Object.hasOwn(catalog, "editions") ||
       !catalog.books || typeof catalog.books !== "object" || Array.isArray(catalog.books) ||
@@ -2237,8 +2241,9 @@ function validBibleCatalog(catalog) {
     // Array#every and Array#map skip holes: 65 real codes plus an undefined
     // hole can satisfy Set.size === 66. Require 66 own book records first.
     Array.from(books.keys()).every((index) => Object.hasOwn(books, index)) &&
-    books.every((book) => book && typeof book === "object" &&
+    books.every((book, index) => book && typeof book === "object" &&
       ["code", "title", "testament", "chapters"].every(field => Object.hasOwn(book, field)) &&
+      book.code === expectedBookCodes[index] &&
       typeof book.code === "string" && /^[A-Z0-9]{3}$/.test(book.code) &&
       typeof book.title === "string" && !!book.title.trim() &&
       (book.testament === "OT" || book.testament === "NT") &&

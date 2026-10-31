@@ -50,7 +50,7 @@ const chapter=(n)=>({book:'GEN',chapter:n,title:'Synthetic Genesis'});
 for(const mode of ['DELETE','WAL']){
   test(`${mode}: historical consent requires renewed opt-in before public church visibility`,async()=>{
     const f=fixture(mode);try{const db=new D1Test(f.file),api=worker(db);
-      assert.equal((await call(api,'profile','PUT',{firstName:'Synthetic',lastName:'Reader',ageRange:'25-34',acceptPrivacy:true,locale:'en'})).status,200);
+      assert.equal((await call(api,'profile','PUT',{firstName:'Synthetic',lastName:'Reader',ageRange:'25-34',acceptPrivacy:true,acceptSensitive:false,locale:'en'})).status,200);
       db.db.prepare("UPDATE profiles SET sensitive_consent=1,sensitive_consent_version=0,tradition='other',denomination='Legacy',church='Legacy church',public_church=1 WHERE user_id='reader-a'").run();
       let me=await call(api,'me');
       assert.equal(me.body.user.sensitiveConsent,false);
@@ -100,7 +100,7 @@ for(const mode of ['DELETE','WAL']){
       assert.deepEqual((await call(api,'reading')).body.reading,[]);
       db.failNext=true;assert.equal((await call(api,'progress','PUT',{progress:{correct:['A']}})).status,403);
       assert.equal(db.db.prepare("SELECT count(*) AS n FROM progress WHERE mission_id='OT-AB-01'").get().n,0);
-      const profile={firstName:'Synthetic',lastName:'Reader',ageRange:'25-34',acceptPrivacy:true,locale:'ru'};
+      const profile={firstName:'Synthetic',lastName:'Reader',ageRange:'25-34',acceptPrivacy:true,acceptSensitive:false,locale:'ru'};
       db.failNext=true;assert.equal((await call(api,'profile','PUT',profile)).status,503);
       assert.equal((await call(api,'profile','PUT',profile)).body.user.locale,'ru');
       db.failNext=true;assert.equal((await call(api,'visibility','PUT',{firstName:true,lastName:false,church:false,progress:false,community:false})).status,503);
@@ -187,7 +187,7 @@ for (const mode of ['DELETE', 'WAL']) {
     const f=fixture(mode);try{
       for(const locale of ['uk','ru','en']){
         const db=new D1Test(f.file),api=worker(db);
-        const profile={firstName:'Synthetic',lastName:'Reader',ageRange:'25-34',acceptPrivacy:true,locale};
+        const profile={firstName:'Synthetic',lastName:'Reader',ageRange:'25-34',acceptPrivacy:true,acceptSensitive:false,locale};
         const saved=await call(api,'profile','PUT',profile);
         assert.equal(saved.status,200);
         assert.equal(saved.body.user.locale,locale);
@@ -199,7 +199,7 @@ for (const mode of ['DELETE', 'WAL']) {
         reopened.close();
       }
       const db=new D1Test(f.file);
-      const invalid=await call(worker(db),'profile','PUT',{firstName:'Synthetic',lastName:'Reader',ageRange:'25-34',acceptPrivacy:true,locale:'de'});
+      const invalid=await call(worker(db),'profile','PUT',{firstName:'Synthetic',lastName:'Reader',ageRange:'25-34',acceptPrivacy:true,acceptSensitive:false,locale:'de'});
       assert.equal(invalid.status,200);
       assert.equal(invalid.body.user.locale,'uk','unsupported locale falls back to UK');
       db.close();
@@ -221,7 +221,7 @@ for (const mode of ['DELETE', 'WAL']) {
       assert.equal(missing.body.error,'profile_not_found');
       assert.equal(db.db.prepare("SELECT count(*) AS n FROM profiles WHERE user_id='reader-a'").get().n,0);
 
-      const created=await call(api,'profile','PUT',{firstName:'Synthetic',lastName:'Reader',ageRange:'25-34',acceptPrivacy:true,locale:'en'});
+      const created=await call(api,'profile','PUT',{firstName:'Synthetic',lastName:'Reader',ageRange:'25-34',acceptPrivacy:true,acceptSensitive:false,locale:'en'});
       assert.equal(created.status,200);
       const visible=await call(api,'visibility','PUT',payload);
       assert.equal(visible.status,200);
@@ -245,7 +245,7 @@ for(const mode of ['DELETE','WAL']){
   test(`${mode}: sensitive-consent write never acknowledges a lost or failed D1 receipt`,async()=>{
     const f=fixture(mode);try{
       const db=new D1Test(f.file),api=worker(db);
-      assert.equal((await call(api,'profile','PUT',{firstName:'Synthetic',lastName:'Reader',ageRange:'25-34',acceptPrivacy:true,locale:'uk'})).status,200);
+      assert.equal((await call(api,'profile','PUT',{firstName:'Synthetic',lastName:'Reader',ageRange:'25-34',acceptPrivacy:true,acceptSensitive:false,locale:'uk'})).status,200);
       const consent={acceptSensitive:true,tradition:'other',denomination:'Synthetic local consent',church:'Synthetic church'};
       db.failNext=true;
       const refused=await call(api,'sensitive-consent','PUT',consent);

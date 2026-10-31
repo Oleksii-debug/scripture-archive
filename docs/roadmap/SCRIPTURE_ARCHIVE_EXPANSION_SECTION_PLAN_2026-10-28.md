@@ -1,3 +1,15 @@
+## 2026-10-31 — SA-EXT-01 / PRIMARY_TRANSLATION_IDENTITY — SCOPED TERMINAL
+
+**ЗАКРИТО ДЛЯ РОЗРОБКИ ТІЛЬКИ ЦЕЙ ДЕФЕКТ:** основний біблійний читач не використовує метадані/ліцензію регіонального видання, якщо трансляцію явно задано з неправильним або відсутнім власним ID. Єдиний канонічний public/app.js::localEditionMetadata, збережено коректний fallback лише за відсутнього ключа. [PR #842](https://github.com/Oleksii-debug/scripture-archive/pull/842) **MERGED** main@12abfeae78f132b5fe07a29abde15f5185d56233, [exact-head CI #41168210300](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41168210300) **SUCCESS**. [Завершальна квитанція](SA_EXT_01_PRIMARY_TRANSLATION_IDENTITY_SCOPED_TERMINAL_20261031.md), remaining_scoped_implementation=0, necessary_unmerged_PRs=0 тільки тут. **Батьківський SA-EXT-01 OPEN**, live Sites/NVDA/Windows/release не перевірені.
+
+---
+
+## 2026-10-31 — SA-EXT-01 / RAW_SOURCE_LICENSE_UNICODE_CONTROLS — SCOPED TERMINAL
+
+**ЗАКРИТО ДЛЯ РОЗРОБКИ ТІЛЬКИ ЦЕЙ ДЕФЕКТ:** джерела/ліцензії видань із сирими Unicode керівними, невидимими, напрямними символами чи пошкодженими surrogate не приймаються до перетворення URL. Використано спільну перевірку для основного/паралельного читання та відомостей про видання; збережено коректні HTTPS. [PR #839](https://github.com/Oleksii-debug/scripture-archive/pull/839) **MERGED** main@d43111e214afdad45e6d35fadf9ebca9a88433eb, [exact-head CI #41167858860](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41167858860) **SUCCESS**. [Завершальна квитанція](SA_EXT_01_RAW_SOURCE_LICENSE_UNICODE_SCOPED_TERMINAL_20261031.md), remaining_scoped_implementation=0, necessary_unmerged_PRs=0 тільки тут. **Батьківський SA-EXT-01 OPEN**, live Sites/NVDA/Windows/release не перевірені.
+
+---
+
 ## 2026-10-31 — SA-EXT-16 / COMMUNITY_WAVE_MEMBER_INSERT_INTEGRITY — SCOPED TERMINAL
 
 **ЛИШЕ ЦЕЙ ПІДПУНКТ — `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`**: канонічна хвиля не зараховує невставленого учасника (SQL `INSERT OR IGNORE` / залежний `UPDATE changes()=1`), контролює обидва підтвердження D1 та всі CAS/lease/paused межі. [PR #838](https://github.com/Oleksii-debug/scripture-archive/pull/838) **SQUASH MERGED** в `main@ed3b9daca87bb7a75e8f79fbabb3a646e61cc99a`; [exact-head CI #41167678710](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41167678710) **SUCCESS** (Node 2412 PASS, 22/22 Worker/D1, 2/2 Python, TS/lint/build). [Формальна квитанція](SA_EXT_16_COMMUNITY_WAVE_MEMBER_INSERT_SCOPED_TERMINAL_20261031.md); `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` лише для цього дефекту. **Батьківський SA-EXT-16 OPEN; live Sites/NVDA/release NOT_VERIFIED, деплою не було.**

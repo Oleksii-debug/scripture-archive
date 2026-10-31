@@ -6,7 +6,8 @@ const w = reviewText('uk');
 const esc = value => String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
 const item = {
   id:'public-01', title:'Зразок', reference:'GEN 1:1', provenance:'Підтверджене джерело',
-  prompt:'Запитання', options:['Відповідь'],
+  prompt:'Запитання', options:['Відповідь','Інша відповідь'], locale:'uk', reviewedAt:'2026-10-31 10:00:00',
+  rights:{holder:'Автор матеріалу',basis:'original',licenseUrl:null},
 };
 const response = (body, status=200) => new Response(JSON.stringify(body), {
   status, headers:{'content-type':'application/json'}

@@ -246,7 +246,7 @@ integration("account, progress, attempts, groups, marathon limit and password re
   result = await request("/api/materials?mine=1");
   assert.equal(result.data.materials.find(item => item.id === material.id).title, material.title);
   // Draft -> review -> published immutable snapshot -> replacement -> withdrawal.
-  const submitReview = { action: "submit", materialId: material.id, provenance: "Original exercise; source GEN 12", rightsConfirmed: true };
+  const submitReview = { action: "submit", materialId: material.id, provenance: "Original exercise; source GEN 12", rightsHolder: "API flow author", rightsBasis: "original", licenseUrl: "", rightsConfirmed: true };
   const reviewPost = async (body, principal = cookie, origin = base, omitBody = false) => {
     const response = await fetch(`${base}/api/material-review`, { method: "POST",
       headers: { Origin: origin, Cookie: principal, ...(omitBody ? {} : { "Content-Type": "application/json" }) },

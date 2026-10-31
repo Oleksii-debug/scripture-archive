@@ -15,6 +15,7 @@ function fixture() {
   db.exec("CREATE TABLE study_materials (id TEXT PRIMARY KEY,owner_user_id TEXT NOT NULL,title TEXT NOT NULL,locale TEXT NOT NULL,data TEXT NOT NULL,visibility TEXT NOT NULL DEFAULT 'private')");
   db.exec(readFileSync(new URL('../drizzle/0011_material_review.sql', import.meta.url), 'utf8'));
   db.exec(readFileSync(new URL('../drizzle/0014_material_takedowns.sql', import.meta.url), 'utf8'));
+  db.exec(readFileSync(new URL('../drizzle/0015_material_rights_metadata.sql', import.meta.url), 'utf8'));
   const input = {prompt:'A valid question?',reference:'GEN 12',options:['one','two'],answer:'one',explanation:'Source based explanation'};
   db.prepare('INSERT INTO study_materials(id,owner_user_id,title,locale,data) VALUES (?,?,?,?,?)').run('m1','alice','Original','uk',JSON.stringify(input));
   db.prepare('INSERT INTO study_materials(id,owner_user_id,title,locale,data) VALUES (?,?,?,?,?)').run('m2','bob','Other','en',JSON.stringify(input));
@@ -59,7 +60,7 @@ function fixture() {
   async function get(view,user='') {const r=await exports.GET(new Request('https://local.invalid/api/material-review?view='+view,{headers:user?{'x-user':user}:{}}));return {status:r.status,data:await r.json()};}
   return {db,post,get,setReadFailure:value=>{failRead=value;},setReadThrow:value=>{throwRead=value;},setBatchFailure:value=>{failBatchAt=value;},afterDraftRead:hook=>{afterDraftRead=hook;},afterRoleRead:hook=>{afterRoleRead=hook;},setSubmitReceiptMode:mode=>{submitReceiptMode=mode;},setReviewReceiptMode:mode=>{reviewReceiptMode=mode;},setWithdrawReceiptMode:mode=>{withdrawReceiptMode=mode;},setAuthFailure:v=>{throwAuth=v;}};
 }
-const submission={action:'submit',materialId:'m1',provenance:'Original work, GEN 12',rightsConfirmed:true};
+const submission={action:'submit',materialId:'m1',provenance:'Original work, GEN 12',rightsHolder:'Alice Author',rightsBasis:'original',licenseUrl:'',rightsConfirmed:true};
 const approve=id=>({action:'review',id,decision:'approve',sourceChecked:true,rightsChecked:true});
 
 // Route-executing SQLite checks for lossless editorial audit notes. The UI
@@ -127,10 +128,66 @@ test('private draft requires consent and editor approval; public answers remain 
     assert.equal(audit.authorId,'alice');assert.equal(audit.reviewerId,'editor');assert.equal(audit.sourceChecked,true);assert.equal(audit.rightsChecked,true);
     const publicItems=(await f.get('public')).data.items;
     assert.equal(publicItems.length,1);assert.equal('answer' in publicItems[0],false);assert.equal('explanation' in publicItems[0],false);
+    assert.deepEqual(publicItems[0].rights,{holder:'Alice Author',basis:'original',licenseUrl:null});
+    assert.equal(publicItems[0].locale,'uk');
+    assert.equal(typeof publicItems[0].reviewedAt,'string');
     assert.deepEqual((await f.post({action:'answer',id:submitted.data.id,choice:1},'')).data,{correct:false});
     const right=await f.post({action:'answer',id:submitted.data.id,choice:0},'');assert.equal(right.data.correct,true);assert.equal(right.data.explanation,'Source based explanation');
     assert.equal((await f.post({action:'answer',id:submitted.data.id,choice:8},'')).status,400);
   }finally{f.db.close();}
+});
+
+test('new submissions require bounded structured rights and canonical HTTPS for open licences',async()=>{
+  const f=fixture();try {
+    for(const body of [
+      {...submission,rightsHolder:''},
+      {...submission,rightsHolder:'A'.repeat(161)},
+      {...submission,rightsBasis:'unknown'},
+      {...submission,rightsBasis:'open_license',licenseUrl:''},
+      {...submission,rightsBasis:'open_license',licenseUrl:'http://example.org/license'},
+      {...submission,rightsBasis:'permission',licenseUrl:'https://user:secret@example.org/license'},
+    ]) assert.equal((await f.post(body)).status,400);
+    const accepted=await f.post({...submission,rightsBasis:'open_license',rightsHolder:'Example Foundation',licenseUrl:'https://example.org/license'});
+    assert.equal(accepted.status,201);
+    const stored=f.db.prepare('SELECT rights_holder,rights_basis,license_url FROM material_submissions WHERE id=?').get(accepted.data.id);
+    assert.deepEqual({...stored},{rights_holder:'Example Foundation',rights_basis:'open_license',license_url:'https://example.org/license'});
+  }finally{f.db.close();}
+});
+
+test('legacy null rights remain explicit while partial or malformed stored rights fail every catalogue read closed',async()=>{
+  const f=fixture();try {
+    const id=(await f.post(submission)).data.id;
+    assert.equal((await f.post(approve(id),'editor')).status,200);
+    f.db.prepare('UPDATE material_submissions SET rights_holder=NULL,rights_basis=NULL,license_url=NULL WHERE id=?').run(id);
+    const legacy=(await f.get('public')).data.items[0];
+    assert.equal(legacy.rights,null);
+    // Simulate a damaged/restored database that bypassed the normal migration
+    // trigger; runtime reads must still refuse a partly structured record.
+    f.db.exec('DROP TRIGGER material_rights_metadata_update');
+    f.db.prepare("UPDATE material_submissions SET rights_holder='Named holder',rights_basis=NULL WHERE id=?").run(id);
+    assert.equal((await f.get('public')).status,503);
+    assert.equal((await f.get('mine','alice')).status,503);
+    assert.equal((await f.post({action:'librarySearch',query:'',cursor:null},'')).status,503);
+  }finally{f.db.close();}
+});
+
+test('rights fields and safe public disclosure are present in the actual editorial UI',async()=>{
+  const esc=s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
+  const w=reviewText('en'), form=submissionForm({id:'draft'},w,esc);
+  assert.match(form,/name="rightsHolder"[^>]*required/);
+  assert.match(form,/name="rightsBasis"[^>]*required/);
+  assert.match(form,/name="licenseUrl" type="url"/);
+  const item={id:'v',title:'Reviewed title',reference:'GEN 1',provenance:'Source record',prompt:'What is recorded?',options:['One','Two'],locale:'en',reviewedAt:'2026-10-31 10:00:00',rights:{holder:'Holder <name>',basis:'open_license',licenseUrl:'https://example.org/license'}};
+  const prior=globalThis.fetch;
+  globalThis.fetch=async()=>({ok:true,json:async()=>({items:[item]})});
+  const root={isConnected:true,innerHTML:'',querySelectorAll:()=>[]};
+  try {
+    await renderPublicMaterials(root,w,esc);
+    assert.match(root.innerHTML,/Holder &lt;name&gt;/);
+    assert.match(root.innerHTML,/Open licence/);
+    assert.match(root.innerHTML,/2026-10-31 10:00:00 UTC/);
+    assert.match(root.innerHTML,/href="https:\/\/example\.org\/license"/);
+  }finally{globalThis.fetch=prior;}
 });
 
 test('revisions are immutable; failed review rolls back and withdrawal revokes answers',async()=>{
@@ -242,11 +299,11 @@ test('a damaged legacy draft cannot enter the review queue',async()=>{
 
 test('editorial controls escape untrusted content and public UI does not print answers',async()=>{
   const esc = s => String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
-  const w=reviewText('uk'), item={id:'id',materialId:'m1',status:'pending',reviewNote:'<script>bad</script>',provenance:'<img src=x>',snapshot:{title:'<img>',data:{reference:'GEN 12',prompt:'Question',options:['one','<b>'],answer:'one',explanation:'Because'}}};
+  const w=reviewText('uk'), item={id:'id',materialId:'m1',status:'pending',reviewNote:'<script>bad</script>',provenance:'<img src=x>',rights:{holder:'Rights <holder>',basis:'permission',licenseUrl:null},submittedAt:'2026-10-31 10:00:00',reviewedAt:null,snapshot:{title:'<img>',locale:'uk',data:{reference:'GEN 12',prompt:'Question',options:['one','<b>'],answer:'one',explanation:'Because'}}};
   const html=historyMarkup([item],w,esc)+queueMarkup([item],w,esc)+submissionForm({id:'"><script>'},w,esc);
   assert.ok(!html.includes('<script>'));assert.ok(!html.includes('<img src=x>'));assert.ok(html.includes('&lt;img&gt;'));
   const previous=globalThis.fetch;
-  globalThis.fetch=async()=>({ok:true,json:async()=>({items:[{id:'v',title:'<img>',reference:'GEN',provenance:'source',prompt:'Question',options:['one','two']}]})});
+  globalThis.fetch=async()=>({ok:true,json:async()=>({items:[{id:'v',title:'<img>',reference:'GEN',provenance:'source',prompt:'Question',options:['one','two'],locale:'uk',reviewedAt:'2026-10-31 10:00:00',rights:null}]})});
   const root={isConnected:true,innerHTML:'',querySelectorAll:()=>[]};
   try {await renderPublicMaterials(root,w,esc);assert.ok(root.innerHTML.includes('&lt;img&gt;'));assert.ok(!root.innerHTML.includes('answer:'));}finally{globalThis.fetch=previous;}
 });

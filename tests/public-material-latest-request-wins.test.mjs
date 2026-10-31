@@ -9,7 +9,8 @@ const escapeHTML = value => String(value)
 const record = title => ({
   id: 'reviewed-1', title, reference: 'GEN 1:1',
   provenance: 'Verified source', prompt: 'Question',
-  options: ['First answer', 'Second answer']
+  options: ['First answer', 'Second answer'], locale:'en', reviewedAt:'2026-10-31 10:00:00',
+  rights:{holder:'Reviewed author',basis:'original',licenseUrl:null}
 });
 const success = title => new Response(JSON.stringify({items:[record(title)]}), {
   status:200, headers:{'Content-Type':'application/json'}

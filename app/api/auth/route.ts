@@ -204,7 +204,11 @@ export async function POST(request: Request) {
     const email = normalizeEmail(data.email), password = data.password;
     try {
     if (!await rateLimit(`login:${address}:${email}`, 10, 900)) return json({ error: "too_many_requests" }, 429);
-    if (!EMAIL.test(email) || typeof password !== "string") return json({ error: "invalid_credentials" }, 401);
+    // Existing registration/change/reset boundaries cap password length at 128.
+    // Refuse larger login strings before account reads or expensive PBKDF2:
+    // an unknown-email path deliberately computes a dummy password hash.
+    if (!EMAIL.test(email) || typeof password !== "string" || password.length > 128)
+      return json({ error: "invalid_credentials" }, 401);
     const account = await env.DB.prepare("SELECT * FROM accounts WHERE email=? AND deleted_at IS NULL").bind(email).first<Account>();
     const passwordOk = account
       ? await verifyPassword(password, account.password_hash, account.password_salt, account.password_iterations)

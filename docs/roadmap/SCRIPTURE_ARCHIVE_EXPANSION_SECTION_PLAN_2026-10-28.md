@@ -1,3 +1,9 @@
+## 2026-10-31 — SA-EXT-08 / REVIEWED_LIBRARY_LOCALE_OWNKEY — CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL
+
+**Лише підфункцію завершено.** Тепер канонічні `/library` і пошук перевірених матеріалів використовують власні `uk/ru/en` ключі, без підхоплення `__proto__`/`constructor`/`toString` і падіння на непридатних типах. [Функціональний PR #989](https://github.com/Oleksii-debug/scripture-archive/pull/989) **SQUASH MERGED** `main@2efd12811f6dfb8740788dba9e6b3d94b9bd5d6c`; [exact-head GitHub Actions #41220737865](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41220737865) **SUCCESS** (3488 Node PASS, 0 FAIL, 1 SKIP; 24 disposable Worker/D1 PASS, TypeScript/lint/build/Python PASS). [Остаточний вузький акт](SA_EXT_08_LIBRARY_LOCALE_OWNKEY_SCOPED_TERMINAL_20261031.md), `remaining_scoped_implementation=0`, `necessary_unmerged_scoped_feature_PRs=0`. **Повний SA-EXT-08 OPEN**, права на корпус/медіа, site/NVDA, published SHA та реліз не підтверджені. Ніякого деплою.
+
+---
+
 ## 2026-10-31 — R0.1 / PUBLIC_APP_JS_MIME_GATE — CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL
 
 **ЗАКРИТО ТІЛЬКИ ПЕРЕВІРКУ MIME/UTF-8, НЕ ПОВНИЙ РОЗДІЛ.** PR [#987](https://github.com/Oleksii-debug/scripture-archive/pull/987) SQUASH MERGED `main@171bbcb7b7ffe78e59ec8d3ab8897ffe86ccc0de`; [native CI #41220160624](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41220160624) COMPLETED SUCCESS (Node, TypeScript, lint, source build, disposable Worker/D1, Python). [Офіційний scoped-акт](R0_1_PUBLIC_JS_MIME_GATE_SCOPED_TERMINAL_20261031.md). `remaining_scoped_implementation=0`, `necessary_unmerged_scoped_feature_PRs=0`. **R0.1, решта батьківських SA-EXT і live release залишаються OPEN/NOT_VERIFIED; жодного деплою.**

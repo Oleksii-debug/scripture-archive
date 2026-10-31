@@ -175,6 +175,21 @@ export function searchScriptureDossiers(language,value,catalog=null) {
   // request as an exact chapter-and-range lookup, not a substring match.
   // Include a dossier's published relation witnesses: the reader can inspect
   // those citations in the same public dossier, with no private grading data.
+  // The reader and dossier citations display closed verse ranges. Resolve the
+  // same user-entered range against *published* source and relationship refs,
+  // without fabricating a verse, expanding the source graph or interpreting a
+  // reversed/invalid interval as a free-text lookup.
+  const rangeQuery=/^(.+?)\s+([1-9][0-9]{0,2}):([1-9][0-9]{0,2})[-–]([1-9][0-9]{0,2})$/u.exec(query);
+  if(rangeQuery){
+    const requestedBook=rangeQuery[1],chapter=Number(rangeQuery[2]);
+    const first=Number(rangeQuery[3]),last=Number(rangeQuery[4]);
+    if(last<first)return [];
+    const cited=source=>(normalize(source.book)===requestedBook ||
+      (bookNames.has(source.book) && normalize(bookNames.get(source.book))===requestedBook)) &&
+      source.chapter===chapter && source.first<=last && first<=source.last;
+    return nodes.filter(item=>item.sources.some(cited) ||
+      item.related.some(edge=>cited(edge.via)));
+  }
   const verseQuery=/^(.+?)\s+([1-9][0-9]{0,2}):([1-9][0-9]{0,2})$/u.exec(query);
   if(verseQuery){
     const requestedBook=verseQuery[1],chapter=Number(verseQuery[2]),verse=Number(verseQuery[3]);

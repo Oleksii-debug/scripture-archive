@@ -30,6 +30,9 @@ async function providerAccepted(response: Response | null): Promise<boolean> {
   if (!response?.ok) return false;
   const receipt: unknown = await response.json().catch(() => null);
   if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) return false;
+  // A contradictory 2xx payload is not an acceptance receipt, even when
+  // it also contains an id. Do not report delivery on provider error shapes.
+  if (Object.hasOwn(receipt, "error") || Object.hasOwn(receipt, "errors")) return false;
   const id = (receipt as { id?: unknown }).id;
   return typeof id === "string" && id.trim().length > 0 && id.length <= 200;
 }

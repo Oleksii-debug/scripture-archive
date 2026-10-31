@@ -455,6 +455,12 @@ export async function POST(request: Request) {
     const startChanges = confirmedBatch(started, 3);
     if (!startChanges) return json({ error: "database_unavailable" }, 503);
     if (startChanges[0] === 0) return json({ error: "chapter_must_be_read" }, 409);
+    // A one-row INSERT must consume exactly its one read receipt. A valid
+    // batch shape alone cannot certify this transition: a zero/multi-row
+    // receipt update must never unlock the first private assessment task.
+    // Prior active attempts may legitimately be zero or several rows.
+    if (startChanges[0] !== 1 || startChanges[2] !== 1)
+      return json({ error: "database_unavailable" }, 503);
     return json({ attemptId: id, task: publicTask(available[0], selectedLocale, 1, taskLimit), guest: currentActor.guest }, 201, currentActor.cookie ? { "Set-Cookie": currentActor.cookie } : {});
   }
 

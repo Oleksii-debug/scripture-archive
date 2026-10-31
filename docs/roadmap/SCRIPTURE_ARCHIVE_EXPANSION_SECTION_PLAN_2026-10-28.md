@@ -1,3 +1,13 @@
+## 2026-10-31 — SA-EXT-06 / FILTERED_ATLAS_RELATION_ONLY_WITNESSES — CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL
+
+**Закрито лише доведений дефект відображення свідчень зв'язків, НЕ батьківський SA-EXT-06.** Пошук досьє за цитатою зв'язку (`EXO 1:6` → Йосип, `ACT 2:14` → Петро, `RUT 1:19` → Рут) показував тему, але відфільтрований текстовий атлас приховував саме те біблійне свідчення, яке обґрунтовувало результат: ціль зв'язку не входила до множини пошуку. Чинний `public/scripture-dossiers.js` тепер показує всі перевірені свідчення зв'язків видимої теми. Ціль поза фільтром залишається доступним текстом, без небезпечного посилання поза фільтровану множину; цитата веде до канонічної читальні. Нових історичних тверджень, карт, ліцензійних джерел, серверів або схем не додано.
+
+[PR #1005](https://github.com/Oleksii-debug/scripture-archive/pull/1005) **SQUASH MERGED**, exact feature `main@acf25561d2eb72c821fc94e4a3ca6c07a1313934`; source blob `fa1c62fac9255286907cd9e3d3c4e0e5f2be1974`, regression blob `98e5c70e51678cd4ed10844756340983b67d3710`. Source-executed V8 на реальному каталозі: старий код 9/9 RED, виправлений 9/9 GREEN, нефільтровані uk/ru/en 3/3 byte-identical; це не native браузер. [Exact PR-head CI #41236089156](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41236089156) **COMPLETED SUCCESS**: native Node, TypeScript, lint, build, disposable Worker/D1, Python. [Остаточний вузький акт](SA_EXT_06_FILTERED_ATLAS_RELATION_WITNESS_SCOPED_TERMINAL_20261031.md). `remaining_scoped_implementation=0`, `necessary_unmerged_scoped_feature_PRs=0` лише для цього виправлення.
+
+**Батьківські SA-EXT-01/02/05/06/07 OPEN; 03/04 source TERMINAL.** Права на карти/геодані, наукове/редакційне приймання, реальний браузер/клавіатура/фізичний NVDA, installed Sites SHA/D1, backup/restore та незалежний release gate NOT_VERIFIED. Жодного деплою, production-міграцій, зміни користувацьких даних, 82 мов, платежів, синтетичних користувачів, розсилок чи знайомств.
+
+---
+
 ## 2026-10-31 — SA-EXT-06 / FILTERED_ATLAS_CANONICAL_READING_RANK — CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL
 
 **ЗАКРИТО ЛИШЕ ЦЕЙ ДОВЕДЕНИЙ ДЕФЕКТ ПОРЯДКУ ЧИТАННЯ, НЕ БАТЬКІВСЬКИЙ SA-EXT-06.** Текстовий атлас мав затверджений порядок тем `abraham → sarah → joseph → moses → exodus → david → nativity`, але після звичайного GET-фільтра `q` перший видимий рядок нумерувався `1` незалежно від його справжнього місця у підписаній таблиці «Порядок читання». Так Йосип/Мойсей/Давид/Різдво отримували неправдивий порядковий номер замість 3/4/6/7. Виправлено тільки номер рядка на основі наявного канонічного `order`; жодних дат, археологічних тверджень, нових джерел чи маршрутів не додано.

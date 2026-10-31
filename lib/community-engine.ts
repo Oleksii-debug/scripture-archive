@@ -164,7 +164,12 @@ export async function leaseCommunityAgents(limit = 2) {
     const active=await env.DB!.prepare(`SELECT COUNT(*) count FROM community_agent_sessions s
       JOIN community_members m ON m.id=s.member_id WHERE m.run_id=? AND s.control_version=?
       AND s.revoked_at IS NULL AND s.expires_at>CURRENT_TIMESTAMP`).bind(COMMUNITY_RUN_ID,run.control_version).first<{count:number}>();
-    const capacity=Math.max(0,Math.min(2-Number(active?.count||0),limit));
+    // An absent/corrupt count is not evidence that another agent slot is free.
+    const activeCount=active?.count;
+    if (typeof activeCount !== "number" || !Number.isSafeInteger(activeCount) ||
+        activeCount < 0 || activeCount > 2)
+      throw Error("community_session_count_unavailable");
+    const capacity=Math.max(0,Math.min(2-activeCount,limit));
     if(!capacity)return {jobs,status:"running"};
     const members=await env.DB!.prepare(`SELECT id,seed,locale FROM community_members WHERE run_id=? AND COALESCE(next_action_at,joined_at)<=CURRENT_TIMESTAMP
       AND NOT EXISTS (SELECT 1 FROM community_agent_sessions s WHERE s.member_id=community_members.id AND s.revoked_at IS NULL
@@ -176,8 +181,15 @@ export async function leaseCommunityAgents(limit = 2) {
         SELECT ?,?,?,datetime('now','+20 minutes') WHERE EXISTS(SELECT 1 FROM community_runs
           WHERE id=? AND status='running' AND control_version=? AND lease_token=?)`)
         .bind(await sha256(token),member.id,run.control_version,COMMUNITY_RUN_ID,run.control_version,lease).run();
-      if(!inserted.meta.changes)continue;
-      await env.DB!.prepare("UPDATE community_members SET next_action_at=datetime('now','+20 minutes') WHERE id=?").bind(member.id).run();
+      // A returned D1 promise/changes value without success is not a lease.
+      if (inserted?.success !== true || !Number.isSafeInteger(inserted.meta?.changes) ||
+          inserted.meta.changes < 0 || inserted.meta.changes > 1)
+        throw Error("community_session_insert_unconfirmed");
+      if (inserted.meta.changes === 0) continue;
+      const scheduled=await env.DB!.prepare("UPDATE community_members SET next_action_at=datetime('now','+20 minutes') WHERE id=?").bind(member.id).run();
+      if (scheduled?.success !== true || !Number.isSafeInteger(scheduled.meta?.changes) ||
+          scheduled.meta.changes !== 1)
+        throw Error("community_member_schedule_unconfirmed");
       jobs.push({memberId:member.id,token,seed:member.seed,locale:member.locale});
     }
   }finally{

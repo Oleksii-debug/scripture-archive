@@ -5,6 +5,12 @@
 
 ## Перевірені вузькі закриття (не закриття батьківського розділу)
 
+
+- **SA-EXT-02 — точна ідентичність книги під час читання/старту місії:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` лише для invalid/overlong book-code alias у канонічних `chapter/read/start` API. [PR #856](https://github.com/Oleksii-debug/scripture-archive/pull/856) **MERGED** `main@2718f85ffadc70437785a8833e1c49491950c90b`; [CI #41170422587](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41170422587) **SUCCESS**, 19×3 негативних плюс 9 позитивних API-контрактів; [термінальна квитанція](roadmap/SA_EXT_02_BOOK_CODE_EXACT_IDENTITY_SCOPED_TERMINAL_20261031.md). Повний SA-EXT-02 **OPEN**; реліз, реальний NVDA/Windows NOT_VERIFIED.
+
+- **SA-EXT-16 / R0 — повний тест історичного оновлення від міграцій 0000–0008 до 0014:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` лише для розширення existing source-upgrade regression з consent-trigger guard і редакційними FK. [PR #854](https://github.com/Oleksii-debug/scripture-archive/pull/854) **MERGED** `main@cb3e5afcfb200235805818cdf0dc2e79cc7324fe`; [CI #41170147488](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41170147488) **SUCCESS**; [квитанція](roadmap/SA_EXT_16_HISTORICAL_V8_V14_UPGRADE_SCOPED_TERMINAL_20261031.md). Повний SA-EXT-16 і production cutover #689 **OPEN**, real D1/Sites/backup NOT_VERIFIED.
+
+
 - **SA-EXT-01 — спільна обмежена атрибуція ліцензій основної й паралельної читальні:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` лише для canonical publisher rights metadata bounds (title<=512, licence/attribution/source<=4096). [PR #855](https://github.com/Oleksii-debug/scripture-archive/pull/855) **MERGED** `main@f8b3cdd029b0ff74f4975a898d57a9d92640e003`; exact [CI #41170269116](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41170269116) **SUCCESS**; [квитанція](roadmap/SA_EXT_01_SHARED_PRIMARY_PARALLEL_RIGHTS_BOUNDS_SCOPED_TERMINAL_20261031.md). Повний SA-EXT-01 **OPEN**, live/NVDA/Windows NOT_VERIFIED.
 
 

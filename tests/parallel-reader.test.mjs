@@ -198,7 +198,10 @@ test('a principal change during a pending comparison cannot repopulate a connect
 
 test('canonical comparison wiring reuses the primary principal-aware reader guard',()=>{
   const source=readFileSync(new URL('../public/app.js', import.meta.url),'utf8');
-  assert.match(source,/const readerStillCurrent = \(\) => state\.currentReader === readerContext && state\.user === readerPrincipal;/);
+  // The primary reader retains the old context/principal fence and now also
+  // refuses superseded same-principal route/edition continuations.
+  assert.match(source,/const readerStillCurrent = \(\) => readerInvocationCurrent\(\) && state\.currentReader === readerContext && state\.user === readerPrincipal;/);
+  assert.match(source,/state\.__readerRenderToken === readerRenderToken/);
   const start=source.indexOf('mountParallelReader(panel, {');
   assert.ok(start>0,'canonical reader mounts the comparison module');
   const end=source.indexOf('\n    });',start);

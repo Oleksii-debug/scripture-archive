@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import test from "node:test";
 import ts from "typescript";
+import { DatabaseSync } from "node:sqlite";
 
 // Execute the real production account route with a minimal fake D1 surface;
 // no parallel API, state store, browser fixture, or production credentials.
@@ -36,7 +37,7 @@ function fixture(){
     },
   });
   async function post(payload,method="POST"){
-    const response=await exports.POST(new Request("https://archive.invalid/api/account?action=profile",{
+    const response=await exports[method](new Request("https://archive.invalid/api/account?action=profile",{
       method,headers:{origin:"https://archive.invalid","Content-Type":"application/json"},
       body:JSON.stringify(payload)
     }));
@@ -48,7 +49,7 @@ function fixture(){
 const profile={firstName:"Ada",lastName:"Reader",
   ageRange:"18-24",acceptPrivacy:true,locale:"uk"};
 const invalid=[
-  ["missing property",undefined],["null",null],["empty string",""],
+  ["null",null],["empty string",""],
   ["string false","false"],["string true","true"],
   ["string zero","0"],["string one","1"],
   ["string yes","yes"],["string no","no"],
@@ -91,4 +92,81 @@ test("profile malformed consent remains denied on PUT as well as POST",async()=>
   const result=await f.post({...profile,acceptSensitive:["true"]},"PUT");
   assert.equal(result.status,400);
   assert.equal(f.calls.length,0);
+});
+
+function nativeSQLiteFixture(){
+  const sqlite=new DatabaseSync(":memory:"), exports={};
+  sqlite.exec(`CREATE TABLE profiles(
+    user_id TEXT PRIMARY KEY,email TEXT,first_name TEXT,last_name TEXT,
+    age_range TEXT,tradition TEXT,church TEXT,marital_status TEXT,
+    gender TEXT,locale TEXT,sensitive_consent INTEGER DEFAULT 0,
+    sensitive_consent_version INTEGER DEFAULT 0,
+    privacy_accepted_at TEXT,created_at TEXT,updated_at TEXT,
+    denomination TEXT,public_church INTEGER DEFAULT 0
+  )`);
+  const calls=[];
+  const DB={prepare(sql){return {bind(...args){return {
+    async run(){calls.push({sql,args});const receipt=sqlite.prepare(sql).run(...args);
+      return {success:true,meta:{changes:Number(receipt.changes)}};},
+    async first(){return sqlite.prepare(sql).get(...args)??null;}
+  };}};}};
+  vm.runInNewContext(transpiled.outputText,{
+    exports,Request,Response,URL,
+    require(specifier){
+      if(specifier==="cloudflare:workers")return {env:{DB}};
+      if(specifier==="../../../public/data/catalog.json")return {default:catalog};
+      if(specifier==="../../../content/mission-abraham.json")return {default:{tasks:[]}};
+      if(specifier==="../../../lib/auth")return {
+        sameOrigin:request=>request.headers.get("origin")===new URL(request.url).origin,
+        authenticateRequest:async()=>({userId:"reader",email:"reader@example.invalid",
+          provider:"password",emailVerified:true}),
+        isVerifiedOwner:()=>false
+      };
+      throw Error("unexpected import "+specifier);
+    }
+  });
+  async function post(body){
+    const response=await exports.POST(new Request("https://archive.invalid/api/account?action=profile",{
+      method:"POST",headers:{origin:"https://archive.invalid","Content-Type":"application/json"},
+      body:JSON.stringify(body)
+    }));
+    return {status:response.status,body:await response.json()};
+  }
+  return {sqlite,calls,post};
+}
+test("legacy missing consent preserves prior granted consent and sensitive metadata in actual SQLite",async()=>{
+  const f=nativeSQLiteFixture();
+  try{
+    f.sqlite.prepare(`INSERT INTO profiles
+      (user_id,email,first_name,last_name,age_range,tradition,church,denomination,
+       locale,sensitive_consent,sensitive_consent_version,public_church)
+      VALUES ('reader','reader@example.invalid','Ada','Reader','18-24','protestant',
+              'Original church','Original denomination','uk',1,1,1)`).run();
+    const before=f.sqlite.prepare("SELECT tradition,church,denomination,public_church,sensitive_consent,sensitive_consent_version FROM profiles").get();
+    const res=await f.post(profile);
+    assert.equal(res.status,200);
+    const after=f.sqlite.prepare("SELECT tradition,church,denomination,public_church,sensitive_consent,sensitive_consent_version FROM profiles").get();
+    assert.deepEqual(after,before);
+    assert.equal(f.calls[0].args.length,18);
+    assert.deepEqual(f.calls[0].args.slice(12),Array(6).fill(1));
+    const withdrawn=await f.post({...profile,acceptSensitive:false});
+    assert.equal(withdrawn.status,200);
+    const revoked=f.sqlite.prepare("SELECT tradition,church,denomination,public_church,sensitive_consent,sensitive_consent_version FROM profiles").get();
+    assert.equal(revoked.sensitive_consent,0);
+    assert.equal(revoked.sensitive_consent_version,0);
+    assert.equal(revoked.tradition,null);
+    assert.equal(revoked.church,null);
+    assert.equal(revoked.denomination,null);
+    assert.equal(revoked.public_church,0);
+  }finally{f.sqlite.close();}
+});
+test("legacy omitted consent defaults off for newly created profile",async()=>{
+  const f=nativeSQLiteFixture();
+  try{
+    const res=await f.post(profile);
+    assert.equal(res.status,200);
+    const created=f.sqlite.prepare("SELECT sensitive_consent,sensitive_consent_version FROM profiles WHERE user_id='reader'").get();
+    assert.equal(created.sensitive_consent,0);
+    assert.equal(created.sensitive_consent_version,0);
+  }finally{f.sqlite.close();}
 });

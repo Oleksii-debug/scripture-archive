@@ -282,7 +282,7 @@ test('SA-EXT-05 exact Bible-book query finds direct and relational witnesses wit
         for(const id of expected)assert.ok(html.includes('href="/dossiers?id='+id+'&amp;q='),
           lang+' '+id+' present through the real filtered route');
       }
-      assert.deepEqual(searchScriptureDossiers(lang,code.toLowerCase()),expected,
+      assert.deepEqual(searchScriptureDossiers(lang,code.toLowerCase()).map(item=>item.id),expected,
         lang+' standalone canonical code requires no second catalogue');
     }
     assert.deepEqual(searchScriptureDossiers(lang,'GEN1',catalog),[]);

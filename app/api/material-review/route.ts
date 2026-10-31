@@ -189,10 +189,10 @@ export async function POST(request: Request) {
     try {
       const receipts = await env.DB.batch([
         env.DB.prepare(`UPDATE material_submissions SET status='withdrawn',closed_at=CURRENT_TIMESTAMP
-          WHERE id=? AND status='approved' AND (?=1 OR EXISTS
-          (SELECT 1 FROM editorial_roles r JOIN accounts a ON a.id=r.user_id
-           WHERE r.user_id=? AND a.deleted_at IS NULL AND a.email_verified_at IS NOT NULL))`)
-          .bind(body.id, owner(identity) ? 1 : 0, identity.userId),
+          WHERE id=? AND status='approved' AND EXISTS
+          (SELECT 1 FROM accounts a WHERE a.id=? AND a.deleted_at IS NULL AND a.email_verified_at IS NOT NULL
+           AND (?=1 OR EXISTS (SELECT 1 FROM editorial_roles r WHERE r.user_id=a.id)))`)
+          .bind(body.id, identity.userId, owner(identity) ? 1 : 0),
         env.DB.prepare("INSERT INTO material_takedowns(submission_id,actor_user_id,reason) SELECT ?,?,? WHERE changes()=1")
           .bind(body.id, identity.userId, body.reason.trim()),
       ]);

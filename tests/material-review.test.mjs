@@ -10,6 +10,7 @@ function fixture() {
   const db = new DatabaseSync(':memory:');
   db.exec('PRAGMA foreign_keys=ON');
   db.exec('CREATE TABLE accounts (id TEXT PRIMARY KEY,email TEXT NOT NULL,email_verified_at TEXT,deleted_at TEXT)');
+  db.exec("INSERT INTO accounts(id,email,email_verified_at) VALUES('editor','dordiaioleksii1@gmail.com',CURRENT_TIMESTAMP)");
   db.exec(readFileSync(new URL('../drizzle/0012_editor_roles.sql', import.meta.url), 'utf8'));
   db.exec("CREATE TABLE study_materials (id TEXT PRIMARY KEY,owner_user_id TEXT NOT NULL,title TEXT NOT NULL,locale TEXT NOT NULL,data TEXT NOT NULL,visibility TEXT NOT NULL DEFAULT 'private')");
   db.exec(readFileSync(new URL('../drizzle/0011_material_review.sql', import.meta.url), 'utf8'));
@@ -499,6 +500,15 @@ test('failed takedown audit insertion rolls back the publication change',async()
   const f=fixture();try {
     const id=(await f.post(submission)).data.id;await f.post(approve(id),'editor');
     f.setBatchFailure(1);assert.equal((await f.post({action:'takedown',id,reason:'Rights issue'},'editor')).status,503);
+    assert.equal(f.db.prepare('SELECT status FROM material_submissions WHERE id=?').get(id).status,'approved');
+  }finally{f.db.close();}
+});
+
+test('deleted owner cannot use a stale identity to take down a submission',async()=>{
+  const f=fixture();try {
+    const id=(await f.post(submission)).data.id;await f.post(approve(id),'editor');
+    f.db.exec("UPDATE accounts SET deleted_at=CURRENT_TIMESTAMP WHERE id='editor'");
+    assert.equal((await f.post({action:'takedown',id,reason:'Rights issue'},'editor')).status,409);
     assert.equal(f.db.prepare('SELECT status FROM material_submissions WHERE id=?').get(id).status,'approved');
   }finally{f.db.close();}
 });

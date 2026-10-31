@@ -3307,7 +3307,39 @@ async function renderReader(parts) {
 
 async function renderMissions() {
   setActiveNav("missions");
-  const mission = await getMission();
+  const principal = state.user, locale = state.lang;
+  const pathname = typeof location === "undefined" ? "" : location.pathname + location.hash;
+  const current = () => state.user === principal && state.lang === locale &&
+    (typeof location === "undefined" || location.pathname + location.hash === pathname);
+  let mission;
+  try {
+    mission = await getMission();
+    if (!current()) return;
+    if (!mission || typeof mission !== "object" || Array.isArray(mission) ||
+        (mission.locked !== undefined && typeof mission.locked !== "boolean"))
+      throw Error("invalid_mission_manifest");
+    if (!mission.locked &&
+        (!mission.title || typeof mission.title !== "object" ||
+         !Object.hasOwn(mission.title, locale) ||
+         typeof mission.title[locale] !== "string" || !mission.title[locale].trim() ||
+         mission.title[locale].length > 512 ||
+         !mission.intro || typeof mission.intro !== "object" ||
+         !Object.hasOwn(mission.intro, locale) ||
+         typeof mission.intro[locale] !== "string" || !mission.intro[locale].trim() ||
+         mission.intro[locale].length > 8192 ||
+         !Number.isSafeInteger(mission.taskCount) || mission.taskCount < 1 ||
+         !Array.isArray(mission.chapters)))
+      throw Error("invalid_mission_manifest");
+  } catch {
+    if (!current()) return;
+    // A malformed HTTP 200 must not stay cached or strand the missions page.
+    state.mission = null;
+    shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1><button class="button primary" type="button" id="retry-missions">${t("retryLoad")}</button></section>`);
+    document.querySelector("#retry-missions")?.addEventListener("click", () => {
+      if (current()) void renderMissions();
+    });
+    return;
+  }
   if (mission.locked) {
     const attemptId = activeAttemptId();
     shell(`<section class="gate-panel"><h1>${ATTEMPT_COPY[state.lang].prepareTitle}</h1><p>${ATTEMPT_COPY[state.lang].memory}</p>${attemptId ? `<a class="button primary" href="/mission/attempt/${encodeURIComponent(attemptId)}">${ATTEMPT_COPY[state.lang].transition}</a>` : ""}</section>`);

@@ -53,7 +53,12 @@ export async function GET(request:Request){
       const row=await env.DB!.prepare("SELECT data FROM progress WHERE user_id=? AND mission_id='READING'").bind(id.userId).first<{data:string}>();
       if(!row)return privateJson({reading:[]});
       const reading=JSON.parse(row.data);
-      if(Array.isArray(reading)&&reading.every(validReadingReceipt))return privateJson({reading});
+      // Bound legacy D1 histories by the same 2,000-entry write contract.
+      // Return only canonical receipt fields, never extra historical private JSON.
+      if(Array.isArray(reading)&&reading.length<=2000&&reading.every(validReadingReceipt))
+        return privateJson({reading:reading.map(entry=>({
+          book:entry.book,chapter:entry.chapter,title:entry.title,
+        }))});
     }catch{}
     // D1 errors and corrupt history are unavailable, not an empty reading history.
     return privateJson({error:"reading_state_unavailable"},{status:503});

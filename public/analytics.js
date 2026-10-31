@@ -235,7 +235,7 @@
     ru: ["Аналитические cookie", "С вашего согласия анонимная статистика помогает улучшать сайт. Она измеряет страницы, действия и активное время без передачи паролей, ответов или содержимого профиля.", "Разрешить", "Отклонить", "Не удалось сохранить согласие в браузере. Аналитика не включена; можно отклонить cookie."],
     en: ["Analytics cookies", "With your consent, anonymous statistics measure pages, actions, and active time. Passwords, answers, and profile content are never sent.", "Allow", "Decline", "Your browser could not save consent. Analytics is not enabled; you can decline cookies."],
   };
-  const language = document.documentElement.lang in copy ? document.documentElement.lang : "uk", text = copy[language];
+  const language = typeof document.documentElement.lang === "string" && Object.hasOwn(copy, document.documentElement.lang) ? document.documentElement.lang : "uk", text = copy[language];
   banner = document.createElement("section");
   banner.className = "cookie-banner";
   banner.setAttribute("role", "dialog");

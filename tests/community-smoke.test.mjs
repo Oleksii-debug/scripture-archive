@@ -51,3 +51,42 @@ test("the scheduler readiness probe rejects wrong/missing version and status",as
     assert.equal(ready,false);
   }
 });
+
+
+test("successful but impossible public counters never qualify automatic community activation", async () => {
+  const invalid = [
+    {registered: -1, online: 0},
+    {registered: 1, online: -1},
+    {registered: 1, online: 2},
+    {registered: -1, online: -2},
+    {registered: 1.5, online: 0},
+    {registered: "1", online: 0},
+    {registered: Number.MAX_SAFE_INTEGER + 1, online: 0},
+    {registered: 1, online: Number.MAX_SAFE_INTEGER + 1},
+  ];
+  for (const summary of invalid) {
+    const seen = [];
+    const ready = await communityDeploymentReady("https://scripture-archive.com", async (url, options) => {
+      seen.push(options.method || "GET");
+      return new URL(url).pathname === "/api/community"
+        ? Response.json({summary}) : deployed(url);
+    });
+    assert.equal(ready, false, JSON.stringify(summary));
+    assert.deepEqual(seen, Array(6).fill("GET"), "readiness must never mutate or POST");
+  }
+});
+
+test("transient corrupt summary recovers only after a coherent new read", async () => {
+  let corrupt = true;
+  const seen = [];
+  const fetcher = async (url, options) => {
+    seen.push(options.method || "GET");
+    return new URL(url).pathname === "/api/community"
+      ? Response.json({summary: corrupt ? {registered: 0, online: 1} : {registered: 3, online: 2}})
+      : deployed(url);
+  };
+  assert.equal(await communityDeploymentReady("https://scripture-archive.com", fetcher), false);
+  corrupt = false;
+  assert.equal(await communityDeploymentReady("https://scripture-archive.com", fetcher), true);
+  assert.deepEqual(seen, Array(12).fill("GET"));
+});

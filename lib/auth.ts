@@ -220,5 +220,21 @@ export async function rateLimit(key: string, limit: number, seconds: number) {
 }
 
 export function requestAddress(request: Request) {
-  return request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  // Only Cloudflare's edge-provided connecting address is an acceptable
+  // throttling identity. X-Forwarded-For is client-controlled at untrusted
+  // proxy boundaries: using it lets callers rotate login/reset rate buckets.
+  // When the trusted edge address is absent, share a bounded fallback bucket
+  // instead of treating an arbitrary caller header as proof of origin.
+  const edgeAddress = request.headers.get("cf-connecting-ip");
+  if (!edgeAddress || edgeAddress.length > 45 || edgeAddress.trim() !== edgeAddress) return "unknown";
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(edgeAddress)) {
+    return edgeAddress.split(".").every(octet => Number(octet) <= 255) ? edgeAddress : "unknown";
+  }
+  // The URL parser validates IPv6 syntax, including IPv4-mapped forms, and
+  // normalizes equivalent spellings into the same rate-limit bucket.
+  if (edgeAddress.includes(":") && /^[0-9a-fA-F:.]+$/.test(edgeAddress)) {
+    try { return new URL(`https://[${edgeAddress}]/`).hostname.slice(1, -1); }
+    catch { /* Refuse invalid edge IP metadata. */ }
+  }
+  return "unknown";
 }

@@ -101,6 +101,10 @@ for (const [method, action] of [['GET', 'current'], ['POST', 'finalize'], ['POST
 for (const [label, state, method, action, expectedStatus, expectedKey] of [
   ['foreign grading status', { mission_id: 'OTHER-MISSION', status: 'grading' }, 'GET', 'current', 409, 'attempt_state_invalid'],
   ['foreign active invalidation', { mission_id: 'OTHER-MISSION', status: 'active' }, 'POST', 'invalidate', 409, 'attempt_state_invalid'],
+  ['foreign invalidated status', { mission_id: 'OTHER-MISSION', status: 'invalidated' }, 'GET', 'current', 409, 'attempt_state_invalid'],
+  ['foreign invalidated answer recovery', { mission_id: 'OTHER-MISSION', status: 'invalidated' }, 'POST', 'answer', 409, 'attempt_state_invalid'],
+  ['canonical invalidated status', { mission_id: 'OT-AB-01', status: 'invalidated' }, 'GET', 'current', 409, 'attempt_invalidated'],
+  ['canonical invalidated answer recovery', { mission_id: 'OT-AB-01', status: 'invalidated' }, 'POST', 'answer', 409, 'attempt_invalidated'],
   ['canonical grading status', { mission_id: 'OT-AB-01', status: 'grading' }, 'GET', 'current', 200, null],
 ]) {
   test(label + ' preserves mission-specific lifecycle boundary', async () => {

@@ -211,8 +211,9 @@ async function write(request:Request){
         ) <= 2000
     `).bind(id.userId,JSON.stringify(unique),chapterLimits,chapterLimits).run();
     const written=confirmedD1Changes(result);
-    if(written===null)return privateJson({error:"reading_save_failed"},{status:503});
-    if(written===0)return privateJson({error:"reading_capacity_exceeded"},{status:409});
+    // A zero-change receipt may be a capacity refusal OR an uncertain D1
+    // write. Preserve the existing fail-closed 503 contract for both.
+    if(written===null||written===0)return privateJson({error:"reading_save_failed"},{status:503});
     return privateJson({ok:true});
     }catch{return privateJson({error:"reading_state_unavailable"},{status:503});}
   }

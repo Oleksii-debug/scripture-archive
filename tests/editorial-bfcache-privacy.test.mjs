@@ -22,7 +22,7 @@ function lifecycleFixture({path='/builder',mounted=true,request=()=>Promise.reso
   let visible=mounted;
   const main={
     querySelector(selector){
-      if(selector==='.builder-layout, .editor-grid, .progress-stat, .resume-card, .account-dashboard, .profile-card, .auth-grid, .auth-card')return visible?{}:null;
+      if(selector==='.builder-layout, .editor-grid, .progress-stat, .resume-card, .account-dashboard, .profile-card, .auth-grid, .auth-card, .academy-reading')return visible?{}:null;
       return null;
     },
     replaceChildren(){visible=false;events.clear++;},

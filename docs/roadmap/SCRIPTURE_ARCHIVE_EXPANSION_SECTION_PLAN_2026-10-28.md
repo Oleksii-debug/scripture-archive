@@ -1,3 +1,13 @@
+## 2026-10-31 — SA-EXT-06 / DOSSIER_ATLAS_FILTER_CONTINUITY — CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL
+
+**РОЗДІЛ №SA-EXT-06 — ЗАКРИТО ДЛЯ РОЗРОБКИ ЛИШЕ ЦЕЙ ДЕФЕКТ ПОШУКУ В АТЛАСІ.** Канонічна сторінка `/dossiers?q=...` тепер фільтрує обидва пов'язані подання: індекс досьє та текстовий атлас, включно з перевіреними біблійними джерелами, місцями, додатковими темами та зв'язками; збережено нативну клавіатурну навігацію, UK/RU/EN, повний не фільтрований режим і fail-closed невірні запити. Це чинний `public/workspace.js` + `public/scripture-dossiers.js`, не відокремлений модуль.
+
+[Feature PR #985](https://github.com/Oleksii-debug/scripture-archive/pull/985) **SQUASH MERGED** у точний `main@c0d24070f4d87b41e0d4bb988ee6d3f1cdbc907e`; production blobs `public/scripture-dossiers.js@fb417444d4f95f0d5f36ba7726476af65eb7431f`, `public/workspace.js@488276dc75f8fafac9577e5ef99b7599cca7287d`. Фокусні перевірки exact source **93/93 V8 PASS**; [exact-head native CI #41219381401](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41219381401) **COMPLETED SUCCESS**: 3484 Node PASS / 0 FAIL / 1 SKIP, 24 disposable Worker/D1 PASS, TS/lint/build/Python PASS. [Остаточний окремий акт](SA_EXT_06_ATLAS_FILTER_CONTINUITY_SCOPED_TERMINAL_20261031.md): `remaining_scoped_implementation=0`, `necessary_unmerged_scoped_feature_PRs=0`, `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`.
+
+**Повний SA-EXT-06 OPEN**: затверджені ліцензії карт, географічні та хронологічні дані, незалежний review, реальний браузер і доступність не прийняті; SA-EXT-01/02/05/07 теж OPEN, SA-EXT-03/04 parent TERMINAL. Production/Sites/D1, Windows/NVDA й реліз **NOT_VERIFIED**, деплой не виконувався.
+
+---
+
 ## 2026-10-31 — SA-EXT-07 / ACADEMY_PROGRESS_PROJECTION_FAILCLOSED — CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL
 
 **ЗАКРИТО ДЛЯ РОЗРОБКИ ЛИШЕ ОДИН ВІДТВОРЕНИЙ ДЕФЕКТ, НЕ БАТЬКІВСЬКИЙ SA-EXT-07.** Канонічна `academyMarkup()` більше не приймає пошкоджену/підроблену проєкцію локального прогресу `{available:true,completed:...}` як доказ проходження занять: неправильний тип, відсутній масив, невідомий/повторний ID чи надлишок позначок залишають перевірені біблійні джерела доступними **лише для читання** з оголошеною помилкою, без активних кнопок і хибного badge. Коректні 13 занять, особисті позначки й відновлення після нового валідного readback збережені.

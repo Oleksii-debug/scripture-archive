@@ -184,7 +184,9 @@ export function searchScriptureDossiers(language,value,catalog=null) {
   // same user-entered range against *published* source and relationship refs,
   // without fabricating a verse, expanding the source graph or interpreting a
   // reversed/invalid interval as a free-text lookup.
-  const rangeQuery=/^(.+?)\s+([1-9][0-9]{0,2}):([1-9][0-9]{0,2})[-–]([1-9][0-9]{0,2})$/u.exec(query);
+  // Pasted source citations can use an em dash or spaces around the verse separator.
+  // Preserve the existing exact chapter, bounded verse and reversed-range gates.
+  const rangeQuery=/^(.+?)\s+([1-9][0-9]{0,2}):([1-9][0-9]{0,2})\s*[-–—]\s*([1-9][0-9]{0,2})$/u.exec(query);
   if(rangeQuery){
     const requestedBook=rangeQuery[1],chapter=Number(rangeQuery[2]);
     const first=Number(rangeQuery[3]),last=Number(rangeQuery[4]);

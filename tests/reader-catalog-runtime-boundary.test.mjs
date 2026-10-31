@@ -148,3 +148,34 @@ test('rejects coordinated all-locale source reordering and valid-looking invente
   intact.books.uk.find(book => book.code === 'JOL').chapters = 4;
   assert.equal(validate(intact), true, 'legitimate edition chapter variation is preserved');
 });
+
+
+test('rejects wrong OT/NT book identity even if all editions agree', () => {
+  // The 66-book canonical inventory contains 39 OT books followed by 27 NT
+  // books. A valid-looking but wrong testament field must not be admitted.
+  const allInventories = value => [
+    ...Object.values(value.books), ...Object.values(value.editionBooks),
+  ];
+  for (const locale of ['uk', 'ru', 'en']) {
+    for (let index = 0; index < 66; index++) {
+      const damaged = clone();
+      damaged.books[locale][index].testament = index < 39 ? 'NT' : 'OT';
+      assert.equal(validate(damaged), false, locale + ' wrong testament at ' + index);
+    }
+  }
+  for (const editionId of Object.keys(catalog.editionBooks)) {
+    for (let index = 0; index < 66; index++) {
+      const damaged = clone();
+      damaged.editionBooks[editionId][index].testament = index < 39 ? 'NT' : 'OT';
+      assert.equal(validate(damaged), false, editionId + ' wrong testament at ' + index);
+    }
+  }
+  const coordinated = clone();
+  for (const books of allInventories(coordinated)) {
+    for (let index = 0; index < 66; index++) {
+      books[index].testament = index < 39 ? 'NT' : 'OT';
+    }
+  }
+  assert.equal(validate(coordinated), false, 'coordinated OT/NT corruption fails closed');
+  assert.equal(validate(catalog), true, 'unmodified real canonical catalogue is accepted');
+});

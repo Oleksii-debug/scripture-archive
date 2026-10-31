@@ -23,12 +23,12 @@ const folder=new URL('../drizzle/',import.meta.url);
 const sql=name=>readFileSync(new URL(name,folder),'utf8');
 const normalizedHash=text=>createHash('sha256').update(text.replace(/[\r\n]+$/,'')+'\n').digest('hex');
 
-test('historical v8 source upgrades representative saved records through v15',()=>{
+test('historical v8 source upgrades representative saved records through v16',()=>{
   const files=readdirSync(folder).filter(x=>/^\d{4}_.+\.sql$/.test(x)).sort();
   const baseline=files.filter(x=>Number(x.slice(0,4))<=8);
-  const upgrade=files.filter(x=>Number(x.slice(0,4))>=9&&Number(x.slice(0,4))<=15);
+  const upgrade=files.filter(x=>Number(x.slice(0,4))>=9);
   assert.deepEqual(baseline,Object.keys(historical));
-  assert.deepEqual(upgrade.map(x=>x.slice(0,4)),['0009','0010','0011','0012','0013','0014','0015']);
+  assert.deepEqual(upgrade.map(x=>x.slice(0,4)),['0009','0010','0011','0012','0013','0014','0015','0016']);
   for(const name of baseline)assert.equal(normalizedHash(sql(name)),historical[name],`${name} differs from the historical source`);
   const db=new DatabaseSync(':memory:');
   try {
@@ -58,6 +58,12 @@ test('historical v8 source upgrades representative saved records through v15',()
       INSERT INTO community_runs(id,status,control_version) VALUES ('run','paused',3);
     `);
     for (const name of upgrade) {
+      if (name.startsWith('0016_')) {
+        // A legacy account may already publish its first name. Migration
+        // 0016 must not infer directory membership from that older choice.
+        db.exec("UPDATE profiles SET public_first_name=1 WHERE user_id='fixture-user'");
+        assert.equal(db.prepare("SELECT public_first_name FROM profiles WHERE user_id='fixture-user'").get().public_first_name,1);
+      }
       db.exec(sql(name));
       if (name.startsWith('0012_')) {
         // Reproduce unsafe coexistence: a still-running v8 Worker can restore
@@ -133,6 +139,43 @@ test('historical v8 source upgrades representative saved records through v15',()
     assert.ok(rightsColumns.includes('rights_holder'));
     assert.ok(rightsColumns.includes('rights_basis'));
     assert.ok(rightsColumns.includes('license_url'));
+    // R0 privacy upgrade: exercise 0016 on the actual historical fixture,
+    // not only on a freshly created database. A previously public name is
+    // not permission to list a real person in the community directory.
+    const legacyCommunity=db.prepare("SELECT public_first_name,public_community FROM profiles WHERE user_id='fixture-user'").get();
+    assert.deepEqual(legacyCommunity,{public_first_name:1,public_community:0});
+    const communityGuards=db.prepare(
+      "SELECT name FROM sqlite_master WHERE type='trigger' AND tbl_name='profiles' AND name LIKE 'profiles_public_community_%' ORDER BY name"
+    ).all().map(row=>row.name);
+    assert.deepEqual(communityGuards,[
+      'profiles_public_community_insert_v1',
+      'profiles_public_community_update_v1',
+    ]);
+    // A malformed opt-in cannot bypass the schema's binary consent domain.
+    assert.throws(
+      ()=>db.exec("UPDATE profiles SET public_community=2 WHERE user_id='fixture-user'"),
+      /CHECK constraint failed/
+    );
+    db.exec("UPDATE profiles SET public_first_name=0 WHERE user_id='fixture-user'");
+    assert.throws(
+      ()=>db.exec("UPDATE profiles SET public_community=1 WHERE user_id='fixture-user'"),
+      /public_community_requires_public_name/
+    );
+    assert.equal(db.prepare("SELECT public_community FROM profiles WHERE user_id='fixture-user'").get().public_community,0);
+    // Explicit opt-in works with a public name; withdrawing the name alone
+    // must fail, and withdrawing both visibility choices must recover.
+    db.exec("UPDATE profiles SET public_first_name=1,public_community=1 WHERE user_id='fixture-user'");
+    assert.equal(db.prepare("SELECT public_community FROM profiles WHERE user_id='fixture-user'").get().public_community,1);
+    assert.throws(
+      ()=>db.exec("UPDATE profiles SET public_first_name=0 WHERE user_id='fixture-user'"),
+      /public_community_requires_public_name/
+    );
+    assert.equal(db.prepare("SELECT public_first_name FROM profiles WHERE user_id='fixture-user'").get().public_first_name,1);
+    db.exec("UPDATE profiles SET public_community=0,public_first_name=0 WHERE user_id='fixture-user'");
+    assert.deepEqual(
+      db.prepare("SELECT public_first_name,public_community FROM profiles WHERE user_id='fixture-user'").get(),
+      {public_first_name:0,public_community:0}
+    );
     assert.equal(db.prepare('PRAGMA foreign_key_check').all().length,0);
   } finally {db.close();}
 });

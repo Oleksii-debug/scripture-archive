@@ -69,7 +69,7 @@ test("successful but impossible public counters never qualify automatic communit
     const ready = await communityDeploymentReady("https://scripture-archive.com", async (url, options) => {
       seen.push(options.method || "GET");
       return new URL(url).pathname === "/api/community"
-        ? Response.json({summary}) : deployed(url);
+        ? Response.json({summary}, {headers:{"Cache-Control":"no-store"}}) : deployed(url);
     });
     assert.equal(ready, false, JSON.stringify(summary));
     assert.deepEqual(seen, Array(6).fill("GET"), "readiness must never mutate or POST");
@@ -82,7 +82,7 @@ test("transient corrupt summary recovers only after a coherent new read", async 
   const fetcher = async (url, options) => {
     seen.push(options.method || "GET");
     return new URL(url).pathname === "/api/community"
-      ? Response.json({summary: corrupt ? {registered: 0, online: 1} : {registered: 3, online: 2}})
+      ? Response.json({summary: corrupt ? {registered: 0, online: 1} : {registered: 3, online: 2}}, {headers:{"Cache-Control":"no-store"}})
       : deployed(url);
   };
   assert.equal(await communityDeploymentReady("https://scripture-archive.com", fetcher), false);

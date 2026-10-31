@@ -23,12 +23,12 @@ const folder=new URL('../drizzle/',import.meta.url);
 const sql=name=>readFileSync(new URL(name,folder),'utf8');
 const normalizedHash=text=>createHash('sha256').update(text.replace(/[\r\n]+$/,'')+'\n').digest('hex');
 
-test('historical v8 source upgrades representative saved records through v12',()=>{
+test('historical v8 source upgrades representative saved records through v14',()=>{
   const files=readdirSync(folder).filter(x=>/^\d{4}_.+\.sql$/.test(x)).sort();
   const baseline=files.filter(x=>Number(x.slice(0,4))<=8);
-  const upgrade=files.filter(x=>Number(x.slice(0,4))>=9&&Number(x.slice(0,4))<=12);
+  const upgrade=files.filter(x=>Number(x.slice(0,4))>=9&&Number(x.slice(0,4))<=14);
   assert.deepEqual(baseline,Object.keys(historical));
-  assert.deepEqual(upgrade.map(x=>x.slice(0,4)),['0009','0010','0011','0012']);
+  assert.deepEqual(upgrade.map(x=>x.slice(0,4)),['0009','0010','0011','0012','0013','0014']);
   for(const name of baseline)assert.equal(normalizedHash(sql(name)),historical[name],`${name} differs from the historical source`);
   const db=new DatabaseSync(':memory:');
   try {
@@ -74,6 +74,35 @@ test('historical v8 source upgrades representative saved records through v12',()
     assert.equal(run.status,'paused');assert.equal(run.control_version,3);
     db.exec("INSERT INTO reader_bookmarks(user_id,edition,book,chapter) VALUES ('fixture-user','en-web','GEN',1)");
     assert.equal(db.prepare("SELECT chapter FROM reader_bookmarks WHERE user_id='fixture-user'").get().chapter,1);
+    assert.equal(db.prepare('PRAGMA foreign_key_check').all().length,0);
+    // R0 release upgrade must exercise the *whole* current migration chain.
+    // 0013 protects the legacy visibility reset when a stale pre-0010 worker
+    // attempts to re-publish church data after the historical site is upgraded.
+    const guards=db.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND tbl_name='profiles' ORDER BY name").all().map(row=>row.name);
+    assert.deepEqual(guards,[
+      'profiles_public_church_consent_insert_v1',
+      'profiles_public_church_consent_update_v1',
+    ]);
+    assert.throws(
+      ()=>db.exec("UPDATE profiles SET public_church=1 WHERE user_id='fixture-user'"),
+      /public_church_requires_current_explicit_consent/
+    );
+    assert.equal(db.prepare("SELECT public_church FROM profiles WHERE user_id='fixture-user'").get().public_church,0);
+    // A separately and explicitly confirmed version-1 consent permits
+    // intentional visibility, but withdrawing consent cannot leave it public.
+    db.exec("UPDATE profiles SET sensitive_consent_version=1 WHERE user_id='fixture-user'");
+    db.exec("UPDATE profiles SET public_church=1 WHERE user_id='fixture-user'");
+    assert.throws(
+      ()=>db.exec("UPDATE profiles SET sensitive_consent=0 WHERE user_id='fixture-user'"),
+      /public_church_requires_current_explicit_consent/
+    );
+    db.exec("UPDATE profiles SET public_church=0,sensitive_consent=0 WHERE user_id='fixture-user'");
+    assert.equal(db.prepare("SELECT public_church FROM profiles WHERE user_id='fixture-user'").get().public_church,0);
+    // 0014 editorial takedown provenance must also exist after an actual
+    // old-site upgrade, rather than only in a fresh-install test.
+    const takedown=db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='material_takedowns'").get();
+    assert.match(takedown?.sql||'',/submission_id TEXT PRIMARY KEY/);
+    assert.match(takedown.sql,/REFERENCES material_submissions\(id\) ON DELETE CASCADE/);
     assert.equal(db.prepare('PRAGMA foreign_key_check').all().length,0);
   } finally {db.close();}
 });

@@ -4,7 +4,7 @@ import { communityDeploymentReady } from "../lib/community-smoke.mjs";
 
 function deployed(url){
   const path=new URL(url).pathname;
-  if(path==="/api/community")return Response.json({summary:{registered:0,online:0}});
+  if(path==="/api/community")return Response.json({summary:{registered:0,online:0}},{headers:{"Cache-Control":"no-store"}});
   if(path==="/api/community/dispatch")return new Response(null,{status:204,headers:{"Cache-Control":"no-store","X-Scripture-Runner-Protocol":"github-oidc-v1"}});
   if(path==="/api/account")return Response.json({user:null},{headers:{"Cache-Control":"no-store, private"}});
   if(path==="/robots.txt")return new Response("User-agent: *\nSitemap: https://scripture-archive.com/sitemap.xml");

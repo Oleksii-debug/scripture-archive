@@ -6,7 +6,7 @@ function deployed(url){
   const path=new URL(url).pathname;
   if(path==="/api/community")return Response.json({summary:{registered:0,online:0}});
   if(path==="/api/community/dispatch")return new Response(null,{status:204,headers:{"Cache-Control":"no-store","X-Scripture-Runner-Protocol":"github-oidc-v1"}});
-  if(path==="/api/account")return Response.json({user:null});
+  if(path==="/api/account")return Response.json({user:null},{headers:{"Cache-Control":"no-store, private"}});
   if(path==="/robots.txt")return new Response("User-agent: *\nSitemap: https://scripture-archive.com/sitemap.xml");
   if(path==="/sitemap.xml")return new Response('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>');
   return new Response("<html>Community</html>");
@@ -89,4 +89,44 @@ test("transient corrupt summary recovers only after a coherent new read", async 
   corrupt = false;
   assert.equal(await communityDeploymentReady("https://scripture-archive.com", fetcher), true);
   assert.deepEqual(seen, Array(12).fill("GET"));
+});
+
+test("P0: unauthenticated release probe rejects private account leaks and cacheable snapshots", async () => {
+  const invalid = [
+    [{user:{id:"fixture-private",email:"private@example.invalid"}}, "no-store, private"],
+    [{user:null}, "public, max-age=3600"],
+    [{user:null}, "private, max-age=300"],
+    [{user:null}, null],
+    [{user:null}, "no-cache"],
+    [{user:null}, "no-store-extra"],
+    [{user:false}, "no-store, private"],
+    [{user:"unexpected"}, "no-store, private"],
+  ];
+  for (const [payload, cache] of invalid) {
+    const methods = [];
+    const ready = await communityDeploymentReady("https://scripture-archive.com", async (url, options) => {
+      methods.push(options.method || "GET");
+      return new URL(url).pathname === "/api/account"
+        ? Response.json(payload, {headers: cache === null ? {} : {"Cache-Control": cache}})
+        : deployed(url);
+    });
+    assert.equal(ready, false, JSON.stringify({payload, cache}));
+    assert.deepEqual(methods, Array(6).fill("GET"), "release preflight must stay read-only");
+  }
+});
+
+test("P0: healthy anonymous no-store response recovers after a denied preflight", async () => {
+  let leaked = true;
+  const methods = [];
+  const fetcher = async (url, options) => {
+    methods.push(options.method || "GET");
+    return new URL(url).pathname === "/api/account"
+      ? Response.json({user: leaked ? {id:"fixture-private"} : null},
+          {headers: {"Cache-Control": "private, NO-STORE"}})
+      : deployed(url);
+  };
+  assert.equal(await communityDeploymentReady("https://scripture-archive.com", fetcher), false);
+  leaked = false;
+  assert.equal(await communityDeploymentReady("https://scripture-archive.com", fetcher), true);
+  assert.deepEqual(methods, Array(12).fill("GET"));
 });

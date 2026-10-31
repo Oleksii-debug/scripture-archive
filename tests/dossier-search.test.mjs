@@ -290,3 +290,23 @@ test('SA-EXT-05 exact Bible-book query finds direct and relational witnesses wit
     assert.deepEqual(searchScriptureDossiers(lang,'GENX',catalog),[]);
   }
 });
+
+test('SA-EXT-05: malformed typed q cannot silently open unrelated dossier evidence',()=>{
+  // Native GET always supplies a string, but callers of the canonical
+  // renderer must not reinterpret invalid input as an unfiltered request.
+  const malformed=[null,false,true,0,1,[],{},['GEN'],new String('GEN'),
+    {toString(){throw Error('must not coerce search input');}}];
+  for(const lang of ['uk','ru','en']){
+    for(const q of malformed){
+      const html=dossierMarkup(catalog,lang,null,esc,q);
+      assert.match(html,/role="alert"/,lang+' rejects untyped q');
+      assert.doesNotMatch(html,/\bdossier-article\b/,'no default dossier');
+      assert.doesNotMatch(html,new RegExp('href="/reader/'),'no unrelated source links');
+    }
+    // Missing q, exact book search and oversized strings retain their
+    // previous public GET behaviour and accessibility.
+    assert.match(dossierMarkup(catalog,lang,null,esc),/\bdossier-article\b/);
+    assert.match(dossierMarkup(catalog,lang,null,esc,'GEN'),/role="search"/);
+    assert.match(dossierMarkup(catalog,lang,null,esc,'A'.repeat(121)),/role="alert"/);
+  }
+});

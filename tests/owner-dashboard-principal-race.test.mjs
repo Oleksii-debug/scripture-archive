@@ -32,6 +32,7 @@ function fixture({ accountRequest = async () => ({ users: [] }), fetch = async (
   };
   const api = vm.runInNewContext(production, {
     state, location, document, main: { querySelector: () => emptyNode },
+    editorialPageHidden: false, editorialAwaitingSession: false,
     accountRequest: async (...args) => { activity.push("account:" + args[0]); return accountRequest(...args); },
     fetch: async (...args) => { activity.push("fetch:" + args[0]); return fetch(...args); },
     setActiveNav() {}, clearInterval() {}, communityOwnerRefreshInterval: null,

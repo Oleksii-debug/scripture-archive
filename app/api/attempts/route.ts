@@ -122,6 +122,18 @@ function storedLocale(value: unknown): value is Locale {
   return value === "uk" || value === "ru" || value === "en";
 }
 function tasksFor(book: string, chapter: number) { return mission.tasks.filter(task => task.book === book && task.chapter === chapter); }
+// SQLite can hold legacy/invalid cursor types despite the TS Attempt shape.
+// Reject impossible active-state task limits and indices *before* displaying
+// a task or writing an answer: Array.slice silently truncates fractional values
+// and array indexing accepts string "0" as a numeric property alias.
+function activeTasks(attempt: Attempt): MissionTask[] | null {
+  if (attempt.mission_id !== MISSION_ID ||
+      !Number.isSafeInteger(attempt.task_limit) || attempt.task_limit < 1 ||
+      !Number.isSafeInteger(attempt.current_index) || attempt.current_index < 0 ||
+      attempt.current_index >= attempt.task_limit) return null;
+  const available = tasksFor(attempt.book_id, attempt.chapter);
+  return attempt.task_limit <= available.length ? available.slice(0, attempt.task_limit) : null;
+}
 function publicTask(task: MissionTask, selectedLocale: Locale, index: number, total: number) {
   return {
     type: task.type,
@@ -348,7 +360,7 @@ export async function GET(request: Request) {
   if (deadline === null) return json({ error: "attempt_state_invalid" }, 409);
   if (deadline <= Date.now()) return json({ error: "attempt_expired" }, 410);
   if (!storedLocale(attempt.locale)) return json({ error: "attempt_state_invalid" }, 409);
-  const tasks = tasksFor(attempt.book_id, attempt.chapter).slice(0, attempt.task_limit), task = tasks[attempt.current_index];
+  const tasks = activeTasks(attempt), task = tasks?.[attempt.current_index];
   if (!task) return json({ error: "attempt_state_invalid" }, 409);
   return json({ attemptId: attempt.id, task: publicTask(task, attempt.locale, attempt.current_index + 1, tasks.length) });
   } catch { return json({ error: "database_unavailable" }, 503); }
@@ -505,7 +517,8 @@ export async function POST(request: Request) {
       if (confirmedChanges(expired) === null) return json({ error: "database_unavailable" }, 503);
       return json({ error: "attempt_expired" }, 410);
     }
-    const tasks = tasksFor(attempt.book_id, attempt.chapter).slice(0, attempt.task_limit), task = tasks[attempt.current_index];
+    const tasks = activeTasks(attempt), task = tasks?.[attempt.current_index];
+    if (!tasks) return json({ error: "attempt_state_invalid" }, 409);
     if (taskIndex < attempt.current_index + 1) return json({ error: "answer_already_submitted" }, 409);
     if (!task || taskIndex !== attempt.current_index + 1 || !Array.isArray(body.selected)) return json({ error: "invalid_answer" }, 400);
     // Answer option indexes are numeric JSON values, not coercible strings,

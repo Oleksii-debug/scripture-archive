@@ -61,7 +61,7 @@ function harness(mode, { readFailure = false } = {}) {
     const payload = action === "reading"
       ? { reading: [{ book: "GEN", chapter: 1, title: "Genesis" }] }
       : action === "visibility"
-        ? { firstName: true, lastName: false, church: false, progress: true }
+        ? { firstName: true, lastName: false, church: false, progress: true, community: true }
         : action === "sensitive-consent"
           ? { acceptSensitive: true, tradition: "protestant", denomination: "Test", church: "Fixture" }
         : { firstName: "Ada", lastName: "Reader", ageRange: "18-24",

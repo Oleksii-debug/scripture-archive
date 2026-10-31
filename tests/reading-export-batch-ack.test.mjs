@@ -17,7 +17,7 @@ assert.equal(compiled.diagnostics?.length ?? 0, 0, "canonical export handler mus
 
 const success = results => ({ success: true, results });
 const standardRows = () => [
-  success([{ first_name: "Alice", locale: "uk" }]),
+  success([{ first_name: "Alice", locale: "uk", public_community: 1 }]),
   success([{ mission_id: "READING", data: '[{"book":"GEN","chapter":1,"title":"Genesis"}]', updated_at: "2026-10-29" }]),
   success([{ edition: "en-web", book: "GEN", chapter: 1, created_at: "2026-10-29" }]),
   success([{ id: "a1", mission_id: "OT-AB-01", book_id: "GEN", chapter: 1,
@@ -74,12 +74,14 @@ test("complete acknowledged D1 batch exports the user's actual stored data", asy
   assert.equal(body.version, 1);
   assert.equal(body.account.email, "reader-a@example.invalid");
   assert.equal(body.profile.first_name, "Alice");
+  assert.equal(body.profile.public_community, 1);
   assert.equal(body.progress[0].mission, "READING");
   assert.equal(body.progress[0].data[0].book, "GEN");
   assert.equal(body.bookmarks[0].chapter, 1);
   assert.equal(body.attemptHistory[0].result.score, 1);
   assert.equal(f.batches, 1);
   assert.equal(f.statements.length, 4);
+  assert.match(f.statements[0].sql,/public_community/);
   assert.equal(f.statements.every(item => item.params.length === 1 && item.params[0] === "reader-a"), true);
   assert.match(response.headers.get("cache-control"), /no-store/);
   assert.match(response.headers.get("cache-control"), /private/);

@@ -38,7 +38,7 @@ function validReadingReceipt(value:unknown):value is {book:string;chapter:number
     &&typeof row.chapter==="number"&&Number.isInteger(row.chapter)&&row.chapter>0&&row.chapter<=(READING_CHAPTERS.get(row.book as string)??0)
     &&typeof row.title==="string"&&row.title.trim().length>0&&row.title.length<=100;
 }
-function publicUser(id:Identity,row:Record<string,unknown>|null){return {id:id.userId,email:id.email,emailVerified:id.emailVerified,authProvider:id.provider,fullName:id.fullName,firstName:row?.first_name??"",lastName:row?.last_name??"",ageRange:row?.age_range??"",age:row?.age??null,tradition:row?.tradition??"",denomination:row?.denomination??"",church:row?.church??"",maritalStatus:row?.marital_status??"",gender:row?.gender??"",hasChildren:row?.has_children==null?null:(row.has_children===1),locale:row?.locale??"uk",sensitiveConsent:(row?.sensitive_consent===1 && row?.sensitive_consent_version===1),visibility:{firstName:(row?.public_first_name===1),lastName:(row?.public_last_name===1),church:(row?.public_church===1 && row?.sensitive_consent===1 && row?.sensitive_consent_version===1),progress:(row?.public_progress===1)},profileComplete:Boolean(row),isOwner:isVerifiedOwner(id)}}
+function publicUser(id:Identity,row:Record<string,unknown>|null){return {id:id.userId,email:id.email,emailVerified:id.emailVerified,authProvider:id.provider,fullName:id.fullName,firstName:row?.first_name??"",lastName:row?.last_name??"",ageRange:row?.age_range??"",age:row?.age??null,tradition:row?.tradition??"",denomination:row?.denomination??"",church:row?.church??"",maritalStatus:row?.marital_status??"",gender:row?.gender??"",hasChildren:row?.has_children==null?null:(row.has_children===1),locale:row?.locale??"uk",sensitiveConsent:(row?.sensitive_consent===1 && row?.sensitive_consent_version===1),visibility:{firstName:(row?.public_first_name===1),lastName:(row?.public_last_name===1),church:(row?.public_church===1 && row?.sensitive_consent===1 && row?.sensitive_consent_version===1),progress:(row?.public_progress===1),community:(row?.public_community===1 && (row?.public_first_name===1 || row?.public_last_name===1))},profileComplete:Boolean(row),isOwner:isVerifiedOwner(id)}}
 export async function GET(request:Request){
   const action=new URL(request.url).searchParams.get("action")??"me";
   // Absence of the identity database is not proof that a saved session has
@@ -247,16 +247,17 @@ async function write(request:Request){
     }catch{return privateJson({error:"consent_save_failed"},{status:503});}
   }
   if(action==="visibility"){
-    // The canonical UI submits one complete four-boolean snapshot. Silently
+    // The canonical UI submits one complete five-boolean snapshot. Silently
     // coercing a missing/typed value to false could erase unrelated saved
     // sharing choices from a truncated or malformed request.
-    const visibilityKeys=["firstName","lastName","church","progress"];
+    const visibilityKeys=["firstName","lastName","church","progress","community"];
     if(typeof body!=="object"||Array.isArray(body)||
        Object.keys(body).length!==visibilityKeys.length||
-       !visibilityKeys.every(key=>Object.hasOwn(body,key)&&typeof body[key]==="boolean"))
+       !visibilityKeys.every(key=>Object.hasOwn(body,key)&&typeof body[key]==="boolean")||
+       (body.community===true&&body.firstName!==true&&body.lastName!==true))
       return privateJson({error:"invalid_visibility"},{status:400});
     try{
-      const visibilityWrite=await env.DB!.prepare("UPDATE profiles SET public_first_name=?,public_last_name=?,public_church=CASE WHEN sensitive_consent=1 AND sensitive_consent_version=1 THEN ? ELSE 0 END,public_progress=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?").bind(body.firstName===true?1:0,body.lastName===true?1:0,body.church===true?1:0,body.progress===true?1:0,id.userId).run();
+      const visibilityWrite=await env.DB!.prepare("UPDATE profiles SET public_first_name=?,public_last_name=?,public_church=CASE WHEN sensitive_consent=1 AND sensitive_consent_version=1 THEN ? ELSE 0 END,public_progress=?,public_community=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?").bind(body.firstName===true?1:0,body.lastName===true?1:0,body.church===true?1:0,body.progress===true?1:0,body.community===true?1:0,id.userId).run();
       const changed=confirmedD1Changes(visibilityWrite);
       if(changed===null)return privateJson({error:"visibility_save_failed"},{status:503});
       if(changed===0)return privateJson({error:"profile_not_found"},{status:409});

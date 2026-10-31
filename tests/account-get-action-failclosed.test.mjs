@@ -152,16 +152,24 @@ test("profile visibility and has-children flags accept only exact D1 numeric boo
   for (const [stored, expected] of cases) {
     const f = fixture({ profile: {
       public_first_name: stored, public_last_name: stored,
-      public_progress: stored, has_children: stored,
+      public_progress: stored, public_community: stored, has_children: stored,
     } });
     const result = await f.get("me");
     assert.equal(result.status, 200, JSON.stringify(stored));
     assert.equal(result.body.user.visibility.firstName, expected, "firstName " + JSON.stringify(stored));
     assert.equal(result.body.user.visibility.lastName, expected, "lastName " + JSON.stringify(stored));
     assert.equal(result.body.user.visibility.progress, expected, "progress " + JSON.stringify(stored));
+    assert.equal(result.body.user.visibility.community, expected, "community " + JSON.stringify(stored));
     assert.equal(result.body.user.hasChildren, stored === null ? null : expected, "hasChildren " + JSON.stringify(stored));
     assert.equal(Object.hasOwn(result.body.user.visibility, "church"), true);
     assert.match(result.cache, /no-store, private/);
     assert.deepEqual(f.calls, { auth: 1, reads: 1 });
   }
+});
+
+test("community visibility additionally requires an exact public name flag", async () => {
+  const f=fixture({profile:{public_first_name:0,public_last_name:0,public_community:1}});
+  const result=await f.get("me");
+  assert.equal(result.status,200);
+  assert.equal(result.body.user.visibility.community,false);
 });

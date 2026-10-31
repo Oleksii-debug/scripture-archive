@@ -183,7 +183,7 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal(consentChange.response.status, 200,
     `Sensitive-consent E2E: expected HTTP 200; error_code=${consentErrorCode}`);
   assert.equal(consentChange.data.user.sensitiveConsent, true);
-  await request("/api/account?action=visibility", { method: "PUT", body: { firstName: false, lastName: false, church: true, progress: false } });
+  await request("/api/account?action=visibility", { method: "PUT", body: { firstName: false, lastName: false, church: true, progress: false, community: false } });
   consentChange = await request("/api/account?action=sensitive-consent", { method: "PUT", body: { acceptSensitive: false } });
   assert.equal(consentChange.response.status, 200);
   assert.equal(consentChange.data.user.sensitiveConsent, false);
@@ -193,7 +193,7 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal(privacyExport.profile.church, null);
   assert.equal(privacyExport.profile.public_church, 0);
   assert.equal(privacyExport.profile.sensitive_consent_version, 0);
-  const visibilityWithoutConsent = await request("/api/account?action=visibility", { method: "PUT", body: { firstName: false, lastName: false, church: true, progress: false } });
+  const visibilityWithoutConsent = await request("/api/account?action=visibility", { method: "PUT", body: { firstName: false, lastName: false, church: true, progress: false, community: false } });
   assert.equal(visibilityWithoutConsent.data.user.visibility.church, false, "publication cannot be enabled before sensitive consent");
   const ownerAfterOtherWithdrawal = await (await fetch(`${base}/api/reading-export`, { headers: { Cookie: ownerCookie } })).json();
   assert.equal(ownerAfterOtherWithdrawal.profile.denomination, "Owner private", "withdrawal must not modify another user's profile");
@@ -357,7 +357,7 @@ integration("account, progress, attempts, groups, marathon limit and password re
   result = await request("/api/account?action=progress");
   assert.deepEqual(result.data.progress.correct, []);
   assert.match(result.response.headers.get("cache-control"), /no-store/);
-  result = await request("/api/account?action=visibility", { method: "PUT", body: { firstName: true, lastName: true, church: false, progress: true } });
+  result = await request("/api/account?action=visibility", { method: "PUT", body: { firstName: true, lastName: true, church: false, progress: true, community: true } });
   assert.equal(result.data.user.visibility.progress, true);
   const communityResponse = await fetch(`${base}/api/community?q=Test%20Reader&pageSize=12`);
   assert.equal(communityResponse.status, 200);

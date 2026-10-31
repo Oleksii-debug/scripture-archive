@@ -29,7 +29,7 @@ class D1Test {
 }
 function fixture(mode){const dir=mkdtempSync(join(tmpdir(),'sa10-canonical-'));const file=join(dir,'test.sqlite');const db=new D1Test(file);
   db.db.exec(`PRAGMA journal_mode=${mode}`);db.db.exec(sqlTable('progress'));db.db.exec(sqlTable('profiles'));
-  for(const col of ['privacy_accepted_at text','public_first_name integer','public_last_name integer','public_church integer','public_progress integer','denomination text','sensitive_consent_version integer NOT NULL DEFAULT 0'])db.db.exec(`ALTER TABLE profiles ADD COLUMN ${col}`);
+  for(const col of ['privacy_accepted_at text','public_first_name integer','public_last_name integer','public_church integer','public_progress integer','public_community integer NOT NULL DEFAULT 0','denomination text','sensitive_consent_version integer NOT NULL DEFAULT 0'])db.db.exec(`ALTER TABLE profiles ADD COLUMN ${col}`);
   db.close();return {file,dispose:()=>rmSync(dir,{recursive:true,force:true})};
 }
 function worker(db){const exports={};vm.runInNewContext(compiled.outputText,{exports,require(id){
@@ -56,12 +56,12 @@ for(const mode of ['DELETE','WAL']){
       assert.equal(me.body.user.sensitiveConsent,false);
       assert.equal(me.body.user.visibility.church,false);
       assert.equal(db.db.prepare("SELECT church FROM profiles WHERE user_id='reader-a'").get().church,'Legacy church','migration must preserve historical data');
-      let visibility=await call(api,'visibility','PUT',{firstName:false,lastName:false,church:true,progress:false});
+      let visibility=await call(api,'visibility','PUT',{firstName:false,lastName:false,church:true,progress:false,community:false});
       assert.equal(visibility.body.user.visibility.church,false);
       const renewed=await call(api,'sensitive-consent','PUT',{acceptSensitive:true,tradition:'other',denomination:'Legacy',church:'Legacy church'});
       assert.equal(renewed.body.user.sensitiveConsent,true);
       assert.equal(renewed.body.user.visibility.church,false,'renewed consent alone must not publish');
-      visibility=await call(api,'visibility','PUT',{firstName:false,lastName:false,church:true,progress:false});
+      visibility=await call(api,'visibility','PUT',{firstName:false,lastName:false,church:true,progress:false,community:false});
       assert.equal(visibility.body.user.visibility.church,true);
       db.close();
     }finally{f.dispose()}
@@ -103,7 +103,7 @@ for(const mode of ['DELETE','WAL']){
       const profile={firstName:'Synthetic',lastName:'Reader',ageRange:'25-34',acceptPrivacy:true,locale:'ru'};
       db.failNext=true;assert.equal((await call(api,'profile','PUT',profile)).status,503);
       assert.equal((await call(api,'profile','PUT',profile)).body.user.locale,'ru');
-      db.failNext=true;assert.equal((await call(api,'visibility','PUT',{firstName:true,lastName:false,church:false,progress:false})).status,503);
+      db.failNext=true;assert.equal((await call(api,'visibility','PUT',{firstName:true,lastName:false,church:false,progress:false,community:false})).status,503);
       db.close();
     }finally{f.dispose()}
   });
@@ -215,7 +215,7 @@ for (const mode of ['DELETE', 'WAL']) {
     const f=fixture(mode);
     try {
       const db=new D1Test(f.file),api=worker(db);
-      const payload={firstName:true,lastName:false,church:false,progress:true};
+      const payload={firstName:true,lastName:false,church:false,progress:true,community:true};
       const missing=await call(api,'visibility','PUT',payload);
       assert.equal(missing.status,409,'missing profile must not ACK a non-applied UPDATE');
       assert.equal(missing.body.error,'profile_not_found');

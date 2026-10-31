@@ -64,7 +64,7 @@ function fixture() {
   }
   return { post, calls };
 }
-const valid = { firstName: true, lastName: false, church: true, progress: false };
+const valid = { firstName: true, lastName: false, church: true, progress: false, community: true };
 for (const key of Object.keys(valid)) {
   test("missing " + key + " refuses a partial visibility snapshot", async () => {
     const h = fixture();
@@ -95,14 +95,20 @@ for (const value of [true, 42, "text", [], null, {}, { ...valid, extra: true }])
     assert.equal(h.calls.writes.length, 0);
   });
 }
-for (const payload of [valid, { firstName: false, lastName: true, church: false, progress: true }]) {
-  test("complete boolean snapshot still saves exactly four intended flags", async () => {
+test("community opt-in without either public name is refused before D1", async () => {
+  const h=fixture(),res=await h.post({firstName:false,lastName:false,church:false,progress:false,community:true});
+  assert.equal(res.status,400);
+  assert.equal(res.data.error,"invalid_visibility");
+  assert.equal(h.calls.writes.length,0);
+});
+for (const payload of [valid, { firstName: false, lastName: true, church: false, progress: true, community: false }]) {
+  test("complete boolean snapshot saves exactly five intended flags", async () => {
     const h = fixture();
     const res = await h.post(payload);
     assert.equal(res.status, 200);
     assert.equal(h.calls.writes.length, 1);
-    assert.deepEqual(h.calls.writes[0].values.slice(0, 4),
-      [payload.firstName, payload.lastName, payload.church, payload.progress].map(Boolean).map(Number));
-    assert.equal(h.calls.writes[0].values[4], "ada");
+    assert.deepEqual(h.calls.writes[0].values.slice(0, 5),
+      [payload.firstName, payload.lastName, payload.church, payload.progress, payload.community].map(Boolean).map(Number));
+    assert.equal(h.calls.writes[0].values[5], "ada");
   });
 }

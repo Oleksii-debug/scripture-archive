@@ -5,6 +5,10 @@
 
 ## Перевірені вузькі закриття (не закриття батьківського розділу)
 
+- **SA-EXT-01 — сирі Unicode-контролі в джерелах/ліцензіях Біблії:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` лише для точної URI-цілісності канонічної читальні й сторінки видань. [PR #839](https://github.com/Oleksii-debug/scripture-archive/pull/839) **MERGED** у `main@d43111e214afdad45e6d35fadf9ebca9a88433eb`; exact-head [Actions #41167858860](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41167858860) **SUCCESS**; [термінальна квитанція](roadmap/SA_EXT_01_RAW_SOURCE_LICENSE_UNICODE_SCOPED_TERMINAL_20261031.md). **Батьківський SA-EXT-01 OPEN; live/Sites/Windows/NVDA NOT_VERIFIED**, деплою немає.
+
+
+
 - **SA-EXT-16 — точний рахунок створених учасників спільноти:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` лише для `community_waves.created_count` після успішного member INSERT. [PR #838](https://github.com/Oleksii-debug/scripture-archive/pull/838) злито в `main@ed3b9daca87bb7a75e8f79fbabb3a646e61cc99a`, [CI #41167678710](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41167678710) SUCCESS. [Квитанція](roadmap/SA_EXT_16_COMMUNITY_WAVE_MEMBER_INSERT_SCOPED_TERMINAL_20261031.md). Батьківський SA-EXT-16 OPEN, реліз не виконано.
 
 - **SA-EXT-16 — owner-керування спільнотою та D1-readback:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` для fail-closed START/PAUSE/RESUME/STOP та точного owner snapshot. [PR #835](https://github.com/Oleksii-debug/scripture-archive/pull/835) і [#836](https://github.com/Oleksii-debug/scripture-archive/pull/836) злиті в `main@0a84164bbad224a9cf85ff0726865371fa5ac660`; обидві native CI SUCCESS. [Квитанція](roadmap/SA_EXT_16_COMMUNITY_OWNER_D1_ACK_SCOPED_TERMINAL_20261031.md). Повний SA-EXT-16 і реліз OPEN.

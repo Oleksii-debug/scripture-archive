@@ -122,7 +122,7 @@ test('the public dossier workspace uses the shared catalog and actual source-gra
   assert.match(source,/import\s*\{[^}]*\bdossierMarkup\b[^}]*\}\s*from\s*['"]\.\/scripture-dossiers\.js['"]/);
   assert.match(source,/if\(name==='dossiers'\)/);
   assert.match(source,/const catalog=await c\.getCatalog\(\)/);
-  assert.match(source,/dossierMarkup\(catalog,state\.lang,selectedId,esc,searchQuery\)/);
+  assert.match(source,/dossierMarkup\(catalog,state\.lang,selectedId,esc,searchQuery,compareId\)/);
   assert.match(source,/get\('q'\)/,'the real dossier route passes native GET search queries');
 });
 

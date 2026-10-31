@@ -226,3 +226,5 @@ body{background:linear-gradient(180deg,#f8f6f0 0,#eef2f1 58%,#f8f6f0 100%)}
 .library-search-more[hidden]{display:none}
 .library-search{max-width:42rem;margin:1.5rem 0}
 .library-search-results>.card,.library-search-results section>.card{margin:1rem 0}
+
+.meeting-notes-editor{grid-column:1/-1}.meeting-notes-editor summary{cursor:pointer;padding:.5rem 0}.session-row h3{margin:0;font-size:1rem}

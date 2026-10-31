@@ -356,7 +356,11 @@ export async function GET(request: Request) {
   if (!attempt) return json({ error: "attempt_not_found" }, 404);
   if (attempt.status === "invalidated") return json({ error: "attempt_invalidated" }, 409);
   if (attempt.status === "completed") return completedResponse(attempt);
-  if (attempt.status === "grading") return json({ grading: true });
+  if (attempt.status === "grading") {
+    // A stored row from a different mission must not be projected as current mission progress.
+    if (attempt.mission_id !== MISSION_ID) return json({ error: "attempt_state_invalid" }, 409);
+    return json({ grading: true });
+  }
   // Unknown/corrupt lifecycle states must never fall through to live task
   // disclosure. Only an explicitly active attempt can expose its next task.
   if (attempt.status !== "active") return json({ error: "attempt_state_invalid" }, 409);
@@ -485,6 +489,8 @@ export async function POST(request: Request) {
     if (attemptId === null) return json({ error: "attempt_not_found" }, 404);
     const { attempt } = await ownedAttempt(request, attemptId);
     if (!attempt) return json({ error: "attempt_not_found" }, 404);
+    // The chapter-opened/invalidate API may only mutate its own mission.
+    if (attempt.mission_id !== MISSION_ID) return json({ error: "attempt_state_invalid" }, 409);
     if (attempt.status === "active") {
       const invalidated = await env.DB.prepare("UPDATE mission_attempts SET status='invalidated',invalidated_at=CURRENT_TIMESTAMP,invalidation_reason=? WHERE id=? AND status='active'")
         .bind(clean(body.reason, 80) || "chapter_opened", attempt.id).run();

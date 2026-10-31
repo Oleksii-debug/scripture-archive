@@ -149,9 +149,17 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
         if (chapterCharacters>131072) throw Error('oversized edition chapter');
       }
       // Never attribute a new/unrecognized local edition to the primary one.
-      const fallback=catalog.editions?.[lang];
-      const declared=Object.prototype.hasOwnProperty.call(catalog.translations || {}, edition.id);
-      const translation=declared ? catalog.translations[edition.id] : null;
+      // Source claims are authoritative only when owned by the catalog and
+      // its named edition/translation map. An inherited locale or map could
+      // silently attach another publisher's rights to genuine loaded verses.
+      const ownMap = key => catalog && Object.hasOwn(catalog,key) &&
+        catalog[key] && typeof catalog[key] === 'object' && !Array.isArray(catalog[key])
+        ? catalog[key] : null;
+      const editionMap=ownMap('editions');
+      const translationMap=ownMap('translations');
+      const fallback=editionMap && Object.hasOwn(editionMap,lang) ? editionMap[lang] : null;
+      const declared=Boolean(translationMap && Object.hasOwn(translationMap,edition.id));
+      const translation=declared ? translationMap[edition.id] : null;
       // A declared but mismatched identity must not borrow another edition's
       // licence and attribute that edition's loaded verses to a false source.
       const metadata=declared ? (translation?.id === edition.id ? translation : null)

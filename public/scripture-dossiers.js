@@ -196,7 +196,10 @@ export function searchScriptureDossiers(language,value,catalog=null) {
   if(rangeQuery){
     const requestedBook=rangeQuery[1],chapter=Number(rangeQuery[2]);
     const first=Number(rangeQuery[3]),last=Number(rangeQuery[4]);
-    if(last<first)return [];
+    // A pasted range is a reader citation, not a broad textual match.
+    // Do not return unrelated-looking sources for verses the canonical
+    // Bible reader cannot display (max 256 verses per chapter).
+    if(chapter>200 || first>256 || last>256 || last<first)return [];
     const cited=source=>(normalize(source.book)===requestedBook ||
       (bookNames.has(source.book) && normalize(bookNames.get(source.book))===requestedBook)) &&
       source.chapter===chapter && source.first<=last && first<=source.last;

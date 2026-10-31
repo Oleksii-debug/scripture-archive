@@ -133,6 +133,14 @@ export async function GET(request: Request) {
   // details and mine remain fully authenticated and fail closed on auth errors.
   const id = (groupId || url.searchParams.get("mine") === "1")
     ? await authenticateRequest(request) : null;
+  if(url.searchParams.get('action')==='name-visibility') {
+    if(!id)return forbidden();
+    if(!groupId||url.searchParams.get('groupId')!==groupId)return Response.json({error:'invalid_group'},{status:400});
+    const row=await env.DB!.prepare('SELECT public_name FROM home_group_members WHERE group_id=? AND user_id=?').bind(groupId,id.userId).first<{public_name:number}>();
+    if(!row)return Response.json({error:'not_found'},{status:404});
+    if(row.public_name!==0&&row.public_name!==1)return unavailableWrite();
+    return Response.json({publicName:row.public_name===1},{headers:{'Cache-Control':'no-store, private'}});
+  }
   if (groupId) {
     const member = id ? await membership(groupId, id.userId) : null;
     const row = await env.DB!.prepare(`${groupSelect} WHERE g.id=? AND (g.visibility='public' OR ?=1)`).bind(groupId, member ? 1 : 0).first<Row>();
@@ -175,6 +183,17 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null) as Row | null;
   if (!body) return Response.json({ error: "invalid_json" }, { status: 400 });
   const action = new URL(request.url).searchParams.get("action") || "create";
+
+  if(action==='name-visibility') {
+    const groupId=body.groupId;
+    if(typeof groupId!=='string'||!groupId||groupId.length>80||groupId.trim()!==groupId||typeof body.publicName!=='boolean'||typeof body.expectedPublicName!=='boolean')
+      return Response.json({error:'invalid_name_visibility'},{status:400});
+    const saved=await env.DB.prepare('UPDATE home_group_members SET public_name=? WHERE group_id=? AND user_id=? AND public_name=?')
+      .bind(body.publicName?1:0,groupId,id.userId,body.expectedPublicName?1:0).run();
+    if(!acknowledgedWrite(saved))return unavailableWrite();
+    if(saved.meta.changes!==1)return Response.json({error:'name_visibility_changed_or_membership_missing'},{status:409});
+    return Response.json({ok:true,publicName:body.publicName},{headers:{'Cache-Control':'no-store, private'}});
+  }
 
   if (action === "settings") {
     // Exact values make both the authored text and the conflict check lossless.

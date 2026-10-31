@@ -47,13 +47,14 @@ function fixture() {
   const exports=loadRoute('groups'),attempts=loadRoute('attempts');
   async function attempt(action,body={},user='carol') {const r=await attempts.POST(new Request('https://local.invalid/api/attempts?action='+action,{method:'POST',headers:{origin:'https://local.invalid','content-type':'application/json','x-user':user},body:JSON.stringify({missionId:'OT-AB-01',book:'GEN',chapter:12,groupId:'g',locale:'en',...body})}));return {status:r.status,data:await r.json()};}
   async function get(user='alice',groupId='g'){const r=await exports.GET(new Request('https://local.invalid/api/groups?groupId='+groupId,{headers:user?{'x-user':user}:{}}));return {status:r.status,data:await r.json()};}
+  async function nameChoice(user='alice',groupId='g'){const r=await exports.GET(new Request('https://local.invalid/api/groups?action=name-visibility&groupId='+encodeURIComponent(groupId),{headers:user?{'x-user':user}:{}}));return {status:r.status,data:await r.json(),cache:r.headers.get('cache-control')};}
   async function list(user='',mine=false){const r=await exports.GET(new Request('https://local.invalid/api/groups'+(mine?'?mine=1':''),{headers:user?{'x-user':user}:{}}));return {status:r.status,data:await r.json()};}
   async function post(action,body={},user='alice',origin='https://local.invalid') {const r=await exports.POST(new Request('https://local.invalid/api/groups?action='+action,{method:'POST',headers:{origin,'content-type':'application/json',...(user?{'x-user':user}:{})},body:JSON.stringify({groupId:'g',...body})}));return {status:r.status,data:await r.json()};}
   function seedAttempt(id,user,group,status='active') {
     db.prepare("INSERT INTO mission_attempts(id,actor_id,mission_id,book_id,chapter,group_id,locale,task_limit,status,expires_at) VALUES(?,?,'OT-AB-01','GEN',12,?,'en',5,?,datetime('now','+2 hours'))").run(id,user,group,status);
     db.prepare("INSERT INTO chapter_read_receipts(id,actor_id,book_id,chapter,group_id) VALUES(?,?,'GEN',12,?)").run(id,user,group);
   }
-  return {db,get,list,post,attempt,seedAttempt,beforeRun:fn=>{beforeRun=fn;},setFailure:n=>{failure=n;},beforeBatch:fn=>{beforeBatch=fn;},setCreateReceiptMode:mode=>{corruptCreateReceipt=mode;},setSingleReceiptMode:mode=>{corruptSingleReceipt=mode;},setReadFailure:v=>{failAll=v;},setReadThrow:v=>{throwAll=v;},setAuthFailure:v=>{throwAuth=v;}};
+  return {db,get,list,post,nameChoice,attempt,seedAttempt,beforeRun:fn=>{beforeRun=fn;},setFailure:n=>{failure=n;},beforeBatch:fn=>{beforeBatch=fn;},setCreateReceiptMode:mode=>{corruptCreateReceipt=mode;},setSingleReceiptMode:mode=>{corruptSingleReceipt=mode;},setReadFailure:v=>{failAll=v;},setReadThrow:v=>{throwAll=v;},setAuthFailure:v=>{throwAuth=v;}};
 }
 const owner=f=>f.db.prepare("SELECT owner_user_id FROM home_groups WHERE id='g'").get().owner_user_id;
 const roles=f=>f.db.prepare("SELECT user_id,role FROM home_group_members WHERE group_id='g' ORDER BY user_id").all().map(x=>[x.user_id,x.role]);
@@ -566,6 +567,55 @@ test('owner settings have native labelled controls, exact values and escaped des
     for(const key of ['name','church','country','city','description','visibility','rosterVisibility'])assert.ok(html.includes(`name="${key}"`));
     assert.ok(!groupManagementMarkup({membership:'member',group},lang,esc).includes('group-settings-form'));
   }
+});
+
+test('members can grant and revoke only their own public name without leaving the group',async()=>{
+  const f=fixture();try {
+    f.db.exec("UPDATE home_groups SET visibility='public',roster_visibility='names' WHERE id='g'; UPDATE home_group_members SET public_name=1 WHERE group_id='g' AND user_id='bob'");
+    assert.deepEqual((await f.nameChoice()).data,{publicName:false});
+    assert.match((await f.nameChoice()).cache,/private/);
+    assert.equal((await f.nameChoice('outsider')).status,404);assert.equal((await f.nameChoice('')).status,401);
+    assert.deepEqual((await f.get('outsider')).data.members.map(x=>x.display_name),['Bob']);
+    assert.equal((await f.post('name-visibility',{publicName:true,expectedPublicName:false})).status,200);
+    assert.deepEqual((await f.get('outsider')).data.members.map(x=>x.display_name),['Alice','Bob']);
+    assert.equal((await f.post('name-visibility',{publicName:false,expectedPublicName:true,targetUserId:'bob'})).status,200);
+    assert.deepEqual((await f.get('outsider')).data.members.map(x=>x.display_name),['Bob']);
+    assert.equal((await f.get()).data.membership,'owner');
+    assert.equal((await f.post('name-visibility',{publicName:false,expectedPublicName:true},'bob')).status,200);
+    assert.equal((await f.get('bob')).data.membership,'member');
+    assert.deepEqual((await f.get('outsider')).data.members,[]);
+  }finally{f.db.close();}
+});
+
+test('name visibility rejects stale edits, absent membership and invalid consent values',async()=>{
+  const f=fixture();try {
+    for(const publicName of ['true','false',1,0,null,[],{}])assert.equal((await f.post('name-visibility',{publicName,expectedPublicName:false})).status,400);
+    assert.equal((await f.post('name-visibility',{publicName:true})).status,400);
+    assert.equal((await f.post('name-visibility',{publicName:true,expectedPublicName:false},'outsider')).status,409);
+    assert.equal((await f.post('name-visibility',{publicName:true,expectedPublicName:false},'')).status,401);
+    assert.equal((await f.post('name-visibility',{publicName:true,expectedPublicName:false},'alice','https://evil.invalid')).status,403);
+    assert.equal((await f.post('name-visibility',{publicName:true,expectedPublicName:false})).status,200);
+    assert.equal((await f.post('name-visibility',{publicName:false,expectedPublicName:false})).status,409);
+    assert.equal((await f.nameChoice()).data.publicName,true);
+    f.beforeRun(()=>f.db.exec("DELETE FROM home_group_members WHERE group_id='g' AND user_id='bob'"));
+    assert.equal((await f.post('name-visibility',{publicName:true,expectedPublicName:false},'bob')).status,409);
+    assert.equal((await f.nameChoice('bob')).status,404);
+  }finally{f.db.close();}
+});
+
+test('name-visibility read corruption and unconfirmed writes fail closed',async()=>{
+  const f=fixture();try {
+    f.db.exec("UPDATE home_group_members SET public_name=2 WHERE group_id='g' AND user_id='alice'");
+    assert.equal((await f.nameChoice()).status,503);
+    f.db.exec("UPDATE home_group_members SET public_name=0 WHERE group_id='g' AND user_id='alice'");
+    f.setSingleReceiptMode('missing');assert.equal((await f.post('name-visibility',{publicName:true,expectedPublicName:false})).status,503);
+    assert.equal((await f.nameChoice()).data.publicName,true);
+    f.beforeRun(()=>{throw Error('storage outage');});
+    assert.equal((await f.post('name-visibility',{publicName:false,expectedPublicName:true})).status,503);
+    assert.equal((await f.nameChoice()).data.publicName,true);
+    f.db.exec("DELETE FROM profiles WHERE user_id='alice'");
+    assert.equal((await f.post('name-visibility',{publicName:false,expectedPublicName:true})).status,200,'profile loss must not prevent privacy withdrawal');
+  }finally{f.db.close();}
 });
 
 test('group IDs and invite/role targets preserve exact identity rather than trimming to another record',async()=>{

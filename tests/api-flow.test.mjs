@@ -522,12 +522,20 @@ integration("account, progress, attempts, groups, marathon limit and password re
     return fetch(`${base}/api/groups?action=${action}`, {method:'POST',headers:{Cookie:ownerCookie,Origin:base,'Content-Type':'application/json'},body:JSON.stringify(body)});
   }
   assert.equal((await managerGroup('join',{inviteCode:lifecycleInvite})).status,200);
-  const editedSettings={...lifecycleSettings,name:'Updated group',description:'Full description\nSecond line',visibility:'public',city:'Kyiv'};
+  const editedSettings={...lifecycleSettings,name:'Updated group',description:'Full description\nSecond line',visibility:'public',rosterVisibility:'names',city:'Kyiv'};
   assert.equal((await managerGroup('settings',{groupId:lifecycleId,expected:lifecycleSettings,settings:editedSettings})).status,409);
   result=await request('/api/groups?action=settings',{method:'POST',body:{groupId:lifecycleId,expected:lifecycleSettings,settings:editedSettings}});
   assert.equal(result.response.status,200);
   const visitorSettings=await (await fetch(`${base}/api/groups?groupId=${lifecycleId}`)).json();
   assert.equal(visitorSettings.group.name,'Updated group');assert.equal(visitorSettings.group.description,editedSettings.description);
+  assert.equal(visitorSettings.members.length,0);
+  const memberNameChoice=await (await fetch(`${base}/api/groups?action=name-visibility&groupId=${lifecycleId}`,{headers:{Cookie:ownerCookie}})).json();
+  assert.equal(memberNameChoice.publicName,false);
+  assert.equal((await managerGroup('name-visibility',{groupId:lifecycleId,publicName:true,expectedPublicName:false})).status,200);
+  assert.equal((await (await fetch(`${base}/api/groups?groupId=${lifecycleId}`)).json()).members.length,1);
+  assert.equal((await managerGroup('name-visibility',{groupId:lifecycleId,publicName:false,expectedPublicName:true})).status,200);
+  assert.equal((await (await fetch(`${base}/api/groups?groupId=${lifecycleId}`)).json()).members.length,0);
+
   result=await request('/api/groups?action=settings',{method:'POST',body:{groupId:lifecycleId,expected:lifecycleSettings,settings:editedSettings}});
   assert.equal(result.response.status,409,'a stale editor cannot overwrite new metadata');
   result=await request('/api/groups?action=settings',{method:'POST',body:{groupId:lifecycleId,expected:editedSettings,settings:{...editedSettings,visibility:'private'}}});

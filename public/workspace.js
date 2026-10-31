@@ -113,15 +113,65 @@ export function groupSettingsMarkup(group,w,esc){
   const select=(key,label,options)=>`<label class="account-field"><span>${label}</span><select name="${key}">${options.map(([value,text])=>`<option value="${value}"${group[key]===value?' selected':''}>${text}</option>`).join('')}</select></label>`;
   return `<details class="card"><summary id="group-settings-summary">${w.settings}</summary><p>${w.settingsHelp}</p><form id="group-settings-form" class="account-form account-form-grid">${input('name',100,true)}${input('church',160)}${input('country',80)}${input('city',80)}<label class="account-field full"><span>${w.description}</span><textarea name="description" maxlength="600" rows="4">${esc(group.description??'')}</textarea></label>${select('visibility',w.visibility,[['private',w.private],['public',w.public]])}${select('rosterVisibility',w.roster,[['private',w.hidden],['count',w.count],['names',w.names]])}<button class="button primary" type="submit">${w.saveSettings}</button><button class="button" type="button" id="reload-group-settings">${w.reloadSettings}</button><p id="group-settings-status" role="status" aria-live="polite"></p></form></details>`;
 }
-export function groupManagementCopy(lang){return {...(GROUP_MANAGE[lang]||GROUP_MANAGE.uk),...(GROUP_ROLES[lang]||GROUP_ROLES.uk),...(GROUP_SETTINGS[lang]||GROUP_SETTINGS.uk)};}
+const GROUP_NAME_COPY={
+  uk:{namePrivacy:'Моє ім’я у групі',namePrivacyHelp:'Показувати моє ім’я відвідувачам, якщо власник увімкне публічний список учасників. Власник групи бачить ваше ім’я для керування участю навіть без цієї згоди.',namePrivacyLabel:'Дозволяю показувати моє ім’я у публічному списку',namePrivacySave:'Зберегти вибір',namePrivacyLoading:'Завантаження поточного вибору…',namePrivacySaved:'Вибір збережено.',namePrivacyError:'Не вдалося підтвердити поточний вибір. Завантажте дані ще раз перед збереженням.',namePrivacyConflict:'Вибір або членство вже змінилися. Завантажте поточні дані.',namePrivacyReload:'Завантажити поточний вибір'},
+  ru:{namePrivacy:'Моё имя в группе',namePrivacyHelp:'Показывать моё имя посетителям, если владелец включит публичный список участников. Владелец группы видит ваше имя для управления участием даже без этого согласия.',namePrivacyLabel:'Разрешаю показывать моё имя в публичном списке',namePrivacySave:'Сохранить выбор',namePrivacyLoading:'Загрузка текущего выбора…',namePrivacySaved:'Выбор сохранён.',namePrivacyError:'Не удалось подтвердить текущий выбор. Загрузите данные ещё раз перед сохранением.',namePrivacyConflict:'Выбор или членство уже изменились. Загрузите текущие данные.',namePrivacyReload:'Загрузить текущий выбор'},
+  en:{namePrivacy:'My name in this group',namePrivacyHelp:'Show my name to visitors if the owner enables the public member list. The group owner can still see your name to manage membership without this permission.',namePrivacyLabel:'Allow my name in the public member list',namePrivacySave:'Save choice',namePrivacyLoading:'Loading your current choice…',namePrivacySaved:'Choice saved.',namePrivacyError:'Your current choice could not be confirmed. Reload it before saving.',namePrivacyConflict:'Your choice or membership has changed. Reload the current data.',namePrivacyReload:'Load current choice'},
+};
+function groupNamePrivacyMarkup(w){
+  return `<section class="card"><h2>${w.namePrivacy}</h2><p>${w.namePrivacyHelp}</p><form id="group-name-privacy-form" class="account-form"><label class="account-check"><input name="publicName" type="checkbox" disabled><span>${w.namePrivacyLabel}</span></label><button class="button" type="submit" disabled>${w.namePrivacySave}</button><button class="button" type="button" data-reload-name>${w.namePrivacyReload}</button><p role="status" data-name-status>${w.namePrivacyLoading}</p></form></section>`;
+}
+export function mountGroupNamePrivacy(form,{request,groupId,copy,isCurrent,onSaved}){
+  const checkbox=form.querySelector('[name="publicName"]'),save=form.querySelector('[type="submit"]'),reload=form.querySelector('[data-reload-name]'),status=form.querySelector('[data-name-status]');
+  let expected=null,busy=false;
+  const current=()=>form.isConnected!==false&&isCurrent();
+  function controls(){if(!current())return;checkbox.disabled=busy||expected===null;save.disabled=busy||expected===null;reload.disabled=busy;}
+  async function load(){
+    if(busy||!current())return;
+    const doc=form.ownerDocument,restore=doc?.activeElement===reload;
+    busy=true;expected=null;controls();status.textContent=copy.namePrivacyLoading;
+    try {
+      const result=await request('name-visibility','GET',undefined,`groupId=${encodeURIComponent(groupId)}`);
+      if(!current())return;
+      if(typeof result?.publicName!=='boolean')throw Error('unconfirmed');
+      expected=result.publicName;checkbox.checked=expected;status.textContent='';
+    } catch {if(current())status.textContent=copy.namePrivacyError;}
+    finally {
+      busy=false;controls();
+      if(restore&&current()&&(doc.activeElement===reload||doc.activeElement===doc.body))reload.focus({preventScroll:true});
+    }
+  }
+  form.onsubmit=async event=>{
+    event.preventDefault();
+    if(busy||expected===null||!current())return;
+    const chosen=checkbox.checked,doc=form.ownerDocument,restore=doc?.activeElement===save;
+    busy=true;controls();status.textContent='';
+    try {
+      const result=await request('name-visibility','POST',{groupId,publicName:chosen,expectedPublicName:expected});
+      if(!current())return;
+      if(result?.ok!==true||result.publicName!==chosen)throw Error('unconfirmed');
+      expected=chosen;
+      await onSaved?.();
+      if(current())status.textContent=copy.namePrivacySaved;
+    } catch(error) {
+      if(current()) {expected=null;status.textContent=error.message==='name_visibility_changed_or_membership_missing'?copy.namePrivacyConflict:copy.namePrivacyError;}
+    } finally {
+      busy=false;controls();
+      if(restore&&current()&&(doc.activeElement===save||doc.activeElement===doc.body))(save.disabled?reload:save).focus({preventScroll:true});
+    }
+  };
+  reload.onclick=load;
+  return {ready:load()};
+}
+export function groupManagementCopy(lang){return {...(GROUP_MANAGE[lang]||GROUP_MANAGE.uk),...(GROUP_ROLES[lang]||GROUP_ROLES.uk),...(GROUP_SETTINGS[lang]||GROUP_SETTINGS.uk),...(GROUP_NAME_COPY[lang]||GROUP_NAME_COPY.uk)};}
 export function groupManagementMarkup(data,lang,esc){
   const w=groupManagementCopy(lang);
   if(!data.membership)return '';
-  if(data.membership!=='owner')return `<section class="card"><h2>${w.title}</h2><p>${w.leaveHelp}</p><button class="button" id="leave-group">${w.leave}</button><p id="group-manage-status" role="status"></p></section>`;
+  if(data.membership!=='owner')return `${groupNamePrivacyMarkup(w)}<section class="card"><h2>${w.title}</h2><p>${w.leaveHelp}</p><button class="button" id="leave-group">${w.leave}</button><p id="group-manage-status" role="status"></p></section>`;
   const candidates=(data.managementMembers||[]).filter(member=>['member','facilitator'].includes(member.role));
   const transfer=candidates.length?`<form id="transfer-group" class="account-form"><label class="account-field"><span>${w.transferLabel}</span><select name="targetUserId" required>${candidates.map(member=>`<option value="${esc(member.user_id)}">${esc(member.display_name)}</option>`).join('')}</select></label><button class="button">${w.transfer}</button></form>`:`<p>${w.noMembers}</p>`;
   const roles=candidates.length?`<h3>${w.roles}</h3><p>${w.roleHelp}</p><ul>${candidates.map(member=>`<li><strong>${esc(member.display_name)}</strong> <button type="button" class="button group-role-button" data-user-id="${esc(member.user_id)}" data-role="${esc(member.role)}" aria-label="${esc((member.role==='facilitator'?w.demote:w.promote)+': '+member.display_name)}">${member.role==='facilitator'?w.demote:w.promote}</button></li>`).join('')}</ul>`:'';
-  return `${groupSettingsMarkup(data.group,w,esc)}<section class="card"><h2>${w.title}</h2><h3>${w.transferTitle}</h3><p>${w.transferHelp}</p>${transfer}${roles}<h3>${w.rotate}</h3><p>${w.rotateHelp}</p><button type="button" class="button" id="rotate-group-invite">${w.rotate}</button><details class="danger-zone"><summary>${w.delete}</summary><p>${w.deleteHelp}</p><button class="button" id="delete-group">${w.delete}</button></details><p id="group-manage-status" role="status"></p></section>`;
+  return `${groupNamePrivacyMarkup(w)}${groupSettingsMarkup(data.group,w,esc)}<section class="card"><h2>${w.title}</h2><h3>${w.transferTitle}</h3><p>${w.transferHelp}</p>${transfer}${roles}<h3>${w.rotate}</h3><p>${w.rotateHelp}</p><button type="button" class="button" id="rotate-group-invite">${w.rotate}</button><details class="danger-zone"><summary>${w.delete}</summary><p>${w.deleteHelp}</p><button class="button" id="delete-group">${w.delete}</button></details><p id="group-manage-status" role="status"></p></section>`;
 }
 
 const HISTORY = {

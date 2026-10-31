@@ -1,6 +1,6 @@
 import { parallelControls, mountParallelReader, safeProvenanceHttpsUrl } from './parallel-reader.js';
 import {routeSourceFromLocation, legacyRouteHashChanged} from './route-location.js';
-import {renderWorkspace, workspaceCopy, groupManagementCopy, groupManagementMarkup} from './workspace.js';
+import {renderWorkspace, workspaceCopy, groupManagementCopy, groupManagementMarkup, mountGroupNamePrivacy} from './workspace.js';
 import {supportSection} from './support.js';
 import {homePage} from './home.js';
 import {EDITIONS, editionCopy, selectedEdition, editionUrl, editionSelect, setEditionForTab} from './editions.js';
@@ -3471,10 +3471,19 @@ async function renderGroup(groupId) {
     )
     .join("");
   shell(
-    `<article class="group-detail"><header class="group-detail-head">${groupStatus(group)}<p class="eyebrow">${t("groups")}</p><h1>${esc(group.name)}</h1><p class="lead">${esc(group.description || group.church || "")}</p><p>${[group.church, group.city, group.country].filter(Boolean).map(esc).join(" · ")}</p>${group.inviteCode ? `<div class="invite-code"><span>${t("inviteCode")}</span><strong>${esc(group.inviteCode)}</strong></div>` : ""}</header>${groupMetrics(group)}<div class="group-detail-grid"><section class="card reading-target"><p class="eyebrow">${t("readingTarget")}</p><h2 id="reading-preview">${esc(bookTitle(books[0]))} 12</h2><p>${t("discussionRoute")}</p><div class="target-controls"><select id="target-book">${bookOptions}</select><input id="target-chapter" aria-label="${t("chapter")}" type="number" min="1" max="200" value="12"></div><div class="action-row"><a class="button primary" id="chapter-link" href="/reader/${books[0].code}/12/group/${encodeURIComponent(group.id)}">${t("openChapter")}</a></div></section><section class="card cohort-card"><p class="eyebrow">${t("cohort")}</p><h2>${group.weeklyGoal} · ${t("weeklyGoal").toLocaleLowerCase(state.lang)}</h2><p>${group.catchupMode === "steady" ? t("steady") : t("flexible")}</p><p>${t("cohortNeed")}</p></section></div>${names ? `<section class="card member-list"><h2>${t("members")}</h2><ul>${names}</ul></section>` : ""}${record}${groupManagementMarkup(data,state.lang,esc)}<section class="groups-section"><div class="section-head"><div><p class="eyebrow">${t("meetings")}</p><h2>${t("recentMeetings")}</h2></div></div>${sessions || `<div class="notice info">${t("noMeetings")}</div>`}</section><section class="groups-section"><div class="section-head"><div><p class="eyebrow">${t("cohort")}</p><h2>${t("cohortPeers")}</h2></div><p>${t("cohortExplain")}</p></div><div class="peer-table">${peers}</div></section></article>`,
+    `<article class="group-detail"><header class="group-detail-head">${groupStatus(group)}<p class="eyebrow">${t("groups")}</p><h1>${esc(group.name)}</h1><p class="lead">${esc(group.description || group.church || "")}</p><p>${[group.church, group.city, group.country].filter(Boolean).map(esc).join(" · ")}</p>${group.inviteCode ? `<div class="invite-code"><span>${t("inviteCode")}</span><strong>${esc(group.inviteCode)}</strong></div>` : ""}</header>${groupMetrics(group)}<div class="group-detail-grid"><section class="card reading-target"><p class="eyebrow">${t("readingTarget")}</p><h2 id="reading-preview">${esc(bookTitle(books[0]))} 12</h2><p>${t("discussionRoute")}</p><div class="target-controls"><select id="target-book">${bookOptions}</select><input id="target-chapter" aria-label="${t("chapter")}" type="number" min="1" max="200" value="12"></div><div class="action-row"><a class="button primary" id="chapter-link" href="/reader/${books[0].code}/12/group/${encodeURIComponent(group.id)}">${t("openChapter")}</a></div></section><section class="card cohort-card"><p class="eyebrow">${t("cohort")}</p><h2>${group.weeklyGoal} · ${t("weeklyGoal").toLocaleLowerCase(state.lang)}</h2><p>${group.catchupMode === "steady" ? t("steady") : t("flexible")}</p><p>${t("cohortNeed")}</p></section></div><section id="group-public-names" class="card member-list"${names?'':' hidden'}><h2>${t("members")}</h2><ul>${names}</ul></section>${record}${groupManagementMarkup(data,state.lang,esc)}<section class="groups-section"><div class="section-head"><div><p class="eyebrow">${t("meetings")}</p><h2>${t("recentMeetings")}</h2></div></div>${sessions || `<div class="notice info">${t("noMeetings")}</div>`}</section><section class="groups-section"><div class="section-head"><div><p class="eyebrow">${t("cohort")}</p><h2>${t("cohortPeers")}</h2></div><p>${t("cohortExplain")}</p></div><div class="peer-table">${peers}</div></section></article>`,
   );
   const manageCopy = groupManagementCopy(state.lang);
   const manageStatus = document.querySelector('#group-manage-status');
+  const namePrivacyForm=document.querySelector('#group-name-privacy-form');
+  if(namePrivacyForm)mountGroupNamePrivacy(namePrivacyForm,{request:groupRequest,groupId:group.id,copy:manageCopy,isCurrent:()=>groupPageCurrent(`groups/${groupId}`,principal),onSaved:async()=>{
+    const refreshed=await groupRequest('', 'GET', undefined, `groupId=${encodeURIComponent(group.id)}`);
+    if(namePrivacyForm.isConnected===false||!groupPageCurrent(`groups/${groupId}`,principal))return;
+    if(!Array.isArray(refreshed?.members))throw Error('unconfirmed_roster');
+    const roster=document.querySelector('#group-public-names');
+    if(roster){roster.hidden=refreshed.members.length===0;roster.querySelector('ul').innerHTML=refreshed.members.map(member=>`<li>${esc(member.display_name)} <span>· ${esc(member.role)}</span></li>`).join('');}
+  }});
+
   async function manageGroup(action, payload, button, successText) {
     if(button?.isConnected===false||!groupPageCurrent(`groups/${groupId}`,principal))return;
     button.disabled = true;

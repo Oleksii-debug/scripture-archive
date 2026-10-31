@@ -4,7 +4,7 @@ import { communityDeploymentReady } from "../lib/community-smoke.mjs";
 
 function deployed(url){
   const path=new URL(url).pathname;
-  if(path==="/api/community")return Response.json({summary:{registered:0,online:0}});
+  if(path==="/api/community")return Response.json({summary:{registered:0,online:0}},{headers:{"Cache-Control":"no-store"}});
   if(path==="/api/community/dispatch")return new Response(null,{status:204,headers:{"Cache-Control":"no-store","X-Scripture-Runner-Protocol":"github-oidc-v1"}});
   if(path==="/api/account")return Response.json({user:null},{headers:{"Cache-Control":"no-store, private"}});
   if(path==="/robots.txt")return new Response("User-agent: *\nSitemap: https://scripture-archive.com/sitemap.xml");
@@ -69,7 +69,7 @@ test("successful but impossible public counters never qualify automatic communit
     const ready = await communityDeploymentReady("https://scripture-archive.com", async (url, options) => {
       seen.push(options.method || "GET");
       return new URL(url).pathname === "/api/community"
-        ? Response.json({summary}) : deployed(url);
+        ? Response.json({summary}, {headers:{"Cache-Control":"no-store"}}) : deployed(url);
     });
     assert.equal(ready, false, JSON.stringify(summary));
     assert.deepEqual(seen, Array(6).fill("GET"), "readiness must never mutate or POST");
@@ -82,7 +82,7 @@ test("transient corrupt summary recovers only after a coherent new read", async 
   const fetcher = async (url, options) => {
     seen.push(options.method || "GET");
     return new URL(url).pathname === "/api/community"
-      ? Response.json({summary: corrupt ? {registered: 0, online: 1} : {registered: 3, online: 2}})
+      ? Response.json({summary: corrupt ? {registered: 0, online: 1} : {registered: 3, online: 2}}, {headers:{"Cache-Control":"no-store"}})
       : deployed(url);
   };
   assert.equal(await communityDeploymentReady("https://scripture-archive.com", fetcher), false);

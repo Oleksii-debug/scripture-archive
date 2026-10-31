@@ -93,14 +93,14 @@ test('answer cursor only advances after the immediately preceding answer INSERT'
 
   const db = new DatabaseSync(':memory:');
   try {
-    db.exec(\`CREATE TABLE mission_attempts (
+    db.exec(`CREATE TABLE mission_attempts (
       id TEXT PRIMARY KEY, status TEXT, current_index INTEGER, expires_at TEXT
     );
     CREATE TABLE mission_attempt_answers (
       attempt_id TEXT, task_id TEXT, selected_json TEXT, is_correct INTEGER,
       PRIMARY KEY (attempt_id, task_id)
     );
-    INSERT INTO mission_attempts VALUES ('attempt', 'active', 0, '2999-01-01');\`);
+    INSERT INTO mission_attempts VALUES ('attempt', 'active', 0, '2999-01-01');`);
     const state = () => ({ ...db.prepare("SELECT status,current_index FROM mission_attempts WHERE id='attempt'").get() });
     const answer = () => {
       db.exec('BEGIN');

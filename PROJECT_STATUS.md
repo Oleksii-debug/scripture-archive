@@ -1,3 +1,9 @@
+## 2026-10-31 — SA-EXT-01 / PRIMARY_READER_BOUNDED_CHAPTERS — SCOPED TERMINAL
+
+**Лише канонічний захист основної читальні ЗАКРИТО ДЛЯ РОЗРОБКИ / `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`.** `public/app.js::getBook` відхиляє великі й розріджені глави до кешу/DOM: до 200 глав, до 256 віршів і 131072 UTF-16 символів на главу; коректні дані й повторний запит збережено. [#864 MERGED](https://github.com/Oleksii-debug/scripture-archive/pull/864) як `main@eb60a7d9a8f90f8287f039887606748c20838de3`; [exact-feature-head Actions #41171867181](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41171867181) **SUCCESS**: 2668 Node PASS/0 FAIL/1 SKIP, 22/22 Worker/D1, TS/lint/build і 2 Python PASS. [Доказ](docs/roadmap/SA_EXT_01_PRIMARY_READER_CHAPTER_BOUNDS_SCOPED_TERMINAL_20261031.md); `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **SA-EXT-01 повністю OPEN** (ліцензії/редакційні джерела); Sites SHA/Chrome/NVDA/Windows NOT_VERIFIED, деплою не було.
+
+---
+
 ## 2026-10-31 — SA-EXT-16 / SAME_SITE_CSRF_ORIGIN_GUARD — SCOPED TERMINAL
 
 **Тільки вузький CSRF-дефект ЗАКРИТО / CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL.** Злитий у main [PR #861](https://github.com/Oleksii-debug/scripture-archive/pull/861), точний `main@c5069df34fc0d54774a9920b7b650fa3fc53c338`. Спільний `sameOrigin` відхиляє піддомени з `Sec-Fetch-Site: same-site`, а справжній auth POST не доходить до D1. [Actual exact-head Actions #41170898839](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41170898839) **SUCCESS**, 2599 Node PASS/0 FAIL/1 SKIP, 22/22 Worker/D1, TS/lint/build/Python SUCCESS. [Постійна квитанція](docs/roadmap/SA_EXT_16_SAME_SITE_CSRF_GUARD_SCOPED_TERMINAL_20261031.md). `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **SA-EXT-16 parent OPEN**, загальне впровадження/браузер/NVDA/SMTP не перевірені.

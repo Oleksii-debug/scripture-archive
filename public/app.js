@@ -4203,7 +4203,7 @@ function renderAccount() {
     if(deleteForm)deleteForm.onsubmit=async event=>{
       event.preventDefault();if(!accountCurrent()||document.querySelector("#delete-form")!==deleteForm)return;
       const status=document.querySelector("#delete-state"),form=new FormData(event.currentTarget);if(!form.has("confirm"))return;
-      try{await authRequest("delete-account",{password:form.get("password")});finishAccountExit()}
+      try{const result=await authRequest("delete-account",{password:form.get("password")});if(result?.ok!==true)throw Error("unconfirmed_account_deletion");finishAccountExit()}
       catch{if(accountCurrent()&&document.querySelector("#delete-form")===deleteForm&&status)status.textContent=copy.error}
     };
     return;

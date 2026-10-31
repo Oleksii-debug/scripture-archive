@@ -4027,6 +4027,10 @@ function field(name, label, type = "text", extra = "") {
   return `<label class="account-field"><span>${label}</span><input name="${name}" type="${type}" ${extra}></label>`;
 }
 function renderAccount() {
+  // A private account view may re-enter only after the browser's restored
+  // session has been rechecked. Also protects pending sign-in callbacks.
+  if (typeof editorialPageHidden !== "undefined" &&
+      (editorialPageHidden || editorialAwaitingSession)) return;
   setActiveNav("account");
   const copy = {
     uk: { title:"Обліковий запис",intro:"Підтверджена пошта захищає доступ, а серверне збереження повертає ваш прогрес на іншому пристрої.",login:"Увійти",register:"Створити обліковий запис",forgot:"Забули пароль?",reset:"Встановити новий пароль",change:"Змінити пароль",currentPassword:"Поточний пароль",newPassword:"Новий пароль",email:"Електронна пошта",password:"Пароль",passwordRule:"Щонайменше 12 символів",age:"Вік",denomination:"Деномінація або назва церкви",children:"Чи є діти",yes:"Так",no:"Ні",send:"Надіслати посилання",verification:"Перевірте пошту та відкрийте одноразове посилання підтвердження.",verified:"Електронну адресу підтверджено. Тепер увійдіть.",resetSent:"Якщо обліковий запис існує, запит на відновлення пароля прийнято. Перевірте пошту і папку «Спам». Це повідомлення не підтверджує доставку листа.",resetDone:"Пароль змінено. Інші активні сесії завершено. Увійдіть з новим паролем.",saved:"Профіль і прогрес синхронізуються між пристроями.",edit:"Редагувати сайт",visibility:"Публічна видимість",visibilityHelp:"Усі чутливі поля залишаються приватними. Окремо можна дозволити лише наведені поля.",publicFirst:"Показувати ім’я",publicLast:"Показувати прізвище",publicChurch:"Показувати назву церкви",publicProgress:"Показувати навчальний поступ",save:"Зберегти",delete:"Видалити обліковий запис",deleteHelp:"Буде видалено профіль, особистий прогрес і групи, якими ви володієте. У чужих групах залишаться лише знеособлені підсумкові числа й дата зустрічі, без вашого ідентифікатора та написаного вами підсумку. Локальні позначки Академії в браузерах не видаляються автоматично: очистіть їх на сторінці курсів у кожному браузері до видалення акаунта. Надіслані листи й резервні копії не видаляються цією дією.",confirmDelete:"Я розумію, що дані буде видалено",logout:"Вийти",error:"Не вдалося виконати дію. Перевірте дані та спробуйте ще раз." },
@@ -4094,7 +4098,8 @@ function renderAccount() {
   }
   if (state.user.profileComplete) {
     let accountPrincipal=state.user;
-    const accountCurrent=()=>state.user===accountPrincipal&&!state.sessionUnavailable;
+    const accountCurrent=()=>state.user===accountPrincipal&&!state.sessionUnavailable &&
+      !(typeof editorialPageHidden !== "undefined" && (editorialPageHidden || editorialAwaitingSession));
     const visibility=state.user.visibility||{};
     shell(`<article class="prose account-dashboard"><p class="eyebrow">${t("account")}</p><h1>${esc(state.user.firstName)} ${esc(state.user.lastName)}</h1><p>${esc(state.user.email)}</p><div class="notice success">${copy.saved}</div><div class="action-row"><a class="button primary" href="/missions">${t("continue")}</a><a class="button" href="/groups">${t("myGroups")}</a>${state.user.isOwner?`<a class="button" href="/editor">${copy.edit}</a>`:""}<button class="button" id="logout-button">${copy.logout}</button></div><p id="account-logout-state" role="alert"></p><section class="profile-controls"><h2>${copy.visibility}</h2><p>${copy.visibilityHelp}</p><form id="visibility-form" class="account-form"><label class="account-check"><input name="firstName" type="checkbox" ${visibility.firstName?"checked":""}><span>${copy.publicFirst}</span></label><label class="account-check"><input name="lastName" type="checkbox" ${visibility.lastName?"checked":""}><span>${copy.publicLast}</span></label><label class="account-check"><input name="church" type="checkbox" ${visibility.church?"checked":""}><span>${copy.publicChurch}</span></label><label class="account-check"><input name="progress" type="checkbox" ${visibility.progress?"checked":""}><span>${copy.publicProgress}</span></label><button class="button">${copy.save}</button><p id="visibility-state" role="status"></p></form></section>${state.user.authProvider==="password"?`<details class="profile-controls"><summary>${copy.change}</summary><form id="password-form" class="account-form">${field("currentPassword",copy.currentPassword,"password",'autocomplete="current-password" required')}${field("newPassword",copy.newPassword,"password",'autocomplete="new-password" minlength="12" maxlength="128" required')}<small>${copy.passwordRule}</small><button class="button">${copy.change}</button><p id="password-state" role="status"></p></form></details><details class="danger-zone"><summary>${copy.delete}</summary><p>${copy.deleteHelp}</p><form id="delete-form" class="account-form">${field("password",copy.password,"password",'autocomplete="current-password" required')}<label class="account-check"><input name="confirm" type="checkbox" required><span>${copy.confirmDelete}</span></label><button class="button">${copy.delete}</button><p id="delete-state" role="status"></p></form></details>`:""}</article>`);
     const exportCopy = {
@@ -4531,12 +4536,12 @@ window.addEventListener("pagehide", () => {
   editorialPageHidden=true;
   editorialRestoreEpoch++;
   const currentRoute=routeSourceFromLocation(location).replace(/^\/+|\/+$/g,"");
-  // Progress exposes personal attempts and reading history just like builder
-  // exposes private drafts. Both must be cleared on a BFCache page exit.
-  const mounted=main.querySelector(".builder-layout, .editor-grid, .progress-stat, .resume-card");
+  // Profile, progress, owner and author pages all hold principal-sensitive
+  // data. Clear even an unmounted account route (e.g. pending sign-in).
+  const mounted=main.querySelector(".builder-layout, .editor-grid, .progress-stat, .resume-card, .account-dashboard, .profile-card, .auth-grid, .auth-card");
   const wasReauthorizing=editorialAwaitingSession;
   editorialAwaitingSession=false;
-  if(!mounted && !["builder","editor","progress"].includes(currentRoute) && !wasReauthorizing)return;
+  if(!mounted && !["builder","editor","progress","account"].includes(currentRoute) && !wasReauthorizing)return;
   editorialPrivateNeedsReauthorization=true;
   editorViewEpoch++;
   retirePrivateWorkspaceOnPageHide();

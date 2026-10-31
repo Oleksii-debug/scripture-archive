@@ -22,7 +22,7 @@ function lifecycleFixture({path='/builder',mounted=true,request=()=>Promise.reso
   let visible=mounted;
   const main={
     querySelector(selector){
-      if(selector==='.builder-layout, .editor-grid, .progress-stat, .resume-card')return visible?{}:null;
+      if(selector==='.builder-layout, .editor-grid, .progress-stat, .resume-card, .account-dashboard, .profile-card, .auth-grid, .auth-card')return visible?{}:null;
       return null;
     },
     replaceChildren(){visible=false;events.clear++;},
@@ -39,6 +39,62 @@ function lifecycleFixture({path='/builder',mounted=true,request=()=>Promise.reso
   return {handlers,events,controller,main,location,pagehide:()=>handlers.get('pagehide')(),
     pageshow:()=>handlers.get('pageshow')()};
 }
+
+test('profile with private email and consent controls clears on pagehide',()=>{
+  const f=lifecycleFixture({path:'/account',mounted:true});
+  f.pagehide();
+  assert.equal(f.events.clear,1);
+  assert.equal(f.controller.epoch(),6);
+  assert.equal(f.controller.needs(),true);
+});
+test('unmounted sign-in route gets a new authoritative session after BFCache restore',async()=>{
+  const f=lifecycleFixture({path:'/account',mounted:false});
+  f.pagehide();f.pageshow();
+  await tick();
+  assert.equal(f.events.clear,1);
+  assert.equal(f.events.auth,1);
+  assert.equal(f.events.route,1);
+});
+test('retained password form or account dashboard after leaving route cannot survive pagehide',()=>{
+  const f=lifecycleFixture({path:'/privacy',mounted:true});
+  f.pagehide();
+  assert.equal(f.events.clear,1);
+  assert.equal(f.events.retire,1);
+});
+test('account session re-read holds route re-entry until server accepts or fails',async()=>{
+  const read=deferred(),f=lifecycleFixture({path:'/account',request:()=>read.promise});
+  f.pagehide();f.pageshow();
+  assert.equal(f.events.auth,1);
+  assert.equal(f.events.route,0);
+  read.resolve({id:'new-session'});
+  await tick();
+  assert.equal(f.events.route,1);
+});
+test('an old account refresh cannot navigate after the user leaves again',async()=>{
+  const first=deferred(),f=lifecycleFixture({path:'/account',request:()=>first.promise});
+  f.pagehide();f.pageshow();f.pagehide();
+  first.resolve({id:'retired-session'});
+  await tick();
+  assert.equal(f.events.route,0);
+  assert.equal(f.controller.needs(),true);
+});
+test('canonical renderAccount refuses private re-entry on pagehide and pending reauthorization',()=>{
+  const start=source.indexOf('function renderAccount() {');
+  const end=source.indexOf('\nlet editorViewEpoch = 0;',start);
+  assert.ok(start>0&&end>start);
+  const actual=source.slice(start,end);
+  for(const [hidden,awaiting] of [[true,false],[false,true]]){
+    const events=[];
+    const api=vm.runInNewContext(actual+'\nrenderAccount', {
+      editorialPageHidden:hidden,editorialAwaitingSession:awaiting,
+      setActiveNav:()=>events.push('nav'),
+      state:{lang:'uk'},location:{search:''}
+    });
+    assert.equal(api(),undefined);
+    assert.deepEqual(events,[],'hidden account renders neither navigation nor private HTML');
+  }
+});
+
 test('editor account listing clears synchronously on pagehide and invalidates old owner render',()=>{
   const f=lifecycleFixture({path:'/editor'});
   f.pagehide();

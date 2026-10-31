@@ -1,3 +1,9 @@
+## 2026-10-31 — SA-EXT-16 / COMMUNITY_WAVE_MEMBER_INSERT_INTEGRITY — SCOPED TERMINAL
+
+**ЛИШЕ ЦЕЙ ПІДПУНКТ — `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`**: канонічна хвиля не зараховує невставленого учасника (SQL `INSERT OR IGNORE` / залежний `UPDATE changes()=1`), контролює обидва підтвердження D1 та всі CAS/lease/paused межі. [PR #838](https://github.com/Oleksii-debug/scripture-archive/pull/838) **SQUASH MERGED** в `main@ed3b9daca87bb7a75e8f79fbabb3a646e61cc99a`; [exact-head CI #41167678710](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41167678710) **SUCCESS** (Node 2412 PASS, 22/22 Worker/D1, 2/2 Python, TS/lint/build). [Формальна квитанція](SA_EXT_16_COMMUNITY_WAVE_MEMBER_INSERT_SCOPED_TERMINAL_20261031.md); `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` лише для цього дефекту. **Батьківський SA-EXT-16 OPEN; live Sites/NVDA/release NOT_VERIFIED, деплою не було.**
+
+---
+
 ## 2026-10-31 — SA-EXT-16 / COMMUNITY_OWNER_D1_ACK — CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL
 
 **ЗАКРИТО ДЛЯ РОЗРОБКИ ТІЛЬКИ ДВА ПІДПУНКТИ** підтверджень власницьких START/PAUSE/RESUME/STOP і owner snapshot. Канонічні PR [#835](https://github.com/Oleksii-debug/scripture-archive/pull/835) та [#836](https://github.com/Oleksii-debug/scripture-archive/pull/836) **MERGED** до `main@0a84164bbad224a9cf85ff0726865371fa5ac660`; exact-head Actions [#41167149955](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41167149955), [#41167332377](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41167332377) обидва **SUCCESS**. Повний [доказ](SA_EXT_16_COMMUNITY_OWNER_D1_ACK_SCOPED_TERMINAL_20261031.md), `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` лише тут. **Батьківський SA-EXT-16 та інші незакриті SA-EXT залишаються OPEN**, повний реліз/Sites/NVDA NOT_VERIFIED; без публікації.

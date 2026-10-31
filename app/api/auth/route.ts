@@ -271,6 +271,7 @@ export async function POST(request: Request) {
   }
 
   if (action === "change-password") {
+    try {
     const identity = await authenticateRequest(request);
     if (!identity || identity.provider !== "password") return json({ error: "authentication_required" }, 401);
     const currentPassword = data.currentPassword, newPassword = data.newPassword;
@@ -288,6 +289,12 @@ export async function POST(request: Request) {
     if (!batchAcknowledged(receipts, 2) || receipts[0].meta.changes !== 1)
       return json({ error: "password_change_unavailable" }, 503);
     return json({ ok: true, signedOut: true });
+    } catch {
+      // Auth/session, throttling, password verification or D1 failures are
+      // infrastructure errors, not incorrect credentials or a signed-out ACK.
+      // D1.batch remains atomic; do not mutate the shared session cookie.
+      return json({ error: "password_change_unavailable" }, 503);
+    }
   }
 
   if (action === "delete-account") {

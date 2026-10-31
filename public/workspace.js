@@ -299,8 +299,20 @@ async function request(path, options) {
 }
 
 let workspaceRenderEpoch = 0;
+let privateWorkspaceSuspended=false;
+
+// Private builder content may re-enter only after the authoritative account
+// session is re-read. Invalidate active and newly initiated hidden-page calls.
+export function retirePrivateWorkspaceOnPageHide() {
+  workspaceRenderEpoch++;
+  privateWorkspaceSuspended=true;
+}
+export function resumePrivateWorkspaceAfterSession() {
+  privateWorkspaceSuspended=false;
+}
 
 export async function renderWorkspace(name,c) {
+  if(name==='builder' && privateWorkspaceSuspended)return;
   const {state,t,esc,shell,getMission,setActiveNav}=c, w=workspaceCopy(state.lang);
   const epoch=++workspaceRenderEpoch, principal=state.user;
   const path=globalThis.location?.pathname, search=globalThis.location?.search, hash=globalThis.location?.hash;
@@ -309,7 +321,8 @@ export async function renderWorkspace(name,c) {
   const samePrincipalRoute=()=>state.user===principal && !state.sessionUnavailable &&
     globalThis.location?.pathname===path && globalThis.location?.search===search &&
     globalThis.location?.hash===hash;
-  const stillCurrent=()=>epoch===workspaceRenderEpoch && samePrincipalRoute();
+  const stillCurrent=()=>epoch===workspaceRenderEpoch && samePrincipalRoute() &&
+    !(name==='builder' && privateWorkspaceSuspended);
   setActiveNav(name);
   if(name==='about') {
     const catalog=await c.getCatalog();

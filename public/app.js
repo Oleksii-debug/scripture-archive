@@ -1,7 +1,7 @@
 import {meetingHistoryCopy,meetingHistoryMarkup,meetingRowsMarkup,mountMeetingHistory} from './group-meeting-history.js';
 import { parallelControls, mountParallelReader, safeProvenanceHttpsUrl } from './parallel-reader.js';
 import {routeSourceFromLocation, legacyRouteHashChanged} from './route-location.js';
-import {renderWorkspace, workspaceCopy, groupManagementCopy, groupManagementMarkup, mountGroupNamePrivacy} from './workspace.js';
+import {renderWorkspace, retirePrivateWorkspaceOnPageHide, resumePrivateWorkspaceAfterSession, workspaceCopy, groupManagementCopy, groupManagementMarkup, mountGroupNamePrivacy} from './workspace.js';
 import {supportSection} from './support.js';
 import {homePage} from './home.js';
 import {EDITIONS, editionCopy, selectedEdition, editionUrl, editionSelect, setEditionForTab} from './editions.js';
@@ -4176,11 +4176,13 @@ function renderAccount() {
 
 let editorViewEpoch = 0;
 async function renderEditor() {
+  if(editorialPageHidden || editorialAwaitingSession)return;
   const principal = state.user, epoch = ++editorViewEpoch;
   const isCurrent = () => {
     const path = location.hash.startsWith("#/")
       ? location.hash.slice(2) : location.pathname.replace(/^\/+/, "");
-    return state.user === principal && Boolean(principal?.isOwner) &&
+    return !editorialPageHidden && !editorialAwaitingSession &&
+      state.user === principal && Boolean(principal?.isOwner) &&
       editorViewEpoch === epoch && path.replace(/\/+$/, "") === "editor";
   };
   clearInterval(communityOwnerRefreshInterval);
@@ -4518,6 +4520,38 @@ window.addEventListener("pageshow", () => {
   void getSession().catch(()=>null).finally(()=>{
     if(groupDetailPageHidden || restoringEpoch!==groupDetailRestoreEpoch)return;
     groupDetailAwaitingSession=false;
+    void route();
+  });
+});
+// Editorial drafts, reviewer queues and owner-only account listings cannot
+// outlive a BFCache exit or a switch of the authenticated browser session.
+let editorialPrivateNeedsReauthorization=false;
+let editorialRestoreEpoch=0,editorialPageHidden=false,editorialAwaitingSession=false;
+window.addEventListener("pagehide", () => {
+  editorialPageHidden=true;
+  editorialRestoreEpoch++;
+  const currentRoute=routeSourceFromLocation(location).replace(/^\/+|\/+$/g,"");
+  const mounted=main.querySelector(".builder-layout, .editor-grid");
+  const wasReauthorizing=editorialAwaitingSession;
+  editorialAwaitingSession=false;
+  if(!mounted && currentRoute!=="builder" && currentRoute!=="editor" && !wasReauthorizing)return;
+  editorialPrivateNeedsReauthorization=true;
+  editorViewEpoch++;
+  retirePrivateWorkspaceOnPageHide();
+  main.replaceChildren();
+});
+window.addEventListener("pageshow", () => {
+  editorialPageHidden=false;
+  if(!editorialPrivateNeedsReauthorization)return;
+  editorialPrivateNeedsReauthorization=false;
+  editorialAwaitingSession=true;
+  const restoringEpoch=editorialRestoreEpoch;
+  // Read the current cookie before allowing the existing protected route to
+  // rebuild anything; an abandoned old restore must not resurrect private DOM.
+  void getSession().catch(()=>null).finally(()=>{
+    if(editorialPageHidden || restoringEpoch!==editorialRestoreEpoch)return;
+    editorialAwaitingSession=false;
+    resumePrivateWorkspaceAfterSession();
     void route();
   });
 });

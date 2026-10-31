@@ -121,8 +121,10 @@ export function validateDossierGraph(catalog) {
   const safeId = value => typeof value === 'string' && /^[a-z][a-z0-9-]*$/.test(value);
   // HTML escaping does not remove invisible/bidi text or lone surrogates;
   // reject ambiguous source metadata before emitting reader links/ARIA names.
+  // Include Unicode format controls and visually empty script fillers;
+  // canonical dossier labels and reader links must not conceal source claims.
   const safeVisibleText = value => typeof value === 'string' && value.trim().length > 0 &&
-    !/[\u0000-\u001f\u007f-\u009f\u00a0\u061c\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\ud800-\udfff]/u.test(value);
+    !/[\u0000-\u001f\u007f-\u009f\u00a0\u061c\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\ud800-\udfff\u034f\u115f\u1160\u2800\u3164\uffa0\p{Cf}]/u.test(value);
   const nonblank = safeVisibleText;
   // Book codes become internal reader URL segments. Reject unsafe catalogue
   // or dossier provenance before rendering any href (including atlas links).

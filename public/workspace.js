@@ -1,7 +1,7 @@
 import { reviewText, submissionForm, historyMarkup, queueMarkup, auditMarkup, attachReviewControls, renderPublicMaterials, renderReviewedLibrary, renderEditorialTakedownSearch, loadReviewData, editorRolesMarkup, attachEditorRoles } from './material-review.js';
 import { dossierMarkup, dossierAtlasMarkup } from './scripture-dossiers.js';
 import { academyMarkup, academyProgressKey, readAcademyProgress, attachAcademy } from './scripture-academy.js';
-import { safeProvenanceHttpsUrl } from './parallel-reader.js';
+import { safeProvenanceHttpsUrl, validEditionRightsText } from './parallel-reader.js';
 
 // The local reading cache is user/device-controlled JSON, not a trusted Bible
 // chapter receipt. Never let a malformed item break the progress route or
@@ -290,9 +290,14 @@ export function editionAboutMarkup(catalog,lang,esc) {
   const w=ownLocaleCopy(EDITION_ABOUT,lang);
   const editions=[catalog?.translations?.['uk-ohiienko'],catalog?.editions?.uk,catalog?.editions?.ru,catalog?.editions?.en];
   const entries=editions.map(edition=>{
-    if(!edition||typeof edition.title!=='string')return `<li>${w.missing}</li>`;
+    // An about-page rights claim must pass the same visibility predicate as
+    // the Bible reader; each independently safe source URL remains available.
+    if(!edition||!validEditionRightsText(edition.title,512)||!edition.title.trim())return `<li>${w.missing}</li>`;
     const source=safeProvenanceHttpsUrl(edition.source),license=safeProvenanceHttpsUrl(edition.licenseUrl);
-    return `<li><strong>${esc(edition.title)}</strong> — ${esc(edition.license||'—')}${source?` · <a href="${esc(source)}" rel="noreferrer">${w.source}</a>`:''}${license?` · <a href="${esc(license)}" rel="noreferrer">${w.license}</a>`:''}${edition.attribution?`<p>${esc(edition.attribution)}</p>`:''}${edition.formatting?`<p>${esc(edition.formatting)}</p>`:''}</li>`;
+    const rights=validEditionRightsText(edition.license,4096)&&edition.license.trim()?edition.license:w.missing;
+    const attribution=validEditionRightsText(edition.attribution,4096)?edition.attribution:'';
+    const formatting=validEditionRightsText(edition.formatting,4096)?edition.formatting:'';
+    return `<li><strong>${esc(edition.title)}</strong> — ${esc(rights)}${source?` · <a href="${esc(source)}" rel="noreferrer">${w.source}</a>`:''}${license?` · <a href="${esc(license)}" rel="noreferrer">${w.license}</a>`:''}${attribution?`<p>${esc(attribution)}</p>`:''}${formatting?`<p>${esc(formatting)}</p>`:''}</li>`;
   }).join('');
   return `<h2>${w.title}</h2><p>${w.intro}</p><h3>${w.local}</h3><ul>${entries}</ul><h3>${w.external}</h3><p>${w.externalText}</p>`;
 }

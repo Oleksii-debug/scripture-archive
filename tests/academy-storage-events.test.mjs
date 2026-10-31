@@ -1,20 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {attachAcademy,academyProgressKey,academyLessonIds} from '../public/scripture-academy.js';
+import {attachAcademy,academyProgressKey,academyLessonIds,academyPlaceLessonIds,academyAllLessonIds} from '../public/scripture-academy.js';
 
 function setup(){
   const key=academyProgressKey({id:'alice'}),map=new Map(),listeners=new Set(),writes=[];
   const storage={getItem:k=>map.get(k)??null,setItem:(k,v)=>{writes.push(k);map.set(k,v)}};
   const events={addEventListener:(type,fn)=>{assert.equal(type,'storage');listeners.add(fn)},removeEventListener:(_type,fn)=>listeners.delete(fn),emit:e=>{for(const fn of [...listeners])fn(e)}};
-  const buttons=academyLessonIds.map(id=>({attrs:{'data-academy-lesson':id,'aria-pressed':'false'},textContent:'',getAttribute(k){return this.attrs[k]},setAttribute(k,v){this.attrs[k]=v},addEventListener(){}}));
+  const buttons=academyAllLessonIds.map(id=>({attrs:{'data-academy-lesson':id,'aria-pressed':'false'},textContent:'',getAttribute(k){return this.attrs[k]},setAttribute(k,v){this.attrs[k]=v},addEventListener(){}}));
   const status={textContent:''},meter={value:0},badge={textContent:''},error={textContent:''};
-  const nodes={'#academy-reading-status':status,'#academy-reading-progress':meter,'#academy-reading-badge':badge,'#academy-reading-error':error};
+  const placeStatus={textContent:''},placeMeter={value:0},placeBadge={textContent:''};
+  const nodes={'#academy-reading-status':status,'#academy-reading-progress':meter,'#academy-reading-badge':badge,'#academy-reading-error':error,
+    '#academy-place-status':placeStatus,'#academy-place-progress':placeMeter,'#academy-place-badge':placeBadge};
   const root={querySelectorAll:()=>buttons,querySelector:s=>nodes[s]??null};
   const document={current:root,querySelector:()=>document.current};
   let active=true;
   const mount=()=>attachAcademy(document,storage,'en',{id:'alice'},{available:true,completed:[]},()=>active,null,events);
   mount();
-  return {key,map,listeners,writes,storage,events,buttons,status,meter,badge,error,document,mount,setActive:v=>{active=v}};
+  return {key,map,listeners,writes,storage,events,buttons,status,meter,badge,placeStatus,placeMeter,placeBadge,error,document,mount,setActive:v=>{active=v}};
 }
 const record=completed=>JSON.stringify({version:1,completed});
 test('another tab updates current lesson buttons, progress, and non-accredited completion',()=>{
@@ -60,6 +62,25 @@ test('a completed cross-tab Academy badge is withdrawn on corrupt data and recov
   h.map.set(h.key,record(academyLessonIds));h.events.emit({key:h.key,storageArea:h.storage});
   assert.equal(h.buttons[0].disabled,false);
   assert.match(h.badge.textContent,/no certificate/);
+});
+test('a formerly completed place track is redacted on unreadable cross-tab storage and restored by a verified retry',()=>{
+  const h=setup(),savedGet=h.storage.getItem;
+  h.map.set(h.key,record(academyPlaceLessonIds));
+  h.events.emit({key:h.key,storageArea:h.storage});
+  assert.match(h.placeBadge.textContent,/no certificate/);
+  assert.equal(h.placeMeter.value,academyPlaceLessonIds.length);
+  h.storage.getItem=()=>{throw Error('storage denied')};
+  h.events.emit({key:h.key,storageArea:h.storage});
+  assert.equal(h.placeBadge.textContent,'');
+  assert.equal(h.placeMeter.value,0);
+  assert.match(h.placeStatus.textContent,/Could not read the updated markers/);
+  assert.equal(h.buttons.at(-1).disabled,true);
+  assert.deepEqual(h.writes,[]);
+  h.storage.getItem=savedGet;
+  h.events.emit({key:h.key,storageArea:h.storage});
+  assert.equal(h.placeMeter.value,academyPlaceLessonIds.length);
+  assert.match(h.placeBadge.textContent,/no certificate/);
+  assert.equal(h.buttons.at(-1).disabled,false);
 });
 test('remount replaces the old event listener',()=>{
   const h=setup();assert.equal(h.listeners.size,1);h.mount();assert.equal(h.listeners.size,1);

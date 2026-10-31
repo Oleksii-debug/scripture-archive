@@ -2246,13 +2246,15 @@ function validBibleCatalog(catalog) {
     const edition = catalog.editions[locale];
     const books = catalog.books[locale];
     if (!edition || typeof edition.id !== "string" || !edition.id.trim() ||
-        !validBooks(books) || books.some((book) => !canonicalCodes.has(book.code))) return false;
+        !validBooks(books) || books.some((book, index) =>
+          !canonicalCodes.has(book.code) || book.code !== catalog.books.uk[index].code)) return false;
   }
   if (catalog.editionBooks !== undefined) {
     if (!catalog.editionBooks || typeof catalog.editionBooks !== "object" ||
         Array.isArray(catalog.editionBooks)) return false;
     for (const books of Object.values(catalog.editionBooks))
-      if (!validBooks(books) || books.some((book) => !canonicalCodes.has(book.code))) return false;
+      if (!validBooks(books) || books.some((book, index) =>
+        !canonicalCodes.has(book.code) || book.code !== catalog.books.uk[index].code)) return false;
   }
   return true;
 }

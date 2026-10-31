@@ -1,3 +1,9 @@
+## 2026-10-31 — SA-EXT-16 / ANALYTICS_CONSENT_OWN_LOCALE — ЗАКРИТО ВУЗЬКИЙ ДЕФЕКТ
+
+**CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** тільки для вибору мови в реальному вікні згоди на аналітичні cookie: `Object.prototype`/нестрокові локалі більше не показують `undefined`, українська запасна локаль і `ru/en` збережені. [PR #901](https://github.com/Oleksii-debug/scripture-archive/pull/901) SQUASH MERGED `main@a55849fcaac59623b33df9f1f247d6a0bb948cd5`; [Actions #41179127156](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41179127156) SUCCESS: 2894 Node PASS / 0 FAIL / 1 SKIP, D1/Worker 22/22, Python 2/2, TypeScript/lint/build PASS. [Квитанція](docs/roadmap/SA_EXT_16_ANALYTICS_CONSENT_OWN_LOCALE_SCOPED_TERMINAL_20261031.md) з exact source/test blobs. `remaining_scoped_implementation=0` тільки для цього дефекту, батьківський SA-EXT-16 OPEN; Sites/Chrome/Windows/NVDA/SMTP/реліз NOT_VERIFIED.
+
+---
+
 ## 2026-10-31 — SA-EXT-01/16 / HOME_SUPPORT_OWN_LOCALE — ЗАКРИТО ВУЗЬКИЙ ДЕФЕКТ
 
 **CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** лише для вже злитого виправлення головної сторінки та підтримки проєкту: невідомі, нестрокові й успадковані назви локалі більше не руйнують вміст і заголовки, `uk/ru/en` збережено. [PR #899](https://github.com/Oleksii-debug/scripture-archive/pull/899) SQUASH MERGED `main@54759a89d79f5b8f2f216c50309810a7643e39fe`; [Actions #41178889927](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41178889927) SUCCESS: 2879 Node PASS / 0 FAIL / 1 SKIP, Worker/D1 22/22, Python 2/2, TypeScript/lint/build PASS. [Квитанція](docs/roadmap/SA_EXT_01_16_HOME_SUPPORT_OWN_LOCALE_SCOPED_TERMINAL_20261031.md) містить exact blobs. `remaining_scoped_implementation=0`, `necessary_unmerged_feature_PRs=0` **лише тут**. Батьківські SA-EXT-01 і SA-EXT-16 OPEN; Sites/Windows/Chrome/NVDA/SMTP та реліз NOT_VERIFIED, деплою не було.

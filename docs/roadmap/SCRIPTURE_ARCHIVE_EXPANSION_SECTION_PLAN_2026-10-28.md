@@ -1,3 +1,9 @@
+## 2026-10-31 — SA-EXT-16 / ANALYTICS_CONSENT_OWN_LOCALE — ВУЗЬКИЙ ТЕРМІНАЛЬНИЙ ДЕФЕКТ
+
+Канонічний consent dialog (`public/analytics.js`) не приймає успадковані JavaScript-ключі за мови; коректні українські/російські/англійські написи та явний вибір аналітики збережено. [PR #901](https://github.com/Oleksii-debug/scripture-archive/pull/901) MERGED `main@a55849fcaac59623b33df9f1f247d6a0bb948cd5`, [CI #41179127156](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41179127156) SUCCESS (2894 Node PASS / 0 FAIL / 1 SKIP, 22 D1 PASS, 2 Python PASS). [Scoped receipt](SA_EXT_16_ANALYTICS_CONSENT_OWN_LOCALE_SCOPED_TERMINAL_20261031.md); `remaining_scoped_implementation=0` лише тут, **батьківський SA-EXT-16 OPEN**. Production/NVDA/Windows не перевірено, реліз не публікувався.
+
+---
+
 ## 2026-10-31 — SA-EXT-01/16 / HOME_SUPPORT_OWN_LOCALE — ВУЗЬКИЙ ТЕРМІНАЛЬНИЙ ДЕФЕКТ
 
 Головна і блок пожертв у чинних `public/home.js`, `public/support.js` тепер перевіряють власні строкові ключі мови та не використовують `Object.prototype` як переклад. [PR #899](https://github.com/Oleksii-debug/scripture-archive/pull/899) SQUASH MERGED `main@54759a89d79f5b8f2f216c50309810a7643e39fe`, [CI #41178889927](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41178889927) SUCCESS (2879 Node PASS, 22 D1 PASS, 2 Python PASS, TS/build). [Термінальна квитанція](SA_EXT_01_16_HOME_SUPPORT_OWN_LOCALE_SCOPED_TERMINAL_20261031.md). `remaining_scoped_implementation=0` лише для дефекту; **SA-EXT-01/16 OPEN**. Production/NVDA/Windows і реліз не перевірено.

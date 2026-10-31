@@ -199,10 +199,16 @@ export async function POST(request: Request) {
     return json(await leaseCommunityAgents(Math.max(1,Math.min(4,Math.trunc(Number(body?.limit)||1)))));
   }
   if (!["start","pause","resume","stop"].includes(action)) return json({error:"invalid_action"},400);
-  const result=await controlCommunity(action);
-  if(!result.ok)return json(result,409);
-  if(action==="start"||action==="resume")await advanceCommunity();
-  return json(result);
+  try {
+    const result=await controlCommunity(action);
+    if(!result.ok)return json(result,409);
+    if(action==="start"||action==="resume")await advanceCommunity();
+    return json(result);
+  } catch {
+    // Never issue an unhandled HTML/500 for an uncertain D1 control write.
+    // A failed acknowledgement is not proof that the owner command committed.
+    return json({error:"community_unavailable"},503);
+  }
 }
 
 export async function ownerCommunityState() { return communityOwnerState(); }

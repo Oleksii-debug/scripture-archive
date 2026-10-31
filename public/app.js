@@ -2242,8 +2242,8 @@ function validBibleCatalog(catalog) {
     // hole can satisfy Set.size === 66. Require 66 own book records first.
     Array.from(books.keys()).every((index) => Object.hasOwn(books, index)) &&
     books.every((book, index) => book && typeof book === "object" &&
-      book.code === expectedBookCodes[index] &&
       ["code", "title", "testament", "chapters"].every(field => Object.hasOwn(book, field)) &&
+      book.code === expectedBookCodes[index] &&
       typeof book.code === "string" && /^[A-Z0-9]{3}$/.test(book.code) &&
       typeof book.title === "string" && !!book.title.trim() &&
       (book.testament === "OT" || book.testament === "NT") &&

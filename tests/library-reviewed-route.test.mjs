@@ -261,6 +261,33 @@ test('a repeated continuation cursor fails closed without duplicating approved l
   }finally{f.restore();}
 });
 
+
+test('a multi-page cursor cycle cannot append an already visited library batch',async()=>{
+  const f=scenario('en'), first={id:'A',submittedAt:'2026-01-01'},second={id:'B',submittedAt:'2025-12-31'};
+  let continuation=0;
+  try {
+    globalThis.fetch=async (_url,options)=>{
+      const {cursor}=JSON.parse(options.body);
+      if(!cursor)return Response.json({items:[libraryItem('first','First verified')],nextCursor:first});
+      continuation++;
+      if(continuation===1)return Response.json({items:[libraryItem('second','Second verified')],nextCursor:second});
+      if(continuation===2)return Response.json({items:[libraryItem('cycle','Must not appear')],nextCursor:first});
+      return Response.json({items:[libraryItem('third','Third verified')],nextCursor:null});
+    };
+    await renderWorkspace('library',f.context);
+    f.more.onclick();await tick();
+    assert.match(f.results.innerHTML,/Second verified/);
+    f.more.onclick();await tick();
+    assert.match(f.status.textContent,/Could not complete/);
+    assert.doesNotMatch(f.results.innerHTML,/Must not appear/);
+    assert.equal(f.more.hidden,false);
+    f.more.onclick();await tick();
+    assert.equal(continuation,3);
+    assert.match(f.results.innerHTML,/Third verified/);
+    assert.equal(f.more.hidden,true);
+  }finally{f.restore();}
+});
+
 test('malformed library responses are errors, not evidence of an empty catalogue',async()=>{
   const f=scenario();
   try {

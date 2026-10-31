@@ -267,6 +267,12 @@ async function write(request:Request){
     }catch{return privateJson({error:"visibility_save_failed"},{status:503});}
   }
   if(action!=="profile")return privateJson({error:"unknown_action"},{status:400});
+  // Profile updates must carry an explicit consent decision. A truncated form
+  // or typed JSON value must not silently become false and overwrite an
+  // existing sensitive-consent record; the canonical form supplies a boolean.
+  // The separate sensitive-consent action keeps its own withdrawal contract.
+  if(typeof body.acceptSensitive!=="boolean")
+    return privateJson({error:"invalid_profile_consent"},{status:400});
   if(oversized(body.firstName,80)||oversized(body.lastName,80)||oversized(body.ageRange,10)||
      oversized(body.tradition,40)||oversized(body.maritalStatus,40)||oversized(body.gender,30)||
      oversized(body.church,160)||oversized(body.locale,2))

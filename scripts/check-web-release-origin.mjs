@@ -31,6 +31,11 @@ export function normalizeSecureOrigin(value, label = 'origin') {
   // operator's release target must be a literal authority, not a lookalike.
   // Preserve the already-supported ASCII hostname case, optional slash and
   // explicit canonical HTTPS :443, plus literal non-default ports.
+  // Non-ASCII compatibility case folding (for example Kelvin sign K -> k)
+  // can also happen in JavaScript lowercasing itself. Require an ASCII literal;
+  // internationalized domains must be explicitly written as punycode.
+  if (/[^\x00-\x7f]/u.test(value))
+    throw new Error(`${label}: invalid URL syntax; use a literal bare HTTPS origin`);
   const literal = value.replace(/\/$/, '').toLowerCase();
   if (literal !== url.origin && literal !== `${url.origin}:443`)
     throw new Error(`${label}: invalid URL syntax; use a literal bare HTTPS origin`);

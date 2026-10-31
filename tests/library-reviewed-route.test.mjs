@@ -314,3 +314,20 @@ test('library own-key language switch keeps all three reviewed-material search c
     } finally{f.restore();}
   }
 });
+
+
+test('canonical library route never renders inherited language copy and remains keyboard searchable',async()=>{
+  for(const lang of ['__proto__','constructor','toString','valueOf',null,{},Object.create(null)]){
+    const f=scenario('uk');f.state.lang=lang;
+    try{
+      globalThis.fetch=async()=>Response.json({items:[],nextCursor:null});
+      await renderWorkspace('library',f.context);
+      assert.equal(f.nav.length,1);
+      assert.ok(f.shells[0].includes('Бібліотека перевірених матеріалів'));
+      assert.ok(f.list.innerHTML.includes('Пошук матеріалів'));
+      assert.doesNotMatch(f.shells[0]+f.list.innerHTML,/\\bundefined\\b/);
+      assert.equal(typeof f.form.onsubmit,'function');
+      assert.match(f.status.textContent,/Збігів не знайдено/);
+    }finally{f.restore();}
+  }
+});

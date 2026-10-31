@@ -1,3 +1,17 @@
+## 2026-10-31 — остаточні source-development стани перших 5 SA-EXT батьківських розділів
+
+Це **канонічні стани розробки**, а не підтвердження встановленого релізу. Постійний список номерів зберігається саме в цьому плані; попередні часткові квитанції залишаються історією.
+
+- **SA-EXT-01 — OPEN:** неповне ліцензоване покриття видань і provenance/QA перекладів; не називати готовим.
+- **SA-EXT-02 — OPEN:** наявна реальна пілотна місія та прогрес, але ширший затверджений каталог місій/повторень не завершений; [закрита тільки приватна BFCache підфункція](SA_EXT_02_PROGRESS_BFCACHE_SCOPED_TERMINAL_20261031.md).
+- **SA-EXT-03 — ЗАКРИТО ДЛЯ ПОДАЛЬШОЇ РОЗРОБКИ / `CLOSED_FOR_DEVELOPMENT / TERMINAL`:** повна авторська й редакційна workflow, права, версії, withdraw, export, audit, real UI; [доказ](SA_EXT_03_PARENT_CLOSED_FOR_DEVELOPMENT_TERMINAL_20261031.md).
+- **SA-EXT-04 — ЗАКРИТО ДЛЯ ПОДАЛЬШОЇ РОЗРОБКИ / `CLOSED_FOR_DEVELOPMENT / TERMINAL`:** повні групи, invitations, приватність, membership, sessions, group attempts і marathon/cohort, real UI; [доказ](SA_EXT_04_PARENT_CLOSED_FOR_DEVELOPMENT_TERMINAL_20261031.md).
+- **SA-EXT-05 — OPEN:** ширший джерельно верифікований каталог досьє/графів, місця, події, розрізнення наукових та конфесійних інтерпретацій не повністю готові.
+
+**Обидва terminal-записи прив'язані до exact вихідного `main@79a8e40cee2c3eb0e0901c5b8b260cb4b0a149c9`, CI [#41164386403](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41164386403) SUCCESS.** Повторне призначення SA-EXT-03/04 без нового конкретного дефекту або затвердженого розширення — заборонено. Новий реальний контент/медіа/мови, правовласники й publication acceptance залишаються за своїми відповідними роботами. Загальне розгортання не блокує source-development terminal.
+
+---
+
 ## 2026-10-31 — SA-EXT-03 / EDITORIAL_PRIVATE_BFCACHE_FENCE — SCOPED TERMINAL
 
 **РОЗРОБКУ ВУЗЬКОГО ПІДПУНКТУ ЗАКРИТО / `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`**, але **повний SA-EXT-03 та всі інші SA-EXT-01…20 OPEN**. Канонічні `/builder` (приватні чернетки/рецензії) і `/editor` (власник, користувачі/аналітика) синхронно очищують приватний DOM на `pagehide`; блокують запізнілі ролі/чернетки/аналітику; нові дані показуються лише після `getSession()` на `pageshow` з generation-fence. [Функціональний PR #819](https://github.com/Oleksii-debug/scripture-archive/pull/819) **SQUASH MERGED** `main@e17f7cf9d7d69140f3eda098f699beb86a2a56d4`; [exact-head CI #41164044787](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41164044787) **SUCCESS** (Node, TS, lint, build, Worker/D1, Python); 12 нових Node регресій, два існуючі source-extract fixtures знову валідні. [Формальна квитанція](SA_EXT_03_EDITORIAL_BFCACHE_SCOPED_TERMINAL_20261031.md). `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` тільки тут; реліз/Chrome/Windows/NVDA/реальний reviewer не перевірені.
@@ -929,10 +943,10 @@
 **Статус:** EXISTING_SOURCE + PLANNED_EXPANSION. Наявна місія Авраама та захищене оцінювання; ширший навчальний каталог, повторення, індивідуальні прогрес і пояснення. **Приймання:** тестова й реальна історія, нуль прихованих правильних відповідей, коректні переклади й джерела.
 
 ### SA-EXT-03. Конструктор і редакційний процес
-**Статус:** EXISTING_SOURCE/INCOMPLETE_INTEGRATION. Автор створює/переглядає/тестує вправу, редактор затверджує, версії/відкликання, експорт. **Приймання:** editor/non-editor permissions, audit log, зміни перевірені без source leakage.
+**Статус РОЗРОБКИ:** **ЗАКРИТО / `CLOSED_FOR_DEVELOPMENT / TERMINAL`** — source `main@79a8e40cee2c3eb0e0901c5b8b260cb4b0a149c9`. Автор створює/переглядає/тестує справжню вправу, редактор затверджує, версії/відкликання, експорт, permissions, audit та source-leakage guards повністю реалізовані в канонічному UI/API і перевірені CI. [Остаточне закриття SA-EXT-03](SA_EXT_03_PARENT_CLOSED_FOR_DEVELOPMENT_TERMINAL_20261031.md). `remaining_approved_development=0`, `necessary_unmerged_PRs=0`. **Окремі завдання для release/QA:** human rights review фактичних матеріалів, реальний браузер/NVDA, live D1/backup та exact Sites SHA — **NOT_VERIFIED**, не повторна розробка.
 
 ### SA-EXT-04. Домашні групи та навчальні марафони
-**Статус:** EXISTING_SOURCE / INCOMPLETE_PRODUCTION_ACCEPTANCE. Групи, запрошення, приватність, зустрічі, відповіді, cohort і марафони. **Приймання:** дві реальні тестові ролі/групи, приватні дані не витікають, повторний вхід/відновлення, правильні підсумки.
+**Статус РОЗРОБКИ:** **ЗАКРИТО / `CLOSED_FOR_DEVELOPMENT / TERMINAL`** — source `main@79a8e40cee2c3eb0e0901c5b8b260cb4b0a149c9`. Канонічні групи, запрошення, приватні ролі, згода на імена, історія й виправлення зустрічей, результати, cohort і марафони підключені до реального UI/API/D1, повні тести пройшли. [Остаточне закриття SA-EXT-04](SA_EXT_04_PARENT_CLOSED_FOR_DEVELOPMENT_TERMINAL_20261031.md). `remaining_approved_development=0`, `necessary_unmerged_PRs=0`. **Окремі завдання для release/QA:** дві реальні тестові ролі/групи, live Sites SHA, D1 міграція/backup, Windows/NVDA і production consent acceptance — **NOT_VERIFIED**, не повторна розробка.
 
 Реалізовано у вихідному коді: вихід учасника, атомарне передавання власності та підтверджене видалення групи; перевірки й межі — `SA_EXT_04_GROUP_MEMBERSHIP.md`. Це не статус production acceptance.
 

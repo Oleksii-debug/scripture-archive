@@ -79,3 +79,42 @@ test('R0 origin preflight rejects 34 formerly normalized nonliteral release decl
     assert.equal(normalizeSecureOrigin(value),canonical);
   }
 });
+
+
+test('R0.1 rejects IDNA compatibility glyphs, Unicode dots and padded ports before release parity', () => {
+  // WHATWG URL() converts these nonliteral authorities into the exact public
+  // origin. The release gate must not report declaration parity for them.
+  const nonliteral = [
+    'https://ｓcripture-archive.com',
+    'https://ⓢcripture-archive.com',
+    'https://scripture-archive。com',
+    'https://scripture-archive．com',
+    'https://scripture-archive｡com',
+    'https://ＳＣＲＩＰＴＵＲＥ-ＡＲＣＨＩＶＥ.com',
+    'https://scripture-archive.com:000443',
+    'https://scripture-archive.com:0443',
+    'https://scripture-archive.com:0008443',
+  ];
+  for (const value of nonliteral) {
+    assert.equal(new URL(value).origin,
+      value.endsWith('0008443') ? canonical.replace('.com', '.com:8443') : canonical,
+      'regression vector must actually normalize to an approved ASCII origin');
+    assert.throws(() => normalizeSecureOrigin(value), /literal bare HTTPS origin/,
+      `nonliteral authority accepted: ${JSON.stringify(value)}`);
+    assert.throws(() => verifyDeclaredOrigins({
+      expectedOrigin: canonical, siteUrl: value, appBaseUrl: canonical,
+    }), /literal bare HTTPS origin/);
+  }
+  // Valid declarations, recovery and explicitly selected non-default ports
+  // must retain their original contract.
+  for (const value of [
+    canonical, canonical + '/', canonical + ':443', canonical + ':443/',
+    'https://SCRIPTURE-ARCHIVE.COM/', 'https://stage.example.test:8443',
+    'https://[::1]',
+  ]) {
+    assert.equal(normalizeSecureOrigin(value), new URL(value).origin);
+  }
+  assert.equal(verifyDeclaredOrigins({
+    expectedOrigin: canonical, siteUrl: canonical + ':443/', appBaseUrl: canonical,
+  }).verdict, 'DECLARED_ORIGIN_MATCH_ONLY');
+});

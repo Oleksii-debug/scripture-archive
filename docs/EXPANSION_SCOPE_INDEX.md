@@ -5,6 +5,10 @@
 
 ## Перевірені вузькі закриття (не закриття батьківського розділу)
 
+- **SA-EXT-01 — ідентичність перекладу основної читальні:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` лише для відмови від підстановки чужого ліцензійного джерела за неправильного ID. [PR #842](https://github.com/Oleksii-debug/scripture-archive/pull/842) **MERGED** у `main@12abfeae78f132b5fe07a29abde15f5185d56233`, exact-head [CI #41168210300](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41168210300) **SUCCESS**; [доказ](roadmap/SA_EXT_01_PRIMARY_TRANSLATION_IDENTITY_SCOPED_TERMINAL_20261031.md). Повний SA-EXT-01 OPEN; live Sites/browser/NVDA/Windows NOT_VERIFIED, деплою немає.
+
+
+
 - **SA-EXT-01 — сирі Unicode-контролі в джерелах/ліцензіях Біблії:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` лише для точної URI-цілісності канонічної читальні й сторінки видань. [PR #839](https://github.com/Oleksii-debug/scripture-archive/pull/839) **MERGED** у `main@d43111e214afdad45e6d35fadf9ebca9a88433eb`; exact-head [Actions #41167858860](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41167858860) **SUCCESS**; [термінальна квитанція](roadmap/SA_EXT_01_RAW_SOURCE_LICENSE_UNICODE_SCOPED_TERMINAL_20261031.md). **Батьківський SA-EXT-01 OPEN; live/Sites/Windows/NVDA NOT_VERIFIED**, деплою немає.
 
 

@@ -321,9 +321,13 @@ export async function POST(request: Request) {
       return json({ error: "invalid_credentials" }, 401);
     const passwordData = await hashPassword(newPassword);
     const receipts = await env.DB.batch([
-      env.DB.prepare("UPDATE accounts SET password_hash=?,password_salt=?,password_iterations=?,session_version=session_version+1,updated_at=CURRENT_TIMESTAMP WHERE id=?")
-        .bind(passwordData.hash, passwordData.salt, passwordData.iterations, identity.userId),
-      env.DB.prepare("UPDATE auth_sessions SET revoked_at=CURRENT_TIMESTAMP WHERE user_id=? AND revoked_at IS NULL").bind(identity.userId),
+      // Password reset or another password change may complete while hashing.
+      // Compare against the credential snapshot that was actually verified.
+      env.DB.prepare("UPDATE accounts SET password_hash=?,password_salt=?,password_iterations=?,session_version=session_version+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND deleted_at IS NULL AND session_version=? AND password_hash=? AND password_salt=? AND password_iterations=?")
+        .bind(passwordData.hash, passwordData.salt, passwordData.iterations, identity.userId,
+          account.session_version, account.password_hash, account.password_salt, account.password_iterations),
+      // The D1 batch is atomic; revoke only if the preceding credential CAS won.
+      env.DB.prepare("UPDATE auth_sessions SET revoked_at=CURRENT_TIMESTAMP WHERE user_id=? AND revoked_at IS NULL AND changes()=1").bind(identity.userId),
     ]);
     if (!batchAcknowledged(receipts, 2) || receipts[0].meta.changes !== 1)
       return json({ error: "password_change_unavailable" }, 503);

@@ -148,3 +148,18 @@ test('rejects coordinated all-locale source reordering and valid-looking invente
   intact.books.uk.find(book => book.code === 'JOL').chapters = 4;
   assert.equal(validate(intact), true, 'legitimate edition chapter variation is preserved');
 });
+
+
+test('canonical 39 OT and 27 NT books cannot be relabelled across all editions', () => {
+  const inventories = value => [...Object.values(value.books), ...Object.values(value.editionBooks)];
+  for (let index = 0; index < 66; index++) {
+    const damaged = clone();
+    const falseTestament = index < 39 ? 'NT' : 'OT';
+    for (const books of inventories(damaged)) books[index].testament = falseTestament;
+    assert.equal(validate(damaged), false, 'false canonical testament at index ' + index);
+  }
+  const valid = clone();
+  assert.equal(validate(valid), true, 'actual OT/NT boundaries remain readable');
+  valid.books.uk.find(book => book.code === 'JOL').chapters = 4;
+  assert.equal(validate(valid), true, 'legitimate edition chapter counts remain independent');
+});

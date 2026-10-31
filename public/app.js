@@ -2246,7 +2246,7 @@ function validBibleCatalog(catalog) {
       book.code === expectedBookCodes[index] &&
       typeof book.code === "string" && /^[A-Z0-9]{3}$/.test(book.code) &&
       typeof book.title === "string" && !!book.title.trim() &&
-      (book.testament === "OT" || book.testament === "NT") &&
+      book.testament === (index < 39 ? "OT" : "NT") &&
       Number.isSafeInteger(book.chapters) && book.chapters > 0 && book.chapters <= 200) &&
     new Set(books.map((book) => book.code)).size === 66;
   if (!validBooks(catalog.books.uk)) return false;

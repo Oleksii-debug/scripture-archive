@@ -63,3 +63,36 @@ test('the same canonical source-backed module is mounted in the real atlas works
   assert.match(source,/dossierAtlasMarkup\(catalog,state\.lang,esc\)/);
   assert.match(source,/import \{ dossierMarkup, dossierAtlasMarkup \} from '\.\/scripture-dossiers\.js'/);
 });
+
+test('other canonical subjects without asserted historical chronology retain every witness',()=>{
+  const remaining=scriptureDossiers.filter(item=>item.type!=='place'&&!order.includes(item.id));
+  assert.deepEqual(remaining.map(item=>item.id),['ruth','paul','mary-mother','peter']);
+  for(const [lang,heading] of [
+    ['uk','Інші теми дослідження (не хронологічний порядок)'],
+    ['ru','Другие темы исследования (без хронологического порядка)'],
+    ['en','Other research subjects (not chronologically ordered)'],
+  ]){
+    const html=dossierAtlasMarkup(catalog,lang,esc);
+    const start=html.indexOf('<section aria-labelledby="dossier-atlas-additional-heading">');
+    assert.ok(start>=0,lang+' explicit separately labelled non-chronological section');
+    const end=html.indexOf('</section>',start);
+    const additional=html.slice(start,end);
+    assert.ok(additional.includes(esc(heading)),lang+' clear chronology disclaimer');
+    assert.equal((html.match(/<table>/g)||[]).length,2,'preserve existing two accessible tables');
+    assert.equal((additional.match(/href="\/dossiers\?id=/g)||[]).length,remaining.length);
+    for(const item of remaining){
+      const link='href="/dossiers?id='+item.id+'"';
+      const linkAt=additional.indexOf(link);
+      assert.ok(linkAt>=0,lang+' '+item.id+' linked to canonical dossier');
+      const row=additional.slice(linkAt,additional.indexOf('</ol></li>',linkAt));
+      assert.equal((row.match(/<li>/g)||[]).length,item.sources.length,
+        lang+' '+item.id+' all distinct witnesses');
+      for(const source of item.sources){
+        const href='href="/reader/'+source.book+'/'+source.chapter+'?verse='+source.first+'"';
+        assert.ok(row.includes(href),lang+' '+item.id+' '+href);
+        assert.ok(row.includes(' — '+esc(kind[lang][source.kind])+'</li>'),
+          lang+' '+item.id+' does not erase source-kind distinctions');
+      }
+    }
+  }
+});

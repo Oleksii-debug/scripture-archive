@@ -1,7 +1,7 @@
 import {meetingHistoryCopy,meetingHistoryMarkup,meetingRowsMarkup,mountMeetingHistory} from './group-meeting-history.js';
 import { parallelControls, mountParallelReader, safeProvenanceHttpsUrl } from './parallel-reader.js';
 import {routeSourceFromLocation, legacyRouteHashChanged} from './route-location.js';
-import {renderWorkspace, retirePrivateWorkspaceOnPageHide, workspaceCopy, groupManagementCopy, groupManagementMarkup, mountGroupNamePrivacy} from './workspace.js';
+import {renderWorkspace, retirePrivateWorkspaceOnPageHide, resumePrivateWorkspaceAfterSession, workspaceCopy, groupManagementCopy, groupManagementMarkup, mountGroupNamePrivacy} from './workspace.js';
 import {supportSection} from './support.js';
 import {homePage} from './home.js';
 import {EDITIONS, editionCopy, selectedEdition, editionUrl, editionSelect, setEditionForTab} from './editions.js';
@@ -3426,7 +3426,9 @@ async function renderGroups() {
 
 // A BFCache page exit retires private group invitations and management details.
 let groupDetailViewEpoch=0,groupDetailNeedsReauthorization=false;
+let groupDetailRestoreEpoch=0,groupDetailPageHidden=false,groupDetailAwaitingSession=false;
 async function renderGroup(groupId) {
+  if(groupDetailPageHidden || groupDetailAwaitingSession)return;
   setActiveNav("groups");
   const principal = state.user,viewEpoch=groupDetailViewEpoch;
   const data = await groupRequest(
@@ -3435,7 +3437,7 @@ async function renderGroup(groupId) {
       undefined,
       `groupId=${encodeURIComponent(groupId)}`,
     );
-  if (viewEpoch!==groupDetailViewEpoch || !groupPageCurrent(`groups/${groupId}`, principal)) return;
+  if (groupDetailPageHidden || groupDetailAwaitingSession || viewEpoch!==groupDetailViewEpoch || !groupPageCurrent(`groups/${groupId}`, principal)) return;
   const group = data.group,
     catalog = await getCatalog(),
     books = catalog.books[state.lang],
@@ -3449,7 +3451,7 @@ async function renderGroup(groupId) {
       const found = books.find((book) => book.code === code);
       return found ? bookTitle(found) : code;
     };
-  if (viewEpoch!==groupDetailViewEpoch || !groupPageCurrent(`groups/${groupId}`, principal)) return;
+  if (groupDetailPageHidden || groupDetailAwaitingSession || viewEpoch!==groupDetailViewEpoch || !groupPageCurrent(`groups/${groupId}`, principal)) return;
   const names = (data.members || [])
       .map(
         (member) =>
@@ -3499,7 +3501,7 @@ async function renderGroup(groupId) {
         await renderGroup(group.id);
         // The readback can be delayed independently of the successful POST.
         // A departed principal must not hear a former owner's success message.
-        if (viewEpoch!==groupDetailViewEpoch || !groupPageCurrent(`groups/${groupId}`, principal)) return;
+        if (groupDetailPageHidden || groupDetailAwaitingSession || viewEpoch!==groupDetailViewEpoch || !groupPageCurrent(`groups/${groupId}`, principal)) return;
       }
       announce(successText);
     } catch {
@@ -4174,11 +4176,13 @@ function renderAccount() {
 
 let editorViewEpoch = 0;
 async function renderEditor() {
+  if(editorialPageHidden || editorialAwaitingSession)return;
   const principal = state.user, epoch = ++editorViewEpoch;
   const isCurrent = () => {
     const path = location.hash.startsWith("#/")
       ? location.hash.slice(2) : location.pathname.replace(/^\/+/, "");
-    return state.user === principal && Boolean(principal?.isOwner) &&
+    return !editorialPageHidden && !editorialAwaitingSession &&
+      state.user === principal && Boolean(principal?.isOwner) &&
       editorViewEpoch === epoch && path.replace(/\/+$/, "") === "editor";
   };
   clearInterval(communityOwnerRefreshInterval);
@@ -4493,39 +4497,63 @@ window.addEventListener("popstate", route);
 // restore that pre-exit DOM from browser back/forward cache for another session.
 // Also fence a group render that was awaiting API/catalog data on page exit.
 window.addEventListener("pagehide", () => {
+  // Even an exit from a different route invalidates a pending private restore.
+  groupDetailPageHidden=true;
+  groupDetailRestoreEpoch++;
   const detail=main.querySelector(".group-detail");
   const currentRoute=routeSourceFromLocation(location).replace(/^\/+|\/+$/g,"");
-  if(!detail && !/^groups\/[^/]+$/.test(currentRoute))return;
+  const wasReauthorizing=groupDetailAwaitingSession;
+  groupDetailAwaitingSession=false;
+  if(!detail && !/^groups\/[^/]+$/.test(currentRoute) && !wasReauthorizing)return;
   groupDetailViewEpoch++;
   groupDetailNeedsReauthorization=true;
   detail?.replaceChildren();
 });
 window.addEventListener("pageshow", () => {
+  groupDetailPageHidden=false;
   if(!groupDetailNeedsReauthorization)return;
   groupDetailNeedsReauthorization=false;
-  // Server session identity, not the BFCache's in-memory principal, decides
-  // whether current group details and invitations may render again.
-  void getSession().catch(()=>null).finally(()=>route());
+  groupDetailAwaitingSession=true;
+  const restoringEpoch=groupDetailRestoreEpoch;
+  // Only the visible, current page generation may reenter the private route.
+  // A second pagehide invalidates this callback even if getSession settles later.
+  void getSession().catch(()=>null).finally(()=>{
+    if(groupDetailPageHidden || restoringEpoch!==groupDetailRestoreEpoch)return;
+    groupDetailAwaitingSession=false;
+    void route();
+  });
 });
-// Editorial drafts, review queues and owner account listings must not be
-// resurrected from a browser BFCache after a different account signs in.
-// Retire both mounted private markup and async author/editor render authority.
+// Editorial drafts, reviewer queues and owner-only account listings cannot
+// outlive a BFCache exit or a switch of the authenticated browser session.
 let editorialPrivateNeedsReauthorization=false;
+let editorialRestoreEpoch=0,editorialPageHidden=false,editorialAwaitingSession=false;
 window.addEventListener("pagehide", () => {
+  editorialPageHidden=true;
+  editorialRestoreEpoch++;
   const currentRoute=routeSourceFromLocation(location).replace(/^\/+|\/+$/g,"");
   const mounted=main.querySelector(".builder-layout, .editor-grid");
-  if(!mounted && currentRoute!=="builder" && currentRoute!=="editor")return;
+  const wasReauthorizing=editorialAwaitingSession;
+  editorialAwaitingSession=false;
+  if(!mounted && currentRoute!=="builder" && currentRoute!=="editor" && !wasReauthorizing)return;
   editorialPrivateNeedsReauthorization=true;
   editorViewEpoch++;
   retirePrivateWorkspaceOnPageHide();
   main.replaceChildren();
 });
 window.addEventListener("pageshow", () => {
+  editorialPageHidden=false;
   if(!editorialPrivateNeedsReauthorization)return;
   editorialPrivateNeedsReauthorization=false;
-  // The current cookie and editor role are server authorities. Never replay
-  // private drafts, reviewer identities or account lists from cached HTML.
-  void getSession().catch(()=>null).finally(()=>route());
+  editorialAwaitingSession=true;
+  const restoringEpoch=editorialRestoreEpoch;
+  // Read the current cookie before allowing the existing protected route to
+  // rebuild anything; an abandoned old restore must not resurrect private DOM.
+  void getSession().catch(()=>null).finally(()=>{
+    if(editorialPageHidden || restoringEpoch!==editorialRestoreEpoch)return;
+    editorialAwaitingSession=false;
+    resumePrivateWorkspaceAfterSession();
+    void route();
+  });
 });
 Promise.all([getCMS(), getSession().catch(() => null)]).finally(async () => {
   if (state.user?.profileComplete) await syncProgress();

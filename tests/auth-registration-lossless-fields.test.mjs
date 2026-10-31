@@ -145,3 +145,41 @@ test("omitted and null optional community details remain valid with no sensitive
   assert.ok(statement.sql.includes("INSERT INTO profiles"));
   assert.equal(statement.args.filter(value => value === "Громада" || value === "Місцева громада").length, 0);
 });
+
+for (const invalidLocale of [0, false, [], ["ru"], {}, { code: "en" }]) {
+  test("typed registration locale must not read D1 or send email: " + JSON.stringify(invalidLocale), async () => {
+    const h = fixture();
+    const response = await h.register({ locale: invalidLocale });
+    assert.equal(response.status, 400);
+    assert.equal(response.body.error, "invalid_registration");
+    assert.equal(h.prepared.length, 0);
+    assert.equal(h.batches.length, 0);
+    assert.equal(h.mail.length, 0);
+  });
+}
+
+for (const [input, saved] of [
+  ["uk", "uk"], ["ru", "ru"], ["en", "en"], ["  ru  ", "ru"],
+  ["fr", "uk"], ["sk", "uk"], ["ru-RU", "uk"], ["en-US", "uk"], ["ukX", "uk"],
+]) {
+  test("registration locale persists the exact canonical code or Ukrainian text fallback: " + input, async () => {
+    const h = fixture();
+    const response = await h.register({ locale: input });
+    assert.equal(response.status, 201);
+    assert.equal(response.body.verificationRequired, true);
+    assert.equal(h.batches.length, 2);
+    const profile = h.batches[0][1];
+    assert.match(profile.sql, /INSERT INTO profiles/);
+    assert.equal(profile.args[12], saved, "saved edition cannot come from a truncated prefix");
+    assert.equal(h.mail.length, 1);
+  });
+}
+
+test("missing or null registration locale retains the established Ukrainian default", async () => {
+  for (const choice of [undefined, null]) {
+    const h = fixture();
+    const response = await h.register({ locale: choice });
+    assert.equal(response.status, 201);
+    assert.equal(h.batches[0][1].args[12], "uk");
+  }
+});

@@ -22,7 +22,7 @@ function lifecycleFixture({path='/builder',mounted=true,request=()=>Promise.reso
   let visible=mounted;
   const main={
     querySelector(selector){
-      if(selector==='.builder-layout, .editor-grid')return visible?{}:null;
+      if(selector==='.builder-layout, .editor-grid, .progress-stat, .resume-card')return visible?{}:null;
       return null;
     },
     replaceChildren(){visible=false;events.clear++;},
@@ -122,10 +122,10 @@ test('unrelated public page does not wipe public content or force session read',
   assert.equal(f.controller.epoch(),5);
 });
 
-function withFakeNetwork(requests,fn){
+function withFakeNetwork(requests,fn,pathname='/builder'){
   const previousFetch=globalThis.fetch,previousLocation=globalThis.location;
   globalThis.fetch=()=>requests.shift()?.promise??Promise.reject(Error('unexpected request'));
-  globalThis.location={pathname:'/builder',hash:'',search:''};
+  globalThis.location={pathname,hash:'',search:''};
   resumePrivateWorkspaceAfterSession();
   return Promise.resolve().then(fn).finally(()=>{
     resumePrivateWorkspaceAfterSession();
@@ -137,6 +137,44 @@ function withFakeNetwork(requests,fn){
 const context=shell=>({
   state:{user:{id:'alice'},lang:'en',sessionUnavailable:false},
   t:x=>x,esc:String,shell,setActiveNav(){},
+});
+
+test('personal progress DOM is retired before browser saves a BFCache snapshot',()=>{
+  const f=lifecycleFixture({path:'/progress',mounted:true});
+  f.pagehide();
+  assert.equal(f.events.clear,1);
+  assert.equal(f.events.retire,1);
+  assert.equal(f.controller.needs(),true);
+});
+test('unmounted in-flight progress route is also reauthenticated after pageshow',async()=>{
+  const f=lifecycleFixture({path:'/progress',mounted:false});
+  f.pagehide();f.pageshow();await tick();
+  assert.equal(f.events.clear,1);
+  assert.equal(f.events.auth,1);
+  assert.equal(f.events.route,1);
+});
+test('private progress attempt-history response cannot repaint after pagehide',async()=>{
+  const history=deferred(),drawn=[];
+  await withFakeNetwork([history],async()=>{
+    const c=context(html=>drawn.push(html));
+    c.getMission=async()=>({taskCount:5,title:{en:'Abraham'}});
+    const running=renderWorkspace('progress',c);
+    await tick();
+    retirePrivateWorkspaceOnPageHide();
+    history.resolve({ok:true,json:async()=>({items:[{id:'PRIVATE_ATTEMPT'}]})});
+    await running;
+    assert.deepEqual(drawn,[]);
+  },'/progress');
+});
+test('hidden personal history route does not begin any mission or account request',async()=>{
+  let calls=0;
+  await withFakeNetwork([],async()=>{
+    retirePrivateWorkspaceOnPageHide();
+    const c=context(()=>{throw Error('personal history rendered while hidden')});
+    c.getMission=()=>{calls++;throw Error('mission call while hidden')};
+    await renderWorkspace('progress',c);
+    assert.equal(calls,0);
+  },'/progress');
 });
 
 test('retirement rejects a late editor-role GET before private builder shell renders',async()=>{

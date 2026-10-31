@@ -261,7 +261,14 @@ export function dossierMarkup(catalog,language,requestedId,esc,searchQuery='',co
   const index=`<nav aria-label="${esc(w.index)}"><h2>${esc(w.index)}</h2>${searchForm}${clearSearch}<ol>${matching.map(item=>`<li><a href="${esc(resultHref(item))}"${selected && item.id===selected.id?' aria-current="page"':''}>${esc(item.names[lang])}</a> — ${esc(w[item.type])}</li>`).join('')}</ol></nav>`;
   if(!selected) return `<div class="dossier-layout"><aside class="card dossier-index">${index}</aside><p role="alert">${esc(noMatch?SEARCH_COPY[lang].empty:filteredId?w.filtered:w.unknown)}</p></div>`;
   const references=`<ol>${selected.sources.map(source=>`<li>${cite(source)} — ${esc(w[source.kind])}</li>`).join('')}</ol>`;
-  const relations=`<ul>${selected.related.map(link=>`<li><a href="/dossiers?id=${link.to}">${esc(nodes.find(item=>item.id===link.to).names[lang])}</a> — ${cite(link.via)} — ${esc(w[link.via.kind])}</li>`).join('')}</ul>`;
+  // Preserve the filter only if the related dossier is in the current result set.
+  // Otherwise retain the unfiltered route so a real relation is still reachable.
+  const relationHref=target=>hasQuery && matching.some(item=>item.id===target.id)
+    ? resultHref(target) : '/dossiers?id='+target.id;
+  const relations=`<ul>${selected.related.map(link=>{
+    const target=nodes.find(item=>item.id===link.to);
+    return `<li><a href="${esc(relationHref(target))}">${esc(target.names[lang])}</a> — ${cite(link.via)} — ${esc(w[link.via.kind])}</li>`;
+  }).join('')}</ul>`;
   // Compare any two approved public dossiers through this existing GET route.
   // All source data is already checked by validateDossierGraph above; no
   // generated Scripture text, date, geography or independent-proof claim.

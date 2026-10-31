@@ -3424,16 +3424,18 @@ async function renderGroups() {
     };
 }
 
+// A BFCache page exit retires private group invitations and management details.
+let groupDetailViewEpoch=0,groupDetailNeedsReauthorization=false;
 async function renderGroup(groupId) {
   setActiveNav("groups");
-  const principal = state.user;
+  const principal = state.user,viewEpoch=groupDetailViewEpoch;
   const data = await groupRequest(
       "",
       "GET",
       undefined,
       `groupId=${encodeURIComponent(groupId)}`,
     );
-  if (!groupPageCurrent(`groups/${groupId}`, principal)) return;
+  if (viewEpoch!==groupDetailViewEpoch || !groupPageCurrent(`groups/${groupId}`, principal)) return;
   const group = data.group,
     catalog = await getCatalog(),
     books = catalog.books[state.lang],
@@ -3447,7 +3449,7 @@ async function renderGroup(groupId) {
       const found = books.find((book) => book.code === code);
       return found ? bookTitle(found) : code;
     };
-  if (!groupPageCurrent(`groups/${groupId}`, principal)) return;
+  if (viewEpoch!==groupDetailViewEpoch || !groupPageCurrent(`groups/${groupId}`, principal)) return;
   const names = (data.members || [])
       .map(
         (member) =>
@@ -3497,7 +3499,7 @@ async function renderGroup(groupId) {
         await renderGroup(group.id);
         // The readback can be delayed independently of the successful POST.
         // A departed principal must not hear a former owner's success message.
-        if (!groupPageCurrent(`groups/${groupId}`, principal)) return;
+        if (viewEpoch!==groupDetailViewEpoch || !groupPageCurrent(`groups/${groupId}`, principal)) return;
       }
       announce(successText);
     } catch {
@@ -4486,6 +4488,25 @@ window.addEventListener("hashchange", (event) => {
   route();
 });
 window.addEventListener("popstate", route);
+
+// Group owners can see invite codes and a private management roster. Do not
+// restore that pre-exit DOM from browser back/forward cache for another session.
+// Also fence a group render that was awaiting API/catalog data on page exit.
+window.addEventListener("pagehide", () => {
+  const detail=main.querySelector(".group-detail");
+  const currentRoute=routeSourceFromLocation(location).replace(/^\/+|\/+$/g,"");
+  if(!detail && !/^groups\/[^/]+$/.test(currentRoute))return;
+  groupDetailViewEpoch++;
+  groupDetailNeedsReauthorization=true;
+  detail?.replaceChildren();
+});
+window.addEventListener("pageshow", () => {
+  if(!groupDetailNeedsReauthorization)return;
+  groupDetailNeedsReauthorization=false;
+  // Server session identity, not the BFCache's in-memory principal, decides
+  // whether current group details and invitations may render again.
+  void getSession().catch(()=>null).finally(()=>route());
+});
 Promise.all([getCMS(), getSession().catch(() => null)]).finally(async () => {
   if (state.user?.profileComplete) await syncProgress();
   setStaticI18n();

@@ -57,7 +57,15 @@ test('historical v8 source upgrades representative saved records through v14',()
       INSERT INTO usage_sessions(session_id,user_id,active_seconds) VALUES ('usage','fixture-user',7);
       INSERT INTO community_runs(id,status,control_version) VALUES ('run','paused',3);
     `);
-    for(const name of upgrade)db.exec(sql(name));
+    for (const name of upgrade) {
+      db.exec(sql(name));
+      if (name.startsWith('0012_')) {
+        // Reproduce unsafe coexistence: a still-running v8 Worker can restore
+        // public_church after migration 0010 and before the 0013 cutover guard.
+        db.exec("UPDATE profiles SET public_church=1 WHERE user_id='fixture-user'");
+        assert.equal(db.prepare("SELECT public_church FROM profiles WHERE user_id='fixture-user'").get().public_church,1);
+      }
+    }
     assert.equal(db.prepare("SELECT email FROM accounts WHERE id='fixture-user'").get().email,'fixture@example.invalid');
     assert.equal(db.prepare("SELECT session_version FROM auth_sessions WHERE token_hash='session-hash'").get().session_version,1);
     const p=db.prepare("SELECT church,sensitive_consent_version,public_church FROM profiles WHERE user_id='fixture-user'").get();
@@ -83,6 +91,24 @@ test('historical v8 source upgrades representative saved records through v14',()
       'profiles_public_church_consent_insert_v1',
       'profiles_public_church_consent_update_v1',
     ]);
+    // Exercise the real 0013 INSERT trigger, not only its installed name.
+    // Use a valid new account so a foreign-key failure cannot mask the guard.
+    db.exec("INSERT INTO accounts(id,email,password_hash,password_salt,password_iterations,first_name,last_name) VALUES ('insert-user','insert@example.invalid','hash','salt',100000,'Insert','User')");
+    const insertProfile=(consent,version)=>db.prepare(
+      "INSERT INTO profiles(user_id,email,first_name,last_name,age_range,church,sensitive_consent,sensitive_consent_version,public_church) VALUES ('insert-user','insert@example.invalid','Insert','User','25-34','Private church',?,?,1)"
+    ).run(consent,version);
+    assert.throws(()=>insertProfile(1,0),/public_church_requires_current_explicit_consent/,
+      'legacy registration must not publish without versioned consent');
+    assert.throws(()=>insertProfile(0,1),/public_church_requires_current_explicit_consent/,
+      'a version alone is not explicit consent');
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM profiles WHERE user_id='insert-user'").get().n,0,
+      'rejected registration must not leave a partial profile');
+    insertProfile(1,1);
+    assert.equal(db.prepare("SELECT public_church FROM profiles WHERE user_id='insert-user'").get().public_church,1,
+      'confirmed v1 registration remains functional');
+    assert.throws(()=>db.exec("UPDATE profiles SET sensitive_consent_version=0 WHERE user_id='insert-user'"),
+      /public_church_requires_current_explicit_consent/,
+      'revocation cannot leave public identity behind');
     assert.throws(
       ()=>db.exec("UPDATE profiles SET public_church=1 WHERE user_id='fixture-user'"),
       /public_church_requires_current_explicit_consent/

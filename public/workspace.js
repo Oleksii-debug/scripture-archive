@@ -312,7 +312,7 @@ export function resumePrivateWorkspaceAfterSession() {
 }
 
 export async function renderWorkspace(name,c) {
-  if(name==='builder' && privateWorkspaceSuspended)return;
+  if((name==='builder' || name==='progress') && privateWorkspaceSuspended)return;
   const {state,t,esc,shell,getMission,setActiveNav}=c, w=workspaceCopy(state.lang);
   const epoch=++workspaceRenderEpoch, principal=state.user;
   const path=globalThis.location?.pathname, search=globalThis.location?.search, hash=globalThis.location?.hash;
@@ -322,7 +322,7 @@ export async function renderWorkspace(name,c) {
     globalThis.location?.pathname===path && globalThis.location?.search===search &&
     globalThis.location?.hash===hash;
   const stillCurrent=()=>epoch===workspaceRenderEpoch && samePrincipalRoute() &&
-    !(name==='builder' && privateWorkspaceSuspended);
+    !((name==='builder' || name==='progress') && privateWorkspaceSuspended);
   setActiveNav(name);
   if(name==='about') {
     const catalog=await c.getCatalog();

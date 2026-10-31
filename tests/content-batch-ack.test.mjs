@@ -248,6 +248,11 @@ const upsertWithIdentity = id => ({
 for (const [label, identity] of [
   ["101-character key", existingIdentity+"x"],
   ["101-character spaced key", " "+existingIdentity+"x "],
+  ["leading ASCII whitespace alias", " record"],
+  ["trailing ASCII whitespace alias", "record "],
+  ["surrounded ASCII whitespace alias", " record "],
+  ["leading Unicode whitespace alias", "\u00a0record"],
+  ["trailing newline alias", "record\n"],
   ["numeric key", 42],
   ["array key", ["record"]],
   ["object key", {key:"record"}],
@@ -266,6 +271,11 @@ for (const [label, identity] of [
 for (const [label, identity] of [
   ["101-character key", existingIdentity+"x"],
   ["101-character spaced key", " "+existingIdentity+"x "],
+  ["leading ASCII whitespace alias", " record"],
+  ["trailing ASCII whitespace alias", "record "],
+  ["surrounded ASCII whitespace alias", " record "],
+  ["leading Unicode whitespace alias", "\u00a0record"],
+  ["trailing newline alias", "record\n"],
   ["empty identity", ""],
   ["whitespace identity", "  "],
 ]) {

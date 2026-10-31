@@ -279,6 +279,61 @@ export async function renderReviewedLibrary(root, w, lang, esc, isCurrent = () =
   };
   await load('',null,null);
 }
+const EDITOR_SEARCH_COPY = {
+  uk:{title:'Пошук опублікованих матеріалів',label:'Назва, уривок або джерело',submit:'Знайти',more:'Показати наступні результати',found:n=>'Знайдено в цій частині: '+n,empty:'У цій частині збігів немає.',continuation:'Можна продовжити пошук.',error:'Не вдалося виконати пошук. Спробуйте ще раз.',page:'Результати, частина'},
+  ru:{title:'Поиск опубликованных материалов',label:'Название, отрывок или источник',submit:'Найти',more:'Показать следующие результаты',found:n=>'Найдено в этой части: '+n,empty:'В этой части совпадений нет.',continuation:'Можно продолжить поиск.',error:'Не удалось выполнить поиск. Попробуйте ещё раз.',page:'Результаты, часть'},
+  en:{title:'Find published materials',label:'Title, passage or source',submit:'Search',more:'Show more results',found:n=>'Found in this part: '+n,empty:'No matches in this part.',continuation:'You can continue searching.',error:'Could not search. Try again.',page:'Results, part'}
+};
+// Uses the same public, bounded catalogue search as the library; editorial
+// authority remains on the existing server-side takedown action.
+export function renderEditorialTakedownSearch(root, mainRoot, w, lang, esc, refresh, announce, isCurrent=()=>true, canPresent=isCurrent) {
+  if(!root || !mainRoot)return;
+  const copy=EDITOR_SEARCH_COPY[lang]||EDITOR_SEARCH_COPY.uk;
+  const active=()=>{try{return root.isConnected!==false && mainRoot.isConnected!==false && isCurrent()===true;}catch{return false;}};
+  const present=()=>{try{return mainRoot.isConnected!==false && canPresent()===true;}catch{return false;}};
+  if(!active())return;
+  root.innerHTML=`<h2>${esc(copy.title)}</h2><form class="editor-public-search"><label class="account-field"><span>${esc(copy.label)}</span><input name="query" type="search" maxlength="100"></label><button type="submit" class="button">${esc(copy.submit)}</button></form><p class="editor-public-status" role="status" aria-live="polite"></p><div class="editor-public-results"></div><button type="button" class="button editor-public-more" hidden>${esc(copy.more)}</button>`;
+  const form=root.querySelector('.editor-public-search'),input=form?.querySelector('input'),submit=form?.querySelector('button');
+  const status=root.querySelector('.editor-public-status'),results=root.querySelector('.editor-public-results'),more=root.querySelector('.editor-public-more');
+  if(!form||!input||!status||!results||!more)return;
+  let epoch=0,cursor=null,query='',page=0,loading=false;
+  const attach=()=>results.querySelectorAll('.material-takedown').forEach(target=>{
+    target.onsubmit=async event=>{
+      event.preventDefault();if(!active()||target.isConnected===false)return;
+      const button=target.querySelector('button'),feedback=target.querySelector('[role="status"]');
+      if(!button||!feedback||button.disabled)return;
+      const reason=new FormData(target).get('reason');
+      if(typeof reason!=='string'||reason.trim().length<3||reason.trim().length>2000){feedback.textContent=w.error;return;}
+      const hadFocus=wasEditorialControlFocused(mainRoot,target);button.disabled=true;
+      try {await post({action:'takedown',id:target.dataset.id,reason});if(!active()||target.isConnected===false)return;await refresh();if(!present())return;restoreEditorialFocus(mainRoot,hadFocus);announce(w.takeDownSaved);}
+      catch {if(active()&&target.isConnected!==false){feedback.textContent=w.error;button.disabled=false;}}
+    };
+  });
+  async function load(text,next,trigger) {
+    if(!active())return;
+    const request=++epoch,doc=root.ownerDocument,hadFocus=Boolean(trigger&&doc?.activeElement===trigger);
+    loading=true;
+    try {
+      const data=await post({action:'librarySearch',query:text,cursor:next});
+      if(!active()||request!==epoch)return;
+      const nextCursor=data?.nextCursor;
+      const validCursor=nextCursor===null || (nextCursor && typeof nextCursor.id==='string' && nextCursor.id.length>0 && nextCursor.id.length<=100 && typeof nextCursor.submittedAt==='string' && nextCursor.submittedAt.length>0 && nextCursor.submittedAt.length<=100 && !(next && next.id===nextCursor.id && next.submittedAt===nextCursor.submittedAt));
+      if(!Array.isArray(data?.items)||data.items.length>12||!validCursor||!data.items.every(item=>item && typeof item.id==='string' && item.id.length>0 && item.id.length<=100 && typeof item.title==='string' && item.title.length>0 && item.title.length<=160 && typeof item.reference==='string' && item.reference.length>0 && item.reference.length<=200))throw Error('invalid search result');
+      cursor=nextCursor;query=text;page++;
+      const id=`editor-public-page-${page}`;
+      results.insertAdjacentHTML('beforeend',`<section><h3 id="${id}" tabindex="-1">${esc(copy.page)} ${page}</h3>${data.items.map(item=>`<article><h4>${esc(item.title)}</h4><p>${esc(item.reference)}</p><form class="material-takedown" data-id="${esc(item.id)}"><label class="account-field"><span>${esc(w.takeDownReason)}</span><textarea name="reason" minlength="3" maxlength="2000" required></textarea></label><button class="button" type="submit">${esc(w.takeDown)}</button><p role="status"></p></form></article>`).join('')}</section>`);
+      attach();
+      status.textContent=(data.items.length?copy.found(data.items.length):copy.empty)+(cursor?' '+copy.continuation:'');
+      const shouldFocus=hadFocus&&doc?.activeElement===trigger;
+      more.hidden=!cursor;
+      if(shouldFocus){try{results.querySelector('#'+id)?.focus();}catch{}}
+    } catch {if(active()&&request===epoch)status.textContent=copy.error;}
+    finally {if(request===epoch)loading=false;}
+  }
+  form.onsubmit=event=>{event.preventDefault();if(!active())return;epoch++;page=0;cursor=null;more.hidden=true;results.innerHTML='';void load(input.value.trim(),null,submit);};
+  more.onclick=()=>{if(active()&&!loading&&cursor)void load(query,cursor,more);};
+}
+
 export async function loadReviewData(isEditor) {
   const [mine, queue, history] = await Promise.all([api('/api/material-review?view=mine'), isEditor ? api('/api/material-review?view=queue') : Promise.resolve({items:[]}), isEditor ? api('/api/material-review?view=history') : Promise.resolve({items:[]})]);
   return { mine: mine.items, queue: queue.items, history: history.items };

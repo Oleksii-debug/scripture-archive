@@ -12,7 +12,7 @@ const compiled = ts.transpileModule(source, {
 });
 assert.equal(compiled.diagnostics?.length ?? 0, 0);
 
-function harness(reply, configured = true) {
+function harness(reply, configured = true, baseOrigin = "https://scripture-archive.com") {
   const calls = [];
   const fakeFetch = async (url, options) => {
     calls.push({ url, options });
@@ -23,6 +23,7 @@ function harness(reply, configured = true) {
   const fakeRequire = name => {
     if (name !== "cloudflare:workers") throw Error("Unexpected import: " + name);
     return { env: {
+      APP_BASE_URL: baseOrigin,
       EMAIL_API_KEY: configured ? "nonsecret-test-key" : "",
       EMAIL_FROM: configured ? "noreply@example.invalid" : "",
       SUPPORT_RECIPIENT: "support@example.invalid",
@@ -102,4 +103,40 @@ test("missing mail configuration makes no provider request and no success claim"
     message: "Local test", locale: "ru", attachments: [],
   }), { delivered: false, reason: "email_not_configured" });
   assert.equal(h.calls.length, 0);
+});
+
+
+test("P0: security email never dispatches one-time tokens to an unapproved origin", async () => {
+  const h = harness(accepted({ id: "provider-accepted" }));
+  for (const url of [
+    "https://attacker.example/account?reset=secret",
+    "http://scripture-archive.com/account?reset=secret",
+    "https://user@scripture-archive.com/account?reset=secret",
+    "https://scripture-archive.com/account?reset=secret#fragment",
+    "https://scripture-archive.com\\n/account?reset=secret",
+  ]) {
+    assert.deepEqual(await h.email.sendSecurityEmail("person@example.invalid", "uk", "reset", url),
+      { delivered: false, reason: "security_link_origin_unverified" });
+  }
+  assert.equal(h.calls.length, 0);
+  // Recovery: a rejected input must not poison the subsequent valid request.
+  assert.equal((await h.email.sendSecurityEmail("person@example.invalid", "uk", "reset",
+    "https://scripture-archive.com/account?reset=valid")).delivered, true);
+  assert.equal(h.calls.length, 1);
+});
+
+test("P0: absent, downgraded or non-origin APP_BASE_URL blocks security mail", async () => {
+  for (const base of ["", "http://scripture-archive.com",
+    "https://scripture-archive.com/path", "https://user@scripture-archive.com",
+    "https://scripture-archive.com?source=unsafe", "https://other.example"]) {
+    const h = harness(accepted({ id: "provider-accepted" }), true, base);
+    assert.deepEqual(await h.email.sendSecurityEmail("person@example.invalid", "en", "verify",
+      "https://scripture-archive.com/api/auth?action=verify&token=valid"),
+      { delivered: false, reason: "security_link_origin_unverified" });
+    assert.equal(h.calls.length, 0);
+  }
+  const trailing = harness(accepted({ id: "provider-accepted" }), true, "https://scripture-archive.com/");
+  assert.equal((await trailing.email.sendSecurityEmail("person@example.invalid", "ru", "verify",
+    "https://scripture-archive.com/api/auth?action=verify&token=valid")).delivered, true);
+  assert.equal(trailing.calls.length, 1);
 });

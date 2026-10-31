@@ -9,7 +9,7 @@ const COPY = {
 // Refuse them before parsing instead of silently changing source/licence links.
 const https = value => {
   if (typeof value !== 'string' || !/^https:\/\//i.test(value) ||
-      /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}\s]/u.test(value)) return '';
+      /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}\s\\\u034f\u115f\u1160\u2800\u3164\uffa0]/u.test(value)) return '';
   const authority = value.slice(value.indexOf('://') + 3).split(/[/?#]/u, 1)[0];
   if (!authority || authority.includes('@')) return '';
   try {

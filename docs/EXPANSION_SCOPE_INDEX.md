@@ -1,3 +1,9 @@
+## 2026-10-31 — SA-EXT-01/16 / REGISTRATION_LOCALE_EXACT_TYPED — SCOPED TERMINAL
+
+**Лише цей дефект ЗАКРИТО ДЛЯ РОЗРОБКИ**: канонічний registration API відхиляє явно нестроковий JSON locale і не перетворює `en-US`/`ru-RU` на `en`/`ru` через обрізання. Збережено `uk/ru/en`, missing/null/default та unknown-text→uk. [PR #879](https://github.com/Oleksii-debug/scripture-archive/pull/879) MERGED `main@fc4fd29774de1aa084d23e31c564dbf34e21996a`; [exact-head full Actions #41176279283](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41176279283) SUCCESS; [terminal receipt](roadmap/SA_EXT_01_REGISTRATION_LOCALE_EXACT_TYPED_SCOPED_TERMINAL_20261031.md). `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`, `remaining_scoped_implementation=0`, `necessary_unmerged_feature_PRs=0`. **Батьківські SA-EXT-01/16 OPEN; 03/04 TERMINAL.** Live Sites/Windows/NVDA/SMTP NOT_VERIFIED, не реліз.
+
+---
+
 ## 2026-10-31 — SA-EXT-02 / PRIVATE_READING_BOOK_CODE_EXACT_IDENTITY — SCOPED TERMINAL
 
 **ЗАКРИТО ДЛЯ РОЗРОБКИ лише один реальний дефект, НЕ батьківський SA-EXT-02.** Канонічний `PUT /api/account?action=reading` тепер не перетворює невалідний код книги з пробілами на чинний ідентифікатор збереженого читання. [PR #870](https://github.com/Oleksii-debug/scripture-archive/pull/870) **SQUASH MERGED** у `main@75e453a13beb27a2b89c3725b24feff46db52bc8`. [Exact-head Actions #41174459535](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41174459535) **SUCCESS** (2677 Node PASS, 0 FAIL, 1 SKIP; 22/22 Worker/D1; 2 Python PASS; TypeScript/lint/build PASS). [Остаточна вузька квитанція](docs/roadmap/SA_EXT_02_READING_BOOK_EXACT_IDENTITY_SCOPED_TERMINAL_20261031.md). `remaining_scoped_implementation=0` і `necessary_unmerged_feature_PRs=0` тільки тут. Повний SA-EXT-02 та решта 17 незакритих батьківських розділів залишаються OPEN; Sites SHA/Chrome/Windows/NVDA NOT_VERIFIED.

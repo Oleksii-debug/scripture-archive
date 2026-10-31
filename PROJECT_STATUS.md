@@ -1,3 +1,9 @@
+## 2026-10-31 — SA-EXT-03 / PUBLIC_MATERIAL_LICENSE_URL — ВУЗЬКИЙ ДЕФЕКТ ЗАКРИТО
+
+Канонічний браузерний компонент публічних перевірених матеріалів захищений від прихованого/bidi Unicode та неоднозначних authority у посиланнях на права. [PR #967](https://github.com/Oleksii-debug/scripture-archive/pull/967) SQUASH MERGED `main@420b5e9f2dcb708ef81944d568efbd54af194970`; [CI #41204439232](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41204439232) SUCCESS — Node 3405 PASS, D1 24 PASS, Python 2 PASS, TS/lint/build PASS. [Вузька квитанція](docs/roadmap/SA_EXT_03_CLIENT_LICENSE_URL_SCOPED_TERMINAL_20261031.md) — `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`. Батьківські SA-EXT-01/16 OPEN, SA-EXT-03/04 раніше TERMINAL; реальний Sites/NVDA/Windows/реліз НЕ ПЕРЕВІРЕНІ.
+
+---
+
 ## 2026-10-31 — SA-EXT-03 / MATERIAL_RIGHTS_RAW_UNICODE — ВУЗЬКИЙ ДЕФЕКТ ЗАКРИТО
 
 Захист посилань на права редакційних матеріалів від прихованого Unicode, bidi і фальшивих credential authorities підключено до чинного API; це не новий модуль. [PR #965](https://github.com/Oleksii-debug/scripture-archive/pull/965) **SQUASH MERGED** `main@15d6f1be205a6f8832c806041d737b5fd8fc740c`; [CI #41203870246](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41203870246) **SUCCESS**, 3403 Node PASS, 24 disposable Worker/D1 PASS, 2 Python PASS, TS/lint/build PASS. [Офіційна вузька квитанція](docs/roadmap/SA_EXT_03_MATERIAL_RIGHTS_RAW_UNICODE_SCOPED_TERMINAL_20261031.md) — `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`, `remaining_scoped_implementation=0`, `necessary_unmerged_scoped_feature_PRs=0`. Батьківські SA-EXT-01 і 16 OPEN, 03/04 раніше TERMINAL; production Sites, Windows/NVDA й увесь 20-роздільний план НЕ ЗАКРИТО. Деплою не було.

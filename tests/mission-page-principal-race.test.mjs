@@ -158,3 +158,42 @@ test("healthy mission still renders a native keyboard form and keeps its answer 
   assert.match(h.html[0], /id="answer-form"/);
   assert.equal(typeof h.answerForm.onsubmit, "function");
 });
+
+test("malformed successful mission response is quarantined into accessible retry instead of crashing", async () => {
+  const corrupt = [
+    null, [], {}, { task: null }, { grading: "false", task },
+    { completed: "false", task }, { task: { ...task, type: "unknown" } },
+    { task: { ...task, index: 0 } }, { task: { ...task, total: 0 } },
+    { task: { ...task, index: 6 } }, { task: { ...task, total: 1001 } },
+    { task: { ...task, question: 42 } }, { task: { ...task, question: "   " } },
+    { task: { ...task, options: null } }, { task: { ...task, options: ["only one"] } },
+    { task: { ...task, options: ["A", , "B"] } },
+    { task: { ...task, options: ["A", null] } },
+    { task: { ...task, options: ["A", " ".repeat(3)] } },
+  ];
+  for (const response of corrupt) {
+    const h = fixture({ attemptRequest: action => {
+      assert.equal(action, "current");
+      return response;
+    } });
+    await assert.doesNotReject(h.render(), "bad HTTP 200 should recover: " + String(response?.task?.type));
+    assert.equal(h.html.length, 1);
+    assert.match(h.html[0], /role="status"/);
+    assert.match(h.html[0], /id="retry-attempt"/);
+    assert.doesNotMatch(h.html[0], /id="answer-form"/);
+    assert.equal(h.answerForm.onsubmit, null);
+    assert.equal(typeof h.button.onclick, "function");
+    assert.deepEqual(h.calls, ["current"]);
+    assert.deepEqual(h.resultViews, []);
+  }
+});
+
+test("malformed finalize response preserves retry without disclosing grade or task", async () => {
+  const h = fixture({ attemptRequest: action => action === "current" ? { grading: true } : { task: null } });
+  await assert.doesNotReject(h.render());
+  assert.deepEqual(h.calls, ["current", "finalize"]);
+  assert.equal(h.html.length, 1);
+  assert.match(h.html[0], /id="retry-attempt"/);
+  assert.equal(h.answerForm.onsubmit, null);
+  assert.deepEqual(h.resultViews, []);
+});

@@ -366,11 +366,12 @@ export function dossierAtlasMarkup(catalog,language,esc,query='') {
   // Atlas links must keep the active native GET search, like dossier index links.
   // Otherwise opening a filtered atlas subject silently resets the dossier view.
   // URLSearchParams encodes the query; esc() protects the HTML attribute.
-  // Filtered relation witnesses may point to a valid dossier outside the result set.
-  // Keep its link navigable without attaching a filter that would reject that target.
   const subject=item=>{
+    // Do not link a nonmatching target into a filtered result set; its
+    // published relation citation remains visible and independently readable.
+    if(filtered && !visible(item))return esc(item.names[lang]);
     const params=new URLSearchParams({id:item.id});
-    if(filtered && visible(item))params.set('q',query.trim());
+    if(filtered)params.set('q',query.trim());
     return '<a href="'+esc('/dossiers?'+params.toString())+'">'+esc(item.names[lang])+'</a>';
   };
   // A filtered result retains its position in the approved narrative reading order.

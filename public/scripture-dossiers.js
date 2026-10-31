@@ -23,7 +23,9 @@ const COMPARE_COPY = {
 // Keep the exact raw input bound; do not normalize away unsafe characters.
 const validDossierSearchQuery = value => typeof value === 'string' &&
   value.length <= 120 &&
-  !/[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\ud800-\udfff]/u.test(value);
+  // Historical empty-search/whitespace GET is an intentional unfiltered atlas.
+  (value.trim().length === 0 ||
+    !/[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\ud800-\udfff]/u.test(value));
 const ref=(book,chapter,first,last,kind='narrative')=>({book,chapter,first,last,kind});
 const nodes=[
  {id:'abraham',type:'person',names:{uk:'Авраам (Аврам)',ru:'Авраам (Аврам)',en:'Abraham (Abram)'},

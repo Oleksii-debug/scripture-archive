@@ -99,7 +99,20 @@ export async function controlCommunity(action: string, now = new Date()) {
     .bind(crypto.randomUUID(), COMMUNITY_RUN_ID, action, JSON.stringify({ target: COMMUNITY_TARGET, timezone: "Europe/Warsaw" }), COMMUNITY_RUN_ID, control));
   statements.push(env.DB!.prepare("UPDATE community_runs SET lease_token=NULL WHERE id=? AND lease_token=?").bind(COMMUNITY_RUN_ID,control));
   const result=await env.DB!.batch(statements);
-  return result[0].meta.changes ? {ok:true,status} : {ok:false,error:"run_changed"};
+  // D1 may return an unacknowledged or truncated batch result after a write.
+  // Never tell the owner that START/PAUSE/RESUME/STOP succeeded without
+  // individual durable acknowledgements, including the audit record and
+  // release of our control lease. A zero-row CAS remains an honest conflict.
+  if (!Array.isArray(result) || result.length !== statements.length ||
+      result.some(receipt => receipt?.success !== true ||
+        !Number.isSafeInteger(receipt.meta?.changes) || receipt.meta.changes < 0))
+    throw Error("community_control_write_unconfirmed");
+  if (result[0].meta.changes === 0) return {ok:false,error:"run_changed"};
+  if (result[0].meta.changes !== 1 ||
+      result[result.length - 2].meta.changes !== 1 ||
+      result[result.length - 1].meta.changes !== 1)
+    throw Error("community_control_write_unconfirmed");
+  return {ok:true,status};
 }
 
 export async function communityOwnerState() {

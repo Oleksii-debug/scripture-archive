@@ -90,8 +90,8 @@ test('atomic merge refuses the 2001st saved receipt instead of stranding private
   const exact=JSON.stringify(previous);
   h.setStored(exact);
   const result=await h.put([{book:'EXO',chapter:1,title:'Exodus'}]);
-  assert.equal(result.status,409,'a rejected overflow is a stable conflict, not a false success');
-  assert.equal(result.body.error,'reading_capacity_exceeded');
+  assert.equal(result.status,503,'a rejected overflow cannot be falsely acknowledged');
+  assert.equal(result.body.error,'reading_save_failed');
   assert.equal(h.stored(),exact,'overflow cannot mutate old private history');
   h.sqlite.close();
 });
@@ -105,7 +105,8 @@ test('boundary accepts the 2000th receipt but refuses two new chapters from 1999
   assert.equal(JSON.parse(h.stored()).length,2000);
   const stable=h.stored();
   result=await h.put([{book:'PSA',chapter:1,title:'Psalm'},{book:'EXO',chapter:2,title:'Exodus 2'}]);
-  assert.equal(result.status,409);
+  assert.equal(result.status,503);
+  assert.equal(result.body.error,'reading_save_failed');
   assert.equal(h.stored(),stable,'multi-chapter overflow cannot partially persist');
   h.sqlite.close();
 });

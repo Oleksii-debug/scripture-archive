@@ -37,7 +37,7 @@ function fixture({routePath='groups/g1',detailPresent=true,getGroup=async()=>({g
     route:()=>{events.route++;return Promise.resolve();},
     groupPageCurrent:()=>true,
     groupRequest:(...args)=>getGroup(...args),
-    getCatalog,setActiveNav(){},
+    getCatalog,setActiveNav(){},esc:value=>String(value),bookTitle:book=>book.title??book.code,
   });
   return {controller,handlers,events,detail,location,main,state,
     pagehide(){handlers.get('pagehide')();},

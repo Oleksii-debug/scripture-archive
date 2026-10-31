@@ -116,10 +116,15 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
         : (edition.contentId && fallback?.id === edition.contentId ? fallback : null);
       // Keep a comparison inaccessible if its own source or terms are missing.
       // Never borrow rights metadata from another Bible edition.
-      const source=typeof metadata?.source==='string'?https(metadata.source):'';
-      const license=typeof metadata?.licenseUrl==='string'?https(metadata.licenseUrl):'';
-      if (!metadata || typeof metadata.title!=='string' || !metadata.title.trim()
-          || typeof metadata.license!=='string' || !metadata.license.trim()
+      // Damaged or hostile manifests must not turn one comparison into an
+      // unbounded DOM/clipboard payload. Keep the real edition's own rights;
+      // never truncate authored provenance into a misleading citation.
+      const boundedText=(value,max)=>typeof value==='string' && value.length<=max;
+      const source=boundedText(metadata?.source,4096)?https(metadata.source):'';
+      const license=boundedText(metadata?.licenseUrl,4096)?https(metadata.licenseUrl):'';
+      if (!metadata || !boundedText(metadata.title,512) || !metadata.title.trim()
+          || !boundedText(metadata.license,4096) || !metadata.license.trim()
+          || (metadata.attribution!=null && !boundedText(metadata.attribution,4096))
           || !source || (metadata.licenseUrl!=null && !license)) {
         throw Error('missing or unsafe edition provenance');
       }

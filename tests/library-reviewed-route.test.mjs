@@ -230,6 +230,37 @@ test('failed continuation preserves displayed results and can be retried',async(
   }finally{f.restore();}
 });
 
+
+test('a repeated continuation cursor fails closed without duplicating approved library items',async()=>{
+  const f=scenario('en'), cursor={id:'first-page',submittedAt:'2026-01-01'};
+  let calls=0;
+  try {
+    globalThis.fetch=async (_url,options)=>{
+      const body=JSON.parse(options.body);
+      calls++;
+      if(!body.cursor) return Response.json({
+        items:[libraryItem('first','Verified first item')],nextCursor:cursor,
+      });
+      if(calls===2) return Response.json({
+        items:[libraryItem('duplicate','Should never be displayed')],nextCursor:{...cursor},
+      });
+      return Response.json({items:[libraryItem('second','Verified second item')],nextCursor:null});
+    };
+    await renderWorkspace('library',f.context);
+    assert.equal(f.more.hidden,false);
+    f.more.onclick();await tick();
+    assert.match(f.status.textContent,/Could not complete/);
+    assert.match(f.results.innerHTML,/Verified first item/);
+    assert.doesNotMatch(f.results.innerHTML,/Should never be displayed/);
+    assert.equal(f.more.hidden,false,'invalid continuation stays retryable');
+    f.more.onclick();await tick();
+    assert.equal(calls,3);
+    assert.match(f.results.innerHTML,/Verified second item/);
+    assert.equal((f.results.innerHTML.match(/Verified first item/g)||[]).length,1);
+    assert.equal(f.more.hidden,true);
+  }finally{f.restore();}
+});
+
 test('malformed library responses are errors, not evidence of an empty catalogue',async()=>{
   const f=scenario();
   try {

@@ -90,7 +90,12 @@ const COPY = {
   }
 };
 
-export function workspaceCopy(lang) { return COPY[lang] || COPY.uk; }
+// Locale lookup is not allowed to traverse Object.prototype. Query/storage
+// input such as "__proto__" or "constructor" must have usable Ukrainian copy.
+function ownLocaleCopy(table, lang) {
+  return typeof lang === 'string' && Object.hasOwn(table, lang) ? table[lang] : table.uk;
+}
+export function workspaceCopy(lang) { return ownLocaleCopy(COPY, lang); }
 
 const GROUP_MANAGE={
   uk:{title:'Керування участю',leave:'Вийти з групи',leaveHelp:'Після виходу приватні обговорення групи будуть недоступні. Створені раніше записи зустрічей залишаться в групі.',leaveConfirm:'Вийти з групи?',left:'Ви вийшли з групи.',transferTitle:'Передати власність',transferHelp:'Оберіть учасника, який стане власником. Після передавання ви залишитесь учасником і зможете вийти.',transferLabel:'Новий власник',transfer:'Передати власність',transferConfirm:'Передати власність учаснику: ',transferred:'Власність передано.',noMembers:'Щоб передати власність, спочатку запросіть іншого учасника.',delete:'Видалити групу',deleteHelp:'Буде видалено групу, членство, зустрічі та марафон. Особисті завершені результати залишаться в акаунтах учасників.',deleteConfirm:'Видалити групу разом із зустрічами та марафоном? Цю дію не можна скасувати.',deleted:'Групу видалено.',error:'Не вдалося виконати дію. Перевірте права й повторіть спробу.'},
@@ -163,7 +168,7 @@ export function mountGroupNamePrivacy(form,{request,groupId,copy,isCurrent,onSav
   reload.onclick=load;
   return {ready:load()};
 }
-export function groupManagementCopy(lang){return {...(GROUP_MANAGE[lang]||GROUP_MANAGE.uk),...(GROUP_ROLES[lang]||GROUP_ROLES.uk),...(GROUP_SETTINGS[lang]||GROUP_SETTINGS.uk),...(GROUP_NAME_COPY[lang]||GROUP_NAME_COPY.uk)};}
+export function groupManagementCopy(lang){return {...ownLocaleCopy(GROUP_MANAGE,lang),...ownLocaleCopy(GROUP_ROLES,lang),...ownLocaleCopy(GROUP_SETTINGS,lang),...ownLocaleCopy(GROUP_NAME_COPY,lang)};}
 export function groupManagementMarkup(data,lang,esc){
   const w=groupManagementCopy(lang);
   if(!data.membership)return '';
@@ -223,7 +228,7 @@ function validAttemptHistoryPayload(history, chapterBounds) {
 }
 
 export function missionHistoryMarkup(history, lang, esc, chapterBounds) {
-  const w=HISTORY[lang] || HISTORY.uk;
+  const w=ownLocaleCopy(HISTORY,lang);
   let content;
   if(history.guest) content=`<p>${w.login}</p>`;
   else if(history.error) content=`<p role="status">${w.error}</p><button class="button" id="retry-mission-history">${w.retry}</button>`;
@@ -270,7 +275,7 @@ const REVIEW_COPY={
 };
 export function reviewScheduleMarkup(history,lang,esc,now=new Date(),chapterBounds) {
   if(history.guest||history.error||history.locked||!validAttemptHistoryPayload(history,chapterBounds))return '';
-  const w=REVIEW_COPY[lang]||REVIEW_COPY.uk,suggestions=reviewSuggestions(history.attempts,now,chapterBounds);
+  const w=ownLocaleCopy(REVIEW_COPY,lang),suggestions=reviewSuggestions(history.attempts,now,chapterBounds);
   return `<section class="card resume-card"><h2>${w.title}</h2><p>${w.description}</p>${suggestions.length?`<ol>${suggestions.map(item=>`<li><p>${esc(item.book)} ${item.chapter} — ${item.due?w.due:w.later} <time datetime="${item.dueAt}">${item.dueAt}</time> UTC</p><a class="button" href="/reader/${encodeURIComponent(item.book)}/${item.chapter}">${w.open}: ${esc(item.book)} ${item.chapter}</a></li>`).join('')}</ol>`:`<p>${w.empty}</p>`}</section>`;
 }
 
@@ -282,7 +287,7 @@ const EDITION_ABOUT = {
 // Reuse the identical raw-URL provenance authority as the live parallel reader.
 
 export function editionAboutMarkup(catalog,lang,esc) {
-  const w=EDITION_ABOUT[lang]||EDITION_ABOUT.uk;
+  const w=ownLocaleCopy(EDITION_ABOUT,lang);
   const editions=[catalog?.translations?.['uk-ohiienko'],catalog?.editions?.uk,catalog?.editions?.ru,catalog?.editions?.en];
   const entries=editions.map(edition=>{
     if(!edition||typeof edition.title!=='string')return `<li>${w.missing}</li>`;

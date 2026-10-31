@@ -7,8 +7,18 @@ const source = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8'
 const start = source.indexOf('function validBibleCatalog(');
 const end = source.indexOf('\nasync function getCatalog(', start);
 assert.ok(start >= 0 && end > start, 'production reader catalog validator exists');
-const { validate, choose } = new Function(source.slice(start, end) +
-  '\nreturn { validate: validBibleCatalog, choose: catalogBooksForEdition };')();
+const validate = new Function(source.slice(start, end) + '\nreturn validBibleCatalog;')();
+// Extract the two existing native reader expressions directly; do not
+// duplicate or replace their canonical implementation in this regression.
+const entryStart = source.indexOf('const entries = state.catalog?.editionBooks');
+const entryEnd = source.indexOf('\n        const expectedChapters', entryStart);
+const readerStart = source.indexOf('  const books = catalog.editionBooks && Object.hasOwn(');
+const readerEnd = source.indexOf('\n  const code = ', readerStart);
+assert.ok(entryStart >= 0 && entryEnd > entryStart && readerStart >= 0 && readerEnd > readerStart);
+const chooseForBook = new Function('state', 'edition', 'requestLocale',
+  source.slice(entryStart, entryEnd) + '\nreturn entries;');
+const chooseForReader = new Function('catalog', 'chosenEdition', 'state',
+  source.slice(readerStart, readerEnd) + '\nreturn books;');
 const catalog = JSON.parse(readFileSync(new URL('../public/data/catalog.json', import.meta.url), 'utf8'));
 const clone = () => structuredClone(catalog);
 
@@ -90,11 +100,16 @@ test('never selects a forged inherited alternate inventory for reader or book fe
   alternate[0].title = 'UNVERIFIED INHERITED TITLE';
   Object.setPrototypeOf(damaged.editionBooks, {'uk-ohiienko':alternate});
   assert.equal(validate(damaged), false, 'validator rejects uninspected inherited edition');
-  assert.equal(choose(damaged, 'uk-ohiienko', 'uk'), damaged.books.uk,
-    'reader and book fetch use only an own-key approved alternate');
-  assert.equal(choose(catalog, 'uk-ohiienko', 'uk'), catalog.editionBooks['uk-ohiienko'],
-    'healthy local Ohiienko edition remains selected');
-  assert.equal(choose(catalog, 'uk-kulish', 'uk'), catalog.books.uk,
+  for (const select of [
+    c => chooseForReader(c, {id:'uk-ohiienko'}, {lang:'uk'}),
+    c => chooseForBook({catalog:c}, {id:'uk-ohiienko'}, 'uk'),
+  ]) {
+    assert.equal(select(damaged), damaged.books.uk,
+      'reader and book fetch reject inherited alternate');
+    assert.equal(select(catalog), catalog.editionBooks['uk-ohiienko'],
+      'healthy local Ohiienko edition remains selected');
+  }
+  assert.equal(chooseForReader(catalog, {id:'uk-kulish'}, {lang:'uk'}), catalog.books.uk,
     'primary historical Ukrainian edition retains its fallback');
   const nullPrototype = clone();
   Object.setPrototypeOf(nullPrototype.editionBooks, null);

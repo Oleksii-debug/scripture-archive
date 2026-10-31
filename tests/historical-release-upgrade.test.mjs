@@ -143,7 +143,8 @@ test('historical v8 source upgrades representative saved records through v16',()
     // not only on a freshly created database. A previously public name is
     // not permission to list a real person in the community directory.
     const legacyCommunity=db.prepare("SELECT public_first_name,public_community FROM profiles WHERE user_id='fixture-user'").get();
-    assert.deepEqual(legacyCommunity,{public_first_name:1,public_community:0});
+    assert.equal(legacyCommunity.public_first_name,1);
+    assert.equal(legacyCommunity.public_community,0);
     const communityGuards=db.prepare(
       "SELECT name FROM sqlite_master WHERE type='trigger' AND tbl_name='profiles' AND name LIKE 'profiles_public_community_%' ORDER BY name"
     ).all().map(row=>row.name);
@@ -172,10 +173,9 @@ test('historical v8 source upgrades representative saved records through v16',()
     );
     assert.equal(db.prepare("SELECT public_first_name FROM profiles WHERE user_id='fixture-user'").get().public_first_name,1);
     db.exec("UPDATE profiles SET public_community=0,public_first_name=0 WHERE user_id='fixture-user'");
-    assert.deepEqual(
-      db.prepare("SELECT public_first_name,public_community FROM profiles WHERE user_id='fixture-user'").get(),
-      {public_first_name:0,public_community:0}
-    );
+    const recoveredCommunity=db.prepare("SELECT public_first_name,public_community FROM profiles WHERE user_id='fixture-user'").get();
+    assert.equal(recoveredCommunity.public_first_name,0);
+    assert.equal(recoveredCommunity.public_community,0);
     assert.equal(db.prepare('PRAGMA foreign_key_check').all().length,0);
   } finally {db.close();}
 });

@@ -10,7 +10,11 @@ const compile=file=>ts.transpileModule(readFileSync(new URL(file,import.meta.url
 const authCode=compile('../lib/auth.ts'),routeCode=compile('../app/api/auth/route.ts');
 function fixture(){
   const db=new DatabaseSync(':memory:');
-  db.exec('CREATE TABLE auth_sessions(token_hash TEXT PRIMARY KEY,user_id TEXT,session_version INTEGER,user_agent_hash TEXT,created_at TEXT,expires_at TEXT,revoked_at TEXT)');
+  // The real session INSERT now reads the verified account snapshot.
+  // Keep this existing route-level receipt fixture representative of that D1 schema.
+  db.exec(`CREATE TABLE accounts(id TEXT PRIMARY KEY,email_verified_at TEXT,deleted_at TEXT,session_version INTEGER NOT NULL);
+    INSERT INTO accounts VALUES ('alice','2026-01-01',NULL,1);
+    CREATE TABLE auth_sessions(token_hash TEXT PRIMARY KEY,user_id TEXT,session_version INTEGER,user_agent_hash TEXT,created_at TEXT,expires_at TEXT,revoked_at TEXT)`);
   let mode='ok';
   const D1={prepare(sql){return {bind(...args){return {
     async run(){

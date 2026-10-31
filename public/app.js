@@ -4174,7 +4174,7 @@ function renderAccount() {
     };
     logoutButton.onclick=async()=>{
       if(!accountCurrent()||document.querySelector("#logout-button")!==logoutButton)return;
-      try { await authRequest("logout");finishAccountExit(); }
+      try { const result=await authRequest("logout");if(result?.ok!==true)throw Error("unconfirmed_logout");finishAccountExit(); }
       catch {
         if(accountCurrent()&&document.querySelector("#logout-button")===logoutButton){
           const status=document.querySelector("#account-logout-state");if(status)status.textContent=copy.error;
@@ -4196,7 +4196,7 @@ function renderAccount() {
     if(passwordForm)passwordForm.onsubmit=async event=>{
       event.preventDefault();if(!accountCurrent()||document.querySelector("#password-form")!==passwordForm)return;
       const status=document.querySelector("#password-state"),data=Object.fromEntries(new FormData(event.currentTarget));
-      try{await authRequest("change-password",data);finishAccountExit()}
+      try{const result=await authRequest("change-password",data);if(result?.ok!==true)throw Error("unconfirmed_password_change");finishAccountExit()}
       catch{if(accountCurrent()&&document.querySelector("#password-form")===passwordForm&&status)status.textContent=copy.error}
     };
     const deleteForm=document.querySelector("#delete-form");

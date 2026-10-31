@@ -11,7 +11,14 @@ type RightsMetadata = { holder: string; basis: RightsBasis; licenseUrl: string |
 const RIGHTS_BASES = new Set<RightsBasis>(["original", "permission", "open_license", "public_domain"]);
 
 function httpsUrl(value: unknown): string | null {
-  if (typeof value !== "string" || value.length < 9 || value.length > 500 || value.trim() !== value || /[\u0000-\u0020\u007f]/.test(value)) return null;
+  // Match the canonical reader's raw-provenance boundary. WHATWG URL
+  // percent-encodes bidi/invisible Unicode and silently accepts an empty
+  // user-info delimiter, so inspect the original string before parsing.
+  if (typeof value !== "string" || value.length < 9 || value.length > 500 ||
+      value.trim() !== value || !/^https:\/\//i.test(value) ||
+      /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}\s]/u.test(value)) return null;
+  const authority = value.slice(value.indexOf("://") + 3).split(/[/?#]/u, 1)[0];
+  if (!authority || authority.includes("@")) return null;
   try {
     const parsed = new URL(value);
     return parsed.protocol === "https:" && !parsed.username && !parsed.password ? parsed.href : null;

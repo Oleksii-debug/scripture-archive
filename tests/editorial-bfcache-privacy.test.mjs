@@ -18,7 +18,7 @@ function deferred(){
   return {promise,resolve,reject};
 }
 function lifecycleFixture({path='/builder',mounted=true,request=()=>Promise.resolve({id:'alice'})}={}){
-  const handlers=new Map(),events={clear:0,auth:0,route:0,retire:0};
+  const handlers=new Map(),events={clear:0,auth:0,route:0,retire:0,resume:0};
   let visible=mounted;
   const main={
     querySelector(selector){
@@ -32,6 +32,7 @@ function lifecycleFixture({path='/builder',mounted=true,request=()=>Promise.reso
     window:{addEventListener:(type,callback)=>handlers.set(type,callback)},
     main,location,routeSourceFromLocation,
     retirePrivateWorkspaceOnPageHide:()=>events.retire++,
+    resumePrivateWorkspaceAfterSession:()=>events.resume++,
     getSession:()=>{events.auth++;return request();},
     route:()=>{events.route++;return Promise.resolve();},
   });

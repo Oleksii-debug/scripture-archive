@@ -41,6 +41,14 @@ function confirmedBatch(results: unknown, expected: number): number[] | null {
   return changes.every(value => value !== null) ? changes as number[] : null;
 }
 function clean(value: unknown, max = 100) { return typeof value === "string" ? value.trim().slice(0, max) : ""; }
+// Bible book codes are identifiers, not prose. Truncating or coercing input
+// can turn a malformed request into a legitimate existing chapter and consume
+// reading receipts or invalidate an unrelated active assessment.
+function requestedBook(value: unknown): string | null {
+  if (typeof value !== "string" || value.length < 2 || value.length > 8 ||
+      value !== value.trim() || !/^[a-z0-9]+$/i.test(value)) return null;
+  return value.toUpperCase();
+}
 // Group mode is an assessment and durable-progress authority. A malformed
 // explicit group identifier must not silently become a personal attempt, and
 // truncating a long identifier must not alias a real group's ID.
@@ -333,8 +341,9 @@ export async function POST(request: Request) {
   if (!body) return json({ error: "invalid_json" }, 400);
 
   if (action === "chapter") {
-    const book = clean(body.book, 8).toUpperCase(), chapter = requestedChapter(body.chapter);
-    if (!book || chapter === null) return json({ error: "invalid_chapter" }, 400);
+    const book = requestedBook(body.book), chapter = requestedChapter(body.chapter);
+    if (book === null) return json({ error: "invalid_book" }, 400);
+    if (chapter === null) return json({ error: "invalid_chapter" }, 400);
     const currentActor = await actor(request);
     if (!currentActor) return json({ invalidated: false });
     // Invalidate before reporting a match: a read-only lookup would reveal the
@@ -351,8 +360,9 @@ export async function POST(request: Request) {
   if (action === "read") {
     const currentActor = await actor(request, true);
     if (!currentActor) return json({ error: "actor_unavailable" }, 401);
-    const book = clean(body.book, 8).toUpperCase(), chapter = requestedChapter(body.chapter), groupId = requestedGroupId(body.groupId);
+    const book = requestedBook(body.book), chapter = requestedChapter(body.chapter), groupId = requestedGroupId(body.groupId);
     if (groupId === null) return json({ error: "invalid_group" }, 400);
+    if (book === null) return json({ error: "invalid_book" }, 400);
     if (chapter === null) return json({ error: "invalid_chapter" }, 400);
     if (!tasksFor(book, chapter).length) return json({ error: "mission_chapter_unavailable" }, 404);
     if (groupId && (!currentActor.identity || !await groupFacilitator(groupId, currentActor.identity.userId))) return json({ error: "group_facilitator_required" }, 403);
@@ -368,8 +378,9 @@ export async function POST(request: Request) {
     const currentActor = await actor(request, true);
     if (!currentActor) return json({ error: "actor_unavailable" }, 401);
     if (currentActor.identity && !currentActor.identity.emailVerified) return json({ error: "email_verification_required" }, 403);
-    const book = clean(body.book, 8).toUpperCase(), chapter = requestedChapter(body.chapter), selectedLocale = requestedLocale(body.locale), groupId = requestedGroupId(body.groupId);
+    const book = requestedBook(body.book), chapter = requestedChapter(body.chapter), selectedLocale = requestedLocale(body.locale), groupId = requestedGroupId(body.groupId);
     if (groupId === null) return json({ error: "invalid_group" }, 400);
+    if (book === null) return json({ error: "invalid_book" }, 400);
     if (chapter === null) return json({ error: "invalid_chapter" }, 400);
     if (selectedLocale === null) return json({ error: "invalid_locale" }, 400);
     const available = tasksFor(book, chapter);

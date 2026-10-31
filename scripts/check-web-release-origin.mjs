@@ -14,6 +14,11 @@ export function normalizeSecureOrigin(value, label = 'origin') {
   // making a credential-bearing authority indistinguishable from a bare host.
   if (/^https:\/\/[^/?#]*@/iu.test(value))
     throw new Error(`${label}: invalid URL userinfo separator`);
+  // WHATWG URL repairs malformed HTTPS separators, backslashes, dot segments,
+  // percent-encoded hostnames and empty query/hash delimiters before inspection.
+  // Release authority must be a literal bare origin, not only normalize to one.
+  if (!/^https:\/\/[^\/?#\\%]+\/?$/iu.test(value))
+    throw new Error(`${label}: invalid URL syntax; use a literal bare HTTPS origin`);
   let url;
   try { url = new URL(value); }
   catch { throw new Error(`${label}: invalid URL`); }

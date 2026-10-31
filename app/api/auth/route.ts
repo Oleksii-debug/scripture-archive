@@ -79,7 +79,15 @@ function registrationTextExceedsLimit(data: Body): boolean {
     (value != null && typeof value !== "string") ||
     (typeof value === "string" && value.trim().length > max));
 }
-function locale(value: unknown) { const result = clean(value, 2); return LOCALES.has(result) ? result : "uk"; }
+function locale(value: unknown): string | null {
+  // Historical missing/null or unsupported textual language choices fall
+  // back to Ukrainian, but a wrong JSON type must not be disguised as one.
+  if (value === undefined || value === null || value === "") return "uk";
+  if (typeof value !== "string") return null;
+  // Never truncate "en-US"/"ru-RU"/"ukX" into a different exact edition.
+  const result = value.trim();
+  return LOCALES.has(result) ? result : "uk";
+}
 function baseUrl(request: Request) { return (env.APP_BASE_URL || new URL(request.url).origin).replace(/\/$/, ""); }
 async function body(request: Request) { return request.json().catch(() => null) as Promise<Body | null>; }
 // A returned D1 batch is not a durable success receipt unless every
@@ -152,7 +160,7 @@ export async function POST(request: Request) {
     const hasChildren = data.hasChildren === true ? 1 : data.hasChildren === false ? 0 : null;
     const sensitiveConsent = data.acceptSensitive === true;
     if (!await rateLimit(`register:${address}`, 5, 3600)) return json({ error: "too_many_requests" }, 429);
-    if (registrationTextExceedsLimit(data)) return json({ error: "invalid_registration" }, 400);
+    if (registrationTextExceedsLimit(data) || selectedLocale === null) return json({ error: "invalid_registration" }, 400);
     if (!EMAIL.test(email) || !validPassword(password) || !firstName || !lastName || age === null || !GENDERS.has(gender) || (tradition && !TRADITIONS.has(tradition)) || !MARITAL.has(maritalStatus) || data.acceptPrivacy !== true)
       return json({ error: "invalid_registration" }, 400);
     if (!sensitiveConsent && ((tradition && tradition !== "prefer_not") || denomination || church))

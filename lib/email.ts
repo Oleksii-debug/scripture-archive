@@ -48,7 +48,7 @@ function trustedSecurityLink(url: string): boolean {
     const base = new URL(declared), target = new URL(url);
     if (base.protocol !== "https:" ||
         (declared !== base.origin && declared !== `${base.origin}/`)) return false;
-    if (url !== url.trim() || /[\\u0000-\\u001f\\u007f]/u.test(url)) return false;
+    if (url !== url.trim() || /[\u0000-\u001f\u007f]/u.test(url)) return false;
     return target.protocol === "https:" && target.origin === base.origin &&
       !target.username && !target.password && !target.hash;
   } catch { return false; }

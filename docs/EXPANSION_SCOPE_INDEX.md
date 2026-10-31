@@ -5,6 +5,9 @@
 
 ## Перевірені вузькі закриття (не закриття батьківського розділу)
 
+- **SA-EXT-01 — безпечні обсяги основної біблійної читальні:** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` лише для реальних `getBook()` chapter/verse bounds, sparse-відмови та HTTP retry. [Код #864](https://github.com/Oleksii-debug/scripture-archive/pull/864) злитий `main@eb60a7d9a8f90f8287f039887606748c20838de3`; [CI #41171867181](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41171867181) SUCCESS (2668 Node PASS, 22 Worker/D1, TypeScript/lint/build, 2 Python). [Остаточна квитанція](roadmap/SA_EXT_01_PRIMARY_READER_CHAPTER_BOUNDS_SCOPED_TERMINAL_20261031.md). **Батьківський SA-EXT-01 OPEN; live Sites/Windows/Chrome/NVDA NOT_VERIFIED.**
+
+
 
 - **SA-EXT-02 — точна ідентичність збереженої навчальної спроби (`GET current`, `POST invalidate/finalize/answer`):** `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` лише для неправильно обрізаних або нормалізованих attempt ID. [PR #860](https://github.com/Oleksii-debug/scripture-archive/pull/860) **MERGED** `main@e4d154632fe850516d9206d4e567a5940662fa32`; [повний CI #41170903151](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41170903151) **SUCCESS**, збережено чесний 503 під час збою авторизації. [Офіційна квитанція](roadmap/SA_EXT_02_EXACT_ATTEMPT_IDENTITY_SCOPED_TERMINAL_20261031.md). Повний SA-EXT-02 **OPEN**; продуктивний сайт, фізичний NVDA і реліз не підтверджено.
 

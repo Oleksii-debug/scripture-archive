@@ -176,9 +176,13 @@ export async function createSession(request: Request, userId: string, version: n
   const token = randomToken();
   const tokenHash = await sha256(token);
   const userAgentHash = await sha256(request.headers.get("user-agent") || "unknown");
+  // The login password may have been verified before a concurrent reset,
+  // password change or account deletion. A version-blind VALUES insert can
+  // acknowledge a cookie for a session that cannot authenticate. Use one
+  // atomic INSERT...SELECT against the verified account version instead.
   const receipt=await env.DB.prepare(
-    "INSERT INTO auth_sessions (token_hash,user_id,session_version,user_agent_hash,created_at,expires_at) VALUES (?,?,?,?,CURRENT_TIMESTAMP,datetime('now','+30 days'))",
-  ).bind(tokenHash, userId, version, userAgentHash).run();
+    "INSERT INTO auth_sessions (token_hash,user_id,session_version,user_agent_hash,created_at,expires_at) SELECT ?,a.id,a.session_version,?,CURRENT_TIMESTAMP,datetime('now','+30 days') FROM accounts a WHERE a.id=? AND a.session_version=? AND a.deleted_at IS NULL AND a.email_verified_at IS NOT NULL",
+  ).bind(tokenHash, userAgentHash, userId, version).run();
   // Never issue a usable-looking cookie for a session without a confirmed insert.
   if(receipt?.success!==true || typeof receipt.meta?.changes!=="number" || receipt.meta.changes!==1)
     throw new Error("session_create_unavailable");

@@ -1,3 +1,9 @@
+## 2026-10-31 — R0.1 / PUBLIC_APP_JS_MIME_GATE — CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL
+
+**ЗАКРИТО ТІЛЬКИ ПЕРЕВІРКУ MIME/UTF-8, НЕ ПОВНИЙ РОЗДІЛ.** PR [#987](https://github.com/Oleksii-debug/scripture-archive/pull/987) SQUASH MERGED `main@171bbcb7b7ffe78e59ec8d3ab8897ffe86ccc0de`; [native CI #41220160624](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41220160624) COMPLETED SUCCESS (Node, TypeScript, lint, source build, disposable Worker/D1, Python). [Офіційний scoped-акт](R0_1_PUBLIC_JS_MIME_GATE_SCOPED_TERMINAL_20261031.md). `remaining_scoped_implementation=0`, `necessary_unmerged_scoped_feature_PRs=0`. **R0.1, решта батьківських SA-EXT і live release залишаються OPEN/NOT_VERIFIED; жодного деплою.**
+
+---
+
 ## 2026-10-31 — SA-EXT-06 / DOSSIER_ATLAS_FILTER_CONTINUITY — CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL
 
 **РОЗДІЛ №SA-EXT-06 — ЗАКРИТО ДЛЯ РОЗРОБКИ ЛИШЕ ЦЕЙ ДЕФЕКТ ПОШУКУ В АТЛАСІ.** Канонічна сторінка `/dossiers?q=...` тепер фільтрує обидва пов'язані подання: індекс досьє та текстовий атлас, включно з перевіреними біблійними джерелами, місцями, додатковими темами та зв'язками; збережено нативну клавіатурну навігацію, UK/RU/EN, повний не фільтрований режим і fail-closed невірні запити. Це чинний `public/workspace.js` + `public/scripture-dossiers.js`, не відокремлений модуль.

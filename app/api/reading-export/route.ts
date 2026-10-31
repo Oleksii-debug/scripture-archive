@@ -41,7 +41,7 @@ export async function GET(request: Request) {
   if (!identity || identity.provider === "agent") return error("authentication_required", 401);
   try {
     const [profile, progress, bookmarks, attempts] = await env.DB.batch([
-      env.DB.prepare(`SELECT first_name,last_name,age_range,age,tradition,denomination,church,marital_status,gender,has_children,locale,sensitive_consent,sensitive_consent_version,privacy_accepted_at,public_first_name,public_last_name,public_church,public_progress,created_at,updated_at FROM profiles WHERE user_id=?`).bind(identity.userId),
+      env.DB.prepare(`SELECT first_name,last_name,age_range,age,tradition,denomination,church,marital_status,gender,has_children,locale,sensitive_consent,sensitive_consent_version,privacy_accepted_at,public_first_name,public_last_name,public_church,public_progress,public_community,created_at,updated_at FROM profiles WHERE user_id=?`).bind(identity.userId),
       env.DB.prepare("SELECT mission_id,data,updated_at FROM progress WHERE user_id=? ORDER BY mission_id").bind(identity.userId),
       env.DB.prepare("SELECT edition,book,chapter,created_at FROM reader_bookmarks WHERE user_id=? ORDER BY created_at,book,chapter").bind(identity.userId),
       env.DB.prepare("SELECT id,mission_id,book_id,chapter,group_id,locale,started_at,completed_at,result_json FROM mission_attempts WHERE actor_id=? AND status='completed' ORDER BY completed_at,id").bind(identity.userId),

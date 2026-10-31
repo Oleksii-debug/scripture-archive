@@ -37,7 +37,7 @@ await request(`/api/auth?action=verify&token=${encodeURIComponent(registered.tes
 actions.push("register", "verify_local_token");
 await request("/api/auth?action=login", {email,password});actions.push("sign_in");
 const identity=await request("/api/account?action=me");
-await request("/api/account?action=visibility",{firstName:true,lastName:true,church:false,progress:true},"PUT");
+await request("/api/account?action=visibility",{firstName:true,lastName:true,church:false,progress:true,community:true},"PUT");
 const manifest=await request("/api/attempts?action=manifest");
 const passage=manifest.chapters[0];
 const chapter=await request(`/data/bible/en/${passage.book}.json`);

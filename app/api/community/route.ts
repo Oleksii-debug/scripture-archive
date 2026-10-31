@@ -82,8 +82,8 @@ export async function GET(request: Request) {
         CASE WHEN p.public_progress=1 THEN COUNT(DISTINCT CASE WHEN pr.mission_id LIKE 'OT-AB-01:%' THEN pr.mission_id END) ELSE 0 END mission_count
       FROM accounts a JOIN profiles p ON p.user_id=a.id
       LEFT JOIN usage_sessions s ON s.user_id=a.id LEFT JOIN progress pr ON pr.user_id=a.id
-      WHERE a.deleted_at IS NULL AND (p.public_first_name=1 OR p.public_last_name=1)
-      GROUP BY a.id,p.first_name,p.last_name,p.public_first_name,p.public_last_name,p.public_progress,p.locale,a.created_at`),
+      WHERE a.deleted_at IS NULL AND p.public_community=1 AND (p.public_first_name=1 OR p.public_last_name=1)
+      GROUP BY a.id,p.first_name,p.last_name,p.public_first_name,p.public_last_name,p.public_progress,p.public_community,p.locale,a.created_at`),
   ]);
 
   // A resolved D1 batch is not a successful read unless each individual

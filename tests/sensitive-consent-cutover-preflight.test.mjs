@@ -12,7 +12,7 @@ const migration = readFileSync(new URL("../drizzle/0010_sensitive_consent_eviden
 const guardMigration = readFileSync(new URL("../drizzle/0013_public_church_consent_guard.sql", import.meta.url), "utf8");
 const account = readFileSync(new URL("../app/api/account/route.ts", import.meta.url), "utf8");
 // Use the EXACT shipped guarded visibility SQL rather than a newly invented policy.
-const actualWriter = account.match(/UPDATE profiles SET public_first_name=\?,public_last_name=\?,public_church=CASE WHEN sensitive_consent=1 AND sensitive_consent_version=1 THEN \? ELSE 0 END,public_progress=\?,updated_at=CURRENT_TIMESTAMP WHERE user_id=\?/);
+const actualWriter = account.match(/UPDATE profiles SET public_first_name=\?,public_last_name=\?,public_church=CASE WHEN sensitive_consent=1 AND sensitive_consent_version=1 THEN \? ELSE 0 END,public_progress=\?,public_community=\?,updated_at=CURRENT_TIMESTAMP WHERE user_id=\?/);
 assert.ok(actualWriter, "canonical visibility writer must retain its consent gate");
 
 function fixture() {
@@ -27,6 +27,7 @@ function fixture() {
     public_first_name INTEGER NOT NULL DEFAULT 0,
     public_last_name INTEGER NOT NULL DEFAULT 0,
     public_progress INTEGER NOT NULL DEFAULT 0,
+    public_community INTEGER NOT NULL DEFAULT 0,
     updated_at TEXT
   );`);
   db.prepare("INSERT INTO profiles(user_id,sensitive_consent,public_church,church) VALUES (?,?,?,?)")
@@ -63,12 +64,12 @@ test("the exact canonical visibility writer cannot re-publish without versioned 
   const f = fixture();
   try {
     f.db.exec(migration);
-    f.db.prepare(actualWriter[0]).run(1, 1, 1, 1, "legacy");
+    f.db.prepare(actualWriter[0]).run(1, 1, 1, 1, 0, "legacy");
     assert.equal(verifyConsentFile(f.path).unsafe, 0);
     assert.equal(f.db.prepare("SELECT public_church FROM profiles").get().public_church, 0);
     // A NEW explicit versioned consent may allow the user's own chosen visibility.
     f.db.prepare("UPDATE profiles SET sensitive_consent=1,sensitive_consent_version=1 WHERE user_id=?").run("legacy");
-    f.db.prepare(actualWriter[0]).run(1, 1, 1, 1, "legacy");
+    f.db.prepare(actualWriter[0]).run(1, 1, 1, 1, 0, "legacy");
     assert.deepEqual(verifyConsentFile(f.path), { total: 1, unsafe: 0, safe: true });
     assert.equal(f.db.prepare("SELECT public_church FROM profiles").get().public_church, 1);
   } finally { f.close(); }

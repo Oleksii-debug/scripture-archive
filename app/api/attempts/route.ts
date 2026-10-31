@@ -52,6 +52,13 @@ function requestedBook(value: unknown): string | null {
 // Group mode is an assessment and durable-progress authority. A malformed
 // explicit group identifier must not silently become a personal attempt, and
 // truncating a long identifier must not alias a real group's ID.
+// Attempt IDs identify durable assessments; trimming or slicing an ID can
+// point a malformed request at an unrelated valid assessment owned by the
+// same principal. The canonical server generates UUID-style ASCII IDs.
+function requestedAttemptId(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 && value.length <= 80 &&
+    /^[A-Za-z0-9_-]+$/.test(value) ? value : null;
+}
 function requestedGroupId(value: unknown): string | null {
   if (value === undefined || value === null || value === "") return "";
   if (typeof value !== "string") return null;
@@ -312,7 +319,8 @@ export async function GET(request: Request) {
       return json({ attempts: (history.results as Array<Record<string, unknown>>).map(row => ({ id: row.id, book: row.book_id, chapter: row.chapter, mode: row.group_id ? "group" : "personal", score: row.score, total: row.total, completedAt: row.completed_at })), pending: (pending.results as Array<Record<string, unknown>>).map(row => ({id:row.id,book:row.book_id,chapter:row.chapter,startedAt:row.started_at})) });
     } catch { return json({ error: "database_unavailable" }, 503); }
   }
-  const attemptId = clean(url.searchParams.get("attemptId"), 80);
+  const attemptId = requestedAttemptId(url.searchParams.get("attemptId"));
+  if (attemptId === null) return json({ error: "attempt_not_found" }, 404);
   const { attempt } = await ownedAttempt(request, attemptId);
   if (!attempt) return json({ error: "attempt_not_found" }, 404);
   if (attempt.status === "invalidated") return json({ error: "attempt_invalidated" }, 409);
@@ -436,7 +444,9 @@ export async function POST(request: Request) {
   }
 
   if (action === "invalidate") {
-    const attemptId = clean(body.attemptId, 80), { attempt } = await ownedAttempt(request, attemptId);
+    const attemptId = requestedAttemptId(body.attemptId);
+    if (attemptId === null) return json({ error: "attempt_not_found" }, 404);
+    const { attempt } = await ownedAttempt(request, attemptId);
     if (!attempt) return json({ error: "attempt_not_found" }, 404);
     if (attempt.status === "active") {
       const invalidated = await env.DB.prepare("UPDATE mission_attempts SET status='invalidated',invalidated_at=CURRENT_TIMESTAMP,invalidation_reason=? WHERE id=? AND status='active'")
@@ -447,13 +457,17 @@ export async function POST(request: Request) {
   }
 
   if (action === "finalize") {
-    const { currentActor, attempt } = await ownedAttempt(request, clean(body.attemptId, 80));
+    const attemptId = requestedAttemptId(body.attemptId);
+    if (attemptId === null) return json({ error: "attempt_not_found" }, 404);
+    const { currentActor, attempt } = await ownedAttempt(request, attemptId);
     if (!currentActor || !attempt) return json({ error: "attempt_not_found" }, 404);
     return finishAttempt(attempt, currentActor.id, currentActor.guest);
   }
 
   if (action === "answer") {
-    const attemptId = clean(body.attemptId, 80), { currentActor, attempt } = await ownedAttempt(request, attemptId);
+    const attemptId = requestedAttemptId(body.attemptId);
+    if (attemptId === null) return json({ error: "attempt_not_found" }, 404);
+    const { currentActor, attempt } = await ownedAttempt(request, attemptId);
     if (!currentActor || !attempt) return json({ error: "attempt_not_found" }, 404);
     // Task cursors, including the idempotent grading path, must be JSON numbers.
     const taskIndex = body.taskIndex;

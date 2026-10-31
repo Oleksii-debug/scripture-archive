@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {dossierAtlasMarkup,scriptureDossiers,validateDossierGraph} from '../public/scripture-dossiers.js';
+import {dossierAtlasMarkup,scriptureDossiers,searchScriptureDossiers,validateDossierGraph} from '../public/scripture-dossiers.js';
 const catalog=JSON.parse(readFileSync(new URL('../public/data/catalog.json',import.meta.url),'utf8'));
 const esc=v=>String(v).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const order=['abraham','sarah','joseph','moses','exodus','david','nativity'];
@@ -60,7 +60,7 @@ test('invalid published Scripture catalogue still fails closed without atlas ref
 
 test('the same canonical source-backed module is mounted in the real atlas workspace',()=>{
   const source=readFileSync(new URL('../public/workspace.js',import.meta.url),'utf8');
-  assert.match(source,/dossierAtlasMarkup\(catalog,state\.lang,esc\)/);
+  assert.match(source,/dossierAtlasMarkup\(catalog,state\.lang,esc,searchQuery\)/);
   assert.match(source,/import \{ dossierMarkup, dossierAtlasMarkup \} from '\.\/scripture-dossiers\.js'/);
 });
 
@@ -94,5 +94,59 @@ test('other canonical subjects without asserted historical chronology retain eve
           lang+' '+item.id+' does not erase source-kind distinctions');
       }
     }
+  }
+});
+
+
+test('filtered atlas uses the same proven source search as its adjacent dossier index',()=>{
+  for(const [lang,query] of [['uk','Мойсей'],['ru','Моисей'],['en','Moses']]){
+    const html=dossierAtlasMarkup(catalog,lang,esc,query);
+    assert.match(html,/role="status"/,lang+' search feedback');
+    assert.match(html,/href="\/dossiers\?id=moses"/,lang+' matching dossier');
+    assert.match(html,/href="\/reader\/EXO\/3\?verse=1"/,lang+' real cited chapter');
+    assert.doesNotMatch(html,/href="\/dossiers\?id=abraham"/,lang+' unrelated dossier not displayed');
+    assert.doesNotMatch(html,/href="\/reader\/GEN\/12\?verse=1"/,lang+' unrelated chapter not displayed');
+    assert.equal((html.match(/<table>/g)||[]).length,2,lang+' still has native accessible atlas tables');
+    assert.ok(!html.includes('onclick=')&&!html.includes('<iframe'),lang+' native keyboard navigation');
+  }
+});
+
+test('atlas filter has safe no-result and overlong-query boundaries',()=>{
+  for(const lang of ['uk','ru','en']){
+    const missing=dossierAtlasMarkup(catalog,lang,esc,'zqxneverexists');
+    assert.match(missing,/role="status"/);
+    assert.ok(!missing.includes('href="/reader/'));
+    assert.ok(!missing.includes('href="/dossiers?'));
+    const invalid=dossierAtlasMarkup(catalog,lang,esc,'x'.repeat(121));
+    assert.match(invalid,/role="alert"/);
+    assert.ok(!invalid.includes('href="/reader/'));
+    for(const payload of [null,{},['Moses']]){
+      const rejected=dossierAtlasMarkup(catalog,lang,esc,payload);
+      assert.match(rejected,/role="alert"/);
+      assert.ok(!rejected.includes('href="/reader/'));
+    }
+  }
+});
+
+test('unfiltered atlas remains byte-identical for empty or whitespace GET query',()=>{
+  for(const lang of ['uk','ru','en']){
+    const original=dossierAtlasMarkup(catalog,lang,esc);
+    for(const query of ['', ' ', '\t']){
+      assert.equal(dossierAtlasMarkup(catalog,lang,esc,query),original,lang+' query='+JSON.stringify(query));
+    }
+  }
+});
+
+test('atlas filtered witness links stay inside the matching canonical graph',()=>{
+  for(const [lang,query] of [['en','Moses'],['uk','Авраам'],['ru','Иерусалим']]){
+    const html=dossierAtlasMarkup(catalog,lang,esc,query);
+    const matches=new Set(searchScriptureDossiers(lang,query,catalog).map(item=>item.id));
+    assert.ok(matches.size>0);
+    for(const item of scriptureDossiers){
+      const anchor='href="/dossiers?id='+item.id+'"';
+      assert.equal(html.includes(anchor),matches.has(item.id),lang+' '+item.id+' exact subject filter');
+    }
+    assert.ok(!html.includes('javascript:'));
+    assert.ok(!html.includes('<script'));
   }
 });

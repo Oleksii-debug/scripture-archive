@@ -9,7 +9,7 @@ const esc=value=>String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').re
 
 test('an accessible narrative/place atlas is integrated into the existing canonical dossier route',()=>{
   assert.match(workspace,/import \{ dossierMarkup, dossierAtlasMarkup \} from '\.\/scripture-dossiers\.js'/);
-  assert.ok(workspace.includes('dossierAtlasMarkup(catalog,state.lang,esc)'));
+  assert.ok(workspace.includes('dossierAtlasMarkup(catalog,state.lang,esc,searchQuery)'));
   assert.equal(validateDossierGraph(catalog),true);
 });
 

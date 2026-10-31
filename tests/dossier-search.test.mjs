@@ -83,7 +83,7 @@ test('the actual canonical workspace accepts GET query without another router or
   const source=readFileSync(new URL('../public/workspace.js',import.meta.url),'utf8');
   assert.match(source,/get\('q'\)/);
   assert.match(source,/dossierMarkup\(catalog,state\.lang,selectedId,esc,searchQuery,compareId\)/);
-  assert.match(source,/dossierAtlasMarkup\(catalog,state\.lang,esc\)/);
+  assert.match(source,/dossierAtlasMarkup\(catalog,state\.lang,esc,searchQuery\)/);
 });
 
 

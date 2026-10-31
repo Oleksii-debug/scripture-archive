@@ -370,7 +370,7 @@ export async function renderWorkspace(name,c) {
     const selectedId=new URLSearchParams(globalThis.location?.search || '').get('id');
     const searchQuery=new URLSearchParams(globalThis.location?.search || '').get('q') || '';
     const compareId=new URLSearchParams(globalThis.location?.search || '').get('compare');
-    shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${esc(w.dossiers)}</h1></div><p>${esc(w.dossierLead)}</p></div>${dossierMarkup(catalog,state.lang,selectedId,esc,searchQuery,compareId)}${dossierAtlasMarkup(catalog,state.lang,esc)}`);
+    shell(`<div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1>${esc(w.dossiers)}</h1></div><p>${esc(w.dossierLead)}</p></div>${dossierMarkup(catalog,state.lang,selectedId,esc,searchQuery,compareId)}${dossierAtlasMarkup(catalog,state.lang,esc,searchQuery)}`);
     return;
   }
   if(name==='live') {

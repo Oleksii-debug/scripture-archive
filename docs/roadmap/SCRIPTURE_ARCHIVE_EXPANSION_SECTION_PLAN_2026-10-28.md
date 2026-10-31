@@ -1,3 +1,9 @@
+## 2026-10-31 — SA-EXT-01 / READER_ROUTE_ASYNC_OWNERSHIP — CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL
+
+**ОСТАТОЧНО ЗАКРИТО ЛИШЕ цю підфункцію, НЕ батьківський SA-EXT-01.** Канонічна читальня `public/app.js` відхиляє застарілий асинхронний результат попереднього маршруту, зміненого URL або повторного виклику, навіть якщо обліковий запис той самий; початковий principal/context guard збережено. [PR #1087](https://github.com/Oleksii-debug/scripture-archive/pull/1087) **SQUASH MERGED** у `main@1ed62b0837c3bfb7ecf2f3d28770aa2de0e991be`. Source blob `37e5bca73517ccba107666bbdd808932138955f4`; 18 Node subtests `tests/reader-route-staleness.test.mjs@5919cf6a98a439dc0d8e9b8873d3fd00bf2f4cb8`; паралельний principal guard `tests/parallel-reader.test.mjs@7dc4a8a79e444e3cf25cf06266fc71f5b9dce26b`. [Exact-head Actions #41247063880](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41247063880) **COMPLETED SUCCESS**: Node, TypeScript, lint, build, disposable Worker/D1, Python. [Акт](SA_EXT_01_READER_ASYNC_ROUTE_FENCE_SCOPED_TERMINAL_20261031.md). `remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0`. SA-EXT-01 parent і release #689 OPEN; installed Sites/D1, браузер, Windows/NVDA NOT_VERIFIED; без деплою, міграцій, розсилки. Не відновлювати цю розробку без конкретного нового дефекту/вимоги.
+
+---
+
 ## 2026-10-31 — SA-EXT-01 / EXPLICIT_UNKNOWN_BOOK_DEEPLINK_FAILCLOSED — CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL
 
 **ЗАКРИТО ДЛЯ РОЗРОБКИ лише одну перевірену межу маршруту читальні; батьківський SA-EXT-01 OPEN.** Явне `/reader/ZZZ/5` більше не підмінюється книгою `GEN` з хибною ідентичністю джерела: канонічний `renderReader` зупиняється до API перевірки глави/завантаження тексту, скидає старий контекст і показує доступне `role=alert` з посиланням відновлення. Справжні книги, lowercase alias, `/reader` із попереднім читанням і fallback для пошкодженої збереженої книги збережено.

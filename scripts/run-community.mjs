@@ -29,7 +29,12 @@ try {
       throw Error(`Community API is not deployed at ${origin}; no public bot run was started.`);
     if (!response.ok) throw Error(`Community API returned HTTP ${response.status}; scheduler stopped.`);
     const data = await response.json().catch(() => null);
-    if (!Number.isInteger(data?.summary?.registered) || !Number.isInteger(data?.summary?.online))
+    const registered = data?.summary?.registered;
+    const online = data?.summary?.online;
+    // Do not request owner leases from inconsistent or unsafe public counters.
+    // Keep the same finite, nonnegative SQL COUNT boundary as release smoke.
+    if (!Number.isSafeInteger(registered) || registered < 0 ||
+        !Number.isSafeInteger(online) || online < 0 || online > registered)
       throw Error("Community API returned an unexpected payload; scheduler stopped.");
     const summary = JSON.stringify(data.summary);
     if (summary !== previous) {

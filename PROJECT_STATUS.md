@@ -1,3 +1,15 @@
+## 2026-10-31 — SA-EXT-05 / DOSSIER_SOURCE_COMPARISON — SCOPED TERMINAL
+
+**CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** лише для справжнього порівняння двох оприлюднених досьє у канонічному /dossiers: клавіатурна GET-форма, повні списки джерел, посилання на /reader, точний перетин book/chapter/verse, класифікація narrative/interpretive, uk/ru/en, чесні відмови для невалідних ідентифікаторів. [PR #921](https://github.com/Oleksii-debug/scripture-archive/pull/921) MERGED `main@1fc1fbaf0254d11241f4b31863e24b063d0177e3`; [full PR-head CI #41188827090](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41188827090) SUCCESS; [точний термінальний акт](docs/roadmap/SA_EXT_05_DOSSIER_SOURCE_COMPARE_SCOPED_TERMINAL_20261031.md). `remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0`; **весь SA-EXT-05 OPEN** — потрібно значно більше незалежно перевіреного матеріалу/прав. Live Sites/NVDA/реліз НЕ ПЕРЕВІРЕНІ.
+
+---
+
+## 2026-10-31 — SA-EXT-16 / PROVIDER_CONFLICTING_2XX_ACK — SCOPED TERMINAL
+
+**CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** лише для fail-closed квитанції приймання пошти: навіть HTTP 2xx з id не доводить доставки, якщо провайдер одночасно повернув `error` або `errors`. [PR #920](https://github.com/Oleksii-debug/scripture-archive/pull/920) MERGED `main@9bb549ede51d006fdd112aba9d012f6db46bb4c0`; [CI #41188413599](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41188413599) SUCCESS, [main push CI #41188656780](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41188656780) SUCCESS; [термінальний акт](docs/roadmap/SA_EXT_16_PROVIDER_RECEIPT_CONFLICT_SCOPED_TERMINAL_20261031.md). `remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` лише тут. **Увесь SA-EXT-16 OPEN** (email/DNS production, права, NVDA і операційні перевірки). Реальних email не надсилали; реліз НЕ ОНОВЛЮВАЛИ.
+
+---
+
 ## 2026-10-31 — SA-EXT-08 / LIBRARY_STRUCTURED_RIGHTS_DISCLOSURE — ВУЗЬКУ ФУНКЦІЮ ЗАКРИТО
 
 **CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** тільки для відомостей про права на матеріали справжньої бібліотеки. Автор указує правовласника/статус, підставу публікації та HTTPS-ліцензію для `open_license`; єдина редакторська черга та публічний `/library` показують права, мову й дату перевірки. Міграція D1 `0015` не вигадує ліцензії старих матеріалів. [PR #922](https://github.com/Oleksii-debug/scripture-archive/pull/922) **SQUASH MERGED** у `main@c7f423df9bfc5eefd00bf8aa0970dcdb054225c6`. [Exact-head Actions #41188738369](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41188738369) **SUCCESS**, Node 2989 PASS/0 FAIL/1 SKIP, Worker/D1 22 PASS, TypeScript/lint/build/Python PASS. [Остаточний scoped-акт](docs/roadmap/SA_EXT_08_STRUCTURED_LIBRARY_RIGHTS_SCOPED_TERMINAL_20261031.md): `remaining_scoped_implementation=0`; `necessary_unmerged_scoped_feature_PRs=0`. **Увесь SA-EXT-08 лишається OPEN** (повний каталог, права, медіа, live acceptance); Sites SHA/Windows/NVDA/deployment **NOT_VERIFIED**, реліз не змінювався.

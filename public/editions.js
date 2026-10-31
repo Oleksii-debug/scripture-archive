@@ -19,17 +19,27 @@ export const EDITIONS = {
   ]
 };
 export const editionCopy={uk:{choose:'Переклад Біблії',external:'Читати у видавця',externalNote:'Це видання відкривається на сайті видавця. Ваш вибір зберігається для наступного читання.',current:'Читати на платформі',whole:'Старий і Новий Завіти'},ru:{choose:'Перевод Библии',external:'Читать у издателя',externalNote:'Это издание открывается на сайте издателя. Ваш выбор сохранится для следующего чтения.',current:'Читать на платформе',whole:'Ветхий и Новый Заветы'},en:{choose:'Bible translation',external:'Read with the publisher',externalNote:'This edition opens on the publisher’s website. Your choice is saved for your next reading session.',current:'Read on the platform',whole:'Old and New Testaments'}};
+// Only real edition keys may select a language. Inherited Object.prototype
+// names (for example "__proto__" or "constructor") are not locale lists.
+function editionList(lang) {
+  return typeof lang === 'string' && Object.hasOwn(EDITIONS, lang) ? EDITIONS[lang] : EDITIONS.uk;
+}
+
 // A browser can deny preference persistence while the local Bible stays readable.
 // Keep the selected *canonical* edition in this tab, without pretending it was saved.
 const currentTabEditions = new Map();
 export function setEditionForTab(lang, id) {
-  const found = EDITIONS[lang]?.find(edition => edition.id === id);
+  const found = typeof lang === 'string' && Object.hasOwn(EDITIONS, lang)
+    ? EDITIONS[lang].find(edition => edition.id === id) : null;
   if (!found) return null;
   currentTabEditions.set(lang, id);
   return found;
 }
 export function selectedEdition(lang){
-  const list = EDITIONS[lang] || EDITIONS.uk;
+  const list = editionList(lang);
+  // A malformed locale must not inherit an unrelated stored preference.
+  // Treat it as a fresh read-only Ukrainian fallback, never as an edition key.
+  if (typeof lang !== 'string' || !Object.hasOwn(EDITIONS, lang)) return list[0];
   const current = currentTabEditions.get(lang);
   if (current) return list.find(edition => edition.id === current) || list[0];
   // Blocked browser storage must never prevent reading local Bible content.
@@ -40,7 +50,8 @@ export function selectedEdition(lang){
 }
 export function editionUrl(edition,code,chapter){if(edition.version)return `https://www.bible.com/bible/${edition.version}/${code}.${chapter}`;if(edition.esv)return `https://www.esv.org/${code}+${chapter}/`;if(edition.gateway)return `https://www.biblegateway.com/passage/?search=${encodeURIComponent(code+' '+chapter)}&version=${edition.gateway}`;return edition.source}
 export function editionSelect(lang,esc,selected=selectedEdition(lang)){
-  const list = EDITIONS[lang] || EDITIONS.uk;
-  const copy = editionCopy[lang] || editionCopy.uk;
+  const list = editionList(lang);
+  const copy = typeof lang === 'string' && Object.hasOwn(editionCopy, lang)
+    ? editionCopy[lang] : editionCopy.uk;
   return `<label class="field grow"><span>${copy.choose}</span><select id="bible-edition">${list.map(e => `<option value="${e.id}" ${e.id===selected.id?'selected':''}>${esc(e.title)}</option>`).join('')}</select></label>`;
 }

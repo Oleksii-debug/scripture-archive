@@ -18,7 +18,23 @@ const TAKEDOWN_TEXT = {
   ru:{takeDown:'Снять с публикации',takeDownReason:'Причина снятия с публикации',takeDownSaved:'Материал снят с публикации.',takeDownLabel:'Снято с публикации: ',takeDownActor:'Снял редактор'},
   en:{takeDown:'Remove from publication',takeDownReason:'Reason for removal',takeDownSaved:'Material removed from publication.',takeDownLabel:'Removed from publication: ',takeDownActor:'Removed by editor'},
 };
-export function reviewText(lang) { return { ...(TEXT[lang] || TEXT.uk), ...(DELETE_TEXT[lang] || DELETE_TEXT.uk), ...(TAKEDOWN_TEXT[lang] || TAKEDOWN_TEXT.uk), selfReview: SELF_REVIEW_TEXT[lang] || SELF_REVIEW_TEXT.uk }; }
+// Language can originate from a document or stored preference. Never read
+// inherited Object.prototype keys as translation dictionaries, and never
+// coerce untrusted objects to property names. Keep one canonical fallback for
+// the public catalogue, editorial actions, permissions and takedown search.
+const ownLocaleCopy = (copies, language) =>
+  typeof language === 'string' && Object.hasOwn(copies, language)
+    ? copies[language]
+    : copies.uk;
+
+export function reviewText(lang) {
+  return {
+    ...ownLocaleCopy(TEXT, lang),
+    ...ownLocaleCopy(DELETE_TEXT, lang),
+    ...ownLocaleCopy(TAKEDOWN_TEXT, lang),
+    selfReview: ownLocaleCopy(SELF_REVIEW_TEXT, lang),
+  };
+}
 async function api(path, options) {
   const response = await fetch(path, options);
   const data = await response.json().catch(() => ({}));
@@ -288,7 +304,7 @@ const EDITOR_SEARCH_COPY = {
 // authority remains on the existing server-side takedown action.
 export function renderEditorialTakedownSearch(root, mainRoot, w, lang, esc, refresh, announce, isCurrent=()=>true, canPresent=isCurrent) {
   if(!root || !mainRoot)return;
-  const copy=EDITOR_SEARCH_COPY[lang]||EDITOR_SEARCH_COPY.uk;
+  const copy=ownLocaleCopy(EDITOR_SEARCH_COPY,lang);
   const active=()=>{try{return root.isConnected!==false && mainRoot.isConnected!==false && isCurrent()===true;}catch{return false;}};
   const present=()=>{try{return mainRoot.isConnected!==false && canPresent()===true;}catch{return false;}};
   if(!active())return;
@@ -344,7 +360,7 @@ const ROLE_TEXT = {
   en:{title:'Editors',help:'Add a verified account by email address.',email:'Editor email',grant:'Grant access',revoke:'Revoke access',empty:'There are no additional editors.',saved:'Access updated.',error:'Could not update access. Check the address or try again.',audit:'Editor access history',granted:'Access granted',revoked:'Access revoked',noEvents:'There are no records yet.'},
 };
 export function editorRolesMarkup(items,lang,esc,events=[]) {
-  const w=ROLE_TEXT[lang]||ROLE_TEXT.uk;
+  const w=ownLocaleCopy(ROLE_TEXT,lang);
   return `<section class="card"><h2>${w.title}</h2><p>${w.help}</p><form id="editor-role-form"><label class="account-field"><span>${w.email}</span><input type="email" name="email" maxlength="254" required></label><button class="button">${w.grant}</button></form>${items.length?`<ul>${items.map(item=>`<li>${esc(item.email)} <button class="button editor-revoke" type="button" data-id="${esc(item.id)}" aria-label="${w.revoke}: ${esc(item.email)}">${w.revoke}</button></li>`).join('')}</ul>`:`<p>${w.empty}</p>`}<p id="editor-role-status" role="status"></p><details><summary>${w.audit}</summary>${events.length?`<ol>${events.map(event=>`<li>${esc(event.subject_email || event.subject_user_id)} — ${event.action==='grant'?w.granted:w.revoked}; ${esc(event.created_at)}; ${esc(event.actor_user_id)}</li>`).join('')}</ol>`:`<p>${w.noEvents}</p>`}</details></section>`;
 }
 export function attachEditorRoles(root,lang,refresh,announce,isCurrent = () => true, canPresent = isCurrent) {
@@ -358,7 +374,7 @@ export function attachEditorRoles(root,lang,refresh,announce,isCurrent = () => t
     try { return canPresent() === true && root?.isConnected !== false; }
     catch { return false; }
   };
-  const w=ROLE_TEXT[lang]||ROLE_TEXT.uk, status=root.querySelector('#editor-role-status');
+  const w=ownLocaleCopy(ROLE_TEXT,lang), status=root.querySelector('#editor-role-status');
   async function change(body,buttons) {
     if (!active(buttons[0])) return;
     const hadFocus = Boolean(root?.ownerDocument && buttons.some(b => b === root.ownerDocument.activeElement));

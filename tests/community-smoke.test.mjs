@@ -130,3 +130,42 @@ test("P0: healthy anonymous no-store response recovers after a denied preflight"
   assert.equal(await communityDeploymentReady("https://scripture-archive.com", fetcher), true);
   assert.deepEqual(methods, Array(12).fill("GET"));
 });
+
+test("P0: cached scheduler 204 cannot falsely qualify signed dispatch readiness", async () => {
+  // The real canonical dispatch GET is always no-store. An intermediary's
+  // stale/cacheable 204 must not certify a safe runnable scheduler.
+  const invalid = [null, "public, max-age=3600", "private, max-age=300", "no-cache",
+    "no-store-extra", "no-stored", "no-store=1"];
+  for (const cache of invalid) {
+    const methods = [];
+    const ready = await communityDeploymentReady("https://scripture-archive.com", async (url, options) => {
+      methods.push(options.method || "GET");
+      return new URL(url).pathname === "/api/community/dispatch"
+        ? new Response(null, {status:204, headers:{
+            "X-Scripture-Runner-Protocol":"github-oidc-v1",
+            ...(cache === null ? {} : {"Cache-Control":cache}),
+          }})
+        : deployed(url);
+    });
+    assert.equal(ready, false, JSON.stringify({cache}));
+    assert.deepEqual(methods, Array(6).fill("GET"), "readiness must remain read-only");
+  }
+});
+
+test("P0: protocol no-store directive is case-insensitive and recovers after stale cache", async () => {
+  let stale = true;
+  const methods = [];
+  const fetcher = async (url, options) => {
+    methods.push(options.method || "GET");
+    return new URL(url).pathname === "/api/community/dispatch"
+      ? new Response(null, {status:204, headers:{
+          "X-Scripture-Runner-Protocol":"github-oidc-v1",
+          "Cache-Control":stale ? "public, max-age=600" : "private, NO-STORE",
+        }})
+      : deployed(url);
+  };
+  assert.equal(await communityDeploymentReady("https://scripture-archive.com", fetcher), false);
+  stale = false;
+  assert.equal(await communityDeploymentReady("https://scripture-archive.com", fetcher), true);
+  assert.deepEqual(methods, Array(12).fill("GET"));
+});

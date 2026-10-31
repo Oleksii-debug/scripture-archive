@@ -14,9 +14,9 @@ const SEARCH_COPY = {
   en: { label:'Search dossiers', submit:'Find', clear:'Clear search', empty:'No dossiers match this search.', results:'Dossiers found', example:'You can also search cited verses, for example GEN 17:15.' },
 };
 const COMPARE_COPY = {
-  uk:{choose:'Порівняти з іншим досьє',prompt:'Виберіть досьє',submit:'Порівняти джерела',heading:'Порівняння біблійних джерел',scope:'Це порівняння лише опублікованих уривків: перетин віршів не означає незалежного свідчення або історичної тотожності подій.',overlap:'Уривки з перетином віршів',none:'Опубліковані джерельні діапазони цих досьє не перетинаються.',unknown:'Другого досьє не знайдено або обрано те саме досьє.'},
-  ru:{choose:'Сравнить с другим досье',prompt:'Выберите досье',submit:'Сравнить источники',heading:'Сравнение библейских источников',scope:'Сравниваются только опубликованные отрывки: пересечение стихов не означает независимого свидетельства или исторического тождества событий.',overlap:'Пересекающиеся диапазоны стихов',none:'Опубликованные диапазоны источников этих досье не пересекаются.',unknown:'Второе досье не найдено или выбрано то же досье.'},
-  en:{choose:'Compare with another dossier',prompt:'Choose a dossier',submit:'Compare sources',heading:'Scripture source comparison',scope:'Only published passage ranges are compared. Overlapping verses do not prove independent witnesses or identical historical events.',overlap:'Overlapping verse ranges',none:'The published source ranges of these dossiers do not overlap.',unknown:'The second dossier was not found or is the same dossier.'}
+  uk:{choose:'Порівняти з іншим досьє',prompt:'Виберіть досьє',submit:'Порівняти джерела',heading:'Порівняння біблійних джерел',scope:'Це порівняння лише опублікованих уривків: перетин віршів не означає незалежного свідчення або історичної тотожності подій.',shared:'Спільні вірші',overlap:'Уривки з перетином віршів',none:'Опубліковані джерельні діапазони цих досьє не перетинаються.',unknown:'Другого досьє не знайдено або обрано те саме досьє.'},
+  ru:{choose:'Сравнить с другим досье',prompt:'Выберите досье',submit:'Сравнить источники',heading:'Сравнение библейских источников',scope:'Сравниваются только опубликованные отрывки: пересечение стихов не означает независимого свидетельства или исторического тождества событий.',shared:'Общие стихи',overlap:'Пересекающиеся диапазоны стихов',none:'Опубликованные диапазоны источников этих досье не пересекаются.',unknown:'Второе досье не найдено или выбрано то же досье.'},
+  en:{choose:'Compare with another dossier',prompt:'Choose a dossier',submit:'Compare sources',heading:'Scripture source comparison',scope:'Only published passage ranges are compared. Overlapping verses do not prove independent witnesses or identical historical events.',shared:'Shared verses',overlap:'Overlapping verse ranges',none:'The published source ranges of these dossiers do not overlap.',unknown:'The second dossier was not found or is the same dossier.'}
 };
 const ref=(book,chapter,first,last,kind='narrative')=>({book,chapter,first,last,kind});
 const nodes=[
@@ -278,8 +278,15 @@ export function dossierMarkup(catalog,language,requestedId,esc,searchQuery='',co
       const overlaps=selected.sources.flatMap(left=>compared.sources.filter(right=>
         left.book===right.book && left.chapter===right.chapter &&
         left.first<=right.last && right.first<=left.last).map(right=>({left,right})));
+      // A matching source pair is not the intersection itself: link only the
+      // verses that both published source ranges actually cite.
+      const sharedPassage=(left,right)=>{
+        const first=Math.max(left.first,right.first),last=Math.min(left.last,right.last);
+        const label=`${bookNames.get(left.book)} ${left.chapter}:${first}–${last}`;
+        return `<a href="/reader/${left.book}/${left.chapter}?verse=${first}">${esc(label)}</a>`;
+      };
       const overlapsHtml=overlaps.length
-        ? `<ol>${overlaps.map(({left,right})=>`<li>${cite(left)} — ${esc(w[left.kind])}; ${cite(right)} — ${esc(w[right.kind])}</li>`).join('')}</ol>`
+        ? `<ol>${overlaps.map(({left,right})=>`<li><strong>${esc(comparisonCopy.shared)}:</strong> ${sharedPassage(left,right)}; ${cite(left)} — ${esc(w[left.kind])}; ${cite(right)} — ${esc(w[right.kind])}</li>`).join('')}</ol>`
         : `<p>${esc(comparisonCopy.none)}</p>`;
       comparison=`<section aria-labelledby="dossier-comparison-heading"><h3 id="dossier-comparison-heading">${esc(comparisonCopy.heading)}</h3><p>${esc(comparisonCopy.scope)}</p><dl><dt>${esc(selected.names[lang])}</dt><dd>${list(selected)}</dd><dt>${esc(compared.names[lang])}</dt><dd>${list(compared)}</dd></dl><h4>${esc(comparisonCopy.overlap)}</h4>${overlapsHtml}</section>`;
     }

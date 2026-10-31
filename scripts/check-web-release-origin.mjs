@@ -26,6 +26,19 @@ export function normalizeSecureOrigin(value, label = 'origin') {
       url.pathname !== '/' || url.search || url.hash) {
     throw new Error(`${label}: use a bare HTTPS origin without credentials, path, query or fragment`);
   }
+  // WHATWG URL also folds Unicode compatibility host glyphs and Unicode
+  // dot separators into ASCII, and normalizes padded port numbers. An
+  // operator's release target must be a literal authority, not a lookalike.
+  // Preserve the already-supported ASCII hostname case, optional slash and
+  // explicit canonical HTTPS :443, plus literal non-default ports.
+  // Non-ASCII compatibility case folding (for example Kelvin sign K -> k)
+  // can also happen in JavaScript lowercasing itself. Require an ASCII literal;
+  // internationalized domains must be explicitly written as punycode.
+  if (/[^\x00-\x7f]/u.test(value))
+    throw new Error(`${label}: invalid URL syntax; use a literal bare HTTPS origin`);
+  const literal = value.replace(/\/$/, '').toLowerCase();
+  if (literal !== url.origin && literal !== `${url.origin}:443`)
+    throw new Error(`${label}: invalid URL syntax; use a literal bare HTTPS origin`);
   return url.origin;
 }
 

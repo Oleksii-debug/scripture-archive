@@ -300,6 +300,12 @@ async function request(path, options) {
 
 let workspaceRenderEpoch = 0;
 
+// Call on a private editorial page's browser pagehide. A late builder/role
+// response must not be allowed to reinsert sensitive HTML into a BFCache page.
+export function retirePrivateWorkspaceOnPageHide() {
+  workspaceRenderEpoch++;
+}
+
 export async function renderWorkspace(name,c) {
   const {state,t,esc,shell,getMission,setActiveNav}=c, w=workspaceCopy(state.lang);
   const epoch=++workspaceRenderEpoch, principal=state.user;

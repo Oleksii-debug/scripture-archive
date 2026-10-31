@@ -56,12 +56,12 @@ for(const mode of ['DELETE','WAL']){
       assert.equal(me.body.user.sensitiveConsent,false);
       assert.equal(me.body.user.visibility.church,false);
       assert.equal(db.db.prepare("SELECT church FROM profiles WHERE user_id='reader-a'").get().church,'Legacy church','migration must preserve historical data');
-      let visibility=await call(api,'visibility','PUT',{church:true});
+      let visibility=await call(api,'visibility','PUT',{firstName:false,lastName:false,church:true,progress:false});
       assert.equal(visibility.body.user.visibility.church,false);
       const renewed=await call(api,'sensitive-consent','PUT',{acceptSensitive:true,tradition:'other',denomination:'Legacy',church:'Legacy church'});
       assert.equal(renewed.body.user.sensitiveConsent,true);
       assert.equal(renewed.body.user.visibility.church,false,'renewed consent alone must not publish');
-      visibility=await call(api,'visibility','PUT',{church:true});
+      visibility=await call(api,'visibility','PUT',{firstName:false,lastName:false,church:true,progress:false});
       assert.equal(visibility.body.user.visibility.church,true);
       db.close();
     }finally{f.dispose()}
@@ -103,7 +103,7 @@ for(const mode of ['DELETE','WAL']){
       const profile={firstName:'Synthetic',lastName:'Reader',ageRange:'25-34',acceptPrivacy:true,locale:'ru'};
       db.failNext=true;assert.equal((await call(api,'profile','PUT',profile)).status,503);
       assert.equal((await call(api,'profile','PUT',profile)).body.user.locale,'ru');
-      db.failNext=true;assert.equal((await call(api,'visibility','PUT',{firstName:true})).status,503);
+      db.failNext=true;assert.equal((await call(api,'visibility','PUT',{firstName:true,lastName:false,church:false,progress:false})).status,503);
       db.close();
     }finally{f.dispose()}
   });

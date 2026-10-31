@@ -224,6 +224,14 @@ async function write(request:Request){
     }catch{return privateJson({error:"consent_save_failed"},{status:503});}
   }
   if(action==="visibility"){
+    // The canonical UI submits one complete four-boolean snapshot. Silently
+    // coercing a missing/typed value to false could erase unrelated saved
+    // sharing choices from a truncated or malformed request.
+    const visibilityKeys=["firstName","lastName","church","progress"];
+    if(typeof body!=="object"||Array.isArray(body)||
+       Object.keys(body).length!==visibilityKeys.length||
+       !visibilityKeys.every(key=>Object.hasOwn(body,key)&&typeof body[key]==="boolean"))
+      return privateJson({error:"invalid_visibility"},{status:400});
     try{
       const visibilityWrite=await env.DB!.prepare("UPDATE profiles SET public_first_name=?,public_last_name=?,public_church=CASE WHEN sensitive_consent=1 AND sensitive_consent_version=1 THEN ? ELSE 0 END,public_progress=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?").bind(body.firstName===true?1:0,body.lastName===true?1:0,body.church===true?1:0,body.progress===true?1:0,id.userId).run();
       const changed=confirmedD1Changes(visibilityWrite);

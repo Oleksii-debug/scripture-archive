@@ -25,3 +25,21 @@ test("expired identities and a valid claim set with a forged signature are rejec
   const valid=await token();const parts=valid.split(".");const signature=Buffer.from(parts[2],"base64url");signature[0]^=1;
   assert.equal(await verifyCommunityRunner(`${parts[0]}.${parts[1]}.${signature.toString("base64url")}`,options),false);
 });
+
+test("signed tokens with malformed or inverted NumericDate claims fail closed",async()=>{
+  const invalid=[
+    {nbf:"not-a-time"},{nbf:String(seconds-5)},{nbf:null},{nbf:false},
+    {nbf:seconds+0.5},{nbf:seconds+31},{nbf:seconds+500},
+    {exp:String(seconds+300)},{exp:seconds+0.5},{iat:String(seconds)},
+    {iat:seconds+0.5},{iat:seconds+25,exp:seconds+10},
+    {nbf:seconds+15,exp:seconds+10},
+  ];
+  for(const changes of invalid){
+    assert.equal(await verifyCommunityRunner(await token(changes),options),false,
+      "invalid NumericDate claims: "+JSON.stringify(changes));
+  }
+});
+test("valid signed scheduler tokens with bounded nbf remain accepted",async()=>{
+  assert.equal(await verifyCommunityRunner(await token({nbf:seconds-1}),options),true);
+  assert.equal(await verifyCommunityRunner(await token({nbf:seconds+30}),options),true);
+});

@@ -52,3 +52,19 @@ test('comparison labels and selected options remain localized in each supported 
     assert.match(html,/<a href="\/reader\/HEB\/11\?verse=11"/);
   }
 });
+
+test('SA-EXT-05: overlapping source pairs link the exact shared intersection, not the entire parent passages',()=>{
+  for(const [lang,label] of [['uk','Спільні вірші'],['ru','Общие стихи'],['en','Shared verses']]){
+    const abraham=show(lang,'abraham','sarah');
+    const comparison=abraham.slice(abraham.indexOf('id="dossier-comparison-heading"'));
+    assert.ok(comparison.includes('<strong>'+label+':</strong> <a href="/reader/HEB/11?verse=11">'),lang+' semantic common-range label and start');
+    assert.match(comparison,/>[^<]+ 11:11–12<\/a>/,lang+' exact shared HEB verses, not original 8–12');
+    assert.match(comparison,/\/reader\/HEB\/11\?verse=8/,lang+' preserve original Abraham source provenance');
+    const david=show(lang,'david','jerusalem');
+    const shared=david.slice(david.indexOf('id="dossier-comparison-heading"'));
+    assert.ok(shared.includes('<strong>'+label+':</strong> <a href="/reader/2SA/5?verse=6">'),lang+' same-chapter intersection start');
+    assert.match(shared,/>[^<]+ 5:6–10<\/a>/,lang+' exact common span from 2SA 5:1–10 and 5:6–10');
+    const disjoint=show(lang,'abraham','joseph');
+    assert.doesNotMatch(disjoint,/<strong>[^<]+:<\/strong> <a href="\/reader\//,lang+' no invented common verse');
+  }
+});

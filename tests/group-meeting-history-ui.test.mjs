@@ -2,15 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {meetingHistoryCopy,meetingHistoryMarkup,meetingRowsMarkup,mountMeetingHistory} from '../public/group-meeting-history.js';
 
-const row=id=>({id,book_id:'GEN',chapter:12,meeting_date:'2026-10-28',answers_correct:2,answers_total:3,participant_count:4,reflection:'Private discussion'});
+const row=id=>({id,book_id:'GEN',chapter:12,meeting_date:'2026-10-28',answers_correct:2,answers_total:3,participant_count:4,reflection:'Private discussion',canEdit:false});
 const page=(start,count=12,more=true)=>{const sessions=Array.from({length:count},(_,i)=>row(String(start+i)));return {sessions,nextCursor:more?sessions.at(-1).id:null};};
 const deferred=()=>{let resolve;const promise=new Promise(r=>{resolve=r;});return {promise,resolve};};
-function fixture(request){
+function fixture(request,{forms=[]}={}){
   let current=true;const requests=[],appended=[],headings=[];
   const doc={body:{}};doc.activeElement=doc.body;
   const button={disabled:true,hidden:false,focus(){doc.activeElement=this;}};
   const status={textContent:'',focus(){doc.activeElement=this;}};
-  const list={insertAdjacentHTML(_where,html){appended.push(html);for(let i=0;i<JSON.parse(html).length;i++)headings.push({focus(){doc.activeElement=this;}});},querySelectorAll(){return headings;},set textContent(value){assert.equal(value,'');appended.length=0;headings.length=0;}};
+  const list={insertAdjacentHTML(_where,html){appended.push(html);for(let i=0;i<JSON.parse(html).length;i++)headings.push({focus(){doc.activeElement=this;}});},querySelectorAll(selector){return selector==='[data-meeting-heading]'?headings:forms;},set textContent(value){assert.equal(value,'');appended.length=0;headings.length=0;}};
   const root={isConnected:true,ownerDocument:doc,querySelector:s=>({'[data-meeting-list]':list,'[data-meeting-more]':button,'[data-meeting-status]':status}[s])};
   const copy=meetingHistoryCopy('en');
   const controller=mountMeetingHistory(root,{copy,groupId:'group id',isCurrent:()=>current,request:async(...args)=>{requests.push(args);return request(...args);},renderRows:rows=>JSON.stringify(rows)});
@@ -64,4 +64,20 @@ test('meeting markup has labelled native pagination, focusable headings and esca
     const html=meetingRowsMarkup([{...row('s'),reflection:'<img onerror=alert(1)>',participant_count:null}],{copy,esc,titleFor:()=>'<Genesis>'});
     assert.match(html,/h3 tabindex="-1" data-meeting-heading/);assert.ok(!html.includes('<img'));assert.ok(html.includes('&lt;Genesis&gt;'));assert.ok(!html.includes('null'));
   }
+});
+
+
+test('history mounts each correction form once and updates the matching displayed meeting after saving',async()=>{
+  const reflection={textContent:'Old',hidden:false},attendanceView={textContent:'4 participants'};
+  const article={querySelector:s=>s==='[data-meeting-reflection]'?reflection:attendanceView};
+  const note={value:'Old'},attendance={value:'4'},save={focus(){}},reload={focus(){}},status={textContent:''};
+  const form={isConnected:true,ownerDocument:{body:{}},dataset:{meetingNoteId:'0',meetingSnapshot:JSON.stringify({reflection:'Old',participantCount:4})},closest:()=>article,querySelector:s=>({'[name="reflection"]':note,'[name="participantCount"]':attendance,'[type="submit"]':save,'[data-notes-reload]':reload,'[data-notes-status]':status}[s])};
+  let reads=0;
+  const f=fixture(async(action,method,body)=>action==='meeting-notes'?{ok:true,notes:body.notes}:++reads===1?page(0):page(12,1,false),{forms:[form]});
+  await f.ready;assert.equal(typeof form.onsubmit,'function');const firstHandler=form.onsubmit;
+  note.value='New discussion';await f.load();assert.equal(form.onsubmit,firstHandler,'loading older records must not rebind or reset existing edits');
+  attendance.value='9';await form.onsubmit({preventDefault(){}});
+  assert.equal(reflection.textContent,'New discussion');assert.equal(attendanceView.textContent,'9 participants · ');
+  note.value='';attendance.value='';await form.onsubmit({preventDefault(){}});
+  assert.equal(reflection.hidden,true);assert.equal(attendanceView.textContent,'');
 });

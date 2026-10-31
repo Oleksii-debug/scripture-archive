@@ -60,6 +60,15 @@ function groupSettings(value: unknown): Row | null {
   return row;
 }
 
+function meetingNotes(value: unknown): {reflection:string|null; participantCount:number|null}|null {
+  if(!value||typeof value!=="object"||Array.isArray(value))return null;
+  const row=value as Row;
+  if(Object.keys(row).length!==2||!Object.hasOwn(row,"reflection")||!Object.hasOwn(row,"participantCount"))return null;
+  if(row.reflection!==null&&(typeof row.reflection!=="string"||row.reflection.length>1200))return null;
+  if(row.participantCount!==null&&(!Number.isSafeInteger(row.participantCount)||Number(row.participantCount)<1||Number(row.participantCount)>500))return null;
+  return {reflection:row.reflection as string|null,participantCount:row.participantCount as number|null};
+}
+
 async function profile(id: Identity) {
   return env.DB!.prepare("SELECT first_name,last_name FROM profiles WHERE user_id=?").bind(id.userId).first<{ first_name: string; last_name: string }>();
 }
@@ -141,6 +150,18 @@ export async function GET(request: Request) {
     if(row.public_name!==0&&row.public_name!==1)return unavailableWrite();
     return Response.json({publicName:row.public_name===1},{headers:{'Cache-Control':'no-store, private'}});
   }
+  if(url.searchParams.get("action")==="meeting-notes"){
+    if(!id)return forbidden();
+    const sessionId=boundedIdentifier(url.searchParams.get("sessionId"));
+    if(!groupId||!sessionId)return Response.json({error:"invalid_meeting"},{status:400});
+    const row=await env.DB!.prepare(`SELECT s.reflection,s.participant_count AS participantCount FROM group_sessions s
+      JOIN home_groups g ON g.id=s.group_id JOIN home_group_members m ON m.group_id=g.id AND m.user_id=?
+      WHERE s.id=? AND s.group_id=? AND ((g.owner_user_id=m.user_id AND m.role='owner') OR (s.created_by=m.user_id AND m.role='facilitator'))`)
+      .bind(id.userId,sessionId,groupId).first<Row>();
+    if(!row)return Response.json({error:"not_found"},{status:404,headers:{"Cache-Control":"no-store, private"}});
+    const notes=meetingNotes(row);if(!notes)return unavailableWrite();
+    return Response.json({notes},{headers:{"Cache-Control":"no-store, private"}});
+  }
   if (url.searchParams.get("action") === "meetings") {
     if (!groupId) return Response.json({error:"invalid_group_id"},{status:400});
     const rawBefore=url.searchParams.get("before");
@@ -151,6 +172,7 @@ export async function GET(request: Request) {
     // scoped to its group and never carries an authorization grant.
     const rows=await checkedGroupRows(await env.DB!.prepare(`
       SELECT g.id AS authorized_group,anchor.id AS cursor_id,
+        CASE WHEN (g.owner_user_id=member.user_id AND member.role='owner') OR (s.created_by=member.user_id AND member.role='facilitator') THEN 1 ELSE 0 END AS editable,
         s.id,s.book_id,s.chapter,s.answers_correct,s.answers_total,s.meeting_date,
         CASE WHEN member.user_id IS NOT NULL OR g.roster_visibility!='private' THEN s.participant_count ELSE NULL END AS participant_count,
         CASE WHEN member.user_id IS NOT NULL THEN s.reflection ELSE NULL END AS reflection
@@ -166,6 +188,7 @@ export async function GET(request: Request) {
     if(rows.length>13||rows.some(row=>row.authorized_group!==groupId))throw Error("invalid_meeting_page");
     if(before&&rows[0].cursor_id!==before)return Response.json({error:"meeting_cursor_unavailable"},{status:409,headers:{"Cache-Control":"no-store, private"}});
     const meetings=rows.length===1&&rows[0].id===null?[]:rows.map(row=>{
+      if(row.editable!==0&&row.editable!==1)throw Error("invalid_meeting_permission");
       const chapterLimit=BOOK_CHAPTERS.get(row.book_id as string);
       if(!boundedIdentifier(row.id)||!chapterLimit||!Number.isSafeInteger(row.chapter)||Number(row.chapter)<1||Number(row.chapter)>chapterLimit||
         !Number.isSafeInteger(row.answers_correct)||!Number.isSafeInteger(row.answers_total)||Number(row.answers_correct)<0||Number(row.answers_total)>1000||Number(row.answers_correct)>Number(row.answers_total)||
@@ -173,7 +196,7 @@ export async function GET(request: Request) {
         (row.participant_count!==null&&(!Number.isSafeInteger(row.participant_count)||Number(row.participant_count)<1||Number(row.participant_count)>500))||
         (row.reflection!==null&&(typeof row.reflection!=="string"||row.reflection.length>1200)))throw Error("invalid_meeting_record");
       const {id,book_id,chapter,answers_correct,answers_total,meeting_date,participant_count,reflection}=row;
-      return {id,book_id,chapter,answers_correct,answers_total,meeting_date,participant_count,reflection};
+      return {id,book_id,chapter,answers_correct,answers_total,meeting_date,participant_count,reflection,canEdit:row.editable===1};
     });
     return Response.json({sessions:meetings.slice(0,12),nextCursor:meetings.length>12?meetings[11].id:null},{headers:{"Cache-Control":"no-store, private"}});
   }
@@ -229,6 +252,21 @@ export async function POST(request: Request) {
     if(!acknowledgedWrite(saved))return unavailableWrite();
     if(saved.meta.changes!==1)return Response.json({error:'name_visibility_changed_or_membership_missing'},{status:409});
     return Response.json({ok:true,publicName:body.publicName},{headers:{'Cache-Control':'no-store, private'}});
+  }
+
+  if(action==="meeting-notes"){
+    const groupId=boundedIdentifier(body.groupId),sessionId=boundedIdentifier(body.sessionId);
+    const next=meetingNotes(body.notes),previous=meetingNotes(body.expected);
+    if(!groupId||!sessionId||!next||!previous)return Response.json({error:"invalid_meeting_notes"},{status:400});
+    const saved=await env.DB.prepare(`UPDATE group_sessions SET reflection=?,participant_count=?
+      WHERE id=? AND group_id=? AND reflection IS ? AND participant_count IS ? AND EXISTS (
+        SELECT 1 FROM home_groups g JOIN home_group_members m ON m.group_id=g.id AND m.user_id=?
+        WHERE g.id=group_sessions.group_id AND ((g.owner_user_id=m.user_id AND m.role='owner') OR
+          (group_sessions.created_by=m.user_id AND m.role='facilitator')))`)
+      .bind(next.reflection,next.participantCount,sessionId,groupId,previous.reflection,previous.participantCount,id.userId).run();
+    if(!acknowledgedWrite(saved))return unavailableWrite();
+    if(saved.meta.changes!==1)return Response.json({error:"meeting_notes_changed_or_forbidden"},{status:409});
+    return Response.json({ok:true,notes:next},{headers:{"Cache-Control":"no-store, private"}});
   }
 
   if (action === "settings") {

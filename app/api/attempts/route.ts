@@ -354,7 +354,11 @@ export async function GET(request: Request) {
   }
   const { attempt } = await ownedAttempt(request, attemptId);
   if (!attempt) return json({ error: "attempt_not_found" }, 404);
-  if (attempt.status === "invalidated") return json({ error: "attempt_invalidated" }, 409);
+  if (attempt.status === "invalidated") {
+    // A foreign mission's invalidation is not an invalidation of this mission.
+    if (attempt.mission_id !== MISSION_ID) return json({ error: "attempt_state_invalid" }, 409);
+    return json({ error: "attempt_invalidated" }, 409);
+  }
   if (attempt.status === "completed") return completedResponse(attempt);
   if (attempt.status === "grading") {
     // A stored row from a different mission must not be projected as current mission progress.
@@ -518,6 +522,10 @@ export async function POST(request: Request) {
       return json({ error: "invalid_answer" }, 400);
     if ((attempt.status === "grading" || attempt.status === "completed") && taskIndex === attempt.task_limit)
       return finishAttempt(attempt, currentActor.id, currentActor.guest, true);
+    // A legacy/corrupt row from another mission must not impersonate a
+    // canonical invalidation during answer recovery either.
+    if (attempt.status === "invalidated" && attempt.mission_id !== MISSION_ID)
+      return json({ error: "attempt_state_invalid" }, 409);
     if (attempt.status !== "active") return json({ error: attempt.status === "invalidated" ? "attempt_invalidated" : "attempt_closed" }, 409);
     if (!storedLocale(attempt.locale)) return json({ error: "attempt_state_invalid" }, 409);
     const deadline = attemptDeadline(attempt.expires_at);

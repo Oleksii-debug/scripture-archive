@@ -86,6 +86,40 @@ test('late unconfirmed deletion response cannot change another principal or anno
   assert.equal(h.status.textContent,'');
 });
 
+// Durable session revocation and password rotation return {ok:true} from the
+// canonical auth API; a bare HTTP 2xx is not evidence that either took effect.
+for (const action of ['password','logout']) {
+  for (const [name,receipt] of [
+    ['missing body',undefined],
+    ['null body',null],
+    ['empty object',{}],
+    ['explicit false',{ok:false}],
+    ['numeric ok',{ok:1}],
+    ['error envelope',{error:'unconfirmed'}],
+    ['array body',[]],
+  ]) {
+    test(`${action} refuses unconfirmed success envelope: ${name}`,async()=>{
+      const h=fixture(),control=h.controls[action==='password'?'#password-form':'#logout-button'];
+      const operation=action==='logout'?control.onclick():control.onsubmit({preventDefault(){},currentTarget:control});
+      h.pending.resolve(receipt);
+      await operation;
+      assert.equal(h.state.user,h.alice,'unconfirmed exit must not assert a signed-out account');
+      assert.equal(h.calls.includes('clear'),false,'private cached progress cannot be discarded');
+      assert.match(h.status.textContent,/could not be completed/i);
+    });
+  }
+  test(`late unconfirmed ${action} response cannot overwrite a new principal`,async()=>{
+    const h=fixture(),control=h.controls[action==='password'?'#password-form':'#logout-button'];
+    const operation=action==='logout'?control.onclick():control.onsubmit({preventDefault(){},currentTarget:control});
+    h.state.user=h.bob;
+    h.pending.resolve({});
+    await operation;
+    assert.equal(h.state.user,h.bob);
+    assert.equal(h.calls.includes('clear'),false);
+    assert.equal(h.status.textContent,'');
+  });
+}
+
 for(const action of ['delete','password','logout']){
   test(`detached ${action} control cannot issue a request`,async()=>{
     const h=fixture(),key=action==='delete'?'#delete-form':action==='password'?'#password-form':'#logout-button',control=h.controls[key];

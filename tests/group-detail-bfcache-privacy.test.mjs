@@ -136,3 +136,52 @@ test('failed server identity refresh still routes into canonical fail-closed err
   assert.equal(f.events.route,1);
   assert.equal(f.detail.html,'');
 });
+
+
+test('second pagehide cancels late first-session restore and requires a new authorized read',async()=>{
+  const first=deferred(),second=deferred();let requests=0;
+  const f=fixture({reauth:()=>++requests===1?first.promise:second.promise});
+  f.pagehide();f.pageshow();
+  assert.equal(f.events.auth,1);
+  f.pagehide();
+  first.resolve({user:{id:'alice'}});
+  await tick();
+  assert.equal(f.events.route,0,'hidden BFCache must not reenter router after stale auth');
+  assert.equal(f.controller.needsReauthorization(),true);
+  f.pageshow();
+  assert.equal(f.events.auth,2);
+  first.resolve({user:{id:'alice'}});
+  await tick();
+  assert.equal(f.events.route,0);
+  second.resolve({user:{id:'alice'}});
+  await tick();
+  assert.equal(f.events.route,1,'only the newest visible authorized restore routes');
+});
+
+test('group route stays inert while page is hidden or reauthorization pending',async()=>{
+  const reauthorization=deferred();let groupReads=0;
+  const f=fixture({
+    reauth:()=>reauthorization.promise,
+    getGroup:async()=>{groupReads++;return {group:{id:'g1'}};},
+  });
+  f.pagehide();
+  await f.controller.renderGroup('g1');
+  assert.equal(groupReads,0,'hidden page must not fetch private details');
+  f.pageshow();
+  await f.controller.renderGroup('g1');
+  assert.equal(groupReads,0,'cached principal must not bypass pending server identity');
+  reauthorization.resolve({user:{id:'alice'}});
+  await tick();
+  assert.equal(f.events.route,1);
+});
+
+test('late session refresh after leaving the group for a public route remains retired',async()=>{
+  const reauthorization=deferred();
+  const f=fixture({reauth:()=>reauthorization.promise});
+  f.pagehide();f.pageshow();
+  f.location.pathname='/home';
+  f.pagehide();
+  reauthorization.resolve({user:{id:'alice'}});
+  await tick();
+  assert.equal(f.events.route,0,'public route pagehide still invalidates group re-entry');
+});

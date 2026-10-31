@@ -1,3 +1,9 @@
+## 2026-10-31 — SA-EXT-16 / COMMUNITY_OWNER_D1_ACK — CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL
+
+**ЗАКРИТО ДЛЯ РОЗРОБКИ ТІЛЬКИ ДВА ПІДПУНКТИ** підтверджень власницьких START/PAUSE/RESUME/STOP і owner snapshot. Канонічні PR [#835](https://github.com/Oleksii-debug/scripture-archive/pull/835) та [#836](https://github.com/Oleksii-debug/scripture-archive/pull/836) **MERGED** до `main@0a84164bbad224a9cf85ff0726865371fa5ac660`; exact-head Actions [#41167149955](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41167149955), [#41167332377](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41167332377) обидва **SUCCESS**. Повний [доказ](SA_EXT_16_COMMUNITY_OWNER_D1_ACK_SCOPED_TERMINAL_20261031.md), `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` лише тут. **Батьківський SA-EXT-16 та інші незакриті SA-EXT залишаються OPEN**, повний реліз/Sites/NVDA NOT_VERIFIED; без публікації.
+
+---
+
 ## 2026-10-31 — SA-EXT-07 / ACADEMY_PRIVATE_BFCACHE_FENCE — SCOPED TERMINAL
 
 **ЗАКРИТО ДЛЯ РОЗРОБКИ ЛИШЕ ЦЕЙ ПІДПУНКТ / `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`.** Канонічний курс `/campaigns` очищує приватні локальні позначки до BFCache, затримує відновлення до нової серверної сесії та скасовує запізнілі render/reads без другого API. [PR #833](https://github.com/Oleksii-debug/scripture-archive/pull/833) **SQUASH MERGED** в `main@c3e02c5842f5ceafe8c4784daa1a0ef51ee2445f`; [exact-head Actions #41166069032](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41166069032) **SUCCESS**: Node, TS, lint, build, Worker/D1, Python. [Точний запис](SA_EXT_07_ACADEMY_BFCACHE_SCOPED_TERMINAL_20261031.md). `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` **лише для BFCache-дефекту**. Батьківські SA-EXT-07 і SA-EXT-16 **OPEN**; live Sites/Chrome/NVDA NOT_VERIFIED, публікації не було.

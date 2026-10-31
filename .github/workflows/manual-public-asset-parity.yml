@@ -1,0 +1,39 @@
+name: Scripture Archive public asset byte parity (manual, read-only)
+
+# Intentionally no schedule, push, pull_request or deployment trigger.
+on:
+  workflow_dispatch:
+    inputs:
+      expected_head:
+        description: 'Exact 40-hex SHA of the source commit to compare; must be the dispatch checkout SHA'
+        required: true
+        type: string
+      expected_origin:
+        description: 'Approved public HTTPS origin; never a private API endpoint'
+        required: true
+        default: 'https://scripture-archive.com'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  public-js-parity:
+    if: github.repository == 'Oleksii-debug/scripture-archive'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout immutable dispatch head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Anonymous public /app.js byte comparison (no deploy, no D1)
+        env:
+          APPROVED_SITE_ORIGIN: ${{ inputs.expected_origin }}
+          EXPECTED_CHECKOUT_HEAD: ${{ inputs.expected_head }}
+        run: |
+          node scripts/verify-live-public-asset.mjs --expected-origin "$APPROVED_SITE_ORIGIN" --expected-head "$EXPECTED_CHECKOUT_HEAD"

@@ -1,3 +1,9 @@
+## 2026-10-31 — SA-EXT-01 / PARALLEL_RIGHTS_METADATA_BOUNDS — SCOPED TERMINAL
+
+**ЗАКРИТО ЛИШЕ ЦЕЙ ПІДПУНКТ:** канонічна порівняльна читальня відхиляє надмірно довгі назви, ліцензії, атрибуцію, source/license HTTPS URL та некоректний тип атрибуції перед створенням HTML або цитування. [Source PR #845](https://github.com/Oleksii-debug/scripture-archive/pull/845) **MERGED** у main@f719f999c1cc8ab9051066eb5bf658808f8c6742, [exact-head CI #41168876527](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41168876527) **SUCCESS** (native Node, TS, lint, build, disposable Worker/D1, Python); V8 before 2/9, after 9/9. [Постійна квитанція](SA_EXT_01_PARALLEL_RIGHTS_METADATA_BOUNDS_SCOPED_TERMINAL_20261031.md). remaining_scoped_implementation=0; necessary_unmerged_PRs=0. **Батьківський SA-EXT-01 OPEN** через незакрите ліцензоване покриття та provenance. Live Sites/Windows/Chrome/NVDA NOT_VERIFIED, без деплою.
+
+---
+
 ## 2026-10-31 — SA-EXT-01 / PRIMARY_TRANSLATION_IDENTITY — SCOPED TERMINAL
 
 **ЗАКРИТО ДЛЯ РОЗРОБКИ ТІЛЬКИ ЦЕЙ ДЕФЕКТ:** основний біблійний читач не використовує метадані/ліцензію регіонального видання, якщо трансляцію явно задано з неправильним або відсутнім власним ID. Єдиний канонічний public/app.js::localEditionMetadata, збережено коректний fallback лише за відсутнього ключа. [PR #842](https://github.com/Oleksii-debug/scripture-archive/pull/842) **MERGED** main@12abfeae78f132b5fe07a29abde15f5185d56233, [exact-head CI #41168210300](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41168210300) **SUCCESS**. [Завершальна квитанція](SA_EXT_01_PRIMARY_TRANSLATION_IDENTITY_SCOPED_TERMINAL_20261031.md), remaining_scoped_implementation=0, necessary_unmerged_PRs=0 тільки тут. **Батьківський SA-EXT-01 OPEN**, live Sites/NVDA/Windows/release не перевірені.

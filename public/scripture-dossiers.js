@@ -139,13 +139,23 @@ export function validateDossierGraph(catalog) {
         item.prompts[lang].every(nonblank)))) return false;
   const known = new Map(nodes.map(item=>[item.id,item]));
   if (known.size !== nodes.length) return false;
-  if(!catalog?.books || LANGS.some(lang=>!Array.isArray(catalog.books[lang]))) return false;
+  // Only own, published catalogue records may authorize reader source labels.
+  // Prototype-inherited language lists or book fields can otherwise spoof a
+  // source name in the dossier, atlas and accessible citation links.
+  if(!catalog || typeof catalog!=='object' || !Object.hasOwn(catalog,'books') ||
+      !catalog.books || typeof catalog.books!=='object' || Array.isArray(catalog.books) ||
+      LANGS.some(lang=>!Object.hasOwn(catalog.books,lang) || !Array.isArray(catalog.books[lang]))) return false;
   // A malformed or ambiguous edition catalogue must show the accessible
   // source-unavailable state, not throw while assembling the dossier.
   // Match the canonical Bible reader's published chapter/verse size gates.
   // Otherwise a dossier can link to a source the actual reader rejects.
   const catalogs = LANGS.map(lang=>catalog.books[lang]);
-  if(catalogs.some(books=>books.some(book=>!book || !safeBookCode(book.code) ||
+  // Sparse or oversized arrays must fail closed before Map construction;
+  // Array#some skips holes and Map(books.map(...)) otherwise throws.
+  if(catalogs.some(books=>books.length===0 || books.length>200 ||
+      Array.from(books.keys()).some(index=>!Object.hasOwn(books,index)) ||
+      books.some(book=>!book || typeof book!=='object' || Array.isArray(book) ||
+      !['code','title','chapters'].every(key=>Object.hasOwn(book,key)) || !safeBookCode(book.code) ||
       !safeVisibleText(book.title) ||
       !Number.isSafeInteger(book.chapters) || book.chapters<1 || book.chapters>200) ||
       new Set(books.map(book=>book.code)).size!==books.length)) return false;
@@ -168,9 +178,12 @@ export function searchScriptureDossiers(language,value,catalog=null) {
   if(!query)return [...nodes];
   // Use the already-validated book catalogue supplied by the native dossier
   // route. A standalone lookup without it still supports canonical book codes.
-  const books=Array.isArray(catalog?.books?.[lang])?catalog.books[lang]:[];
-  const bookNames=new Map(books.filter(book=>book && typeof book.code==='string' &&
-    typeof book.title==='string').map(book=>[book.code,book.title]));
+  const books=catalog && typeof catalog==='object' && Object.hasOwn(catalog,'books') &&
+    catalog.books && typeof catalog.books==='object' && Object.hasOwn(catalog.books,lang) &&
+    Array.isArray(catalog.books[lang]) ? catalog.books[lang] : [];
+  const bookNames=new Map(books.filter(book=>book && typeof book==='object' &&
+    Object.hasOwn(book,'code') && Object.hasOwn(book,'title') &&
+    typeof book.code==='string' && typeof book.title==='string').map(book=>[book.code,book.title]));
   const normalize=text=>text.normalize('NFC').toLocaleLowerCase(lang);
   // An exact book-name/code search must discover every dossier whose
   // published sources or relation witnesses cite that book. Do not perform

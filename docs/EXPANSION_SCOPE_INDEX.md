@@ -1,3 +1,11 @@
+## 2026-10-31 — SA-EXT-01/02 / EXACT SOURCE GATES — TWO SCOPED TERMINAL REPAIRS
+
+- **SA-EXT-01:** [#866](https://github.com/Oleksii-debug/scripture-archive/pull/866) **MERGED** main `91e59f5a6fe9810e2a9637eadff4238621f058e5`; safe canonical book codes and bounded chapters before HTML/fetch. Exact-head [CI #41172736372](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41172736372) SUCCESS.
+- **SA-EXT-02/04:** [#867](https://github.com/Oleksii-debug/scripture-archive/pull/867) **MERGED** main `39108a68fa37bbf6020a33d0dc43ec8511cf0ea0`; exact group identifier instead of trimmed cross-key alias in canonical reading/assessment API. Exact-head [CI #41172834341](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41172834341) SUCCESS.
+- [Canonical scoped terminal receipt](roadmap/SA_EXT_01_02_READER_AND_ATTEMPT_EXACT_SCOPED_TERMINAL_20261031.md). `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL` for these 2 fixes only, no necessary unmerged feature PR. Full SA-EXT-01/02 OPEN, 03/04 remain parent TERMINAL, other 16 parents OPEN. No hosted Sites/NVDA/release verification.
+
+---
+
 # Scripture Archive — індекс затверджених майбутніх розширень (28.10.2026)
 
 **Статус:** власник погодив включення до технічних планів і каталогу розділів; це не доказ реалізації й не дозвіл на автоматичний реліз. 

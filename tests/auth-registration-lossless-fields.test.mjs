@@ -115,3 +115,33 @@ test("valid default registration still persists account, profile, and verificati
   assert.equal(h.batches[1].length, 2);
   assert.equal(h.mail.length, 1);
 });
+
+for (const field of ["denomination", "church"]) {
+  for (const malformed of [0, false, [], {}, ["Громада"]]) {
+    test("registration refuses typed non-text " + field + " " + JSON.stringify(malformed) + " before D1/email", async () => {
+      const h = fixture();
+      const response = await h.register({ [field]: malformed });
+      assert.equal(response.status, 400);
+      assert.equal(response.body.error, "invalid_registration");
+      assert.equal(h.prepared.length, 0, "wrong-typed input must not read an account");
+      assert.equal(h.batches.length, 0, "wrong-typed input must not write to D1");
+      assert.equal(h.mail.length, 0, "wrong-typed input must not trigger verification email");
+    });
+  }
+}
+
+test("omitted and null optional community details remain valid with no sensitive consent", async () => {
+  const h = fixture();
+  const response = await h.register({
+    denomination: null,
+    church: null,
+    tradition: "prefer_not",
+    acceptSensitive: false,
+  });
+  assert.equal(response.status, 201);
+  assert.equal(h.batches.length, 2);
+  assert.equal(h.mail.length, 1);
+  const statement = h.batches[0][1];
+  assert.ok(statement.sql.includes("INSERT INTO profiles"));
+  assert.equal(statement.args.filter(value => value === "Громада" || value === "Місцева громада").length, 0);
+});

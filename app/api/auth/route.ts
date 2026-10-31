@@ -365,6 +365,10 @@ export async function POST(request: Request) {
       // facilitator's stable identifier and free-text contribution in shared groups.
       // Owned groups are deleted below and cascade their sessions.
       env.DB.prepare("UPDATE group_sessions SET created_by='deleted-account',reflection=NULL WHERE created_by=?").bind(identity.userId),
+      // Preserve another author's reviewed material and approval decision, but
+      // do not expose a deleted editor's stable identity through review history.
+      // The row stays audit-visible under a non-identifying reviewer sentinel.
+      env.DB.prepare("UPDATE material_submissions SET reviewed_by='deleted-account' WHERE reviewed_by=?").bind(identity.userId),
       env.DB.prepare("DELETE FROM home_group_members WHERE user_id=?").bind(identity.userId),
       env.DB.prepare("DELETE FROM study_materials WHERE owner_user_id=?").bind(identity.userId),
       env.DB.prepare("DELETE FROM home_groups WHERE owner_user_id=?").bind(identity.userId),
@@ -375,9 +379,9 @@ export async function POST(request: Request) {
         .bind(`deleted-${identity.userId}@invalid.local`, identity.userId),
       env.DB.prepare("DELETE FROM auth_sessions WHERE user_id=?").bind(identity.userId),
     ]);
-    // All 20 statements, including shared-record redaction and final account
-    // update, must be acknowledged. Empty unrelated DELETEs may change 0 rows.
-    if (!batchAcknowledged(receipts, 20) || receipts[18].meta.changes !== 1)
+    // All 21 statements, including shared-meeting/editor redactions and final
+    // account update, must be acknowledged. Empty unrelated DELETEs may change 0 rows.
+    if (!batchAcknowledged(receipts, 21) || receipts[19].meta.changes !== 1)
       throw Error("deletion_batch_unconfirmed");
     } catch {
       // D1 batch rejects atomically; do not pretend the account was erased.

@@ -30,6 +30,15 @@ test('account deletion clears personal records while preserving other users', as
     db.prepare("INSERT INTO material_submissions(id,material_id,author_id,snapshot,provenance,rights_attested,status) VALUES (?,?, 'bob','{}','source',1,'withdrawn')").run(id,'material-'+id);
     db.prepare("INSERT INTO material_takedowns(submission_id,actor_user_id,reason) VALUES (?,?, 'Rights issue')").run(id,actor);
   }
+  // Alice also reviewed Bob's independently owned material. Account erasure
+  // must anonymize her reviewer identity WITHOUT erasing Bob's approved record.
+  const validSnapshot = JSON.stringify({title:'Reviewed lesson',locale:'en',data:{
+    prompt:'What does Genesis record?',reference:'GEN 12:1',
+    options:['Choice one','Choice two'],answer:'Choice one',
+    explanation:'The source reference is available for review.'
+  }});
+  db.prepare("INSERT INTO material_submissions(id,material_id,author_id,snapshot,provenance,rights_attested,status,reviewed_at,reviewed_by,source_checked,rights_checked) VALUES ('reviewed-by-alice','material-sub-bob','bob',?,'source',1,'approved','2026-10-30','alice',1,1)").run(validSnapshot);
+  db.prepare("INSERT INTO material_submissions(id,material_id,author_id,snapshot,provenance,rights_attested,status,reviewed_at,reviewed_by) VALUES ('reviewed-by-bob','material-sub-alice','bob',?,'source',1,'rejected','2026-10-30','bob')").run(validSnapshot);
   // Alice facilitated one meeting in Bob's group and owns another group.
   // Deletion must not erase Bob's independent records or retain Alice's
   // identifier or free-text reflection in a surviving shared group.
@@ -53,7 +62,7 @@ test('account deletion clears personal records while preserving other users', as
       // A fake incomplete ACK does not assert a rollback. It proves only that
       // the API refuses to claim successful deletion without D1 confirmation.
       if (unconfirmedBatch) return statements.map((_, index) =>
-        ({ success: index !== 2, meta: { changes: index === 18 ? 1 : 0 } }));
+        ({ success: index !== 2, meta: { changes: index === 19 ? 1 : 0 } }));
       db.exec('BEGIN');
       try {
         const receipts = [];
@@ -84,13 +93,15 @@ test('account deletion clears personal records while preserving other users', as
   assert.equal((await refused.json()).error, 'deletion_failed');
   assert.equal(db.prepare("SELECT count(*) n FROM progress WHERE user_id='alice'").get().n, 1, 'failed batch rolls back earlier deletions');
   assert.equal(db.prepare("SELECT deleted_at FROM accounts WHERE id='alice'").get().deleted_at, null);
-  // New editorial-role and event cleanup precede shared-session redaction;
-  // fail at the following membership deletion to test rollback of redaction too.
-  failAfter = 11;
+  // Fail after BOTH shared-session and reviewed-by anonymization but before
+  // group membership deletion, to prove atomic rollback of both redactions.
+  failAfter = 13;
   const refusedAfterRedaction = await exports.POST(request('correct'));
   assert.equal(refusedAfterRedaction.status, 503);
   assert.equal((await refusedAfterRedaction.json()).error, 'deletion_failed');
   assert.deepEqual({...db.prepare("SELECT created_by,reflection FROM group_sessions WHERE id='alice-meeting'").get()}, {created_by:'alice',reflection:'Alice private reflection'});
+  assert.deepEqual({...db.prepare("SELECT reviewed_by,status FROM material_submissions WHERE id='reviewed-by-alice'").get()},
+    {reviewed_by:'alice',status:'approved'},'failed deletion rolls back shared editorial anonymization');
   assert.equal(db.prepare("SELECT count(*) AS n FROM home_group_members WHERE group_id='bob-group'").get().n, 2);
   failAfter = -1;
   unconfirmedBatch = true;
@@ -113,6 +124,12 @@ test('account deletion clears personal records while preserving other users', as
   const shared = db.prepare("SELECT created_by,reflection,answers_correct,answers_total,meeting_date FROM group_sessions WHERE id='alice-meeting'").get();
   assert.deepEqual({...shared}, {created_by:'deleted-account',reflection:null,answers_correct:2,answers_total:3,meeting_date:'2026-10-27'});
   assert.deepEqual({...db.prepare("SELECT created_by,reflection FROM group_sessions WHERE id='bob-meeting'").get()}, {created_by:'bob',reflection:'Bob authored text'});
+  assert.deepEqual({...db.prepare("SELECT reviewed_by,status,reviewed_at,source_checked,rights_checked FROM material_submissions WHERE id='reviewed-by-alice'").get()},
+    {reviewed_by:'deleted-account',status:'approved',reviewed_at:'2026-10-30',source_checked:1,rights_checked:1},
+    'existing independent approved submission survives without deleted editor identifier');
+  assert.deepEqual({...db.prepare("SELECT reviewed_by,status FROM material_submissions WHERE id='reviewed-by-bob'").get()},
+    {reviewed_by:'bob',status:'rejected'},'another reviewer remains untouched');
+  assert.equal(db.prepare("SELECT count(*) n FROM material_submissions WHERE reviewed_by='alice'").get().n,0);
   assert.equal(db.prepare("SELECT count(*) AS n FROM home_groups WHERE id='bob-group'").get().n, 1);
   assert.equal(db.prepare("SELECT count(*) AS n FROM home_group_members WHERE group_id='bob-group' AND user_id='alice'").get().n, 0);
   assert.equal(db.prepare("SELECT count(*) AS n FROM home_group_members WHERE group_id='bob-group' AND user_id='bob'").get().n, 1);

@@ -97,3 +97,32 @@ test('primary reader refuses normalized-away source and licence provenance in al
   assert.equal(result.source,valid.translations['uk-ohiienko'].source);
   assert.equal(result.licenseUrl,valid.translations['uk-ohiienko'].licenseUrl);
 });
+
+
+test('declared primary translation with a wrong identity must not borrow regional license',()=>{
+  const wrong=structuredClone(catalog);
+  wrong.translations['uk-kulish']={
+    id:'unrelated-edition',title:'Unrelated publication',license:'Restricted',
+    source:'https://different.example.invalid/translation',
+  };
+  assert.throws(()=>provenance('uk-kulish')(wrong),/local_edition_provenance_unavailable/,
+    'explicit but mismatched identity is unsafe even if a default regional edition exists');
+  const empty=structuredClone(catalog);
+  empty.translations['uk-kulish']=null;
+  assert.throws(()=>provenance('uk-kulish')(empty),/local_edition_provenance_unavailable/,
+    'declared null must not erase a missing provenance warning');
+  const missingId=structuredClone(catalog);
+  missingId.translations['uk-kulish']={title:'No ID',license:'PD',source:'https://source.example/unknown'};
+  assert.throws(()=>provenance('uk-kulish')(missingId),/local_edition_provenance_unavailable/);
+});
+
+test('a true missing translation key retains regional identity and a correctly named translation wins',()=>{
+  assert.equal(provenance('uk-kulish')(catalog).title,'Kulish');
+  const named=structuredClone(catalog);
+  named.translations['uk-kulish']={
+    id:'uk-kulish',title:'Authorized second edition',license:'CC BY-SA 4.0',
+    source:'https://source.example/authorized',
+  };
+  assert.equal(provenance('uk-kulish')(named).title,'Authorized second edition');
+  assert.equal(provenance('uk-kulish')(named).license,'CC BY-SA 4.0');
+});

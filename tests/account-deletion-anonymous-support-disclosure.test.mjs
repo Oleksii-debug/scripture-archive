@@ -31,7 +31,7 @@ function renderedAccount(lang) {
     sessionUnavailable: false,
     user: {
       id: 'fixture-principal', email: 'example@invalid.test',
-      firstName: 'A', lastName: 'B', profileComplete: true,
+      firstName: 'A', lastName: 'B', profileComplete: true, authProvider: 'password',
       visibility: {}, sensitiveConsent: false,
     },
   };

@@ -13,6 +13,11 @@ const SEARCH_COPY = {
   ru: { label:'Поиск досье', submit:'Найти', clear:'Очистить поиск', empty:'По запросу досье не найдены.', results:'Найдено досье', example:'Доступен также поиск по стиху, например GEN 17:15.' },
   en: { label:'Search dossiers', submit:'Find', clear:'Clear search', empty:'No dossiers match this search.', results:'Dossiers found', example:'You can also search cited verses, for example GEN 17:15.' },
 };
+const COMPARE_COPY = {
+  uk:{choose:'Порівняти з іншим досьє',prompt:'Виберіть досьє',submit:'Порівняти джерела',heading:'Порівняння біблійних джерел',scope:'Це порівняння лише опублікованих уривків: перетин віршів не означає незалежного свідчення або історичної тотожності подій.',overlap:'Уривки з перетином віршів',none:'Опубліковані джерельні діапазони цих досьє не перетинаються.',unknown:'Другого досьє не знайдено або обрано те саме досьє.'},
+  ru:{choose:'Сравнить с другим досье',prompt:'Выберите досье',submit:'Сравнить источники',heading:'Сравнение библейских источников',scope:'Сравниваются только опубликованные отрывки: пересечение стихов не означает независимого свидетельства или исторического тождества событий.',overlap:'Пересекающиеся диапазоны стихов',none:'Опубликованные диапазоны источников этих досье не пересекаются.',unknown:'Второе досье не найдено или выбрано то же досье.'},
+  en:{choose:'Compare with another dossier',prompt:'Choose a dossier',submit:'Compare sources',heading:'Scripture source comparison',scope:'Only published passage ranges are compared. Overlapping verses do not prove independent witnesses or identical historical events.',overlap:'Overlapping verse ranges',none:'The published source ranges of these dossiers do not overlap.',unknown:'The second dossier was not found or is the same dossier.'}
+};
 const ref=(book,chapter,first,last,kind='narrative')=>({book,chapter,first,last,kind});
 const nodes=[
  {id:'abraham',type:'person',names:{uk:'Авраам (Аврам)',ru:'Авраам (Аврам)',en:'Abraham (Abram)'},
@@ -217,7 +222,7 @@ export function searchScriptureDossiers(language,value,catalog=null) {
   });
 }
 
-export function dossierMarkup(catalog,language,requestedId,esc,searchQuery='') {
+export function dossierMarkup(catalog,language,requestedId,esc,searchQuery='',compareId=null) {
   const lang=LANGS.includes(language)?language:'uk',w=COPY[lang];
   if(!validateDossierGraph(catalog)) return `<p role="alert">${esc(w.invalid)}</p>`;
   // An absent query selects the introduction. An invalid explicit ID must
@@ -255,9 +260,34 @@ export function dossierMarkup(catalog,language,requestedId,esc,searchQuery='') {
   if(!selected) return `<div class="dossier-layout"><aside class="card dossier-index">${index}</aside><p role="alert">${esc(noMatch?SEARCH_COPY[lang].empty:filteredId?w.filtered:w.unknown)}</p></div>`;
   const references=`<ol>${selected.sources.map(source=>`<li>${cite(source)} — ${esc(w[source.kind])}</li>`).join('')}</ol>`;
   const relations=`<ul>${selected.related.map(link=>`<li><a href="/dossiers?id=${link.to}">${esc(nodes.find(item=>item.id===link.to).names[lang])}</a> — ${cite(link.via)} — ${esc(w[link.via.kind])}</li>`).join('')}</ul>`;
+  // Compare any two approved public dossiers through this existing GET route.
+  // All source data is already checked by validateDossierGraph above; no
+  // generated Scripture text, date, geography or independent-proof claim.
+  const comparisonCopy=COMPARE_COPY[lang];
+  const compared=typeof compareId==='string' && compareId!==''
+    ? nodes.find(item=>item.id===compareId) : null;
+  const compareOptions=nodes.filter(item=>item.id!==selected.id).map(item=>
+    `<option value="${item.id}"${compared?.id===item.id?' selected':''}>${esc(item.names[lang])}</option>`).join('');
+  const compareForm=`<form action="/dossiers" method="get"><input type="hidden" name="id" value="${selected.id}"><label for="dossier-compare">${esc(comparisonCopy.choose)}</label><select id="dossier-compare" name="compare"><option value="">${esc(comparisonCopy.prompt)}</option>${compareOptions}</select><button type="submit">${esc(comparisonCopy.submit)}</button></form>`;
+  let comparison='';
+  if(typeof compareId==='string' && compareId!==''){
+    if(!compared || compared.id===selected.id){
+      comparison=`<p role="alert">${esc(comparisonCopy.unknown)}</p>`;
+    }else{
+      const list=item=>`<ol>${item.sources.map(source=>`<li>${cite(source)} — ${esc(w[source.kind])}</li>`).join('')}</ol>`;
+      const overlaps=selected.sources.flatMap(left=>compared.sources.filter(right=>
+        left.book===right.book && left.chapter===right.chapter &&
+        left.first<=right.last && right.first<=left.last).map(right=>({left,right})));
+      const overlapsHtml=overlaps.length
+        ? `<ol>${overlaps.map(({left,right})=>`<li>${cite(left)} — ${esc(w[left.kind])}; ${cite(right)} — ${esc(w[right.kind])}</li>`).join('')}</ol>`
+        : `<p>${esc(comparisonCopy.none)}</p>`;
+      comparison=`<section aria-labelledby="dossier-comparison-heading"><h3 id="dossier-comparison-heading">${esc(comparisonCopy.heading)}</h3><p>${esc(comparisonCopy.scope)}</p><dl><dt>${esc(selected.names[lang])}</dt><dd>${list(selected)}</dd><dt>${esc(compared.names[lang])}</dt><dd>${list(compared)}</dd></dl><h4>${esc(comparisonCopy.overlap)}</h4>${overlapsHtml}</section>`;
+    }
+  }
+  const comparisonUI=compareForm+comparison;
   const questions=`<ol>${selected.prompts[lang].map(prompt=>`<li>${esc(prompt)}</li>`).join('')}</ol>`;
   const mission=selected.id==='abraham'? `<p><a class="button primary" href="/mission/abraham">${esc(w.mission)}</a></p>` : '';
-  return `<div class="dossier-layout"><aside class="card dossier-index">${index}</aside><article class="card dossier-article" aria-labelledby="dossier-heading"><p class="eyebrow">${esc(w.selected)} · ${esc(w[selected.type])}</p><h2 id="dossier-heading" tabindex="-1">${esc(selected.names[lang])}</h2><p class="lead">${esc(selected.summaries[lang])}</p><p>${esc(w.scope)}</p><h3>${esc(w.sources)}</h3>${references}<h3>${esc(w.relations)}</h3>${relations}<h3>${esc(w.questions)}</h3>${questions}${mission}</article></div>`;
+  return `<div class="dossier-layout"><aside class="card dossier-index">${index}</aside><article class="card dossier-article" aria-labelledby="dossier-heading"><p class="eyebrow">${esc(w.selected)} · ${esc(w[selected.type])}</p><h2 id="dossier-heading" tabindex="-1">${esc(selected.names[lang])}</h2><p class="lead">${esc(selected.summaries[lang])}</p><p>${esc(w.scope)}</p><h3>${esc(w.sources)}</h3>${references}<h3>${esc(w.relations)}</h3>${relations}${comparisonUI}<h3>${esc(w.questions)}</h3>${questions}${mission}</article></div>`;
 }
 
 

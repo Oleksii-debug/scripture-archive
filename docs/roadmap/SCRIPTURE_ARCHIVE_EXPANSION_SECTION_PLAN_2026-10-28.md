@@ -1,3 +1,9 @@
+## 2026-10-31 — R0.1 / LITERAL_IDNA_RELEASE_ORIGIN — CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL
+
+**Закрито лише вузький дефект release-origin preflight, не весь R0.1 або SA-EXT-16.** [PR #1020](https://github.com/Oleksii-debug/scripture-archive/pull/1020) **SQUASH MERGED** у `main@deb421d3bc43c3e60e151565113d937990ac1f01`: canonical `scripts/check-web-release-origin.mjs` відхиляє Unicode/IDNA authority та padded ports із збереженням коректних HTTPS URL; regression `tests/release-origin-hidden-controls.test.mjs`. [Exact PR-head CI #41239163403](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41239163403) **COMPLETED SUCCESS** (Node, TypeScript, lint, build, disposable Worker/D1, Python). [Остаточний scoped акт](R0_1_LITERAL_IDNA_RELEASE_ORIGIN_SCOPED_TERMINAL_20261031.md): `remaining_scoped_implementation=0`; `necessary_unmerged_scoped_prs=0`; `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`. Загальні розділи, live Sites, реальний browser/NVDA, D1/backup і cutover #689 залишаються OPEN/NOT_VERIFIED; deployment не проводився.
+
+---
+
 ## 2026-10-31 — SA-EXT-01 / PRIMARY_READER_SPARSE_CATALOG_FAILCLOSED — CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL
 
 **ЗАКРИТО ДЛЯ РОЗРОБКИ ЛИШЕ ПЕРЕВІРКУ РОЗРІДЖЕНИХ МАСИВІВ КАТАЛОГУ, НЕ БАТЬКІВСЬКИЙ SA-EXT-01.** Канонічний `public/app.js::validBibleCatalog` тепер вимагає власні записи для всіх 66 позицій кожного основного та додаткового списку книг до перевірок кодів, джерел, розділів і посилань. Раніше `Array.every/map` пропускали відсутній індекс, а `Set.size` рахував `undefined` як 66-ту книгу. Це відтворено на пошкодженому **in-memory** каталозі, не як production-атака чи безпосередній JSON payload.

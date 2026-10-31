@@ -30,11 +30,35 @@ test('other users, other storage and stale views never redraw the current contro
   h.events.emit({key:h.key,storageArea:{}});h.setActive(false);h.events.emit({key:h.key,storageArea:h.storage});
   assert.equal(h.meter.value,0);h.setActive(true);h.document.current=null;h.events.emit({key:h.key,storageArea:h.storage});assert.equal(h.meter.value,0);
 });
-test('corrupt or unreadable updates do not invent empty completion or overwrite storage',()=>{
+test('corrupt cross-tab readback redacts stale private Academy markers without writing storage',()=>{
   const h=setup();h.map.set(h.key,record(['abraham']));h.events.emit({key:h.key,storageArea:h.storage});
   h.map.set(h.key,'{broken');h.events.emit({key:h.key,storageArea:h.storage});
-  assert.equal(h.meter.value,1);assert.equal(h.buttons[0].attrs['aria-pressed'],'true');assert.match(h.error.textContent,/Could not read the updated markers/);assert.deepEqual(h.writes,[]);
-  h.map.set(h.key,record(['sarah']));h.events.emit({key:h.key,storageArea:h.storage});assert.equal(h.error.textContent,'');assert.equal(h.buttons[1].attrs['aria-pressed'],'true');
+  assert.equal(h.meter.value,0,'unverified previous completion is not displayed');
+  assert.equal(h.buttons[0].attrs['aria-pressed'],'false');
+  assert.equal(h.buttons[0].disabled,true,'private marker actions are read-only during uncertainty');
+  assert.match(h.status.textContent,/Could not read/);
+  assert.match(h.error.textContent,/Could not read the updated markers/);
+  assert.equal(h.badge.textContent,'');
+  assert.deepEqual(h.writes,[],'storage corruption never triggers a destructive repair');
+  h.map.set(h.key,record(['sarah']));h.events.emit({key:h.key,storageArea:h.storage});
+  assert.equal(h.error.textContent,'');
+  assert.equal(h.buttons[0].disabled,false,'verified readback restores edit controls');
+  assert.equal(h.buttons[1].attrs['aria-pressed'],'true');
+  assert.equal(h.meter.value,1);
+});
+test('a completed cross-tab Academy badge is withdrawn on corrupt data and recovers only on verified readback',()=>{
+  const h=setup();
+  h.map.set(h.key,record(academyLessonIds));h.events.emit({key:h.key,storageArea:h.storage});
+  assert.match(h.badge.textContent,/no certificate/);
+  h.map.set(h.key,JSON.stringify({version:1,completed:['abraham','abraham']}));
+  h.events.emit({key:h.key,storageArea:h.storage});
+  assert.equal(h.badge.textContent,'');
+  assert.equal(h.meter.value,0);
+  assert.ok(h.buttons.every(button=>button.disabled===true),'all stale private actions are disabled');
+  assert.deepEqual(h.writes,[]);
+  h.map.set(h.key,record(academyLessonIds));h.events.emit({key:h.key,storageArea:h.storage});
+  assert.equal(h.buttons[0].disabled,false);
+  assert.match(h.badge.textContent,/no certificate/);
 });
 test('remount replaces the old event listener',()=>{
   const h=setup();assert.equal(h.listeners.size,1);h.mount();assert.equal(h.listeners.size,1);

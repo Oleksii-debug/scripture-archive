@@ -395,8 +395,10 @@ export async function POST(request: Request) {
     if (!currentActor) return json({ invalidated: false });
     // Invalidate before reporting a match: a read-only lookup would reveal the
     // active passage through enumeration. Group context must not bypass this.
+    // Opening this mission's chapter must never invalidate another mission's
+    // independent attempt for the same actor and Bible passage.
     const result = await env.DB.batch([
-      env.DB.prepare("UPDATE mission_attempts SET status='invalidated',invalidated_at=CURRENT_TIMESTAMP,invalidation_reason='chapter_opened' WHERE actor_id=? AND book_id=? AND chapter=? AND status='active' AND expires_at>CURRENT_TIMESTAMP").bind(currentActor.id, book, chapter),
+      env.DB.prepare("UPDATE mission_attempts SET status='invalidated',invalidated_at=CURRENT_TIMESTAMP,invalidation_reason='chapter_opened' WHERE actor_id=? AND book_id=? AND chapter=? AND mission_id=? AND status='active' AND expires_at>CURRENT_TIMESTAMP").bind(currentActor.id, book, chapter, MISSION_ID),
       env.DB.prepare("UPDATE chapter_read_receipts SET consumed_at=CURRENT_TIMESTAMP WHERE actor_id=? AND book_id=? AND chapter=? AND consumed_at IS NULL").bind(currentActor.id, book, chapter),
     ]);
     const changes = confirmedBatch(result, 2);

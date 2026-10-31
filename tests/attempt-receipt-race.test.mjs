@@ -49,8 +49,8 @@ test('chapter opening and start serialize safely in either order across contexts
         CREATE TABLE mission_attempts (id TEXT PRIMARY KEY, actor_id TEXT, mission_id TEXT, book_id TEXT, chapter INTEGER, group_id TEXT, locale TEXT, task_limit INTEGER, expires_at TEXT, status TEXT DEFAULT 'active', invalidated_at TEXT, invalidation_reason TEXT);`);
       db.prepare('INSERT INTO chapter_read_receipts VALUES (?,?,?,?,?,NULL)').run('receipt','actor','GEN',12,group);
       db.prepare('INSERT INTO chapter_read_receipts VALUES (?,?,?,?,?,NULL)').run('other','other','GEN',12,group);
-      const open = () => { db.exec('BEGIN'); for (const sql of chapterSql) db.prepare(sql).run('actor','GEN',12); db.exec('COMMIT'); };
-      const start = () => { db.exec('BEGIN'); const n=db.prepare(startSql[0]).run('attempt','actor','mission','GEN',12,group,'en',1,'receipt','actor',group || '',group || '','actor').changes; db.prepare(startSql[1]).run('actor','attempt','attempt'); db.prepare(startSql[2]).run('receipt','attempt'); db.exec('COMMIT'); return n; };
+      const open = () => { db.exec('BEGIN'); db.prepare(chapterSql[0]).run('actor','GEN',12,'OT-AB-01'); db.prepare(chapterSql[1]).run('actor','GEN',12); db.exec('COMMIT'); };
+      const start = () => { db.exec('BEGIN'); const n=db.prepare(startSql[0]).run('attempt','actor','OT-AB-01','GEN',12,group,'en',1,'receipt','actor',group || '',group || '','actor').changes; db.prepare(startSql[1]).run('actor','attempt','attempt'); db.prepare(startSql[2]).run('receipt','attempt'); db.exec('COMMIT'); return n; };
       if (openFirst) { open(); assert.equal(start(),0); } else { assert.equal(start(),1); open(); assert.equal(db.prepare("SELECT status FROM mission_attempts WHERE id='attempt'").get().status,'invalidated'); }
       assert.equal(db.prepare("SELECT consumed_at FROM chapter_read_receipts WHERE id='other'").get().consumed_at,null);
     } finally { db.close(); }

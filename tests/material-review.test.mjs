@@ -10,9 +10,11 @@ function fixture() {
   const db = new DatabaseSync(':memory:');
   db.exec('PRAGMA foreign_keys=ON');
   db.exec('CREATE TABLE accounts (id TEXT PRIMARY KEY,email TEXT NOT NULL,email_verified_at TEXT,deleted_at TEXT)');
+  db.exec("INSERT INTO accounts(id,email,email_verified_at) VALUES('editor','dordiaioleksii1@gmail.com',CURRENT_TIMESTAMP)");
   db.exec(readFileSync(new URL('../drizzle/0012_editor_roles.sql', import.meta.url), 'utf8'));
   db.exec("CREATE TABLE study_materials (id TEXT PRIMARY KEY,owner_user_id TEXT NOT NULL,title TEXT NOT NULL,locale TEXT NOT NULL,data TEXT NOT NULL,visibility TEXT NOT NULL DEFAULT 'private')");
   db.exec(readFileSync(new URL('../drizzle/0011_material_review.sql', import.meta.url), 'utf8'));
+  db.exec(readFileSync(new URL('../drizzle/0014_material_takedowns.sql', import.meta.url), 'utf8'));
   const input = {prompt:'A valid question?',reference:'GEN 12',options:['one','two'],answer:'one',explanation:'Source based explanation'};
   db.prepare('INSERT INTO study_materials(id,owner_user_id,title,locale,data) VALUES (?,?,?,?,?)').run('m1','alice','Original','uk',JSON.stringify(input));
   db.prepare('INSERT INTO study_materials(id,owner_user_id,title,locale,data) VALUES (?,?,?,?,?)').run('m2','bob','Other','en',JSON.stringify(input));
@@ -460,5 +462,53 @@ test('library search rejects malformed cursors and surfaces unavailable storage,
     assert.equal((await f.post({action:'librarySearch',query:'',cursor:null},'')).status,503);
     f.setReadFailure(false);f.setReadThrow(true);
     assert.equal((await f.post({action:'librarySearch',query:'',cursor:null},'')).status,503);
+  }finally{f.db.close();}
+});
+
+
+test('editor rights takedown atomically hides publication and preserves original review',async()=>{
+  const f=fixture();try {
+    const id=(await f.post(submission)).data.id;
+    assert.equal((await f.post({...approve(id),note:'Original review'},'editor')).status,200);
+    assert.equal((await f.post({action:'takedown',id,reason:'Rights concern'},'bob')).status,403);
+    assert.equal((await f.post({action:'takedown',id,reason:'no'},'editor')).status,400);
+    assert.equal((await f.post({action:'takedown',id,reason:'Rights concern'},'editor')).status,200);
+    const row=f.db.prepare('SELECT status,reviewed_by,review_note FROM material_submissions WHERE id=?').get(id);
+    assert.deepEqual({...row},{status:'withdrawn',reviewed_by:'editor',review_note:'Original review'});
+    const audit=f.db.prepare('SELECT actor_user_id,reason FROM material_takedowns WHERE submission_id=?').get(id);
+    assert.deepEqual({...audit},{actor_user_id:'editor',reason:'Rights concern'});
+    assert.equal((await f.get('public')).data.items.length,0);
+    assert.equal((await f.post({action:'librarySearch',query:'',cursor:null},'')).data.items.length,0);
+    assert.equal((await f.post({action:'answer',id,choice:0},'')).status,404);
+    assert.equal((await f.get('mine','alice')).data.items[0].takedownReason,'Rights concern');
+    assert.equal((await f.get('history','editor')).data.items[0].takedownActor,'editor');
+    assert.equal((await f.post({action:'takedown',id,reason:'Repeated request'},'editor')).status,409);
+  }finally{f.db.close();}
+});
+test('editor revoked before takedown cannot alter publication',async()=>{
+  const f=fixture();try {
+    const id=(await f.post(submission)).data.id;await f.post(approve(id),'editor');
+    f.db.prepare("INSERT INTO accounts(id,email,email_verified_at) VALUES('bob','bob@example.invalid',CURRENT_TIMESTAMP)").run();
+    f.db.prepare("INSERT INTO editorial_roles(user_id,granted_by) VALUES('bob','editor')").run();
+    f.afterRoleRead(()=>f.db.prepare("DELETE FROM editorial_roles WHERE user_id='bob'").run());
+    assert.equal((await f.post({action:'takedown',id,reason:'Rights issue'},'bob')).status,409);
+    assert.equal(f.db.prepare('SELECT status FROM material_submissions WHERE id=?').get(id).status,'approved');
+    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM material_takedowns').get().n,0);
+  }finally{f.db.close();}
+});
+test('failed takedown audit insertion rolls back the publication change',async()=>{
+  const f=fixture();try {
+    const id=(await f.post(submission)).data.id;await f.post(approve(id),'editor');
+    f.setBatchFailure(1);assert.equal((await f.post({action:'takedown',id,reason:'Rights issue'},'editor')).status,503);
+    assert.equal(f.db.prepare('SELECT status FROM material_submissions WHERE id=?').get(id).status,'approved');
+  }finally{f.db.close();}
+});
+
+test('deleted owner cannot use a stale identity to take down a submission',async()=>{
+  const f=fixture();try {
+    const id=(await f.post(submission)).data.id;await f.post(approve(id),'editor');
+    f.db.exec("UPDATE accounts SET deleted_at=CURRENT_TIMESTAMP WHERE id='editor'");
+    assert.equal((await f.post({action:'takedown',id,reason:'Rights issue'},'editor')).status,409);
+    assert.equal(f.db.prepare('SELECT status FROM material_submissions WHERE id=?').get(id).status,'approved');
   }finally{f.db.close();}
 });

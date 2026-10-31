@@ -8,7 +8,7 @@ import vm from 'node:vm';
 test('account deletion clears personal records while preserving other users', async () => {
   const db = new DatabaseSync(':memory:');
   db.exec('PRAGMA foreign_keys=ON');
-  for (const name of readdirSync(new URL('../drizzle/', import.meta.url)).filter(n => /^00(?:0[0-9]|1[0-2])_.*\.sql$/.test(n)).sort())
+  for (const name of readdirSync(new URL('../drizzle/', import.meta.url)).filter(n => /^00(?:0[0-9]|1[0-4])_.*\.sql$/.test(n)).sort())
     db.exec(readFileSync(new URL('../drizzle/' + name, import.meta.url), 'utf8'));
   for (const id of ['alice', 'bob']) {
     db.prepare("INSERT INTO accounts (id,email,password_hash,password_salt,password_iterations,first_name,last_name) VALUES (?,?,?,?,?,?,?)").run(id, `${id}@example.invalid`, 'hash', 'salt', 1, 'First', 'Last');
@@ -25,6 +25,11 @@ test('account deletion clears personal records while preserving other users', as
   }
   db.prepare("INSERT INTO accounts (id,email,password_hash,password_salt,password_iterations,first_name,last_name) VALUES ('carol','carol@example.invalid','hash','salt',1,'First','Last')").run();
   db.prepare("INSERT INTO editorial_roles(user_id,granted_by) VALUES ('carol','alice')").run();
+  for (const [id, actor] of [['sub-alice','alice'],['sub-bob','bob']]) {
+    db.prepare("INSERT INTO study_materials(id,owner_user_id,title,locale,data) VALUES (?, 'bob', 'Study','en','{}')").run('material-'+id);
+    db.prepare("INSERT INTO material_submissions(id,material_id,author_id,snapshot,provenance,rights_attested,status) VALUES (?,?, 'bob','{}','source',1,'withdrawn')").run(id,'material-'+id);
+    db.prepare("INSERT INTO material_takedowns(submission_id,actor_user_id,reason) VALUES (?,?, 'Rights issue')").run(id,actor);
+  }
   // Alice facilitated one meeting in Bob's group and owns another group.
   // Deletion must not erase Bob's independent records or retain Alice's
   // identifier or free-text reflection in a surviving shared group.
@@ -48,7 +53,7 @@ test('account deletion clears personal records while preserving other users', as
       // A fake incomplete ACK does not assert a rollback. It proves only that
       // the API refuses to claim successful deletion without D1 confirmation.
       if (unconfirmedBatch) return statements.map((_, index) =>
-        ({ success: index !== 2, meta: { changes: index === 17 ? 1 : 0 } }));
+        ({ success: index !== 2, meta: { changes: index === 18 ? 1 : 0 } }));
       db.exec('BEGIN');
       try {
         const receipts = [];
@@ -113,6 +118,9 @@ test('account deletion clears personal records while preserving other users', as
   assert.equal(db.prepare("SELECT count(*) AS n FROM home_group_members WHERE group_id='bob-group' AND user_id='bob'").get().n, 1);
   assert.equal(db.prepare("SELECT count(*) AS n FROM home_groups WHERE id='alice-group'").get().n, 0);
   assert.equal(db.prepare("SELECT count(*) AS n FROM group_sessions WHERE group_id='alice-group'").get().n, 0);
+  assert.equal(db.prepare("SELECT count(*) n FROM material_takedowns WHERE actor_user_id='alice'").get().n,0);
+  assert.equal(db.prepare("SELECT count(*) n FROM material_takedowns WHERE actor_user_id='bob'").get().n,1);
+  assert.equal(db.prepare("SELECT status FROM material_submissions WHERE id='sub-alice'").get().status,'withdrawn');
   assert.equal(db.prepare("SELECT count(*) n FROM editorial_role_events WHERE subject_user_id='alice' OR actor_user_id='alice'").get().n, 0);
   assert.equal(db.prepare("SELECT count(*) n FROM editorial_role_events WHERE subject_user_id='bob'").get().n, 1);
   assert.equal(db.prepare("SELECT count(*) n FROM editorial_roles WHERE user_id='carol'").get().n, 0, 'deleting grantor revokes delegated roles');

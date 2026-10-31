@@ -317,6 +317,18 @@ integration("account, progress, attempts, groups, marathon limit and password re
   library = await reviewPost({ action: "librarySearch", query: "Edited draft", cursor: null }, '');
   assert.equal(library.response.status, 200);
   assert.equal(library.data.items.some(item => item.id === nextSubmission.data.id), false, "withdrawn materials are not searchable");
+  // A real local D1 batch must atomically remove a rights-disputed approved
+  // item and record the editor's reason without exposing it publicly.
+  const rightsSubmission = await reviewPost(submitReview);
+  assert.equal(rightsSubmission.response.status, 201);
+  assert.equal((await reviewPost({ action: "review", id: rightsSubmission.data.id, decision: "approve", sourceChecked: true, rightsChecked: true }, ownerCookie)).response.status, 200);
+  assert.equal((await reviewPost({ action: "takedown", id: rightsSubmission.data.id, reason: "Rights concern" })).response.status, 403);
+  assert.equal((await reviewPost({ action: "takedown", id: rightsSubmission.data.id, reason: "Rights concern" }, ownerCookie)).response.status, 200);
+  assert.equal((await reviewPost({ action: "answer", id: rightsSubmission.data.id, choice: 0 })).response.status, 404);
+  const rightsSearch = await reviewPost({ action: "librarySearch", query: "Edited draft", cursor: null }, '');
+  assert.equal(rightsSearch.data.items.some(item => item.id === rightsSubmission.data.id), false);
+  const rightsAudit = await (await fetch(`${base}/api/material-review?view=history`, { headers: { Cookie: ownerCookie } })).json();
+  assert.equal(rightsAudit.items.find(item => item.id === rightsSubmission.data.id).takedownReason, "Rights concern");
   const reviewHistory = await (await fetch(`${base}/api/material-review?view=mine`, { headers: { Cookie: cookie } })).json();
   assert.ok(reviewHistory.items.some(item => item.id === submission && item.status === "superseded"));
   assert.ok(reviewHistory.items.some(item => item.id === nextSubmission.data.id && item.status === "withdrawn"));

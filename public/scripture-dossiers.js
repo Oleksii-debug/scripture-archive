@@ -150,7 +150,11 @@ export function validateDossierGraph(catalog) {
   // Match the canonical Bible reader's published chapter/verse size gates.
   // Otherwise a dossier can link to a source the actual reader rejects.
   const catalogs = LANGS.map(lang=>catalog.books[lang]);
-  if(catalogs.some(books=>books.some(book=>!book || typeof book!=='object' || Array.isArray(book) ||
+  // Sparse or oversized arrays must fail closed before Map construction;
+  // Array#some skips holes and Map(books.map(...)) otherwise throws.
+  if(catalogs.some(books=>books.length===0 || books.length>200 ||
+      Array.from(books.keys()).some(index=>!Object.hasOwn(books,index)) ||
+      books.some(book=>!book || typeof book!=='object' || Array.isArray(book) ||
       !['code','title','chapters'].every(key=>Object.hasOwn(book,key)) || !safeBookCode(book.code) ||
       !safeVisibleText(book.title) ||
       !Number.isSafeInteger(book.chapters) || book.chapters<1 || book.chapters>200) ||

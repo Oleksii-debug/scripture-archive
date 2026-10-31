@@ -9,7 +9,7 @@ function deployed(url){
   if(path==="/api/account")return Response.json({user:null},{headers:{"Cache-Control":"no-store, private"}});
   if(path==="/robots.txt")return new Response("User-agent: *\nSitemap: https://scripture-archive.com/sitemap.xml");
   if(path==="/sitemap.xml")return new Response('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>');
-  return new Response("<html>Community</html>");
+  return new Response("<html>Community</html>",{headers:{"Content-Type":"text/html; charset=utf-8"}});
 }
 test("automatic activation waits until all public routes exist",async()=>{
   assert.equal(await communityDeploymentReady("https://scripture-archive.com",async url=>new URL(url).pathname==="/community"?new Response("missing",{status:404}):deployed(url)),false);
@@ -168,4 +168,40 @@ test("P0: protocol no-store directive is case-insensitive and recovers after sta
   stale = false;
   assert.equal(await communityDeploymentReady("https://scripture-archive.com", fetcher), true);
   assert.deepEqual(methods, Array(12).fill("GET"));
+});
+
+test("P0: a successful non-HTML community placeholder cannot certify release readiness", async () => {
+  const invalid = [
+    new Response("maintenance",{headers:{"Content-Type":"text/plain"}}),
+    Response.json({error:"not_deployed"}),
+    new Response("<html>not served as HTML</html>",{headers:{"Content-Type":"application/octet-stream"}}),
+    new Response("<html>no type</html>",{headers:{"Content-Type":""}}),
+    new Response("<html>lookalike</html>",{headers:{"Content-Type":"text/htmlx"}}),
+  ];
+  for (const response of invalid) {
+    const methods = [];
+    const ready = await communityDeploymentReady("https://scripture-archive.com",async(url,options)=>{
+      methods.push(options.method || "GET");
+      return new URL(url).pathname === "/community" ? response : deployed(url);
+    });
+    assert.equal(ready,false,"non-HTML /community must fail closed");
+    assert.deepEqual(methods,Array(6).fill("GET"));
+  }
+});
+
+test("P0: real HTML page recovers after a transient 200 maintenance placeholder",async()=>{
+  let maintenance = true;
+  const methods = [];
+  const fetcher = async(url,options)=>{
+    methods.push(options.method || "GET");
+    if(new URL(url).pathname === "/community")
+      return maintenance
+        ? new Response("maintenance",{headers:{"Content-Type":"text/plain"}})
+        : new Response("<html>Community</html>",{headers:{"Content-Type":"TEXT/HTML; charset=UTF-8"}});
+    return deployed(url);
+  };
+  assert.equal(await communityDeploymentReady("https://scripture-archive.com",fetcher),false);
+  maintenance = false;
+  assert.equal(await communityDeploymentReady("https://scripture-archive.com",fetcher),true);
+  assert.deepEqual(methods,Array(12).fill("GET"));
 });

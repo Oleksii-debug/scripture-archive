@@ -48,9 +48,16 @@ export function academyProgressKey(user){
   // Only a truly absent principal is anonymous. Do not alias an invalid
   // authenticated identity (including reserved "guest") to anonymous data.
   if(user===null || user===undefined)return 'sa.academy.reading.v1:guest';
-  if(typeof user!=='object' || typeof user.id!=='string' ||
-     !/^[a-zA-Z0-9_-]{1,120}$/.test(user.id) || user.id==='guest')return null;
-  return 'sa.academy.reading.v1:'+user.id;
+  // Only an own data-property ID from the authenticated account projection
+  // can select private markers. Inherited IDs, accessor getters, arrays and
+  // hostile property descriptors must never alias another principal's data.
+  try {
+    if(typeof user!=='object' || Array.isArray(user))return null;
+    const descriptor=Object.getOwnPropertyDescriptor(user,'id');
+    const id=descriptor?.value;
+    if(typeof id!=='string' || !/^[a-zA-Z0-9_-]{1,120}$/.test(id) || id==='guest')return null;
+    return 'sa.academy.reading.v1:'+id;
+  } catch {return null;}
 }
 export function readAcademyProgress(storage,key){
   try{

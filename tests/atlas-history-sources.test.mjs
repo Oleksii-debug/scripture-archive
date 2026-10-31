@@ -60,7 +60,7 @@ test('invalid published Scripture catalogue still fails closed without atlas ref
 
 test('the same canonical source-backed module is mounted in the real atlas workspace',()=>{
   const source=readFileSync(new URL('../public/workspace.js',import.meta.url),'utf8');
-  assert.match(source,/dossierAtlasMarkup\(catalog,state\.lang,esc\)/);
+  assert.match(source,/dossierAtlasMarkup\(catalog,state\.lang,esc,searchQuery\)/);
   assert.match(source,/import \{ dossierMarkup, dossierAtlasMarkup \} from '\.\/scripture-dossiers\.js'/);
 });
 

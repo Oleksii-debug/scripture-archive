@@ -228,6 +228,10 @@ test('corrupted HTTP 200 catalog is rejected, evicted, then healthy retry succee
     catalog => { catalog.editions.uk = null; },
     catalog => { catalog.books.uk[1].code = catalog.books.uk[0].code; },
     catalog => { catalog.books.uk[0].chapters = 0; },
+    // Same 66 book codes with swapped positions must not corrupt Bible navigation.
+    catalog => { [catalog.books.ru[0], catalog.books.ru[1]] = [catalog.books.ru[1], catalog.books.ru[0]]; },
+    catalog => { [catalog.editionBooks['uk-ohiienko'][0], catalog.editionBooks['uk-ohiienko'][1]] =
+      [catalog.editionBooks['uk-ohiienko'][1], catalog.editionBooks['uk-ohiienko'][0]]; },
     catalog => { catalog.books.ru[0].code = 'NOT-A-BOOK'; },
     catalog => { catalog.editionBooks['uk-ohiienko'] = []; },
     catalog => { delete catalog.books; },

@@ -74,3 +74,23 @@ test('parallel reader refuses to render licensed verses under a deceptive source
     globalThis.FormData=previous;
   }
 });
+
+test('SA-EXT-01 raw visually blank URL aliases and backslashes never acquire publisher authority', () => {
+  // The WHATWG parser encodes invisible fillers and treats backslashes as slashes.
+  // Neither transformation is acceptable for edition rights or source citations.
+  const hidden = ['\\u034f','\\u115f','\\u1160','\\u2800','\\u3164','\\uffa0','\\\\'];
+  for (const character of hidden) {
+    for (const field of ['source','licenseUrl']) {
+      const raw='https://deceptive.example/terms'+character+'label';
+      assert.notEqual(new URL(raw).href,raw,'control is rewritten by the URL parser');
+      assert.equal(safeProvenanceHttpsUrl(raw),'','refuse altered URL '+character.codePointAt(0).toString(16));
+      const item={title:'Verified edition',license:'Public Domain',source:'https://publisher.safe.example/read',licenseUrl:'https://rights.safe.example/terms'};
+      item[field]=raw;
+      const html=editionAboutMarkup({translations:{'uk-ohiienko':item},editions:{}},'en',esc);
+      assert.ok(!html.includes('deceptive.example'),'unverified target is not presented');
+      assert.ok(html.includes(field==='source'?'rights.safe.example':'publisher.safe.example'),'independent valid source remains');
+    }
+  }
+  for (const legitimate of ['https://publisher.example/a%20b?source=a@b','HTTPS://publisher.example/read','https://publisher.example/path/%5Cencoded'])
+    assert.ok(safeProvenanceHttpsUrl(legitimate),'valid encoded/normal URL remains usable');
+});

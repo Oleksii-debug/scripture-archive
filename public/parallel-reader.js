@@ -5,11 +5,11 @@ const COPY = {
 };
 // Provenance URL admission must inspect the *raw* string first: WHATWG URL
 // silently strips tabs/newlines and empty user-info delimiters; it also
-// percent-encodes raw C1, bidi/isolate and invisible controls in URI paths.
+// percent-encodes raw Unicode controls, separators and lone surrogates in URI paths.
 // Refuse them before parsing instead of silently changing source/licence links.
 const https = value => {
   if (typeof value !== 'string' || !/^https:\/\//i.test(value) ||
-      /[\u0000-\u0020\u007f-\u009f\u061c\u200b\u2028-\u202e\u2066-\u2069\ufeff]/u.test(value)) return '';
+      /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}\s]/u.test(value)) return '';
   const authority = value.slice(value.indexOf('://') + 3).split(/[/?#]/u, 1)[0];
   if (!authority || authority.includes('@')) return '';
   try {

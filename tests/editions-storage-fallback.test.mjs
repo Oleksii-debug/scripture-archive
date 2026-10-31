@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { selectedEdition, editionSelect } from '../public/editions.js';
+import { selectedEdition, editionSelect, setEditionForTab } from '../public/editions.js';
 
 function withStorage(storage, callback) {
   const previous = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
@@ -68,5 +68,20 @@ test('missing storage is a recoverable preference error, not a missing Bible cha
   withStorage(undefined, () => {
     assert.equal(selectedEdition('uk').id, 'uk-ohiienko');
     assert.match(editionSelect('uk', value => String(value)), /value="uk-ohiienko" selected/);
+  });
+});
+
+test('prototype property names cannot crash edition choice or spoof the fallback language', () => {
+  withStorage({ getItem: () => 'uk-kulish' }, () => {
+    for (const lang of ['__proto__', 'constructor', 'toString', 'hasOwnProperty']) {
+      assert.equal(setEditionForTab(lang, 'uk-kulish'), null,
+        'unsupported prototype-like language must never be accepted: ' + lang);
+      assert.equal(selectedEdition(lang).id, 'uk-ohiienko',
+        'unknown locale must use the Ukrainian primary edition: ' + lang);
+      const html = editionSelect(lang, value => String(value));
+      assert.match(html, /value="uk-ohiienko" selected/);
+      assert.match(html, /Переклад Біблії/);
+      assert.ok(!html.includes('undefined'), 'fallback markup must be localized');
+    }
   });
 });

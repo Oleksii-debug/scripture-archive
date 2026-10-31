@@ -22,6 +22,7 @@ for(const lang of ['uk','ru','en']){
       'GEN 17:15\n','GEN 17:15\r','GEN 17:15\t',
       'GEN 17:15\u202e','GEN 17:15\u200b','GEN 17:15\u2066',
       'GEN 17:15\u0000','GEN 17:15\ud800',
+      '\n','\r','\u2028','\u2029','\ufeff',
     ];
     for(const query of invalid){
       assert.deepEqual(searchScriptureDossiers(lang,query,catalog),[]);

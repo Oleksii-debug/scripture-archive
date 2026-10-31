@@ -2458,8 +2458,12 @@ function localEditionMetadata(catalog) {
   // Locale defaults must not be used as attribution for a distinct edition.
   const translated = catalog.translations?.[local.id];
   const regional = catalog.editions?.[state.lang];
-  const metadata = translated?.id === local.id ? translated
-    : local.contentId && regional?.id === local.contentId ? regional : null;
+  // A declared translation with a different embedded ID is corrupt; do not
+  // fall back to the regional edition and misattribute its licensed verses.
+  // The fallback is only legal when no translation entry was declared at all.
+  const declared = Object.prototype.hasOwnProperty.call(catalog.translations || {}, local.id);
+  const metadata = declared ? (translated?.id === local.id ? translated : null)
+    : (local.contentId && regional?.id === local.contentId ? regional : null);
   if (!metadata || typeof metadata.title !== "string" || !metadata.title.trim() ||
       typeof metadata.license !== "string" || !metadata.license.trim() ||
       typeof metadata.source !== "string") throw Error("local_edition_provenance_unavailable");

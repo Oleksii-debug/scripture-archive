@@ -58,6 +58,8 @@ test("a bare 2xx, error-shaped 2xx or broken provider JSON cannot claim mail acc
     accepted({}), accepted({ ok: true }), accepted({ id: "" }),
     accepted({ id: "   " }), accepted({ id: 14 }),
     accepted({ id: "x".repeat(201) }), accepted([]),
+    accepted({ id: "accepted-looking-id", error: { message: "provider rejected" } }),
+    accepted({ id: "accepted-looking-id", errors: [{ message: "invalid sender" }] }),
     { ok: true, json: async () => { throw Error("invalid JSON"); } },
     rejected(), null, new Error("network outage"),
   ]) {
@@ -78,6 +80,9 @@ test("support mail follows the same provider acceptance rule without exposing ra
   };
   const absent = harness(accepted({}));
   assert.equal((await absent.email.sendSupportRequestEmail(input)).delivered, false);
+  const contradictory = harness(accepted({ id: "message-accepted-42", error: "rejected" }));
+  assert.deepEqual(await contradictory.email.sendSupportRequestEmail(input),
+    { delivered: false, reason: "email_provider_error" });
   const present = harness(accepted({ id: "message-accepted-42" }));
   assert.equal((await present.email.sendSupportRequestEmail(input)).delivered, true);
   assert.equal(present.calls.length, 1);

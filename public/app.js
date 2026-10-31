@@ -3068,6 +3068,34 @@ async function renderReader(parts) {
     const status = document.querySelector("#reader-cite-status");
     if (!status) return;
     status.textContent = "";
+    // A chapter may become assessment-locked after the reader was rendered.
+    // The parallel reader already rechecks before copying; the primary reader
+    // must enforce the same server authority before exposing its citation.
+    const citationStillCurrent = () => readerStillCurrent() && button.isConnected &&
+      document.querySelector("#reader-cite-status") === status;
+    let chapterGuard;
+    try {
+      chapterGuard = await attemptRequest("chapter", "POST", { book: meta.code, chapter });
+    } catch {
+      if (citationStillCurrent()) {
+        state.currentReader = null;
+        shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1></section>`);
+      }
+      return;
+    }
+    if (!citationStillCurrent()) return;
+    if (!chapterGuard || typeof chapterGuard.invalidated !== "boolean") {
+      state.currentReader = null;
+      shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1></section>`);
+      return;
+    }
+    if (chapterGuard.invalidated) {
+      forgetActiveAttempt();
+      state.mission = null;
+      state.currentReader = null;
+      renderLockedChapter(meta.code, chapter);
+      return;
+    }
     try {
       if (!navigator.clipboard?.writeText) throw Error("clipboard_unavailable");
       const citation = readerCitationText(

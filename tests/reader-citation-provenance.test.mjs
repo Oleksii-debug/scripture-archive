@@ -19,8 +19,11 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
-function harness({ clipboard, active = true, rawVerse = "2" } = {}) {
+function harness({ clipboard, active = true, rawVerse = "2", guard = { invalidated: false } } = {}) {
   const copied = [];
+  const guardCalls = [];
+  let locked = 0, failClosed = 0, invalidated = 0;
+  const state = { currentReader: { active: true }, mission: { active: true } };
   let listener;
   const button = { isConnected: true, dataset: { verseCite: rawVerse } };
   const panel = { addEventListener(name, handler) { assert.equal(name, "click"); listener = handler; } };
@@ -42,7 +45,17 @@ function harness({ clipboard, active = true, rawVerse = "2" } = {}) {
       if (clipboard) return clipboard(text);
       copied.push(text);
     } } },
-    readerCitationText, readerVerseUrl: (book, chapter, verse) => `/reader/${book}/${chapter}?verse=${verse}`,
+    readerCitationText,
+    attemptRequest: async (...args) => {
+      guardCalls.push(args);
+      return typeof guard === "function" ? guard(...args) : guard;
+    },
+    state,
+    forgetActiveAttempt: () => { invalidated += 1; },
+    renderLockedChapter: () => { locked += 1; },
+    shell: () => { failClosed += 1; },
+    t: () => "Reader unavailable",
+    readerVerseUrl: (book, chapter, verse) => `/reader/${book}/${chapter}?verse=${verse}`,
     bibleText: v => v,
     bookTitle: book => book.title,
     meta: { code: "GEN", title: "Genesis" },
@@ -50,7 +63,10 @@ function harness({ clipboard, active = true, rawVerse = "2" } = {}) {
   };
   vm.runInNewContext(listenerCode, context);
   return {
-    copied, status, button,
+    copied, status, button, guardCalls, state,
+    get locked() { return locked; },
+    get failClosed() { return failClosed; },
+    get invalidated() { return invalidated; },
     setActive(value) { active = value; },
     detach() { button.isConnected = false; },
     press: () => listener({ target: { closest: () => button } }),
@@ -82,6 +98,58 @@ test("native reader click copies the exact verse plus edition and announces comp
   assert.match(h.copied[0], /Original translation attribution/);
   assert.match(h.copied[0], /https:\/\/scripture-archive\.com\/reader\/GEN\/12\?verse=2/);
   assert.equal(h.status.textContent, "Verse copied");
+});
+
+test("primary verse citation rechecks chapter authorization before clipboard disclosure", async () => {
+  const h = harness();
+  await h.press();
+  assert.equal(h.guardCalls.length, 1);
+  assert.equal(h.guardCalls[0][0], "chapter");
+  assert.equal(h.guardCalls[0][1], "POST");
+  assert.equal(h.guardCalls[0][2].book, "GEN");
+  assert.equal(h.guardCalls[0][2].chapter, 12);
+  assert.equal(h.copied.length, 1);
+});
+
+test("active assessment locks the primary reader without copying its verse", async () => {
+  const h = harness({ guard: { invalidated: true } });
+  await h.press();
+  assert.equal(h.copied.length, 0);
+  assert.equal(h.locked, 1);
+  assert.equal(h.invalidated, 1);
+  assert.equal(h.state.currentReader, null);
+  assert.equal(h.state.mission, null);
+  assert.equal(h.failClosed, 0);
+});
+
+test("malformed or rejected chapter checks fail closed; a fresh authorized reader recovers", async () => {
+  for (const guard of [null, {}, { invalidated: "false" }, () => { throw Error("D1 unavailable"); }]) {
+    const h = harness({ guard });
+    await h.press();
+    assert.equal(h.copied.length, 0);
+    assert.equal(h.failClosed, 1);
+    assert.equal(h.locked, 0);
+    assert.equal(h.state.currentReader, null);
+  }
+  const recovered = harness();
+  await recovered.press();
+  assert.equal(recovered.copied.length, 1);
+  assert.equal(recovered.failClosed, 0);
+});
+
+test("late chapter checks cannot copy or fail-close a newer principal or detached reader", async () => {
+  for (const retire of ["principal", "detached"]) {
+    const pending = deferred();
+    const h = harness({ guard: () => pending.promise });
+    const work = h.press();
+    if (retire === "principal") h.setActive(false);
+    else h.detach();
+    pending.resolve({ invalidated: true });
+    await work;
+    assert.equal(h.copied.length, 0);
+    assert.equal(h.locked, 0);
+    assert.equal(h.failClosed, 0);
+  }
 });
 
 test("fake or out-of-bounds chapter verse data can never reach clipboard", async () => {
@@ -116,6 +184,7 @@ test("late clipboard reply after reader navigation cannot announce into the next
   const gate = deferred();
   const h = harness({ clipboard: () => gate.promise });
   const work = h.press();
+  await Promise.resolve();
   h.setActive(false);
   h.status.textContent = "New reader status";
   gate.resolve();
@@ -127,6 +196,7 @@ test("detached copied-verse button cannot announce after the clipboard response"
   const gate = deferred();
   const h = harness({ clipboard: () => gate.promise });
   const work = h.press();
+  await Promise.resolve();
   h.detach();
   h.status.textContent = "Next page";
   gate.resolve();

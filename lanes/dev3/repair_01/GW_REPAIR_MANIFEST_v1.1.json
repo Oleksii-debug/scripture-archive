@@ -1,0 +1,53 @@
+{
+  "schema": "GW_REPAIR_MANIFEST_v1.1",
+  "round": "R06_DEV3_REPAIR_01",
+  "base_lane_head": "1a54ae3f4002cabced8c22d4830ce392c571c0a5",
+  "candidate_nodes": 360,
+  "missions": 15,
+  "evidence_records_retained": 240,
+  "confidence": {"T1": 242, "T2": 108, "D1": 10},
+  "tx1_nodes": 22,
+  "task_types": {
+    "EVIDENCE_SELECT": 60,
+    "SHORT_TEXT": 60,
+    "SPEAKER_RECIPIENT": 60,
+    "CLAIM_EVIDENCE": 60,
+    "SINGLE_CHOICE": 15,
+    "COMBOBOX_SELECT": 15,
+    "PARALLEL_WITNESS_COMPARE": 15,
+    "LONG_TEXT": 15,
+    "MULTI_SELECT": 15,
+    "ORDERING": 15,
+    "MATCHING": 15,
+    "COMPOSITE_MULTI_STEP": 15
+  },
+  "repair_metrics": {
+    "duplicated_book_artifacts": 0,
+    "generic_equivalence_accepted_variants": 0,
+    "grading_objects": 360,
+    "runtime_submission_examples": 360,
+    "success_feedback_unique": 360,
+    "partial_feedback_unique": 360,
+    "failure_feedback_unique": 360,
+    "H1_unique": 360,
+    "H2_unique": 360,
+    "H3_unique": 360,
+    "H4_unique": 360,
+    "H5_unique": 360,
+    "H6_unique": 360,
+    "H7_unique": 360
+  },
+  "d5_conformance": {
+    "d5_package_sha256": "89e82fe87d2b8f384ca9c882515eb6ed3ebd0aa256573c8b4ea575a6ba140c1a",
+    "loader_nodes": 360,
+    "base_registry_correct": 285,
+    "base_registry_partial": 0,
+    "base_registry_incorrect": 0,
+    "base_registry_error": 75,
+    "unsupported": {"SPEAKER_RECIPIENT": 60, "PARALLEL_WITNESS_COMPARE": 15},
+    "public_registry_extension_correct": 360,
+    "d5_source_modified": false
+  },
+  "source_truth_changed": false,
+  "audit_status": "DEVELOPER_REPAIRED / INDEPENDENT_AUDIT_PENDING"
+}

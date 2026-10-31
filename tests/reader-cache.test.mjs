@@ -284,3 +284,43 @@ test('reader chapter hash and saved checkpoint normalize to server-safe integers
       assert.ok(Number.isInteger(value), lang + '/' + hash + ': server rejects fractional chapters');
     }
 });
+
+
+// SA-EXT-01: primary reading uses the same 256-verse / 131072 UTF-16
+// character limit as the already shipped parallel reader. This directly runs
+// canonical getBook rather than testing a duplicate parser.
+test('primary Bible reader rejects oversized or sparse chapters and recovers on retry', async () => {
+  const invalidBooks = [
+    { ...book, chapters: [Array(257).fill('verse')] },
+    { ...book, chapters: [['V'.repeat(131073)]] },
+    { ...book, chapters: [Array(128).fill('V'.repeat(1025))] },
+    { ...book, chapters: Array(1) },
+    { ...book, chapters: [['One', , 'Two']] },
+    { ...book, chapters: Array(201).fill(['One']) },
+  ];
+  for (const invalid of invalidBooks) {
+    let calls = 0;
+    const { state, getBook } = setup(async () => ({
+      ok: true,
+      json: async () => ++calls === 1 ? invalid : book,
+    }));
+    await assert.rejects(getBook('GEN'), /Invalid Bible book data/);
+    assert.equal(state.bookCache.has('uk:GEN'), false, 'invalid HTTP 200 must not become trusted Scripture');
+    assert.deepEqual(await getBook('GEN'), book, 'corrected response recovers without reloading page');
+    assert.equal(calls, 2);
+  }
+});
+
+test('primary Bible reader accepts Psalm-like chapters and exact limits', async () => {
+  for (const verses of [
+    Array(176).fill('Verified verse'),
+    Array(256).fill('V'),
+    ['V'.repeat(131072)],
+    Array(128).fill('V'.repeat(1024)),
+  ]) {
+    const payload = { ...book, chapters: [verses] };
+    const { state, getBook } = setup(async () => ({ ok: true, json: async () => payload }));
+    assert.deepEqual(await getBook('GEN'), payload);
+    assert.equal(state.bookCache.has('uk:GEN'), true);
+  }
+});

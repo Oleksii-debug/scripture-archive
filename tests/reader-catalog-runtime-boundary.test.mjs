@@ -8,6 +8,17 @@ const start = source.indexOf('function validBibleCatalog(');
 const end = source.indexOf('\nasync function getCatalog(', start);
 assert.ok(start >= 0 && end > start, 'production reader catalog validator exists');
 const validate = new Function(source.slice(start, end) + '\nreturn validBibleCatalog;')();
+// Extract the two existing native reader expressions directly; do not
+// duplicate or replace their canonical implementation in this regression.
+const entryStart = source.indexOf('const entries = state.catalog?.editionBooks');
+const entryEnd = source.indexOf('\n        const expectedChapters', entryStart);
+const readerStart = source.indexOf('  const books = catalog.editionBooks && Object.hasOwn(');
+const readerEnd = source.indexOf('\n  const code = ', readerStart);
+assert.ok(entryStart >= 0 && entryEnd > entryStart && readerStart >= 0 && readerEnd > readerStart);
+const chooseForBook = new Function('state', 'edition', 'requestLocale',
+  source.slice(entryStart, entryEnd) + '\nreturn entries;');
+const chooseForReader = new Function('catalog', 'chosenEdition', 'state',
+  source.slice(readerStart, readerEnd) + '\nreturn books;');
 const catalog = JSON.parse(readFileSync(new URL('../public/data/catalog.json', import.meta.url), 'utf8'));
 const clone = () => structuredClone(catalog);
 
@@ -62,4 +73,45 @@ test('rejects a sparse approved-edition inventory before reader cache and citati
     assert.equal(validate(damaged), false, editionId);
   }
   assert.equal(validate(catalog), true, 'healthy catalog recovers without mutation');
+});
+
+test('rejects inherited source and edition metadata rather than accepting prototype values', () => {
+  const cases = [
+    c => { c.books = Object.create(c.books); },
+    c => { c.editions = Object.create(c.editions); },
+    c => { c.books.uk[0] = Object.create(c.books.uk[0]); },
+    c => { c.editions.uk = Object.create(c.editions.uk); },
+    c => { const value = c.books; delete c.books; Object.setPrototypeOf(c, {books:value}); },
+    c => { const value = c.editions; delete c.editions; Object.setPrototypeOf(c, {editions:value}); },
+    c => { const value = c.editionBooks; delete c.editionBooks; Object.setPrototypeOf(c, {editionBooks:value}); },
+  ];
+  for (const [index, corrupt] of cases.entries()) {
+    const damaged = clone();
+    corrupt(damaged);
+    assert.equal(validate(damaged), false, 'inherited source case '+index);
+    assert.equal(validate(catalog), true, 'canonical source remains usable');
+  }
+});
+
+test('never selects a forged inherited alternate inventory for reader or book fetch', () => {
+  const damaged = clone();
+  const alternate = damaged.editionBooks['uk-ohiienko'];
+  delete damaged.editionBooks['uk-ohiienko'];
+  alternate[0].title = 'UNVERIFIED INHERITED TITLE';
+  Object.setPrototypeOf(damaged.editionBooks, {'uk-ohiienko':alternate});
+  assert.equal(validate(damaged), false, 'validator rejects uninspected inherited edition');
+  for (const select of [
+    c => chooseForReader(c, {id:'uk-ohiienko'}, {lang:'uk'}),
+    c => chooseForBook({catalog:c}, {id:'uk-ohiienko'}, 'uk'),
+  ]) {
+    assert.equal(select(damaged), damaged.books.uk,
+      'reader and book fetch reject inherited alternate');
+    assert.equal(select(catalog), catalog.editionBooks['uk-ohiienko'],
+      'healthy local Ohiienko edition remains selected');
+  }
+  assert.equal(chooseForReader(catalog, {id:'uk-kulish'}, {lang:'uk'}), catalog.books.uk,
+    'primary historical Ukrainian edition retains its fallback');
+  const nullPrototype = clone();
+  Object.setPrototypeOf(nullPrototype.editionBooks, null);
+  assert.equal(validate(nullPrototype), true, 'safe null-prototype own-key inventory remains valid');
 });

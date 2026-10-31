@@ -197,11 +197,10 @@ async function write(request:Request){
           )
         ),
         updated_at=CURRENT_TIMESTAMP
-        // The private GET contract rejects histories longer than 2000.
-        // Check the FINAL merged length in this same atomic UPSERT: a stale
-        // client's snapshot may overlap old chapters, while a legacy history
-        // can already have 1999/2000 entries. Never ACK a write that would
-        // strand that account's entire reading history behind a GET 503.
+        -- The private GET contract rejects histories longer than 2000.
+        -- Check FINAL merged length in this atomic UPSERT. A stale client's
+        -- snapshot may overlap old chapters. Legacy histories can have 2000
+        -- entries. Never ACK a write that would make the private GET fail.
         WHERE json_array_length(progress.data) + (
           SELECT COUNT(*) FROM json_each(excluded.data) AS incoming
           WHERE NOT EXISTS (

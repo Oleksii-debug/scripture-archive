@@ -3011,7 +3011,9 @@ async function renderReader(parts) {
   const chosenEdition = selectedEdition(state.lang);
   const books = catalog.editionBooks && Object.hasOwn(catalog.editionBooks, chosenEdition.id)
     ? catalog.editionBooks[chosenEdition.id] : catalog.books[state.lang];
-  const code = (parts[1] || state.reader.book || "GEN").toUpperCase();
+  // A damaged saved reader record must not make the real Bible route permanently unusable.
+  const savedBook = typeof state.reader?.book === "string" ? state.reader.book : "GEN";
+  const code = (parts[1] || savedBook || "GEN").toUpperCase();
   // A missing path segment may resume the saved reader (or default to GEN),
   // but an explicit unknown book must never silently show GEN as if it were
   // the requested source. Reject it before chapter/attempt requests or DOM.
@@ -3023,7 +3025,7 @@ async function renderReader(parts) {
     shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1><p><a href="/reader">${t("reader")}</a></p></section>`);
     return;
   }
-  const chapter = readerChapterNumber(parts[2] || state.reader.chapter || 1, meta.chapters);
+  const chapter = readerChapterNumber(parts[2] || state.reader?.chapter || 1, meta.chapters);
   const groupId = parts[3] === "group" ? parts[4] || "" : "";
   state.currentReader = { book: meta.code, chapter };
   const readerContext = state.currentReader;

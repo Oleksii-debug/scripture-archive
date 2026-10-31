@@ -37,6 +37,9 @@ export function setEditionForTab(lang, id) {
 }
 export function selectedEdition(lang){
   const list = editionList(lang);
+  // A malformed locale must not inherit an unrelated stored preference.
+  // Treat it as a fresh read-only Ukrainian fallback, never as an edition key.
+  if (typeof lang !== 'string' || !Object.hasOwn(EDITIONS, lang)) return list[0];
   const current = currentTabEditions.get(lang);
   if (current) return list.find(edition => edition.id === current) || list[0];
   // Blocked browser storage must never prevent reading local Bible content.

@@ -74,7 +74,10 @@ function registrationTextExceedsLimit(data: Body): boolean {
     [data.denomination, 160], [data.church, 160],
   ];
   return fields.some(([value, max]) =>
-    typeof value === "string" && value.trim().length > max);
+    // Optional details may be omitted/null, but JSON arrays, objects, booleans
+    // and numbers must not be silently replaced by empty user-authored text.
+    (value != null && typeof value !== "string") ||
+    (typeof value === "string" && value.trim().length > max));
 }
 function locale(value: unknown) { const result = clean(value, 2); return LOCALES.has(result) ? result : "uk"; }
 function baseUrl(request: Request) { return (env.APP_BASE_URL || new URL(request.url).origin).replace(/\/$/, ""); }

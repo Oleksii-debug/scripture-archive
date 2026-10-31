@@ -67,8 +67,13 @@ export function readAcademyProgress(storage,key){
     if(!storage || typeof storage.getItem!=='function')throw Error('no storage');
     const raw=storage.getItem(key);
     if(raw===null)return {available:true,completed:[]};
+    // Match the 4 KiB import contract before JSON.parse. A damaged local
+    // record must not allocate an unbounded object graph on every render,
+    // resume, storage event or cross-tab edit. Never rewrite the evidence.
+    if(typeof raw!=='string' || raw.length>4096)throw Error('oversized saved progress');
     const record=JSON.parse(raw);
     if(!record || record.version!==1 || !Array.isArray(record.completed) ||
+       record.completed.length>academyAllLessonIds.length ||
        record.completed.some(id=>typeof id!=='string'||!academyAllLessonIds.includes(id)) ||
        new Set(record.completed).size!==record.completed.length)throw Error('invalid saved progress');
     return {available:true,completed:academyAllLessonIds.filter(id=>record.completed.includes(id))};

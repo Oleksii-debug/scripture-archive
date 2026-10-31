@@ -97,3 +97,23 @@ for (const [method, action] of [['GET', 'current'], ['POST', 'finalize'], ['POST
     assert.deepEqual(f.counters(), { reads: 1, writes: 0 });
   });
 }
+
+for (const [label, state, method, action, expectedStatus, expectedKey] of [
+  ['foreign grading status', { mission_id: 'OTHER-MISSION', status: 'grading' }, 'GET', 'current', 409, 'attempt_state_invalid'],
+  ['foreign active invalidation', { mission_id: 'OTHER-MISSION', status: 'active' }, 'POST', 'invalidate', 409, 'attempt_state_invalid'],
+  ['canonical grading status', { mission_id: 'OT-AB-01', status: 'grading' }, 'GET', 'current', 200, null],
+]) {
+  test(label + ' preserves mission-specific lifecycle boundary', async () => {
+    const f = fixture(state);
+    const result = await f.invoke(method, action);
+    assert.equal(result.status, expectedStatus);
+    if (expectedKey) {
+      assert.equal(result.payload.error, expectedKey);
+      assert.ok(!('grading' in result.payload) && !('invalidated' in result.payload));
+    } else {
+      assert.equal(result.payload.grading, true);
+    }
+    assert.match(result.cache, /no-store/);
+    assert.deepEqual(f.counters(), { reads: 1, writes: 0 });
+  });
+}

@@ -1,3 +1,9 @@
+## 2026-10-31 — SA-EXT-01/16 / HOME_SUPPORT_OWN_LOCALE — ВУЗЬКИЙ ТЕРМІНАЛЬНИЙ ДЕФЕКТ
+
+Головна і блок пожертв у чинних `public/home.js`, `public/support.js` тепер перевіряють власні строкові ключі мови та не використовують `Object.prototype` як переклад. [PR #899](https://github.com/Oleksii-debug/scripture-archive/pull/899) SQUASH MERGED `main@54759a89d79f5b8f2f216c50309810a7643e39fe`, [CI #41178889927](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41178889927) SUCCESS (2879 Node PASS, 22 D1 PASS, 2 Python PASS, TS/build). [Термінальна квитанція](SA_EXT_01_16_HOME_SUPPORT_OWN_LOCALE_SCOPED_TERMINAL_20261031.md). `remaining_scoped_implementation=0` лише для дефекту; **SA-EXT-01/16 OPEN**. Production/NVDA/Windows і реліз не перевірено.
+
+---
+
 ## 2026-10-31 — SA-EXT-04 / MEETING_OWN_LOCALE_COPY — ЗАКРИТО ЛИШЕ ВУЗЬКИЙ ДЕФЕКТ
 
 Реальні модулі `public/group-meeting-history.js` і `public/group-meeting-notes.js` захищені від успадкованих мовних ключів Object.prototype та нестрокових значень; канонічний fallback `uk` і `ru/en` збережено. [PR #894](https://github.com/Oleksii-debug/scripture-archive/pull/894) **SQUASH MERGED** `main@6824ce20d476db1226dd44e8d2bac2ecfe9ee21d`, [Actions #41178417038](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41178417038) SUCCESS (2847 Node PASS, 0 FAIL, 1 SKIP; D1 22/22; Python 2/2; build). [Точний terminal receipt](SA_EXT_04_MEETING_LOCALE_OWN_KEY_SCOPED_TERMINAL_20261031.md), `remaining_scoped_implementation=0` **лише для дефекту**. Батьківський SA-EXT-04 зберігає вже прийнятий TERMINAL; жодної переатестації всього продукту чи релізу немає.

@@ -129,7 +129,11 @@ async function write(request:Request){
     // The canonical title limit is 100; trimming whitespace is intentional,
     // silently slicing a longer authored title before persistence is not.
     if(!body.reading.every(r=>r&&typeof r==="object"&&!Array.isArray(r)&&
-        typeof r.title==="string"&&r.title.trim().length<=100))
+        typeof r.title==="string"&&r.title.trim().length<=100&&
+        // Bible book codes are exact catalog identifiers, not display text.
+        // Never alias caller whitespace to another saved reading key.
+        typeof r.book==="string"&&r.book.length>0&&r.book.length<=4&&
+        r.book===r.book.trim()))
       return privateJson({error:"invalid_reading"},{status:400});
     const reading=body.reading.map(r=>({book:clean(r.book,4),chapter:r.chapter,title:clean(r.title,100)}));
     if(!reading.every(validReadingReceipt))return privateJson({error:"invalid_reading"},{status:400});

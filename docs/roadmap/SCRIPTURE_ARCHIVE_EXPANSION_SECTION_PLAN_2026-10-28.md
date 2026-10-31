@@ -1,3 +1,9 @@
+## 2026-10-31 — SA-EXT-05 / DOSSIER_VISIBLE_PROVENANCE — ЗАКРИТО ВУЗЬКИЙ ДЕФЕКТ
+
+У чинному біблійному атласі й досьє канонічний валідатор тепер відкидає всі Unicode format controls і порожні символи письма до показу назв джерел, навчальних запитань та посилань на Писання. [PR #957](https://github.com/Oleksii-debug/scripture-archive/pull/957) **SQUASH MERGED** у `main@cbbd1a4d38b2b6a2a1ea64abd3a34412d401b764`, source `1113bba060a8dc81b7a4828b99147e5cccc0cf08`, tests `b30b13363a52726415fd924fce9bb46929ea8ec2`. [GitHub Actions #41201960188](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41201960188): Node 3390 PASS, Worker/D1 24 PASS, Python 2 PASS, TS/lint/build PASS. [Точний акт](SA_EXT_05_DOSSIER_UNICODE_PROVENANCE_SCOPED_TERMINAL_20261031.md), `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`, `remaining_scoped_implementation=0`. **Батьківський SA-EXT-05 OPEN**; правдивість усієї бази, сайт, NVDA та реліз не оголошені готовими.
+
+---
+
 ## 2026-10-31 — SA-EXT-02 / ASSIGNED_TASK_TOTALS — ВУЗЬКИЙ ФУНКЦІОНАЛ ЗАКРИТО
 
 У канонічному API історії спроб відхиляються вигадані/пошкоджені результати, де `total` не збігається з D1 `task_limit` або перевищує справжню кількість завдань місії для відповідної глави. [PR #956](https://github.com/Oleksii-debug/scripture-archive/pull/956) **SQUASH MERGED** `main@c0eb0407ab6eadaf891bba6e2bb2cf2f47fdf401`, route `09213464684c82744c648742c6f51d1ed4891abf`, SQLite route tests `d568bae9a57c443dd168a6a324acd00e2a9e024f`. [GitHub Actions #41201794542](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41201794542): Node 3295 PASS, Worker/D1 24 PASS, Python 2 PASS, TS/lint/build PASS. [Акт закриття](SA_EXT_02_ASSIGNED_TASK_TOTALS_SCOPED_TERMINAL_20261031.md); `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`, `remaining_scoped_implementation=0`. **Весь SA-EXT-02 OPEN**, production/NVDA не підтверджено, деплой не виконано.

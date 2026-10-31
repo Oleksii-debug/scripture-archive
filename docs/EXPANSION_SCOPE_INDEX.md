@@ -1,3 +1,9 @@
+## 2026-10-31 — SA-EXT-02 / PRIVATE_READING_BOOK_CODE_EXACT_IDENTITY — SCOPED TERMINAL
+
+**ЗАКРИТО ДЛЯ РОЗРОБКИ лише один реальний дефект, НЕ батьківський SA-EXT-02.** Канонічний `PUT /api/account?action=reading` тепер не перетворює невалідний код книги з пробілами на чинний ідентифікатор збереженого читання. [PR #870](https://github.com/Oleksii-debug/scripture-archive/pull/870) **SQUASH MERGED** у `main@75e453a13beb27a2b89c3725b24feff46db52bc8`. [Exact-head Actions #41174459535](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41174459535) **SUCCESS** (2677 Node PASS, 0 FAIL, 1 SKIP; 22/22 Worker/D1; 2 Python PASS; TypeScript/lint/build PASS). [Остаточна вузька квитанція](docs/roadmap/SA_EXT_02_READING_BOOK_EXACT_IDENTITY_SCOPED_TERMINAL_20261031.md). `remaining_scoped_implementation=0` і `necessary_unmerged_feature_PRs=0` тільки тут. Повний SA-EXT-02 та решта 17 незакритих батьківських розділів залишаються OPEN; Sites SHA/Chrome/Windows/NVDA NOT_VERIFIED.
+
+---
+
 ## 2026-10-31 — SA-EXT-01/02 / EXACT SOURCE GATES — TWO SCOPED TERMINAL REPAIRS
 
 - **SA-EXT-01:** [#866](https://github.com/Oleksii-debug/scripture-archive/pull/866) **MERGED** main `91e59f5a6fe9810e2a9637eadff4238621f058e5`; safe canonical book codes and bounded chapters before HTML/fetch. Exact-head [CI #41172736372](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41172736372) SUCCESS.

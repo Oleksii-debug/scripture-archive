@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import {routeSourceFromLocation} from '../public/route-location.js';
-import {renderWorkspace,retirePrivateWorkspaceOnPageHide} from '../public/workspace.js';
+import {renderWorkspace,retirePrivateWorkspaceOnPageHide,resumePrivateWorkspaceAfterSession} from '../public/workspace.js';
 
 const source=readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
 const begin=source.indexOf('let editorialPrivateNeedsReauthorization=false;');
@@ -126,7 +126,9 @@ function withFakeNetwork(requests,fn){
   const previousFetch=globalThis.fetch,previousLocation=globalThis.location;
   globalThis.fetch=()=>requests.shift()?.promise??Promise.reject(Error('unexpected request'));
   globalThis.location={pathname:'/builder',hash:'',search:''};
+  resumePrivateWorkspaceAfterSession();
   return Promise.resolve().then(fn).finally(()=>{
+    resumePrivateWorkspaceAfterSession();
     globalThis.fetch=previousFetch;
     if(previousLocation===undefined)delete globalThis.location;
     else globalThis.location=previousLocation;

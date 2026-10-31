@@ -2229,13 +2229,17 @@ function play(kind) {
   audio.play().catch(()=>{});
 }
 function validBibleCatalog(catalog) {
-  if (!catalog || catalog.schemaVersion !== 1 || !catalog.books ||
-      !catalog.editions || typeof catalog.editions !== "object") return false;
+  if (!catalog || catalog.schemaVersion !== 1 ||
+      !Object.hasOwn(catalog, "books") || !Object.hasOwn(catalog, "editions") ||
+      !catalog.books || typeof catalog.books !== "object" || Array.isArray(catalog.books) ||
+      !catalog.editions || typeof catalog.editions !== "object" || Array.isArray(catalog.editions)) return false;
   const validBooks = (books) => Array.isArray(books) && books.length === 66 &&
     // Array#every and Array#map skip holes: 65 real codes plus an undefined
     // hole can satisfy Set.size === 66. Require 66 own book records first.
     Array.from(books.keys()).every((index) => Object.hasOwn(books, index)) &&
-    books.every((book) => book && typeof book.code === "string" && /^[A-Z0-9]{3}$/.test(book.code) &&
+    books.every((book) => book && typeof book === "object" &&
+      ["code", "title", "testament", "chapters"].every(field => Object.hasOwn(book, field)) &&
+      typeof book.code === "string" && /^[A-Z0-9]{3}$/.test(book.code) &&
       typeof book.title === "string" && !!book.title.trim() &&
       (book.testament === "OT" || book.testament === "NT") &&
       Number.isSafeInteger(book.chapters) && book.chapters > 0 && book.chapters <= 200) &&
@@ -2243,20 +2247,35 @@ function validBibleCatalog(catalog) {
   if (!validBooks(catalog.books.uk)) return false;
   const canonicalCodes = new Set(catalog.books.uk.map((book) => book.code));
   for (const locale of ["uk", "ru", "en"]) {
+    if (!Object.hasOwn(catalog.books, locale) || !Object.hasOwn(catalog.editions, locale))
+      return false;
     const edition = catalog.editions[locale];
     const books = catalog.books[locale];
-    if (!edition || typeof edition.id !== "string" || !edition.id.trim() ||
+    if (!edition || typeof edition !== "object" || !Object.hasOwn(edition, "id") ||
+        typeof edition.id !== "string" || !edition.id.trim() ||
         !validBooks(books) || books.some((book, index) =>
           !canonicalCodes.has(book.code) || book.code !== catalog.books.uk[index].code)) return false;
   }
   if (catalog.editionBooks !== undefined) {
-    if (!catalog.editionBooks || typeof catalog.editionBooks !== "object" ||
-        Array.isArray(catalog.editionBooks)) return false;
+    // Object.values() checks only own inventories, whereas bracket lookup
+    // can otherwise select an inherited, unverified alternate edition.
+    if (!Object.hasOwn(catalog, "editionBooks") || !catalog.editionBooks ||
+        typeof catalog.editionBooks !== "object" || Array.isArray(catalog.editionBooks) ||
+        ![Object.prototype, null].includes(Object.getPrototypeOf(catalog.editionBooks)))
+      return false;
     for (const books of Object.values(catalog.editionBooks))
       if (!validBooks(books) || books.some((book, index) =>
         !canonicalCodes.has(book.code) || book.code !== catalog.books.uk[index].code)) return false;
   }
   return true;
+}
+// Reader and book fetch must share this own-key edition authority. A missing
+// optional inventory falls back to the validated primary locale, never to an
+// inherited list that Object.values() did not inspect.
+function catalogBooksForEdition(catalog, editionId, locale) {
+  const variants = catalog?.editionBooks;
+  return variants && Object.hasOwn(variants, editionId)
+    ? variants[editionId] : catalog?.books?.[locale];
 }
 async function getCatalog() {
   if (state.catalog) return state.catalog;
@@ -2436,7 +2455,7 @@ async function getBook(code, explicitEdition = null) {
       .then(async (r) => {
         if (!r.ok) throw Error(r.status);
         const book = await r.json();
-        const entries = state.catalog?.editionBooks?.[edition.id] || state.catalog?.books?.[requestLocale];
+        const entries = catalogBooksForEdition(state.catalog, edition.id, requestLocale);
         const expectedChapters = entries?.find((entry) => entry.code === code)?.chapters;
         if (!book || book.bookCode !== code || book.locale !== requestLocale ||
             book.editionId !== (edition.contentId || edition.id) || !Array.isArray(book.chapters) ||
@@ -2976,7 +2995,7 @@ async function renderReader(parts) {
   const catalog = await getCatalog();
   if (state.user !== readerPrincipal || (typeof location !== "undefined" && location.pathname && !location.pathname.startsWith("/reader"))) return;
   const chosenEdition = selectedEdition(state.lang);
-  const books = catalog.editionBooks?.[chosenEdition.id] || catalog.books[state.lang];
+  const books = catalogBooksForEdition(catalog, chosenEdition.id, state.lang);
   const code = (parts[1] || state.reader.book || "GEN").toUpperCase();
   const meta = books.find((b) => b.code === code) || books[0];
   const chapter = readerChapterNumber(parts[2] || state.reader.chapter || 1, meta.chapters);

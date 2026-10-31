@@ -29,3 +29,15 @@ test('public reviewed-material DOM rejects empty user-info and raw newline yet k
   // A source outage or invalid response must not poison a later successful fetch.
   assert.match(await render(seed),/href="https:\/\/publisher\.example\/license"/);
 });
+
+test('reviewed-material DOM refuses spoofed public rights-holder names and stays recoverable',async()=>{
+  for(const cp of [0x034f,0x061c,0x200b,0x202e,0x2066,0x2800,0xd800,0xffa0]){
+    const holder='Trusted'+String.fromCharCode(cp)+'Publisher';
+    const html=await render({...seed,rights:{...seed.rights,holder}});
+    assert.match(html,/role="alert"/,'reject U+'+cp.toString(16));
+    assert.doesNotMatch(html,/Trusted/,'do not expose spoofed public source name');
+  }
+  const html=await render({...seed,rights:{...seed.rights,holder:'Trusted Publisher'}});
+  assert.match(html,/Trusted Publisher/);
+  assert.doesNotMatch(html,/role="alert"/);
+});

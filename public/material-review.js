@@ -67,6 +67,7 @@ function validRightsMetadata(rights) {
   if(rights===null)return true;
   if(!rights||typeof rights!=='object'||Array.isArray(rights)||Object.keys(rights).sort().join(',')!=='basis,holder,licenseUrl'||
      typeof rights.holder!=='string'||rights.holder.trim()!==rights.holder||rights.holder.length<2||rights.holder.length>160||
+     /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}\u00a0\u034f\u115f\u1160\u2800\u3164\uffa0]/u.test(rights.holder)||
      typeof rights.basis!=='string'||!RIGHTS_BASES.has(rights.basis)||
      !(rights.licenseUrl===null||canonicalPublicHttps(rights.licenseUrl)))return false;
   return rights.basis!=='open_license'||rights.licenseUrl!==null;

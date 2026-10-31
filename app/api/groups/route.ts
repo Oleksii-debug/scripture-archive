@@ -141,6 +141,42 @@ export async function GET(request: Request) {
     if(row.public_name!==0&&row.public_name!==1)return unavailableWrite();
     return Response.json({publicName:row.public_name===1},{headers:{'Cache-Control':'no-store, private'}});
   }
+  if (url.searchParams.get("action") === "meetings") {
+    if (!groupId) return Response.json({error:"invalid_group_id"},{status:400});
+    const rawBefore=url.searchParams.get("before");
+    const before=rawBefore===null ? "" : boundedIdentifier(rawBefore);
+    if(rawBefore!==null&&!before)return Response.json({error:"invalid_meeting_cursor"},{status:400});
+    // Group visibility, current membership and private columns are decided in
+    // this one SQL snapshot, including every continuation page. A cursor is
+    // scoped to its group and never carries an authorization grant.
+    const rows=await checkedGroupRows(await env.DB!.prepare(`
+      SELECT g.id AS authorized_group,anchor.id AS cursor_id,
+        s.id,s.book_id,s.chapter,s.answers_correct,s.answers_total,s.meeting_date,
+        CASE WHEN member.user_id IS NOT NULL OR g.roster_visibility!='private' THEN s.participant_count ELSE NULL END AS participant_count,
+        CASE WHEN member.user_id IS NOT NULL THEN s.reflection ELSE NULL END AS reflection
+      FROM home_groups g
+      LEFT JOIN home_group_members member ON member.group_id=g.id AND member.user_id=?
+      LEFT JOIN group_sessions anchor ON anchor.group_id=g.id AND anchor.id=?
+      LEFT JOIN group_sessions s ON s.group_id=g.id AND
+        (?='' OR (s.meeting_date,s.created_at,s.id)<(anchor.meeting_date,anchor.created_at,anchor.id))
+      WHERE g.id=? AND (g.visibility='public' OR member.user_id IS NOT NULL)
+      ORDER BY s.meeting_date DESC,s.created_at DESC,s.id DESC LIMIT 13
+    `).bind(id?.userId??null,before,before,groupId).all<Row>());
+    if(!rows.length)return Response.json({error:"not_found"},{status:404,headers:{"Cache-Control":"no-store, private"}});
+    if(rows.length>13||rows.some(row=>row.authorized_group!==groupId))throw Error("invalid_meeting_page");
+    if(before&&rows[0].cursor_id!==before)return Response.json({error:"meeting_cursor_unavailable"},{status:409,headers:{"Cache-Control":"no-store, private"}});
+    const meetings=rows.length===1&&rows[0].id===null?[]:rows.map(row=>{
+      const chapterLimit=BOOK_CHAPTERS.get(row.book_id as string);
+      if(!boundedIdentifier(row.id)||!chapterLimit||!Number.isSafeInteger(row.chapter)||Number(row.chapter)<1||Number(row.chapter)>chapterLimit||
+        !Number.isSafeInteger(row.answers_correct)||!Number.isSafeInteger(row.answers_total)||Number(row.answers_correct)<0||Number(row.answers_total)>1000||Number(row.answers_correct)>Number(row.answers_total)||
+        typeof row.meeting_date!=="string"||!/^\d{4}-\d{2}-\d{2}$/.test(row.meeting_date)||!Number.isFinite(Date.parse(row.meeting_date))||new Date(row.meeting_date).toISOString().slice(0,10)!==row.meeting_date||
+        (row.participant_count!==null&&(!Number.isSafeInteger(row.participant_count)||Number(row.participant_count)<1||Number(row.participant_count)>500))||
+        (row.reflection!==null&&(typeof row.reflection!=="string"||row.reflection.length>1200)))throw Error("invalid_meeting_record");
+      const {id,book_id,chapter,answers_correct,answers_total,meeting_date,participant_count,reflection}=row;
+      return {id,book_id,chapter,answers_correct,answers_total,meeting_date,participant_count,reflection};
+    });
+    return Response.json({sessions:meetings.slice(0,12),nextCursor:meetings.length>12?meetings[11].id:null},{headers:{"Cache-Control":"no-store, private"}});
+  }
   if (groupId) {
     const member = id ? await membership(groupId, id.userId) : null;
     const row = await env.DB!.prepare(`${groupSelect} WHERE g.id=? AND (g.visibility='public' OR ?=1)`).bind(groupId, member ? 1 : 0).first<Row>();

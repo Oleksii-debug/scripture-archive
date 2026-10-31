@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import {meetingHistoryCopy,meetingHistoryMarkup} from '../public/group-meeting-history.js';
 
 // The actual production handlers are evaluated, not a copied implementation.
 // Avoid importing app.js because it bootstraps the browser at module load time.
@@ -66,7 +67,7 @@ function fixture({detail = false, pendingAction = '', holdSecondCatalog = false,
   const secondCatalogStarted = deferred();
   let catalogReads=0;
   const ctx = {
-    state,location,document,FormData:FakeFormData,
+    state,location,document,FormData:FakeFormData,meetingHistoryCopy,meetingHistoryMarkup,
     window:{confirm:() => {events.confirmations++; return true;}},
     setActiveNav() {}, t: key => key, esc: String,
     field: () => '', groupStatus:()=>'',groupMetrics:()=>'',groupCard:()=>'',groupManagementMarkup:()=>'',groupManagementCopy:()=>({leaveConfirm:'Leave?',deleteConfirm:'Delete?',left:'Left',deleted:'Deleted',rotateConfirm:'Rotate?',rotated:'Rotated',error:'Error',settingsSaved:'Settings saved',settingsConflict:'Conflict',settingsUnconfirmed:'Unconfirmed',publishConfirm:'Publish?',reloadConfirm:'Reload?'}),

@@ -15,10 +15,10 @@ function fixture() {
   db.exec(`INSERT INTO home_groups(id,owner_user_id,name,invite_code,visibility,bible_edition) VALUES('g','alice','Group','AABBCCDD','private','en-web'),('other','alice','Other','other','private','en-web');
     INSERT INTO home_group_members(group_id,user_id,display_name,role) VALUES('g','alice','Alice','owner'),('g','bob','Bob','member'),('g','carol','Carol','facilitator'),('other','alice','Alice','owner');
     INSERT INTO group_sessions(id,group_id,created_by,book_id,chapter,meeting_date,reflection) VALUES('s','g','alice','GEN',12,'2026-10-28','private discussion');`);
-  let failure=-1, beforeBatch=null, beforeRun=null, corruptCreateReceipt=null, corruptSingleReceipt=null, failAll=false, throwAll=false, throwAuth=false;
+  let failure=-1, beforeBatch=null, beforeRun=null, beforeAll=null, corruptCreateReceipt=null, corruptSingleReceipt=null, failAll=false, throwAll=false, throwAuth=false;
   function statement(sql,args=[]) {return {sql,args,
     first:async()=>db.prepare(sql).get(...args)??null,
-    all:async()=>{if(throwAll)throw Error('D1 read unavailable');return failAll?{success:false,results:[]}:{success:true,results:db.prepare(sql).all(...args)};},
+    all:async()=>{if(beforeAll){const hook=beforeAll;beforeAll=null;hook();}if(throwAll)throw Error('D1 read unavailable');return failAll?{success:false,results:[]}:{success:true,results:db.prepare(sql).all(...args)};},
     run:async()=>{if(beforeRun){const hook=beforeRun;beforeRun=null;hook();}const changes=Number(db.prepare(sql).run(...args).changes);const mode=corruptSingleReceipt;corruptSingleReceipt=null;if(mode==='missing')return {success:true,meta:{}};if(mode==='failed')return {success:false,meta:{changes}};return {success:true,meta:{changes}};},
   };}
   const D1={prepare(sql){return {...statement(sql),bind:(...args)=>statement(sql,args)};},async batch(statements){
@@ -47,6 +47,10 @@ function fixture() {
   const exports=loadRoute('groups'),attempts=loadRoute('attempts');
   async function attempt(action,body={},user='carol') {const r=await attempts.POST(new Request('https://local.invalid/api/attempts?action='+action,{method:'POST',headers:{origin:'https://local.invalid','content-type':'application/json','x-user':user},body:JSON.stringify({missionId:'OT-AB-01',book:'GEN',chapter:12,groupId:'g',locale:'en',...body})}));return {status:r.status,data:await r.json()};}
   async function get(user='alice',groupId='g'){const r=await exports.GET(new Request('https://local.invalid/api/groups?groupId='+groupId,{headers:user?{'x-user':user}:{}}));return {status:r.status,data:await r.json()};}
+  async function meetings(user='alice',before=null,groupId='g'){
+    const r=await exports.GET(new Request('https://local.invalid/api/groups?action=meetings&groupId='+encodeURIComponent(groupId)+(before===null?'':'&before='+encodeURIComponent(before)),{headers:user?{'x-user':user}:{}}));
+    return {status:r.status,data:await r.json(),cache:r.headers.get('cache-control')};
+  }
   async function nameChoice(user='alice',groupId='g'){const r=await exports.GET(new Request('https://local.invalid/api/groups?action=name-visibility&groupId='+encodeURIComponent(groupId),{headers:user?{'x-user':user}:{}}));return {status:r.status,data:await r.json(),cache:r.headers.get('cache-control')};}
   async function list(user='',mine=false){const r=await exports.GET(new Request('https://local.invalid/api/groups'+(mine?'?mine=1':''),{headers:user?{'x-user':user}:{}}));return {status:r.status,data:await r.json()};}
   async function post(action,body={},user='alice',origin='https://local.invalid') {const r=await exports.POST(new Request('https://local.invalid/api/groups?action='+action,{method:'POST',headers:{origin,'content-type':'application/json',...(user?{'x-user':user}:{})},body:JSON.stringify({groupId:'g',...body})}));return {status:r.status,data:await r.json()};}
@@ -54,7 +58,7 @@ function fixture() {
     db.prepare("INSERT INTO mission_attempts(id,actor_id,mission_id,book_id,chapter,group_id,locale,task_limit,status,expires_at) VALUES(?,?,'OT-AB-01','GEN',12,?,'en',5,?,datetime('now','+2 hours'))").run(id,user,group,status);
     db.prepare("INSERT INTO chapter_read_receipts(id,actor_id,book_id,chapter,group_id) VALUES(?,?,'GEN',12,?)").run(id,user,group);
   }
-  return {db,get,list,post,nameChoice,attempt,seedAttempt,beforeRun:fn=>{beforeRun=fn;},setFailure:n=>{failure=n;},beforeBatch:fn=>{beforeBatch=fn;},setCreateReceiptMode:mode=>{corruptCreateReceipt=mode;},setSingleReceiptMode:mode=>{corruptSingleReceipt=mode;},setReadFailure:v=>{failAll=v;},setReadThrow:v=>{throwAll=v;},setAuthFailure:v=>{throwAuth=v;}};
+  return {db,get,list,post,nameChoice,meetings,beforeAll:fn=>{beforeAll=fn;},attempt,seedAttempt,beforeRun:fn=>{beforeRun=fn;},setFailure:n=>{failure=n;},beforeBatch:fn=>{beforeBatch=fn;},setCreateReceiptMode:mode=>{corruptCreateReceipt=mode;},setSingleReceiptMode:mode=>{corruptSingleReceipt=mode;},setReadFailure:v=>{failAll=v;},setReadThrow:v=>{throwAll=v;},setAuthFailure:v=>{throwAuth=v;}};
 }
 const owner=f=>f.db.prepare("SELECT owner_user_id FROM home_groups WHERE id='g'").get().owner_user_id;
 const roles=f=>f.db.prepare("SELECT user_id,role FROM home_group_members WHERE group_id='g' ORDER BY user_id").all().map(x=>[x.user_id,x.role]);
@@ -646,4 +650,63 @@ test('group IDs and invite/role targets preserve exact identity rather than trim
     assert.equal(f.db.prepare("SELECT invite_code FROM home_groups WHERE id='g'").get().invite_code,initialInvite);
     assert.equal((await f.get('alice','g')).status,200,'canonical group remains readable');
   } finally { f.db.close(); }
+});
+
+
+test('meeting history pages every tied-date record exactly once and exposes no internal identities',async()=>{
+  const f=fixture();try{
+    const insert=f.db.prepare("INSERT INTO group_sessions(id,group_id,created_by,book_id,chapter,meeting_date,reflection,participant_count,created_at) VALUES(?,'g','alice','GEN',12,'2026-10-28','private discussion',4,'2026-10-28 10:00:00')");
+    for(let i=0;i<29;i++)insert.run('meeting-'+String(i).padStart(2,'0'));
+    const expected=f.db.prepare("SELECT id FROM group_sessions WHERE group_id='g' ORDER BY meeting_date DESC,created_at DESC,id DESC").all().map(r=>r.id);
+    const found=[];let cursor=null;
+    do{
+      const response=await f.meetings('bob',cursor);assert.equal(response.status,200);assert.match(response.cache,/no-store, private/);
+      assert.ok(response.data.sessions.length<=12);
+      for(const row of response.data.sessions){assert.equal(row.reflection,'private discussion');assert.equal(row.created_by,undefined);assert.equal(row.authorized_group,undefined);}
+      found.push(...response.data.sessions.map(r=>r.id));cursor=response.data.nextCursor;
+    }while(cursor);
+    assert.deepEqual(found,expected);assert.equal(new Set(found).size,30);
+    const empty=await f.meetings('alice',null,'other');assert.deepEqual(empty.data,{sessions:[],nextCursor:null});
+  }finally{f.db.close();}
+});
+
+test('every history page rechecks access and public reflection/attendance privacy in SQL',async()=>{
+  const f=fixture();try{
+    f.db.exec("UPDATE group_sessions SET participant_count=4 WHERE id='s'");
+    for(const user of ['', 'outsider'])assert.equal((await f.meetings(user)).status,404);
+    f.db.exec("UPDATE home_groups SET visibility='public',roster_visibility='private' WHERE id='g'");
+    for(const user of ['', 'outsider']){
+      const row=(await f.meetings(user)).data.sessions[0];assert.equal(row.reflection,null);assert.equal(row.participant_count,null);
+    }
+    assert.equal((await f.meetings('bob')).data.sessions[0].participant_count,4);
+    f.db.exec("UPDATE home_groups SET roster_visibility='count' WHERE id='g'");
+    assert.equal((await f.meetings('')).data.sessions[0].participant_count,4);
+    f.beforeAll(()=>f.db.exec("DELETE FROM home_group_members WHERE user_id='bob';UPDATE home_groups SET visibility='private' WHERE id='g'"));
+    assert.equal((await f.meetings('bob')).status,404,'membership removed immediately before page query cannot expose reflections');
+    f.db.exec("UPDATE home_groups SET visibility='public' WHERE id='g'");
+    f.beforeAll(()=>f.db.exec("UPDATE home_groups SET visibility='private' WHERE id='g'"));
+    assert.equal((await f.meetings('')).status,404,'public access revoked immediately before query is respected');
+  }finally{f.db.close();}
+});
+
+test('history cursors are bounded, group-scoped and fail explicitly when their record disappears',async()=>{
+  const f=fixture();try{
+    for(const cursor of ['', ' s','s ','x'.repeat(81)])assert.equal((await f.meetings('alice',cursor)).status,400);
+    f.db.exec("INSERT INTO group_sessions(id,group_id,created_by,book_id,chapter,meeting_date) VALUES('foreign','other','alice','GEN',12,'2026-10-28')");
+    for(const cursor of ['foreign','missing']){const r=await f.meetings('bob',cursor);assert.equal(r.status,409);assert.equal(r.data.error,'meeting_cursor_unavailable');}
+    assert.deepEqual((await f.meetings('bob','s')).data,{sessions:[],nextCursor:null});
+    f.db.exec("DELETE FROM group_sessions WHERE id='s'");assert.equal((await f.meetings('bob','s')).status,409);
+    f.setReadFailure(true);assert.equal((await f.meetings()).status,503);f.setReadFailure(false);
+    f.setReadThrow(true);assert.equal((await f.meetings()).status,503);
+  }finally{f.db.close();}
+});
+
+test('meeting history refuses corrupt stored grades and dates instead of rendering fabricated results',async()=>{
+  const f=fixture();try{
+    for(const sql of ["answers_correct='false'","answers_total=-1","chapter=0","participant_count='4x'","meeting_date='2026-02-30'"]){
+      f.db.exec("UPDATE group_sessions SET answers_correct=0,answers_total=0,chapter=12,participant_count=NULL,meeting_date='2026-10-28'");
+      f.db.exec('UPDATE group_sessions SET '+sql);
+      assert.equal((await f.meetings()).status,503,sql);
+    }
+  }finally{f.db.close();}
 });

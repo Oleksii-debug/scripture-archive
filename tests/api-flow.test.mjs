@@ -479,9 +479,23 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const publicGroup = await fetch(`${base}/api/groups?groupId=${encodeURIComponent(publicGroupId)}`);
   assert.equal(publicGroup.status, 200);
   assert.equal((await publicGroup.json()).sessions[0].reflection, null);
+  for(let i=0;i<12;i++) {
+    result=await request('/api/groups?action=session',{method:'POST',body:{groupId:publicGroupId,bookId:'GEN',chapter:12,answersTotal:0,answersCorrect:0,meetingDate:'2026-10-28',participantCount:4,reflection:'Private earlier meeting'}});
+    assert.equal(result.response.status,200);
+  }
+  result=await request(`/api/groups?action=meetings&groupId=${publicGroupId}`);
+  assert.equal(result.response.status,200);assert.equal(result.data.sessions.length,12);assert.ok(result.data.nextCursor);
+  const firstMeetingPage=result.data;
+  assert.ok(firstMeetingPage.sessions.every(session=>typeof session.reflection==='string'));
+  result=await request(`/api/groups?action=meetings&groupId=${publicGroupId}&before=${encodeURIComponent(firstMeetingPage.nextCursor)}`);
+  assert.equal(result.response.status,200);assert.equal(result.data.sessions.length,1);assert.equal(result.data.nextCursor,null);
+  assert.equal(new Set([...firstMeetingPage.sessions,...result.data.sessions].map(session=>session.id)).size,13);
+  const publicMeetings=await (await fetch(`${base}/api/groups?action=meetings&groupId=${publicGroupId}`)).json();
+  assert.ok(publicMeetings.sessions.every(session=>session.reflection===null&&session.participant_count===null));
   result = await request("/api/groups?action=create", { method: "POST", body: groupBody });
   assert.equal(result.response.status, 201);
   const groupId = result.data.groupId;
+  assert.equal((await fetch(`${base}/api/groups?action=meetings&groupId=${groupId}`)).status,404);
   await request("/api/attempts?action=read", { method: "POST", body: { book: "GEN", chapter: 12, groupId } });
   result = await request("/api/attempts?action=start", { method: "POST", body: { missionId: "OT-AB-01", book: "GEN", chapter: 12, locale: "en", groupId } });
   assert.equal(result.response.status, 201);

@@ -342,7 +342,7 @@ export async function renderWorkspace(name,c) {
     return;
   }
   if(name==='library') {
-    const copy=LIBRARY_COPY[state.lang] || LIBRARY_COPY.uk;
+    const copy=ownLocaleCopy(LIBRARY_COPY,state.lang);
     shell(`<section class="reviewed-library" aria-labelledby="reviewed-library-title"><div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1 id="reviewed-library-title">${esc(copy.title)}</h1></div></div><p class="lead">${esc(copy.lead)}</p><p>${esc(copy.scope)}</p><div id="public-materials"></div><p><a href="/builder">${esc(reviewText(state.lang).builder)}</a></p></section>`);
     // Reuse the canonical reviewed-material list and answer-check API: no
     // shadow library database or second publication/identity authority.

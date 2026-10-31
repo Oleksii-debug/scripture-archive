@@ -36,11 +36,19 @@ try {
     if (!Number.isSafeInteger(registered) || registered < 0 ||
         !Number.isSafeInteger(online) || online < 0 || online > registered)
       throw Error("Community API returned an unexpected payload; scheduler stopped.");
-    const summary = JSON.stringify(data.summary);
+    // Only validated public counters belong in operational logs. Do not copy
+    // arbitrary fields returned by an old or inconsistent upstream response:
+    // those may include private account/session data not intended for logs.
+    const visible = data.summary?.visible;
+    const publicSummary = {
+      registered, online,
+      ...(Number.isSafeInteger(visible) && visible >= 0 && visible <= registered ? { visible } : {}),
+    };
+    const summary = JSON.stringify(publicSummary);
     if (summary !== previous) {
       console.log(JSON.stringify({
         at: new Date().toISOString(), timeZone: "Europe/Warsaw", origin,
-        summary: data.summary, localOnly: local,
+        summary: publicSummary, localOnly: local,
       }));
       previous = summary;
     }

@@ -13,7 +13,16 @@ export async function ensureCommunityRun(now = new Date()) {
   for (const wave of communityWavePlan(now)) statements.push(env.DB!.prepare(
     "INSERT OR IGNORE INTO community_waves (id,run_id,label,starts_at,next_at,target_count,interval_pattern) VALUES (?,?,?,?,?,?,?)",
   ).bind(`${COMMUNITY_RUN_ID}:${wave.key}`, COMMUNITY_RUN_ID, `${wave.key}-${wave.count}`, wave.startsAt, wave.startsAt, wave.count, wave.pattern));
-  await env.DB!.batch(statements);
+  // A resolved batch can carry false, missing or corrupt individual receipts.
+  // Do not let START proceed on an unconfirmed run/wave initialization. The
+  // INSERT OR IGNORE statements are idempotent and may legitimately change 0
+  // rows when a concurrent request initialized the same canonical run.
+  const receipts = await env.DB!.batch(statements);
+  if (!Array.isArray(receipts) || receipts.length !== statements.length ||
+      receipts.some(receipt => receipt?.success !== true ||
+        !Number.isSafeInteger(receipt.meta?.changes) ||
+        receipt.meta.changes < 0 || receipt.meta.changes > 1))
+    throw Error("community_initialization_unconfirmed");
 }
 
 export async function advanceCommunity(now = new Date()) {

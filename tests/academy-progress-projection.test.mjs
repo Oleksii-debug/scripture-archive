@@ -26,7 +26,7 @@ test('SA-EXT-07: malformed private progress is source-readable but cannot fabric
       assert.doesNotThrow(()=>{html=academyMarkup(catalog,lang,esc,progress);});
       assert.match(html,/data-academy-root/);
       assert.match(html,/id="academy-reading-unavailable" role="alert"/);
-      assert.match(html,/href="\\/reader\\//,'verified public Scripture links stay available');
+      assert.ok(html.includes('href="/reader/'),'verified public Scripture links stay available');
       assert.doesNotMatch(html,/data-academy-lesson=|aria-pressed=|<progress /,
         'untrusted progress cannot render interactive markers');
       assert.doesNotMatch(html,/academy-reading-badge|academy-place-badge/,

@@ -140,15 +140,17 @@ export function validateDossierGraph(catalog) {
   if(!catalog?.books || LANGS.some(lang=>!Array.isArray(catalog.books[lang]))) return false;
   // A malformed or ambiguous edition catalogue must show the accessible
   // source-unavailable state, not throw while assembling the dossier.
+  // Match the canonical Bible reader's published chapter/verse size gates.
+  // Otherwise a dossier can link to a source the actual reader rejects.
   const catalogs = LANGS.map(lang=>catalog.books[lang]);
   if(catalogs.some(books=>books.some(book=>!book || !safeBookCode(book.code) ||
       !safeVisibleText(book.title) ||
-      !Number.isSafeInteger(book.chapters) || book.chapters<1) ||
+      !Number.isSafeInteger(book.chapters) || book.chapters<1 || book.chapters>200) ||
       new Set(books.map(book=>book.code)).size!==books.length)) return false;
   const bookMaps = catalogs.map(books=>new Map(books.map(book=>[book.code,book.chapters])));
-  const validRef = source => source && safeBookCode(source.book) && Number.isInteger(source.first) && source.first>0 &&
-    Number.isInteger(source.last) && source.last>=source.first &&
-    Number.isInteger(source.chapter) && source.chapter>0 &&
+  const validRef = source => source && safeBookCode(source.book) && Number.isSafeInteger(source.first) && source.first>0 && source.first<=256 &&
+    Number.isSafeInteger(source.last) && source.last>=source.first && source.last<=256 &&
+    Number.isSafeInteger(source.chapter) && source.chapter>0 && source.chapter<=200 &&
     ['narrative','interpretive'].includes(source.kind) &&
     bookMaps.every(books=>books.has(source.book) && source.chapter<=books.get(source.book));
   return nodes.every(item=>item.sources.every(validRef) &&

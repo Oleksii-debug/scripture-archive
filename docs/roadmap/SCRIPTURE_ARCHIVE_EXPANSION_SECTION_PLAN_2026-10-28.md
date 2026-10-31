@@ -1,3 +1,9 @@
+## 2026-10-31 — SA-EXT-01 / PARALLEL_READER_LOCALE_OWN_KEY — ЗАКРИТО ЛИШЕ ПІДПУНКТ
+
+**`CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`, не батьківський SA-EXT-01.** На реальному паралельному читачі UI/статус підтримують лише власні `uk/ru/en` ключі; успадковані чи нетипізовані імена локалей безпечно повертають українські написи. [PR #890](https://github.com/Oleksii-debug/scripture-archive/pull/890) злитий у `main@f1da62ad911d00fd72f93b8e27060888e4c22044`, exact-head [Actions #41178190377](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41178190377) SUCCESS (Node 2832 PASS/0 FAIL/1 SKIP; Worker/D1 22 PASS; Python 2 PASS; build). [Термінальна scoped-квитанція](SA_EXT_01_PARALLEL_READER_LOCALE_OWN_KEY_SCOPED_TERMINAL_20261031.md), `remaining_scoped_implementation=0` тільки для цього дефекту. **SA-EXT-01 залишається OPEN**, release/Sites/NVDA NOT_VERIFIED.
+
+---
+
 ## 2026-10-31 — SA-EXT-01 / EDITION_LANGUAGE_PROTOTYPE_ALIAS — ЗАКРИТО ЛИШЕ ПІДПУНКТ
 
 **Підфункція `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`, НЕ батьківський SA-EXT-01.** Канонічний `public/editions.js` відхиляє назви локалі, що збігаються із `Object.prototype` (`__proto__`, `constructor`, `toString`, `hasOwnProperty`), без падіння `find` або підміни збереженого перекладу; правильний `uk/ru/en` збережено. [PR #887](https://github.com/Oleksii-debug/scripture-archive/pull/887) **SQUASH MERGED** `main@f8d20af9433de5a8e90ec47208ffe14f0e0d88c9`, [CI #41177845597](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41177845597) SUCCESS, 2781 Node PASS/0 FAIL/1 SKIP, Worker/D1 22 PASS, TS/lint/build/Python. [Квитанція](SA_EXT_01_EDITION_LANGUAGE_PROTOTYPE_ALIAS_SCOPED_TERMINAL_20261031.md): `remaining_scoped_implementation=0`, `necessary_unmerged_feature_PRs=0`. **SA-EXT-01 OPEN** через ліцензоване покриття та provenance; SA-EXT-03/04 TERMINAL, решта OPEN. Live Sites/Windows/NVDA NOT_VERIFIED, релізу не було.

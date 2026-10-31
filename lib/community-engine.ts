@@ -117,13 +117,26 @@ export async function controlCommunity(action: string, now = new Date()) {
 
 export async function communityOwnerState() {
   await ensureCommunityRun();
-  const [run, waves, synthetic, log] = await env.DB!.batch([
+  const receipts = await env.DB!.batch([
     env.DB!.prepare("SELECT status,started_at,activated_at,paused_at,stopped_at FROM community_runs WHERE id=?").bind(COMMUNITY_RUN_ID),
     env.DB!.prepare("SELECT label,starts_at,next_at,created_count,target_count,status FROM community_waves WHERE run_id=? ORDER BY starts_at").bind(COMMUNITY_RUN_ID),
     env.DB!.prepare("SELECT COUNT(*) total FROM community_members WHERE run_id=?").bind(COMMUNITY_RUN_ID),
     env.DB!.prepare("SELECT event_type,created_at,details_json FROM community_run_log WHERE run_id=? ORDER BY created_at DESC,rowid DESC LIMIT 50").bind(COMMUNITY_RUN_ID),
   ]);
-  return { run: run.results[0] || null, waves: waves.results, synthetic: synthetic.results[0] || { total: 0 }, log: log.results };
+  // The owner must never see a fabricated empty run, wave list or zero people
+  // after a partial/failed D1 SELECT batch. A read is trustworthy only when
+  // each individual statement acknowledged an actual array of rows.
+  if (!Array.isArray(receipts) || receipts.length !== 4 ||
+      receipts.some(receipt => receipt?.success !== true || !Array.isArray(receipt.results)))
+    throw Error("community_owner_snapshot_unavailable");
+  const [run, waves, synthetic, log] = receipts;
+  const current = run.results[0] as { status?: unknown } | undefined;
+  const count = (synthetic.results[0] as { total?: unknown } | undefined)?.total;
+  if (run.results.length !== 1 || !current ||
+      !["waiting", "running", "paused", "stopped"].includes(String(current.status)) ||
+      synthetic.results.length !== 1 || !Number.isSafeInteger(count) || (count as number) < 0)
+    throw Error("community_owner_snapshot_unavailable");
+  return { run: current, waves: waves.results, synthetic: { total: count }, log: log.results };
 }
 
 export async function leaseCommunityAgents(limit = 2) {

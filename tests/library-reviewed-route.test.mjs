@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {renderWorkspace} from '../public/workspace.js';
+import {renderReviewedLibrary, reviewText} from '../public/material-review.js';
 
 const escapeText=value=>String(value).replaceAll('&','&amp;').replaceAll('<','&lt;')
   .replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
@@ -269,4 +270,47 @@ test('continued results move keyboard focus to their heading only if the reader 
 test('shared button styles cannot override the continuation control hidden state',()=>{
   const styles=readFileSync(new URL('../public/styles.css',import.meta.url),'utf8');
   assert.match(styles,/\.library-search-more\[hidden\]\s*\{\s*display\s*:\s*none/);
+});
+
+
+test('library locale uses own dictionary keys and preserves accessible Ukrainian fallback', async()=>{
+  // A locale can originate in locally stored user/session input. JavaScript's
+  // inherited Object.prototype names must never become translation objects.
+  const inherited=['__proto__','constructor','toString','valueOf','hasOwnProperty'];
+  const invalid=[...inherited,'unknown','',null,undefined,42,true,{},Object.create(null)];
+  for (const lang of invalid) {
+    const f=scenario('uk');
+    try {
+      globalThis.fetch=async (url,options)=>{
+        assert.equal(url,'/api/material-review');
+        assert.deepEqual(JSON.parse(options.body),{action:'librarySearch',query:'',cursor:null});
+        return Response.json({items:[],nextCursor:null});
+      };
+      await renderReviewedLibrary(f.list,reviewText('uk'),lang,escapeText);
+      assert.match(f.list.innerHTML,/Пошук матеріалів/);
+      assert.match(f.list.innerHTML,/Шукайте за назвою/);
+      assert.match(f.list.innerHTML,/Шукати/);
+      assert.doesNotMatch(f.list.innerHTML,/\\bundefined\\b/);
+      assert.match(f.status.textContent,/Збігів не знайдено/);
+      assert.equal(typeof f.form.onsubmit,'function');
+    } finally { f.restore(); }
+  }
+});
+
+test('library own-key language switch keeps all three reviewed-material search copies',async()=>{
+  const languages=[
+    ['uk','Пошук матеріалів','Збігів не знайдено'],
+    ['ru','Поиск материалов','Совпадений не найдено'],
+    ['en','Search materials','No matches found'],
+  ];
+  for(const [lang,label,empty] of languages){
+    const f=scenario(lang);
+    try{
+      globalThis.fetch=async()=>Response.json({items:[],nextCursor:null});
+      await renderReviewedLibrary(f.list,reviewText(lang),lang,escapeText);
+      assert.ok(f.list.innerHTML.includes(label),lang);
+      assert.ok(f.status.textContent.includes(empty),lang);
+      assert.equal(f.more.hidden,true);
+    } finally{f.restore();}
+  }
 });

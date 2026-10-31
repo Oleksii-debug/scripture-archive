@@ -3426,7 +3426,9 @@ async function renderGroups() {
 
 // A BFCache page exit retires private group invitations and management details.
 let groupDetailViewEpoch=0,groupDetailNeedsReauthorization=false;
+let groupDetailRestoreEpoch=0,groupDetailPageHidden=false,groupDetailAwaitingSession=false;
 async function renderGroup(groupId) {
+  if(groupDetailPageHidden || groupDetailAwaitingSession)return;
   setActiveNav("groups");
   const principal = state.user,viewEpoch=groupDetailViewEpoch;
   const data = await groupRequest(
@@ -3435,7 +3437,7 @@ async function renderGroup(groupId) {
       undefined,
       `groupId=${encodeURIComponent(groupId)}`,
     );
-  if (viewEpoch!==groupDetailViewEpoch || !groupPageCurrent(`groups/${groupId}`, principal)) return;
+  if (groupDetailPageHidden || groupDetailAwaitingSession || viewEpoch!==groupDetailViewEpoch || !groupPageCurrent(`groups/${groupId}`, principal)) return;
   const group = data.group,
     catalog = await getCatalog(),
     books = catalog.books[state.lang],
@@ -3449,7 +3451,7 @@ async function renderGroup(groupId) {
       const found = books.find((book) => book.code === code);
       return found ? bookTitle(found) : code;
     };
-  if (viewEpoch!==groupDetailViewEpoch || !groupPageCurrent(`groups/${groupId}`, principal)) return;
+  if (groupDetailPageHidden || groupDetailAwaitingSession || viewEpoch!==groupDetailViewEpoch || !groupPageCurrent(`groups/${groupId}`, principal)) return;
   const names = (data.members || [])
       .map(
         (member) =>
@@ -3499,7 +3501,7 @@ async function renderGroup(groupId) {
         await renderGroup(group.id);
         // The readback can be delayed independently of the successful POST.
         // A departed principal must not hear a former owner's success message.
-        if (viewEpoch!==groupDetailViewEpoch || !groupPageCurrent(`groups/${groupId}`, principal)) return;
+        if (groupDetailPageHidden || groupDetailAwaitingSession || viewEpoch!==groupDetailViewEpoch || !groupPageCurrent(`groups/${groupId}`, principal)) return;
       }
       announce(successText);
     } catch {
@@ -4493,19 +4495,31 @@ window.addEventListener("popstate", route);
 // restore that pre-exit DOM from browser back/forward cache for another session.
 // Also fence a group render that was awaiting API/catalog data on page exit.
 window.addEventListener("pagehide", () => {
+  // Even an exit from a different route invalidates a pending private restore.
+  groupDetailPageHidden=true;
+  groupDetailRestoreEpoch++;
   const detail=main.querySelector(".group-detail");
   const currentRoute=routeSourceFromLocation(location).replace(/^\/+|\/+$/g,"");
-  if(!detail && !/^groups\/[^/]+$/.test(currentRoute))return;
+  const wasReauthorizing=groupDetailAwaitingSession;
+  groupDetailAwaitingSession=false;
+  if(!detail && !/^groups\/[^/]+$/.test(currentRoute) && !wasReauthorizing)return;
   groupDetailViewEpoch++;
   groupDetailNeedsReauthorization=true;
   detail?.replaceChildren();
 });
 window.addEventListener("pageshow", () => {
+  groupDetailPageHidden=false;
   if(!groupDetailNeedsReauthorization)return;
   groupDetailNeedsReauthorization=false;
-  // Server session identity, not the BFCache's in-memory principal, decides
-  // whether current group details and invitations may render again.
-  void getSession().catch(()=>null).finally(()=>route());
+  groupDetailAwaitingSession=true;
+  const restoringEpoch=groupDetailRestoreEpoch;
+  // Only the visible, current page generation may reenter the private route.
+  // A second pagehide invalidates this callback even if getSession settles later.
+  void getSession().catch(()=>null).finally(()=>{
+    if(groupDetailPageHidden || restoringEpoch!==groupDetailRestoreEpoch)return;
+    groupDetailAwaitingSession=false;
+    void route();
+  });
 });
 Promise.all([getCMS(), getSession().catch(() => null)]).finally(async () => {
   if (state.user?.profileComplete) await syncProgress();

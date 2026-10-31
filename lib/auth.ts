@@ -227,7 +227,7 @@ export function requestAddress(request: Request) {
   // instead of treating an arbitrary caller header as proof of origin.
   const edgeAddress = request.headers.get("cf-connecting-ip");
   if (!edgeAddress || edgeAddress.length > 45 || edgeAddress.trim() !== edgeAddress) return "unknown";
-  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(edgeAddress)) {
+  if (/^(?:0|[1-9]\d{0,2})(?:\.(?:0|[1-9]\d{0,2})){3}$/.test(edgeAddress)) {
     return edgeAddress.split(".").every(octet => Number(octet) <= 255) ? edgeAddress : "unknown";
   }
   // The URL parser validates IPv6 syntax, including IPv4-mapped forms, and

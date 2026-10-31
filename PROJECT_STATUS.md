@@ -1,3 +1,9 @@
+## 2026-10-31 — SA-EXT-01 / READ_HISTORY_ATOMIC_CAP — ВУЗЬКИЙ ДЕФЕКТ ЗАКРИТО
+
+**CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** виключно для атомарної межі 2 000 збережених записів читання: canonical `PUT /api/account?action=reading` не дозволяє переповнити історію, яку `GET` не зміг би прочитати; старі дані не пошкоджуються, повторення глав залишається безпечним. [PR #918](https://github.com/Oleksii-debug/scripture-archive/pull/918) **SQUASH MERGED** у `main@2445708dc8351f0a75dfcd581beeeffc8e469fcc`; [CI #41187278995](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41187278995) **SUCCESS**: Node 2985 PASS / 0 FAIL / 1 SKIP, Worker/D1 22 PASS, Python 2 PASS, TypeScript/lint/build PASS. [Термінальний scoped-акт](docs/roadmap/SA_EXT_01_READING_ATOMIC_CAP_SCOPED_TERMINAL_20261031.md). `remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0`; **увесь SA-EXT-01 залишається OPEN** (права, покриття видань, provenance/QA). Production Sites, Windows/NVDA та поточний реліз — NOT_VERIFIED; деплою не було.
+
+---
+
 ## 2026-10-31 — SA-EXT-05/06/07 — WITNESS_LINK_ACCESSIBLE_NAMES — ДВА ВУЗЬКІ ВИПРАВЛЕННЯ ЗАКРИТО
 
 **CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL** тільки для доступних назв біблійних посилань. NVDA-користувач, що читає список посилань, тепер отримує класифікацію narrative чи interpretive всередині назви, а не лише після посилання.

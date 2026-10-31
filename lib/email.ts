@@ -37,10 +37,28 @@ async function providerAccepted(response: Response | null): Promise<boolean> {
   return typeof id === "string" && id.trim().length > 0 && id.length <= 200;
 }
 
+// Security links contain single-use account tokens. A missing or malformed
+// public-origin declaration must never turn a Host-derived fallback into an
+// outbound link to an unrelated domain. This checks configuration and URL only;
+// it is not a live DNS/TLS or provider-delivery attestation.
+function trustedSecurityLink(url: string): boolean {
+  const declared = env.APP_BASE_URL;
+  if (typeof declared !== "string") return false;
+  try {
+    const base = new URL(declared), target = new URL(url);
+    if (base.protocol !== "https:" ||
+        (declared !== base.origin && declared !== `${base.origin}/`)) return false;
+    if (url !== url.trim() || /[\\u0000-\\u001f\\u007f]/u.test(url)) return false;
+    return target.protocol === "https:" && target.origin === base.origin &&
+      !target.username && !target.password && !target.hash;
+  } catch { return false; }
+}
+
 export async function sendSecurityEmail(email: string, localeValue: string, purpose: Purpose, url: string) {
   const locale: Locale = localeValue === "ru" || localeValue === "en" ? localeValue : "uk";
   const copy = COPY[locale][purpose];
   if (!env.EMAIL_API_KEY || !env.EMAIL_FROM) return { delivered: false, reason: "email_not_configured" };
+  if (!trustedSecurityLink(url)) return { delivered: false, reason: "security_link_origin_unverified" };
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     signal: AbortSignal.timeout(10_000),

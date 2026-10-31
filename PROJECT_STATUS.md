@@ -1,3 +1,9 @@
+## 2026-10-31 — SA-EXT-03 / MATERIAL_RIGHTS_HOLDER_VISIBLE_PROVENANCE — ВУЗЬКИЙ ДЕФЕКТ ЗАКРИТО
+
+Виправлено приймання невидимих, bidi, Unicode format/filler і пошкоджених UTF-16 символів як публічного імені правовласника в чинному сервері, SQL-прочитуванні та HTML/ARIA-каталозі. [PR #969](https://github.com/Oleksii-debug/scripture-archive/pull/969) **SQUASH MERGED** `main@9039d85ed24f1c9346cc0b44aa1db26f357b9ff6`; [CI #41204855117](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41204855117) **SUCCESS**, Node 3407 PASS, Worker/D1 24 PASS, Python 2 PASS, TS/lint/build PASS. [Точний акт](docs/roadmap/SA_EXT_03_RIGHTS_HOLDER_VISIBLE_SOURCE_SCOPED_TERMINAL_20261031.md): `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`, `remaining_scoped_implementation=0`, `necessary_unmerged_scoped_feature_PRs=0` тільки для цього дефекту. SA-EXT-03/04 раніше parent TERMINAL, SA-EXT-01/16 та решта 18 відкритих батьківських розділів залишаються OPEN; новий реліз, фізичний NVDA/Windows, live Sites/D1 НЕ ПЕРЕВІРЕНІ.
+
+---
+
 ## 2026-10-31 — SA-EXT-03 / PUBLIC_MATERIAL_LICENSE_URL — ВУЗЬКИЙ ДЕФЕКТ ЗАКРИТО
 
 Канонічний браузерний компонент публічних перевірених матеріалів захищений від прихованого/bidi Unicode та неоднозначних authority у посиланнях на права. [PR #967](https://github.com/Oleksii-debug/scripture-archive/pull/967) SQUASH MERGED `main@420b5e9f2dcb708ef81944d568efbd54af194970`; [CI #41204439232](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41204439232) SUCCESS — Node 3405 PASS, D1 24 PASS, Python 2 PASS, TS/lint/build PASS. [Вузька квитанція](docs/roadmap/SA_EXT_03_CLIENT_LICENSE_URL_SCOPED_TERMINAL_20261031.md) — `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`. Батьківські SA-EXT-01/16 OPEN, SA-EXT-03/04 раніше TERMINAL; реальний Sites/NVDA/Windows/реліз НЕ ПЕРЕВІРЕНІ.

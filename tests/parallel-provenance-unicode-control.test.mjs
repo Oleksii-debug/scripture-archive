@@ -78,7 +78,7 @@ test('parallel reader refuses to render licensed verses under a deceptive source
 test('SA-EXT-01 raw visually blank URL aliases and backslashes never acquire publisher authority', () => {
   // The WHATWG parser encodes invisible fillers and treats backslashes as slashes.
   // Neither transformation is acceptable for edition rights or source citations.
-  const hidden = ['\\u034f','\\u115f','\\u1160','\\u2800','\\u3164','\\uffa0','\\\\'];
+  const hidden = [0x034f,0x115f,0x1160,0x2800,0x3164,0xffa0,0x5c].map(cp => String.fromCharCode(cp));
   for (const character of hidden) {
     for (const field of ['source','licenseUrl']) {
       const raw='https://deceptive.example/terms'+character+'label';

@@ -24,8 +24,16 @@ export { https as safeProvenanceHttpsUrl };
 // and the parallel reader. Do not silently truncate verified attribution.
 // These conservative limits bound DOM and clipboard payloads.
 export function validEditionRightsMetadata(metadata) {
+  // Publisher/source/rights claims must belong to the edition record itself.
+  // Inherited values (including optional fields) can silently attach another
+  // edition's licence to real Scripture verses if a catalog object is polluted
+  // or reconstructed with a nontrivial prototype. Parsed JSON remains valid.
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return false;
+  const own = key => Object.hasOwn(metadata,key);
+  const optionalOwn = key => !(key in metadata) || own(key);
   const boundedText=(value,max)=>typeof value==='string'&&value.length<=max;
-  return Boolean(metadata &&
+  return Boolean(own('title') && own('license') && own('source') &&
+    optionalOwn('attribution') && optionalOwn('licenseUrl') &&
     boundedText(metadata.title,512) && metadata.title.trim() &&
     boundedText(metadata.license,4096) && metadata.license.trim() &&
     boundedText(metadata.source,4096) && https(metadata.source) &&

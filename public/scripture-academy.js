@@ -3,11 +3,13 @@
 import { scriptureDossiers, validateDossierGraph } from './scripture-dossiers.js';
 
 export const academyLessonIds=Object.freeze(['abraham','sarah','joseph','moses','exodus','david','nativity']);
+export const academyPlaceLessonIds=Object.freeze(['jerusalem','bethlehem','egypt','nazareth','jericho','galilee']);
+export const academyAllLessonIds=Object.freeze([...academyLessonIds,...academyPlaceLessonIds]);
 const LANGS=['uk','ru','en'];
 const COPY={
-  uk:{title:'Академія: читання біблійних першоджерел',intro:'Сім послідовних занять за вже перевіреними біблійними досьє. Відкрийте уривки в читальні, дослідіть запитання і самостійно позначте опрацьовані теми.',privacy:'Позначки зберігаються лише у цьому браузері, окремо для кожного облікового запису. Вони не синхронізуються із сервером.',honesty:'Це самостійний читацький маршрут, а не іспит, диплом чи церковна або державна акредитація.',progress:'Опрацьовано',badge:'Особистий читацький маршрут завершено (самооцінка, без сертифіката).',read:'Відкрити уривок у читальні',question:'Запитання для роздумів',mark:'Позначити як опрацьоване',unmark:'Прибрати позначку',unavailable:'Не вдалося прочитати або підтвердити локальні позначки занять. Прогрес не змінено.',saveError:'Не вдалося підтвердити збереження позначки на цьому пристрої. Перевірте її стан після повторного відкриття сторінки.',lockUnavailable:'Безпечне збереження між вкладками недоступне в цьому браузері. Позначку не змінено.',invalid:'Джерела цього курсу наразі не перевірені.'},
-  ru:{title:'Академия: чтение библейских первоисточников',intro:'Семь последовательных занятий по уже проверенным библейским досье. Откройте отрывки в читальне, изучите вопросы и самостоятельно отметьте пройденные темы.',privacy:'Отметки хранятся только в этом браузере, отдельно для каждой учётной записи. Они не синхронизируются с сервером.',honesty:'Это самостоятельный читательский маршрут, а не экзамен, диплом или церковная либо государственная аккредитация.',progress:'Пройдено',badge:'Личный читательский маршрут завершён (самооценка, без сертификата).',read:'Открыть отрывок в читальне',question:'Вопросы для размышления',mark:'Отметить как пройденное',unmark:'Убрать отметку',unavailable:'Не удалось прочитать или подтвердить локальные отметки занятий. Прогресс не изменён.',saveError:'Не удалось подтвердить сохранение отметки на этом устройстве. Проверьте её состояние после повторного открытия страницы.',lockUnavailable:'Безопасное сохранение между вкладками недоступно в этом браузере. Отметка не изменена.',invalid:'Источники курса пока не проверены.'},
-  en:{title:'Academy: read the primary Scripture sources',intro:'Seven sequential lessons from the already verified biblical dossiers. Read the source passages, reflect on the questions, and mark lessons studied yourself.',privacy:'Markers are saved only in this browser, separately for each account. They do not synchronize with the server.',honesty:'This is a self-directed reading path, not a graded exam, diploma, or religious/government accreditation.',progress:'Studied',badge:'Personal reading path completed (self-report only; no certificate).',read:'Open passage in reader',question:'Reflection questions',mark:'Mark studied',unmark:'Unmark studied',unavailable:'Local lesson markers could not be read or verified. Progress has not been changed.',saveError:'Could not verify that the marker was saved on this device. Reopen the page to check its current state.',lockUnavailable:'Safe cross-tab saving is unavailable in this browser. The marker was not changed.',invalid:'Course source references are not currently verified.'}
+  uk:{title:'Академія: читання біблійних першоджерел',intro:'Сім послідовних занять за вже перевіреними біблійними досьє. Відкрийте уривки в читальні, дослідіть запитання і самостійно позначте опрацьовані теми.',placesTitle:'Біблійні місця у першоджерелах',placesIntro:'Шість окремих досліджень місць за перевіреними біблійними досьє. Їхній порядок не є історичною хронологією або твердженням про сучасну локалізацію.',privacy:'Позначки зберігаються лише у цьому браузері, окремо для кожного облікового запису. Вони не синхронізуються із сервером.',honesty:'Це самостійний читацький маршрут, а не іспит, диплом чи церковна або державна акредитація.',progress:'Опрацьовано',badge:'Особистий читацький маршрут завершено (самооцінка, без сертифіката).',placesBadge:'Особистий маршрут дослідження місць завершено (самооцінка, без сертифіката).',read:'Відкрити уривок у читальні',question:'Запитання для роздумів',mark:'Позначити як опрацьоване',unmark:'Прибрати позначку',unavailable:'Не вдалося прочитати або підтвердити локальні позначки занять. Прогрес не змінено.',saveError:'Не вдалося підтвердити збереження позначки на цьому пристрої. Перевірте її стан після повторного відкриття сторінки.',lockUnavailable:'Безпечне збереження між вкладками недоступне в цьому браузері. Позначку не змінено.',invalid:'Джерела цього курсу наразі не перевірені.'},
+  ru:{title:'Академия: чтение библейских первоисточников',intro:'Семь последовательных занятий по уже проверенным библейским досье. Откройте отрывки в читальне, изучите вопросы и самостоятельно отметьте пройденные темы.',placesTitle:'Библейские места в первоисточниках',placesIntro:'Шесть отдельных исследований мест по проверенным библейским досье. Их порядок не является исторической хронологией или утверждением о современной локализации.',privacy:'Отметки хранятся только в этом браузере, отдельно для каждой учётной записи. Они не синхронизируются с сервером.',honesty:'Это самостоятельный читательский маршрут, а не экзамен, диплом или церковная либо государственная аккредитация.',progress:'Пройдено',badge:'Личный читательский маршрут завершён (самооценка, без сертификата).',placesBadge:'Личный маршрут исследования мест завершён (самооценка, без сертификата).',read:'Открыть отрывок в читальне',question:'Вопросы для размышления',mark:'Отметить как пройденное',unmark:'Убрать отметку',unavailable:'Не удалось прочитать или подтвердить локальные отметки занятий. Прогресс не изменён.',saveError:'Не удалось подтвердить сохранение отметки на этом устройстве. Проверьте её состояние после повторного открытия страницы.',lockUnavailable:'Безопасное сохранение между вкладками недоступно в этом браузере. Отметка не изменена.',invalid:'Источники курса пока не проверены.'},
+  en:{title:'Academy: read the primary Scripture sources',intro:'Seven sequential lessons from the already verified biblical dossiers. Read the source passages, reflect on the questions, and mark lessons studied yourself.',placesTitle:'Biblical places in the primary sources',placesIntro:'Six separate place studies from verified biblical dossiers. Their order is not a historical chronology or a claim about modern locations.',privacy:'Markers are saved only in this browser, separately for each account. They do not synchronize with the server.',honesty:'This is a self-directed reading path, not a graded exam, diploma, or religious/government accreditation.',progress:'Studied',badge:'Personal reading path completed (self-report only; no certificate).',placesBadge:'Personal place-study path completed (self-report only; no certificate).',read:'Open passage in reader',question:'Reflection questions',mark:'Mark studied',unmark:'Unmark studied',unavailable:'Local lesson markers could not be read or verified. Progress has not been changed.',saveError:'Could not verify that the marker was saved on this device. Reopen the page to check its current state.',lockUnavailable:'Safe cross-tab saving is unavailable in this browser. The marker was not changed.',invalid:'Course source references are not currently verified.'}
 };
 const RESET_COPY={
   uk:{title:'Очистити позначки цього курсу',detail:'Буде видалено всі позначки курсу лише для поточного користувача в цьому браузері. Інші пристрої не зміняться. Закрийте інші вкладки курсу, щоб вони знову не записали позначки.',confirm:'Я хочу видалити ці позначки з цього браузера',action:'Очистити позначки',confirmFirst:'Спершу підтвердьте видалення позначок.',done:'Позначки видалено з цього браузера. Оновіть сторінку, щоб продовжити.',uncertain:'Не вдалося підтвердити видалення. Оновіть сторінку й перевірте стан позначок.'},
@@ -25,9 +27,9 @@ const IMPORT_COPY={
   en:{label:'Course markers file',action:'Add markers from file',detail:'Import adds markers to existing ones only in this browser for the current user; it does not delete markers or verify knowledge.',done:'Markers from the file were added in this browser.',invalid:'The file is invalid or could not be read. Markers were not changed.',uncertain:'Could not confirm the save. Reload the page and check the markers.',lock:'Safe cross-tab saving is unavailable. Markers were not changed.'}
 };
 const RESUME_COPY={
-  uk:{button:'Перейти до наступного неопрацьованого заняття',done:'Усі заняття позначено як опрацьовані. Це самооцінка.',error:'Не вдалося визначити наступне заняття. Перевірте локальні позначки.'},
-  ru:{button:'Перейти к следующему непройденному занятию',done:'Все занятия отмечены как пройденные. Это самооценка.',error:'Не удалось определить следующее занятие. Проверьте локальные отметки.'},
-  en:{button:'Go to the next unmarked lesson',done:'All lessons are marked studied. This is self-reported.',error:'Could not determine the next lesson. Check your local markers.'}
+  uk:{button:'Перейти до наступного неопрацьованого заняття',placeButton:'Перейти до наступного неопрацьованого місця',done:'Усі заняття позначено як опрацьовані. Це самооцінка.',placeDone:'Усі дослідження місць позначено як опрацьовані. Це самооцінка.',error:'Не вдалося визначити наступне заняття. Перевірте локальні позначки.'},
+  ru:{button:'Перейти к следующему непройденному занятию',placeButton:'Перейти к следующему непройденному месту',done:'Все занятия отмечены как пройденные. Это самооценка.',placeDone:'Все исследования мест отмечены как пройденные. Это самооценка.',error:'Не удалось определить следующее занятие. Проверьте локальные отметки.'},
+  en:{button:'Go to the next unmarked lesson',placeButton:'Go to the next unmarked place study',done:'All lessons are marked studied. This is self-reported.',placeDone:'All place studies are marked studied. This is self-reported.',error:'Could not determine the next lesson. Check your local markers.'}
 };
 const SYNC_ERROR={
   uk:'Не вдалося прочитати оновлені позначки з іншої вкладки. Оновіть сторінку й перевірте їх.',
@@ -54,9 +56,9 @@ export function readAcademyProgress(storage,key){
     if(raw===null)return {available:true,completed:[]};
     const record=JSON.parse(raw);
     if(!record || record.version!==1 || !Array.isArray(record.completed) ||
-       record.completed.some(id=>typeof id!=='string'||!academyLessonIds.includes(id)) ||
+       record.completed.some(id=>typeof id!=='string'||!academyAllLessonIds.includes(id)) ||
        new Set(record.completed).size!==record.completed.length)throw Error('invalid saved progress');
-    return {available:true,completed:academyLessonIds.filter(id=>record.completed.includes(id))};
+    return {available:true,completed:academyAllLessonIds.filter(id=>record.completed.includes(id))};
   }catch{return {available:false,completed:[]};}
 }
 
@@ -68,10 +70,10 @@ export function academyMarkup(catalog,language,esc,progress) {
   if(!validateDossierGraph(catalog) || (!readOnly && progress?.available !== true))
     return '<section class="card" role="alert">'+esc(w.invalid)+'</section>';
   const byId=new Map(scriptureDossiers.map(item=>[item.id,item]));
-  if(academyLessonIds.some(id=>!byId.has(id)))return '<section role="alert">'+esc(w.invalid)+'</section>';
+  if(academyAllLessonIds.some(id=>!byId.has(id)))return '<section role="alert">'+esc(w.invalid)+'</section>';
   const titles=new Map(catalog.books[lang].map(book=>[book.code,book.title]));
   const selected=new Set(readOnly?[]:progress.completed);
-  const lessons=academyLessonIds.map((id,index)=>{
+  const lessons=(ids,headingLevel)=>ids.map((id,index)=>{
     const node=byId.get(id),name=esc(node.names[lang]);
     const passages=node.sources.map(ref=>{
       const label=titles.get(ref.book)+' '+ref.chapter+':'+ref.first+'–'+ref.last;
@@ -81,10 +83,14 @@ export function academyMarkup(catalog,language,esc,progress) {
     // dropping all but the first one when composing the accessible course.
     const questions=node.prompts[lang].map(prompt=>'<li>'+esc(prompt)+'</li>').join('');
     const studied=selected.has(id);
-    return '<li><article class="card"><h3 id="academy-lesson-'+id+'" tabindex="-1">'+String(index+1)+'. <a href="/dossiers?id='+id+'">'+name+'</a></h3><p>'+esc(node.summaries[lang])+'</p><ul>'+passages+'</ul><h4>'+esc(w.question)+'</h4><ol>'+questions+'</ol>'+(readOnly?'':'<button type="button" class="button" data-academy-lesson="'+id+'" aria-pressed="'+studied+'">'+esc(studied?w.unmark:w.mark)+'</button>')+'</article></li>';
+    const questionLevel=headingLevel+1;
+    return '<li><article class="card"><h'+headingLevel+' id="academy-lesson-'+id+'" tabindex="-1">'+String(index+1)+'. <a href="/dossiers?id='+id+'">'+name+'</a></h'+headingLevel+'><p>'+esc(node.summaries[lang])+'</p><ul>'+passages+'</ul><h'+questionLevel+'>'+esc(w.question)+'</h'+questionLevel+'><ol>'+questions+'</ol>'+(readOnly?'':'<button type="button" class="button" data-academy-lesson="'+id+'" aria-pressed="'+studied+'">'+esc(studied?w.unmark:w.mark)+'</button>')+'</article></li>';
   }).join('');
-  const total=academyLessonIds.length,count=selected.size;
-  return '<section class="academy-reading" data-academy-root aria-labelledby="academy-reading-title"><h2 id="academy-reading-title">'+esc(w.title)+'</h2><p>'+esc(w.intro)+'</p><p>'+esc(w.privacy)+'</p><p>'+esc(w.honesty)+'</p>'+(readOnly?'<p id="academy-reading-unavailable" role="alert">'+esc(w.unavailable)+'</p>':'<label for="academy-reading-progress">'+esc(w.progress)+'</label> <progress id="academy-reading-progress" max="'+total+'" value="'+count+'"></progress> <span id="academy-reading-status" role="status" aria-live="polite">'+esc(w.progress)+': '+count+'/'+total+'</span><p id="academy-reading-badge" role="status">'+(count===total?esc(w.badge):'')+'</p><p id="academy-reading-error" role="alert"></p><button type="button" class="button" id="academy-resume">'+esc(resume.button)+'</button><p id="academy-resume-status" role="status" aria-live="polite"></p>')+(readOnly?'':'<p>'+esc(exportCopy.detail)+'</p><button type="button" class="button" id="academy-export">'+esc(exportCopy.button)+'</button><p id="academy-export-status" role="status" aria-live="polite"></p><p>'+esc(importCopy.detail)+'</p><label for="academy-import-file">'+esc(importCopy.label)+'</label> <input id="academy-import-file" type="file" accept="application/json,.json"> <button type="button" class="button" id="academy-import">'+esc(importCopy.action)+'</button><p id="academy-import-status" role="status" aria-live="polite"></p>')+'<details><summary>'+esc(reset.title)+'</summary><p>'+esc(reset.detail)+'</p><label><input type="checkbox" id="academy-reset-confirm"> '+esc(reset.confirm)+'</label> <button type="button" class="button" id="academy-reset">'+esc(reset.action)+'</button><p id="academy-reset-status" role="status" aria-live="polite"></p></details><ol>'+lessons+'</ol></section>';
+  const foundationCount=academyLessonIds.filter(id=>selected.has(id)).length;
+  const placesCount=academyPlaceLessonIds.filter(id=>selected.has(id)).length;
+  const privateControls=readOnly?'':'<label for="academy-reading-progress">'+esc(w.progress)+'</label> <progress id="academy-reading-progress" max="'+academyLessonIds.length+'" value="'+foundationCount+'"></progress> <span id="academy-reading-status" role="status" aria-live="polite">'+esc(w.progress)+': '+foundationCount+'/'+academyLessonIds.length+'</span><p id="academy-reading-badge" role="status">'+(foundationCount===academyLessonIds.length?esc(w.badge):'')+'</p><p id="academy-reading-error" role="alert"></p><button type="button" class="button" id="academy-resume">'+esc(resume.button)+'</button><p id="academy-resume-status" role="status" aria-live="polite"></p>';
+  const placesControls=readOnly?'':'<label for="academy-place-progress">'+esc(w.progress)+'</label> <progress id="academy-place-progress" max="'+academyPlaceLessonIds.length+'" value="'+placesCount+'"></progress> <span id="academy-place-status" role="status" aria-live="polite">'+esc(w.progress)+': '+placesCount+'/'+academyPlaceLessonIds.length+'</span><p id="academy-place-badge" role="status">'+(placesCount===academyPlaceLessonIds.length?esc(w.placesBadge):'')+'</p><button type="button" class="button" id="academy-place-resume">'+esc(resume.placeButton)+'</button><p id="academy-place-resume-status" role="status" aria-live="polite"></p>';
+  return '<section class="academy-reading" data-academy-root aria-labelledby="academy-reading-title"><h2 id="academy-reading-title">'+esc(w.title)+'</h2><p>'+esc(w.intro)+'</p><p>'+esc(w.privacy)+'</p><p>'+esc(w.honesty)+'</p>'+(readOnly?'<p id="academy-reading-unavailable" role="alert">'+esc(w.unavailable)+'</p>':privateControls)+(readOnly?'':'<p>'+esc(exportCopy.detail)+'</p><button type="button" class="button" id="academy-export">'+esc(exportCopy.button)+'</button><p id="academy-export-status" role="status" aria-live="polite"></p><p>'+esc(importCopy.detail)+'</p><label for="academy-import-file">'+esc(importCopy.label)+'</label> <input id="academy-import-file" type="file" accept="application/json,.json"> <button type="button" class="button" id="academy-import">'+esc(importCopy.action)+'</button><p id="academy-import-status" role="status" aria-live="polite"></p>')+'<details><summary>'+esc(reset.title)+'</summary><p>'+esc(reset.detail)+'</p><label><input type="checkbox" id="academy-reset-confirm"> '+esc(reset.confirm)+'</label> <button type="button" class="button" id="academy-reset">'+esc(reset.action)+'</button><p id="academy-reset-status" role="status" aria-live="polite"></p></details><ol>'+lessons(academyLessonIds,3)+'</ol><section class="academy-place-track" aria-labelledby="academy-place-title"><h3 id="academy-place-title">'+esc(w.placesTitle)+'</h3><p>'+esc(w.placesIntro)+'</p>'+placesControls+'<ol>'+lessons(academyPlaceLessonIds,4)+'</ol></section></section>';
 }
 
 let detachAcademyStorageListener=()=>{};
@@ -106,11 +112,32 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
   const status=root.querySelector('#academy-reading-status');
   const meter=root.querySelector('#academy-reading-progress');
   const badge=root.querySelector('#academy-reading-badge');
+  const placeStatus=root.querySelector('#academy-place-status');
+  const placeMeter=root.querySelector('#academy-place-progress');
+  const placeBadge=root.querySelector('#academy-place-badge');
   const error=root.querySelector('#academy-reading-error');
   const unavailable=root.querySelector('#academy-reading-unavailable');
   const resetButton=root.querySelector('#academy-reset');
   const resetConfirm=root.querySelector('#academy-reset-confirm');
   const resetStatus=root.querySelector('#academy-reset-status');
+  const syncProgress=(selected)=>{
+    const foundationCount=academyLessonIds.filter(id=>selected.has(id)).length;
+    const placeCount=academyPlaceLessonIds.filter(id=>selected.has(id)).length;
+    if(meter)meter.value=foundationCount;
+    if(status)status.textContent=w.progress+': '+foundationCount+'/'+academyLessonIds.length;
+    if(badge)badge.textContent=foundationCount===academyLessonIds.length?w.badge:'';
+    if(placeMeter)placeMeter.value=placeCount;
+    if(placeStatus)placeStatus.textContent=w.progress+': '+placeCount+'/'+academyPlaceLessonIds.length;
+    if(placeBadge)placeBadge.textContent=placeCount===academyPlaceLessonIds.length?w.placesBadge:'';
+  };
+  const syncButtons=(selected)=>{
+    for(const button of buttons){
+      const id=button.getAttribute('data-academy-lesson');
+      if(!academyAllLessonIds.includes(id))continue;
+      button.setAttribute('aria-pressed',String(selected.has(id)));
+      button.textContent=selected.has(id)?w.unmark:w.mark;
+    }
+  };
   const currentView=()=>{
     try{return Boolean(isCurrent()) && document?.querySelector('[data-academy-root]')===root;}
     catch{return false;}
@@ -122,16 +149,15 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
        !document?.body || document.activeElement!==document.body || typeof button.focus!=='function')return;
     try { button.focus({preventScroll:true}); } catch { /* status remains available */ }
   };
-  const resumeButton=root.querySelector('#academy-resume');
-  const resumeStatus=root.querySelector('#academy-resume-status');
   const resume=RESUME_COPY[languageOf(language)];
-  if(resumeButton && typeof resumeButton.addEventListener==='function') {
+  const attachResume=(resumeButton,resumeStatus,ids,done)=>{
+    if(!resumeButton || typeof resumeButton.addEventListener!=='function')return;
     resumeButton.addEventListener('click',()=>{
       if(!currentView())return;
       const current=readAcademyProgress(storage,key);
       if(!current.available){if(resumeStatus)resumeStatus.textContent=resume.error;return;}
-      const next=academyLessonIds.find(id=>!current.completed.includes(id));
-      if(!next){if(resumeStatus)resumeStatus.textContent=resume.done;return;}
+      const next=ids.find(id=>!current.completed.includes(id));
+      if(!next){if(resumeStatus)resumeStatus.textContent=done;return;}
       try {
         const heading=root.querySelector('#academy-lesson-'+next);
         if(!heading || typeof heading.focus!=='function')throw Error('lesson unavailable');
@@ -139,7 +165,9 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
         heading.focus();
       } catch {if(resumeStatus)resumeStatus.textContent=resume.error;}
     });
-  }
+  };
+  attachResume(root.querySelector('#academy-resume'),root.querySelector('#academy-resume-status'),academyLessonIds,resume.done);
+  attachResume(root.querySelector('#academy-place-resume'),root.querySelector('#academy-place-resume-status'),academyPlaceLessonIds,resume.placeDone);
   const exportButton=root.querySelector('#academy-export');
   const exportStatus=root.querySelector('#academy-export-status');
   const exportCopy=EXPORT_COPY[languageOf(language)];
@@ -185,8 +213,8 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
           if(!record || typeof record!=='object' || Array.isArray(record) ||
              Object.keys(record).sort().join(',')!=='completed,format,version' ||
              record.format!=='scripture-archive-academy-markers' || record.version!==1 ||
-             !Array.isArray(record.completed) || record.completed.length>academyLessonIds.length ||
-             record.completed.some(id=>typeof id!=='string'||!academyLessonIds.includes(id)) ||
+             !Array.isArray(record.completed) || record.completed.length>academyAllLessonIds.length ||
+             record.completed.some(id=>typeof id!=='string'||!academyAllLessonIds.includes(id)) ||
              new Set(record.completed).size!==record.completed.length)throw Error('invalid markers');
         } catch {if(importStatus)importStatus.textContent=importCopy.invalid;return;}
         await locks.request('sa-academy-progress:'+key,{mode:'exclusive'},()=>{
@@ -194,22 +222,16 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
           const existing=readAcademyProgress(storage,key);
           if(!existing.available){if(importStatus)importStatus.textContent=importCopy.uncertain;return;}
           const merged=new Set([...existing.completed,...record.completed]);
-          const completed=academyLessonIds.filter(id=>merged.has(id));
+          const completed=academyAllLessonIds.filter(id=>merged.has(id));
           try {
             const saved=JSON.stringify({version:1,completed});
             storage.setItem(key,saved);
             if(storage.getItem(key)!==saved)throw Error('unconfirmed save');
           } catch {if(currentView()&&importStatus)importStatus.textContent=importCopy.uncertain;return;}
           if(!currentView())return;
-          for(const button of buttons){
-            const id=button.getAttribute('data-academy-lesson');
-            if(!academyLessonIds.includes(id))continue;
-            button.setAttribute('aria-pressed',String(merged.has(id)));
-            button.textContent=merged.has(id)?w.unmark:w.mark;
-          }
-          if(meter)meter.value=completed.length;
-          if(status)status.textContent=w.progress+': '+completed.length+'/'+academyLessonIds.length;
-          if(badge)badge.textContent=completed.length===academyLessonIds.length?w.badge:'';
+          const selected=new Set(completed);
+          syncButtons(selected);
+          syncProgress(selected);
           if(error)error.textContent='';
           if(importStatus)importStatus.textContent=importCopy.done;
           importFile.value='';
@@ -242,13 +264,9 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
         }
         if(!currentView())return;
         resetConfirm.checked=false;
-        for(const updatedButton of buttons){
-          updatedButton.setAttribute('aria-pressed','false');
-          updatedButton.textContent=w.mark;
-        }
-        if(meter)meter.value=0;
-        if(status)status.textContent=w.progress+': 0/'+academyLessonIds.length;
-        if(badge)badge.textContent='';
+        const selected=new Set();
+        syncButtons(selected);
+        syncProgress(selected);
         if(error)error.textContent='';
         if(unavailable)unavailable.textContent='';
         if(resetStatus)resetStatus.textContent=reset.done;
@@ -279,15 +297,8 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
         return;
       }
       const selected=new Set(latest.completed);
-      for(const button of buttons){
-        const id=button.getAttribute('data-academy-lesson');
-        if(!academyLessonIds.includes(id))continue;
-        button.setAttribute('aria-pressed',String(selected.has(id)));
-        button.textContent=selected.has(id)?w.unmark:w.mark;
-      }
-      if(meter)meter.value=selected.size;
-      if(status)status.textContent=w.progress+': '+selected.size+'/'+academyLessonIds.length;
-      if(badge)badge.textContent=selected.size===academyLessonIds.length?w.badge:'';
+      syncButtons(selected);
+      syncProgress(selected);
       if(error)error.textContent='';
     };
     events.addEventListener('storage',refresh);
@@ -295,7 +306,7 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
   }
   for(const button of buttons){
     const id=button.getAttribute('data-academy-lesson');
-    if(!academyLessonIds.includes(id))continue;
+    if(!academyAllLessonIds.includes(id))continue;
     const update=()=>{
       // An account switch, session outage, or route replacement must retire
       // stale controls before they can mutate a prior principal's device data.
@@ -314,7 +325,7 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
       // Apply the action shown on this button, even if another view has
       // changed this same lesson since it was rendered.
       if(button.getAttribute('aria-pressed')==='true')next.delete(id);else next.add(id);
-      const completed=academyLessonIds.filter(x=>next.has(x));
+      const completed=academyAllLessonIds.filter(x=>next.has(x));
       try{
         if(!storage || typeof storage.setItem!=='function')throw Error('no storage');
         const saved=JSON.stringify({version:1,completed});
@@ -327,16 +338,9 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
         if(error)error.textContent=w.saveError;
         return;
       }
-      for(const updatedButton of buttons){
-        const updatedId=updatedButton.getAttribute('data-academy-lesson');
-        if(!academyLessonIds.includes(updatedId))continue;
-        updatedButton.setAttribute('aria-pressed',String(next.has(updatedId)));
-        updatedButton.textContent=next.has(updatedId)?w.unmark:w.mark;
-      }
+      syncButtons(next);
       if(error)error.textContent='';
-      if(meter)meter.value=completed.length;
-      if(status)status.textContent=w.progress+': '+completed.length+'/'+academyLessonIds.length;
-      if(badge)badge.textContent=completed.length===academyLessonIds.length?w.badge:'';
+      syncProgress(next);
     };
     button.addEventListener('click',()=>{
       // Recheck before and after lock acquisition (inside update()).

@@ -14,10 +14,10 @@ function mount({user={id:'alice'},raw=JSON.stringify({version:1,completed:['abra
   return {status,click:()=>handler(),get download(){return clicked},setRaw(v){raw=v}};
 }
 test('course download reads the latest validated markers without account identifiers',()=>{
-  const f=mount();f.setRaw(JSON.stringify({version:1,completed:['david','abraham']}));f.click();
+  const f=mount();f.setRaw(JSON.stringify({version:1,completed:['galilee','david','abraham']}));f.click();
   assert.equal(f.download.download,'scripture-archive-academy-markers.json');
   const payload=JSON.parse(decodeURIComponent(f.download.href.split(',')[1]));
-  assert.deepEqual(payload,{format:'scripture-archive-academy-markers',version:1,completed:['abraham','david']});
+  assert.deepEqual(payload,{format:'scripture-archive-academy-markers',version:1,completed:['abraham','david','galilee']});
   assert.doesNotMatch(JSON.stringify(payload),/alice/);
   assert.match(f.status.textContent,/Download requested/);
 });

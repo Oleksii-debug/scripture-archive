@@ -59,6 +59,28 @@ test('pending builder navigation is fenced even if private DOM is not mounted ye
   assert.equal(f.events.retire,1);
   assert.equal(f.controller.epoch(),6);
 });
+test('abandoned session refresh cannot re-enter private editor after another pagehide',async()=>{
+  const pending=deferred();
+  const f=lifecycleFixture({path:'/editor',request:()=>pending.promise});
+  f.pagehide();f.pageshow();
+  f.pagehide();
+  pending.resolve({id:'old'});
+  await tick();
+  assert.equal(f.events.route,0);
+  assert.equal(f.controller.needs(),true);
+});
+test('second page restore supersedes the first pending authentication result',async()=>{
+  const old=deferred(),newer=deferred();
+  let n=0;
+  const f=lifecycleFixture({path:'/builder',request:()=>++n===1?old.promise:newer.promise});
+  f.pagehide();f.pageshow();f.pagehide();f.pageshow();
+  newer.resolve({id:'new'});
+  await tick();
+  assert.equal(f.events.route,1);
+  old.resolve({id:'old'});
+  await tick();
+  assert.equal(f.events.route,1);
+});
 test('private editorial page only navigates after an authoritative session refresh',async()=>{
   const pending=deferred(),f=lifecycleFixture({path:'/editor',request:()=>pending.promise});
   f.pagehide();

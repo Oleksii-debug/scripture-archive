@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {dossierAtlasMarkup, searchScriptureDossiers, validateDossierGraph} from '../public/scripture-dossiers.js';
+import {dossierAtlasMarkup, scriptureDossiers, searchScriptureDossiers, validateDossierGraph} from '../public/scripture-dossiers.js';
 
 const catalog = JSON.parse(readFileSync(new URL('../public/data/catalog.json', import.meta.url), 'utf8'));
 const esc = value => String(value).replace(/[&<>"']/g, char => ({
@@ -20,7 +20,7 @@ test('canonical catalogue remains valid for filtered relation-witness acceptance
 
 for (const lang of ['uk','ru','en']) {
   for (const {query,source,target,passage} of relationOnly) {
-    test(`filtered ${lang} ${query}: show relation-only witness and navigable target`, () => {
+    test(`filtered ${lang} ${query}: show relation-only witness without unfiltered target link`, () => {
       const matches = searchScriptureDossiers(lang, query, catalog).map(item => item.id);
       assert.deepEqual(matches, [source], 'search matches source solely, not the related target');
       const html = dossierAtlasMarkup(catalog, lang, esc, query);
@@ -28,7 +28,9 @@ for (const lang of ['uk','ru','en']) {
       assert.ok(html.includes('href="' + esc(filteredSource) + '"'), 'source keeps active GET filter');
       assert.ok(html.includes('id="dossier-atlas-relations-heading"'), 'relation witnesses are not hidden');
       assert.ok(html.includes('href="' + passage + '"'), 'real relation citation remains readable');
-      assert.ok(html.includes('href="/dossiers?id=' + target + '"'), 'nonmatching target stays navigable');
+      const targetLabel = scriptureDossiers.find(item => item.id === target).names[lang];
+      assert.ok(html.includes(esc(targetLabel)), 'relation target remains readable as text');
+      assert.ok(!html.includes('href="/dossiers?id=' + target + '"'), 'nonmatching target cannot bypass filtered link graph');
       const invalidTarget = '/dossiers?' + new URLSearchParams({id:target,q:query}).toString();
       assert.ok(!html.includes('href="' + esc(invalidTarget) + '"'), 'target must not inherit a rejecting filter');
       assert.ok(!html.includes('onclick='), 'native accessible links, no script click handlers');

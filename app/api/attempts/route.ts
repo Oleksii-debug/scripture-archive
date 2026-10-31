@@ -61,9 +61,10 @@ function requestedAttemptId(value: unknown): string | null {
 // truncating a long identifier must not alias a real group's ID.
 function requestedGroupId(value: unknown): string | null {
   if (value === undefined || value === null || value === "") return "";
-  if (typeof value !== "string") return null;
-  const groupId = value.trim();
-  return groupId && groupId.length <= 80 ? groupId : null;
+  // Group IDs are exact database keys, as in /api/groups. Trimming would
+  // silently bind a malformed reading/attempt request to another group.
+  return typeof value === "string" && value.length > 0 && value.length <= 80 &&
+    value.trim() === value ? value : null;
 }
 // Chapter input must be numeric evidence, not JavaScript truthy/coercible text.
 // Decimal form field values remain supported without accepting hex/exponent,

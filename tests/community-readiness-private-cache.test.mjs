@@ -13,7 +13,7 @@ function deployed(url, options = {}) {
   if (path === DISPATCH) return new Response(null, {status:204,headers:{"Cache-Control":"no-store","X-Scripture-Runner-Protocol":"github-oidc-v1"}});
   if (path === "/robots.txt") return new Response("User-agent: *\nSitemap: https://scripture-archive.com/sitemap.xml");
   if (path === "/sitemap.xml") return new Response("<urlset></urlset>");
-  return new Response("<html>Community</html>");
+  return new Response("<html>Community</html>",{headers:{"Content-Type":"text/html; charset=utf-8"}});
 }
 const override = (path, factory) => async (url, options) => new URL(url).pathname === path ? factory() : deployed(url, options);
 const badCache = [null,"public, max-age=3600","private, max-age=300","no-cache","no-store-extra","no-stored","no-store=1","max-age=0","PUBLIC, MAX-AGE=0","no-cache, must-revalidate"];

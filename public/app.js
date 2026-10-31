@@ -3712,8 +3712,32 @@ async function renderMission(parts = []) {
   try {
     data = await attemptRequest("current", "GET", undefined, `attemptId=${encodeURIComponent(attemptId)}`);
     if (!isCurrent()) return;
+    // Never treat an HTTP 200 malformed task DTO as a playable mission. Keep
+    // this guard inside the existing retry path rather than throwing during render.
+    if (!data || typeof data !== "object" || Array.isArray(data) ||
+        (data.grading !== undefined && typeof data.grading !== "boolean"))
+      throw Error("attempt_response_invalid");
     if (data.grading) data = await attemptRequest("finalize", "POST", { attemptId });
     if (!isCurrent()) return;
+    if (!data || typeof data !== "object" || Array.isArray(data) ||
+        (data.completed !== undefined && typeof data.completed !== "boolean"))
+      throw Error("attempt_response_invalid");
+    if (!data.completed) {
+      const candidate = data.task;
+      if (!candidate || typeof candidate !== "object" || Array.isArray(candidate) ||
+          !["single", "multi"].includes(candidate.type) ||
+          !Number.isSafeInteger(candidate.index) || !Number.isSafeInteger(candidate.total) ||
+          candidate.index < 1 || candidate.total < 1 ||
+          candidate.index > candidate.total || candidate.total > 1000 ||
+          typeof candidate.question !== "string" || !candidate.question.trim() ||
+          candidate.question.length > 8192 ||
+          !Array.isArray(candidate.options) ||
+          candidate.options.length < 2 || candidate.options.length > 32 ||
+          !Array.from(candidate.options.keys()).every(index => Object.hasOwn(candidate.options, index)) ||
+          candidate.options.some(option =>
+            typeof option !== "string" || !option.trim() || option.length > 2048))
+        throw Error("attempt_response_invalid");
+    }
   }
   catch (error) {
     if (!isCurrent()) return;

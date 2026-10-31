@@ -19,9 +19,9 @@ const TAKEDOWN_TEXT = {
   en:{takeDown:'Remove from publication',takeDownReason:'Reason for removal',takeDownSaved:'Material removed from publication.',takeDownLabel:'Removed from publication: ',takeDownActor:'Removed by editor'},
 };
 const RIGHTS_TEXT = {
-  uk:{rightsHolder:'Правовласник або статус прав',rightsBasis:'Підстава публікації',licenseUrl:'Публічне HTTPS-посилання на ліцензію (необов’язково)',original:'Оригінальний матеріал правовласника',permission:'Публікація з дозволу',open_license:'Відкрита ліцензія',public_domain:'Суспільне надбання',language:'Мова матеріалу',reviewDate:'Дата редакційної перевірки',legacyRights:'Структуровані відомості про правовласника не були записані для цієї попередньої версії.',licenseLink:'Переглянути ліцензію'},
-  ru:{rightsHolder:'Правообладатель или статус прав',rightsBasis:'Основание публикации',licenseUrl:'Публичная HTTPS-ссылка на лицензию (необязательно)',original:'Оригинальный материал правообладателя',permission:'Публикация с разрешения',open_license:'Открытая лицензия',public_domain:'Общественное достояние',language:'Язык материала',reviewDate:'Дата редакционной проверки',legacyRights:'Структурированные сведения о правообладателе не были записаны для этой предыдущей версии.',licenseLink:'Открыть лицензию'},
-  en:{rightsHolder:'Rights holder or rights status',rightsBasis:'Publication basis',licenseUrl:'Public HTTPS licence URL (optional)',original:'Rights holder’s original work',permission:'Published with permission',open_license:'Open licence',public_domain:'Public domain',language:'Material language',reviewDate:'Editorial review date',legacyRights:'Structured rights-holder details were not recorded for this earlier version.',licenseLink:'View licence'},
+  uk:{rightsHolder:'Правовласник або статус прав',rightsBasis:'Підстава публікації',licenseUrl:'Публічне HTTPS-посилання на ліцензію (необов’язково)',original:'Оригінальний матеріал правовласника',permission:'Публікація з дозволу',open_license:'Відкрита ліцензія',public_domain:'Суспільне надбання',language:'Мова матеріалу',reviewDate:'Дата редакційної перевірки',legacyRights:'Структуровані відомості про правовласника не були записані для цієї попередньої версії.',licenseLink:'Переглянути ліцензію',rightsConcern:'Повідомити про права на цей матеріал'},
+  ru:{rightsHolder:'Правообладатель или статус прав',rightsBasis:'Основание публикации',licenseUrl:'Публичная HTTPS-ссылка на лицензию (необязательно)',original:'Оригинальный материал правообладателя',permission:'Публикация с разрешения',open_license:'Открытая лицензия',public_domain:'Общественное достояние',language:'Язык материала',reviewDate:'Дата редакционной проверки',legacyRights:'Структурированные сведения о правообладателе не были записаны для этой предыдущей версии.',licenseLink:'Открыть лицензию',rightsConcern:'Сообщить о правах на этот материал'},
+  en:{rightsHolder:'Rights holder or rights status',rightsBasis:'Publication basis',licenseUrl:'Public HTTPS licence URL (optional)',original:'Rights holder’s original work',permission:'Published with permission',open_license:'Open licence',public_domain:'Public domain',language:'Material language',reviewDate:'Editorial review date',legacyRights:'Structured rights-holder details were not recorded for this earlier version.',licenseLink:'View licence',rightsConcern:'Report a rights concern about this material'},
 };
 // Language can originate from a document or stored preference. Never read
 // inherited Object.prototype keys as translation dictionaries, and never
@@ -76,9 +76,14 @@ function validPublicMaterial(item) {
   return item && ['id','title','locale','reference','prompt','provenance','reviewedAt'].every(key=>typeof item[key]==='string') &&
     item.id.length>0 && item.id.length<=100 && item.title.length>0 && item.title.length<=160 &&
     ['uk','ru','en'].includes(item.locale) && item.reference.length>0 && item.reference.length<=200 &&
-    item.reviewedAt.length>0 && item.reviewedAt.length<=100 && validRightsMetadata(item.rights) &&
+    item.reviewedAt.length>0 && item.reviewedAt.length<=100 && validRightsMetadata(item.rights) && rightsRequestUrl(item)!==null &&
     Array.isArray(item.options) && item.options.length>=2 && item.options.length<=8 &&
     item.options.every(value=>typeof value==='string' && value.length>0 && value.length<=500);
+}
+function rightsRequestUrl(item) {
+  try {
+    return `/help?topic=rights&material=${encodeURIComponent(item.id)}&title=${encodeURIComponent(item.title)}`;
+  } catch { return null; }
 }
 export function historyMarkup(items, w, esc) {
   return `<section class="card"><h2>${w.history}</h2>${items.length ? `<ol>${items.map(item=>`<li><strong>${esc(item.snapshot.title)}</strong> — ${esc(w[item.status] || item.status)}${rightsMetadataMarkup({...item,locale:item.snapshot.locale,reviewedAt:item.reviewedAt||item.submittedAt},w,esc)}${item.reviewNote ? `<p>${esc(item.reviewNote)}</p>` : ''}${item.takedownReason ? `<p>${w.takeDownLabel}${esc(item.takedownReason)}</p>` : ''}${['pending','approved'].includes(item.status) ? `<button class="button material-withdraw" data-id="${esc(item.id)}">${w.withdraw}</button>` : ''}</li>`).join('')}</ol>` : `<p>${w.empty}</p>`}<p class="review-history-status" role="status"></p></section>`;
@@ -153,7 +158,7 @@ export function attachReviewControls(root, w, refresh, announce, isCurrent = () 
   }));
 }
 function publicMaterialMarkup(items, w, esc) {
-  return items.map(item=>`<article class="card"><h3>${esc(item.title)}</h3><p>${esc(item.reference)}</p><p>${esc(item.provenance)}</p>${rightsMetadataMarkup(item,w,esc)}<form class="public-material" data-id="${esc(item.id)}"><fieldset><legend>${esc(item.prompt)}</legend>${item.options.map((option,index)=>`<label class="option"><input type="radio" name="choice" value="${index}" required><span>${esc(option)}</span></label>`).join('')}</fieldset><button class="button" type="submit">${w.check}</button><p role="status"></p></form></article>`).join('');
+  return items.map(item=>`<article class="card"><h3>${esc(item.title)}</h3><p>${esc(item.reference)}</p><p>${esc(item.provenance)}</p>${rightsMetadataMarkup(item,w,esc)}<p class="material-rights-request"><a href="${esc(rightsRequestUrl(item))}">${esc(w.rightsConcern)}</a></p><form class="public-material" data-id="${esc(item.id)}"><fieldset><legend>${esc(item.prompt)}</legend>${item.options.map((option,index)=>`<label class="option"><input type="radio" name="choice" value="${index}" required><span>${esc(option)}</span></label>`).join('')}</fieldset><button class="button" type="submit">${w.check}</button><p role="status"></p></form></article>`).join('');
 }
 // Concurrent reads for one mounted public-material panel must be ordered by
 // the request that STARTED last, not whichever fetch happens to finish last.

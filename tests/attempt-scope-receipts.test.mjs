@@ -20,6 +20,8 @@ const receiptLookup = source.slice(startAt, startEnd);
 const chapterUpdates = [...guard.matchAll(/env\.DB\.prepare\("([^"]+)"\)/g)].map(value => value[1]);
 const receiptQuery = receiptLookup.match(/env\.DB\.prepare\("([^"]+)"\)/)?.[1];
 assert.equal(chapterUpdates.length, 2);
+assert.match(chapterUpdates[0], /mission_id=\?/);
+assert.equal((chapterUpdates[0].match(/\?/g) || []).length, 4);
 assert.ok(receiptQuery);
 assert.match(receiptLookup, /\.bind\(currentActor\.id, book, chapter, groupId\)\.first/);
 assert.equal((receiptQuery.match(/\?/g) || []).length, 4);
@@ -35,7 +37,7 @@ function openDatabase(filename = ":memory:") {
     consumed_at TEXT
   );
   CREATE TABLE IF NOT EXISTS mission_attempts (
-    id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, book_id TEXT NOT NULL,
+    id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, mission_id TEXT NOT NULL, book_id TEXT NOT NULL,
     chapter INTEGER NOT NULL, group_id TEXT, status TEXT NOT NULL,
     expires_at TEXT NOT NULL, invalidated_at TEXT, invalidation_reason TEXT
   );`);
@@ -44,9 +46,9 @@ function openDatabase(filename = ":memory:") {
       .run(id, actor, book, chapter, group, when, consumed);
   const findReceipt = (actor, book, chapter, group = "") =>
     db.prepare(receiptQuery).get(actor, book, chapter, group);
-  const addAttempt = (id, actor, book, chapter, group, status = "active", expiry = "2999-01-01") =>
-    db.prepare("INSERT INTO mission_attempts VALUES (?,?,?,?,?,?,?,NULL,NULL)")
-      .run(id, actor, book, chapter, group, status, expiry);
+  const addAttempt = (id, actor, book, chapter, group, status = "active", expiry = "2999-01-01", mission = "OT-AB-01") =>
+    db.prepare("INSERT INTO mission_attempts VALUES (?,?,?,?,?,?,?,?,NULL,NULL)")
+      .run(id, actor, mission, book, chapter, group, status, expiry);
   return { db, addReceipt, findReceipt, addAttempt };
 }
 
@@ -96,23 +98,25 @@ test("consumed receipts cannot authorize another attempt; newest valid receipt w
   } finally { f.db.close(); }
 });
 
-test("production chapter-open SQL invalidates all matching contexts, but never another actor or chapter", () => {
+test("production chapter-open SQL invalidates only this mission across contexts, never a foreign mission", () => {
   const f = openDatabase();
   try {
     samples(f);
-    for (const [id, actor, book, chapter, group, status, expiry] of [
+    for (const [id, actor, book, chapter, group, status, expiry, mission] of [
       ["personal", "alice", "GEN", 12, null],
       ["group-one", "alice", "GEN", 12, "group-one"],
       ["group-two", "alice", "GEN", 12, "group-two"],
+      ["foreign-mission", "alice", "GEN", 12, "group-one", "active", "2999-01-01", "OTHER-MISSION"],
+      ["foreign-personal", "alice", "GEN", 12, null, "active", "2999-01-01", "OTHER-MISSION"],
       ["other-actor", "bob", "GEN", 12, "group-one"],
       ["other-book", "alice", "EXO", 12, "group-one"],
       ["other-chapter", "alice", "GEN", 13, "group-one"],
       ["completed", "alice", "GEN", 12, "group-one", "completed"],
       ["expired", "alice", "GEN", 12, "group-one", "active", "2000-01-01"],
-    ]) f.addAttempt(id, actor, book, chapter, group, status, expiry);
+    ]) f.addAttempt(id, actor, book, chapter, group, status, expiry, mission);
     f.db.exec("BEGIN");
     try {
-      const first = f.db.prepare(chapterUpdates[0]).run("alice", "GEN", 12);
+      const first = f.db.prepare(chapterUpdates[0]).run("alice", "GEN", 12, "OT-AB-01");
       const second = f.db.prepare(chapterUpdates[1]).run("alice", "GEN", 12);
       assert.equal(Number(first.changes), 3);
       assert.equal(Number(second.changes), 3);
@@ -122,7 +126,7 @@ test("production chapter-open SQL invalidates all matching contexts, but never a
       assert.equal(f.db.prepare("SELECT status FROM mission_attempts WHERE id=?").get(id).status, "invalidated");
       assert.ok(f.db.prepare("SELECT invalidated_at FROM mission_attempts WHERE id=?").get(id).invalidated_at);
     }
-    for (const id of ["other-actor", "other-book", "other-chapter", "expired"]) {
+    for (const id of ["foreign-mission", "foreign-personal", "other-actor", "other-book", "other-chapter", "expired"]) {
       assert.equal(f.db.prepare("SELECT status FROM mission_attempts WHERE id=?").get(id).status, "active");
     }
     assert.equal(f.db.prepare("SELECT status FROM mission_attempts WHERE id='completed'").get().status, "completed");

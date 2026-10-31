@@ -34,7 +34,11 @@ export async function advanceCommunity(now = new Date()) {
       const person = identityFor(sequence);
       const next = sqlDate(new Date(now.getTime() + intervalSeconds(wave.interval_pattern, Number(wave.pattern_index), sqlDate(now)) * 1000));
       const allowed = "EXISTS (SELECT 1 FROM community_runs WHERE id=? AND status='running' AND lease_token=? AND control_version=?)";
-      await env.DB!.batch([
+      // In the same D1 transaction, progress the wave only when the preceding
+      // INSERT really created its member. INSERT OR IGNORE can legally make
+      // zero changes on a duplicate sequence/ID; advancing created_count
+      // anyway would silently lose an agent and falsify completion.
+      const receipts = await env.DB!.batch([
         env.DB!.prepare(`INSERT OR IGNORE INTO community_members
           (id,run_id,wave_id,sequence_number,first_name,last_name,locale,country_code,persona,seed,joined_at,next_action_at)
           SELECT ?,?,?,?,?,?,?,?,?,?,?,? WHERE ${allowed}`)
@@ -42,10 +46,16 @@ export async function advanceCommunity(now = new Date()) {
             person.locale, person.countryCode, person.persona, person.seed, sqlDate(now), sqlDate(now),
             COMMUNITY_RUN_ID, lease, claimed.control_version),
         env.DB!.prepare(`UPDATE community_waves SET created_count=?,pattern_index=pattern_index+1,next_at=?,status=?
-          WHERE id=? AND created_count=? AND ${allowed}`)
+          WHERE id=? AND created_count=? AND changes()=1 AND ${allowed}`)
           .bind(count, next, count === Number(wave.target_count) ? "complete" : "running", wave.id, created,
             COMMUNITY_RUN_ID, lease, claimed.control_version),
       ]);
+      if (!Array.isArray(receipts) || receipts.length !== 2 ||
+          receipts.some(receipt => receipt?.success !== true ||
+            !Number.isSafeInteger(receipt.meta?.changes) ||
+            receipt.meta.changes < 0 || receipt.meta.changes > 1) ||
+          receipts[0].meta.changes !== receipts[1].meta.changes)
+        throw Error("community_wave_write_unconfirmed");
     }
   } finally {
     await env.DB!.prepare("UPDATE community_runs SET lease_token=NULL,lease_until=NULL WHERE id=? AND lease_token=?")

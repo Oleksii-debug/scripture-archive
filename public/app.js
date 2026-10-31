@@ -2232,6 +2232,9 @@ function validBibleCatalog(catalog) {
   if (!catalog || catalog.schemaVersion !== 1 || !catalog.books ||
       !catalog.editions || typeof catalog.editions !== "object") return false;
   const validBooks = (books) => Array.isArray(books) && books.length === 66 &&
+    // Array#every and Array#map skip holes: 65 real codes plus an undefined
+    // hole can satisfy Set.size === 66. Require 66 own book records first.
+    Array.from(books.keys()).every((index) => Object.hasOwn(books, index)) &&
     books.every((book) => book && typeof book.code === "string" && /^[A-Z0-9]{3}$/.test(book.code) &&
       typeof book.title === "string" && !!book.title.trim() &&
       (book.testament === "OT" || book.testament === "NT") &&

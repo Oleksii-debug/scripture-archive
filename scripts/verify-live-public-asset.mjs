@@ -46,6 +46,13 @@ export async function comparePublicAppBytes({ origin, sourceBytes, fetchImpl = g
   });
   if (!response || response.status !== 200 || !response.body || typeof response.body.getReader !== 'function')
     throw new Error('public app.js HTTP 200 body required; redirects and failures are not accepted');
+  // Exact JS bytes alone do not prove the browser can execute this asset:
+  // HTML/JSON/unknown MIME responses can be blocked as scripts (nosniff).
+  // Refuse a contradictory declared charset, which can corrupt Scripture text.
+  const contentType = response.headers?.get?.('content-type');
+  if (typeof contentType !== 'string' ||
+      !/^(?:text|application)\/(?:javascript|ecmascript)(?:\s*;\s*charset\s*=\s*(?:"utf-8"|utf-8))?$/iu.test(contentType.trim()))
+    throw new Error('public app.js JavaScript Content-Type with UTF-8 required');
   const contentLength = response.headers?.get?.('content-length');
   if (contentLength !== null && contentLength !== undefined &&
       (!/^(0|[1-9][0-9]*)$/.test(contentLength) || Number(contentLength) > MAX_PUBLIC_ASSET_BYTES))

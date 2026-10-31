@@ -27,3 +27,55 @@ test('R0 release origin cannot silently normalize hidden URL control bytes',()=>
  }).verdict,'DECLARED_ORIGIN_MATCH_ONLY');
  assert.equal(normalizeSecureOrigin('https://SCRIPTURE-ARCHIVE.com/'),canonical);
 });
+
+test('R0 origin preflight rejects 34 formerly normalized nonliteral release declarations',()=>{
+  // Checked against the pre-fix source: every vector normalized to the canonical origin.
+  // A strict URL() comparison is insufficient for an operator-selected release target.
+  const nonliteral=[
+    "https:scripture-archive.com",
+    "https:/scripture-archive.com",
+    "https:\\scripture-archive.com",
+    "https:\\\\scripture-archive.com",
+    "https:///scripture-archive.com",
+    "https:////scripture-archive.com",
+    "https:/\\scripture-archive.com",
+    "https:\\/scripture-archive.com",
+    "https://scripture-archive.com\\",
+    "https://scripture-archive.com/.",
+    "https://scripture-archive.com/./",
+    "https://scripture-archive.com/..",
+    "https://scripture-archive.com/../",
+    "https://scripture-archive.com/%2e",
+    "https://scripture-archive.com/%2E/",
+    "https://scripture-archive.com/%2e%2e",
+    "https://scripture-archive.com/%2E%2E/",
+    "https://scripture-archive.com/a/..",
+    "https://scripture-archive.com/a/../",
+    "https://scripture-archive.com/a/%2e%2e",
+    "https://scripture-archive.com/a/%2E%2E/",
+    "https://scripture-%61rchive.com",
+    "https://%73cripture-archive.com",
+    "https://scripture-archive%2ecom",
+    "https://scripture-archive.com?",
+    "https://scripture-archive.com#",
+    "https://scripture-archive.com/?",
+    "https://scripture-archive.com/#",
+    "https://scripture-archive.com/?#",
+    "https://scripture-archive.com:443?",
+    "https://scripture-archive.com:443#",
+    "https://scripture-archive.com:443/./",
+    "https://scripture-archive.com:443/%2e/",
+    "https://scripture-archive.com:443/%2E%2E/",
+  ];
+  assert.equal(nonliteral.length,34);
+  for (const value of nonliteral) {
+    assert.throws(()=>normalizeSecureOrigin(value),/invalid URL syntax/,
+      `malformed release origin must fail: ${JSON.stringify(value)}`);
+    assert.throws(()=>verifyDeclaredOrigins({expectedOrigin:canonical,siteUrl:value,appBaseUrl:canonical}),
+      /invalid URL syntax/);
+  }
+  // Preserve already authorized canonical origins and legitimate URL normalization.
+  for (const value of [canonical,canonical+'/', 'https://SCRIPTURE-ARCHIVE.com/', canonical+':443']) {
+    assert.equal(normalizeSecureOrigin(value),canonical);
+  }
+});

@@ -75,3 +75,17 @@ test('own properties on null-prototype catalogues remain valid; no false denial'
   assert.equal(validateDossierGraph(ownRoot),true);
   assert.match(dossierMarkup(ownRoot,'en','abraham',esc), /\/reader\/GEN\/12/);
 });
+
+test('sparse or oversized book arrays fail closed instead of throwing in Map', () => {
+  for (const language of ['uk','ru','en']) {
+    const sparse = [...catalog.books[language]];
+    delete sparse[1];
+    const spoofed = {books:{...catalog.books,[language]:sparse}};
+    assert.doesNotThrow(()=>validateDossierGraph(spoofed),language);
+    assert.equal(validateDossierGraph(spoofed),false,language);
+    assert.match(dossierMarkup(spoofed,language,'abraham',esc),/role="alert"/);
+    assert.match(dossierAtlasMarkup(spoofed,language,esc),/role="alert"/);
+    const oversized = Array.from({length:201},()=>({...catalog.books[language][0]}));
+    assert.equal(validateDossierGraph({books:{...catalog.books,[language]:oversized}}),false,language);
+  }
+});

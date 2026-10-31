@@ -27,10 +27,16 @@ function httpsUrl(value: unknown): string | null {
 
 // `null` is an honest legacy record; `undefined` means corrupt or partial
 // structured metadata and must fail the catalogue read closed.
+// Rights-holder names are a public source authority, not free-form private
+// annotation. Reject Unicode direction controls, hidden script fillers and
+// invalid UTF-16 before publication; do not silently normalize a forged name.
+function visibleRightsHolder(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length >= 2 && value.trim().length <= 160 &&
+    !/[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}\u00a0\u034f\u115f\u1160\u2800\u3164\uffa0]/u.test(value);
+}
 function readRights(row: RightsRow): RightsMetadata | null | undefined {
   if (row.rights_holder === null && row.rights_basis === null && row.license_url === null) return null;
-  if (typeof row.rights_holder !== "string" || row.rights_holder.trim() !== row.rights_holder ||
-      row.rights_holder.length < 2 || row.rights_holder.length > 160 ||
+  if (!visibleRightsHolder(row.rights_holder) || row.rights_holder.trim() !== row.rights_holder ||
       typeof row.rights_basis !== "string" || !RIGHTS_BASES.has(row.rights_basis as RightsBasis)) return undefined;
   const licenseUrl = row.license_url === null ? null : httpsUrl(row.license_url);
   if (row.license_url !== null && !licenseUrl) return undefined;
@@ -183,7 +189,7 @@ export async function POST(request: Request) {
     const rightsBasis = typeof body.rightsBasis === "string" && RIGHTS_BASES.has(body.rightsBasis as RightsBasis) ? body.rightsBasis as RightsBasis : null;
     const licenseUrl = body.licenseUrl === "" || body.licenseUrl === null || body.licenseUrl === undefined ? null : httpsUrl(body.licenseUrl);
     if (!validId(body.materialId) || provenance.length < 3 || provenance.length > 1000 ||
-        rightsHolder.length < 2 || rightsHolder.length > 160 || !rightsBasis ||
+        !visibleRightsHolder(body.rightsHolder) || !rightsBasis ||
         (body.licenseUrl !== "" && body.licenseUrl !== null && body.licenseUrl !== undefined && !licenseUrl) ||
         (rightsBasis === "open_license" && !licenseUrl) || body.rightsConfirmed !== true)
       return json({ error: "invalid_material" }, 400);

@@ -519,7 +519,7 @@ export async function POST(request: Request) {
     const accepted = await env.DB.batch([
       env.DB.prepare("INSERT OR IGNORE INTO mission_attempt_answers (attempt_id,task_id,selected_json,is_correct) SELECT ?,?,?,? WHERE EXISTS (SELECT 1 FROM mission_attempts WHERE id=? AND status='active' AND expires_at>CURRENT_TIMESTAMP AND current_index=?)")
         .bind(attempt.id, task.id, JSON.stringify(selected), correct ? 1 : 0, attempt.id, attempt.current_index),
-      env.DB.prepare("UPDATE mission_attempts SET current_index=?,status=? WHERE id=? AND current_index=? AND status='active' AND expires_at>CURRENT_TIMESTAMP")
+      env.DB.prepare("UPDATE mission_attempts SET current_index=?,status=? WHERE id=? AND current_index=? AND status='active' AND expires_at>CURRENT_TIMESTAMP AND changes()=1")
         .bind(nextIndex, nextIndex === tasks.length ? "grading" : "active", attempt.id, attempt.current_index),
     ]);
     const answerChanges = confirmedBatch(accepted, 2);

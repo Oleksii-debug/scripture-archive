@@ -410,3 +410,62 @@ test('source and licence URLs must not be silently rewritten before attribution'
   assert.match(good.result.innerHTML,/source\.example/);
   assert.match(good.result.innerHTML,/license\.example/);
 }));
+
+test('provenance cannot be borrowed from an inherited edition locale or inherited catalog map',()=>withForm(async()=>{
+  const forged={id:'UKRPAN',title:'Wrong publisher',license:'Public Domain',source:'https://forged.example/'};
+  const inheritedLocale=Object.create({uk:forged});
+  const inheritedMap=Object.create({editions:{uk:forged}});
+  inheritedMap.translations={};
+  for(const candidate of [
+    {translations:{},editions:inheritedLocale},
+    inheritedMap,
+  ]) {
+    const f=fixture({catalog:candidate});
+    await f.run();
+    assert.equal(f.result.innerHTML,'','inherited source metadata must never render licensed verses');
+    assert.match(f.status.textContent,/Не вдалося/,'show retryable accessible failure');
+    assert.equal(f.checked(),2,'chapter authorization remains enforced');
+    assert.equal(f.button.disabled,false,'failure must not strand retry');
+  }
+}));
+
+test('inherited translations map cannot override publisher provenance or leak verses',()=>withForm(async()=>{
+  const forged={id:'uk-kulish',title:'Inherited translation',license:'Restricted',
+    source:'https://forged.example/translation'};
+  const candidate=Object.create({translations:{'uk-kulish':forged}});
+  candidate.editions={};
+  const f=fixture({catalog:candidate});
+  await f.run();
+  assert.equal(f.result.innerHTML,'');
+  assert.match(f.status.textContent,/Не вдалося/);
+  assert.equal(f.checked(),2);
+}));
+
+test('owned edition fallback remains available when an inherited translation map exists',()=>withForm(async()=>{
+  const forged={id:'uk-kulish',title:'Inherited rights',license:'Restricted',
+    source:'https://forged.example/'};
+  const candidate=Object.create({translations:{'uk-kulish':forged}});
+  candidate.editions={uk:{id:'UKRPAN',title:'Real source',license:'Public Domain',
+    source:'https://legitimate.example/'}};
+  const f=fixture({catalog:candidate});
+  await f.run();
+  assert.match(f.result.innerHTML,/Real source/);
+  assert.match(f.result.innerHTML,/https:\/\/legitimate\.example/);
+  assert.ok(!f.result.innerHTML.includes('forged.example'));
+}));
+
+test('owned explicit translation keeps precedence; invalid owned identity cannot borrow fallback',()=>withForm(async()=>{
+  const authoritative={id:'uk-kulish',title:'Licensed alternate',license:'CC BY-SA',
+    source:'https://alternate.example/'};
+  const base={editions:{uk:{id:'UKRPAN',title:'Legacy fallback',license:'Public Domain',
+    source:'https://fallback.example/'}},translations:{'uk-kulish':authoritative}};
+  const valid=fixture({catalog:base});await valid.run();
+  assert.match(valid.result.innerHTML,/Licensed alternate/);
+  assert.ok(!valid.result.innerHTML.includes('fallback.example'));
+  const wrong={editions:base.editions,translations:{
+    'uk-kulish':{...authoritative,id:'other-translation'},
+  }};
+  const invalid=fixture({catalog:wrong});await invalid.run();
+  assert.equal(invalid.result.innerHTML,'');
+  assert.match(invalid.status.textContent,/Не вдалося/);
+}));

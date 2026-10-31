@@ -301,5 +301,17 @@ export function dossierAtlasMarkup(catalog,language,esc) {
     additionalTopics.map(item=>'<li>'+subject(item)+'<ol>'+
       item.sources.map(source=>'<li>'+passage(source)+' — '+esc(w[source.kind])+'</li>').join('')+
       '</ol></li>').join('')+'</ol></section>':'';
-  return '<section class="card dossier-atlas" aria-labelledby="dossier-atlas-heading"><h2 id="dossier-atlas-heading">'+esc(terms.title)+'</h2><p>'+esc(terms.intro)+'</p><table><caption>'+esc(terms.order)+'</caption><thead><tr><th scope="col">№</th><th scope="col">'+esc(terms.subject)+'</th><th scope="col">'+esc(terms.passage)+'</th></tr></thead><tbody>'+history+'</tbody></table><table><caption>'+esc(terms.places)+'</caption><thead><tr><th scope="col">'+esc(terms.subject)+'</th><th scope="col">'+esc(terms.passage)+'</th></tr></thead><tbody>'+places+'</tbody></table>'+additional+'<p>'+esc(terms.uncertainty)+'</p></section>';
+
+  // Expose the graph's relationship-only witnesses in the canonical atlas.
+  // The main tables intentionally keep their approved narrative reading order;
+  // a separate semantic definition list avoids mistaking relation edges for
+  // additional dates, locations or independent historical proof.
+  const relationEntries=nodes.flatMap(item=>item.related.map(link=>({item,link})));
+  const relatedWitnesses=relationEntries.length?
+    '<section aria-labelledby="dossier-atlas-relations-heading"><h3 id="dossier-atlas-relations-heading">'+esc(w.relations)+'</h3><dl>'+
+      relationEntries.map(({item,link})=>
+        '<dt>'+subject(item)+' → '+subject(byId.get(link.to))+'</dt><dd>'+
+        passage(link.via)+' — '+esc(w[link.via.kind])+'</dd>').join('')+
+    '</dl></section>':'';
+  return '<section class="card dossier-atlas" aria-labelledby="dossier-atlas-heading"><h2 id="dossier-atlas-heading">'+esc(terms.title)+'</h2><p>'+esc(terms.intro)+'</p><table><caption>'+esc(terms.order)+'</caption><thead><tr><th scope="col">№</th><th scope="col">'+esc(terms.subject)+'</th><th scope="col">'+esc(terms.passage)+'</th></tr></thead><tbody>'+history+'</tbody></table><table><caption>'+esc(terms.places)+'</caption><thead><tr><th scope="col">'+esc(terms.subject)+'</th><th scope="col">'+esc(terms.passage)+'</th></tr></thead><tbody>'+places+'</tbody></table>'+additional+relatedWitnesses+'<p>'+esc(terms.uncertainty)+'</p></section>';
 }

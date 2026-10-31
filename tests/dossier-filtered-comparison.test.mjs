@@ -5,7 +5,7 @@ import {dossierMarkup, validateDossierGraph} from '../public/scripture-dossiers.
 
 const catalog=JSON.parse(readFileSync(new URL('../public/data/catalog.json',import.meta.url),'utf8'));
 const esc=value=>String(value).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-const compareForm=html=>html.match(/<form action="\\/dossiers" method="get">[\\s\\S]*?<\\/form>/u)?.[0];
+const compareForm=html=>html.match(/<form action="\/dossiers" method="get">[\s\S]*?<\/form>/u)?.[0];
 
 test('SA-EXT-05: comparing filtered published dossiers retains the same native GET search',()=>{
   assert.equal(validateDossierGraph(catalog),true);
@@ -25,7 +25,7 @@ test('SA-EXT-05: comparing filtered published dossiers retains the same native G
     assert.ok(form.includes('name="compare"'));
     assert.ok(form.includes('<option value="'+other+'" selected>'),lang+' selected comparison');
     assert.match(html,/id="dossier-comparison-heading"/u);
-    assert.match(html,/href="\\/reader\\//u);
+    assert.match(html,/href="\/reader\//u);
   }
 });
 
@@ -54,14 +54,14 @@ test('SA-EXT-05: hidden comparison filters never bypass an invalid or nonmatchin
     const html=dossierMarkup(catalog,'en',id,esc,query,'abraham');
     assert.equal(compareForm(html),undefined);
     assert.doesNotMatch(html,/id="dossier-comparison-heading"/u);
-    assert.doesNotMatch(html,/href="\\/reader\\//u);
+    assert.doesNotMatch(html,/href="\/reader\//u);
     assert.match(html,/role="alert"/u);
   }
 });
 
 test('SA-EXT-05: canonical workspace still routes comparison through the same GET params',()=>{
   const source=readFileSync(new URL('../public/workspace.js',import.meta.url),'utf8');
-  assert.match(source,/get\\('q'\\)/u);
-  assert.match(source,/get\\('compare'\\)/u);
-  assert.match(source,/dossierMarkup\\(catalog,state\\.lang,selectedId,esc,searchQuery,compareId\\)/u);
+  assert.match(source,/get\('q'\)/u);
+  assert.match(source,/get\('compare'\)/u);
+  assert.match(source,/dossierMarkup\(catalog,state\.lang,selectedId,esc,searchQuery,compareId\)/u);
 });

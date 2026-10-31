@@ -119,3 +119,80 @@ test("malformed null chapter entries cannot crash reading or fabricate tasks", a
   assert.equal((await runGate({ chapters: [null] })).hasTasks, false);
   assert.equal((await runGate({ chapters: [null, { book: "GEN", chapter: 1 }] })).hasTasks, true);
 });
+
+const missionsMatch = source.match(/(async function renderMissions\(\) \{[\s\S]*?\n\})\n\nasync function groupRequest\(/);
+assert.ok(missionsMatch, "canonical missions-page renderer must exist");
+
+function missionsPage(getMission) {
+  const html = [], listeners = [];
+  const state = { user: { id: "a" }, lang: "uk", mission: null };
+  const location = { pathname: "/missions", hash: "" };
+  const button = { addEventListener(type, callback) { assert.equal(type, "click"); listeners.push(callback); } };
+  const context = {
+    state, location, setActiveNav() {}, getMission,
+    shell(markup) { html.push(markup); },
+    document: { querySelector: selector => selector === "#retry-missions" ? button : null },
+    ATTEMPT_COPY: { uk: { reread: "Прочитати" } },
+    t: key => key, esc: value => String(value), statusBadge: () => "",
+    activeAttemptId: () => null,
+  };
+  const render = vm.runInNewContext("(" + missionsMatch[1] + ")", context);
+  return { html, listeners, state, location, render };
+}
+
+const genuineMission = {
+  id: "OT-AB-01", taskCount: 5,
+  title: { uk: "Місія Авраама" }, intro: { uk: "Навчальна місія" },
+  chapters: [{ book: "GEN", chapter: 12 }],
+};
+
+test("mission list rejects malformed HTTP 200 manifests and exposes a keyboard retry", async () => {
+  const invalid = [
+    null, [], {}, { locked: "false" }, { ...genuineMission, title: null },
+    { ...genuineMission, title: { en: "Wrong locale" } },
+    { ...genuineMission, intro: { uk: 8 } },
+    { ...genuineMission, taskCount: 0 },
+    { ...genuineMission, chapters: { corrupt: true } },
+  ];
+  for (const response of invalid) {
+    let next = response;
+    const page = missionsPage(async () => next);
+    await assert.doesNotReject(page.render());
+    assert.equal(page.state.mission, null);
+    assert.equal(page.html.length, 1);
+    assert.match(page.html[0], /role="alert"/);
+    assert.match(page.html[0], /id="retry-missions"/);
+    assert.doesNotMatch(page.html[0], /class="card featured"/);
+    assert.equal(page.listeners.length, 1);
+    next = genuineMission;
+    page.listeners[0]();
+    // The callback starts a Promise-based re-read, not a shadow render.
+    await new Promise(resolve => setImmediate(resolve));
+    assert.ok(page.html.some(markup => markup.includes("Місія Авраама")));
+  }
+});
+
+test("mission list transient rejection can recover without reloading", async () => {
+  let calls = 0;
+  const page = missionsPage(async () => {
+    if (++calls === 1) throw Error("database_unavailable");
+    return genuineMission;
+  });
+  await page.render();
+  assert.match(page.html[0], /retry-missions/);
+  page.listeners[0]();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(calls, 2);
+  assert.match(page.html.at(-1), /Місія Авраама/);
+});
+
+test("late mission manifest cannot paint into a different account", async () => {
+  let release;
+  const promise = new Promise(resolve => { release = resolve; });
+  const page = missionsPage(() => promise);
+  const work = page.render();
+  page.state.user = { id: "b" };
+  release(genuineMission);
+  await work;
+  assert.deepEqual(page.html, []);
+});

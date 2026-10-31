@@ -34,7 +34,9 @@ export function validEditionRightsMetadata(metadata) {
   // Source URLs already reject bidi/control Unicode; do not let edition
   // titles, rights terms or attribution spoof the same authoritative citation.
   // Preserve normal multiline licences (TAB/LF/CR) and non-Latin letters.
-  const unsafeRightsText=/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u00a0\u061c\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\ud800-\udfff]/u;
+  // Cover all Unicode format controls and visually blank script fillers,
+  // not only bidi controls; keep normal TAB/LF/CR in licensed rights text.
+  const unsafeRightsText=/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u00a0\u061c\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\ud800-\udfff\u034f\u115f\u1160\u2800\u3164\uffa0\p{Cf}]/u;
   const boundedText=(value,max)=>typeof value==='string'&&value.length<=max&&!unsafeRightsText.test(value);
   return Boolean(own('title') && own('license') && own('source') &&
     optionalOwn('attribution') && optionalOwn('licenseUrl') &&

@@ -31,6 +31,55 @@ test('editor can search beyond first bounded page and remove a found public item
     assert.deepEqual(calls.at(-1),{action:'takedown',id:'old-1',reason:'Rights revoked'});assert.equal(f.refreshes,1);assert.match(f.announcement,/removed from publication/i);
   }finally{globalThis.fetch=oldFetch;globalThis.FormData=oldForm;}
 });
+
+test('editor public-search refuses immediate repeated cursor with safe retry',async()=>{
+  const original=globalThis.fetch,first={id:'first',submittedAt:'2026-01-01'};
+  let n=0;
+  try {
+    globalThis.fetch=async(_url,options)=>{
+      n++;
+      const {cursor}=JSON.parse(options.body);
+      if(cursor===null)return Response.json({items:[{id:'one',title:'Verified first',reference:'GEN 1'}],nextCursor:first});
+      if(n===2)return Response.json({items:[{id:'duplicate',title:'False duplicate',reference:'GEN 2'}],nextCursor:{...first}});
+      return Response.json({items:[{id:'two',title:'Verified second',reference:'GEN 3'}],nextCursor:null});
+    };
+    const f=fixture();f.input.value='source';f.form.onsubmit({preventDefault(){}});await tick();
+    assert.equal(f.more.hidden,false);
+    f.more.onclick();await tick();
+    assert.match(f.status.textContent,/Could not search/);
+    assert.match(f.results.innerHTML,/Verified first/);
+    assert.doesNotMatch(f.results.innerHTML,/False duplicate/);
+    assert.equal(f.more.hidden,false);
+    f.more.onclick();await tick();
+    assert.match(f.results.innerHTML,/Verified second/);
+    assert.equal((f.results.innerHTML.match(/Verified first/g)||[]).length,1);
+    assert.equal(f.more.hidden,true);
+  }finally{globalThis.fetch=original;}
+});
+
+test('editor public-search rejects a multi-page A→B→A cursor cycle',async()=>{
+  const original=globalThis.fetch,first={id:'A',submittedAt:'2026-01-02'},second={id:'B',submittedAt:'2026-01-01'};
+  let n=0;
+  try {
+    globalThis.fetch=async()=>{
+      n++;
+      if(n===1)return Response.json({items:[{id:'one',title:'Verified first',reference:'GEN 1'}],nextCursor:first});
+      if(n===2)return Response.json({items:[{id:'two',title:'Verified second',reference:'GEN 2'}],nextCursor:second});
+      if(n===3)return Response.json({items:[{id:'cycle',title:'Cyclic result',reference:'GEN 3'}],nextCursor:{...first}});
+      return Response.json({items:[],nextCursor:null});
+    };
+    const f=fixture();f.form.onsubmit({preventDefault(){}});await tick();
+    f.more.onclick();await tick();assert.match(f.results.innerHTML,/Verified second/);
+    f.more.onclick();await tick();
+    assert.match(f.status.textContent,/Could not search/);
+    assert.doesNotMatch(f.results.innerHTML,/Cyclic result/);
+    assert.match(f.results.innerHTML,/Verified first/);
+    assert.equal(f.more.hidden,false);
+    f.more.onclick();await tick();
+    assert.equal(n,4);assert.equal(f.more.hidden,true);
+  }finally{globalThis.fetch=original;}
+});
+
 test('stale view and bad search data cannot create removal controls',async()=>{
   const original=globalThis.fetch;let active=true,finish;
   try{

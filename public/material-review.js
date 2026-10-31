@@ -363,6 +363,8 @@ export function renderEditorialTakedownSearch(root, mainRoot, w, lang, esc, refr
   const status=root.querySelector('.editor-public-status'),results=root.querySelector('.editor-public-results'),more=root.querySelector('.editor-public-more');
   if(!form||!input||!status||!results||!more)return;
   let epoch=0,cursor=null,query='',page=0,loading=false;
+  // A keyset cursor may not cycle back to a previously accepted page.
+  const seenCursors=new Set();
   const attach=()=>results.querySelectorAll('.material-takedown').forEach(target=>{
     target.onsubmit=async event=>{
       event.preventDefault();if(!active()||target.isConnected===false)return;
@@ -383,9 +385,11 @@ export function renderEditorialTakedownSearch(root, mainRoot, w, lang, esc, refr
       const data=await post({action:'librarySearch',query:text,cursor:next});
       if(!active()||request!==epoch)return;
       const nextCursor=data?.nextCursor;
-      const validCursor=nextCursor===null || (nextCursor && typeof nextCursor.id==='string' && nextCursor.id.length>0 && nextCursor.id.length<=100 && typeof nextCursor.submittedAt==='string' && nextCursor.submittedAt.length>0 && nextCursor.submittedAt.length<=100 && !(next && next.id===nextCursor.id && next.submittedAt===nextCursor.submittedAt));
+      const validCursor=nextCursor===null || (nextCursor && typeof nextCursor.id==='string' && nextCursor.id.length>0 && nextCursor.id.length<=100 && typeof nextCursor.submittedAt==='string' && nextCursor.submittedAt.length>0 && nextCursor.submittedAt.length<=100 && !seenCursors.has(JSON.stringify([nextCursor.id,nextCursor.submittedAt])));
       if(!Array.isArray(data?.items)||data.items.length>12||!validCursor||!data.items.every(item=>item && typeof item.id==='string' && item.id.length>0 && item.id.length<=100 && typeof item.title==='string' && item.title.length>0 && item.title.length<=160 && typeof item.reference==='string' && item.reference.length>0 && item.reference.length<=200))throw Error('invalid search result');
-      cursor=nextCursor;query=text;page++;
+      cursor=nextCursor;
+      if(cursor)seenCursors.add(JSON.stringify([cursor.id,cursor.submittedAt]));
+      query=text;page++;
       const id=`editor-public-page-${page}`;
       results.insertAdjacentHTML('beforeend',`<section><h3 id="${id}" tabindex="-1">${esc(copy.page)} ${page}</h3>${data.items.map(item=>`<article><h4>${esc(item.title)}</h4><p>${esc(item.reference)}</p><form class="material-takedown" data-id="${esc(item.id)}"><label class="account-field"><span>${esc(w.takeDownReason)}</span><textarea name="reason" minlength="3" maxlength="2000" required></textarea></label><button class="button" type="submit">${esc(w.takeDown)}</button><p role="status"></p></form></article>`).join('')}</section>`);
       attach();
@@ -396,7 +400,7 @@ export function renderEditorialTakedownSearch(root, mainRoot, w, lang, esc, refr
     } catch {if(active()&&request===epoch)status.textContent=copy.error;}
     finally {if(request===epoch)loading=false;}
   }
-  form.onsubmit=event=>{event.preventDefault();if(!active())return;epoch++;page=0;cursor=null;more.hidden=true;results.innerHTML='';void load(input.value.trim(),null,submit);};
+  form.onsubmit=event=>{event.preventDefault();if(!active())return;epoch++;page=0;cursor=null;seenCursors.clear();more.hidden=true;results.innerHTML='';void load(input.value.trim(),null,submit);};
   more.onclick=()=>{if(active()&&!loading&&cursor)void load(query,cursor,more);};
 }
 

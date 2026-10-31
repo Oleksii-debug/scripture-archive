@@ -294,7 +294,7 @@ export function editionAboutMarkup(catalog,lang,esc) {
     // the Bible reader; each independently safe source URL remains available.
     if(!edition||!validEditionRightsText(edition.title,512)||!edition.title.trim())return `<li>${w.missing}</li>`;
     const source=safeProvenanceHttpsUrl(edition.source),license=safeProvenanceHttpsUrl(edition.licenseUrl);
-    const rights=validEditionRightsText(edition.license,4096)&&edition.license.trim()?edition.license:w.missing;
+    const rights=validEditionRightsText(edition.license,4096)&&edition.license.trim()?edition.license:(edition.license?w.missing:'—');
     const attribution=validEditionRightsText(edition.attribution,4096)?edition.attribution:'';
     const formatting=validEditionRightsText(edition.formatting,4096)?edition.formatting:'';
     return `<li><strong>${esc(edition.title)}</strong> — ${esc(rights)}${source?` · <a href="${esc(source)}" rel="noreferrer">${w.source}</a>`:''}${license?` · <a href="${esc(license)}" rel="noreferrer">${w.license}</a>`:''}${attribution?`<p>${esc(attribution)}</p>`:''}${formatting?`<p>${esc(formatting)}</p>`:''}</li>`;

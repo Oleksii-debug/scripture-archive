@@ -137,6 +137,26 @@ test('private draft requires consent and editor approval; public answers remain 
   }finally{f.db.close();}
 });
 
+test('visible rights-holder provenance refuses bidi and invisible Unicode in both writes and historic reads',async()=>{
+  const f=fixture();try{
+    for(const cp of [0x00a0,0x034f,0x061c,0x115f,0x200b,0x202e,0x2066,0x2800,0x3164,0xd800,0xffa0]){
+      const name='Trusted'+String.fromCharCode(cp)+'Publisher';
+      assert.equal((await f.post({...submission,rightsHolder:name})).status,400,'reject U+'+cp.toString(16));
+    }
+    assert.equal(f.db.prepare('SELECT count(*) n FROM material_submissions').get().n,0);
+    const result=await f.post({...submission,rightsHolder:'Verified Ukrainian Publisher'});
+    assert.equal(result.status,201);
+    assert.equal((await f.post(approve(result.data.id),'editor')).status,200);
+    assert.equal((await f.get('public')).data.items[0].rights.holder,'Verified Ukrainian Publisher');
+    // Old or restored SQLite data may bypass the HTTP writer and column CHECK.
+    f.db.prepare('UPDATE material_submissions SET rights_holder=? WHERE id=?')
+      .run('Trusted'+String.fromCharCode(0x202e)+'Publisher',result.data.id);
+    assert.equal((await f.get('public')).status,503);
+    assert.equal((await f.get('mine','alice')).status,503);
+    assert.equal((await f.post({action:'librarySearch',query:'',cursor:null},'')).status,503);
+  }finally{f.db.close();}
+});
+
 test('new submissions require bounded structured rights and canonical HTTPS for open licences',async()=>{
   const f=fixture();try {
     for(const body of [

@@ -490,8 +490,17 @@ integration("account, progress, attempts, groups, marathon limit and password re
   result=await request(`/api/groups?action=meetings&groupId=${publicGroupId}&before=${encodeURIComponent(firstMeetingPage.nextCursor)}`);
   assert.equal(result.response.status,200);assert.equal(result.data.sessions.length,1);assert.equal(result.data.nextCursor,null);
   assert.equal(new Set([...firstMeetingPage.sessions,...result.data.sessions].map(session=>session.id)).size,13);
+  const editableMeeting=firstMeetingPage.sessions[0];assert.equal(editableMeeting.canEdit,true);
+  const originalNotes={reflection:editableMeeting.reflection,participantCount:editableMeeting.participant_count};
+  const correctedNotes={reflection:'Corrected private discussion\nSecond line',participantCount:8};
+  const notesPayload={groupId:publicGroupId,sessionId:editableMeeting.id,expected:originalNotes,notes:correctedNotes};
+  const forbiddenNotes=await fetch(`${base}/api/groups?action=meeting-notes`,{method:'POST',headers:{Cookie:ownerCookie,Origin:base,'Content-Type':'application/json'},body:JSON.stringify(notesPayload)});
+  assert.equal(forbiddenNotes.status,409);
+  result=await request('/api/groups?action=meeting-notes',{method:'POST',body:notesPayload});assert.equal(result.response.status,200);assert.deepEqual(result.data.notes,correctedNotes);
+  result=await request(`/api/groups?action=meeting-notes&groupId=${publicGroupId}&sessionId=${editableMeeting.id}`);assert.deepEqual(result.data.notes,correctedNotes);
+  result=await request('/api/groups?action=meeting-notes',{method:'POST',body:notesPayload});assert.equal(result.response.status,409);
   const publicMeetings=await (await fetch(`${base}/api/groups?action=meetings&groupId=${publicGroupId}`)).json();
-  assert.ok(publicMeetings.sessions.every(session=>session.reflection===null&&session.participant_count===null));
+  assert.ok(publicMeetings.sessions.every(session=>session.reflection===null&&session.participant_count===null&&session.canEdit===false));
   result = await request("/api/groups?action=create", { method: "POST", body: groupBody });
   assert.equal(result.response.status, 201);
   const groupId = result.data.groupId;

@@ -4,7 +4,7 @@ import {meetingHistoryCopy,mountMeetingHistory} from '../public/group-meeting-hi
 
 const row=(id,reflection='PRIVATE_MEETING_REFLECTION')=>({
   id,book_id:'GEN',chapter:12,meeting_date:'2026-10-30',
-  answers_correct:1,answers_total:2,participant_count:3,reflection,
+  answers_correct:1,answers_total:2,participant_count:3,reflection,canEdit:false,
 });
 const page=(id,reflection)=>({sessions:[row(id,reflection)],nextCursor:null});
 function deferred(){
@@ -30,7 +30,7 @@ function fixture(request){
       this.html+=markup;
       this.headings.push({focus(){doc.activeElement=this;}});
     },
-    querySelectorAll(){return this.headings;},
+    querySelectorAll(selector){return selector==='[data-meeting-heading]'?this.headings:[];},
   };
   const root={ownerDocument:doc,isConnected:true,querySelector(selector){
     return {'[data-meeting-list]':list,'[data-meeting-more]':button,'[data-meeting-status]':status}[selector];

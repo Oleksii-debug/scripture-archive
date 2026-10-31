@@ -1,4 +1,10 @@
-## 2026-10-31 — SA-EXT-01 / OWN_PARALLEL_EDITION_MAP_PROVENANCE — CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL
+## 2026-10-31 — R0.4 / COMMUNITY_PUBLIC_SUMMARY_LOG — CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL
+
+**ОСТАТОЧНО ЗАКРИТО ДЛЯ РОЗРОБКИ ЛИШЕ ВУЗЬКУ ПІДФУНКЦІЮ журналювання R0.4.** Канонічний `scripts/run-community.mjs` друкує тільки перевірені публічні `registered`, `online` й допустимий `visible`, а не всі поля `summary`; некоректні обов'язкові counters, як і раніше, не дозволяють owner-lease. Це захист від можливого надлишкового stdout у разі некоректного upstream payload, не доказ production-витоку. [PR #1074](https://github.com/Oleksii-debug/scripture-archive/pull/1074) **SQUASH MERGED** `main@1b6d560c13581dd5232aa44f3ee63972b5eb5810`; blobs `scripts/run-community.mjs@252f0fcc6479bfdf78851eca8e7c5777dab05740`, `tests/community-runner-summary-boundary.test.mjs@7dbd1451c989027f2264fb48b586a4a146581ae3`. [Exact-head CI #41245932212](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41245932212) **COMPLETED SUCCESS**: native Node, TypeScript, lint, build, disposable Worker/D1 і Python; усі кроки виконані. `remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0`; [акт](docs/roadmap/R0_4_COMMUNITY_PUBLIC_SUMMARY_LOG_SCOPED_TERMINAL_20261031.md). R0.4 parent, SA-EXT батьківські та #689 OPEN; реальний Sites/Windows/physical NVDA NOT_VERIFIED. Без деплою, реальних агентів, платежів, email або production DB writes.
+
+---
+
+### 2026-10-31 — SA-EXT-01 / OWN_PARALLEL_EDITION_MAP_PROVENANCE — CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL
 
 **ЗАКРИТО ДЛЯ РОЗРОБКИ лише одну реальну межу атрибуції прав паралельної читальні; SA-EXT-01 parent OPEN.** `mountParallelReader` відхиляє успадковані карти видань/перекладів і locale-ключі, які раніше могли підмінити source/license під дійсними рядками біблійного тексту. Власні авторитетні записи видання, коректний fallback, справжня локалізована невдача й повтор працюють без другого сервера. Це доказ виправлення пошкодженого *in-memory* каталогу, а не твердження про production злам.
 

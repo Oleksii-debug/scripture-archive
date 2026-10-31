@@ -268,7 +268,12 @@ export function dossierMarkup(catalog,language,requestedId,esc,searchQuery='',co
     ? nodes.find(item=>item.id===compareId) : null;
   const compareOptions=nodes.filter(item=>item.id!==selected.id).map(item=>
     `<option value="${item.id}"${compared?.id===item.id?' selected':''}>${esc(item.names[lang])}</option>`).join('');
-  const compareForm=`<form action="/dossiers" method="get"><input type="hidden" name="id" value="${selected.id}"><label for="dossier-compare">${esc(comparisonCopy.choose)}</label><select id="dossier-compare" name="compare"><option value="">${esc(comparisonCopy.prompt)}</option>${compareOptions}</select><button type="submit">${esc(comparisonCopy.submit)}</button></form>`;
+  // The comparison is a continuation of the currently filtered dossier view.
+  // Preserve the exact bounded visible query through its native GET form, just
+  // as the catalogue links do. Otherwise the first comparison silently drops
+  // the user's filter and may present an unrelated unfiltered result on reload.
+  const compareFilter=hasQuery?`<input type="hidden" name="q" value="${esc(shownQuery)}">`:'';
+  const compareForm=`<form action="/dossiers" method="get">${compareFilter}<input type="hidden" name="id" value="${selected.id}"><label for="dossier-compare">${esc(comparisonCopy.choose)}</label><select id="dossier-compare" name="compare"><option value="">${esc(comparisonCopy.prompt)}</option>${compareOptions}</select><button type="submit">${esc(comparisonCopy.submit)}</button></form>`;
   let comparison='';
   if(typeof compareId==='string' && compareId!==''){
     if(!compared || compared.id===selected.id){

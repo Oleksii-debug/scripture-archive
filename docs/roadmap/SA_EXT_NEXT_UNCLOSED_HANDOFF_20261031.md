@@ -1,3 +1,18 @@
+# 2026-10-31 — newest exact-main continuation checkpoint (supersedes earlier main snapshots below)
+
+- Verified current post-receipt source ledger `main@feeba7bca11e97bc0b7e3482fd9187d274a36683`. This is a documentation closure SHA, **not the deployed Sites SHA**.
+- **Newly terminal narrowly scoped SA-EXT-07 Academy cross-tab unreadable progress:** source PR [#997](https://github.com/Oleksii-debug/scripture-archive/pull/997) SQUASH MERGED `main@0fed52491a1da282e70d6af22559ffbb315bef6f`; native exact-head Actions [#41225768705](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41225768705) **SUCCESS** (3495 Node PASS / 0 FAIL / 1 SKIP; 24 Worker/D1 PASS; 2 Python PASS; TS/lint/build PASS), followed by exact merged-main push [#41225945788](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41225945788) **SUCCESS**.
+- **Official central registry receipt:** PR [#998](https://github.com/Oleksii-debug/scripture-archive/pull/998) SQUASH MERGED `main@feeba7bca11e97bc0b7e3482fd9187d274a36683`; `PROJECT_STATUS.md` and approved 20-section plan updated with scoped terminal, and `SA_EXT_07_ACADEMY_CROSS_TAB_STORAGE_REDACTION_SCOPED_TERMINAL_20261031.md` added. Central coordination #297 informed. No parent scope was falsely closed.
+- **First five still unfinished parent scopes:** SA-EXT-01 licensed Bible edition rights/coverage, SA-EXT-02 full reviewed mission catalog, SA-EXT-05 independent dossier/historical source and editorial review, SA-EXT-06 licensed maps/chronology/archaeological context with text alternative, SA-EXT-07 independently authored expanded courses/media/transcripts/accessibility. SA-EXT-03/04 remain already parent TERMINAL; do not restart them.
+- **Unresolved integration:** draft PR #325 is far behind current main, has 27 divergent files with later guards, and was independently marked unsafe for blind merge; R06 updater PRs #274/#276/#279 are separate divergent Windows lineages. Preserve their work and compare unique behavior instead of overwriting the active site authority. No complete updater/owner Windows build is claimed here.
+- **External release acceptance:** existing production deployed SHA/production D1 ledger, source licences/rights, physical Windows/NVDA, real browser E2E, email/password recovery and privacy migration cutover #689 still require independent verification; source-fixed is **not** released. No production deployment, real account mutations, outreach, paid compute, languages or feature rework performed.
+
+## Next worker action
+
+Take the earliest remaining **actual missing approved parent functionality** in SA-EXT-01/02/05/06/07, not another already-closed defect. Verify exact source and rights approvals; reuse canonical UI/API, execute exact-head native/disposable checks, merge with SHA lease, and record a parent terminal only after all its own acceptance requirements are genuinely satisfied. If actual rights/editorial or live release access is unavailable, work on the next independent missing source deliverable and record the external boundary. The GitHub issue #297 is the shared board; no duplicate tracker or section reimplementation is needed.
+
+---
+
 # Scripture Archive — canonical next-unclosed handoff (2026-10-31)
 
 **Status:** scoped task handoff, **not a new product plan or terminal authority.** Normative source: [approved 20-section roadmap](SCRIPTURE_ARCHIVE_EXPANSION_SECTION_PLAN_2026-10-28.md), [central coordination issue #297](https://github.com/Oleksii-debug/scripture-archive/issues/297), [approved scope issue #295](https://github.com/Oleksii-debug/scripture-archive/issues/295). Production deployment remains independent from source closure. No release performed.

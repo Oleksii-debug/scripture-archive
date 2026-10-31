@@ -35,6 +35,12 @@ test('every currently published Academy lesson distinguishes narrative and inter
         const li=article.slice(at,article.indexOf('</li>',at)+5);
         assert.ok(li.includes('</a> — '+esc(names[lang][ref.kind])+'</li>'),
           lang+' '+id+' '+ref.book+' '+ref.kind+' is publicly classified');
+        // An aria-label replaces the native link name. NVDA's links list must
+        // retain this provenance classification without adjacent static text.
+        const anchor=li.slice(0,li.indexOf('</a>')+4);
+        assert.ok(anchor.includes('aria-label="'),lang+' '+id+' missing link name');
+        assert.ok(anchor.includes(' — '+esc(names[lang][ref.kind])+'">'),
+          lang+' '+id+' '+ref.book+' '+ref.kind+' is absent from the link accessible name');
         if(ref.kind==='interpretive')interpretive++;else narrative++;
       }
       assert.ok(!article.includes('onclick='),'native links and controls remain keyboard accessible');

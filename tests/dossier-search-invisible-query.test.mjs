@@ -41,6 +41,10 @@ for(const lang of ['uk','ru','en']){
     assert.ok(searchScriptureDossiers(lang,'GEN 17:15',catalog).some(item=>item.id==='sarah'));
     assert.ok(searchScriptureDossiers(lang,' GEN 17:15 ',catalog).some(item=>item.id==='sarah'));
     assert.ok(searchScriptureDossiers(lang,'',catalog).length>0);
+    assert.deepEqual(searchScriptureDossiers(lang,'\t',catalog),
+      searchScriptureDossiers(lang,'',catalog));
+    assert.equal(dossierAtlasMarkup(catalog,lang,esc,'\t'),
+      dossierAtlasMarkup(catalog,lang,esc,''));
     assert.match(dossierMarkup(catalog,lang,'sarah',esc,' GEN 17:15 '),/class="dossier-layout"/);
     assert.match(dossierAtlasMarkup(catalog,lang,esc,' GEN 17:15 '),/class="card dossier-atlas"/);
     assert.match(dossierMarkup(catalog,lang,null,esc,''),/class="dossier-layout"/);

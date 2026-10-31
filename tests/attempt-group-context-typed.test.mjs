@@ -55,8 +55,8 @@ function fixture() {
       throw Error('Unexpected import '+specifier);
     },
   });
-  return {queries,batches,authCalls:()=>authCalls,async invoke(action,groupId,include=true,origin='https://archive.test'){
-    const body={book:'GEN',chapter:12,missionId:'OT-AB-01',locale:'en'};
+  return {queries,batches,authCalls:()=>authCalls,async invoke(action,groupId,include=true,origin='https://archive.test',overrides={}){
+    const body={book:'GEN',chapter:12,missionId:'OT-AB-01',locale:'en',...overrides};
     if(include)body.groupId=groupId;
     const response=await exports.POST(new Request('https://archive.test/api/attempts?action='+action,{
       method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify(body),
@@ -109,3 +109,42 @@ test('cross-origin group mutation is denied before identity or D1 access',async(
   assert.equal(f.queries.length,0);
   assert.equal(f.batches.length,0);
 });
+
+
+// Source regression for the actual chapter/read/start routes: previously
+// clean(body.book, 8) truncated a forged long identity to an existing GEN
+// chapter and could consume receipts / invalidate an active assessment.
+const malformedBookIds = [
+  ['missing',undefined],['null',null],['number',12],['boolean',true],
+  ['array',['GEN']],['object',{id:'GEN'}],['empty',''],
+  ['leading whitespace',' GEN'],['trailing whitespace','GEN '],
+  ['padding alias','GEN     forged'],['overlength book code','GEN123456'],
+  ['hidden newline','GEN\\n'],['embedded nul','GEN\\u0000'],
+  ['zero-width Unicode','GEN\\u200b'],['slash','GEN/12'],
+  ['punctuation','GEN.'],['markup','<GEN>'],
+  ['single character','G'],['Unicode lookalike','GЕN'],
+];
+for (const action of ['chapter','read','start']) {
+  for (const [name,value] of malformedBookIds) {
+    test(action+' rejects malformed book identifier '+name+' before any SQL write',async()=>{
+      const f=fixture(),response=await f.invoke(action,undefined,false,'https://archive.test',{book:value});
+      assert.equal(response.status,400,JSON.stringify(response.body));
+      assert.equal(response.body.error,'invalid_book');
+      assert.match(response.cache,/no-store/);
+      assert.equal(f.queries.length,0,'invalid book cannot reach D1');
+      assert.equal(f.batches.length,0,'no assessment or reading mutation');
+      assert.equal(f.authCalls(),action==='chapter'?0:1,
+        'chapter input is denied before looking up an actor');
+    });
+  }
+  for (const code of ['GEN','gen','GeN']) {
+    test(action+' preserves an exact or case-insensitive valid book code '+code,async()=>{
+      const f=fixture(),response=await f.invoke(action,undefined,false,'https://archive.test',{book:code});
+      assert.equal(response.status,action==='chapter'?200:201,JSON.stringify(response.body));
+      const bookBound=f.queries.some(query=>query.args.includes('GEN'));
+      assert.equal(bookBound,true,'the canonical code is bound to real D1 SQL');
+      assert.equal(f.batches.length,action==='start'||action==='chapter'?1:0);
+      assert.equal(f.authCalls(),1);
+    });
+  }
+}

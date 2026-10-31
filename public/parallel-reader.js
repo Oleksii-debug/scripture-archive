@@ -34,15 +34,22 @@ export function validEditionRightsMetadata(metadata) {
       (boundedText(metadata.licenseUrl,4096) && https(metadata.licenseUrl))));
 }
 
+// Locale values can come from navigation, restored browser state and callers.
+// Inherited object properties are not translation dictionaries; never emit
+// \"undefined\" accessibility labels for a prototype-named locale.
+function copyForLocale(lang) {
+  return typeof lang === 'string' && Object.hasOwn(COPY, lang) ? COPY[lang] : COPY.uk;
+}
+
 export function parallelControls(editions, lang, esc) {
-  const copy = COPY[lang] || COPY.uk;
+  const copy = copyForLocale(lang);
   return `<details class="card parallel-reader"><summary>${copy.title}</summary><p>${copy.note}</p><form class="parallel-form"><label class="account-field"><span>${copy.choose}</span><select name="edition">${editions.map(edition=>`<option value="${esc(edition.id)}">${esc(edition.title)}</option>`).join('')}</select></label><button class="button" type="submit">${copy.open}</button><p class="parallel-status" role="status"></p></form><div class="parallel-result"></div></details>`;
 }
 
 // The same chapter guard as the reader runs again before loading another text.
 // Detached panels and a changed reader context cannot be repopulated by a late response.
 export function mountParallelReader(panel, { editions, catalog, lang, book, bookTitle, chapter, getBook, check, current, lock, failClosed, esc, copyText = text => navigator.clipboard.writeText(text) }) {
-  const copy = COPY[lang] || COPY.uk;
+  const copy = copyForLocale(lang);
   const form=panel.querySelector('.parallel-form'), status=panel.querySelector('.parallel-status'), result=panel.querySelector('.parallel-result');
   let selectionRevision = 0;
   let requestRevision = 0;

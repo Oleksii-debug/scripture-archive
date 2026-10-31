@@ -11,6 +11,14 @@ const esc=value=>String(value).replace(/[&<>"']/g,ch=>({
 }[ch]));
 
 const invisible=[
+  ['soft hyphen','\u00ad'],
+  ['combining grapheme joiner','\u034f'],
+  ['Hangul choseong filler','\u115f'],
+  ['Hangul jungseong filler','\u1160'],
+  ['Mongolian vowel separator','\u180e'],
+  ['Braille pattern blank','\u2800'],
+  ['Hangul filler','\u3164'],
+  ['halfwidth Hangul filler','\uffa0'],
   ['bidi override','\u202e'],
   ['zero-width character','\u200b'],
   ['bidi isolate','\u2066'],

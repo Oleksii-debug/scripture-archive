@@ -87,7 +87,7 @@ const invalidDates=['0000-01-01','2026-00-01','2026-13-01','2026-01-00',
   '2026-01-32','2025-02-29','2024-02-30','1900-02-29','2026-04-31',
   '2026-11-31','2026-06-31','2026-09-31'];
 const invalidBooks=['GEN ',' GEN','X'.repeat(65),'X'.repeat(256),
-  'X'.repeat(1024),'X'.repeat(4096),'  GEN  ','GEN\\t','GEN\\n',
+  'X'.repeat(1024),'X'.repeat(4096),'  GEN  ','GEN\t','GEN\n',
   '0'.repeat(66),'1'.repeat(70),'a'.repeat(101)];
 const oversizedReflections=[1201,1202,1300,1500,2000,3000,4096,8192,16384,32000];
 const invalidMeetingRows=[

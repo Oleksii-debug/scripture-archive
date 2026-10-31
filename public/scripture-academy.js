@@ -72,7 +72,16 @@ export function academyMarkup(catalog,language,esc,progress) {
   const lang=languageOf(language),w=COPY[lang],reset=RESET_COPY[lang],exportCopy=EXPORT_COPY[lang],importCopy=IMPORT_COPY[lang],resume=RESUME_COPY[lang];
   // A private progress read can be unavailable without making public lessons
   // inaccessible. Show source-verified lessons read-only, never guessed marks.
-  const readOnly = progress?.available === false;
+  // A malformed progress projection must not fabricate completion badges or
+  // crash the public course. Keep source-verified lessons readable, but retire
+  // private marker controls until a fresh, validated device readback.
+  const completed = progress?.completed;
+  const validCompleted = Array.isArray(completed) &&
+    completed.length <= academyAllLessonIds.length &&
+    completed.every(id=>typeof id==='string' && academyAllLessonIds.includes(id)) &&
+    new Set(completed).size===completed.length;
+  const readOnly = progress?.available === false ||
+    (progress?.available === true && !validCompleted);
   if(!validateDossierGraph(catalog) || (!readOnly && progress?.available !== true))
     return '<section class="card" role="alert">'+esc(w.invalid)+'</section>';
   const byId=new Map(scriptureDossiers.map(item=>[item.id,item]));

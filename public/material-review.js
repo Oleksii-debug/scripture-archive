@@ -290,6 +290,8 @@ export async function renderReviewedLibrary(root, w, lang, esc, isCurrent = () =
   const status=root.querySelector('.library-search-status'), results=root.querySelector('.library-search-results'), more=root.querySelector('.library-search-more');
   if (!form || !input || !status || !results || !more) return;
   let requestEpoch=0, searchEpoch=0, nextCursor=null, currentQuery='', page=0, loading=false;
+  // Cursor IDs are opaque but a repeated pair can never advance pagination.
+  const seenCursors=new Set();
   async function load(query, cursor, trigger) {
     if (!active()) return;
     const request=++requestEpoch, search=searchEpoch;
@@ -301,11 +303,13 @@ export async function renderReviewedLibrary(root, w, lang, esc, isCurrent = () =
       if (!active() || request!==requestEpoch || search!==searchEpoch) return;
       const validCursor=data?.nextCursor===null || (data?.nextCursor &&
         typeof data.nextCursor.id==='string' && data.nextCursor.id.length>0 && data.nextCursor.id.length<=100 &&
-        typeof data.nextCursor.submittedAt==='string' && data.nextCursor.submittedAt.length>0 && data.nextCursor.submittedAt.length<=100);
+        typeof data.nextCursor.submittedAt==='string' && data.nextCursor.submittedAt.length>0 && data.nextCursor.submittedAt.length<=100 &&
+        !seenCursors.has(JSON.stringify([data.nextCursor.id,data.nextCursor.submittedAt])));
       if (!Array.isArray(data?.items) || data.items.length>12 || !validCursor ||
         !data.items.every(validPublicMaterial))
         throw Error('invalid library response');
       nextCursor=data.nextCursor;
+      if(nextCursor)seenCursors.add(JSON.stringify([nextCursor.id,nextCursor.submittedAt]));
       currentQuery=query;
       page++;
       const headingId=`library-search-page-${page}`;
@@ -332,7 +336,7 @@ export async function renderReviewedLibrary(root, w, lang, esc, isCurrent = () =
   form.onsubmit=event=>{
     event.preventDefault();
     if (!active()) return;
-    searchEpoch++; page=0; nextCursor=null; more.hidden=true; results.innerHTML='';
+    searchEpoch++; page=0; nextCursor=null; seenCursors.clear(); more.hidden=true; results.innerHTML='';
     void load(input.value.trim(),null,submit);
   };
   more.onclick=()=>{

@@ -20,6 +20,20 @@ const https = value => {
 // Single canonical source/licence URI admission for the reader and edition information.
 export { https as safeProvenanceHttpsUrl };
 
+// Shared fail-closed publisher/rights metadata contract for the primary reader
+// and the parallel reader. Do not silently truncate verified attribution.
+// These conservative limits bound DOM and clipboard payloads.
+export function validEditionRightsMetadata(metadata) {
+  const boundedText=(value,max)=>typeof value==='string'&&value.length<=max;
+  return Boolean(metadata &&
+    boundedText(metadata.title,512) && metadata.title.trim() &&
+    boundedText(metadata.license,4096) && metadata.license.trim() &&
+    boundedText(metadata.source,4096) && https(metadata.source) &&
+    (metadata.attribution==null || boundedText(metadata.attribution,4096)) &&
+    (metadata.licenseUrl==null ||
+      (boundedText(metadata.licenseUrl,4096) && https(metadata.licenseUrl))));
+}
+
 export function parallelControls(editions, lang, esc) {
   const copy = COPY[lang] || COPY.uk;
   return `<details class="card parallel-reader"><summary>${copy.title}</summary><p>${copy.note}</p><form class="parallel-form"><label class="account-field"><span>${copy.choose}</span><select name="edition">${editions.map(edition=>`<option value="${esc(edition.id)}">${esc(edition.title)}</option>`).join('')}</select></label><button class="button" type="submit">${copy.open}</button><p class="parallel-status" role="status"></p></form><div class="parallel-result"></div></details>`;
@@ -119,15 +133,10 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
       // Damaged or hostile manifests must not turn one comparison into an
       // unbounded DOM/clipboard payload. Keep the real edition's own rights;
       // never truncate authored provenance into a misleading citation.
-      const boundedText=(value,max)=>typeof value==='string' && value.length<=max;
-      const source=boundedText(metadata?.source,4096)?https(metadata.source):'';
-      const license=boundedText(metadata?.licenseUrl,4096)?https(metadata.licenseUrl):'';
-      if (!metadata || !boundedText(metadata.title,512) || !metadata.title.trim()
-          || !boundedText(metadata.license,4096) || !metadata.license.trim()
-          || (metadata.attribution!=null && !boundedText(metadata.attribution,4096))
-          || !source || (metadata.licenseUrl!=null && !license)) {
+      if (!validEditionRightsMetadata(metadata))
         throw Error('missing or unsafe edition provenance');
-      }
+      const source=https(metadata.source);
+      const license=metadata.licenseUrl==null?'':https(metadata.licenseUrl);
       result.innerHTML=`<section aria-labelledby="parallel-title"><h3 id="parallel-title">${esc(metadata.title)} — ${esc(bookTitle)} ${chapter}</h3><p>${copy.note}</p><p>${copy.license}: ${esc(metadata.license || '—')}</p>${metadata.attribution?`<p>${esc(metadata.attribution)}</p>`:''}${source?`<p><a href="${esc(source)}" target="_blank" rel="noreferrer">${copy.source}</a></p>`:''}${license?`<p><a href="${esc(license)}" target="_blank" rel="noreferrer">${copy.license}</a></p>`:''}<ol>${verses.map((verse,index)=>`<li><span>${esc(verse)}</span> <button type="button" class="parallel-cite" data-parallel-cite="${index+1}" aria-label="${esc(copy.cite)}: ${esc(bookTitle)} ${chapter}:${index+1}">${esc(copy.cite)}</button></li>`).join('')}</ol></section>`;
       citation={ editionId:id, title:metadata.title, license:metadata.license, attribution:typeof metadata.attribution==='string'?metadata.attribution:'', source, licenseUrl:license, verses:verses.slice() };
       status.textContent=copy.ready;

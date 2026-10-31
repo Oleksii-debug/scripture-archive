@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { safeProvenanceHttpsUrl } from '../public/parallel-reader.js';
+import { safeProvenanceHttpsUrl, validEditionRightsMetadata } from '../public/parallel-reader.js';
 
 const src = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
 const first=src.indexOf('function localEditionMetadata(');
@@ -17,7 +17,7 @@ function provenance(selected,lang='uk') {
     en:[{id:'en-web',contentId:'ENGWEBU',local:true}],
   };
   const state={lang};
-  const ctx=vm.createContext({state,EDITIONS:entries,URL,safeProvenanceHttpsUrl,selectedEdition:()=>entries[lang].find(e=>e.id===selected)});
+  const ctx=vm.createContext({state,EDITIONS:entries,URL,safeProvenanceHttpsUrl,validEditionRightsMetadata,selectedEdition:()=>entries[lang].find(e=>e.id===selected)});
   vm.runInContext(functionSource,ctx);
   return c=>ctx.localEditionMetadata(c);
 }
@@ -125,4 +125,60 @@ test('a true missing translation key retains regional identity and a correctly n
   };
   assert.equal(provenance('uk-kulish')(named).title,'Authorized second edition');
   assert.equal(provenance('uk-kulish')(named).license,'CC BY-SA 4.0');
+});
+
+test('primary reader shares bounded edition rights with the parallel reader in every supported locale',()=>{
+  const cases=[
+    ['title',513],['license',4097],['attribution',4097],
+    ['source',4097],['licenseUrl',4097],
+  ];
+  for(const [lang,selected] of [['uk','uk-ohiienko'],['ru','ru-synodal'],['en','en-web']]){
+    for(const [field,size] of cases){
+      const changed=structuredClone(catalog);
+      const metadata=lang==='uk'?changed.translations['uk-ohiienko']:changed.editions[lang];
+      metadata[field]=field==='source'||field==='licenseUrl'
+        ? 'https://source.example/'+ 'a'.repeat(size)
+        : 'A'.repeat(size);
+      assert.throws(()=>provenance(selected,lang)(changed),
+        /local_edition_provenance_unavailable/,
+        lang+' oversized '+field+' must never reach DOM or clipboard');
+      assert.equal(validEditionRightsMetadata(metadata),false);
+    }
+  }
+});
+test('primary reader refuses typed/foreign authored attribution without miscrediting it',()=>{
+  for(const lang of ['uk','ru','en']){
+    const selected={uk:'uk-ohiienko',ru:'ru-synodal',en:'en-web'}[lang];
+    for(const value of [42,true,[],{name:'forged'},['wrong'],false]){
+      const changed=structuredClone(catalog);
+      const metadata=lang==='uk'?changed.translations['uk-ohiienko']:changed.editions[lang];
+      metadata.attribution=value;
+      assert.throws(()=>provenance(selected,lang)(changed),/local_edition_provenance_unavailable/);
+      assert.equal(validEditionRightsMetadata(metadata),false);
+    }
+  }
+});
+test('exact publisher metadata length boundaries preserve legitimate citations',()=>{
+  for(const lang of ['uk','ru','en']){
+    const selected={uk:'uk-ohiienko',ru:'ru-synodal',en:'en-web'}[lang];
+    const changed=structuredClone(catalog);
+    const metadata=lang==='uk'?changed.translations['uk-ohiienko']:changed.editions[lang];
+    metadata.title='T'.repeat(512);
+    metadata.license='L'.repeat(4096);
+    metadata.attribution='A'.repeat(4096);
+    metadata.licenseUrl='https://source.example/licence';
+    assert.equal(validEditionRightsMetadata(metadata),true);
+    assert.equal(provenance(selected,lang)(changed),metadata);
+  }
+});
+test('primary and parallel reader preserve real source bytes without truncation or license substitution',()=>{
+  for(const lang of ['uk','ru','en']){
+    const selected={uk:'uk-ohiienko',ru:'ru-synodal',en:'en-web'}[lang];
+    const changed=structuredClone(catalog);
+    const metadata=lang==='uk'?changed.translations['uk-ohiienko']:changed.editions[lang];
+    metadata.source='HTTPS://publisher.example/path%20with%20spaces?name=a@b';
+    metadata.licenseUrl='https://publisher.example/licence%20source';
+    assert.equal(provenance(selected,lang)(changed).source,metadata.source);
+    assert.equal(validEditionRightsMetadata(metadata),true);
+  }
 });

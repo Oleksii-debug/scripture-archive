@@ -4,6 +4,12 @@
 
 ---
 
+## 2026-10-31 — SA-EXT-16 / TWO AUTHENTICATION ABUSE REPAIRS — SCOPED TERMINAL
+
+**Лише два підтверджені підпункти ЗАКРИТО ДЛЯ ПОДАЛЬШОЇ РОЗРОБКИ / `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`:** (1) надійна IP-ідентичність rate limiter без довіри до клієнтського `X-Forwarded-For` — [PR #885](https://github.com/Oleksii-debug/scripture-archive/pull/885), `main@313a15bf092dbb913e25af8deba821e1dfdadeb0`, [повне CI #41177621085](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41177621085) **SUCCESS**, 46 тестових сценаріїв; (2) відмова від паролів понад 128 символів до дорогого PBKDF2 під час входу — [PR #886](https://github.com/Oleksii-debug/scripture-archive/pull/886), `main@a68a5f8b03ed51e993bec58cdeee6e7e90042acf`, [повне CI #41177763897](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41177763897) **SUCCESS**, 35 сценаріїв. Обидва PR SQUASH MERGED і звірені з головною гілкою. [Повна термінальна квитанція](docs/roadmap/SA_EXT_16_AUTH_ABUSE_BOUNDS_SCOPED_TERMINAL_20261031.md), `remaining_scoped_implementation=0`, `necessary_unmerged_feature_PRs=0` **тільки для цих двох дефектів**. **Повний SA-EXT-16 та інші незавершені батьківські секції залишаються OPEN; SA-EXT-03/04 — TERMINAL.** Живий сайт, реліз, Windows/Chrome/NVDA, email і production D1 NOT_VERIFIED; без публікації.
+
+---
+
 ## 2026-10-31 — SA-EXT-16 / AUTH_RATE_LIMITER_UNAVAILABLE — SCOPED TERMINAL
 
 **Лише цей підтверджений дефект ЗАКРИТО ДЛЯ ПОДАЛЬШОЇ РОЗРОБКИ / `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`.** Чотири реальні дії `POST /api/auth` (реєстрація, повторне підтвердження, запит відновлення й скидання пароля) тепер повертають контрольований HTTP 503 при недоступному D1 rate limiter, залишаючи 429 для реального перевищення ліміту. [Код PR #882](https://github.com/Oleksii-debug/scripture-archive/pull/882) **SQUASH MERGED** в точний `main@07e070639d5f6f14b25bc34d2bd0559888f20f28`; [реальна exact-head Actions #41176856521](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41176856521) **SUCCESS** (Node, TypeScript, lint, build, Worker/D1, Python). [Остаточна scoped-квитанція](docs/roadmap/SA_EXT_16_AUTH_RATE_LIMITER_503_SCOPED_TERMINAL_20261031.md), 11 доданих регресій, `remaining_scoped_implementation=0`, `necessary_unmerged_feature_PRs=0` **лише для цього дефекту**. **Повний SA-EXT-16 і решта незакритих батьківських SA-EXT залишаються OPEN**; SA-EXT-03/04 уже TERMINAL. Живий Sites SHA, SMTP, Windows, Chrome й фізичне NVDA NOT_VERIFIED; реліз НЕ ОНОВЛЮВАВСЯ.

@@ -425,3 +425,37 @@ test('SA-EXT-02 completed result refuses forged JSON or mismatched D1 scores and
     assert.equal(restored.data.result.score,canonical.score);
   }finally{f.db.close();}
 });
+
+test('SA-EXT-02 completed history never invents a perfect score above saved/canonical task count',async()=>{
+  const f=fixture();try{
+    f.seed('verified');
+    const completed=await f.post('finalize',{attemptId:'verified'});
+    assert.equal(completed.status,200);
+    assert.equal((await f.get('history')).status,200);
+    const baseline=f.db.prepare("SELECT score,total,task_limit FROM mission_attempts WHERE id='verified'").get();
+    assert.equal(baseline.total,chapter.length);
+    const corrupted=[
+      ['inflated perfect score',"UPDATE mission_attempts SET score=900000,total=900000 WHERE id='verified'"],
+      ['denominator differs from assigned tasks',"UPDATE mission_attempts SET total=total+1 WHERE id='verified'"],
+      ['declared tasks exceed available Bible content',"UPDATE mission_attempts SET total=total+1,task_limit=task_limit+1,score=score+1 WHERE id='verified'"],
+      ['invalid zero task assignment',"UPDATE mission_attempts SET task_limit=0 WHERE id='verified'"],
+      ['negative task assignment',"UPDATE mission_attempts SET task_limit=-1 WHERE id='verified'"],
+    ];
+    for(const [label,sql] of corrupted){
+      f.db.prepare(sql).run();
+      const stored=f.db.prepare("SELECT score,total,task_limit FROM mission_attempts WHERE id='verified'").get();
+      const reply=await f.get('history');
+      assert.equal(reply.status,503,label);
+      assert.equal(reply.data.error,'attempt_history_unavailable',label);
+      assert.deepEqual(f.db.prepare("SELECT score,total,task_limit FROM mission_attempts WHERE id='verified'").get(),stored,
+        'history GET may not repair or rewrite another durable record: '+label);
+      f.db.prepare("UPDATE mission_attempts SET score=?,total=?,task_limit=? WHERE id='verified'")
+        .run(baseline.score,baseline.total,baseline.task_limit);
+      assert.equal((await f.get('history')).status,200,'intact legitimate history remains readable');
+    }
+    // Deliberately mislabelled chapter cannot borrow another chapter's
+    // canonical task inventory, even though its saved totals are internally equal.
+    f.db.prepare("UPDATE mission_attempts SET book_id='GEN',chapter=50 WHERE id='verified'").run();
+    assert.equal((await f.get('history')).status,503);
+  }finally{f.db.close();}
+});

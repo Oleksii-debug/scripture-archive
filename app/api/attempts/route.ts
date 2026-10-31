@@ -282,7 +282,7 @@ export async function GET(request: Request) {
     try {
       const [active, history, pending] = await env.DB.batch([
         env.DB.prepare("SELECT id FROM mission_attempts WHERE actor_id=? AND status='active' AND expires_at>CURRENT_TIMESTAMP LIMIT 1").bind(currentActor.id),
-        env.DB.prepare("SELECT id,book_id,chapter,group_id,score,total,completed_at FROM mission_attempts WHERE actor_id=? AND status='completed' ORDER BY rowid DESC LIMIT 100").bind(currentActor.id),
+        env.DB.prepare("SELECT id,book_id,chapter,group_id,task_limit,score,total,completed_at FROM mission_attempts WHERE actor_id=? AND status='completed' ORDER BY rowid DESC LIMIT 100").bind(currentActor.id),
         env.DB.prepare("SELECT id,book_id,chapter,started_at FROM mission_attempts WHERE actor_id=? AND status='grading' ORDER BY started_at DESC,id DESC LIMIT 20").bind(currentActor.id),
       ]);
       if (!active.success || !history.success || !pending.success || !Array.isArray(active.results) || !Array.isArray(history.results) || !Array.isArray(pending.results)) return json({ error: "database_unavailable" }, 503);
@@ -294,7 +294,14 @@ export async function GET(request: Request) {
       const scoreValid = (row: Record<string, unknown>) =>
         typeof row.score === "number" && Number.isSafeInteger(row.score) && row.score >= 0 &&
         typeof row.total === "number" && Number.isSafeInteger(row.total) &&
-        row.total > 0 && row.score <= row.total;
+        row.total > 0 && row.score <= row.total &&
+        // A finite but inflated DB total is not evidence of work completed:
+        // the recorded denominator must equal the attempt's saved task limit
+        // and must be supported by the canonical source mission inventory.
+        typeof row.task_limit === "number" && Number.isSafeInteger(row.task_limit) &&
+        row.task_limit === row.total &&
+        typeof row.book_id === "string" && Number.isSafeInteger(row.chapter) &&
+        tasksFor(row.book_id, row.chapter as number).length >= row.task_limit;
       // Saved rows can predate current constraints or be corrupted in D1.
       // Invalid provenance must not be presented as an authentic chapter,
       // completed timestamp, or group/personal history. This read never repairs

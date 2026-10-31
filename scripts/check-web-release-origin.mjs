@@ -26,6 +26,14 @@ export function normalizeSecureOrigin(value, label = 'origin') {
       url.pathname !== '/' || url.search || url.hash) {
     throw new Error(`${label}: use a bare HTTPS origin without credentials, path, query or fragment`);
   }
+  // WHATWG URL also folds Unicode compatibility host glyphs and Unicode
+  // dot separators into ASCII, and normalizes padded port numbers. An
+  // operator's release target must be a literal authority, not a lookalike.
+  // Preserve the already-supported ASCII hostname case, optional slash and
+  // explicit canonical HTTPS :443, plus literal non-default ports.
+  const literal = value.replace(/\/$/, '').toLowerCase();
+  if (literal !== url.origin && literal !== `${url.origin}:443`)
+    throw new Error(`${label}: invalid URL syntax; use a literal bare HTTPS origin`);
   return url.origin;
 }
 

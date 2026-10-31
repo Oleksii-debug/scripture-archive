@@ -69,6 +69,8 @@ const bad=[
   ['array', ['group-1']],['object',{id:'group-1'}],['number',123],
   ['zero',0],['true',true],['false',false],
   ['whitespace','   '],['too-long','g'.repeat(81)],
+  ['leading space',' group-1'],['trailing space','group-1 '],
+  ['leading tab','\tgroup-1'],['trailing newline','group-1\n'],
   ['existing-id-plus-suffix','g'.repeat(80)+'tail'],
 ];
 for(const action of ['read','start']){
@@ -86,7 +88,6 @@ for(const action of ['read','start']){
   for(const [name,value,include,expected] of [
     ['omitted',null,false,''],['explicit null',null,true,''],
     ['blank', '',true,''],['valid','group-1',true,'group-1'],
-    ['trimmed',' group-1 ',true,'group-1'],
     ['exact maximum','g'.repeat(80),true,'g'.repeat(80)],
   ]){
     test(action+' retains the intended personal or authorized group mode: '+name,async()=>{

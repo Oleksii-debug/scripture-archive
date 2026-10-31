@@ -2232,10 +2232,10 @@ function validBibleCatalog(catalog) {
   if (!catalog || catalog.schemaVersion !== 1 || !catalog.books ||
       !catalog.editions || typeof catalog.editions !== "object") return false;
   const validBooks = (books) => Array.isArray(books) && books.length === 66 &&
-    books.every((book) => book && typeof book.code === "string" && !!book.code &&
+    books.every((book) => book && typeof book.code === "string" && /^[A-Z0-9]{3}$/.test(book.code) &&
       typeof book.title === "string" && !!book.title.trim() &&
       (book.testament === "OT" || book.testament === "NT") &&
-      Number.isInteger(book.chapters) && book.chapters > 0) &&
+      Number.isSafeInteger(book.chapters) && book.chapters > 0 && book.chapters <= 200) &&
     new Set(books.map((book) => book.code)).size === 66;
   if (!validBooks(catalog.books.uk)) return false;
   const canonicalCodes = new Set(catalog.books.uk.map((book) => book.code));

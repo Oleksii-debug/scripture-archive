@@ -57,15 +57,16 @@ function fixture(status='active',{expires_at='2099-01-01',owned=true,dbAvailable
   });
   return {
     lookups:()=>lookups,
-    async get(){
-      const response=await exports.GET(new Request('https://archive.invalid/api/attempts?action=current&attemptId=attempt-1'));
+    async get(id='attempt-1'){
+      const query=id===null?'':('&attemptId='+encodeURIComponent(String(id)));
+      const response=await exports.GET(new Request('https://archive.invalid/api/attempts?action=current'+query));
       return {status:response.status,body:await response.json(),
         cache:response.headers.get('Cache-Control')};
     },
-    async post(action){
+    async post(action,overrides={}){
       const response=await exports.POST(new Request('https://archive.invalid/api/attempts?action='+action,{
         method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({attemptId:'attempt-1',taskIndex:1,selected:[0]}),
+        body:JSON.stringify({attemptId:'attempt-1',taskIndex:1,selected:[0],...overrides}),
       }));
       return {status:response.status,body:await response.json(),cache:response.headers.get('Cache-Control')};
     },
@@ -175,4 +176,68 @@ test('database unavailability still has priority and does not expose task',async
   assert.equal(result.status,503);
   assert.equal(result.body.error,'database_unavailable');
   assert.ok(!('task' in result.body));
+});
+
+
+// Execute the real canonical API with a known authorized attempt.
+// Previously `clean(..., 80)` silently trimmed an ID such as " attempt-1 "
+// into the actual saved ID. This disclosed and allowed changes to a different
+// attempt than the caller supplied (even though it was the same principal).
+// Reject malformed identity before any D1 lookup or mutation.
+const badAttemptIds=[
+  ['leading whitespace',' attempt-1'],
+  ['trailing whitespace','attempt-1 '],
+  ['line ending','attempt-1\\n'],
+  ['tab','attempt-1\\t'],
+  ['embedded NUL','attempt-1\\u0000'],
+  ['overlength exact prefix','attempt-1'.padEnd(80,'x')+'extra'],
+  ['slash','attempt-1/other'],
+  ['dot','attempt-1.'],
+  ['control character','attempt-1\\u007f'],
+  ['zero-width joiner','attempt-1\\u200d'],
+  ['Unicode lookalike','аttempt-1'],
+  ['empty',''],
+];
+for (const [label,id] of badAttemptIds) {
+  test('GET current refuses noncanonical attempt ID '+label,async()=>{
+    const h=fixture('active');
+    const response=await h.get(id);
+    assert.equal(response.status,404,JSON.stringify(response.body));
+    assert.equal(response.body.error,'attempt_not_found');
+    assert.equal(h.lookups(),0,'malformed GET ID must not query D1');
+    assert.ok(!('task' in response.body));
+    assert.match(response.cache,/no-store/);
+  });
+  for (const action of ['invalidate','finalize','answer']) {
+    test('POST '+action+' refuses noncanonical attempt ID '+label,async()=>{
+      const h=fixture('active');
+      const response=await h.post(action,{attemptId:id});
+      assert.equal(response.status,404,JSON.stringify(response.body));
+      assert.equal(response.body.error,'attempt_not_found');
+      assert.equal(h.lookups(),0,'malformed POST ID must not touch D1');
+      assert.ok(!('accepted' in response.body));
+      assert.match(response.cache,/no-store/);
+    });
+  }
+}
+for (const [label,id] of [
+  ['absent',undefined],['null',null],['number',42],
+  ['array',['attempt-1']],['object',{id:'attempt-1'}],['boolean',true],
+]) {
+  for (const action of ['invalidate','finalize','answer']) {
+    test('POST '+action+' rejects nonstring attempt ID '+label,async()=>{
+      const h=fixture('active');
+      const response=await h.post(action,{attemptId:id});
+      assert.equal(response.status,404,JSON.stringify(response.body));
+      assert.equal(response.body.error,'attempt_not_found');
+      assert.equal(h.lookups(),0);
+      assert.match(response.cache,/no-store/);
+    });
+  }
+}
+test('GET without attemptId refuses before any DB read',async()=>{
+  const h=fixture('active'),r=await h.get(null);
+  assert.equal(r.status,404);
+  assert.equal(r.body.error,'attempt_not_found');
+  assert.equal(h.lookups(),0);
 });

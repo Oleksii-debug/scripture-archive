@@ -5,7 +5,8 @@ import { editionAboutMarkup } from '../public/workspace.js';
 
 // The URL parser itself accepts these raw controls by percent-encoding them.
 // Bible provenance and rights metadata must never be silently rewritten.
-const hidden = ['\u0085','\u061c','\u200b','\u2028','\u2029','\u202a','\u202e','\u2066','\u2069','\ufeff'];
+const hidden = ['\u0085','\u00a0','\u061c','\u200b','\u200c','\u200d','\u200e','\u200f',
+  '\u2028','\u2029','\u202a','\u202e','\u2060','\u2066','\u2069','\u206a','\u206f','\ufeff','\ud800'];
 const esc = value => String(value).replaceAll('&','&amp;').replaceAll('<','&lt;')
   .replaceAll('>','&gt;').replaceAll('"','&quot;');
 

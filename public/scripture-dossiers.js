@@ -371,12 +371,13 @@ export function dossierAtlasMarkup(catalog,language,esc,query='') {
     if(filtered)params.set('q',query.trim());
     return '<a href="'+esc('/dossiers?'+params.toString())+'">'+esc(item.names[lang])+'</a>';
   };
-  const history=order.filter(id=>visible(byId.get(id))).map((id,i)=>{
+  // A filtered result retains its position in the approved narrative reading order.
+  const history=order.filter(id=>visible(byId.get(id))).map(id=>{
     const item=byId.get(id);
     // Each narrative row must expose all its canonical witness passages, not
     // only the first reference. Keep interpretive sources explicitly labelled.
     const witnesses='<ol>'+item.sources.map(source=>'<li>'+passage(source)+' — '+esc(w[source.kind])+'</li>').join('')+'</ol>';
-    return '<tr><th scope="row">'+(i+1)+'</th><td>'+subject(item)+'</td><td>'+witnesses+'</td></tr>';
+    return '<tr><th scope="row">'+(order.indexOf(id)+1)+'</th><td>'+subject(item)+'</td><td>'+witnesses+'</td></tr>';
   }).join('');
   // Display every source-backed passage for each place. Selecting only the
   // first source silently hid independently cited chapters from the atlas.

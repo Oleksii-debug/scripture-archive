@@ -112,6 +112,23 @@ test('filtered atlas uses the same proven source search as its adjacent dossier 
   }
 });
 
+test('filtered atlas preserves canonical narrative positions instead of renumbering results',()=>{
+  // The first filtered result is not necessarily the first approved reading step.
+  for(const lang of ['uk','ru','en']){
+    for(const [id,position] of [['joseph',3],['moses',4],['david',6],['nativity',7]]){
+      const item=scriptureDossiers.find(node=>node.id===id);
+      const query=item.names[lang];
+      const html=dossierAtlasMarkup(catalog,lang,esc,query);
+      const history=html.match(/<tbody>(.*?)<\/tbody>/s)?.[1] || '';
+      assert.ok(history.includes(resultLink(id,query)),lang+' '+id+' remains linked');
+      assert.ok(history.includes('<th scope="row">'+position+'</th>'),
+        lang+' '+id+' keeps its authored narrative order '+position);
+      assert.ok(!history.includes('<th scope="row">1</th>'),
+        lang+' '+id+' must not be mislabeled as the first canonical step');
+    }
+  }
+});
+
 test('atlas filter has safe no-result and overlong-query boundaries',()=>{
   for(const lang of ['uk','ru','en']){
     const missing=dossierAtlasMarkup(catalog,lang,esc,'zqxneverexists');

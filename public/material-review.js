@@ -18,6 +18,11 @@ const TAKEDOWN_TEXT = {
   ru:{takeDown:'Снять с публикации',takeDownReason:'Причина снятия с публикации',takeDownSaved:'Материал снят с публикации.',takeDownLabel:'Снято с публикации: ',takeDownActor:'Снял редактор'},
   en:{takeDown:'Remove from publication',takeDownReason:'Reason for removal',takeDownSaved:'Material removed from publication.',takeDownLabel:'Removed from publication: ',takeDownActor:'Removed by editor'},
 };
+const RIGHTS_TEXT = {
+  uk:{rightsHolder:'Правовласник або статус прав',rightsBasis:'Підстава публікації',licenseUrl:'Публічне HTTPS-посилання на ліцензію (необов’язково)',original:'Оригінальний матеріал правовласника',permission:'Публікація з дозволу',open_license:'Відкрита ліцензія',public_domain:'Суспільне надбання',language:'Мова матеріалу',reviewDate:'Дата редакційної перевірки',legacyRights:'Структуровані відомості про правовласника не були записані для цієї попередньої версії.',licenseLink:'Переглянути ліцензію'},
+  ru:{rightsHolder:'Правообладатель или статус прав',rightsBasis:'Основание публикации',licenseUrl:'Публичная HTTPS-ссылка на лицензию (необязательно)',original:'Оригинальный материал правообладателя',permission:'Публикация с разрешения',open_license:'Открытая лицензия',public_domain:'Общественное достояние',language:'Язык материала',reviewDate:'Дата редакционной проверки',legacyRights:'Структурированные сведения о правообладателе не были записаны для этой предыдущей версии.',licenseLink:'Открыть лицензию'},
+  en:{rightsHolder:'Rights holder or rights status',rightsBasis:'Publication basis',licenseUrl:'Public HTTPS licence URL (optional)',original:'Rights holder’s original work',permission:'Published with permission',open_license:'Open licence',public_domain:'Public domain',language:'Material language',reviewDate:'Editorial review date',legacyRights:'Structured rights-holder details were not recorded for this earlier version.',licenseLink:'View licence'},
+};
 // Language can originate from a document or stored preference. Never read
 // inherited Object.prototype keys as translation dictionaries, and never
 // coerce untrusted objects to property names. Keep one canonical fallback for
@@ -32,6 +37,7 @@ export function reviewText(lang) {
     ...ownLocaleCopy(TEXT, lang),
     ...ownLocaleCopy(DELETE_TEXT, lang),
     ...ownLocaleCopy(TAKEDOWN_TEXT, lang),
+    ...ownLocaleCopy(RIGHTS_TEXT, lang),
     selfReview: ownLocaleCopy(SELF_REVIEW_TEXT, lang),
   };
 }
@@ -44,16 +50,44 @@ async function api(path, options) {
 const post = body => api('/api/material-review', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
 
 export function submissionForm(material, w, esc) {
-  return `<details><summary>${w.submit}</summary><form class="material-submit" data-id="${esc(material.id)}"><label class="account-field"><span>${w.source}</span><textarea name="provenance" minlength="3" maxlength="1000" required></textarea></label><label class="account-check"><input name="rights" type="checkbox" required><span>${w.rights}</span></label><button class="button" type="submit">${w.send}</button><p role="status"></p></form></details>`;
+  return `<details><summary>${w.submit}</summary><form class="material-submit" data-id="${esc(material.id)}"><label class="account-field"><span>${w.source}</span><textarea name="provenance" minlength="3" maxlength="1000" required></textarea></label><label class="account-field"><span>${w.rightsHolder}</span><input name="rightsHolder" minlength="2" maxlength="160" required></label><label class="account-field"><span>${w.rightsBasis}</span><select name="rightsBasis" required><option value="original">${w.original}</option><option value="permission">${w.permission}</option><option value="open_license">${w.open_license}</option><option value="public_domain">${w.public_domain}</option></select></label><label class="account-field"><span>${w.licenseUrl}</span><input name="licenseUrl" type="url" maxlength="500" inputmode="url" placeholder="https://"></label><label class="account-check"><input name="rights" type="checkbox" required><span>${w.rights}</span></label><button class="button" type="submit">${w.send}</button><p role="status"></p></form></details>`;
+}
+const RIGHTS_BASES = new Set(['original','permission','open_license','public_domain']);
+function canonicalPublicHttps(value) {
+  if(typeof value!=='string'||value.length<9||value.length>500||value.trim()!==value||/[\u0000-\u0020\u007f]/.test(value))return null;
+  try {const url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password?url.href:null;} catch {return null;}
+}
+function validRightsMetadata(rights) {
+  if(rights===null)return true;
+  if(!rights||typeof rights!=='object'||Array.isArray(rights)||Object.keys(rights).sort().join(',')!=='basis,holder,licenseUrl'||
+     typeof rights.holder!=='string'||rights.holder.trim()!==rights.holder||rights.holder.length<2||rights.holder.length>160||
+     typeof rights.basis!=='string'||!RIGHTS_BASES.has(rights.basis)||
+     !(rights.licenseUrl===null||canonicalPublicHttps(rights.licenseUrl)))return false;
+  return rights.basis!=='open_license'||rights.licenseUrl!==null;
+}
+function rightsMetadataMarkup(item,w,esc) {
+  if(!validRightsMetadata(item?.rights))return '';
+  const context=`<dt>${esc(w.language)}</dt><dd>${esc(item.locale)}</dd><dt>${esc(w.reviewDate)}</dt><dd><time datetime="${esc(item.reviewedAt)}">${esc(item.reviewedAt)} UTC</time></dd>`;
+  if(item.rights===null)return `<dl class="material-rights">${context}</dl><p>${esc(w.legacyRights)}</p>`;
+  const license=item.rights.licenseUrl?`<dt>${esc(w.licenseUrl)}</dt><dd><a href="${esc(canonicalPublicHttps(item.rights.licenseUrl))}" rel="noreferrer">${esc(w.licenseLink)}</a></dd>`:'';
+  return `<dl class="material-rights">${context}<dt>${esc(w.rightsHolder)}</dt><dd>${esc(item.rights.holder)}</dd><dt>${esc(w.rightsBasis)}</dt><dd>${esc(w[item.rights.basis])}</dd>${license}</dl>`;
+}
+function validPublicMaterial(item) {
+  return item && ['id','title','locale','reference','prompt','provenance','reviewedAt'].every(key=>typeof item[key]==='string') &&
+    item.id.length>0 && item.id.length<=100 && item.title.length>0 && item.title.length<=160 &&
+    ['uk','ru','en'].includes(item.locale) && item.reference.length>0 && item.reference.length<=200 &&
+    item.reviewedAt.length>0 && item.reviewedAt.length<=100 && validRightsMetadata(item.rights) &&
+    Array.isArray(item.options) && item.options.length>=2 && item.options.length<=8 &&
+    item.options.every(value=>typeof value==='string' && value.length>0 && value.length<=500);
 }
 export function historyMarkup(items, w, esc) {
-  return `<section class="card"><h2>${w.history}</h2>${items.length ? `<ol>${items.map(item=>`<li><strong>${esc(item.snapshot.title)}</strong> — ${esc(w[item.status] || item.status)}${item.reviewNote ? `<p>${esc(item.reviewNote)}</p>` : ''}${item.takedownReason ? `<p>${w.takeDownLabel}${esc(item.takedownReason)}</p>` : ''}${['pending','approved'].includes(item.status) ? `<button class="button material-withdraw" data-id="${esc(item.id)}">${w.withdraw}</button>` : ''}</li>`).join('')}</ol>` : `<p>${w.empty}</p>`}<p class="review-history-status" role="status"></p></section>`;
+  return `<section class="card"><h2>${w.history}</h2>${items.length ? `<ol>${items.map(item=>`<li><strong>${esc(item.snapshot.title)}</strong> — ${esc(w[item.status] || item.status)}${rightsMetadataMarkup({...item,locale:item.snapshot.locale,reviewedAt:item.reviewedAt||item.submittedAt},w,esc)}${item.reviewNote ? `<p>${esc(item.reviewNote)}</p>` : ''}${item.takedownReason ? `<p>${w.takeDownLabel}${esc(item.takedownReason)}</p>` : ''}${['pending','approved'].includes(item.status) ? `<button class="button material-withdraw" data-id="${esc(item.id)}">${w.withdraw}</button>` : ''}</li>`).join('')}</ol>` : `<p>${w.empty}</p>`}<p class="review-history-status" role="status"></p></section>`;
 }
 export function queueMarkup(items, w, esc) {
-  return `<section class="card"><h2>${w.queue}</h2>${items.length ? items.map(item=>`<article><h3>${esc(item.snapshot.title)}</h3><p>${esc(item.snapshot.data.reference)} — ${esc(item.snapshot.data.prompt)}</p><ul>${item.snapshot.data.options.map(option=>`<li>${esc(option)}</li>`).join('')}</ul><p>${esc(item.snapshot.data.answer)}</p><p>${esc(item.snapshot.data.explanation)}</p><p><strong>${w.provenance}:</strong> ${esc(item.provenance)}</p><form class="material-review" data-id="${esc(item.id)}"><label class="account-field"><span>${w.note}</span><textarea name="note" maxlength="2000"></textarea></label><label class="account-check"><input type="checkbox" name="source"><span>${w.sourceChecked}</span></label><label class="account-check"><input type="checkbox" name="rights"><span>${w.rightsChecked}</span></label><button class="button" type="button" data-decision="approve">${w.approve}</button><button class="button" type="button" data-decision="reject">${w.reject}</button><p role="status"></p></form></article>`).join('') : `<p>${w.noQueue}</p>`}</section>`;
+  return `<section class="card"><h2>${w.queue}</h2>${items.length ? items.map(item=>`<article><h3>${esc(item.snapshot.title)}</h3><p>${esc(item.snapshot.data.reference)} — ${esc(item.snapshot.data.prompt)}</p><ul>${item.snapshot.data.options.map(option=>`<li>${esc(option)}</li>`).join('')}</ul><p>${esc(item.snapshot.data.answer)}</p><p>${esc(item.snapshot.data.explanation)}</p><p><strong>${w.provenance}:</strong> ${esc(item.provenance)}</p>${rightsMetadataMarkup({...item,locale:item.snapshot.locale,reviewedAt:item.reviewedAt||item.submittedAt},w,esc)}<form class="material-review" data-id="${esc(item.id)}"><label class="account-field"><span>${w.note}</span><textarea name="note" maxlength="2000"></textarea></label><label class="account-check"><input type="checkbox" name="source"><span>${w.sourceChecked}</span></label><label class="account-check"><input type="checkbox" name="rights"><span>${w.rightsChecked}</span></label><button class="button" type="button" data-decision="approve">${w.approve}</button><button class="button" type="button" data-decision="reject">${w.reject}</button><p role="status"></p></form></article>`).join('') : `<p>${w.noQueue}</p>`}</section>`;
 }
 export function auditMarkup(items, w, esc) {
-  return `<details class="card"><summary>${w.audit}</summary>${items.length ? `<ol>${items.map(item=>`<li><strong>${esc(item.snapshot.title)}</strong> — ${esc(w[item.status] || item.status)}; ${esc(item.submittedAt)}; ${w.author}: ${esc(item.authorId || '')}${item.reviewerId ? `; ${w.reviewer}: ${esc(item.reviewerId)}` : ''}${item.reviewNote ? `<p>${esc(item.reviewNote)}</p>` : ''}${item.takedownReason ? `<p>${w.takeDownLabel}${esc(item.takedownReason)}${item.takedownActor ? `; ${w.takeDownActor}: ${esc(item.takedownActor)}` : ''}</p>` : ''}${item.status==='approved' ? `<form class="material-takedown" data-id="${esc(item.id)}"><label class="account-field"><span>${w.takeDownReason}</span><textarea name="reason" minlength="3" maxlength="2000" required></textarea></label><button class="button" type="submit">${w.takeDown}</button><p role="status"></p></form>` : ''}</li>`).join('')}</ol>` : `<p>${w.noQueue}</p>`}</details>`;
+  return `<details class="card"><summary>${w.audit}</summary>${items.length ? `<ol>${items.map(item=>`<li><strong>${esc(item.snapshot.title)}</strong> — ${esc(w[item.status] || item.status)}; ${esc(item.submittedAt)}; ${w.author}: ${esc(item.authorId || '')}${item.reviewerId ? `; ${w.reviewer}: ${esc(item.reviewerId)}` : ''}${rightsMetadataMarkup({...item,locale:item.snapshot.locale,reviewedAt:item.reviewedAt||item.submittedAt},w,esc)}${item.reviewNote ? `<p>${esc(item.reviewNote)}</p>` : ''}${item.takedownReason ? `<p>${w.takeDownLabel}${esc(item.takedownReason)}${item.takedownActor ? `; ${w.takeDownActor}: ${esc(item.takedownActor)}` : ''}</p>` : ''}${item.status==='approved' ? `<form class="material-takedown" data-id="${esc(item.id)}"><label class="account-field"><span>${w.takeDownReason}</span><textarea name="reason" minlength="3" maxlength="2000" required></textarea></label><button class="button" type="submit">${w.takeDown}</button><p role="status"></p></form>` : ''}</li>`).join('')}</ol>` : `<p>${w.noQueue}</p>`}</details>`;
 }
 // Mutation callbacks redraw the builder and detach its focused button.
 // Restore a visible heading for keyboard/NVDA only when the user had focused
@@ -90,7 +124,7 @@ export function attachReviewControls(root, w, refresh, announce, isCurrent = () 
     event.preventDefault(); if (!active(form)) return;
     const f = new FormData(form), button = form.querySelector('button'), status = form.querySelector('[role="status"]');
     const hadFocus = wasEditorialControlFocused(root, form); button.disabled = true;
-    try { await post({action:'submit',materialId:form.dataset.id,provenance:f.get('provenance'),rightsConfirmed:f.has('rights')}); if (!active(form)) return; await refresh(); if (!present()) return; restoreEditorialFocus(root, hadFocus); announce(w.sent); }
+    try { await post({action:'submit',materialId:form.dataset.id,provenance:f.get('provenance'),rightsHolder:f.get('rightsHolder'),rightsBasis:f.get('rightsBasis'),licenseUrl:f.get('licenseUrl'),rightsConfirmed:f.has('rights')}); if (!active(form)) return; await refresh(); if (!present()) return; restoreEditorialFocus(root, hadFocus); announce(w.sent); }
     catch { if (active(form)) { status.textContent = w.error; button.disabled = false; } }
   });
   root.querySelectorAll('.material-withdraw').forEach(button => button.onclick = async () => {
@@ -119,7 +153,7 @@ export function attachReviewControls(root, w, refresh, announce, isCurrent = () 
   }));
 }
 function publicMaterialMarkup(items, w, esc) {
-  return items.map(item=>`<article class="card"><h3>${esc(item.title)}</h3><p>${esc(item.reference)}</p><p>${esc(item.provenance)}</p><form class="public-material" data-id="${esc(item.id)}"><fieldset><legend>${esc(item.prompt)}</legend>${item.options.map((option,index)=>`<label class="option"><input type="radio" name="choice" value="${index}" required><span>${esc(option)}</span></label>`).join('')}</fieldset><button class="button" type="submit">${w.check}</button><p role="status"></p></form></article>`).join('');
+  return items.map(item=>`<article class="card"><h3>${esc(item.title)}</h3><p>${esc(item.reference)}</p><p>${esc(item.provenance)}</p>${rightsMetadataMarkup(item,w,esc)}<form class="public-material" data-id="${esc(item.id)}"><fieldset><legend>${esc(item.prompt)}</legend>${item.options.map((option,index)=>`<label class="option"><input type="radio" name="choice" value="${index}" required><span>${esc(option)}</span></label>`).join('')}</fieldset><button class="button" type="submit">${w.check}</button><p role="status"></p></form></article>`).join('');
 }
 // Concurrent reads for one mounted public-material panel must be ordered by
 // the request that STARTED last, not whichever fetch happens to finish last.
@@ -198,6 +232,7 @@ export async function renderPublicMaterials(root, w, esc, isCurrent = () => true
   try {
     const {items} = await api('/api/material-review?view=public');
     if (!active()) return;
+    if(!Array.isArray(items)||items.length>200||!items.every(validPublicMaterial))throw Error('invalid public catalogue');
     root.innerHTML = `<h2>${w.publicTitle}</h2>${items.length ? publicMaterialMarkup(items,w,esc) : `<p>${w.empty}</p>`}`;
     attachPublicMaterialAnswers(root, w, active);
   } catch {
@@ -256,8 +291,7 @@ export async function renderReviewedLibrary(root, w, lang, esc, isCurrent = () =
         typeof data.nextCursor.id==='string' && data.nextCursor.id.length>0 && data.nextCursor.id.length<=100 &&
         typeof data.nextCursor.submittedAt==='string' && data.nextCursor.submittedAt.length>0 && data.nextCursor.submittedAt.length<=100);
       if (!Array.isArray(data?.items) || data.items.length>12 || !validCursor ||
-        !data.items.every(item=>item && ['id','title','reference','prompt','provenance'].every(key=>typeof item[key]==='string') &&
-          Array.isArray(item.options) && item.options.length>=2 && item.options.length<=8 && item.options.every(value=>typeof value==='string')))
+        !data.items.every(validPublicMaterial))
         throw Error('invalid library response');
       nextCursor=data.nextCursor;
       currentQuery=query;

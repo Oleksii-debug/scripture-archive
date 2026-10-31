@@ -23,12 +23,12 @@ const folder=new URL('../drizzle/',import.meta.url);
 const sql=name=>readFileSync(new URL(name,folder),'utf8');
 const normalizedHash=text=>createHash('sha256').update(text.replace(/[\r\n]+$/,'')+'\n').digest('hex');
 
-test('historical v8 source upgrades representative saved records through v14',()=>{
+test('historical v8 source upgrades representative saved records through v15',()=>{
   const files=readdirSync(folder).filter(x=>/^\d{4}_.+\.sql$/.test(x)).sort();
   const baseline=files.filter(x=>Number(x.slice(0,4))<=8);
-  const upgrade=files.filter(x=>Number(x.slice(0,4))>=9&&Number(x.slice(0,4))<=14);
+  const upgrade=files.filter(x=>Number(x.slice(0,4))>=9&&Number(x.slice(0,4))<=15);
   assert.deepEqual(baseline,Object.keys(historical));
-  assert.deepEqual(upgrade.map(x=>x.slice(0,4)),['0009','0010','0011','0012','0013','0014']);
+  assert.deepEqual(upgrade.map(x=>x.slice(0,4)),['0009','0010','0011','0012','0013','0014','0015']);
   for(const name of baseline)assert.equal(normalizedHash(sql(name)),historical[name],`${name} differs from the historical source`);
   const db=new DatabaseSync(':memory:');
   try {
@@ -129,6 +129,10 @@ test('historical v8 source upgrades representative saved records through v14',()
     const takedown=db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='material_takedowns'").get();
     assert.match(takedown?.sql||'',/submission_id TEXT PRIMARY KEY/);
     assert.match(takedown.sql,/REFERENCES material_submissions\(id\) ON DELETE CASCADE/);
+    const rightsColumns=db.prepare("PRAGMA table_info('material_submissions')").all().map(row=>row.name);
+    assert.ok(rightsColumns.includes('rights_holder'));
+    assert.ok(rightsColumns.includes('rights_basis'));
+    assert.ok(rightsColumns.includes('license_url'));
     assert.equal(db.prepare('PRAGMA foreign_key_check').all().length,0);
   } finally {db.close();}
 });

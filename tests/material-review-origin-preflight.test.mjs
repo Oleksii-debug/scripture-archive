@@ -37,7 +37,7 @@ test("actual review POST rejects nonempty cross-origin JSON before auth or D1", 
     method: "POST",
     headers: { Origin: "https://attacker.invalid", "Content-Type": "application/json" },
     body: JSON.stringify({ action: "submit", materialId: "private-draft",
-      provenance: "Forged source", rightsConfirmed: true }),
+      provenance: "Forged source", rightsHolder: "Forged holder", rightsBasis: "original", licenseUrl: "", rightsConfirmed: true }),
   }));
   assert.equal(response.status, 403);
   assert.deepEqual(await response.json(), { error: "cross_origin_request" });

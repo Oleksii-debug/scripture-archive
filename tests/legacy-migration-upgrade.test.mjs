@@ -109,3 +109,23 @@ test('0014 adds takedown audit without changing previously approved material',()
     assert.equal(db.prepare('PRAGMA foreign_key_check').all().length,0);
   }finally{db.close();}
 });
+
+test('0015 preserves legacy publications without inventing rights holders and constrains new metadata',()=>{
+  const db=new DatabaseSync(':memory:');
+  try {
+    db.exec('PRAGMA foreign_keys=ON');
+    for(const name of old)apply(db,name);
+    for(const name of ['0010_sensitive_consent_evidence.sql','0011_material_review.sql','0012_editor_roles.sql','0013_public_church_consent_guard.sql','0014_material_takedowns.sql'])apply(db,name);
+    db.exec("INSERT INTO study_materials(id,owner_user_id,title,locale,data) VALUES ('m','alice','Study','en','{}')");
+    db.exec("INSERT INTO material_submissions(id,material_id,author_id,snapshot,provenance,rights_attested,status,reviewed_at,reviewed_by,source_checked,rights_checked) VALUES ('s','m','alice','{}','source',1,'approved',CURRENT_TIMESTAMP,'editor',1,1)");
+    apply(db,'0015_material_rights_metadata.sql');
+    const legacy=db.prepare("SELECT rights_holder,rights_basis,license_url FROM material_submissions WHERE id='s'").get();
+    assert.deepEqual({...legacy},{rights_holder:null,rights_basis:null,license_url:null});
+    assert.throws(()=>db.exec("UPDATE material_submissions SET rights_basis='invented' WHERE id='s'"));
+    assert.throws(()=>db.exec("UPDATE material_submissions SET rights_holder='x' WHERE id='s'"));
+    assert.throws(()=>db.exec("UPDATE material_submissions SET rights_holder='Example Foundation',rights_basis='open_license' WHERE id='s'"),/material_rights_metadata_incomplete/);
+    db.exec("UPDATE material_submissions SET rights_holder='Example Foundation',rights_basis='open_license',license_url='https://example.org/license' WHERE id='s'");
+    assert.equal(db.prepare("SELECT rights_basis FROM material_submissions WHERE id='s'").get().rights_basis,'open_license');
+    assert.equal(db.prepare('PRAGMA foreign_key_check').all().length,0);
+  }finally{db.close();}
+});

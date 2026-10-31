@@ -55,7 +55,7 @@ test('all three library languages show only actual editor-approved public API it
         assert.deepEqual(JSON.parse(options.body),{action:'librarySearch',query:'',cursor:null});
         return Response.json({items:[{
           id:'approval-1',title:'Approved <study>',reference:'GEN 12:1–3',
-          provenance:'https://example.org/source',prompt:'Which promise is recorded?',
+        provenance:'https://example.org/source',prompt:'Which promise is recorded?',locale:'en',reviewedAt:'2026-10-31 10:00:00',rights:{holder:'Example Publisher',basis:'open_license',licenseUrl:'https://example.org/license'},
           options:['A & B','C'],
         }],nextCursor:null});
       };
@@ -97,7 +97,7 @@ test('slow reviewed-library response cannot repaint a different principal or rou
       if(change==='session')f.state.sessionUnavailable=true;
       resolve(Response.json({items:[{
         id:'private-old',title:'Stale reviewed item',reference:'GEN 1',
-        provenance:'Old account',prompt:'Stale question',options:['Yes','No'],
+        provenance:'Old account',prompt:'Stale question',options:['Yes','No'],locale:'en',reviewedAt:'2026-10-31 10:00:00',rights:null,
       }],nextCursor:null}));
       await rendering;
       assert.equal(f.results.innerHTML,'','changed context must suppress stale public data');
@@ -134,7 +134,7 @@ test('actual public library item submits its answer through existing reviewed-ma
       calls.push({url,options});
       if(JSON.parse(options.body).action==='librarySearch') return Response.json({items:[{
         id:'approved-lesson',title:'Source-verified study',reference:'GEN 12:2',
-        provenance:'Reviewed source',prompt:'Which answer is supported?',
+        provenance:'Reviewed source',prompt:'Which answer is supported?',locale:'en',reviewedAt:'2026-10-31 10:00:00',rights:{holder:'Study Author',basis:'permission',licenseUrl:null},
         options:['One','Two'],
       }],nextCursor:null});
       if(url==='/api/material-review'){
@@ -157,7 +157,7 @@ test('actual public library item submits its answer through existing reviewed-ma
 });
 
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
-const libraryItem=(id,title)=>({id,title,reference:'GEN 1',provenance:'Reviewed source',prompt:'What does the passage say?',options:['Yes','No']});
+const libraryItem=(id,title)=>({id,title,reference:'GEN 1',provenance:'Reviewed source',prompt:'What does the passage say?',options:['Yes','No'],locale:'en',reviewedAt:'2026-10-31 10:00:00',rights:{holder:'Study Author',basis:'permission',licenseUrl:null}});
 
 test('library searches and continues through bounded pages without replacing earlier answers',async()=>{
   const f=scenario(), calls=[];

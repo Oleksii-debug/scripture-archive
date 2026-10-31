@@ -48,7 +48,8 @@ async function scenario({
       ok:true,json:async()=>({items:[{
         id:'approved-1',title:'A real reviewed study',reference:'GEN 1:1',
         provenance:'Public domain text',prompt:'Choose the source statement',
-        options:['Option A','Option B'],
+        options:['Option A','Option B'],locale:'en',reviewedAt:'2026-10-31 10:00:00',
+        rights:{holder:'Public domain',basis:'public_domain',licenseUrl:null},
       }]})
     };
     assert.equal(url,'/api/material-review');

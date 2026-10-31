@@ -366,9 +366,11 @@ export function dossierAtlasMarkup(catalog,language,esc,query='') {
   // Atlas links must keep the active native GET search, like dossier index links.
   // Otherwise opening a filtered atlas subject silently resets the dossier view.
   // URLSearchParams encodes the query; esc() protects the HTML attribute.
+  // Filtered relation witnesses may point to a valid dossier outside the result set.
+  // Keep its link navigable without attaching a filter that would reject that target.
   const subject=item=>{
     const params=new URLSearchParams({id:item.id});
-    if(filtered)params.set('q',query.trim());
+    if(filtered && visible(item))params.set('q',query.trim());
     return '<a href="'+esc('/dossiers?'+params.toString())+'">'+esc(item.names[lang])+'</a>';
   };
   // A filtered result retains its position in the approved narrative reading order.
@@ -398,7 +400,9 @@ export function dossierAtlasMarkup(catalog,language,esc,query='') {
   // The main tables intentionally keep their approved narrative reading order;
   // a separate semantic definition list avoids mistaking relation edges for
   // additional dates, locations or independent historical proof.
-  const relationEntries=nodes.filter(visible).flatMap(item=>item.related.map(link=>({item,link}))).filter(({link})=>visible(byId.get(link.to)));
+  // A visible dossier can match solely through a relation witness; do not
+  // erase that witness merely because its related target is outside the filter.
+  const relationEntries=nodes.filter(visible).flatMap(item=>item.related.map(link=>({item,link})));
   const relatedWitnesses=relationEntries.length?
     '<section aria-labelledby="dossier-atlas-relations-heading"><h3 id="dossier-atlas-relations-heading">'+esc(w.relations)+'</h3><dl>'+
       relationEntries.map(({item,link})=>

@@ -83,7 +83,7 @@ export function academyMarkup(catalog,language,esc,progress) {
     const node=byId.get(id),name=esc(node.names[lang]);
     const passages=node.sources.map(ref=>{
       const label=titles.get(ref.book)+' '+ref.chapter+':'+ref.first+'–'+ref.last;
-      return '<li><a href="/reader/'+ref.book+'/'+ref.chapter+'?verse='+ref.first+'" aria-label="'+esc(w.read)+': '+esc(label)+'">'+esc(label)+'</a> — '+esc(SOURCE_KIND_LABELS[lang][ref.kind])+'</li>';
+      return '<li><a href="/reader/'+ref.book+'/'+ref.chapter+'?verse='+ref.first+'" aria-label="'+esc(w.read)+': '+esc(label)+' — '+esc(SOURCE_KIND_LABELS[lang][ref.kind])+'">'+esc(label)+'</a> — '+esc(SOURCE_KIND_LABELS[lang][ref.kind])+'</li>';
     }).join('');
     // Preserve every source-approved research question rather than silently
     // dropping all but the first one when composing the accessible course.

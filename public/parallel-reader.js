@@ -20,6 +20,14 @@ const https = value => {
 // Single canonical source/licence URI admission for the reader and edition information.
 export { https as safeProvenanceHttpsUrl };
 
+// One verified Unicode admission predicate for all visible edition-rights text.
+// Disallow invisible format/filler spoofs while keeping genuine multiline
+// licence text (TAB/LF/CR), visible Cyrillic and Braille characters.
+const unsafeRightsText=/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u00a0\u061c\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\ud800-\udfff\u034f\u115f\u1160\u2800\u3164\uffa0\p{Cf}]/u;
+export function validEditionRightsText(value,max) {
+  return typeof value==='string' && value.length<=max && !unsafeRightsText.test(value);
+}
+
 // Shared fail-closed publisher/rights metadata contract for the primary reader
 // and the parallel reader. Do not silently truncate verified attribution.
 // These conservative limits bound DOM and clipboard payloads.
@@ -36,8 +44,7 @@ export function validEditionRightsMetadata(metadata) {
   // Preserve normal multiline licences (TAB/LF/CR) and non-Latin letters.
   // Cover all Unicode format controls and visually blank script fillers,
   // not only bidi controls; keep normal TAB/LF/CR in licensed rights text.
-  const unsafeRightsText=/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u00a0\u061c\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\ud800-\udfff\u034f\u115f\u1160\u2800\u3164\uffa0\p{Cf}]/u;
-  const boundedText=(value,max)=>typeof value==='string'&&value.length<=max&&!unsafeRightsText.test(value);
+  const boundedText=validEditionRightsText;
   return Boolean(own('title') && own('license') && own('source') &&
     optionalOwn('attribution') && optionalOwn('licenseUrl') &&
     boundedText(metadata.title,512) && metadata.title.trim() &&

@@ -87,3 +87,31 @@ test('SA-EXT-01 edition about reuses strict raw HTTPS source and licence admissi
   assert.match(legitimate,/href="https:\/\/publisher\.example\/path%20with%20spaces\?name=a@b"/);
   assert.match(legitimate,/href="https:\/\/license\.example\/terms%20of%20use"/);
 });
+test('SA-EXT-01 about page hides deceptive Unicode edition claims without losing independent safe provenance',()=>{
+  const controls=['\u00ad','\u034f','\u115f','\u1160','\u180e','\u2800','\u3164','\uffa0','\u202e'];
+  for(const lang of ['uk','ru','en']) for(const field of ['title','license','attribution','formatting']) {
+    for(const hidden of controls){
+      const edition={
+        title:'Verified edition',license:'Public Domain',attribution:'Publisher board',
+        formatting:'Original orthography',
+        source:'https://source.safe.example/edition',licenseUrl:'https://rights.safe.example/terms',
+      };
+      edition[field]='SPOOFED'+hidden+'LEGAL';
+      const html=editionAboutMarkup({translations:{'uk-ohiienko':edition},editions:{}},lang,esc);
+      assert.ok(!html.includes('SPOOFED'+hidden+'LEGAL'),field+' must not show concealed rights text in '+lang);
+      if(field==='title')assert.ok(!html.includes('source.safe.example'),'unsafe title cannot label a trusted source');
+      else {
+        assert.ok(html.includes('<strong>Verified edition</strong>'),'valid independent title remains');
+        assert.ok(html.includes('href="https://source.safe.example/edition"'),'safe source remains');
+        assert.ok(html.includes('href="https://rights.safe.example/terms"'),'safe licence URL remains');
+      }
+    }
+  }
+});
+test('SA-EXT-01 about page preserves legitimate Cyrillic, visible Braille and multiline licence',()=>{
+  const edition={title:'Легітимне видання \u2801',license:'Публічний текст\nПереклад',attribution:'Український комітет',formatting:'Історичний правопис',
+    source:'https://publisher.example/source',licenseUrl:'https://publisher.example/terms'};
+  const html=editionAboutMarkup({translations:{'uk-ohiienko':edition},editions:{}},'uk',esc);
+  for(const value of [edition.title,edition.license,edition.attribution,edition.formatting])
+    assert.ok(html.includes(esc(value)),'legitimate field must remain visible');
+});

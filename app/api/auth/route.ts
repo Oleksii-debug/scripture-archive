@@ -298,6 +298,7 @@ export async function POST(request: Request) {
   }
 
   if (action === "delete-account") {
+    try {
     const identity = await authenticateRequest(request);
     if (!identity || identity.provider !== "password") return json({ error: "authentication_required" }, 401);
     const password = data.password;
@@ -340,6 +341,12 @@ export async function POST(request: Request) {
       return json({ error: "deletion_failed" }, 503);
     }
     return json({ ok: true });
+    } catch {
+      // Initial identity/credential checks may also fail because D1 is down.
+      // Never present an uncertain account state as invalid credentials or
+      // send a session-cookie change when the destructive action is unknown.
+      return json({ error: "deletion_failed" }, 503);
+    }
   }
 
   return json({ error: "unknown_action" }, 400);

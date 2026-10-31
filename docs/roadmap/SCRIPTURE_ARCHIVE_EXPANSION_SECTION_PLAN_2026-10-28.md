@@ -1,3 +1,9 @@
+## 2026-10-31 — SA-EXT-01 / PRIMARY_READER_BOUNDED_CHAPTERS — SCOPED TERMINAL
+
+**ЗАКРИТО ДЛЯ ПОДАЛЬШОЇ РОЗРОБКИ саме захист основної біблійної читальні, не батьківський розділ.** Канонічний `public/app.js::getBook()` відхиляє HTTP-200 глави понад 256 віршів чи 131072 UTF-16 символів, понад 200 глав у книзі і пошкоджені/sparse масиви до кешу/рендерингу; відмова не отруює retry. [PR #864](https://github.com/Oleksii-debug/scripture-archive/pull/864) **SQUASH MERGED** `main@eb60a7d9a8f90f8287f039887606748c20838de3`. [Exact-head CI #41171867181](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41171867181) **SUCCESS** (2668 Node PASS, 22/22 Worker/D1, TypeScript/lint/build/Python PASS). [Постійна квитанція](SA_EXT_01_PRIMARY_READER_CHAPTER_BOUNDS_SCOPED_TERMINAL_20261031.md), `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0` лише тут. **SA-EXT-01 parent OPEN**, реальний Sites/Windows/NVDA/правовласники NOT_VERIFIED; без деплою.
+
+---
+
 ## 2026-10-31 — SA-EXT-16 / SAME_SITE_CSRF_ORIGIN_GUARD — SCOPED TERMINAL
 
 **ЗАКРИТО ДЛЯ РОЗРОБКИ лише вузький захист**, не батьківський SA-EXT-16. Канонічний `lib/auth.ts::sameOrigin` більше не приймає `Sec-Fetch-Site: same-site` як `same-origin`; фактичний `POST /api/auth` відхиляє піддоменний запит до D1. [PR #861](https://github.com/Oleksii-debug/scripture-archive/pull/861) **SQUASH MERGED** `main@c5069df34fc0d54774a9920b7b650fa3fc53c338`, [exact-head CI #41170898839](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41170898839) **SUCCESS** (2599 Node PASS, 22/22 Worker/D1, TS/lint/build/Python PASS); [повний terminal receipt](SA_EXT_16_SAME_SITE_CSRF_GUARD_SCOPED_TERMINAL_20261031.md). `remaining_scoped_implementation=0`, `necessary_unmerged_PRs=0`. **SA-EXT-16 parent OPEN**, Sites release і фізичний NVDA не підтверджено.

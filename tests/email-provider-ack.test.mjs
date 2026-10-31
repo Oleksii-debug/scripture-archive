@@ -113,7 +113,7 @@ test("P0: security email never dispatches one-time tokens to an unapproved origi
     "http://scripture-archive.com/account?reset=secret",
     "https://user@scripture-archive.com/account?reset=secret",
     "https://scripture-archive.com/account?reset=secret#fragment",
-    "https://scripture-archive.com\\n/account?reset=secret",
+    "https://scripture-archive.com\n/account?reset=secret",
   ]) {
     assert.deepEqual(await h.email.sendSecurityEmail("person@example.invalid", "uk", "reset", url),
       { delivered: false, reason: "security_link_origin_unverified" });

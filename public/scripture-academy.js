@@ -36,6 +36,12 @@ const SYNC_ERROR={
   ru:'Не удалось прочитать обновлённые отметки из другой вкладки. Обновите страницу и проверьте их.',
   en:'Could not read the updated markers from another tab. Reload the page and check them.'
 };
+// Reuse each validated canonical dossier witness kind as an explicit lesson label.
+const SOURCE_KIND_LABELS={
+  uk:{narrative:'Зв’язок у біблійній оповіді',interpretive:'Тематичне зіставлення, не незалежний історичний доказ'},
+  ru:{narrative:'Связь в библейском повествовании',interpretive:'Тематическое сопоставление, не независимое историческое доказательство'},
+  en:{narrative:'Connection in the biblical narrative',interpretive:'Thematic comparison, not independent historical proof'},
+};
 const languageOf=value=>LANGS.includes(value)?value:'uk';
 
 export function academyProgressKey(user){
@@ -77,7 +83,7 @@ export function academyMarkup(catalog,language,esc,progress) {
     const node=byId.get(id),name=esc(node.names[lang]);
     const passages=node.sources.map(ref=>{
       const label=titles.get(ref.book)+' '+ref.chapter+':'+ref.first+'–'+ref.last;
-      return '<li><a href="/reader/'+ref.book+'/'+ref.chapter+'?verse='+ref.first+'" aria-label="'+esc(w.read)+': '+esc(label)+'">'+esc(label)+'</a></li>';
+      return '<li><a href="/reader/'+ref.book+'/'+ref.chapter+'?verse='+ref.first+'" aria-label="'+esc(w.read)+': '+esc(label)+'">'+esc(label)+'</a> — '+esc(SOURCE_KIND_LABELS[lang][ref.kind])+'</li>';
     }).join('');
     // Preserve every source-approved research question rather than silently
     // dropping all but the first one when composing the accessible course.

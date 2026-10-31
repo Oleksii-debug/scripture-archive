@@ -9,7 +9,9 @@ const source=readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
 const groupStart=source.indexOf('let groupDetailViewEpoch=0,groupDetailNeedsReauthorization=false;');
 const groupEnd=source.indexOf('\nfunction renderAttemptResult(',groupStart);
 const listenerStart=source.indexOf('// Group owners can see invite codes and a private management roster.');
-const listenerEnd=source.indexOf('Promise.all([getCMS(), getSession().catch(() => null)]).finally(',listenerStart);
+// Keep the group controller's original two listeners isolated: the editorial
+// BFCache listeners use the same event names in the full app, not this fixture.
+const listenerEnd=source.indexOf('// Editorial drafts, reviewer queues',listenerStart);
 assert.ok(groupStart>0&&groupEnd>groupStart&&listenerStart>groupEnd&&listenerEnd>listenerStart);
 const production=source.slice(groupStart,groupEnd)+'\n'+source.slice(listenerStart,listenerEnd)+
   '\n({renderGroup,getEpoch:()=>groupDetailViewEpoch,needsReauthorization:()=>groupDetailNeedsReauthorization})';

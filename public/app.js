@@ -2260,22 +2260,17 @@ function validBibleCatalog(catalog) {
     // Object.values() checks only own inventories, whereas bracket lookup
     // can otherwise select an inherited, unverified alternate edition.
     if (!Object.hasOwn(catalog, "editionBooks") || !catalog.editionBooks ||
-        typeof catalog.editionBooks !== "object" || Array.isArray(catalog.editionBooks) ||
-        ![Object.prototype, null].includes(Object.getPrototypeOf(catalog.editionBooks)))
+        typeof catalog.editionBooks !== "object" || Array.isArray(catalog.editionBooks))
       return false;
+    // Cross-realm plain JSON objects are valid; inherited enumerable entries
+    // are not, because Object.values() never validated their source claims.
+    for (const key in catalog.editionBooks)
+      if (!Object.hasOwn(catalog.editionBooks, key)) return false;
     for (const books of Object.values(catalog.editionBooks))
       if (!validBooks(books) || books.some((book, index) =>
         !canonicalCodes.has(book.code) || book.code !== catalog.books.uk[index].code)) return false;
   }
   return true;
-}
-// Reader and book fetch must share this own-key edition authority. A missing
-// optional inventory falls back to the validated primary locale, never to an
-// inherited list that Object.values() did not inspect.
-function catalogBooksForEdition(catalog, editionId, locale) {
-  const variants = catalog?.editionBooks;
-  return variants && Object.hasOwn(variants, editionId)
-    ? variants[editionId] : catalog?.books?.[locale];
 }
 async function getCatalog() {
   if (state.catalog) return state.catalog;
@@ -2455,7 +2450,9 @@ async function getBook(code, explicitEdition = null) {
       .then(async (r) => {
         if (!r.ok) throw Error(r.status);
         const book = await r.json();
-        const entries = catalogBooksForEdition(state.catalog, edition.id, requestLocale);
+        const entries = state.catalog?.editionBooks &&
+          Object.hasOwn(state.catalog.editionBooks, edition.id)
+          ? state.catalog.editionBooks[edition.id] : state.catalog?.books?.[requestLocale];
         const expectedChapters = entries?.find((entry) => entry.code === code)?.chapters;
         if (!book || book.bookCode !== code || book.locale !== requestLocale ||
             book.editionId !== (edition.contentId || edition.id) || !Array.isArray(book.chapters) ||
@@ -2995,7 +2992,8 @@ async function renderReader(parts) {
   const catalog = await getCatalog();
   if (state.user !== readerPrincipal || (typeof location !== "undefined" && location.pathname && !location.pathname.startsWith("/reader"))) return;
   const chosenEdition = selectedEdition(state.lang);
-  const books = catalogBooksForEdition(catalog, chosenEdition.id, state.lang);
+  const books = catalog.editionBooks && Object.hasOwn(catalog.editionBooks, chosenEdition.id)
+    ? catalog.editionBooks[chosenEdition.id] : catalog.books[state.lang];
   const code = (parts[1] || state.reader.book || "GEN").toUpperCase();
   const meta = books.find((b) => b.code === code) || books[0];
   const chapter = readerChapterNumber(parts[2] || state.reader.chapter || 1, meta.chapters);

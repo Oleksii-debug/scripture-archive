@@ -79,7 +79,9 @@ export async function PUT(request: Request) {
     // Never shorten an explicit identity into a different existing CMS key.
     // Only a genuinely absent/blank ID may request a new generated key.
     if (body.id !== undefined && body.id !== null &&
-        (typeof body.id !== "string" || body.id.trim().length > 100))
+        (typeof body.id !== "string" || body.id.trim().length > 100 ||
+         // An explicit nonblank ID is an exact key, not a trim-to-other-record alias.
+         (body.id.trim().length > 0 && body.id !== body.id.trim())))
       return Response.json({ error: "invalid_content_item" }, { status: 400 });
     // Keep authored CMS item titles lossless. The previous clean(title,200)
     // silently shortened an overlong owner title while acknowledging success
@@ -140,9 +142,11 @@ export async function DELETE(request: Request) {
   if (!isVerifiedOwner(identity)) return Response.json({ error: "forbidden" }, { status: 403 });
   const requestedId = new URL(request.url).searchParams.get("id");
   // Truncation here could hide a DIFFERENT record whose key is a prefix.
-  if (!requestedId || !requestedId.trim() || requestedId.trim().length > 100)
+  // Never silently target another record by trimming the requested key.
+  if (!requestedId || !requestedId.trim() || requestedId.trim().length > 100 ||
+      requestedId !== requestedId.trim())
     return Response.json({ error: "invalid_content_id" }, { status: 400 });
-  const id = requestedId.trim();
+  const id = requestedId;
   const existing = await env.DB!.prepare("SELECT kind,title,locale,data FROM managed_content WHERE id=?").bind(id).first<Record<string, unknown>>();
   if (!existing) return Response.json({ error: "not_found" }, { status: 404 });
   const acknowledged = await contentBatchAcknowledged(() => env.DB!.batch([

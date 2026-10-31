@@ -172,7 +172,10 @@ export function validateDossierGraph(catalog) {
 // Search only the existing source-validated dossier graph, with no private IO.
 export function searchScriptureDossiers(language,value,catalog=null) {
   const lang=LANGS.includes(language)?language:'uk';
-  if(typeof value!=='string')return [];
+  // The public GET form and atlas cap the *raw* q at 120 UTF-16 units.
+  // Whitespace-only padding must not bypass that bound via trim/normalize,
+  // which would otherwise process arbitrarily large untrusted input first.
+  if(typeof value!=='string' || value.length>120)return [];
   const query=value.normalize('NFC').trim().toLocaleLowerCase(lang);
   if(query.length>120)return [];
   if(!query)return [...nodes];
@@ -251,6 +254,10 @@ export function searchScriptureDossiers(language,value,catalog=null) {
 export function dossierMarkup(catalog,language,requestedId,esc,searchQuery='',compareId=null) {
   const lang=LANGS.includes(language)?language:'uk',w=COPY[lang];
   if(!validateDossierGraph(catalog)) return `<p role="alert">${esc(w.invalid)}</p>`;
+  // A direct GET can bypass HTML maxlength. Match the atlas' raw-query gate
+  // instead of re-rendering a truncated, falsely selectable search result.
+  if(typeof searchQuery==='string' && searchQuery.length>120)
+    return `<p role="alert">${esc(w.invalid)}</p>`;
   // An absent query selects the introduction. An invalid explicit ID must
   // never be silently presented as a different person's source dossier.
   const matches=searchScriptureDossiers(lang,searchQuery,catalog);

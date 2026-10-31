@@ -44,3 +44,22 @@ test('refuses impossible or unsafe chapter counts in every edition', () => {
   safe.books.uk.find(book => book.code === 'PSA').chapters = 150;
   assert.equal(validate(safe), true, 'Psalm 150-chapter canonical bound remains valid');
 });
+
+test('rejects sparse primary book lists instead of treating missing slots as a 66th book', () => {
+  // A damaged in-memory catalog can be sparse even though ordinary JSON
+  // transport encodes holes as null. editionBooks is optional by contract.
+  const damaged = clone();
+  delete damaged.editionBooks;
+  for (const lang of ['uk', 'ru', 'en']) delete damaged.books[lang][10];
+  assert.equal(validate(damaged), false, 'matching holes across locales must fail closed');
+  assert.equal(validate(catalog), true, 'unchanged canonical catalog still loads');
+});
+
+test('rejects a sparse approved-edition inventory before reader cache and citations', () => {
+  for (const editionId of Object.keys(catalog.editionBooks)) {
+    const damaged = clone();
+    delete damaged.editionBooks[editionId][10];
+    assert.equal(validate(damaged), false, editionId);
+  }
+  assert.equal(validate(catalog), true, 'healthy catalog recovers without mutation');
+});

@@ -3000,7 +3000,17 @@ async function renderReader(parts) {
   const books = catalog.editionBooks && Object.hasOwn(catalog.editionBooks, chosenEdition.id)
     ? catalog.editionBooks[chosenEdition.id] : catalog.books[state.lang];
   const code = (parts[1] || state.reader.book || "GEN").toUpperCase();
-  const meta = books.find((b) => b.code === code) || books[0];
+  // A missing path segment may resume the saved reader (or default to GEN),
+  // but an explicit unknown book must never silently show GEN as if it were
+  // the requested source. Reject it before chapter/attempt requests or DOM.
+  const meta = books.find((b) => b.code === code) || (parts[1] ? null : books[0]);
+  if (!meta) {
+    // Retire an earlier reader context so pending private callbacks cannot
+    // populate this invalid deep link after navigation.
+    state.currentReader = null;
+    shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1><p><a href="/reader">${t("reader")}</a></p></section>`);
+    return;
+  }
   const chapter = readerChapterNumber(parts[2] || state.reader.chapter || 1, meta.chapters);
   const groupId = parts[3] === "group" ? parts[4] || "" : "";
   state.currentReader = { book: meta.code, chapter };

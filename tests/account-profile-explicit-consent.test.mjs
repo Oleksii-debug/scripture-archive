@@ -35,9 +35,9 @@ function fixture(){
       throw Error("unexpected import "+specifier);
     },
   });
-  async function post(payload){
+  async function post(payload,method="POST"){
     const response=await exports.POST(new Request("https://archive.invalid/api/account?action=profile",{
-      method:"POST",headers:{origin:"https://archive.invalid","Content-Type":"application/json"},
+      method,headers:{origin:"https://archive.invalid","Content-Type":"application/json"},
       body:JSON.stringify(payload)
     }));
     return {status:response.status,body:await response.json(),
@@ -88,7 +88,7 @@ for(const [label,consent,stored] of [
 }
 test("profile malformed consent remains denied on PUT as well as POST",async()=>{
   const f=fixture();
-  const result=await f.post({...profile,acceptSensitive:["true"]});
+  const result=await f.post({...profile,acceptSensitive:["true"]},"PUT");
   assert.equal(result.status,400);
   assert.equal(f.calls.length,0);
 });

@@ -300,12 +300,12 @@ test('SA-EXT-05: malformed typed q cannot silently open unrelated dossier eviden
     for(const q of malformed){
       const html=dossierMarkup(catalog,lang,null,esc,q);
       assert.match(html,/role="alert"/,lang+' rejects untyped q');
-      assert.doesNotMatch(html,/class="dossier-article"/,'no default dossier');
+      assert.doesNotMatch(html,/\bdossier-article\b/,'no default dossier');
       assert.doesNotMatch(html,new RegExp('href="/reader/'),'no unrelated source links');
     }
     // Missing q, exact book search and oversized strings retain their
     // previous public GET behaviour and accessibility.
-    assert.match(dossierMarkup(catalog,lang,null,esc),/class="dossier-article"/);
+    assert.match(dossierMarkup(catalog,lang,null,esc),/\bdossier-article\b/);
     assert.match(dossierMarkup(catalog,lang,null,esc,'GEN'),/role="search"/);
     assert.match(dossierMarkup(catalog,lang,null,esc,'A'.repeat(121)),/role="alert"/);
   }

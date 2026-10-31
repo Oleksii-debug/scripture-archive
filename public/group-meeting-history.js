@@ -4,7 +4,7 @@ const COPY={
   ru:{title:'История встреч',more:'Показать предыдущие встречи',retry:'Попробовать ещё раз',loading:'Загрузка встреч…',error:'Не удалось загрузить встречи. Показанные записи сохранены; попробуйте ещё раз.',expired:'Список изменился или доступ утрачен. Откройте группу ещё раз.',empty:'Встреч пока нет.',loaded:'Загружено записей:',end:'Показаны все доступные встречи.',members:'участников',noDepth:'Без оценивания'},
   en:{title:'Meeting history',more:'Show earlier meetings',retry:'Try again',loading:'Loading meetings…',error:'Meetings could not be loaded. Displayed records are kept; try again.',expired:'The list changed or access was lost. Open the group again.',empty:'No meetings yet.',loaded:'Records loaded:',end:'All available meetings are shown.',members:'participants',noDepth:'Not graded'},
 };
-export const meetingHistoryCopy=lang=>({...COPY[lang]||COPY.uk,notes:meetingNotesCopy(lang)});
+export const meetingHistoryCopy=lang=>({...(typeof lang==='string' && Object.hasOwn(COPY,lang) ? COPY[lang] : COPY.uk),notes:meetingNotesCopy(lang)});
 export function meetingHistoryMarkup(copy){
   return `<section class="groups-section" id="group-meeting-history"><h2>${copy.title}</h2><div data-meeting-list></div><button class="button" type="button" data-meeting-more disabled>${copy.more}</button><p role="status" aria-live="polite" data-meeting-status>${copy.loading}</p></section>`;
 }

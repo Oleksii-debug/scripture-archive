@@ -64,7 +64,23 @@ function docxHasParts(bytes: Uint8Array) {
       const nameSize = u16(offset + 28), extraSize = u16(offset + 30), commentSize = u16(offset + 32);
       const next = offset + 46 + nameSize + extraSize + commentSize;
       if (next > end) return false;
-      const name = new TextDecoder().decode(bytes.subarray(offset + 46, offset + 46 + nameSize));
+      // Central-directory names alone are attacker-controlled declarations.
+      // Bind each claimed DOCX part to its actual local ZIP header and bytes
+      // before forwarding this attachment to support D1/email. Keep the
+      // existing bounded structural gate; this is not an XML or malware scan.
+      const localOffset = u32(offset + 42);
+      if (localOffset >= centralStart || localOffset + 30 > centralStart ||
+          u32(localOffset) !== 0x04034b50) return false;
+      const localNameSize = u16(localOffset + 26), localExtraSize = u16(localOffset + 28);
+      const dataStart = localOffset + 30 + localNameSize + localExtraSize;
+      if (localNameSize !== nameSize || dataStart > centralStart ||
+          u16(localOffset + 6) !== u16(offset + 8) ||
+          u16(localOffset + 8) !== u16(offset + 10) ||
+          u32(offset + 20) > centralStart - dataStart) return false;
+      const centralName = bytes.subarray(offset + 46, offset + 46 + nameSize);
+      const localName = bytes.subarray(localOffset + 30, localOffset + 30 + localNameSize);
+      if (!centralName.every((byte, index) => byte === localName[index])) return false;
+      const name = new TextDecoder().decode(centralName);
       if (name === "[Content_Types].xml" || name === "word/document.xml") parts.add(name);
       offset = next;
     }

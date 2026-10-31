@@ -301,7 +301,8 @@ export async function renderReviewedLibrary(root, w, lang, esc, isCurrent = () =
       if (!active() || request!==requestEpoch || search!==searchEpoch) return;
       const validCursor=data?.nextCursor===null || (data?.nextCursor &&
         typeof data.nextCursor.id==='string' && data.nextCursor.id.length>0 && data.nextCursor.id.length<=100 &&
-        typeof data.nextCursor.submittedAt==='string' && data.nextCursor.submittedAt.length>0 && data.nextCursor.submittedAt.length<=100);
+        typeof data.nextCursor.submittedAt==='string' && data.nextCursor.submittedAt.length>0 && data.nextCursor.submittedAt.length<=100 &&
+        !(cursor && cursor.id===data.nextCursor.id && cursor.submittedAt===data.nextCursor.submittedAt));
       if (!Array.isArray(data?.items) || data.items.length>12 || !validCursor ||
         !data.items.every(validPublicMaterial))
         throw Error('invalid library response');

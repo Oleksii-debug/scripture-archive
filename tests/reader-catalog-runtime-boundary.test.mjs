@@ -135,6 +135,13 @@ test('rejects coordinated all-locale source reordering and valid-looking invente
       [books[0], books[index]] = [books[index], books[0]];
     assert.equal(validate(damaged), false, 'all-inventory canonical reorder at index ' + index);
   }
+  // Never read an inherited accessor before checking ownership of source
+  // fields: corrupt catalogue objects must fail closed without executing it.
+  const inheritedGetter = clone();
+  inheritedGetter.books.uk[0] = Object.create({
+    get code() { throw Error('untrusted inherited source getter'); },
+  });
+  assert.equal(validate(inheritedGetter), false, 'inherited source getter is not consulted');
   const intact = clone();
   assert.equal(validate(intact), true, 'original 66-book catalogue remains accepted');
   // Edition-specific chapter counts are legitimate, unlike a changed code/order.

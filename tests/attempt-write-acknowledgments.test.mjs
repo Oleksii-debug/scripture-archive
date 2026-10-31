@@ -28,7 +28,7 @@ function scenario({action,mode="good",batchValues=null,expired=false}){
     if(n==="false")return {success:false,meta:{changes:1}};
     if(n==="string")return {success:true,meta:{changes:"1"}};
     if(n==="negative")return {success:true,meta:{changes:-1}};
-    return {success:true,meta:{changes:n==="zero"?0:1}};
+    return {success:true,meta:{changes:n==="zero"?0:n==="multi"?2:1}};
   };
   const DB={
     prepare(sql){
@@ -125,6 +125,38 @@ for(const values of [["false","good","good"],["good","missing","good"],["good","
     assert.ok(!("task" in r.body));
   });
 }
+// D1's batch response may have valid receipt shapes but still contradict the
+// transaction's one-insert/one-consumed-read invariant. Do not return a task.
+for(const values of [
+  ["good","zero","zero"], // attempt inserted; read receipt not consumed
+  ["good","good","zero"], // even a previous-attempt invalidation cannot substitute
+  ["good","zero","multi"], // impossible multiple read receipts consumed
+  ["multi","zero","good"], // a one-row INSERT cannot acknowledge two rows
+]){
+  test("start refuses inconsistent confirmed D1 changes before first task "+JSON.stringify(values),async()=>{
+    const r=await scenario({action:"start",batchValues:values}).invoke();
+    assert.equal(r.status,503);
+    assert.equal(r.body.error,"database_unavailable");
+    assert.ok(!("task" in r.body));
+    assert.ok(!("attemptId" in r.body));
+    assert.match(r.cache,/no-store/);
+  });
+}
+
+test("start recovery still accepts a new exactly acknowledged read receipt",async()=>{
+  const rejected=await scenario({action:"start",batchValues:["good","zero","zero"]}).invoke();
+  assert.equal(rejected.status,503);
+  const recovered=await scenario({action:"start",batchValues:["good","zero","good"]}).invoke();
+  assert.equal(recovered.status,201);
+  assert.equal(recovered.body.task.index,1);
+});
+
+test("start preserves multiple valid previous-attempt invalidations",async()=>{
+  const r=await scenario({action:"start",batchValues:["good","multi","good"]}).invoke();
+  assert.equal(r.status,201);
+  assert.equal(r.body.task.index,1);
+});
+
 test("start preserves chapter-not-read 409 for confirmed zero-row insertion",async()=>{
   const r=await scenario({action:"start",batchValues:["zero","zero","zero"]}).invoke();
   assert.equal(r.status,409);

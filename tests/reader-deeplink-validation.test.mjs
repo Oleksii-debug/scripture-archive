@@ -33,7 +33,7 @@ test("actual reader accepts only canonical safe integer chapters for edition-spe
 });
 
 test("canonical reader refuses verse focus when its URL does not match the displayed coordinate", () => {
-  assert.match(app,/const chapter = readerChapterNumber\(parts\[2\] \|\| state\.reader\.chapter \|\| 1, meta\.chapters\)/);
+  assert.match(app,/const chapter = readerChapterNumber\(parts\[2\] \|\| state\.reader\?\.chapter \|\| 1, meta\.chapters\)/);
   assert.match(app,/const verseCoordinateMatches = parts\[1\] === meta\.code && parts\[2\] === String\(chapter\)/);
   assert.match(app,/const selectedVerse = verseCoordinateMatches \? readerVerseFromUrl\(location\.href, verses\.length\) : null/);
   assert.match(app,/selected\.focus\(\{ preventScroll: true \}\)/);

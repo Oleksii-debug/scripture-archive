@@ -282,7 +282,7 @@ const LIBRARY_SEARCH = {
 // The public library uses the reviewed-material authority, not a separate
 // catalogue. Search terms stay in the request body, not a URL or browser history.
 export async function renderReviewedLibrary(root, w, lang, esc, isCurrent = () => true) {
-  const copy=LIBRARY_SEARCH[lang] || LIBRARY_SEARCH.uk;
+  const copy=ownLocaleCopy(LIBRARY_SEARCH,lang);
   const active=()=>{ try { return root?.isConnected !== false && isCurrent() === true; } catch { return false; } };
   if (!active()) return;
   root.innerHTML=`<form class="library-search"><label class="account-field"><span>${copy.label}</span><input name="query" type="search" maxlength="100" aria-describedby="library-search-help"></label><p id="library-search-help">${copy.hint}</p><button class="button" type="submit">${copy.submit}</button></form><p class="library-search-status" role="status"></p><div class="library-search-results"></div><button class="button library-search-more" type="button" hidden>${copy.more}</button>`;

@@ -1,3 +1,9 @@
+## 2026-10-31 — SA-EXT-04 / MEETING_OWN_LOCALE_COPY — ЗАКРИТО ЛИШЕ ВУЗЬКИЙ ДЕФЕКТ
+
+Реальні модулі `public/group-meeting-history.js` і `public/group-meeting-notes.js` захищені від успадкованих мовних ключів Object.prototype та нестрокових значень; канонічний fallback `uk` і `ru/en` збережено. [PR #894](https://github.com/Oleksii-debug/scripture-archive/pull/894) **SQUASH MERGED** `main@6824ce20d476db1226dd44e8d2bac2ecfe9ee21d`, [Actions #41178417038](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41178417038) SUCCESS (2847 Node PASS, 0 FAIL, 1 SKIP; D1 22/22; Python 2/2; build). [Точний terminal receipt](SA_EXT_04_MEETING_LOCALE_OWN_KEY_SCOPED_TERMINAL_20261031.md), `remaining_scoped_implementation=0` **лише для дефекту**. Батьківський SA-EXT-04 зберігає вже прийнятий TERMINAL; жодної переатестації всього продукту чи релізу немає.
+
+---
+
 ## 2026-10-31 — SA-EXT-01/02 / WORKSPACE_OWN_LOCALE_COPY — ЗАКРИТО ЛИШЕ ПІДПУНКТ
 
 **`CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`, НЕ цілі SA-EXT-01/02.** Канонічний `public/workspace.js` використовує один helper із перевіркою власних мовних ключів для головних розділів, керування групою, історії місій/повторення та прав на видання. Некоректні `__proto__`/`constructor`/інші успадковані значення не видають `undefined`, підтримувані `uk/ru/en` незмінні. [PR #891](https://github.com/Oleksii-debug/scripture-archive/pull/891) **SQUASH MERGED** `main@0309db1bbcb6226d359cfb6f85e0467c01c4e142`; [CI #41178305059](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41178305059) SUCCESS: Node 2831 PASS/0 FAIL/1 SKIP, Worker/D1 22 PASS, TypeScript/lint/build/Python. [Остаточна квитанція](SA_EXT_01_02_WORKSPACE_OWN_LOCALE_COPY_SCOPED_TERMINAL_20261031.md), `remaining_scoped_implementation=0`, `necessary_unmerged_feature_PRs=0`. **SA-EXT-01/02 OPEN** (ліцензії й повний корпус місій), 03/04 TERMINAL; live реліз/NVDA NOT_VERIFIED.

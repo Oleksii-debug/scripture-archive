@@ -167,10 +167,12 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
       button.textContent=w.mark;
     }
     if(meter)meter.value=0;
-    if(status)status.textContent=w.unavailable;
+    // Do not claim "progress has not changed" after another tab replaced it:
+    // its persisted state is unknown, not confirmed unchanged.
+    if(status)status.textContent=SYNC_ERROR[languageOf(language)];
     if(badge)badge.textContent='';
     if(placeMeter)placeMeter.value=0;
-    if(placeStatus)placeStatus.textContent=w.unavailable;
+    if(placeStatus)placeStatus.textContent=SYNC_ERROR[languageOf(language)];
     if(placeBadge)placeBadge.textContent='';
   };
   const currentView=()=>{

@@ -256,7 +256,9 @@ export function dossierMarkup(catalog,language,requestedId,esc,searchQuery='',co
   if(!validateDossierGraph(catalog)) return `<p role="alert">${esc(w.invalid)}</p>`;
   // A direct GET can bypass HTML maxlength. Match the atlas' raw-query gate
   // instead of re-rendering a truncated, falsely selectable search result.
-  if(typeof searchQuery==='string' && searchQuery.length>120)
+  // A malformed programmatic q must not be treated as an absent filter:
+  // otherwise the default dossier's unrelated Scripture links are exposed.
+  if(typeof searchQuery!=='string' || searchQuery.length>120)
     return `<p role="alert">${esc(w.invalid)}</p>`;
   // An absent query selects the introduction. An invalid explicit ID must
   // never be silently presented as a different person's source dossier.

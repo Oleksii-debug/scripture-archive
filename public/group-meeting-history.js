@@ -27,15 +27,43 @@ function validPage(page,seen,cursor){
 export function mountMeetingHistory(root,{request,groupId,copy,isCurrent,renderRows}){
   const list=root.querySelector('[data-meeting-list]'),button=root.querySelector('[data-meeting-more]'),status=root.querySelector('[data-meeting-status]');
   const seen=new Set();let cursor=null,busy=false,finished=false,unavailable=false;
-  const current=()=>root.isConnected!==false&&isCurrent();
+  let epoch=0,hidden=false,destroyed=false;
+  const current=()=>!hidden&&!destroyed&&root.isConnected!==false&&isCurrent();
+  function retire(){
+    epoch++;
+    hidden=true;
+    busy=false;
+    cursor=null;
+    finished=false;
+    unavailable=false;
+    seen.clear();
+    list.textContent='';
+    button.disabled=true;
+    button.hidden=true;
+    button.textContent=copy.more;
+    status.textContent=copy.loading;
+  }
+  const view=root.ownerDocument?.defaultView;
+  const onPageHide=()=>retire();
+  const onPageShow=()=>{
+    if(!hidden||destroyed)return;
+    hidden=false;
+    if(root.isConnected!==false&&isCurrent()){
+      button.hidden=false;
+      void load();
+    }
+  };
+  view?.addEventListener?.('pagehide',onPageHide);
+  view?.addEventListener?.('pageshow',onPageShow);
   async function load(){
     if(busy||finished||unavailable||!current())return;
+    const lease=epoch;
     const doc=root.ownerDocument,restore=doc?.activeElement===button,offset=seen.size;
     busy=true;button.disabled=true;status.textContent=copy.loading;
     let added=false;
     try {
       const page=await request('meetings','GET',undefined,`groupId=${encodeURIComponent(groupId)}${cursor?`&before=${encodeURIComponent(cursor)}`:''}`);
-      if(!current())return;
+      if(lease!==epoch||!current())return;
       if(!validPage(page,seen,cursor))throw Error('invalid_meeting_page');
       const html=renderRows(page.sessions);
       list.insertAdjacentHTML('beforeend',html);
@@ -44,13 +72,14 @@ export function mountMeetingHistory(root,{request,groupId,copy,isCurrent,renderR
       status.textContent=seen.size?`${copy.loaded} ${seen.size}. ${finished?copy.end:''}`:copy.empty;
       button.textContent=copy.more;
     } catch(error){
-      if(!current())return;
+      if(lease!==epoch||!current())return;
       unavailable=['meeting_cursor_unavailable','not_found','authentication_required','forbidden'].includes(error.message);
       // Revoked access must not leave already-loaded private reflections visible.
       if(unavailable){list.textContent='';seen.clear();}
       status.textContent=unavailable?copy.expired:copy.error;
       button.textContent=copy.retry;
     } finally {
+      if(lease!==epoch)return;
       busy=false;
       if(current()){
         button.disabled=finished||unavailable;button.hidden=finished||unavailable;
@@ -63,5 +92,15 @@ export function mountMeetingHistory(root,{request,groupId,copy,isCurrent,renderR
     }
   }
   button.onclick=load;
-  return {ready:load()};
+  return {
+    ready:load(),
+    destroy(){
+      if(destroyed)return;
+      destroyed=true;
+      view?.removeEventListener?.('pagehide',onPageHide);
+      view?.removeEventListener?.('pageshow',onPageShow);
+      button.onclick=null;
+      retire();
+    },
+  };
 }

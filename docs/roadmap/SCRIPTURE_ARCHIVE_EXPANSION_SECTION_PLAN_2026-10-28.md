@@ -1,3 +1,9 @@
+## 2026-10-31 — SA-EXT-06 / ALL_EXISTING_UNORDERED_DOSSIER_TOPICS — SCOPED TERMINAL
+
+**ЗАКРИТО ДЛЯ РОЗРОБКИ лише цей функціональний підпункт** — `CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL`. Канонічний текстовий атлас показує **17/17 уже прийнятих досьє**: сім редакційних оповідей, шість місць, чотири інші source-linked теми (Рут, Павло, Марія, Петро) в окремому недатованому списку з усіма біблійними посиланнями й позначками `narrative/interpretive` українською, російською та англійською. **[PR #827](https://github.com/Oleksii-debug/scripture-archive/pull/827) SQUASH MERGED** `main@f7ff8049a9d6992da4d4290da54c3ef01c33d0e8`; [точний PR-head CI #41165013842](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41165013842) **SUCCESS**, окремо пройдені Node/TS/lint/build/Worker-D1/Python. [Квитанція](SA_EXT_06_ATLAS_ALL_EXISTING_UNORDERED_TOPICS_SCOPED_TERMINAL_20261031.md). Для підпункту `remaining_scoped_implementation=0` та `necessary_unmerged_PRs=0`. **Повний SA-EXT-06 і всі інші незакриті батьківські розділи залишаються OPEN**; SA-EXT-03/04 уже TERMINAL. Немає proof живого Sites SHA, незалежних картографічних прав, повної географії/археології або фізичного NVDA; **без деплою**.
+
+---
+
 ## 2026-10-31 — остаточні source-development стани перших 5 SA-EXT батьківських розділів
 
 Це **канонічні стани розробки**, а не підтвердження встановленого релізу. Постійний список номерів зберігається саме в цьому плані; попередні часткові квитанції залишаються історією.

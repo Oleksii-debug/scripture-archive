@@ -4531,10 +4531,12 @@ window.addEventListener("pagehide", () => {
   editorialPageHidden=true;
   editorialRestoreEpoch++;
   const currentRoute=routeSourceFromLocation(location).replace(/^\/+|\/+$/g,"");
-  const mounted=main.querySelector(".builder-layout, .editor-grid");
+  // Progress exposes personal attempts and reading history just like builder
+  // exposes private drafts. Both must be cleared on a BFCache page exit.
+  const mounted=main.querySelector(".builder-layout, .editor-grid, .progress-stat, .resume-card");
   const wasReauthorizing=editorialAwaitingSession;
   editorialAwaitingSession=false;
-  if(!mounted && currentRoute!=="builder" && currentRoute!=="editor" && !wasReauthorizing)return;
+  if(!mounted && !["builder","editor","progress"].includes(currentRoute) && !wasReauthorizing)return;
   editorialPrivateNeedsReauthorization=true;
   editorViewEpoch++;
   retirePrivateWorkspaceOnPageHide();

@@ -159,6 +159,18 @@ export function searchScriptureDossiers(language,value,catalog=null) {
   const bookNames=new Map(books.filter(book=>book && typeof book.code==='string' &&
     typeof book.title==='string').map(book=>[book.code,book.title]));
   const normalize=text=>text.normalize('NFC').toLocaleLowerCase(lang);
+  // An exact book-name/code search must discover every dossier whose
+  // published sources or relation witnesses cite that book. Do not perform
+  // prefix/substring matching on book identifiers: GEN must never include
+  // GEN 1 merely because it shares the spelling of GEN 12.
+  const citedBookCodes=new Set(nodes.flatMap(item=>[
+    ...item.sources.map(source=>source.book),
+    ...item.related.map(edge=>edge.via.book)
+  ]));
+  const requestedBooks=new Set([...citedBookCodes].filter(code=>normalize(code)===query ||
+    (bookNames.has(code) && normalize(bookNames.get(code))===query)));
+  if(requestedBooks.size)return nodes.filter(item=>item.sources.some(source=>requestedBooks.has(source.book)) ||
+    item.related.some(edge=>requestedBooks.has(edge.via.book)));
   // Reuse the existing verified book-name/code index, but treat a verse
   // request as an exact chapter-and-range lookup, not a substring match.
   // Include a dossier's published relation witnesses: the reader can inspect

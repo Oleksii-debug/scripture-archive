@@ -264,3 +264,29 @@ test('SA-EXT-05: relation chapter witnesses must not match invented adjacent cha
   }
   assert.deepEqual(searchScriptureDossiers('en','GEN 17:14',catalog),[],'outside the published relation verse interval');
 });
+
+test('SA-EXT-05 exact Bible-book query finds direct and relational witnesses without chapter alias',()=>{
+  for(const lang of ['uk','ru','en']){
+    for(const code of ['GEN','LUK','ACT','RUT']){
+      const title=catalog.books[lang].find(book=>book.code===code)?.title;
+      assert.ok(title,lang+' '+code+' must be a real edition book');
+      const expected=scriptureDossiers.filter(item=>item.sources.some(source=>source.book===code) ||
+        item.related.some(edge=>edge.via.book===code)).map(item=>item.id);
+      assert.ok(expected.length>0,code+' cited by actual dossiers');
+      for(const query of [code.toLowerCase(),title]){
+        const actual=searchScriptureDossiers(lang,query,catalog).map(item=>item.id);
+        assert.deepEqual(actual,expected,lang+' '+query+' citation-backed book search');
+        const html=dossierMarkup(catalog,lang,null,esc,query);
+        assert.match(html,/<form action="\/dossiers" method="get" role="search">/);
+        assert.ok(html.includes('name="q" type="search"'),lang+' same public search UI');
+        for(const id of expected)assert.ok(html.includes('href="/dossiers?id='+id+'&amp;q='),
+          lang+' '+id+' present through the real filtered route');
+      }
+      assert.deepEqual(searchScriptureDossiers(lang,code.toLowerCase()).map(item=>item.id),expected,
+        lang+' standalone canonical code requires no second catalogue');
+    }
+    assert.deepEqual(searchScriptureDossiers(lang,'GEN1',catalog),[]);
+    assert.deepEqual(searchScriptureDossiers(lang,'GEN 1',catalog),[]);
+    assert.deepEqual(searchScriptureDossiers(lang,'GENX',catalog),[]);
+  }
+});

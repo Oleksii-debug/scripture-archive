@@ -136,3 +136,26 @@ test("a genuine named reading receipt is acknowledged with existing trimmed titl
   assert.deepEqual(result.body, {ok:true});
   assert.deepEqual(JSON.parse(f.calls[0].args[1]), [{...receipt, title:"Буття 1"}]);
 });
+
+
+test("reading refuses noncanonical exact Bible book identifiers before D1", async () => {
+  // A malformed caller-supplied identifier must not alias a saved chapter.
+  for (const book of [" GEN ","GEN ","GEN\n","\tJOL","1CO "," 1CO"]) {
+    const f = harness();
+    const result = await f.put([receipt("EXO", 1), { book, chapter: 1, title: "Forged" }]);
+    assert.equal(result.status, 400, JSON.stringify(book));
+    assert.equal(result.body.error, "invalid_reading");
+    assert.equal(f.calls.length, 0, "invalid mixed batch must not write to D1");
+  }
+});
+
+test("reading still accepts canonical numbered and local book codes", async () => {
+  const f = harness();
+  const result = await f.put([receipt("GEN", 1), receipt("1CO", 1), receipt("JOL", 4)]);
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body, { ok: true });
+  assert.equal(f.calls.length, 1);
+  assert.deepEqual(JSON.parse(f.calls[0].args[1]), [
+    receipt("GEN", 1), receipt("1CO", 1), receipt("JOL", 4),
+  ]);
+});

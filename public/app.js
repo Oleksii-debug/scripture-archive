@@ -1,7 +1,7 @@
 import {meetingHistoryCopy,meetingHistoryMarkup,meetingRowsMarkup,mountMeetingHistory} from './group-meeting-history.js';
 import { parallelControls, mountParallelReader, safeProvenanceHttpsUrl } from './parallel-reader.js';
 import {routeSourceFromLocation, legacyRouteHashChanged} from './route-location.js';
-import {renderWorkspace, workspaceCopy, groupManagementCopy, groupManagementMarkup, mountGroupNamePrivacy} from './workspace.js';
+import {renderWorkspace, retirePrivateWorkspaceOnPageHide, workspaceCopy, groupManagementCopy, groupManagementMarkup, mountGroupNamePrivacy} from './workspace.js';
 import {supportSection} from './support.js';
 import {homePage} from './home.js';
 import {EDITIONS, editionCopy, selectedEdition, editionUrl, editionSelect, setEditionForTab} from './editions.js';
@@ -4505,6 +4505,26 @@ window.addEventListener("pageshow", () => {
   groupDetailNeedsReauthorization=false;
   // Server session identity, not the BFCache's in-memory principal, decides
   // whether current group details and invitations may render again.
+  void getSession().catch(()=>null).finally(()=>route());
+});
+// Editorial drafts, review queues and owner account listings must not be
+// resurrected from a browser BFCache after a different account signs in.
+// Retire both mounted private markup and async author/editor render authority.
+let editorialPrivateNeedsReauthorization=false;
+window.addEventListener("pagehide", () => {
+  const currentRoute=routeSourceFromLocation(location).replace(/^\/+|\/+$/g,"");
+  const mounted=main.querySelector(".builder-layout, .editor-grid");
+  if(!mounted && currentRoute!=="builder" && currentRoute!=="editor")return;
+  editorialPrivateNeedsReauthorization=true;
+  editorViewEpoch++;
+  retirePrivateWorkspaceOnPageHide();
+  main.replaceChildren();
+});
+window.addEventListener("pageshow", () => {
+  if(!editorialPrivateNeedsReauthorization)return;
+  editorialPrivateNeedsReauthorization=false;
+  // The current cookie and editor role are server authorities. Never replay
+  // private drafts, reviewer identities or account lists from cached HTML.
   void getSession().catch(()=>null).finally(()=>route());
 });
 Promise.all([getCMS(), getSession().catch(() => null)]).finally(async () => {

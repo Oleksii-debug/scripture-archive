@@ -105,6 +105,16 @@ test('R0.1 rejects IDNA compatibility glyphs, Unicode dots and padded ports befo
       expectedOrigin: canonical, siteUrl: value, appBaseUrl: canonical,
     }), /literal bare HTTPS origin/);
   }
+  // U+212A (Kelvin sign) lowercases to ASCII k in JavaScript itself.
+  // Merely comparing value.toLowerCase() to URL.origin is insufficient.
+  const kelvin = 'https://staKe.example.test';
+  const stage = 'https://stake.example.test';
+  assert.equal(new URL(kelvin).origin, stage);
+  assert.equal(kelvin.toLowerCase(), stage);
+  assert.throws(() => normalizeSecureOrigin(kelvin), /literal bare HTTPS origin/);
+  assert.throws(() => verifyDeclaredOrigins({
+    expectedOrigin: stage, siteUrl: kelvin, appBaseUrl: stage,
+  }), /literal bare HTTPS origin/);
   // Valid declarations, recovery and explicitly selected non-default ports
   // must retain their original contract.
   for (const value of [

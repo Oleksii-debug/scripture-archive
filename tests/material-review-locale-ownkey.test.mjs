@@ -28,15 +28,17 @@ function searchHTML(language) {
 test('post-terminal editorial copy has one complete Ukrainian fallback for malformed and inherited language keys', () => {
   const expected = reviewText('uk');
   for (const locale of unexpectedLocales) {
-    assert.deepEqual(reviewText(locale), expected, String(locale));
+    // A null-prototype object deliberately has no toString() method.
+    const description = locale !== null && typeof locale === 'object' ? 'object' : String(locale);
+    assert.deepEqual(reviewText(locale), expected, description);
     assert.equal(
       editorRolesMarkup([], locale, esc),
       editorRolesMarkup([], 'uk', esc),
-      'editor management must use complete own-key copy for ' + String(locale),
+      'editor management must use complete own-key copy for ' + description,
     );
     assert.equal(
       searchHTML(locale), searchHTML('uk'),
-      'editorial public search must use complete own-key copy for ' + String(locale),
+      'editorial public search must use complete own-key copy for ' + description,
     );
   }
 });

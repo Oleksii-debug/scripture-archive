@@ -4530,18 +4530,21 @@ window.addEventListener("pageshow", () => {
 });
 // Editorial drafts, reviewer queues and owner-only account listings cannot
 // outlive a BFCache exit or a switch of the authenticated browser session.
+// The same barrier also protects personal progress and principal-scoped
+// Academy markers.
 let editorialPrivateNeedsReauthorization=false;
 let editorialRestoreEpoch=0,editorialPageHidden=false,editorialAwaitingSession=false;
 window.addEventListener("pagehide", () => {
   editorialPageHidden=true;
   editorialRestoreEpoch++;
   const currentRoute=routeSourceFromLocation(location).replace(/^\/+|\/+$/g,"");
-  // Profile, progress, owner and author pages all hold principal-sensitive
-  // data. Clear even an unmounted account route (e.g. pending sign-in).
-  const mounted=main.querySelector(".builder-layout, .editor-grid, .progress-stat, .resume-card, .account-dashboard, .profile-card, .auth-grid, .auth-card");
+  // Profile, progress, Academy, owner and author pages all hold
+  // principal-sensitive data. Clear even an unmounted private route (e.g.
+  // pending sign-in or course source request) before BFCache can preserve it.
+  const mounted=main.querySelector(".builder-layout, .editor-grid, .progress-stat, .resume-card, .account-dashboard, .profile-card, .auth-grid, .auth-card, .academy-reading");
   const wasReauthorizing=editorialAwaitingSession;
   editorialAwaitingSession=false;
-  if(!mounted && !["builder","editor","progress","account"].includes(currentRoute) && !wasReauthorizing)return;
+  if(!mounted && !["builder","editor","progress","account","campaigns"].includes(currentRoute) && !wasReauthorizing)return;
   editorialPrivateNeedsReauthorization=true;
   editorViewEpoch++;
   retirePrivateWorkspaceOnPageHide();

@@ -78,3 +78,57 @@ test('a failed receipt consumption rolls back the entire start transaction', () 
     assert.equal(db.prepare('SELECT consumed_at FROM chapter_read_receipts').get().consumed_at,null);
   } finally { db.close(); }
 });
+// Execute both answer statements extracted from the canonical API, including
+// SQLite's actual changes() behavior inside one D1-equivalent transaction.
+// An existing answer with an unmoved cursor can arise from old/corrupt state:
+// an ignored INSERT must never advance to grading or publish the old answer.
+test('answer cursor only advances after the immediately preceding answer INSERT', () => {
+  const source = readFileSync(new URL('../app/api/attempts/route.ts', import.meta.url), 'utf8');
+  const begin = source.indexOf('const accepted = await env.DB.batch([');
+  const end = source.indexOf('const answerChanges = confirmedBatch(accepted, 2)', begin);
+  assert.ok(begin > 0 && end > begin, 'canonical answer transaction must exist');
+  const sql = [...source.slice(begin, end).matchAll(/env\.DB\.prepare\("([^"]+)"\)/g)].map(match => match[1]);
+  assert.equal(sql.length, 2);
+  assert.match(sql[1], /\bchanges\(\)\s*=\s*1\b/, 'cursor UPDATE must depend on actual answer INSERT');
+
+  const db = new DatabaseSync(':memory:');
+  try {
+    db.exec(\`CREATE TABLE mission_attempts (
+      id TEXT PRIMARY KEY, status TEXT, current_index INTEGER, expires_at TEXT
+    );
+    CREATE TABLE mission_attempt_answers (
+      attempt_id TEXT, task_id TEXT, selected_json TEXT, is_correct INTEGER,
+      PRIMARY KEY (attempt_id, task_id)
+    );
+    INSERT INTO mission_attempts VALUES ('attempt', 'active', 0, '2999-01-01');\`);
+    const state = () => ({ ...db.prepare("SELECT status,current_index FROM mission_attempts WHERE id='attempt'").get() });
+    const answer = () => {
+      db.exec('BEGIN');
+      try {
+        const inserted = db.prepare(sql[0]).run('attempt', 'task-1', '[0]', 1, 'attempt', 0).changes;
+        const advanced = db.prepare(sql[1]).run(1, 'grading', 'attempt', 0).changes;
+        db.exec('COMMIT');
+        return [inserted, advanced];
+      } catch (error) { db.exec('ROLLBACK'); throw error; }
+    };
+
+    // RED on the old source: INSERT OR IGNORE=0, cursor UPDATE=1, durable
+    // grading cursor points at an answer that was never accepted by this POST.
+    db.prepare("INSERT INTO mission_attempt_answers VALUES ('attempt','task-1','[1]',0)").run();
+    assert.deepEqual(answer(), [0, 0], 'duplicate/corrupt answer cannot move the cursor');
+    assert.deepEqual(state(), { status: 'active', current_index: 0 });
+    assert.deepEqual({ ...db.prepare("SELECT selected_json,is_correct FROM mission_attempt_answers").get() },
+      { selected_json: '[1]', is_correct: 0 });
+
+    // Removing the invalid old answer permits a normal fresh response.
+    db.prepare("DELETE FROM mission_attempt_answers WHERE attempt_id='attempt'").run();
+    assert.deepEqual(answer(), [1, 1]);
+    assert.deepEqual(state(), { status: 'grading', current_index: 1 });
+    assert.deepEqual({ ...db.prepare("SELECT selected_json,is_correct FROM mission_attempt_answers").get() },
+      { selected_json: '[0]', is_correct: 1 });
+
+    // A delayed replay after a completed cursor cannot duplicate an answer.
+    assert.deepEqual(answer(), [0, 0]);
+    assert.deepEqual(state(), { status: 'grading', current_index: 1 });
+  } finally { db.close(); }
+});

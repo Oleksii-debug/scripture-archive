@@ -93,7 +93,10 @@ export function sameOrigin(request: Request) {
   const origin = request.headers.get("origin");
   if (origin && origin !== new URL(request.url).origin) return false;
   const site = request.headers.get("sec-fetch-site");
-  return !site || site === "same-origin" || site === "same-site" || site === "none";
+  // A sibling subdomain is same-site but NOT same-origin. SameSite cookies
+  // are sent there, so accepting this browser signal permits CSRF from a
+  // compromised sibling origin if the Origin header is absent.
+  return !site || site === "same-origin" || site === "none";
 }
 
 export function isAuthTestRequest(request: Request) {

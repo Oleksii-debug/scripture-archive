@@ -49,9 +49,6 @@ function requestedBook(value: unknown): string | null {
       value !== value.trim() || !/^[a-z0-9]+$/i.test(value)) return null;
   return value.toUpperCase();
 }
-// Group mode is an assessment and durable-progress authority. A malformed
-// explicit group identifier must not silently become a personal attempt, and
-// truncating a long identifier must not alias a real group's ID.
 // Attempt IDs identify durable assessments; trimming or slicing an ID can
 // point a malformed request at an unrelated valid assessment owned by the
 // same principal. The canonical server generates UUID-style ASCII IDs.
@@ -59,6 +56,9 @@ function requestedAttemptId(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 && value.length <= 80 &&
     /^[A-Za-z0-9_-]+$/.test(value) ? value : null;
 }
+// Group mode is an assessment and durable-progress authority. A malformed
+// explicit group identifier must not silently become a personal attempt, and
+// truncating a long identifier must not alias a real group's ID.
 function requestedGroupId(value: unknown): string | null {
   if (value === undefined || value === null || value === "") return "";
   if (typeof value !== "string") return null;

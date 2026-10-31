@@ -325,9 +325,18 @@ export function dossierMarkup(catalog,language,requestedId,esc,searchQuery='',co
 
 // SA-EXT-06: accessible text-first passage/place index. Editorial reading
 // order is NOT absolute historical dating or archaeological confirmation.
-export function dossierAtlasMarkup(catalog,language,esc) {
+export function dossierAtlasMarkup(catalog,language,esc,query='') {
   const lang=LANGS.includes(language)?language:'uk',w=COPY[lang];
   if(!validateDossierGraph(catalog))return '<p role="alert">'+esc(w.invalid)+'</p>';
+  // Reuse the dossier GET search rather than displaying unrelated atlas witnesses
+  // beside a filtered dossier result. Default (no query) is unchanged.
+  if(typeof query!=='string'||query.length>120)return '<p role="alert">'+esc(w.invalid)+'</p>';
+  const filtered=query.trim().length>0;
+  const visibleIds=filtered?new Set(searchScriptureDossiers(lang,query,catalog).map(item=>item.id)):null;
+  const visible=item=>Boolean(item)&&(!visibleIds||visibleIds.has(item.id));
+  const resultCount=filtered?visibleIds.size:0;
+  if(filtered&&resultCount===0)return '<section class="card dossier-atlas" aria-labelledby="dossier-atlas-heading"><h2 id="dossier-atlas-heading">'+esc(COPY[lang].index)+'</h2><p role="status">'+esc(SEARCH_COPY[lang].empty)+'</p></section>';
+  const filterStatus=filtered?'<p role="status">'+esc(SEARCH_COPY[lang].results)+': '+resultCount+'</p>':'';
   const terms={
     uk:{title:'Біблійний атлас: текстова лабораторія',intro:'Орієнтовна послідовність оповідей для читання. Це не датування історичних подій і не незалежне археологічне підтвердження.',order:'Порядок читання',subject:'Тема',passage:'Біблійний уривок',places:'Згадані місця',extra:'Інші теми дослідження (не хронологічний порядок)',uncertainty:'Сучасні координати, маршрути й археологічні локалізації тут не встановлені; використовуйте першоджерела, а не припущення на карті.'},
     ru:{title:'Библейский атлас: текстовая лаборатория',intro:'Ориентировочная последовательность повествований для чтения. Это не датировка исторических событий и не независимое археологическое подтверждение.',order:'Порядок чтения',subject:'Тема',passage:'Библейский отрывок',places:'Упомянутые места',extra:'Другие темы исследования (без хронологического порядка)',uncertainty:'Современные координаты, маршруты и археологические локализации здесь не установлены; используйте первоисточники, а не предположения на карте.'},
@@ -342,7 +351,7 @@ export function dossierAtlasMarkup(catalog,language,esc) {
     return '<a href="/reader/'+source.book+'/'+source.chapter+'?verse='+source.first+'" aria-label="'+esc(w.read)+': '+esc(label)+' — '+esc(w[source.kind])+'">'+esc(label)+'</a>';
   };
   const subject=item=>'<a href="/dossiers?id='+item.id+'">'+esc(item.names[lang])+'</a>';
-  const history=order.map((id,i)=>{
+  const history=order.filter(id=>visible(byId.get(id))).map((id,i)=>{
     const item=byId.get(id);
     // Each narrative row must expose all its canonical witness passages, not
     // only the first reference. Keep interpretive sources explicitly labelled.
@@ -351,14 +360,14 @@ export function dossierAtlasMarkup(catalog,language,esc) {
   }).join('');
   // Display every source-backed passage for each place. Selecting only the
   // first source silently hid independently cited chapters from the atlas.
-  const places=nodes.filter(item=>item.type==='place').map(item=>
+  const places=nodes.filter(item=>item.type==='place'&&visible(item)).map(item=>
     '<tr><th scope="row">'+subject(item)+'</th><td><ol>'+
     item.sources.map(source=>'<li>'+passage(source)+' — '+esc(w[source.kind])+'</li>').join('')+
     '</ol></td></tr>').join('');
   // The dated-reading sample above is deliberately bounded. Do not hide
   // other approved person/event dossiers from the text atlas or falsely place
   // them in a historical chronology without independent dated evidence.
-  const additionalTopics=nodes.filter(item=>item.type!=='place'&&!order.includes(item.id));
+  const additionalTopics=nodes.filter(item=>item.type!=='place'&&!order.includes(item.id)&&visible(item));
   const additional=additionalTopics.length?'<section aria-labelledby="dossier-atlas-additional-heading"><h3 id="dossier-atlas-additional-heading">'+esc(terms.extra)+'</h3><ol>'+
     additionalTopics.map(item=>'<li>'+subject(item)+'<ol>'+
       item.sources.map(source=>'<li>'+passage(source)+' — '+esc(w[source.kind])+'</li>').join('')+
@@ -368,12 +377,12 @@ export function dossierAtlasMarkup(catalog,language,esc) {
   // The main tables intentionally keep their approved narrative reading order;
   // a separate semantic definition list avoids mistaking relation edges for
   // additional dates, locations or independent historical proof.
-  const relationEntries=nodes.flatMap(item=>item.related.map(link=>({item,link})));
+  const relationEntries=nodes.filter(visible).flatMap(item=>item.related.map(link=>({item,link}))).filter(({link})=>visible(byId.get(link.to)));
   const relatedWitnesses=relationEntries.length?
     '<section aria-labelledby="dossier-atlas-relations-heading"><h3 id="dossier-atlas-relations-heading">'+esc(w.relations)+'</h3><dl>'+
       relationEntries.map(({item,link})=>
         '<dt>'+subject(item)+' → '+subject(byId.get(link.to))+'</dt><dd>'+
         passage(link.via)+' — '+esc(w[link.via.kind])+'</dd>').join('')+
     '</dl></section>':'';
-  return '<section class="card dossier-atlas" aria-labelledby="dossier-atlas-heading"><h2 id="dossier-atlas-heading">'+esc(terms.title)+'</h2><p>'+esc(terms.intro)+'</p><table><caption>'+esc(terms.order)+'</caption><thead><tr><th scope="col">№</th><th scope="col">'+esc(terms.subject)+'</th><th scope="col">'+esc(terms.passage)+'</th></tr></thead><tbody>'+history+'</tbody></table><table><caption>'+esc(terms.places)+'</caption><thead><tr><th scope="col">'+esc(terms.subject)+'</th><th scope="col">'+esc(terms.passage)+'</th></tr></thead><tbody>'+places+'</tbody></table>'+additional+relatedWitnesses+'<p>'+esc(terms.uncertainty)+'</p></section>';
+  return '<section class="card dossier-atlas" aria-labelledby="dossier-atlas-heading"><h2 id="dossier-atlas-heading">'+esc(terms.title)+'</h2><p>'+esc(terms.intro)+'</p>'+filterStatus+'<table><caption>'+esc(terms.order)+'</caption><thead><tr><th scope="col">№</th><th scope="col">'+esc(terms.subject)+'</th><th scope="col">'+esc(terms.passage)+'</th></tr></thead><tbody>'+history+'</tbody></table><table><caption>'+esc(terms.places)+'</caption><thead><tr><th scope="col">'+esc(terms.subject)+'</th><th scope="col">'+esc(terms.passage)+'</th></tr></thead><tbody>'+places+'</tbody></table>'+additional+relatedWitnesses+'<p>'+esc(terms.uncertainty)+'</p></section>';
 }

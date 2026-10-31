@@ -159,7 +159,10 @@ export async function POST(request: Request) {
     const church = clean(data.church, 160), selectedLocale = locale(data.locale);
     const hasChildren = data.hasChildren === true ? 1 : data.hasChildren === false ? 0 : null;
     const sensitiveConsent = data.acceptSensitive === true;
-    if (!await rateLimit(`register:${address}`, 5, 3600)) return json({ error: "too_many_requests" }, 429);
+    let registrationAllowed: boolean;
+    try { registrationAllowed = await rateLimit(`register:${address}`, 5, 3600); }
+    catch { return json({ error: "registration_unavailable" }, 503); }
+    if (!registrationAllowed) return json({ error: "too_many_requests" }, 429);
     if (registrationTextExceedsLimit(data) || selectedLocale === null) return json({ error: "invalid_registration" }, 400);
     if (!EMAIL.test(email) || !validPassword(password) || !firstName || !lastName || age === null || !GENDERS.has(gender) || (tradition && !TRADITIONS.has(tradition)) || !MARITAL.has(maritalStatus) || data.acceptPrivacy !== true)
       return json({ error: "invalid_registration" }, 400);
@@ -230,7 +233,10 @@ export async function POST(request: Request) {
 
   if (action === "resend-verification") {
     const email = normalizeEmail(data.email);
-    if (!await rateLimit(`verify:${address}:${email}`, 3, 3600)) return json({ error: "too_many_requests" }, 429);
+    let verificationAllowed: boolean;
+    try { verificationAllowed = await rateLimit(`verify:${address}:${email}`, 3, 3600); }
+    catch { return json({ error: "verification_unavailable" }, 503); }
+    if (!verificationAllowed) return json({ error: "too_many_requests" }, 429);
     try {
     const account = await env.DB.prepare("SELECT a.id,a.email,a.email_verified_at,p.locale FROM accounts a LEFT JOIN profiles p ON p.user_id=a.id WHERE a.email=? AND a.deleted_at IS NULL").bind(email).first<Account>();
     if (account && !account.email_verified_at) {
@@ -246,7 +252,10 @@ export async function POST(request: Request) {
 
   if (action === "forgot-password") {
     const email = normalizeEmail(data.email);
-    if (!await rateLimit(`forgot:${address}:${email}`, 3, 3600)) return json({ error: "too_many_requests" }, 429);
+    let recoveryAllowed: boolean;
+    try { recoveryAllowed = await rateLimit(`forgot:${address}:${email}`, 3, 3600); }
+    catch { return json({ error: "password_reset_unavailable" }, 503); }
+    if (!recoveryAllowed) return json({ error: "too_many_requests" }, 429);
     try {
     const account = await env.DB.prepare("SELECT a.id,a.email,a.email_verified_at,p.locale FROM accounts a LEFT JOIN profiles p ON p.user_id=a.id WHERE a.email=? AND a.deleted_at IS NULL").bind(email).first<Account>();
     let testToken: string | undefined;
@@ -265,7 +274,10 @@ export async function POST(request: Request) {
   if (action === "reset-password") {
     const token = clean(data.token, 200), password = data.password;
     if (!token || !validPassword(password)) return json({ error: "invalid_reset" }, 400);
-    if (!await rateLimit(`reset:${address}`, 8, 900)) return json({ error: "too_many_requests" }, 429);
+    let resetAllowed: boolean;
+    try { resetAllowed = await rateLimit(`reset:${address}`, 8, 900); }
+    catch { return json({ error: "password_reset_unavailable" }, 503); }
+    if (!resetAllowed) return json({ error: "too_many_requests" }, 429);
     try {
     const tokenHash = await sha256(token);
     const record = await env.DB.prepare("SELECT token_hash,user_id FROM auth_tokens WHERE token_hash=? AND purpose='reset' AND used_at IS NULL AND expires_at>CURRENT_TIMESTAMP").bind(tokenHash).first<{ token_hash: string; user_id: string }>();

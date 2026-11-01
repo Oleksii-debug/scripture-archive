@@ -7,10 +7,10 @@ import {routeSourceFromLocation, legacyRouteHashChanged} from '../public/route-l
 // Exercise the existing production URL helpers and actual search link template,
 // with the repository's three licensed local John 3 corpora.
 const source = (await readFile(process.env.SA_SOURCE || new URL('../public/app.js', import.meta.url), 'utf8')).replaceAll('\r\n', '\n');
-const helperStart = source.indexOf('function readerVerseUrl(');
+const helperStart = source.indexOf('function readerChapterUrl(');
 const helperEnd = source.indexOf('\nasync function renderReader(', helperStart);
 const helpers = helperStart >= 0 && helperEnd > helperStart
-  ? vm.runInNewContext(source.slice(helperStart, helperEnd) + ';({readerVerseUrl,readerVerseFromUrl,readerChapterNumber})', {URL, Number, encodeURIComponent})
+  ? vm.runInNewContext(source.slice(helperStart, helperEnd) + ';({readerChapterUrl,readerVerseUrl,readerVerseFromUrl,readerChapterNumber})', {URL, Number, encodeURIComponent})
   : null;
 const templateMatch = source.match(/`<li><a href="[^"\n]*">\$\{esc\(bookTitle\(meta\)\)\} \$\{r.chapter\}:\$\{r.verse\}<\/a><p>\$\{esc\(r.text\)\}<\/p><\/li>`/);
 
@@ -18,20 +18,20 @@ test('search result opens a verse-specific reference rather than the top of chap
   assert.ok(templateMatch, 'canonical search-result template missing');
   const actual = vm.runInNewContext(templateMatch[0], {
     meta: {code:'JHN'}, r:{chapter:3,verse:16,text:'sample'},
-    esc: String, bookTitle:()=> 'John', readerVerseUrl: helpers?.readerVerseUrl,
+    esc: String, bookTitle:()=> 'John', readerVerseUrl: helpers?.readerVerseUrl, groupId: '',
   });
   assert.match(actual, /href="\/reader\/JHN\/3\?verse=16"/);
 });
 
 test('reader exposes keyboard-selectable book, chapter and verse, then focuses a permalink target', () => {
-  assert.match(source, /<a class="verse-number" href="\$\{readerVerseUrl\(meta.code, chapter, i \+ 1\)\}" aria-label=/);
+  assert.match(source, /<a class="verse-number" href="\$\{readerVerseUrl\(meta.code, chapter, i \+ 1, groupId\)\}" aria-label=/);
   assert.match(source, /data-selected-verse tabindex="-1"/);
   assert.match(source, /selected\.focus\(\{ preventScroll: true \}\)/);
   assert.match(source, /<select id="book-select">/);
   assert.match(source, /<select id="chapter-select">/);
   assert.match(source, /<label for="verse-select">\$\{t\("verse"\)\}<\/label><select id="verse-select">/);
   assert.match(source, /querySelector\("#verse-select"\)\.addEventListener\("change"/);
-  assert.match(source, /e\.target\.value \? readerVerseUrl\(meta.code, chapter, e.target.value\)/);
+  assert.match(source, /e\.target\.value \? readerVerseUrl\(meta.code, chapter, e.target.value, groupId\)/);
   for (const translation of ['Вірш','Стих','Verse']) assert.ok(source.includes(`verse: "${translation}"`));
 });
 
@@ -65,6 +65,8 @@ test('verse selector can return from an exact verse to the chapter-only permalin
     meta: {code: 'JHN'},
     chapter: 3,
     readerVerseUrl: helpers?.readerVerseUrl,
+    readerChapterUrl: helpers?.readerChapterUrl,
+    groupId: '',
     navigateTo: path => opened.push(path),
   });
   onChange({target:{value:'16'}});
@@ -89,7 +91,7 @@ for (const [lang, edition] of Object.entries({uk:'uk-ohiienko', ru:'ru', en:'en'
     const elements = {'#search-input':searchInput,'#search-panel':panel,'#search-results':list};
     const submit = vm.runInNewContext(`(e) => {${searchHandler[1]}\n  }`, {
       document:{querySelector:key=>elements[key]}, state:{lang}, book,
-      bibleText:String, meta:{code:'JHN'}, readerVerseUrl:helpers.readerVerseUrl,
+      bibleText:String, meta:{code:'JHN'}, readerVerseUrl:helpers.readerVerseUrl, groupId: '',
       esc:String, bookTitle:()=> 'John', t:key=>i18n[lang][key],
       announce:message=>announcements.push(message),
     });

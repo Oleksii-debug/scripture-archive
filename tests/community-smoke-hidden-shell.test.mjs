@@ -22,7 +22,7 @@ function deployed(url, html) {
     return Response.json({ user: null }, { headers: { "Cache-Control": "no-store" } });
   }
   if (path === "/robots.txt") {
-    return new Response("User-agent: *\\nSitemap: https://scripture-archive.com/sitemap.xml");
+    return new Response("User-agent: *\nSitemap: https://scripture-archive.com/sitemap.xml");
   }
   if (path === "/sitemap.xml") {
     return new Response('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>');

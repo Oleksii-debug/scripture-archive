@@ -58,7 +58,7 @@ for (const lang of ["uk", "ru", "en"]) {
         assert.deepEqual(h.state.reader, { book: "JHN", chapter: 3 }, chapter);
         assert.equal(h.notices.length, 1, chapter);
         assert.match(h.notices[0], /role="alert"/, chapter);
-        assert.match(h.notices[0], /href="\\/reader"/, chapter);
+        assert.match(h.notices[0], /href="\/reader"/, chapter);
       }
     });
 
@@ -85,6 +85,6 @@ test("explicit chapter route guard precedes catalogue and chapter-attempt IO", (
   const catalog = source.indexOf("  const catalog = await getCatalog();", start);
   const attempt = source.indexOf('    const attemptState = await attemptRequest("chapter"', start);
   assert.ok(start < guard && guard < catalog && catalog < attempt);
-  assert.match(source.slice(guard, catalog), /state\\.currentReader = null/);
+  assert.match(source.slice(guard, catalog), /state\.currentReader = null/);
   assert.match(source.slice(guard, catalog), /role="alert"/);
 });

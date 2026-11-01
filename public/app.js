@@ -3026,7 +3026,9 @@ async function renderReader(parts) {
   const readerPath = typeof location === "undefined" ? "" :
     (typeof location.hash === "string" && location.hash.startsWith("#/")
       ? location.hash.slice(2).split("?")[0] : (location.pathname || "").replace(/^\/?/, ""));
-  if (readerPath.includes("//")) {
+  // A second leading slash is an empty route coordinate, not a reader alias.
+  // Reject it before catalogue/attempt access instead of silently retaining stale UI.
+  if (readerPath.startsWith("/") || readerPath.includes("//")) {
     state.currentReader = null;
     shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1><p><a href="/reader">${t("reader")}</a></p></section>`);
     return;

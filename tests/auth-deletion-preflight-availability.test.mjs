@@ -33,7 +33,7 @@ function fixture(fault = "") {
       calls.batches++;
       if (fault === "batch") throw Error("D1 batch unavailable");
       if (fault === "unconfirmed") return statements.map((_, i) => ({
-        success: i !== 18, meta: { changes: i === 18 ? 0 : 1 },
+        success: i !== 0, meta: { changes: i === 0 ? 0 : 1 },
       }));
       return statements.map(() => ({ success: true, meta: { changes: 1 } }));
     },

@@ -148,12 +148,21 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
       // 119 has 176 verses; these bounds leave room for edition differences.
       // Validate before creating ANY verse DOM or citation snapshot.
       if (verses.length===0 || verses.length>256) throw Error('invalid edition chapter size');
+      // Imported chapter arrays are untrusted source records. An inherited
+      // verse slot or getter can pass validation and later return a different
+      // string to the DOM/citation. Read each own data descriptor exactly once,
+      // then render and cite only the validated immutable string snapshot.
       let chapterCharacters=0;
+      const verifiedVerses=[];
       for (let i=0; i<verses.length; i++) {
-        if (typeof verses[i]!=='string' || !verses[i].trim())
+        const descriptor=Object.getOwnPropertyDescriptor(verses,String(i));
+        if (!descriptor || !Object.hasOwn(descriptor,'value') ||
+            typeof descriptor.value!=='string' || !descriptor.value.trim())
           throw Error('invalid edition verse record');
-        chapterCharacters+=verses[i].length;
+        const verse=descriptor.value;
+        chapterCharacters+=verse.length;
         if (chapterCharacters>131072) throw Error('oversized edition chapter');
+        verifiedVerses.push(verse);
       }
       // Never attribute a new/unrecognized local edition to the primary one.
       // Source claims are authoritative only when owned by the catalog and
@@ -180,8 +189,8 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
         throw Error('missing or unsafe edition provenance');
       const source=https(metadata.source);
       const license=metadata.licenseUrl==null?'':https(metadata.licenseUrl);
-      result.innerHTML=`<section aria-labelledby="parallel-title"><h3 id="parallel-title">${esc(metadata.title)} — ${esc(bookTitle)} ${chapter}</h3><p>${copy.note}</p><p>${copy.license}: ${esc(metadata.license || '—')}</p>${metadata.attribution?`<p>${esc(metadata.attribution)}</p>`:''}${source?`<p><a href="${esc(source)}" target="_blank" rel="noreferrer">${copy.source}</a></p>`:''}${license?`<p><a href="${esc(license)}" target="_blank" rel="noreferrer">${copy.license}</a></p>`:''}<ol>${verses.map((verse,index)=>`<li><span>${esc(verse)}</span> <button type="button" class="parallel-cite" data-parallel-cite="${index+1}" aria-label="${esc(copy.cite)}: ${esc(bookTitle)} ${chapter}:${index+1}">${esc(copy.cite)}</button></li>`).join('')}</ol></section>`;
-      citation={ editionId:id, title:metadata.title, license:metadata.license, attribution:typeof metadata.attribution==='string'?metadata.attribution:'', source, licenseUrl:license, verses:verses.slice() };
+      result.innerHTML=`<section aria-labelledby="parallel-title"><h3 id="parallel-title">${esc(metadata.title)} — ${esc(bookTitle)} ${chapter}</h3><p>${copy.note}</p><p>${copy.license}: ${esc(metadata.license || '—')}</p>${metadata.attribution?`<p>${esc(metadata.attribution)}</p>`:''}${source?`<p><a href="${esc(source)}" target="_blank" rel="noreferrer">${copy.source}</a></p>`:''}${license?`<p><a href="${esc(license)}" target="_blank" rel="noreferrer">${copy.license}</a></p>`:''}<ol>${verifiedVerses.map((verse,index)=>`<li><span>${esc(verse)}</span> <button type="button" class="parallel-cite" data-parallel-cite="${index+1}" aria-label="${esc(copy.cite)}: ${esc(bookTitle)} ${chapter}:${index+1}">${esc(copy.cite)}</button></li>`).join('')}</ol></section>`;
+      citation={ editionId:id, title:metadata.title, license:metadata.license, attribution:typeof metadata.attribution==='string'?metadata.attribution:'', source, licenseUrl:license, verses:verifiedVerses.slice() };
       status.textContent=copy.ready;
     } catch { if (panel.isConnected && current() && requestCurrent()) status.textContent=copy.fail; }
     finally {

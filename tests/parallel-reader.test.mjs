@@ -472,3 +472,40 @@ test('owned explicit translation keeps precedence; invalid owned identity cannot
   assert.equal(invalid.result.innerHTML,'');
   assert.match(invalid.status.textContent,/Не вдалося/);
 }));
+
+
+test('SA-EXT-01: accessor and inherited parallel verses cannot masquerade as verified Scripture',()=>withForm(async()=>{
+  let getterCalls=0;
+  const accessor=['placeholder'];
+  Object.defineProperty(accessor,0,{enumerable:true,configurable:true,get(){
+    getterCalls++;
+    return getterCalls===1?'Plausible verse':'Unverified changed verse';
+  }});
+  const inherited=Array(1);
+  const prototype=Object.create(Array.prototype);
+  Object.defineProperty(prototype,'0',{value:'Unverified inherited verse',enumerable:true});
+  Object.setPrototypeOf(inherited,prototype);
+  for (const verses of [accessor,inherited]) {
+    const f=fixture({getBook:async()=>({chapters:[verses]})});
+    await f.run();
+    assert.equal(f.result.innerHTML,'','non-owned or dynamic verses must not be published');
+    assert.match(f.status.textContent,/Не вдалося/,'announce a retryable failure');
+    assert.equal(f.button.disabled,false,'keyboard retry remains available');
+    assert.equal(f.checked(),2,'both canonical chapter guards still execute');
+    await f.cite(1);
+    assert.equal(f.copied.length,0,'rejected verses must not reach clipboard');
+  }
+  assert.equal(getterCalls,0,'do not execute untrusted verse accessors');
+}));
+
+test('SA-EXT-01: validated parallel verses remain stable in the rendered text and citation',()=>withForm(async()=>{
+  const verses=['Original approved verse'];
+  const f=fixture({getBook:async()=>({chapters:[verses]})});
+  await f.run();
+  assert.match(f.result.innerHTML,/Original approved verse/);
+  verses[0]='Later changed verse';
+  await f.cite(1);
+  assert.equal(f.copied.length,1);
+  assert.match(f.copied[0],/Original approved verse/);
+  assert.doesNotMatch(f.copied[0],/Later changed verse/);
+}));

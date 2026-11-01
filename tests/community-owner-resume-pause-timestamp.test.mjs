@@ -106,13 +106,32 @@ test("R0.4 pause/stop and first activation are not blocked by a missing historic
   assert.equal(first.writes.length, 1);
 });
 
-test("R0.4 SQLite: an invalid resume modifier silently destroys next_at despite an ACK", () => {
+test("R0.4 canonical NOT NULL SQLite: invalid modifier aborts active wave, but zero-wave resume can ACK", () => {
   const db = new DatabaseSync(":memory:");
   try {
-    db.exec("CREATE TABLE wave(next_at TEXT); INSERT INTO wave VALUES ('2026-11-02 12:00:00')");
-    const receipt = db.prepare("UPDATE wave SET next_at=datetime(next_at,?)").run("+NaN seconds");
-    assert.equal(receipt.changes, 1);
-    assert.equal(db.prepare("SELECT next_at FROM wave").get().next_at, null);
+    // Mirrors drizzle/0007_community.sql: next_at is NOT NULL, not nullable.
+    db.exec("CREATE TABLE wave(next_at TEXT NOT NULL,status TEXT NOT NULL);" +
+      "INSERT INTO wave VALUES ('2026-11-02 12:00:00','running')");
+    const shift = db.prepare("UPDATE wave SET next_at=datetime(next_at,?) WHERE status='running'");
+    assert.throws(() => shift.run("+NaN seconds"), /NOT NULL constraint failed/);
+    assert.equal(db.prepare("SELECT next_at FROM wave").get().next_at, "2026-11-02 12:00:00");
+
+    // When every wave is complete, the invalid modifier changes zero rows:
+    // a separate owner run CAS and audit can still succeed without a guard.
+    db.exec("UPDATE wave SET status='complete';" +
+      "CREATE TABLE owner_run(status TEXT NOT NULL);" +
+      "INSERT INTO owner_run VALUES ('paused');" +
+      "CREATE TABLE owner_log(event TEXT NOT NULL)");
+    db.exec("BEGIN");
+    const owner = db.prepare("UPDATE owner_run SET status='running' WHERE status='paused'").run();
+    const noWave = shift.run("+NaN seconds");
+    const log = db.prepare("INSERT INTO owner_log VALUES ('resume')").run();
+    db.exec("COMMIT");
+    assert.equal(owner.changes, 1);
+    assert.equal(noWave.changes, 0);
+    assert.equal(log.changes, 1);
+    assert.equal(db.prepare("SELECT status FROM owner_run").get().status, "running");
+    assert.equal(db.prepare("SELECT next_at FROM wave").get().next_at, "2026-11-02 12:00:00");
   } finally { db.close(); }
 });
 

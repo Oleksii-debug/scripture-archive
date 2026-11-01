@@ -1,3 +1,9 @@
+## 2026-11-01 — SA-EXT-01 / BOOK_FETCH_TRANSIENT_READER_CONTEXT — scoped terminal
+
+**Лише цей дефект невдалого завантаження глави закрито.** [PR #1146](https://github.com/Oleksii-debug/scripture-archive/pull/1146) **MERGED** `main@143d63e29fcff9b1b4f235c0c1d1dda6be494c3a`; [CI #41313441739](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41313441739) **SUCCESS**: 4229 Node PASS/1 SKIP, 37 Worker/D1 PASS, 2 Python PASS, TS/lint/build. [Акт](roadmap/SA_EXT_01_BOOK_FETCH_TRANSIENT_READER_SCOPED_TERMINAL_20261101.md). `remaining_scoped_implementation=0` тільки тут; SA-EXT-01/02/05/06/07 OPEN, 03/04 source-terminal. Rights/editorial, browser/NVDA, installed Sites/D1/backup/release NOT_VERIFIED; без заборонених запусків.
+
+---
+
 ## 2026-11-01 — SA-EXT-01 / PROVENANCE_TRANSIENT_READER_CONTEXT — scoped terminal
 
 **Лише скидання transient reader при відмові видавничих прав закрито.** [PR #1144](https://github.com/Oleksii-debug/scripture-archive/pull/1144) **MERGED** `main@8f5ce7b8c482d6fe2509d6c6eaae6ce00fc343be`; [exact-head CI #41313075912](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41313075912) **SUCCESS**: 4229 Node PASS/1 SKIP, 37 Worker/D1 PASS, 2 Python PASS, TS/lint/build. [Акт](roadmap/SA_EXT_01_PROVENANCE_TRANSIENT_READER_SCOPED_TERMINAL_20261101.md). `remaining_scoped_implementation=0` тільки тут; SA-EXT-01/02/05/06/07 OPEN, 03/04 source-terminal. Rights/editorial, real browser/NVDA, installed Sites/D1/backup/release NOT_VERIFIED; без заборонених запусків.

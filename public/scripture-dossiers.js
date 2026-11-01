@@ -30,6 +30,15 @@ const validDossierSearchQuery = value => typeof value === 'string' &&
   // would silently expose the unfiltered dossier/atlas source links.
   (/^[ \t]*$/u.test(value) ||
     !/[\u0000-\u001f\u007f-\u009f\u00a0\u034f\u1680\u2000-\u200a\u202f\u205f\u3000\u061c\u115f\u1160\u200b-\u200f\u2028-\u202e\u2060-\u206f\u2800\u3164\ufeff\ud800-\udfff\uffa0\p{Cf}]/u.test(value));
+// Publisher catalogue metadata must be owned data, not executable accessors.
+// Read each descriptor once; never invoke a getter merely to validate a source.
+const ownData=(record,key)=>{
+  if(!record || typeof record!=='object')return undefined;
+  const descriptor=Object.getOwnPropertyDescriptor(record,key);
+  return descriptor && Object.hasOwn(descriptor,'value') ? descriptor.value : undefined;
+};
+const hasOwnData=(record,key)=>record && typeof record==='object' &&
+  Object.hasOwn(Object.getOwnPropertyDescriptor(record,key) || {},'value');
 const ref=(book,chapter,first,last,kind='narrative')=>({book,chapter,first,last,kind});
 const nodes=[
  {id:'abraham',type:'person',names:{uk:'Авраам (Аврам)',ru:'Авраам (Аврам)',en:'Abraham (Abram)'},
@@ -154,20 +163,20 @@ export function validateDossierGraph(catalog) {
   // Only own, published catalogue records may authorize reader source labels.
   // Prototype-inherited language lists or book fields can otherwise spoof a
   // source name in the dossier, atlas and accessible citation links.
-  if(!catalog || typeof catalog!=='object' || !Object.hasOwn(catalog,'books') ||
-      !catalog.books || typeof catalog.books!=='object' || Array.isArray(catalog.books) ||
-      LANGS.some(lang=>!Object.hasOwn(catalog.books,lang) || !Array.isArray(catalog.books[lang]))) return false;
+  const inventories=ownData(catalog,'books');
+  if(!inventories || typeof inventories!=='object' || Array.isArray(inventories) ||
+      LANGS.some(lang=>!Array.isArray(ownData(inventories,lang)))) return false;
   // A malformed or ambiguous edition catalogue must show the accessible
   // source-unavailable state, not throw while assembling the dossier.
   // Match the canonical Bible reader's published chapter/verse size gates.
   // Otherwise a dossier can link to a source the actual reader rejects.
-  const catalogs = LANGS.map(lang=>catalog.books[lang]);
+  const catalogs = LANGS.map(lang=>ownData(inventories,lang));
   // Sparse or oversized arrays must fail closed before Map construction;
   // Array#some skips holes and Map(books.map(...)) otherwise throws.
   if(catalogs.some(books=>books.length===0 || books.length>200 ||
-      Array.from(books.keys()).some(index=>!Object.hasOwn(books,index)) ||
+      Array.from(books.keys()).some(index=>!hasOwnData(books,index)) ||
       books.some(book=>!book || typeof book!=='object' || Array.isArray(book) ||
-      !['code','title','chapters'].every(key=>Object.hasOwn(book,key)) || !safeBookCode(book.code) ||
+      !['code','title','chapters'].every(key=>hasOwnData(book,key)) || !safeBookCode(book.code) ||
       !safeVisibleText(book.title) ||
       !Number.isSafeInteger(book.chapters) || book.chapters<1 || book.chapters>200) ||
       new Set(books.map(book=>book.code)).size!==books.length)) return false;
@@ -193,12 +202,16 @@ export function searchScriptureDossiers(language,value,catalog=null) {
   if(!query)return [...nodes];
   // Use the already-validated book catalogue supplied by the native dossier
   // route. A standalone lookup without it still supports canonical book codes.
-  const books=catalog && typeof catalog==='object' && Object.hasOwn(catalog,'books') &&
-    catalog.books && typeof catalog.books==='object' && Object.hasOwn(catalog.books,lang) &&
-    Array.isArray(catalog.books[lang]) ? catalog.books[lang] : [];
-  const bookNames=new Map(books.filter(book=>book && typeof book==='object' &&
-    Object.hasOwn(book,'code') && Object.hasOwn(book,'title') &&
-    typeof book.code==='string' && typeof book.title==='string').map(book=>[book.code,book.title]));
+  const candidateBooks=ownData(ownData(catalog,'books'),lang);
+  const books=Array.isArray(candidateBooks) && candidateBooks.length<=200 ? candidateBooks : [];
+  const bookNames=new Map();
+  // Standalone search is also public: never execute an accessor while
+  // looking up a publisher's book title, even without a full route render.
+  for(let index=0;index<books.length;index++){
+    const book=ownData(books,index);
+    const code=ownData(book,'code'),title=ownData(book,'title');
+    if(typeof code==='string' && typeof title==='string')bookNames.set(code,title);
+  }
   const normalize=text=>text.normalize('NFC').toLocaleLowerCase(lang);
   // An exact book-name/code search must discover every dossier whose
   // published sources or relation witnesses cite that book. Do not perform

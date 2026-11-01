@@ -25,9 +25,11 @@ const validDossierSearchQuery = value => typeof value === 'string' &&
   value.length <= 120 &&
   // Only ordinary space/TAB preserve the historical blank GET behavior.
   // Unicode separators, BOM, CR/LF, format controls and visually empty
-  // script fillers fail closed, even alone (consistent with source metadata).
+  // script fillers and non-ASCII Unicode spaces fail closed, even alone.
+  // JS trim() removes Zs spaces such as U+202F and U+3000; accepting them
+  // would silently expose the unfiltered dossier/atlas source links.
   (/^[ \t]*$/u.test(value) ||
-    !/[\u0000-\u001f\u007f-\u009f\u00a0\u034f\u061c\u115f\u1160\u200b-\u200f\u2028-\u202e\u2060-\u206f\u2800\u3164\ufeff\ud800-\udfff\uffa0\p{Cf}]/u.test(value));
+    !/[\u0000-\u001f\u007f-\u009f\u00a0\u034f\u1680\u2000-\u200a\u202f\u205f\u3000\u061c\u115f\u1160\u200b-\u200f\u2028-\u202e\u2060-\u206f\u2800\u3164\ufeff\ud800-\udfff\uffa0\p{Cf}]/u.test(value));
 const ref=(book,chapter,first,last,kind='narrative')=>({book,chapter,first,last,kind});
 const nodes=[
  {id:'abraham',type:'person',names:{uk:'Авраам (Аврам)',ru:'Авраам (Аврам)',en:'Abraham (Abram)'},

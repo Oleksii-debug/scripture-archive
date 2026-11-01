@@ -39,6 +39,13 @@ export function validEditionRightsMetadata(metadata) {
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return false;
   const own = key => Object.hasOwn(metadata,key);
   const optionalOwn = key => !(key in metadata) || own(key);
+  // An own accessor is not an authored publisher/rights record. A getter can
+  // return an approved title during validation and a different title when the
+  // reader renders or copies the citation. Never execute accessors for rights.
+  for (const key of ['title','license','source','attribution','licenseUrl']) {
+    const descriptor = Object.getOwnPropertyDescriptor(metadata,key);
+    if (descriptor && !Object.hasOwn(descriptor,'value')) return false;
+  }
   // Source URLs already reject bidi/control Unicode; do not let edition
   // titles, rights terms or attribution spoof the same authoritative citation.
   // Preserve normal multiline licences (TAB/LF/CR) and non-Latin letters.

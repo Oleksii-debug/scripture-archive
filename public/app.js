@@ -3088,7 +3088,9 @@ async function renderReader(parts) {
   }
   const verses = book.chapters[chapter - 1];
   // Never focus a verse in a different book/chapter from the URL.
-  const verseCoordinateMatches = parts[1] === meta.code && parts[2] === String(chapter);
+  // A case-insensitive book alias already resolves to this exact catalog book;
+  // preserve verse focus for that same chapter without accepting another source.
+  const verseCoordinateMatches = typeof parts[1] === "string" && parts[1].toUpperCase() === meta.code && parts[2] === String(chapter);
   const selectedVerse = verseCoordinateMatches ? readerVerseFromUrl(location.href, verses.length) : null;
   // Do not replace the last readable bookmark when book loading fails.
   state.reader = { book: meta.code, chapter };

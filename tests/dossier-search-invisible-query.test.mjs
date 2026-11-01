@@ -51,3 +51,33 @@ for(const lang of ['uk','ru','en']){
     assert.match(dossierMarkup(catalog,lang,null,esc,''),/class="dossier-layout"/);
   });
 }
+
+
+for(const lang of ['uk','ru','en']){
+  test(lang+': reject invisible Unicode fillers instead of treating them as blank or exact citations',()=>{
+    // U+00A0 is trimmed to an empty/default search by the old predicate,
+    // exposing unrelated reader links. The others are invisible script
+    // fillers rejected for authored dossier metadata but not for GET q.
+    const fillers=['\u00a0','\u034f','\u115f','\u1160','\u2800','\u3164','\uffa0'];
+    for(const filler of fillers){
+      for(const query of [filler,filler+'GEN 17:15','GEN 17:15'+filler]){
+        assert.deepEqual(searchScriptureDossiers(lang,query,catalog),[],
+          JSON.stringify({lang,query}));
+        assert.deepEqual(searchScriptureDossiers(lang,query),[]);
+        for(const id of ['sarah',null]){
+          const dossier=dossierMarkup(catalog,lang,id,esc,query);
+          assert.match(dossier,/^<p role="alert">/,JSON.stringify({lang,query,id}));
+          assert.doesNotMatch(dossier,/dossier-layout|dossier-article|href="\/reader\//);
+        }
+        const atlas=dossierAtlasMarkup(catalog,lang,esc,query);
+        assert.match(atlas,/^<p role="alert">/,JSON.stringify({lang,query}));
+        assert.doesNotMatch(atlas,/dossier-atlas|href="\/reader\//);
+      }
+    }
+    // The historical visible space/TAB and valid source citations survive.
+    assert.ok(searchScriptureDossiers(lang,' GEN 17:15 ',catalog)
+      .some(item=>item.id==='sarah'));
+    assert.deepEqual(searchScriptureDossiers(lang,'\t',catalog),
+      searchScriptureDossiers(lang,'',catalog));
+  });
+}

@@ -18,7 +18,7 @@ function otherRoutes(url) {
       "X-Scripture-Runner-Protocol": "github-oidc-v1",
     } });
   if (path === "/robots.txt")
-    return new Response("User-agent: *\\nSitemap: https://scripture-archive.com/sitemap.xml");
+    return new Response("User-agent: *\nSitemap: https://scripture-archive.com/sitemap.xml");
   if (path === "/sitemap.xml")
     return new Response('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>');
   throw Error("unexpected mocked URL " + url);

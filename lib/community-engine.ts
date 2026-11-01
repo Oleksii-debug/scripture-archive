@@ -104,7 +104,7 @@ export async function controlCommunity(action: string, now = new Date()) {
     // Trust only canonical D1 UTC seconds and refuse future/invalid clocks.
     const pausedAt = run.paused_at;
     if (typeof pausedAt !== "string" ||
-        !/^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}$/.test(pausedAt))
+        !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(pausedAt))
       throw Error("community_pause_timestamp_unavailable");
     const pausedTime = Date.parse(pausedAt.replace(" ", "T") + "Z");
     if (!Number.isFinite(pausedTime) || !Number.isFinite(now.getTime()) ||

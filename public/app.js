@@ -3064,6 +3064,10 @@ async function renderReader(parts) {
     shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1><p><a href="/reader">${t("reader")}</a></p></section>`);
     return;
   }
+  // A new chapter route cannot inherit an old transient reader lease while
+  // its catalogue is pending or unavailable. Keep the last verified bookmark;
+  // the new lease is created only after catalogue coordinates are resolved.
+  state.currentReader = null;
   const catalog = await getCatalog();
   if (state.user !== readerPrincipal || !readerInvocationCurrent() ||
       (readerPath && readerPath !== "reader" && !readerPath.startsWith("reader/"))) return;

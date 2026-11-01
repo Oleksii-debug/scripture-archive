@@ -1,3 +1,11 @@
+## 2026-11-01 — SA-EXT-05/06 / DOSSIER_INVISIBLE_UNICODE_FILLER_QUERY — CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL
+
+**Закрито тільки нову input-integrity підфункцію; SA-EXT-05/06 батьківські OPEN.** Пошук біблійних досьє та текстового атласу більше не інтерпретує NBSP-only як порожній запит із нефільтрованими посиланнями і відхиляє інші невидимі Unicode fillers (U+034F, U+115F/U+1160, U+2800, U+3164, U+FFA0, Cf) через наявний локалізований `role=alert`. Старі порожні/SPACE/TAB запити та валідні цитати збережені. [PR #1100](https://github.com/Oleksii-debug/scripture-archive/pull/1100) **SQUASH MERGED** `main@b8ff1751b52f76f5948ca59e21756c569ef420dc`; source blob `298d27722dce94cf81b1f20dfe9d012e4ea0fda9`, regression blob `d3d2593bfead9554c8f73456959f16cfe423fdd3`. [Exact-head CI #41258414929](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41258414929) **SUCCESS**: 3987 Node PASS / 1 SKIP / 0 FAIL, 37 Worker/D1 PASS, 2 Python PASS, TS/lint/build SUCCESS (13 lint warnings, no errors). No full local checkout, browser/NVDA or production verification claimed.
+
+`remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` **лише для цієї межі**. SA-EXT-01/02/05/06/07 parent OPEN; 03/04 source-terminal. Rights/editorial acceptance, installed Sites/D1/backup, Chrome/Windows/NVDA, release #689 **NOT_VERIFIED**. Без production/deploy/міграцій/82 мов/платежів/synthetic users/масової пошти/dating.
+
+---
+
 ## 2026-11-01 — SA-EXT-07 / ACADEMY_PERSISTED_MARKER_SIZE_BOUND — CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL
 
 **ЗАКРИТО ЛИШЕ ЦЮ ПІДФУНКЦІЮ, НЕ БАТЬКІВСЬКИЙ SA-EXT-07.** Канонічна Академія більше не приймає синтаксично коректний, але надмірний (>4096 UTF-16 одиниць) локальний JSON прогресу і не парсить його при кожному відображенні, відновленні, події між вкладками чи редагуванні. Нестроковий запис та масив позначок, більший за затверджені 13 занять, відхиляються без переписування або видалення оригінальних байтів. Локалізований read-only recovery, усі 13 справжніх позначок, гостьовий режим та ізоляція іншого користувача збережені. Це перевірка пошкодженого локального запису, **не доказ production-атаки**.

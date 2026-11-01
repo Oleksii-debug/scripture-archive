@@ -1,3 +1,9 @@
+## 2026-11-01 — SA-EXT-01 / PARALLEL_EDITION_IDENTITY_OWN_DATA — scoped terminal
+
+**Закрито тільки перевірку власного data-ID видавничого запису, НЕ SA-EXT-01.** Успадковані/accessor-backed ідентичності explicit translation і fallback більше не авторизують показ/цитування біблійного тексту. [PR #1158](https://github.com/Oleksii-debug/scripture-archive/pull/1158) **SQUASH MERGED** `main@d698c65e234c46a3537f74b1ee11b1c15d04055f`; [exact-head CI #41333342171](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41333342171) **SUCCESS**: 4285 Node PASS/1 SKIP, 37 Worker/D1 PASS, 2 Python PASS, TS/lint/build PASS. [Акт](roadmap/SA_EXT_01_PARALLEL_EDITION_IDENTITY_OWN_DATA_SCOPED_TERMINAL_20261101.md). `remaining_scoped_implementation=0` лише тут; SA-EXT-01/02/05/06/07 OPEN, 03/04 source-terminal; rights/editorial, physical NVDA, live Sites/D1/backup/release NOT_VERIFIED. Заборонених запусків немає.
+
+---
+
 ## 2026-11-01 — SA-EXT-01 / PARALLEL_VERSE_OWN_DATA_SNAPSHOT — scoped terminal
 
 **Закрито тільки перевірку власних незмінних рядків віршів для паралельного читача, НЕ SA-EXT-01.** Динамічні getter/inherited/sparse записи відхиляються до DOM/clipboard; звичайні видання, дві перевірки глави, доступне повідомлення й повторна спроба збережені. [PR #1155](https://github.com/Oleksii-debug/scripture-archive/pull/1155) **SQUASH MERGED** `main@f9909f664a72f88505896c517b2a46b00ca51062`; [CI #41327911606](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41327911606) **SUCCESS**: 4274 Node PASS/1 SKIP, 37 disposable Worker/D1 PASS, 2 Python PASS, TypeScript/lint/build PASS (13 warnings/0 errors). [Акт](roadmap/SA_EXT_01_PARALLEL_VERSE_DESCRIPTOR_SCOPED_TERMINAL_20261101.md). `remaining_scoped_implementation=0` лише тут; SA-EXT-01/02/05/06/07 OPEN, 03/04 source-terminal. Rights/editorial, physical NVDA, live Sites/D1/backup/release NOT_VERIFIED. Без production/82 мов/платежів/synthetic users/масової пошти/dating.

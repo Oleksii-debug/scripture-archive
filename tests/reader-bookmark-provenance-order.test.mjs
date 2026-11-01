@@ -17,12 +17,13 @@ const actual = new Function(
 
 function fixture({ lang='uk', metadata=()=>({title:'Verified edition'}),
   details=edition=>({title:edition.title}), storage=()=>{} }={}) {
-  const old={book:'JHN',chapter:3}, state={lang,reader:old}, writes=[];
+  const old={book:'JHN',chapter:3}, currentReader={book:'GEN',chapter:12};
+  const state={lang,reader:old,currentReader}, writes=[];
   const run=()=>actual(state,['reader','GEN','12'],{code:'GEN'},12,['verse'],
     {href:'https://example.org/reader/GEN/12?verse=1'},()=>1,
     {setItem:(key,value)=>{writes.push([key,value]);storage(key,value);}},
     metadata,details,{});
-  return {old,state,writes,run};
+  return {old,currentReader,state,writes,run};
 }
 
 for(const lang of ['uk','ru','en']){
@@ -30,6 +31,7 @@ for(const lang of ['uk','ru','en']){
     const h=fixture({lang,metadata:()=>{throw Error('local_edition_provenance_unavailable');}});
     assert.throws(h.run,/local_edition_provenance_unavailable/);
     assert.equal(h.state.reader,h.old,'previous in-memory bookmark remains');
+    assert.equal(h.state.currentReader,null,'unlicensed chapter cannot retain transient reader authority');
     assert.equal(h.writes.length,0,'no browser preference write for unlicensed chapter');
   });
 
@@ -37,6 +39,7 @@ for(const lang of ['uk','ru','en']){
     const h=fixture({lang,details:()=>{throw Error('edition_details_unavailable');}});
     assert.throws(h.run,/edition_details_unavailable/);
     assert.equal(h.state.reader,h.old);
+    assert.equal(h.state.currentReader,null,'failed edition details retire transient reader');
     assert.equal(h.writes.length,0);
   });
 
@@ -46,6 +49,7 @@ for(const lang of ['uk','ru','en']){
     assert.equal(result.editionInfo.title,'Verified edition');
     assert.equal(result.selectedVerse,1);
     assert.deepEqual(h.state.reader,{book:'GEN',chapter:12});
+    assert.equal(h.state.currentReader,h.currentReader,'valid chapter retains its transient lease');
     assert.deepEqual(h.writes,[['sa.reader',JSON.stringify({book:'GEN',chapter:12})]]);
   });
 }
@@ -54,5 +58,6 @@ test('denied preference storage still permits an authorized in-memory chapter',(
   const h=fixture({storage:()=>{throw Error('storage denied');}});
   assert.doesNotThrow(h.run);
   assert.deepEqual(h.state.reader,{book:'GEN',chapter:12});
+  assert.equal(h.state.currentReader,h.currentReader);
   assert.equal(h.writes.length,1,'one attempted preference write, no false durability claim');
 });

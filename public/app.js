@@ -3146,8 +3146,17 @@ async function renderReader(parts) {
   // A fetched chapter is not yet readable if its edition's publisher and
   // licence cannot be verified. Preserve the last readable bookmark on
   // provenance failure, just as on a failed book fetch.
-  const edition = localEditionMetadata(catalog),
+  let edition, editionInfo;
+  try {
+    edition = localEditionMetadata(catalog);
     editionInfo = editionDetails(edition, meta.code);
+  } catch (error) {
+    // A failed rights check is not an active, readable chapter. Retire the
+    // transient lease before the outer router shows its accessible error;
+    // keep the last verified bookmark and browser preference unchanged.
+    state.currentReader = null;
+    throw error;
+  }
   state.reader = { book: meta.code, chapter };
   // Browser preference storage is optional; never block an authorized chapter.
   try { localStorage.setItem("sa.reader", JSON.stringify(state.reader)); }

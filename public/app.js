@@ -3115,6 +3115,10 @@ async function renderReader(parts) {
     // A cancelled chapter must never let the route-level error handler
     // replace a newer account or page with an obsolete failure.
     if (!readerStillCurrent()) return;
+    // An unavailable or invalid chapter is not an active reader. Keep the
+    // previous verified bookmark, but retire this failed transient lease so
+    // cross-tab attempt events cannot act on an error page as a live chapter.
+    state.currentReader = null;
     throw error;
   }
   // A different device may start a new attempt while the Bible JSON loads.

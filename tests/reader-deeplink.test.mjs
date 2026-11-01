@@ -273,12 +273,15 @@ test('book fetch failure keeps the last chapter until a successful retry (uk/ru/
     };
     const {renderReader} = vm.runInNewContext(entry+'\n({renderReader})',ctx);
     await assert.rejects(renderReader(['reader','JHN','3']),/temporary_outage/);
+    assert.equal(state.currentReader,null,lang+': failed fetch must retire transient reader');
     assert.equal(state.reader.book,'GEN',lang);
     assert.equal(state.reader.chapter,12,lang);
     assert.equal(saved.get('sa.reader'),JSON.stringify({book:'GEN',chapter:12}),lang);
     assert.equal(writes.length,0,lang);
     fail = false;
     await renderReader(['reader','JHN','3']);
+    assert.equal(state.currentReader?.book,'JHN',lang+': retry owns a fresh reader');
+    assert.equal(state.currentReader?.chapter,3,lang);
     assert.equal(state.reader.book,'JHN',lang);
     assert.equal(state.reader.chapter,3,lang);
     assert.equal(saved.get('sa.reader'),JSON.stringify({book:'JHN',chapter:3}),lang);

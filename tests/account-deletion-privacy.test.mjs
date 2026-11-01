@@ -62,7 +62,7 @@ test('account deletion clears personal records while preserving other users', as
       // A fake incomplete ACK does not assert a rollback. It proves only that
       // the API refuses to claim successful deletion without D1 confirmation.
       if (unconfirmedBatch) return statements.map((_, index) =>
-        ({ success: index !== 2, meta: { changes: index === 19 ? 1 : 0 } }));
+        ({ success: index !== 2, meta: { changes: index === 0 ? 1 : 0 } }));
       db.exec('BEGIN');
       try {
         const receipts = [];

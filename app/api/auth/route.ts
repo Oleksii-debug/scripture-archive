@@ -349,39 +349,39 @@ export async function POST(request: Request) {
     if (!account || typeof password !== "string" || !await verifyPassword(password, account.password_hash, account.password_salt, account.password_iterations))
       return json({ error: "invalid_credentials" }, 401);
     try {
+    // The password can change while its PBKDF2 verification is pending. The
+    // first statement must win a credential-snapshot CAS; every subsequent
+    // destructive statement is gated on its account tombstone. D1.batch is
+    // atomic, so failed CAS/recovery never erases unrelated private records.
+    const deletionGuard = "EXISTS (SELECT 1 FROM accounts a WHERE a.id=?1 AND a.deleted_at IS NOT NULL AND a.email='deleted-' || ?1 || '@invalid.local')";
     const receipts = await env.DB.batch([
-      env.DB.prepare("DELETE FROM progress WHERE user_id=?").bind(identity.userId),
-      env.DB.prepare("DELETE FROM reader_bookmarks WHERE user_id=?").bind(identity.userId),
-      env.DB.prepare("DELETE FROM mission_attempt_answers WHERE attempt_id IN (SELECT id FROM mission_attempts WHERE actor_id=?)").bind(identity.userId),
-      env.DB.prepare("DELETE FROM mission_attempts WHERE actor_id=?").bind(identity.userId),
-      env.DB.prepare("DELETE FROM chapter_read_receipts WHERE actor_id=?").bind(identity.userId),
-      env.DB.prepare("DELETE FROM support_attachments WHERE request_id IN (SELECT id FROM support_requests WHERE user_id=?)").bind(identity.userId),
-      env.DB.prepare("DELETE FROM support_requests WHERE user_id=?").bind(identity.userId),
-      env.DB.prepare("DELETE FROM auth_tokens WHERE user_id=?").bind(identity.userId),
-      env.DB.prepare("DELETE FROM editorial_roles WHERE user_id=? OR granted_by=?").bind(identity.userId, identity.userId),
-      env.DB.prepare("DELETE FROM editorial_role_events WHERE subject_user_id=? OR actor_user_id=?").bind(identity.userId, identity.userId),
-      env.DB.prepare("DELETE FROM material_takedowns WHERE actor_user_id=?").bind(identity.userId),
-      // Preserve other members' numeric meeting history, but erase the departing
-      // facilitator's stable identifier and free-text contribution in shared groups.
-      // Owned groups are deleted below and cascade their sessions.
-      env.DB.prepare("UPDATE group_sessions SET created_by='deleted-account',reflection=NULL WHERE created_by=?").bind(identity.userId),
-      // Preserve another author's reviewed material and approval decision, but
-      // do not expose a deleted editor's stable identity through review history.
-      // The row stays audit-visible under a non-identifying reviewer sentinel.
-      env.DB.prepare("UPDATE material_submissions SET reviewed_by='deleted-account' WHERE reviewed_by=?").bind(identity.userId),
-      env.DB.prepare("DELETE FROM home_group_members WHERE user_id=?").bind(identity.userId),
-      env.DB.prepare("DELETE FROM study_materials WHERE owner_user_id=?").bind(identity.userId),
-      env.DB.prepare("DELETE FROM home_groups WHERE owner_user_id=?").bind(identity.userId),
-      env.DB.prepare("DELETE FROM profiles WHERE user_id=?").bind(identity.userId),
-      env.DB.prepare("UPDATE usage_sessions SET user_id=NULL WHERE user_id=?").bind(identity.userId),
-      env.DB.prepare("UPDATE usage_events SET user_id=NULL WHERE user_id=?").bind(identity.userId),
-      env.DB.prepare("UPDATE accounts SET email=?,first_name='',last_name='',deleted_at=CURRENT_TIMESTAMP,session_version=session_version+1,password_hash='',password_salt='' WHERE id=?")
-        .bind(`deleted-${identity.userId}@invalid.local`, identity.userId),
-      env.DB.prepare("DELETE FROM auth_sessions WHERE user_id=?").bind(identity.userId),
+      env.DB.prepare("UPDATE accounts SET email=?,first_name='',last_name='',deleted_at=CURRENT_TIMESTAMP,session_version=session_version+1,password_hash='',password_salt='' WHERE id=? AND deleted_at IS NULL AND session_version=? AND password_hash=? AND password_salt=? AND password_iterations=?")
+        .bind(`deleted-${identity.userId}@invalid.local`, identity.userId, account.session_version,
+          account.password_hash, account.password_salt, account.password_iterations),
+      env.DB.prepare(`DELETE FROM progress WHERE user_id=? AND ${deletionGuard}`).bind(identity.userId),
+      env.DB.prepare(`DELETE FROM reader_bookmarks WHERE user_id=? AND ${deletionGuard}`).bind(identity.userId),
+      env.DB.prepare(`DELETE FROM mission_attempt_answers WHERE attempt_id IN (SELECT id FROM mission_attempts WHERE actor_id=?) AND ${deletionGuard}`).bind(identity.userId),
+      env.DB.prepare(`DELETE FROM mission_attempts WHERE actor_id=? AND ${deletionGuard}`).bind(identity.userId),
+      env.DB.prepare(`DELETE FROM chapter_read_receipts WHERE actor_id=? AND ${deletionGuard}`).bind(identity.userId),
+      env.DB.prepare(`DELETE FROM support_attachments WHERE request_id IN (SELECT id FROM support_requests WHERE user_id=?) AND ${deletionGuard}`).bind(identity.userId),
+      env.DB.prepare(`DELETE FROM support_requests WHERE user_id=? AND ${deletionGuard}`).bind(identity.userId),
+      env.DB.prepare(`DELETE FROM auth_tokens WHERE user_id=? AND ${deletionGuard}`).bind(identity.userId),
+      env.DB.prepare(`DELETE FROM editorial_roles WHERE (user_id=? OR granted_by=?) AND ${deletionGuard}`).bind(identity.userId, identity.userId),
+      env.DB.prepare(`DELETE FROM editorial_role_events WHERE (subject_user_id=? OR actor_user_id=?) AND ${deletionGuard}`).bind(identity.userId, identity.userId),
+      env.DB.prepare(`DELETE FROM material_takedowns WHERE actor_user_id=? AND ${deletionGuard}`).bind(identity.userId),
+      env.DB.prepare(`UPDATE group_sessions SET created_by='deleted-account',reflection=NULL WHERE created_by=? AND ${deletionGuard}`).bind(identity.userId),
+      env.DB.prepare(`UPDATE material_submissions SET reviewed_by='deleted-account' WHERE reviewed_by=? AND ${deletionGuard}`).bind(identity.userId),
+      env.DB.prepare(`DELETE FROM home_group_members WHERE user_id=? AND ${deletionGuard}`).bind(identity.userId),
+      env.DB.prepare(`DELETE FROM study_materials WHERE owner_user_id=? AND ${deletionGuard}`).bind(identity.userId),
+      env.DB.prepare(`DELETE FROM home_groups WHERE owner_user_id=? AND ${deletionGuard}`).bind(identity.userId),
+      env.DB.prepare(`DELETE FROM profiles WHERE user_id=? AND ${deletionGuard}`).bind(identity.userId),
+      env.DB.prepare(`UPDATE usage_sessions SET user_id=NULL WHERE user_id=? AND ${deletionGuard}`).bind(identity.userId),
+      env.DB.prepare(`UPDATE usage_events SET user_id=NULL WHERE user_id=? AND ${deletionGuard}`).bind(identity.userId),
+      env.DB.prepare(`DELETE FROM auth_sessions WHERE user_id=? AND ${deletionGuard}`).bind(identity.userId),
     ]);
     // All 21 statements, including shared-meeting/editor redactions and final
     // account update, must be acknowledged. Empty unrelated DELETEs may change 0 rows.
-    if (!batchAcknowledged(receipts, 21) || receipts[19].meta.changes !== 1)
+    if (!batchAcknowledged(receipts, 21) || receipts[0].meta.changes !== 1)
       throw Error("deletion_batch_unconfirmed");
     } catch {
       // D1 batch rejects atomically; do not pretend the account was erased.

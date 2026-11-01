@@ -3046,6 +3046,16 @@ async function renderReader(parts) {
     shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1><p><a href="/reader">${t("reader")}</a></p></section>`);
     return;
   }
+  // Invalid explicit chapter coordinates are independent of catalogue availability.
+  // Reuse the canonical guard before any remote catalogue or attempt request.
+  // An explicit malformed chapter is not a request for chapter one. Preserve
+  // saved-reader recovery only when the route has no chapter coordinate.
+  // Valid positive coordinates above the edition limit retain legacy clamping.
+  if (parts[2] && (!/^[1-9][0-9]*$/.test(parts[2]) || !Number.isSafeInteger(Number(parts[2])))) {
+    state.currentReader = null;
+    shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1><p><a href="/reader">${t("reader")}</a></p></section>`);
+    return;
+  }
   const catalog = await getCatalog();
   if (state.user !== readerPrincipal || !readerInvocationCurrent() ||
       (readerPath && readerPath !== "reader" && !readerPath.startsWith("reader/"))) return;
@@ -3062,14 +3072,6 @@ async function renderReader(parts) {
   if (!meta) {
     // Retire an earlier reader context so pending private callbacks cannot
     // populate this invalid deep link after navigation.
-    state.currentReader = null;
-    shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1><p><a href="/reader">${t("reader")}</a></p></section>`);
-    return;
-  }
-  // An explicit malformed chapter is not a request for chapter one. Preserve
-  // saved-reader recovery only when the route has no chapter coordinate.
-  // Valid positive coordinates above the edition limit retain legacy clamping.
-  if (parts[2] && (!/^[1-9][0-9]*$/.test(parts[2]) || !Number.isSafeInteger(Number(parts[2])))) {
     state.currentReader = null;
     shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1><p><a href="/reader">${t("reader")}</a></p></section>`);
     return;

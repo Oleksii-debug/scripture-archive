@@ -55,6 +55,7 @@ function fixture({ pausedAt = "2026-11-01 09:00:00", activatedAt = "2026-10-31 1
     writes,
     setPausedAt(value) { currentPausedAt = value; },
     control: action => exports.controlCommunity(action, NOW),
+    db, engine: exports,
   };
 }
 
@@ -113,4 +114,40 @@ test("R0.4 SQLite: an invalid resume modifier silently destroys next_at despite 
     assert.equal(receipt.changes, 1);
     assert.equal(db.prepare("SELECT next_at FROM wave").get().next_at, null);
   } finally { db.close(); }
+});
+
+test("R0.4 owner resume API returns private 503, not success, for damaged D1 pause state", async () => {
+  const f = fixture({ pausedAt: "not-a-date" });
+  const routeSource = readFileSync(new URL("../app/api/community/route.ts", import.meta.url), "utf8");
+  const routeJs = ts.transpileModule(routeSource, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    reportDiagnostics: true,
+  });
+  assert.equal(routeJs.diagnostics?.length ?? 0, 0);
+  const routes = {};
+  vm.runInNewContext(routeJs.outputText, {
+    exports: routes, Request, Response, URL, crypto, Date, console,
+    require(name) {
+      if (name === "cloudflare:workers") return { env: { DB: f.db } };
+      if (name === "../../../lib/auth") return {
+        authenticateRequest: async () => ({ userId: "owner", emailVerified: true, provider: "password" }),
+        isVerifiedOwner: () => true, sameOrigin: () => true,
+        rateLimit: async () => true, requestAddress: () => "unknown",
+      };
+      if (name === "../../../lib/community") return { COMMUNITY_RUN_ID: "run" };
+      if (name === "../../../public/data/catalog.json") return { default: { books: { en: [] }, editionBooks: {} } };
+      if (name === "../../../lib/community-engine") return {
+        controlCommunity: f.engine.controlCommunity, advanceCommunity: async () => {},
+      };
+      throw Error("Unexpected route import: " + name);
+    },
+  });
+  const response = await routes.POST(new Request("https://archive.invalid/api/community", {
+    method: "POST", headers: { Origin: "https://archive.invalid", "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "resume" }),
+  }));
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: "community_unavailable" });
+  assert.match(response.headers.get("cache-control"), /no-store/);
+  assert.equal(f.writes.length, 0);
 });

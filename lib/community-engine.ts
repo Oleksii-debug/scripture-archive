@@ -99,8 +99,9 @@ export async function controlCommunity(action: string, now = new Date()) {
       wave.count, `${wave.key}-${wave.count}`, `${COMMUNITY_RUN_ID}:${wave.key}`, COMMUNITY_RUN_ID, control));
   }
   if (action === "resume" && !activate) {
-    // A damaged pause timestamp must not become "+NaN seconds": SQLite
-    // accepts that UPDATE but writes NULL wave deadlines and can ACK resume.
+    // A damaged pause timestamp must not become "+NaN seconds": canonical
+    // next_at is NOT NULL, so active waves abort the batch; with no running
+    // waves a zero-row update could still ACK a resume with invalid state.
     // Trust only canonical D1 UTC seconds and refuse future/invalid clocks.
     const pausedAt = run.paused_at;
     if (typeof pausedAt !== "string" ||

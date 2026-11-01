@@ -1,3 +1,9 @@
+## 2026-11-01 — SA-EXT-01 / LEGACY_HASH_QUERY_READER_PATH — scoped terminal
+
+**Лише відокремлення query від legacy hash-координат завершено.** [PR #1126](https://github.com/Oleksii-debug/scripture-archive/pull/1126) **MERGED** `main@c140f064c032b8ffb126ef0bd476df9a6423f765`; [exact-head CI #41290663525](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41290663525) **SUCCESS** (Node/TS/lint/build, Worker/D1, Python). [Акт](roadmap/SA_EXT_01_LEGACY_HASH_QUERY_ROUTE_BOUNDARY_SCOPED_TERMINAL_20261101.md). `remaining_scoped_implementation=0` тільки тут. SA-EXT-01/02/05/06/07 parent OPEN, 03/04 source-terminal; rights, real browser/NVDA, live Sites/D1 and release NOT_VERIFIED. Жодного забороненого запуску.
+
+---
+
 ## 2026-11-01 — SA-EXT-01 / LEGACY_HASH_READER_VERSE_FOCUS — scoped terminal
 
 Лише hash-verse deep-link compatibility закрито: [PR #1123](https://github.com/Oleksii-debug/scripture-archive/pull/1123) **MERGED** `main@364c4283ea3817499f4aa3b6ec06f681a45033e7`; [exact-head CI #41286095922](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41286095922) **SUCCESS** (Node/TS/lint/build, Worker/D1, Python). [Акт](roadmap/SA_EXT_01_LEGACY_HASH_VERSE_FOCUS_SCOPED_TERMINAL_20261101.md). `remaining_scoped_implementation=0` тільки тут. SA-EXT-01/02/05/06/07 parent OPEN; 03/04 source-terminal. Real browser/NVDA, rights, editorial, live Sites/D1 and release NOT_VERIFIED; no prohibited launch.

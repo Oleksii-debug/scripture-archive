@@ -78,6 +78,18 @@ function ownEditionData(edition, key) {
   const descriptor=Object.getOwnPropertyDescriptor(edition,key);
   return descriptor && Object.hasOwn(descriptor,'value') ? descriptor.value : undefined;
 }
+// Imported edition lists are publisher/path authorities too. Array getters and
+// inherited slots must not execute during selector rendering or file admission.
+// Keep a bounded list so malformed sparse manifests cannot monopolize the UI.
+function ownEditionItems(editions) {
+  if (!Array.isArray(editions) || editions.length > 1024) return [];
+  const items=[];
+  for (let i=0; i<editions.length; i++) {
+    const descriptor=Object.getOwnPropertyDescriptor(editions,String(i));
+    if (descriptor && Object.hasOwn(descriptor,'value')) items.push(descriptor.value);
+  }
+  return items;
+}
 function verifiedLocalEdition(edition, id) {
   if (!edition || typeof edition !== 'object' || Array.isArray(edition)) return false;
   for (const key of ['id','local','folder','contentId']) {
@@ -90,7 +102,7 @@ function verifiedLocalEdition(edition, id) {
 
 export function parallelControls(editions, lang, esc) {
   const copy = copyForLocale(lang);
-  return `<details class="card parallel-reader"><summary>${copy.title}</summary><p>${copy.note}</p><form class="parallel-form"><label class="account-field"><span>${copy.choose}</span><select name="edition">${editions.map(edition=>{
+  return `<details class="card parallel-reader"><summary>${copy.title}</summary><p>${copy.note}</p><form class="parallel-form"><label class="account-field"><span>${copy.choose}</span><select name="edition">${ownEditionItems(editions).map(edition=>{
     const id=ownEditionData(edition,'id'), title=ownEditionData(edition,'title');
     return typeof id==='string' && id && typeof title==='string'
       ? `<option value="${esc(id)}">${esc(title)}</option>` : '';
@@ -122,7 +134,7 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
     event.preventDefault();
     const button=submitButton, id=String(new FormData(form).get('edition') || '');
     let edition=null;
-    try { edition=editions.find(item=>verifiedLocalEdition(item,id)); }
+    try { edition=ownEditionItems(editions).find(item=>verifiedLocalEdition(item,id)); }
     catch { /* Malformed edition descriptors are never selection authority. */ }
     const submittedRevision = selectionRevision;
     const selectionCurrent = () => selectionRevision === submittedRevision &&

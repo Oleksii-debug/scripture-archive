@@ -140,3 +140,38 @@ test("P0: absent, downgraded or non-origin APP_BASE_URL blocks security mail", a
     "https://scripture-archive.com/api/auth?action=verify&token=valid")).delivered, true);
   assert.equal(trailing.calls.length, 1);
 });
+
+
+test("P0 R0.2: normalized-away security-link syntax cannot carry one-time tokens to mail", async () => {
+  // These inputs were accepted by the previous production trustedSecurityLink:
+  // WHATWG URL normalization made their origins appear identical to APP_BASE_URL.
+  const invalid = [
+    "https://@scripture-archive.com/account?reset=secret",
+    "https://:@scripture-archive.com/account?reset=secret",
+    "https://scripture-archive.com\\@other.invalid/account?reset=secret",
+    "https://scripture-archive.com:0443/account?reset=secret",
+    "https://scripture-archive.com/account/../account?reset=secret",
+    "https://scripture-archive.com/account?reset=secret#",
+    "https://scripture-archive.com/account?reset=secret\u2028",
+    "https://scripture-archive.com/account?reset=secret\u200b",
+  ];
+  const h = harness(accepted({ id: "provider-accepted" }));
+  for (const link of invalid) {
+    assert.deepEqual(
+      await h.email.sendSecurityEmail("person@example.invalid", "en", "reset", link),
+      { delivered: false, reason: "security_link_origin_unverified" },
+      "rejected ambiguous link: " + JSON.stringify(link)
+    );
+  }
+  assert.equal(h.calls.length, 0, "no provider request for rejected token-bearing links");
+  // Recovery and legitimate encoded query parameters remain operational.
+  for (const [purpose, link] of [
+    ["reset", "https://scripture-archive.com/account?reset=valid%2Ftoken"],
+    ["verify", "https://scripture-archive.com/api/auth?action=verify&token=valid"],
+  ]) {
+    assert.equal((await h.email.sendSecurityEmail("person@example.invalid", "uk", purpose, link)).delivered, true);
+  }
+  assert.equal(h.calls.length, 2);
+  assert.deepEqual(h.calls.map(call => JSON.parse(call.options.body).to),
+    [["person@example.invalid"], ["person@example.invalid"]]);
+});

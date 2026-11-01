@@ -48,9 +48,14 @@ function trustedSecurityLink(url: string): boolean {
     const base = new URL(declared), target = new URL(url);
     if (base.protocol !== "https:" ||
         (declared !== base.origin && declared !== `${base.origin}/`)) return false;
-    if (url !== url.trim() || /[\u0000-\u001f\u007f]/u.test(url)) return false;
+    // URL() silently repairs empty userinfo, backslashes, dot segments,
+    // padded ports and Unicode before origin comparison. Security emails
+    // contain one-time tokens: only send the literal canonical link, never
+    // a visually ambiguous spelling that another mail client may reinterpret.
+    if (url !== target.href || url.includes("#") ||
+        url !== url.trim() || /[\u0000-\u001f\u007f]/u.test(url)) return false;
     return target.protocol === "https:" && target.origin === base.origin &&
-      !target.username && !target.password && !target.hash;
+      !target.username && !target.password;
   } catch { return false; }
 }
 

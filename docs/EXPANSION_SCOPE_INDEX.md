@@ -1,3 +1,9 @@
+## 2026-11-01 — SA-EXT-05/06 / DOSSIER_INVISIBLE_UNICODE_FILLER_QUERY — SCOPED TERMINAL
+
+**Лише цей дефект закрито:** NBSP-only та інші невидимі Unicode fillers більше не відкривають нефільтровані досьє/атлас або хибні результати. [PR #1100](https://github.com/Oleksii-debug/scripture-archive/pull/1100) **MERGED** `main@b8ff1751b52f76f5948ca59e21756c569ef420dc`, [exact-head CI #41258414929](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41258414929) **SUCCESS** (3987 Node PASS/1 SKIP, 37 Worker/D1 PASS, 2 Python PASS, TS/lint/build). `remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` тільки для цього input gate. **SA-EXT-01/02/05/06/07 parent OPEN, 03/04 source-terminal**. Реальні браузер/NVDA, права, редакційне приймання, Sites/D1/backup та реліз NOT_VERIFIED; жодного production deploy або заборонених запусків.
+
+---
+
 ## 2026-10-31 — SA-EXT-01 / EXPLICIT_UNKNOWN_BOOK_DEEPLINK_FAILCLOSED — CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL
 
 **ЗАКРИТО ДЛЯ РОЗРОБКИ лише одну перевірену межу маршруту читальні; батьківський SA-EXT-01 OPEN.** Явне `/reader/ZZZ/5` більше не підмінюється книгою `GEN` з хибною ідентичністю джерела: канонічний `renderReader` зупиняється до API перевірки глави/завантаження тексту, скидає старий контекст і показує доступне `role=alert` з посиланням відновлення. Справжні книги, lowercase alias, `/reader` із попереднім читанням і fallback для пошкодженої збереженої книги збережено.

@@ -3033,8 +3033,18 @@ async function renderReader(parts) {
     shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1><p><a href="/reader">${t("reader")}</a></p></section>`);
     return;
   }
+  // Only /reader/BOOK/CHAPTER/group/GROUP_ID is a group reading link.
+  // A truncated or misspelled group suffix must not silently start a personal
+  // assessment and misattribute group progress. Reject before attempt API.
+  const validGroupRoute = parts.length === 5 && parts[3] === "group" &&
+    typeof parts[4] === "string" && parts[4].length > 0;
+  if (parts.length > 3 && !validGroupRoute) {
+    state.currentReader = null;
+    shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1><p><a href="/reader">${t("reader")}</a></p></section>`);
+    return;
+  }
   const chapter = readerChapterNumber(parts[2] || state.reader?.chapter || 1, meta.chapters);
-  const groupId = parts[3] === "group" ? parts[4] || "" : "";
+  const groupId = validGroupRoute ? parts[4] : "";
   state.currentReader = { book: meta.code, chapter };
   const readerContext = state.currentReader;
   const readerStillCurrent = () => readerInvocationCurrent() && state.currentReader === readerContext && state.user === readerPrincipal;

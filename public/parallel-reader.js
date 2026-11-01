@@ -168,14 +168,24 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
       // Source claims are authoritative only when owned by the catalog and
       // its named edition/translation map. An inherited locale or map could
       // silently attach another publisher's rights to genuine loaded verses.
-      const ownMap = key => catalog && Object.hasOwn(catalog,key) &&
-        catalog[key] && typeof catalog[key] === 'object' && !Array.isArray(catalog[key])
-        ? catalog[key] : null;
+      // Catalog dictionaries and their slots are also publisher authorities.
+      // An own getter at either level is not immutable authored provenance;
+      // reading it could execute code or substitute another edition's rights.
+      // Inspect descriptors without invoking accessors, as for edition IDs.
+      const ownData = (record,key) => {
+        if (!record || typeof record !== 'object' || Array.isArray(record)) return null;
+        const descriptor=Object.getOwnPropertyDescriptor(record,key);
+        return descriptor && Object.hasOwn(descriptor,'value') ? descriptor.value : null;
+      };
+      const ownMap = key => {
+        const value=ownData(catalog,key);
+        return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+      };
       const editionMap=ownMap('editions');
       const translationMap=ownMap('translations');
-      const fallback=editionMap && Object.hasOwn(editionMap,lang) ? editionMap[lang] : null;
+      const fallback=ownData(editionMap,lang);
       const declared=Boolean(translationMap && Object.hasOwn(translationMap,edition.id));
-      const translation=declared ? translationMap[edition.id] : null;
+      const translation=declared ? ownData(translationMap,edition.id) : null;
       // A declared but mismatched identity must not borrow another edition's
       // licence and attribute that edition's loaded verses to a false source.
       // A matching edition ID is part of publisher provenance, not a mere

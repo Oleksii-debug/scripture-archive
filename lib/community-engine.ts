@@ -99,7 +99,21 @@ export async function controlCommunity(action: string, now = new Date()) {
       wave.count, `${wave.key}-${wave.count}`, `${COMMUNITY_RUN_ID}:${wave.key}`, COMMUNITY_RUN_ID, control));
   }
   if (action === "resume" && !activate) {
-    const seconds = run.paused_at ? Math.max(0, Math.floor((now.getTime()-new Date(run.paused_at.replace(" ","T")+"Z").getTime())/1000)) : 0;
+    // A damaged pause timestamp must not become "+NaN seconds": SQLite
+    // accepts that UPDATE but writes NULL wave deadlines and can ACK resume.
+    // Trust only canonical D1 UTC seconds and refuse future/invalid clocks.
+    const pausedAt = run.paused_at;
+    if (typeof pausedAt !== "string" ||
+        !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(pausedAt))
+      throw Error("community_pause_timestamp_unavailable");
+    const pausedTime = Date.parse(pausedAt.replace(" ", "T") + "Z");
+    if (!Number.isFinite(pausedTime) || !Number.isFinite(now.getTime()) ||
+        new Date(pausedTime).toISOString().slice(0, 19).replace("T", " ") !== pausedAt ||
+        pausedTime > now.getTime())
+      throw Error("community_pause_timestamp_unavailable");
+    const seconds = Math.floor((now.getTime() - pausedTime) / 1000);
+    if (!Number.isSafeInteger(seconds))
+      throw Error("community_pause_timestamp_unavailable");
     statements.push(env.DB!.prepare(`UPDATE community_waves SET next_at=datetime(next_at,?) WHERE run_id=? AND status='running' AND ${guard}`)
       .bind(`+${seconds} seconds`, COMMUNITY_RUN_ID, COMMUNITY_RUN_ID, control));
   }

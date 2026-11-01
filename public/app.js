@@ -3020,9 +3020,11 @@ async function renderReader(parts) {
   setActiveNav("reader");
   // Keep legacy #/reader routes usable, but never collapse an empty interior
   // coordinate into another book, chapter, or private group identity.
+  // Validate coordinates only. A legacy hash query may itself contain a
+  // URL (and therefore "//"), but it is not an empty reader path segment.
+  // Reuse the same canonical resolver as route() rather than a second parser.
   const readerPath = typeof location === "undefined" ? "" :
-    (typeof location.hash === "string" && location.hash.startsWith("#/")
-      ? location.hash.slice(2) : (location.pathname || "").replace(/^\/?/, ""));
+    routeSourceFromLocation(location);
   if (readerPath.includes("//")) {
     state.currentReader = null;
     shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1><p><a href="/reader">${t("reader")}</a></p></section>`);

@@ -2950,8 +2950,12 @@ function readerCitationText(reference, verseText, edition, permalink) {
   ].filter(Boolean).join("\n");
 }
 
-function readerVerseUrl(code, chapter, verse) {
-  return `/reader/${encodeURIComponent(code)}/${chapter}?verse=${verse}`;
+function readerChapterUrl(code, chapter, groupId = "") {
+  const base = `/reader/${encodeURIComponent(code)}/${chapter}`;
+  return groupId ? `${base}/group/${encodeURIComponent(groupId)}` : base;
+}
+function readerVerseUrl(code, chapter, verse, groupId = "") {
+  return `${readerChapterUrl(code, chapter, groupId)}?verse=${verse}`;
 }
 function readerVerseFromUrl(url, availableVerses) {
   if (!Number.isSafeInteger(availableVerses) || availableVerses < 1) return null;
@@ -3126,7 +3130,7 @@ async function renderReader(parts) {
       `<option value="${i + 1}" ${i + 1 === chapter ? "selected" : ""}>${i + 1}</option>`,
   ).join("");
   shell(
-    `<div class="section-head reader-heading"><div><p class="eyebrow">${t("reader")}</p><h1>${t("readerTitle")}</h1></div><p>${t("readerIntro")}</p></div><div class="toolbar"><div class="field grow"><label for="book-select">${t("book")}</label><select id="book-select">${options}</select></div><div class="field"><label for="chapter-select">${t("chapter")}</label><select id="chapter-select">${chapters}</select></div><div class="field"><label for="verse-select">${t("verse")}</label><select id="verse-select"><option value="" ${selectedVerse === null ? "selected" : ""}>—</option>${verses.map((_, i) => `<option value="${i + 1}" ${selectedVerse === i + 1 ? "selected" : ""}>${i + 1}</option>`).join("")}</select></div><form id="book-search" class="field grow"><label for="search-input">${t("searchBook")}</label><div style="display:flex;gap:.4rem"><input id="search-input" type="search" placeholder="${t("searchPlaceholder")}"><button class="button" type="submit">${t("search")}</button></div></form></div><div class="reader-layout"><article class="reading-pane"><p class="eyebrow">${meta.testament === "OT" ? t("oldTestament") : t("newTestament")}</p><h1>${esc(bookTitle(meta))} ${chapter}</h1><p class="chapter-meta">${esc(editionInfo.title)}</p><div class="verses">${verses.map((v, i) => `<p class="verse" id="v${i + 1}" ${selectedVerse === i + 1 ? 'data-selected-verse tabindex="-1"' : ''}><a class="verse-number" href="${readerVerseUrl(meta.code, chapter, i + 1)}" aria-label="${esc(bookTitle(meta))} ${chapter}:${i + 1}">${i + 1}</a> ${esc(bibleText(v))} <button type="button" class="verse-cite" data-verse-cite="${i + 1}" aria-label="${esc(citationCopy.label)}: ${esc(bookTitle(meta))} ${chapter}:${i + 1}">${esc(citationCopy.button)}</button></p>`).join("")}</div><p id="reader-cite-status" role="status" aria-live="polite"></p><div class="chapter-nav">${chapter > 1 ? `<a class="button" href="/reader/${meta.code}/${chapter - 1}">← ${t("previous")}</a>` : "<span></span>"}${chapter < meta.chapters ? `<a class="button" href="/reader/${meta.code}/${chapter + 1}">${t("next")} →</a>` : "<span></span>"}</div></article><aside class="reader-aside"><div class="card edition-card"><h2>${t("edition")}</h2><p><strong>${esc(editionInfo.title)}</strong></p>${editionInfo.note ? `<p>${esc(editionInfo.note)}</p>` : ""}<p>${t("license")}: ${esc(editionInfo.license)}</p><a href="${esc(editionInfo.source)}" target="_blank" rel="noreferrer">${t("sourceLink")} ↗</a></div>${editionToggle(meta.code)}${timerCard()}<div class="card" id="search-panel" hidden><h2>${t("search")}</h2><ol class="search-results" id="search-results" tabindex="-1"></ol></div></aside></div>`,
+    `<div class="section-head reader-heading"><div><p class="eyebrow">${t("reader")}</p><h1>${t("readerTitle")}</h1></div><p>${t("readerIntro")}</p></div><div class="toolbar"><div class="field grow"><label for="book-select">${t("book")}</label><select id="book-select">${options}</select></div><div class="field"><label for="chapter-select">${t("chapter")}</label><select id="chapter-select">${chapters}</select></div><div class="field"><label for="verse-select">${t("verse")}</label><select id="verse-select"><option value="" ${selectedVerse === null ? "selected" : ""}>—</option>${verses.map((_, i) => `<option value="${i + 1}" ${selectedVerse === i + 1 ? "selected" : ""}>${i + 1}</option>`).join("")}</select></div><form id="book-search" class="field grow"><label for="search-input">${t("searchBook")}</label><div style="display:flex;gap:.4rem"><input id="search-input" type="search" placeholder="${t("searchPlaceholder")}"><button class="button" type="submit">${t("search")}</button></div></form></div><div class="reader-layout"><article class="reading-pane"><p class="eyebrow">${meta.testament === "OT" ? t("oldTestament") : t("newTestament")}</p><h1>${esc(bookTitle(meta))} ${chapter}</h1><p class="chapter-meta">${esc(editionInfo.title)}</p><div class="verses">${verses.map((v, i) => `<p class="verse" id="v${i + 1}" ${selectedVerse === i + 1 ? 'data-selected-verse tabindex="-1"' : ''}><a class="verse-number" href="${readerVerseUrl(meta.code, chapter, i + 1, groupId)}" aria-label="${esc(bookTitle(meta))} ${chapter}:${i + 1}">${i + 1}</a> ${esc(bibleText(v))} <button type="button" class="verse-cite" data-verse-cite="${i + 1}" aria-label="${esc(citationCopy.label)}: ${esc(bookTitle(meta))} ${chapter}:${i + 1}">${esc(citationCopy.button)}</button></p>`).join("")}</div><p id="reader-cite-status" role="status" aria-live="polite"></p><div class="chapter-nav">${chapter > 1 ? `<a class="button" href="${readerChapterUrl(meta.code, chapter - 1, groupId)}">← ${t("previous")}</a>` : "<span></span>"}${chapter < meta.chapters ? `<a class="button" href="${readerChapterUrl(meta.code, chapter + 1, groupId)}">${t("next")} →</a>` : "<span></span>"}</div></article><aside class="reader-aside"><div class="card edition-card"><h2>${t("edition")}</h2><p><strong>${esc(editionInfo.title)}</strong></p>${editionInfo.note ? `<p>${esc(editionInfo.note)}</p>` : ""}<p>${t("license")}: ${esc(editionInfo.license)}</p><a href="${esc(editionInfo.source)}" target="_blank" rel="noreferrer">${t("sourceLink")} ↗</a></div>${editionToggle(meta.code)}${timerCard()}<div class="card" id="search-panel" hidden><h2>${t("search")}</h2><ol class="search-results" id="search-results" tabindex="-1"></ol></div></aside></div>`,
   );
   activateTimer();
   document.querySelector(".verses")?.addEventListener("click", async event => {
@@ -3173,7 +3177,7 @@ async function renderReader(parts) {
         `${bookTitle(meta)} ${chapter}:${number}.`,
         bibleText(verses[number - 1]),
         editionInfo,
-        new URL(readerVerseUrl(meta.code, chapter, number), location.origin).href,
+        new URL(readerVerseUrl(meta.code, chapter, number, groupId), location.origin).href,
       );
       await navigator.clipboard.writeText(citation);
       if (readerStillCurrent() && button.isConnected && document.querySelector("#reader-cite-status") === status)
@@ -3325,16 +3329,16 @@ async function renderReader(parts) {
     .querySelector("#book-select")
     .addEventListener(
       "change",
-      (e) => navigateTo(`/reader/${e.target.value}/1`),
+      (e) => navigateTo(readerChapterUrl(e.target.value, 1, groupId)),
     );
   document
     .querySelector("#chapter-select")
     .addEventListener(
       "change",
-      (e) => navigateTo(`/reader/${meta.code}/${e.target.value}`),
+      (e) => navigateTo(readerChapterUrl(meta.code, e.target.value, groupId)),
     );
   document.querySelector("#verse-select").addEventListener("change", (e) => {
-    navigateTo(e.target.value ? readerVerseUrl(meta.code, chapter, e.target.value) : `/reader/${meta.code}/${chapter}`);
+    navigateTo(e.target.value ? readerVerseUrl(meta.code, chapter, e.target.value, groupId) : readerChapterUrl(meta.code, chapter, groupId));
   });
   document.querySelector("#book-search").addEventListener("submit", (e) => {
     e.preventDefault();
@@ -3361,7 +3365,7 @@ async function renderReader(parts) {
       ? results
           .map(
             (r) =>
-              `<li><a href="${readerVerseUrl(meta.code, r.chapter, r.verse)}">${esc(bookTitle(meta))} ${r.chapter}:${r.verse}</a><p>${esc(r.text)}</p></li>`,
+              `<li><a href="${readerVerseUrl(meta.code, r.chapter, r.verse, groupId)}">${esc(bookTitle(meta))} ${r.chapter}:${r.verse}</a><p>${esc(r.text)}</p></li>`,
           )
           .join("")
       : `<li>${t("noResults")}</li>`;

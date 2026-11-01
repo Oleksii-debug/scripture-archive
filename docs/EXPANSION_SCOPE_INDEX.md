@@ -1,3 +1,9 @@
+## 2026-11-01 — SA-EXT-01 / PRIMARY_RIGHTS_MAP_OWNERSHIP — scoped terminal
+
+**Лише захист успадкованих видавничих metadata закрито.** Первинна читальня тепер вимагає власні мапи та ключі видань/перекладів; підроблена через прототип назва/ліцензія не авторизує біблійний текст. [PR #1139](https://github.com/Oleksii-debug/scripture-archive/pull/1139) **MERGED** `main@91178972ad9c97a8453fca017c3737548859d53c`; [exact-head CI #41307851019](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41307851019) **SUCCESS**: 4211 Node PASS/1 SKIP, 37 Worker/D1 PASS, 2 Python PASS, TS/lint/build. [Акт](roadmap/SA_EXT_01_PRIMARY_RIGHTS_MAP_OWNERSHIP_SCOPED_TERMINAL_20261101.md). `remaining_scoped_implementation=0` тільки тут; SA-EXT-01/02/05/06/07 OPEN, 03/04 source-terminal; права/редакція, browser/NVDA, live Sites/D1/backup/release NOT_VERIFIED. Без заборонених запусків.
+
+---
+
 ## 2026-11-01 — SA-EXT-01 / MALFORMED_CHAPTER_PRE_CATALOG — scoped terminal
 
 **Лише цей дефект завершено, не весь SA-EXT-01.** Неправильні явні номери глав тепер відхиляються до `getCatalog()` з доступним `role=alert` навіть під час збою каталогу, без зміни збереженого читання. [PR #1136](https://github.com/Oleksii-debug/scripture-archive/pull/1136) **MERGED** `main@c4626a8cc247ba5a61e04c83bda78c7428ea1978`; [exact-head CI #41303325090](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41303325090) **SUCCESS**: 4206 Node PASS/1 SKIP, 37 Worker/D1 PASS, 2 Python PASS, TS/lint/build. [Акт](roadmap/SA_EXT_01_MALFORMED_CHAPTER_PRE_CATALOG_SCOPED_TERMINAL_20261101.md). `remaining_scoped_implementation=0` тільки тут; SA-EXT-01/02/05/06/07 OPEN, 03/04 source-terminal. Права/редакція, browser/NVDA, live Sites/D1/backup/release NOT_VERIFIED. Без заборонених запусків.

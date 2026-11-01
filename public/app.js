@@ -3143,13 +3143,15 @@ async function renderReader(parts) {
   // preserve verse focus for that same chapter without accepting another source.
   const verseCoordinateMatches = typeof parts[1] === "string" && parts[1].toUpperCase() === meta.code && parts[2] === String(chapter);
   const selectedVerse = verseCoordinateMatches ? readerVerseFromUrl(location.href, verses.length) : null;
-  // Do not replace the last readable bookmark when book loading fails.
+  // A fetched chapter is not yet readable if its edition's publisher and
+  // licence cannot be verified. Preserve the last readable bookmark on
+  // provenance failure, just as on a failed book fetch.
+  const edition = localEditionMetadata(catalog),
+    editionInfo = editionDetails(edition, meta.code);
   state.reader = { book: meta.code, chapter };
   // Browser preference storage is optional; never block an authorized chapter.
   try { localStorage.setItem("sa.reader", JSON.stringify(state.reader)); }
   catch { /* Keep the current chapter in memory without claiming durable persistence. */ }
-  const edition = localEditionMetadata(catalog),
-    editionInfo = editionDetails(edition, meta.code);
   const citationCopy = {
     uk: { button: "Цитувати", label: "Копіювати вірш із джерелом", done: "Цитату з джерелом скопійовано", error: "Не вдалося скопіювати цитату" },
     ru: { button: "Цитировать", label: "Копировать стих с источником", done: "Цитата с источником скопирована", error: "Не удалось скопировать цитату" },

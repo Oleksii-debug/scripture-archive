@@ -2497,12 +2497,20 @@ function localEditionMetadata(catalog) {
   const local = chosen.local ? chosen : EDITIONS[state.lang]?.find(e => e.local);
   if (!local) throw Error("local_edition_unavailable");
   // Locale defaults must not be used as attribution for a distinct edition.
-  const translated = catalog.translations?.[local.id];
-  const regional = catalog.editions?.[state.lang];
+  // Rights maps and their selected keys must be owned by the validated
+  // catalogue. A polluted prototype cannot become a publisher/licence
+  // authority for a real Bible chapter or clipboard citation.
+  const ownMap = key => Object.hasOwn(catalog, key) &&
+    catalog[key] && typeof catalog[key] === "object" && !Array.isArray(catalog[key])
+    ? catalog[key] : null;
+  const translations = ownMap("translations");
+  const editions = ownMap("editions");
+  const declared = Boolean(translations && Object.hasOwn(translations, local.id));
+  const translated = declared ? translations[local.id] : null;
+  const regional = editions && Object.hasOwn(editions, state.lang) ? editions[state.lang] : null;
   // A declared translation with a different embedded ID is corrupt; do not
   // fall back to the regional edition and misattribute its licensed verses.
   // The fallback is only legal when no translation entry was declared at all.
-  const declared = Object.prototype.hasOwnProperty.call(catalog.translations || {}, local.id);
   const metadata = declared ? (translated?.id === local.id ? translated : null)
     : (local.contentId && regional?.id === local.contentId ? regional : null);
   if (!metadata || typeof metadata.title !== "string" || !metadata.title.trim() ||

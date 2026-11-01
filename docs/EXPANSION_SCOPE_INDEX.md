@@ -1,3 +1,9 @@
+## 2026-11-01 — SA-EXT-01 / PARALLEL_PROVENANCE_MAP_OWN_DATA — scoped terminal
+
+**Закрито лише getter-backed права на рівні catalog map/entry, НЕ батьківський SA-EXT-01.** [PR #1161](https://github.com/Oleksii-debug/scripture-archive/pull/1161) **SQUASH MERGED** `main@dd7b6c8246f48793cce6c6e298eb124017d8b030`; [CI #41338544895](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41338544895) **SUCCESS**: 4293 Node PASS, 37 Worker/D1 PASS, 2 Python PASS, TS/lint/build PASS. [Акт](roadmap/SA_EXT_01_PARALLEL_PROVENANCE_MAP_DESCRIPTOR_SCOPED_TERMINAL_20261101.md). `remaining_scoped_implementation=0` лише тут; SA-EXT-01/02/05/06/07 OPEN, 03/04 source-terminal. Rights/editorial, physical NVDA, live Sites/D1/backup/release NOT_VERIFIED. Без production/82 мов/платежів/synthetic users/масової пошти/dating.
+
+---
+
 ## 2026-11-01 — SA-EXT-01 / PARALLEL_EDITION_IDENTITY_OWN_DATA — scoped terminal
 
 **Закрито тільки перевірку власного data-ID видавничого запису, НЕ SA-EXT-01.** Успадковані/accessor-backed ідентичності explicit translation і fallback більше не авторизують показ/цитування біблійного тексту. [PR #1158](https://github.com/Oleksii-debug/scripture-archive/pull/1158) **SQUASH MERGED** `main@d698c65e234c46a3537f74b1ee11b1c15d04055f`; [exact-head CI #41333342171](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41333342171) **SUCCESS**: 4285 Node PASS/1 SKIP, 37 Worker/D1 PASS, 2 Python PASS, TS/lint/build PASS. [Акт](roadmap/SA_EXT_01_PARALLEL_EDITION_IDENTITY_OWN_DATA_SCOPED_TERMINAL_20261101.md). `remaining_scoped_implementation=0` лише тут; SA-EXT-01/02/05/06/07 OPEN, 03/04 source-terminal; rights/editorial, physical NVDA, live Sites/D1/backup/release NOT_VERIFIED. Заборонених запусків немає.

@@ -1,3 +1,9 @@
+## 2026-11-01 — SA-EXT-01 / PARALLEL_CHAPTER_CONTAINER_OWN_DATA — scoped terminal
+
+**Закрито лише власні data descriptors `chapters` і chapter index у паралельній читальні, НЕ SA-EXT-01.** Getter/inherited chapter metadata не виконуються та не видаються за Scripture; uk/ru/en, права, два chapter guards і retry збережені. [PR #1167](https://github.com/Oleksii-debug/scripture-archive/pull/1167) **SQUASH MERGED** `main@940caf93bb4c243fc2eb6523ea020f21bd767e3d`; [exact-head CI #41348461287](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41348461287) **SUCCESS**: 4308 Node PASS/1 SKIP, 37 disposable Worker/D1 PASS, 2 Python PASS, TS/lint/build PASS. [Акт](roadmap/SA_EXT_01_PARALLEL_CHAPTER_CONTAINER_OWN_DATA_SCOPED_TERMINAL_20261101.md). `remaining_scoped_implementation=0` лише тут; SA-EXT-01/02/05/06/07 OPEN, 03/04 source-terminal. Rights/editorial, real NVDA, Sites/D1/backup/release NOT_VERIFIED. Без заборонених запусків.
+
+---
+
 ## 2026-11-01 — SA-EXT-05/06 / DOSSIER_CATALOG_OWN_DATA_PROVENANCE — scoped terminal
 
 **Закрито лише захист видавничого каталогу для чинних досьє та атласу, НЕ батьківські SA-EXT-05/06.** Getter-backed own metadata більше не авторизують source labels/reader links; збережено 3 мови, доступну відмову та справжній null-prototype каталог. [PR #1164](https://github.com/Oleksii-debug/scripture-archive/pull/1164) **SQUASH MERGED** `main@3e46e626f5ac81a71bf3760049f9148c935c3078`; [CI #41343483190](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41343483190) **SUCCESS**: 4298 Node PASS/1 SKIP, 37 disposable Worker/D1 PASS, 2 Python PASS, TS/lint/build PASS. [Акт](roadmap/SA_EXT_05_06_DOSSIER_CATALOG_ACCESSOR_SCOPED_TERMINAL_20261101.md). `remaining_scoped_implementation=0` лише тут; SA-EXT-01/02/05/06/07 OPEN, 03/04 source-terminal; права/редакція, real NVDA, live Sites/D1/backup/release NOT_VERIFIED. Без production, 82 мов, платежів, synthetic users, розсилок або dating.

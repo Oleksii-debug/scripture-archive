@@ -182,3 +182,50 @@ test('primary and parallel reader preserve real source bytes without truncation 
     assert.equal(validEditionRightsMetadata(metadata),true);
   }
 });
+
+
+test('SA-EXT-01: primary edition rights cannot come from inherited locale keys',()=>{
+  for(const [lang,selected] of [['uk','uk-kulish'],['ru','ru-synodal'],['en','en-web']]){
+    const inherited=Object.create({[lang]:{...catalog.editions[lang],title:'FORGED INHERITED RIGHTS'}});
+    const damaged={translations:{},editions:inherited};
+    assert.throws(()=>provenance(selected,lang)(damaged),/local_edition_provenance_unavailable/,
+      lang+' inherited edition locale must not authorize a Bible source');
+    const healthy={translations:{},editions:Object.assign(Object.create(null),{
+      [lang]:{...catalog.editions[lang]},
+    })};
+    assert.equal(provenance(selected,lang)(healthy).title,catalog.editions[lang].title,
+      lang+' own null-prototype locale remains readable');
+  }
+});
+
+test('SA-EXT-01: inherited top-level rights maps cannot impersonate selected translations',()=>{
+  const forged={...catalog.translations['uk-ohiienko'],title:'FORGED INHERITED TRANSLATION'};
+  const inheritedCatalog=Object.create({translations:{'uk-ohiienko':forged}});
+  inheritedCatalog.editions={};
+  assert.throws(()=>provenance('uk-ohiienko')(inheritedCatalog),
+    /local_edition_provenance_unavailable/);
+  const inheritedRegional=Object.create({editions:{uk:{...catalog.editions.uk,title:'FORGED REGIONAL'}}});
+  inheritedRegional.translations={};
+  assert.throws(()=>provenance('uk-kulish')(inheritedRegional),
+    /local_edition_provenance_unavailable/);
+  const accessorCatalog=Object.create({
+    get editions(){throw Error('inherited edition getter executed');},
+    get translations(){throw Error('inherited translation getter executed');},
+  });
+  assert.throws(()=>provenance('uk-kulish')(accessorCatalog),
+    /local_edition_provenance_unavailable/);
+});
+
+test('SA-EXT-01: owned declared translations retain precedence over legitimate regional fallback',()=>{
+  const owned=Object.assign(Object.create(null),{
+    'uk-kulish':{id:'uk-kulish',title:'Authorized local rights',
+      license:'CC BY-SA 4.0',source:'https://licensed.example/translation'},
+  });
+  const healthy={translations:owned,editions:Object.assign(Object.create(null),{
+    uk:{...catalog.editions.uk},
+  })};
+  assert.equal(provenance('uk-kulish')(healthy).title,'Authorized local rights');
+  const invalid={translations:{'uk-kulish':{...owned['uk-kulish'],id:'another-edition'}},
+    editions:healthy.editions};
+  assert.throws(()=>provenance('uk-kulish')(invalid),/local_edition_provenance_unavailable/);
+});

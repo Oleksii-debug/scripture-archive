@@ -1,3 +1,9 @@
+## 2026-11-01 — SA-EXT-01 / GROUP_READER_NAVIGATION_CONTEXT — scoped terminal
+
+**Закрито тільки дефект втрати group ID у навігації чинної читальні.** [PR #1114](https://github.com/Oleksii-debug/scripture-archive/pull/1114) **MERGED** `main@61dca5ec11436d532180a7f1ef59ebbf33a639a9`; [native CI #41274563834](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41274563834) **SUCCESS** (4071 Node PASS / 1 SKIP, 37 Worker/D1, 2 Python, TS/lint/build). Копійовані цитати не розкривають приватний group ID. [Акт](roadmap/SA_EXT_01_GROUP_READER_NAVIGATION_CONTEXT_SCOPED_TERMINAL_20261101.md). `remaining_scoped_implementation=0` тільки тут; батьківські 01/02/05/06/07 OPEN, 03/04 source-terminal; live browser/NVDA/Sites/D1/rights/release NOT_VERIFIED.
+
+---
+
 ## 2026-11-01 — SA-EXT-01 / GROUP_READER_ROUTE_SHAPE — SCOPED TERMINAL
 
 **Лише цей дефект маршруту закрито:** неповні/помилкові групові посилання читальні більше не підміняються особистими. [PR #1111](https://github.com/Oleksii-debug/scripture-archive/pull/1111) **SQUASH MERGED** `main@90c9ca621d4ce08776eda6fb524e7ec08e3ac26e`; [CI #41270514276](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41270514276) **SUCCESS**: 4052 Node PASS/1 SKIP, 37 Worker/D1 PASS, 2 Python PASS, TS/lint/build. [Акт](roadmap/SA_EXT_01_GROUP_READER_ROUTE_SHAPE_SCOPED_TERMINAL_20261101.md). `remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` лише тут. **SA-EXT-01/02/05/06/07 parent OPEN, 03/04 source-terminal**; реальні права/редакція/Chrome/NVDA/Sites/D1/release NOT_VERIFIED. Без production або заборонених запусків.

@@ -1,3 +1,13 @@
+## 2026-11-01 — SA-EXT-05/06 / DOSSIER_INVISIBLE_UNICODE_FILLER_QUERY — CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL
+
+**ЗАКРИТО ЛИШЕ ЦЕЙ НОВИЙ ДЕФЕКТ ПОШУКУ, НЕ БАТЬКІВСЬКІ SA-EXT-05/06.** Канонічний спільний предикат пошуку досьє/текстового атласу тепер відхиляє невидимі Unicode-заповнювачі U+00A0, U+034F, U+115F/U+1160, U+2800, U+3164, U+FFA0 і решту Unicode Cf до нормалізації/trim. Раніше запит тільки з NBSP міг без попередження перетворитися на порожній та показати нефільтровані біблійні посилання. Новий шлях повертає локалізований `role=alert`, не підставляє інше досьє, зберігає звичайні порожні/SPACE/TAB запити та валідні цитати у трьох мовах. Це дефект source input-integrity, **не підтверджений production-інцидент**.
+
+**Інтеграція:** [PR #1100](https://github.com/Oleksii-debug/scripture-archive/pull/1100) **SQUASH MERGED** у exact `main@b8ff1751b52f76f5948ca59e21756c569ef420dc`. Production blob `public/scripture-dossiers.js@298d27722dce94cf81b1f20dfe9d012e4ea0fda9`, native regression blob `tests/dossier-search-invisible-query.test.mjs@d3d2593bfead9554c8f73456959f16cfe423fdd3`. [Exact-head CI #41258414929](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41258414929) **COMPLETED SUCCESS** на `6bc87ef26fb71d33cc3e63166129423b8e91281d`: **3987 Node PASS / 1 SKIP / 0 FAIL**, **37 disposable Worker/D1 PASS**, **2 Python PASS**, TypeScript, lint (13 warnings / 0 errors), build SUCCESS. Окремі 26 copied-predicate Node checks PASS, **не** native source-module або повний локальний checkout. Merge, SHA та обидва blobs прочитано повторно.
+
+`remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` **тільки для filler-query boundary**. **SA-EXT-01/02/05/06/07 parent OPEN, SA-EXT-03/04 source-terminal**; затверджений ширший корпус, права на тексти/карти, редакційне приймання, реальний Chrome/Windows/фізичний NVDA, deployed Sites/D1/backup та release #689 **NOT_VERIFIED**. Без деплою, production-міграцій, 82 мов, платежів, synthetic users, масової пошти або dating.
+
+---
+
 ## 2026-11-01 — SA-EXT-07 / ACADEMY_PERSISTED_MARKER_SIZE_BOUND — CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL
 
 **Лише цей вузький захист завершено, батьківський SA-EXT-07 OPEN.** Локальна Академія відмовляє на пошкодженому записі прогресу, що перевищує 4096 символів, **до JSON.parse**, та на масиві позначок, довшому за 13 затверджених занять. Вихідні байти не видаляються/не переписуються, читання інших облікових записів, чинні 13 позначок, гостьовий стан і доступне повідомлення про невизначений прогрес збережено. Це локальна data-integrity/recovery boundary, не новий курс і не production-інцидент.

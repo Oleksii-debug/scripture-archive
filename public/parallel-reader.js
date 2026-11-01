@@ -178,7 +178,13 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
         return descriptor && Object.hasOwn(descriptor,'value') ? descriptor.value : null;
       };
       const ownMap = key => {
-        const value=ownData(catalog,key);
+        const descriptor=catalog && typeof catalog === 'object' && !Array.isArray(catalog)
+          ? Object.getOwnPropertyDescriptor(catalog,key) : null;
+        // A declared but accessor-backed translation map cannot silently
+        // downgrade to the fallback edition's licence.
+        if (descriptor && !Object.hasOwn(descriptor,'value'))
+          throw Error('unsafe edition provenance map');
+        const value=descriptor?.value;
         return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
       };
       const editionMap=ownMap('editions');

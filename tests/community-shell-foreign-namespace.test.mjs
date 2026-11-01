@@ -50,6 +50,9 @@ for (const [name, html] of [
   ["only link in math", page(`${MAIN}<math>${LINK}</math>`)],
   ["nested MathML", page(`<math><mrow>${MARKERS}</mrow></math>`)],
   ["markers split between foreign namespaces", page(`<svg>${MAIN}</svg><math>${LINK}</math>`)],
+  ["malformed SVG slash plus space is not self-closing", page(`<svg/ >${MARKERS}</svg>`)],
+  ["malformed MathML slash plus space is not self-closing", page(`<math/ >${MARKERS}</math>`)],
+  ["malformed SVG spaced slash is not self-closing", page(`<svg / >${MARKERS}</svg>`)],
 ]) {
   test("P0 R0.4: foreign-namespace markers do not qualify HTML shell: " + name, async () => {
     assert.equal(await ready(html), false);

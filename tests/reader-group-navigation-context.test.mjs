@@ -74,8 +74,8 @@ test("actual reader HTML keeps group chapter and verse anchors", () => {
   const start = source.indexOf("async function renderReader(parts) {");
   const end = source.indexOf("async function renderMissions()", start);
   const reader = source.slice(start, end);
-  const markupStart = reader.indexOf('  shell(\\n    `<div class=');
-  const markupEnd = reader.indexOf("\\n  );", markupStart);
+  const markupStart = reader.indexOf('  shell(\n    `<div class=');
+  const markupEnd = reader.indexOf("\n  );", markupStart);
   assert.ok(markupStart >= 0 && markupEnd > markupStart);
   const markupCall = reader.slice(markupStart, markupEnd + 5);
   const renderMarkup = new Function(

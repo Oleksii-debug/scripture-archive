@@ -69,3 +69,49 @@ test("all canonical in-reader navigation retains group context", () => {
   assert.ok(reader.includes("const groupId = validGroupRoute ? parts[4] : \"\";"));
   assert.ok(reader.includes("groupId: groupId || undefined"));
 });
+
+test("actual reader HTML keeps group chapter and verse anchors", () => {
+  const start = source.indexOf("async function renderReader(parts) {");
+  const end = source.indexOf("async function renderMissions()", start);
+  const reader = source.slice(start, end);
+  const markupStart = reader.indexOf('  shell(\\n    `<div class=');
+  const markupEnd = reader.indexOf("\\n  );", markupStart);
+  assert.ok(markupStart >= 0 && markupEnd > markupStart);
+  const markupCall = reader.slice(markupStart, markupEnd + 5);
+  const renderMarkup = new Function(
+    "shell", "t", "meta", "chapter", "options", "chapters",
+    "selectedVerse", "verses", "esc", "bookTitle", "editionInfo",
+    "bibleText", "citationCopy", "readerVerseUrl", "readerChapterUrl",
+    "editionToggle", "timerCard", "groupId", markupCall,
+  );
+  function htmlFor(groupId) {
+    let html = "";
+    renderMarkup(
+      value => { html = value; }, key => key,
+      { code: "GEN", testament: "OT", chapters: 50 }, 3,
+      "<option>GEN</option>", "<option>3</option>", 2,
+      ["first", "second"], value => value, () => "Genesis",
+      { title: "Edition", license: "License", source: "https://example.test" },
+      value => value, { label: "Copy verse", button: "Cite" },
+      readerVerseUrl, readerChapterUrl, () => "", () => "", groupId,
+    );
+    return html;
+  }
+  const group = htmlFor("g_123");
+  for (const link of [
+    '/reader/GEN/2/group/g_123',
+    '/reader/GEN/4/group/g_123',
+    '/reader/GEN/3/group/g_123?verse=1',
+    '/reader/GEN/3/group/g_123?verse=2',
+  ]) {
+    assert.ok(group.includes(`href="${link}"`), `missing group link ${link}`);
+  }
+  const personal = htmlFor("");
+  for (const link of [
+    '/reader/GEN/2', '/reader/GEN/4',
+    '/reader/GEN/3?verse=1', '/reader/GEN/3?verse=2',
+  ]) {
+    assert.ok(personal.includes(`href="${link}"`), `missing personal link ${link}`);
+  }
+  assert.ok(!personal.includes("/group/"));
+});

@@ -68,7 +68,7 @@ for (const lang of ["uk", "ru", "en"]) {
           "persisted personal reading must remain unchanged");
         assert.equal(h.notices.length, 1);
         assert.match(h.notices[0], /role="alert"/);
-        assert.match(h.notices[0], /href="\\/reader"/);
+        assert.match(h.notices[0], /href="\/reader"/);
       }
     });
     test(`${lang}: ${mode} valid personal and group links still use catalogue`, async () => {
@@ -90,6 +90,6 @@ test("group route shape is rejected before the first catalogue read", () => {
   const catalogue = source.indexOf("  const catalog = await getCatalog();", start);
   const attempt = source.indexOf('    const attemptState = await attemptRequest("chapter"', start);
   assert.ok(gate > start && gate < catalogue && catalogue < attempt);
-  assert.match(source.slice(gate, catalogue), /state\\.currentReader = null/);
+  assert.match(source.slice(gate, catalogue), /state\.currentReader = null/);
   assert.match(source.slice(gate, catalogue), /role="alert"/);
 });

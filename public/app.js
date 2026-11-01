@@ -2959,7 +2959,15 @@ function readerVerseUrl(code, chapter, verse, groupId = "") {
 }
 function readerVerseFromUrl(url, availableVerses) {
   if (!Number.isSafeInteger(availableVerses) || availableVerses < 1) return null;
-  const values = new URL(url).searchParams.getAll("verse");
+  const parsed = new URL(url);
+  // The supported legacy #/reader/BOOK/CHAPTER?verse=N syntax keeps its
+  // query inside the fragment. Never prefer one verse authority over another.
+  const hashQueryIndex = parsed.hash.startsWith("#/reader/") ? parsed.hash.indexOf("?") : -1;
+  const hashVerses = hashQueryIndex < 0 ? [] :
+    new URLSearchParams(parsed.hash.slice(hashQueryIndex + 1)).getAll("verse");
+  const searchVerses = parsed.searchParams.getAll("verse");
+  if (hashVerses.length && searchVerses.length) return null;
+  const values = hashVerses.length ? hashVerses : searchVerses;
   if (values.length !== 1 || !/^[1-9][0-9]*$/.test(values[0])) return null;
   const value = Number(values[0]);
   return Number.isSafeInteger(value) && value <= availableVerses ? value : null;

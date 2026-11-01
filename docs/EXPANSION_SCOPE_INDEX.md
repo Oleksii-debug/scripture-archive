@@ -1,3 +1,9 @@
+## 2026-11-01 — SA-EXT-01 / READER_EMPTY_SEGMENTS_AND_LEGACY_HASH — scoped terminal
+
+**Закрито тільки malformed-path/legacy-hash boundary, НЕ батьківський розділ.** Порожні внутрішні сегменти `/reader/GEN//3` або `/reader/GEN/3/group//g_123` більше не стають валідною главою/групою; чинний legacy `/#/reader/GEN/3` читається через канонічний UI. [PR #1117](https://github.com/Oleksii-debug/scripture-archive/pull/1117) **MERGED** `main@ec7e9a2b21e49d6dab2c6e4ab4c09dffb0c4de47`; [CI #41278079344](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41278079344) **SUCCESS** (4087 Node PASS/1 SKIP, 37 Worker/D1, 2 Python, TS/lint/build). [Акт](roadmap/SA_EXT_01_READER_EMPTY_SEGMENTS_LEGACY_HASH_SCOPED_TERMINAL_20261101.md). `remaining_scoped_implementation=0` лише тут. SA-EXT-01/02/05/06/07 OPEN, 03/04 source-terminal; права, редакція, live browser/NVDA/Sites/D1/backup/release NOT_VERIFIED. Без production чи заборонених запусків.
+
+---
+
 ## 2026-11-01 — SA-EXT-01 / GROUP_READER_NAVIGATION_CONTEXT — scoped terminal
 
 **Закрито тільки дефект втрати group ID у навігації чинної читальні.** [PR #1114](https://github.com/Oleksii-debug/scripture-archive/pull/1114) **MERGED** `main@61dca5ec11436d532180a7f1ef59ebbf33a639a9`; [native CI #41274563834](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41274563834) **SUCCESS** (4071 Node PASS / 1 SKIP, 37 Worker/D1, 2 Python, TS/lint/build). Копійовані цитати не розкривають приватний group ID. [Акт](roadmap/SA_EXT_01_GROUP_READER_NAVIGATION_CONTEXT_SCOPED_TERMINAL_20261101.md). `remaining_scoped_implementation=0` тільки тут; батьківські 01/02/05/06/07 OPEN, 03/04 source-terminal; live browser/NVDA/Sites/D1/rights/release NOT_VERIFIED.

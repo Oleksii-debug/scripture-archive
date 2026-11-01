@@ -61,13 +61,15 @@ test("all canonical in-reader navigation retains group context", () => {
     'readerVerseUrl(meta.code, chapter, e.target.value, groupId)',
     'readerChapterUrl(meta.code, chapter, groupId)',
     'readerVerseUrl(meta.code, chapter, i + 1, groupId)',
-    'readerVerseUrl(meta.code, chapter, number, groupId)',
     'readerVerseUrl(meta.code, r.chapter, r.verse, groupId)',
   ]) {
     assert.ok(reader.includes(expected), `missing group-aware navigation: ${expected}`);
   }
   assert.ok(reader.includes("const groupId = validGroupRoute ? parts[4] : \"\";"));
   assert.ok(reader.includes("groupId: groupId || undefined"));
+  // Clipboard citations are shareable public references, not group invitations.
+  assert.ok(reader.includes("new URL(readerVerseUrl(meta.code, chapter, number), location.origin).href"));
+  assert.ok(!reader.includes("new URL(readerVerseUrl(meta.code, chapter, number, groupId), location.origin).href"));
 });
 
 test("actual reader HTML keeps group chapter and verse anchors", () => {

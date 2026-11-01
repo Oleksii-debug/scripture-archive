@@ -3177,7 +3177,8 @@ async function renderReader(parts) {
         `${bookTitle(meta)} ${chapter}:${number}.`,
         bibleText(verses[number - 1]),
         editionInfo,
-        new URL(readerVerseUrl(meta.code, chapter, number, groupId), location.origin).href,
+        // A copied citation is public evidence, not an invitation into a private group.
+         new URL(readerVerseUrl(meta.code, chapter, number), location.origin).href,
       );
       await navigator.clipboard.writeText(citation);
       if (readerStillCurrent() && button.isConnected && document.querySelector("#reader-cite-status") === status)

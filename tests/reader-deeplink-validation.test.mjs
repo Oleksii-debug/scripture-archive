@@ -40,7 +40,7 @@ test("canonical reader refuses verse focus when its URL does not match the displ
 });
 
 test("canonical case-insensitive book aliases keep verse focus only for their own chapter", () => {
-  const expression = app.match(/const verseCoordinateMatches = ([^\\n;]+);/);
+  const expression = app.match(/const verseCoordinateMatches = ([^\n;]+);/);
   assert.ok(expression, "canonical verse-coordinate guard must exist");
   const matches = new Function("parts","meta","chapter","return (" + expression[1] + ");");
   for (const alias of ["JHN","jhn","JhN"]) {

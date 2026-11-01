@@ -38,6 +38,8 @@ test("legacy hash reader query does not become a malformed route coordinate", ()
 
 test("actual empty reader path segments still fail closed before catalog access", () => {
   for (const location of [
+    { pathname: "//reader/GEN/3", search: "", hash: "" },
+    { pathname: "/", search: "", hash: "#//reader/GEN/3" },
     { pathname: "/reader/GEN//3", search: "?source=https://example.invalid/a", hash: "" },
     { pathname: "/", search: "", hash: "#/reader/GEN//3?source=https://example.invalid/a" },
     { pathname: "/", search: "", hash: "#/reader/GEN/3/group//g_123?verse=16" },

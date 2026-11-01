@@ -51,8 +51,9 @@ function harness(lang, path, legacy = false) {
 for (const lang of ["uk", "ru", "en"]) {
   for (const legacy of [false, true]) {
     const mode = legacy ? "legacy hash" : "pathname";
-    test(`${lang}: ${mode} empty interior reader segments fail closed`, async () => {
+    test(`${lang}: ${mode} empty interior or leading reader segments fail closed`, async () => {
       for (const path of [
+        "/reader/GEN/3",
         "reader//GEN/3",
         "reader/GEN//3",
         "reader/GEN/3//",
@@ -86,7 +87,7 @@ for (const lang of ["uk", "ru", "en"]) {
 }
 
 test("malformed route rejection precedes catalog, chapter attempt and saved reader mutation", () => {
-  const guard = source.indexOf('  if (readerPath.includes("//")) {', start);
+  const guard = source.indexOf('  if (readerPath.startsWith("/") || readerPath.includes("//")) {', start);
   const catalog = source.indexOf("  const catalog = await getCatalog();", start);
   const attempt = source.indexOf('    const attemptState = await attemptRequest("chapter"', start);
   assert.ok(guard > start && guard < catalog && catalog < attempt);

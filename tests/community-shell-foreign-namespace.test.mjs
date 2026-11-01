@@ -61,6 +61,8 @@ for (const [name, html] of [
   ["real shell after decorative SVG", page(`<svg><g>${MARKERS}</g></svg>${MARKERS}`)],
   ["real shell after MathML", page(`<math>${MARKERS}</math>${MARKERS}`)],
   ["decorative SVG after real shell", page(`${MARKERS}<svg><circle r="1"/></svg>`)],
+  ["self-closing SVG before HTML shell", page(`<svg/>${MARKERS}`)],
+  ["self-closing MathML before HTML shell", page(`<math/>${MARKERS}`)],
 ]) {
   test("P0 R0.4: real HTML shell remains ready: " + name, async () => {
     assert.equal(await ready(html), true);

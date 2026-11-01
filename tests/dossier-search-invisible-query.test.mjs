@@ -81,3 +81,38 @@ for(const lang of ['uk','ru','en']){
       searchScriptureDossiers(lang,'',catalog));
   });
 }
+
+
+for(const lang of ['uk','ru','en']){
+  test(lang+': Unicode Zs spacing aliases cannot silently turn a filtered atlas into an unfiltered one',()=>{
+    // JS String.trim() erases these non-ASCII spaces. Previously each
+    // whitespace-only q exposed all dossier/atlas citations without warning.
+    // U+0020 space and U+0009 TAB remain the intentional legacy blank search.
+    const invisibleSpaces=[
+      '\u1680','\u2000','\u2001','\u2002','\u2003','\u2004',
+      '\u2005','\u2006','\u2007','\u2008','\u2009','\u200a',
+      '\u202f','\u205f','\u3000',
+    ];
+    for(const filler of invisibleSpaces){
+      for(const query of [filler,filler+'GEN 17:15','GEN 17:15'+filler]){
+        assert.deepEqual(searchScriptureDossiers(lang,query,catalog),[],
+          JSON.stringify({lang,query}));
+        assert.deepEqual(searchScriptureDossiers(lang,query),[]);
+        for(const id of ['sarah',null]){
+          const dossier=dossierMarkup(catalog,lang,id,esc,query);
+          assert.match(dossier,/^<p role="alert">/,JSON.stringify({lang,query,id}));
+          assert.doesNotMatch(dossier,/dossier-layout|dossier-article|href="\/reader\//);
+        }
+        const atlas=dossierAtlasMarkup(catalog,lang,esc,query);
+        assert.match(atlas,/^<p role="alert">/,JSON.stringify({lang,query}));
+        assert.doesNotMatch(atlas,/dossier-atlas|href="\/reader\//);
+      }
+    }
+    assert.ok(searchScriptureDossiers(lang,' GEN 17:15 ',catalog)
+      .some(item=>item.id==='sarah'));
+    assert.deepEqual(searchScriptureDossiers(lang,' \t ',catalog),
+      searchScriptureDossiers(lang,'',catalog));
+    assert.match(dossierAtlasMarkup(catalog,lang,esc,' GEN 17:15 '),
+      /class="card dossier-atlas"/);
+  });
+}

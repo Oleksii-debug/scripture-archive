@@ -69,9 +69,32 @@ function copyForLocale(lang) {
   return typeof lang === 'string' && Object.hasOwn(COPY, lang) ? COPY[lang] : COPY.uk;
 }
 
+// The canonical edition list is an authority for local file paths and
+// publisher identity. Never execute inherited/accessor-backed edition fields
+// while creating controls or admitting a comparison. A malformed imported
+// record must not cause getBook to read a dynamic folder/contentId getter.
+function ownEditionData(edition, key) {
+  if (!edition || typeof edition !== 'object' || Array.isArray(edition)) return undefined;
+  const descriptor=Object.getOwnPropertyDescriptor(edition,key);
+  return descriptor && Object.hasOwn(descriptor,'value') ? descriptor.value : undefined;
+}
+function verifiedLocalEdition(edition, id) {
+  if (!edition || typeof edition !== 'object' || Array.isArray(edition)) return false;
+  for (const key of ['id','local','folder','contentId']) {
+    const descriptor=Object.getOwnPropertyDescriptor(edition,key);
+    if ((descriptor && !Object.hasOwn(descriptor,'value')) ||
+        (!descriptor && key in edition)) return false;
+  }
+  return ownEditionData(edition,'id')===id && ownEditionData(edition,'local')===true;
+}
+
 export function parallelControls(editions, lang, esc) {
   const copy = copyForLocale(lang);
-  return `<details class="card parallel-reader"><summary>${copy.title}</summary><p>${copy.note}</p><form class="parallel-form"><label class="account-field"><span>${copy.choose}</span><select name="edition">${editions.map(edition=>`<option value="${esc(edition.id)}">${esc(edition.title)}</option>`).join('')}</select></label><button class="button" type="submit">${copy.open}</button><p class="parallel-status" role="status"></p></form><div class="parallel-result"></div></details>`;
+  return `<details class="card parallel-reader"><summary>${copy.title}</summary><p>${copy.note}</p><form class="parallel-form"><label class="account-field"><span>${copy.choose}</span><select name="edition">${editions.map(edition=>{
+    const id=ownEditionData(edition,'id'), title=ownEditionData(edition,'title');
+    return typeof id==='string' && id && typeof title==='string'
+      ? `<option value="${esc(id)}">${esc(title)}</option>` : '';
+  }).join('')}</select></label><button class="button" type="submit">${copy.open}</button><p class="parallel-status" role="status"></p></form><div class="parallel-result"></div></details>`;
 }
 
 // The same chapter guard as the reader runs again before loading another text.
@@ -97,11 +120,23 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
   let citation = null;
   form.onsubmit=async event=>{
     event.preventDefault();
-    const button=submitButton, id=String(new FormData(form).get('edition') || ''), edition=editions.find(item=>item.id===id && item.local);
+    const button=submitButton, id=String(new FormData(form).get('edition') || '');
+    let edition=null;
+    try { edition=editions.find(item=>verifiedLocalEdition(item,id)); }
+    catch { /* Malformed edition descriptors are never selection authority. */ }
     const submittedRevision = selectionRevision;
     const selectionCurrent = () => selectionRevision === submittedRevision &&
       String(new FormData(form).get('edition') || '') === id;
-    if (!edition || button.disabled || !current() || !panel.isConnected) return;
+    if (button.disabled || !current() || !panel.isConnected) return;
+    if (!edition) {
+      // A malformed programmatic selection may not fire onchange. Retire
+      // previously licensed text rather than leaving it under a bad edition.
+      requestRevision += 1;
+      citation=null;
+      result.replaceChildren();
+      status.textContent=copy.fail;
+      return;
+    }
     const requestId = ++requestRevision;
     const requestCurrent = () => requestRevision === requestId && selectionCurrent();
     // A programmatic selection change need not emit onchange; preserve retry text.
@@ -200,8 +235,8 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
       const editionMap=ownMap('editions');
       const translationMap=ownMap('translations');
       const fallback=ownData(editionMap,lang);
-      const declared=Boolean(translationMap && Object.hasOwn(translationMap,edition.id));
-      const translation=declared ? ownData(translationMap,edition.id) : null;
+      const declared=Boolean(translationMap && Object.hasOwn(translationMap,id));
+      const translation=declared ? ownData(translationMap,id) : null;
       // A declared but mismatched identity must not borrow another edition's
       // licence and attribute that edition's loaded verses to a false source.
       // A matching edition ID is part of publisher provenance, not a mere
@@ -214,8 +249,8 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
         return Boolean(descriptor && Object.hasOwn(descriptor,'value') &&
           descriptor.value === expected);
       };
-      const metadata=declared ? (ownsVerifiedId(translation,edition.id) ? translation : null)
-        : (edition.contentId && ownsVerifiedId(fallback,edition.contentId) ? fallback : null);
+      const metadata=declared ? (ownsVerifiedId(translation,id) ? translation : null)
+        : (ownEditionData(edition,'contentId') && ownsVerifiedId(fallback,ownEditionData(edition,'contentId')) ? fallback : null);
       // Keep a comparison inaccessible if its own source or terms are missing.
       // Never borrow rights metadata from another Bible edition.
       // Damaged or hostile manifests must not turn one comparison into an

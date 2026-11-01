@@ -109,3 +109,33 @@ test('SA-EXT-01: comparison selector does not execute edition title or ID getter
   }
   assert.match(parallelControls([base],'en',esc),/Kulish/);
 });
+
+test('SA-EXT-01: invalid programmatic selection retires previously licensed comparison',async()=>{
+  const good={...base}, bad={local:true,contentId:'UKRPAN',title:'Bad'};
+  let invoked=0, selected=base.id;
+  Object.defineProperty(bad,'id',{get(){invoked++;return 'bad';}});
+  const button={disabled:false},status={textContent:''};
+  const result={innerHTML:'',replaceChildren(){this.innerHTML='';}};
+  const form={querySelector:()=>button};
+  const panel={isConnected:true,querySelector(selector){
+    return selector==='.parallel-form'?form:selector==='.parallel-status'?status:result;
+  }};
+  mountParallelReader(panel,{
+    editions:[good,bad],catalog,lang:'en',book:'GEN',bookTitle:'Genesis',chapter:1,
+    getBook:async()=>({chapters:[['PREVIOUS LICENSED VERSE']]}),
+    check:async()=>({invalidated:false}),current:()=>true,lock:()=>{},failClosed:()=>{},
+    esc,copyText:async()=>{},
+  });
+  const original=globalThis.FormData;
+  globalThis.FormData=class {get(){return selected;}};
+  try {
+    await form.onsubmit({preventDefault(){}});
+    assert.match(result.innerHTML,/PREVIOUS LICENSED VERSE/);
+    selected='bad'; // Programmatic selection: no onchange event.
+    await form.onsubmit({preventDefault(){}});
+    assert.equal(result.innerHTML,'','previous edition text is retired');
+    assert.ok(status.textContent,'accessible retry failure is announced');
+    assert.equal(button.disabled,false);
+    assert.equal(invoked,0,'bad edition ID getter never executes');
+  } finally {globalThis.FormData=original;}
+});

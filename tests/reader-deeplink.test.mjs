@@ -129,6 +129,9 @@ test('reader entry route resumes the last book and chapter for uk/ru/en', async 
       setActiveNav() {},
       async getCatalog() {return catalog;},
       selectedEdition() {return {id:'not-a-local-edition'};},
+      // The real bookmark stage now validates publisher rights before saving.
+      localEditionMetadata() {return {title:'Verified test edition'};},
+      editionDetails(edition) {return {title:edition.title};},
       clearInterval() {},
       timerInterval: null,
       communityRefreshInterval: null, communityOwnerRefreshInterval: null,
@@ -247,7 +250,7 @@ test('legacy hash reader references survive delegated clicks while local verse a
 
 test('book fetch failure keeps the last chapter until a successful retry (uk/ru/en)', async () => {
   const start = source.indexOf('async function renderReader(parts) {');
-  const stop = source.indexOf('  const edition = localEditionMetadata(', start);
+  const stop = source.indexOf('  const citationCopy = ', start);
   assert.ok(start >= 0 && stop > start, 'canonical reader fetch stage must exist');
   const entry = source.slice(start, stop) + '\n}';
   for (const [lang,edition] of Object.entries({uk:'uk-ohiienko',ru:'ru',en:'en'})) {
@@ -263,6 +266,8 @@ test('book fetch failure keeps the last chapter until a successful retry (uk/ru/
       getBook:async()=>{if(fail)throw Error('temporary_outage');return book;},
       readerVerseFromUrl:helpers.readerVerseFromUrl,
       readerChapterNumber:helpers.readerChapterNumber,
+      localEditionMetadata() {return {title:'Verified test edition'};},
+      editionDetails(edition) {return {title:edition.title};},
       localStorage:{setItem(k,v){writes.push([k,v]);saved.set(k,v)}},
       sessionStorage:{removeItem(){}},console:{warn(){}}
     };

@@ -4617,6 +4617,13 @@ function cleanPublicCopy() {
 }
 
 async function route() {
+  // An older async route must not replace the metadata, focus, or error UI of
+  // a newer navigation. Keep this token transient, like the reader token.
+  const routeToken = {};
+  Object.defineProperty(state, "__routeToken", {
+    value: routeToken, writable: true, configurable: true,
+  });
+  const routeStillCurrent = () => state.__routeToken === routeToken;
   clearInterval(timerInterval);
   clearInterval(communityRefreshInterval);
   clearInterval(communityOwnerRefreshInterval);
@@ -4644,6 +4651,7 @@ async function route() {
     else if (name === "account") renderAccount();
     else if (name === "editor") await renderEditor();
     else await renderHome();
+    if (!routeStillCurrent()) return;
     cleanPublicCopy();
     setStaticI18n();
     updatePageMetadata(name);
@@ -4656,6 +4664,7 @@ async function route() {
       window.scrollTo({ top: 0, behavior: "instant" });
     }
   } catch (error) {
+    if (!routeStillCurrent()) return;
     console.error(error);
     shell(`<div class="notice error" role="alert"><p>${t("errorLoad")}</p><button class="button primary" type="button" id="retry-load">${t("retryLoad")}</button></div>`);
     document.querySelector("#retry-load")?.addEventListener("click", () => route());

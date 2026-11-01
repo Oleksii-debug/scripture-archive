@@ -34,7 +34,23 @@ test("actual reader accepts only canonical safe integer chapters for edition-spe
 
 test("canonical reader refuses verse focus when its URL does not match the displayed coordinate", () => {
   assert.match(app,/const chapter = readerChapterNumber\(parts\[2\] \|\| state\.reader\?\.chapter \|\| 1, meta\.chapters\)/);
-  assert.match(app,/const verseCoordinateMatches = parts\[1\] === meta\.code && parts\[2\] === String\(chapter\)/);
+  assert.match(app,/const verseCoordinateMatches = typeof parts\[1\] === "string" && parts\[1\]\.toUpperCase\(\) === meta\.code && parts\[2\] === String\(chapter\)/);
   assert.match(app,/const selectedVerse = verseCoordinateMatches \? readerVerseFromUrl\(location\.href, verses\.length\) : null/);
   assert.match(app,/selected\.focus\(\{ preventScroll: true \}\)/);
+});
+
+test("canonical case-insensitive book aliases keep verse focus only for their own chapter", () => {
+  const expression = app.match(/const verseCoordinateMatches = ([^\\n;]+);/);
+  assert.ok(expression, "canonical verse-coordinate guard must exist");
+  const matches = new Function("parts","meta","chapter","return (" + expression[1] + ");");
+  for (const alias of ["JHN","jhn","JhN"]) {
+    assert.equal(matches(["reader",alias,"3"],{code:"JHN"},3),true,alias);
+  }
+  for (const wrong of ["GEN","gen","JHNX","",undefined,["JHN"]]) {
+    assert.equal(matches(["reader",wrong,"3"],{code:"JHN"},3),false,String(wrong));
+  }
+  for (const wrongChapter of ["2","03","4","abc","0"]) {
+    assert.equal(matches(["reader","jhn",wrongChapter],{code:"JHN"},3),false,wrongChapter);
+  }
+  assert.equal(helpers.readerVerseFromUrl("https://scripture.invalid/reader/jhn/3?verse=16",36),16);
 });

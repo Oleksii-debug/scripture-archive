@@ -33,7 +33,7 @@ test("legacy hash reader query does not become a malformed route coordinate", ()
     const result = probe({ pathname: "/", search: "", hash });
     assert.equal(result.readerPath, hash.slice(2).split("?")[0], hash);
     assert.deepEqual(result.alerts, [], hash);
-    assert.deepEqual(result.state.currentReader, { book: "GEN", chapter: 3 }, hash);
+    assert.equal(result.state.currentReader, null, "valid new reader route retires the previous transient lease");
   }
 });
 

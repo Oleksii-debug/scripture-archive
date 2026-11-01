@@ -1,3 +1,9 @@
+## 2026-11-01 — SA-EXT-01 / LEGACY_HASH_READER_VERSE_FOCUS — scoped terminal
+
+Лише hash-verse deep-link compatibility закрито: [PR #1123](https://github.com/Oleksii-debug/scripture-archive/pull/1123) **MERGED** `main@364c4283ea3817499f4aa3b6ec06f681a45033e7`; [exact-head CI #41286095922](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41286095922) **SUCCESS** (Node/TS/lint/build, Worker/D1, Python). [Акт](roadmap/SA_EXT_01_LEGACY_HASH_VERSE_FOCUS_SCOPED_TERMINAL_20261101.md). `remaining_scoped_implementation=0` тільки тут. SA-EXT-01/02/05/06/07 parent OPEN; 03/04 source-terminal. Real browser/NVDA, rights, editorial, live Sites/D1 and release NOT_VERIFIED; no prohibited launch.
+
+---
+
 ## 2026-11-01 — SA-EXT-01 / STALE_OUTER_ROUTE_CONTINUATION — CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL
 
 **Закрито тільки захист асинхронного продовження канонічного `route()`, НЕ батьківський SA-EXT-01.** Старий запит читальні більше не замінює метадані, фокус/прокручування або доступний екран помилки новішої сторінки після пізньої відповіді чи відмови. Збережено `role=alert` та retry для поточної помилки. [PR #1120](https://github.com/Oleksii-debug/scripture-archive/pull/1120) **SQUASH MERGED** `main@58e4c1675bfae09949b5b842ed014dfe26494718`; [exact-head CI #41282589015](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41282589015) **SUCCESS**: 4110 Node PASS / 1 SKIP, 37 disposable Worker/D1 PASS, 2 Python PASS, TypeScript/lint/build PASS. [Точний акт](roadmap/SA_EXT_01_STALE_OUTER_ROUTE_CONTINUATION_SCOPED_TERMINAL_20261101.md). `remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` **лише тут**. SA-EXT-01/02/05/06/07 parent OPEN; 03/04 source-terminal. Права, редакція, Chrome/Windows/NVDA, Sites/D1/backup, release #689 NOT_VERIFIED. Без production/deploy/міграцій/82 мов/платежів/synthetic users/розсилок/dating.

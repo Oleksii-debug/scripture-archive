@@ -3066,7 +3066,7 @@ async function renderReader(parts) {
   }
   // A new chapter route cannot inherit an old transient reader lease while
   // its catalogue is pending or unavailable. Keep the last verified bookmark;
-  // the new lease is created only after the catalogue and book are admitted.
+  // the new lease is created only after catalogue coordinates are resolved.
   state.currentReader = null;
   const catalog = await getCatalog();
   if (state.user !== readerPrincipal || !readerInvocationCurrent() ||

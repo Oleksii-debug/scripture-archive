@@ -3025,6 +3025,14 @@ async function renderReader(parts) {
     shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1><p><a href="/reader">${t("reader")}</a></p></section>`);
     return;
   }
+  // An explicit malformed chapter is not a request for chapter one. Preserve
+  // saved-reader recovery only when the route has no chapter coordinate.
+  // Valid positive coordinates above the edition limit retain legacy clamping.
+  if (parts[2] && (!/^[1-9][0-9]*$/.test(parts[2]) || !Number.isSafeInteger(Number(parts[2])))) {
+    state.currentReader = null;
+    shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1><p><a href="/reader">${t("reader")}</a></p></section>`);
+    return;
+  }
   const chapter = readerChapterNumber(parts[2] || state.reader?.chapter || 1, meta.chapters);
   const groupId = parts[3] === "group" ? parts[4] || "" : "";
   state.currentReader = { book: meta.code, chapter };

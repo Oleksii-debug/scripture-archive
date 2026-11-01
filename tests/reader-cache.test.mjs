@@ -159,7 +159,9 @@ test('book shorter than the already loaded catalog must be rejected until correc
 const routeStart = source.indexOf('async function route()');
 const routeEnd = source.indexOf('\nlangSelect.addEventListener("change"', routeStart);
 assert.ok(routeStart >= 0 && routeEnd > routeStart, 'canonical route must exist');
-const routeFailure = source.slice(routeStart, routeEnd).match(/  } catch \(error\) \{\s*console\.error\(error\);\s*([\s\S]*?)\n  }\n}/);
+// The outer route now ignores errors from superseded navigations; retain the
+// current-route retry contract test after its ownership guard.
+const routeFailure = source.slice(routeStart, routeEnd).match(/  } catch \(error\) \{\s*(?:if \(!routeStillCurrent\(\)\) return;\s*)?console\.error\(error\);\s*([\s\S]*?)\n  }\n}/);
 assert.ok(routeFailure, 'canonical route error handler must remain testable');
 const retryCopy = { uk: 'Повторити спробу', ru: 'Повторить попытку', en: 'Try again' };
 for (const [locale, label] of Object.entries(retryCopy)) {

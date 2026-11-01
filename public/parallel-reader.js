@@ -120,11 +120,23 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
   let citation = null;
   form.onsubmit=async event=>{
     event.preventDefault();
-    const button=submitButton, id=String(new FormData(form).get('edition') || ''), edition=editions.find(item=>verifiedLocalEdition(item,id));
+    const button=submitButton, id=String(new FormData(form).get('edition') || '');
+    let edition=null;
+    try { edition=editions.find(item=>verifiedLocalEdition(item,id)); }
+    catch { /* Malformed edition descriptors are never selection authority. */ }
     const submittedRevision = selectionRevision;
     const selectionCurrent = () => selectionRevision === submittedRevision &&
       String(new FormData(form).get('edition') || '') === id;
-    if (!edition || button.disabled || !current() || !panel.isConnected) return;
+    if (button.disabled || !current() || !panel.isConnected) return;
+    if (!edition) {
+      // A malformed programmatic selection may not fire onchange. Retire
+      // previously licensed text rather than leaving it under a bad edition.
+      requestRevision += 1;
+      citation=null;
+      result.replaceChildren();
+      status.textContent=copy.fail;
+      return;
+    }
     const requestId = ++requestRevision;
     const requestCurrent = () => requestRevision === requestId && selectionCurrent();
     // A programmatic selection change need not emit onchange; preserve retry text.

@@ -1,3 +1,9 @@
+## 2026-11-01 — SA-EXT-01 / READER_BOOKMARK_AFTER_PROVENANCE — scoped terminal
+
+**Лише цей дефект закладки закрито.** Невалідна назва/ліцензія видання більше не перезаписує останню читабельну главу до показу помилки. [PR #1141](https://github.com/Oleksii-debug/scripture-archive/pull/1141) **MERGED** `main@06783acdcf663cc96e68ccd38bba50c031b5b4f3`; [CI #41308355856](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41308355856) **SUCCESS**: 4221 Node PASS/1 SKIP, 37 Worker/D1 PASS, 2 Python PASS, TS/lint/build. [Акт](roadmap/SA_EXT_01_READER_BOOKMARK_AFTER_PROVENANCE_SCOPED_TERMINAL_20261101.md). `remaining_scoped_implementation=0` тільки тут; SA-EXT-01/02/05/06/07 OPEN, 03/04 source-terminal; права/редакція, браузер/NVDA, live Sites/D1/backup/release NOT_VERIFIED. Без заборонених запусків.
+
+---
+
 ## 2026-11-01 — SA-EXT-01 / PRIMARY_RIGHTS_MAP_OWNERSHIP — scoped terminal
 
 **Лише захист успадкованих видавничих metadata закрито.** Первинна читальня тепер вимагає власні мапи та ключі видань/перекладів; підроблена через прототип назва/ліцензія не авторизує біблійний текст. [PR #1139](https://github.com/Oleksii-debug/scripture-archive/pull/1139) **MERGED** `main@91178972ad9c97a8453fca017c3737548859d53c`; [exact-head CI #41307851019](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41307851019) **SUCCESS**: 4211 Node PASS/1 SKIP, 37 Worker/D1 PASS, 2 Python PASS, TS/lint/build. [Акт](roadmap/SA_EXT_01_PRIMARY_RIGHTS_MAP_OWNERSHIP_SCOPED_TERMINAL_20261101.md). `remaining_scoped_implementation=0` тільки тут; SA-EXT-01/02/05/06/07 OPEN, 03/04 source-terminal; права/редакція, browser/NVDA, live Sites/D1/backup/release NOT_VERIFIED. Без заборонених запусків.

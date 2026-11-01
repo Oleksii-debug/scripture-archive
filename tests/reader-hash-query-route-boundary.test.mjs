@@ -11,15 +11,16 @@ const start = source.indexOf('  const readerPath = typeof location === "undefine
 const end = source.indexOf("  const catalog = await getCatalog();", start);
 assert.ok(start >= 0 && end > start, "canonical reader route-shape gate exists");
 const check = vm.runInNewContext(
-  "(location, routeSourceFromLocation, state, shell, t) => {\n" +
+  "(location, routeSourceFromLocation, state, shell, t, parts) => {\n" +
     source.slice(start, end) + "\nreturn readerPath;\n}",
 );
 
 function probe(location) {
   const state = { currentReader: { book: "GEN", chapter: 3 } };
   const alerts = [];
+  const parts = routeSourceFromLocation(location).split("/").filter(Boolean);
   const readerPath = check(location, routeSourceFromLocation, state,
-    markup => alerts.push(markup), key => key);
+    markup => alerts.push(markup), key => key, parts);
   return { readerPath, state, alerts };
 }
 

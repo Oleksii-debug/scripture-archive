@@ -3033,6 +3033,19 @@ async function renderReader(parts) {
     shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1><p><a href="/reader">${t("reader")}</a></p></section>`);
     return;
   }
+  // A malformed explicit group URL is invalid independently of the
+  // catalogue. Reject it before any remote read: an unavailable catalogue
+  // must not mask the accessible route error or preserve stale reader state.
+  // Only /reader/BOOK/CHAPTER/group/GROUP_ID is a group reading link.
+  // A truncated or misspelled group suffix must not silently start a personal
+  // assessment and misattribute group progress. Reject before attempt API.
+  const validGroupRoute = parts.length === 5 && parts[3] === "group" &&
+    typeof parts[4] === "string" && parts[4].length > 0;
+  if (parts.length > 3 && !validGroupRoute) {
+    state.currentReader = null;
+    shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1><p><a href="/reader">${t("reader")}</a></p></section>`);
+    return;
+  }
   const catalog = await getCatalog();
   if (state.user !== readerPrincipal || !readerInvocationCurrent() ||
       (readerPath && readerPath !== "reader" && !readerPath.startsWith("reader/"))) return;
@@ -3057,16 +3070,6 @@ async function renderReader(parts) {
   // saved-reader recovery only when the route has no chapter coordinate.
   // Valid positive coordinates above the edition limit retain legacy clamping.
   if (parts[2] && (!/^[1-9][0-9]*$/.test(parts[2]) || !Number.isSafeInteger(Number(parts[2])))) {
-    state.currentReader = null;
-    shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1><p><a href="/reader">${t("reader")}</a></p></section>`);
-    return;
-  }
-  // Only /reader/BOOK/CHAPTER/group/GROUP_ID is a group reading link.
-  // A truncated or misspelled group suffix must not silently start a personal
-  // assessment and misattribute group progress. Reject before attempt API.
-  const validGroupRoute = parts.length === 5 && parts[3] === "group" &&
-    typeof parts[4] === "string" && parts[4].length > 0;
-  if (parts.length > 3 && !validGroupRoute) {
     state.currentReader = null;
     shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1><p><a href="/reader">${t("reader")}</a></p></section>`);
     return;

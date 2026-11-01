@@ -3010,8 +3010,19 @@ async function renderReader(parts) {
     (readerRoute === null || (typeof location !== "undefined" &&
       `${location.pathname || ""}${location.search || ""}${location.hash || ""}` === readerRoute));
   setActiveNav("reader");
+  // Keep legacy #/reader routes usable, but never collapse an empty interior
+  // coordinate into another book, chapter, or private group identity.
+  const readerPath = typeof location === "undefined" ? "" :
+    (typeof location.hash === "string" && location.hash.startsWith("#/")
+      ? location.hash.slice(2) : (location.pathname || "").replace(/^\/?/, ""));
+  if (readerPath.includes("//")) {
+    state.currentReader = null;
+    shell(`<section class="gate-panel" role="alert"><h1>${t("errorLoad")}</h1><p><a href="/reader">${t("reader")}</a></p></section>`);
+    return;
+  }
   const catalog = await getCatalog();
-  if (state.user !== readerPrincipal || !readerInvocationCurrent() || (typeof location !== "undefined" && location.pathname && !location.pathname.startsWith("/reader"))) return;
+  if (state.user !== readerPrincipal || !readerInvocationCurrent() ||
+      (readerPath && readerPath !== "reader" && !readerPath.startsWith("reader/"))) return;
   const chosenEdition = selectedEdition(state.lang);
   const books = catalog.editionBooks && Object.hasOwn(catalog.editionBooks, chosenEdition.id)
     ? catalog.editionBooks[chosenEdition.id] : catalog.books[state.lang];

@@ -32,7 +32,7 @@ function responseFor(path, status = 200) {
   if (path === "/community")
     return new Response(HTML, { status, headers: { "Content-Type": "text/html; charset=utf-8" } });
   if (path === "/robots.txt")
-    return new Response("User-agent: *\\nSitemap: https://scripture-archive.com/sitemap.xml", { status });
+    return new Response("User-agent: *\nSitemap: https://scripture-archive.com/sitemap.xml", { status });
   if (path === "/sitemap.xml")
     return new Response('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>', { status });
   throw Error("Unexpected probe: " + path);

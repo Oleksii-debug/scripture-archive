@@ -1,3 +1,9 @@
+## 2026-11-01 — SA-EXT-01 / PARALLEL_EDITION_OWN_DATA_SELECTION — scoped terminal
+
+**Лише захист own-data локального edition selector завершено, НЕ SA-EXT-01.** Getter/inherited edition ID/local/folder/contentId більше не вибирають другий текст або права, getter option ID/title не виконуються; недійсний програмний вибір очищає старий текст і цитату з доступним retry. [PR #1171](https://github.com/Oleksii-debug/scripture-archive/pull/1171) **SQUASH MERGED** `main@6eacee08c591f8dbb26239db8e3d9c53380a15e0`; [CI #41358670256](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41358670256) **SUCCESS**: 4324 Node PASS/1 SKIP, 37 disposable Worker/D1 PASS, 2 Python PASS, TS/lint/build PASS. [Акт](roadmap/SA_EXT_01_PARALLEL_EDITION_OWN_DATA_SELECTION_SCOPED_TERMINAL_20261101.md). `remaining_scoped_implementation=0` лише тут; SA-EXT-01/02/05/06/07 OPEN, 03/04 source-terminal. Rights/editorial, physical NVDA, live Sites/D1/backup/release NOT_VERIFIED. Заборонених запусків немає.
+
+---
+
 ## 2026-11-01 — SA-EXT-01 / PARALLEL_CHAPTER_CONTAINER_OWN_DATA — scoped terminal
 
 **Закрито лише власні data descriptors `chapters` і chapter index у паралельній читальні, НЕ SA-EXT-01.** Getter/inherited chapter metadata не виконуються та не видаються за Scripture; uk/ru/en, права, два chapter guards і retry збережені. [PR #1167](https://github.com/Oleksii-debug/scripture-archive/pull/1167) **SQUASH MERGED** `main@940caf93bb4c243fc2eb6523ea020f21bd767e3d`; [exact-head CI #41348461287](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41348461287) **SUCCESS**: 4308 Node PASS/1 SKIP, 37 disposable Worker/D1 PASS, 2 Python PASS, TS/lint/build PASS. [Акт](roadmap/SA_EXT_01_PARALLEL_CHAPTER_CONTAINER_OWN_DATA_SCOPED_TERMINAL_20261101.md). `remaining_scoped_implementation=0` лише тут; SA-EXT-01/02/05/06/07 OPEN, 03/04 source-terminal. Rights/editorial, real NVDA, Sites/D1/backup/release NOT_VERIFIED. Без заборонених запусків.

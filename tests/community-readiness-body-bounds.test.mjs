@@ -11,8 +11,8 @@ function healthy(url, options) {
   assert.equal(options.redirect, "manual");
   const path = new URL(url).pathname;
   if (path === "/community") return new Response(HTML, { headers: { "Content-Type": "text/html" } });
-  if (path === "/api/community") return Response.json({ summary: { registered: 1, online: 0 } }, { headers: { "Cache-Control": "no-store" } });
-  if (path === "/api/account") return Response.json({ user: null }, { headers: { "Cache-Control": "no-store" } });
+  if (path === "/api/community") return Response.json({ summary: { registered: 1, online: 0 } }, { headers: { "Cache-Control": "no-store", "Content-Type": "application/json" } });
+  if (path === "/api/account") return Response.json({ user: null }, { headers: { "Cache-Control": "no-store", "Content-Type": "application/json" } });
   if (path === "/api/community/dispatch") return new Response(null, { status: 204, headers: {
     "Cache-Control": "no-store", "X-Scripture-Runner-Protocol": "github-oidc-v1",
   } });
@@ -25,9 +25,9 @@ const override = (path, factory) => async (url, options) =>
 
 for (const [path, make] of [
   ["/api/community", () => new Response('{"summary":{"registered":1,"online":0}}' + PAD,
-    { headers: { "Cache-Control": "no-store" } })],
+    { headers: { "Cache-Control": "no-store", "Content-Type": "application/json" } })],
   ["/api/account", () => new Response('{"user":null}' + PAD,
-    { headers: { "Cache-Control": "no-store" } })],
+    { headers: { "Cache-Control": "no-store", "Content-Type": "application/json" } })],
   ["/robots.txt", () => new Response("Sitemap: https://scripture-archive.com/sitemap.xml" + PAD)],
   ["/sitemap.xml", () => new Response("<urlset></urlset>" + PAD)],
 ]) {
@@ -55,7 +55,7 @@ test("P0 R0.4: oversized streaming response is cancelled without activation", as
     cancel() { cancelled++; },
   });
   assert.equal(await communityDeploymentReady(ORIGIN, override("/api/account", () =>
-    new Response(stream(), { headers: { "Cache-Control": "no-store" } }))), false);
+    new Response(stream(), { headers: { "Cache-Control": "no-store", "Content-Type": "application/json" } }))), false);
   assert.equal(cancelled, 1);
 });
 
@@ -65,7 +65,7 @@ test("P0 R0.4: clean six-route GET-only preflight recovers after denied oversize
   const fetcher = async (url, options) => {
     methods.push(options.method || "GET");
     if (oversized && new URL(url).pathname === "/api/account")
-      return new Response('{"user":null}' + PAD, { headers: { "Cache-Control": "no-store" } });
+      return new Response('{"user":null}' + PAD, { headers: { "Cache-Control": "no-store", "Content-Type": "application/json" } });
     return healthy(url, options);
   };
   assert.equal(await communityDeploymentReady(ORIGIN, fetcher), false);

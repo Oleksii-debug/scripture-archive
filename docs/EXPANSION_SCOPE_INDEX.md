@@ -1,3 +1,9 @@
+## 2026-11-01 — SA-EXT-01 / CATALOG_PENDING_TRANSIENT_READER_LEASE — scoped terminal
+
+**Лише цей дефект закрито.** Чинний primary reader скидає попередній transient `state.currentReader` до `getCatalog()` без втрати останньої закладки. [PR #1149](https://github.com/Oleksii-debug/scripture-archive/pull/1149) **SQUASH MERGED** `main@313eed6faaead2e728797e7e14280de207474071`; [CI #41318145607](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41318145607) **SUCCESS**: 4262 Node PASS/1 SKIP, 37 Worker/D1 PASS, 2 Python PASS, TS/lint/build. [Акт](roadmap/SA_EXT_01_READER_CATALOG_TRANSIENT_CONTEXT_SCOPED_TERMINAL_20261101.md). `remaining_scoped_implementation=0` тільки тут; SA-EXT-01/02/05/06/07 OPEN, 03/04 source-terminal; rights/editorial, Chrome/Windows/NVDA, installed Sites/D1/backup/release NOT_VERIFIED. Жодних production/82 мов/платежів/synthetic users/масової пошти/dating.
+
+---
+
 ## 2026-11-01 — SA-EXT-01 / BOOK_FETCH_TRANSIENT_READER_CONTEXT — scoped terminal
 
 **Лише цей дефект невдалого завантаження глави закрито.** [PR #1146](https://github.com/Oleksii-debug/scripture-archive/pull/1146) **MERGED** `main@143d63e29fcff9b1b4f235c0c1d1dda6be494c3a`; [CI #41313441739](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41313441739) **SUCCESS**: 4229 Node PASS/1 SKIP, 37 Worker/D1 PASS, 2 Python PASS, TS/lint/build. [Акт](roadmap/SA_EXT_01_BOOK_FETCH_TRANSIENT_READER_SCOPED_TERMINAL_20261101.md). `remaining_scoped_implementation=0` тільки тут; SA-EXT-01/02/05/06/07 OPEN, 03/04 source-terminal. Rights/editorial, browser/NVDA, installed Sites/D1/backup/release NOT_VERIFIED; без заборонених запусків.

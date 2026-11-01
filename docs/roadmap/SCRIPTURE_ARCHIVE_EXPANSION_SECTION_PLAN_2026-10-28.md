@@ -1,3 +1,13 @@
+## 2026-11-01 — SA-EXT-05/06 / DOSSIER_UNICODE_ZS_SEARCH_FAILCLOSED — CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL
+
+**ЗАКРИТО ЛИШЕ ЦЕЙ ДЕФЕКТ, НЕ БАТЬКІВСЬКІ SA-EXT-05/06.** Спільний пошук досьє й текстового атласу тепер відхиляє 15 не-ASCII Unicode Zs пробілів (U+1680, U+2000–U+200A, U+202F, U+205F, U+3000) до `trim()`, щоб невидимий GET `q` не перетворювався на нефільтрований каталог із сторонніми біблійними посиланнями. Збережено порожній/звичайний SPACE/TAB, реальні біблійні запити, три мови та доступне `role=alert`. Це дефект source input-integrity, не доведений production-інцидент.
+
+**Інтеграція:** [PR #1103](https://github.com/Oleksii-debug/scripture-archive/pull/1103) **SQUASH MERGED** у `main@bbfb189b1798484723560bc2933f4a481f975624`; source blob `public/scripture-dossiers.js@51ca7935742ebaba8f377d0253770ed41ff932b1`, regression blob `tests/dossier-search-invisible-query.test.mjs@74bc685fbfafa6e46c608f55c9b473fd67002bc8`. [Exact-head GitHub CI #41262334005](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41262334005) **COMPLETED SUCCESS**: 4027 native Node PASS / 1 SKIP / 0 FAIL, 37 disposable Worker/D1 PASS, 2 Python PASS; TypeScript, lint (13 warnings / 0 errors), build PASS. Окремі 78 ізольованих regex-only Node assertions PASS, **не** повний локальний checkout.
+
+`remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` **лише для Unicode Zs search boundary**. SA-EXT-01/02/05/06/07 parent **OPEN**, 03/04 source-terminal. Права, редакційне приймання, реальний Chrome/Windows/NVDA, deployed Sites/D1/backup і release #689 **NOT_VERIFIED**. Без production/deploy/міграцій/82 мов/платежів/synthetic users/масової пошти/dating.
+
+---
+
 ## 2026-11-01 — SA-EXT-05/06 / DOSSIER_INVISIBLE_UNICODE_FILLER_QUERY — CLOSED_FOR_DEVELOPMENT_SCOPED / TERMINAL
 
 **ЗАКРИТО ЛИШЕ ЦЕЙ НОВИЙ ДЕФЕКТ ПОШУКУ, НЕ БАТЬКІВСЬКІ SA-EXT-05/06.** Канонічний спільний предикат пошуку досьє/текстового атласу тепер відхиляє невидимі Unicode-заповнювачі U+00A0, U+034F, U+115F/U+1160, U+2800, U+3164, U+FFA0 і решту Unicode Cf до нормалізації/trim. Раніше запит тільки з NBSP міг без попередження перетворитися на порожній та показати нефільтровані біблійні посилання. Новий шлях повертає локалізований `role=alert`, не підставляє інше досьє, зберігає звичайні порожні/SPACE/TAB запити та валідні цитати у трьох мовах. Це дефект source input-integrity, **не підтверджений production-інцидент**.

@@ -57,11 +57,31 @@ test('SA-EXT-01: fallback content identity getter cannot borrow verified publish
     }});
     const f=await render(edition,lang);
     assert.equal(invoked,0);
-    assert.equal(f.checks,2,'both chapter attempt guards remain in place');
-    assert.equal(f.reads,1);
+    assert.equal(f.checks,0,'unverified edition cannot begin chapter authorization');
+    assert.equal(f.reads,0,'unverified edition cannot reach getBook');
     assert.equal(f.result.innerHTML,'','no text without own edition content identity');
     assert.ok(f.status.textContent,'retryable failure announced');
     assert.equal(f.button.disabled,false,'retry enabled');
+  }
+});
+
+test('SA-EXT-01: inherited or accessor-backed edition folder cannot select a file path',async()=>{
+  for(const lang of ['uk','ru','en']){
+    for(const inherited of [false,true]){
+      let invoked=0;
+      const edition=inherited
+        ? Object.assign(Object.create({get folder(){invoked++;return 'other';}}),base)
+        : {...base};
+      if(!inherited)Object.defineProperty(edition,'folder',{get(){
+        invoked++;return 'other';
+      }});
+      const f=await render(edition,lang);
+      assert.equal(invoked,0);
+      assert.equal(f.reads,0);
+      assert.equal(f.checks,0);
+      assert.equal(f.result.innerHTML,'');
+      assert.equal(f.button.disabled,false);
+    }
   }
 });
 

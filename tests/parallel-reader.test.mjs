@@ -509,3 +509,44 @@ test('SA-EXT-01: validated parallel verses remain stable in the rendered text an
   assert.match(f.copied[0],/Original approved verse/);
   assert.doesNotMatch(f.copied[0],/Later changed verse/);
 }));
+
+
+test('parallel provenance rejects accessor-backed catalog maps and edition slots without executing getters',()=>withForm(async()=>{
+  const verified={id:'UKRPAN',title:'Куліш',source:'https://source.example/',license:'Public Domain'};
+  for (const lang of ['uk','ru','en']) {
+    for (const boundary of ['catalog-editions','catalog-translations','edition-locale','translation-entry']) {
+      let calls=0;
+      const catalog={translations:{},editions:{[lang]:verified}};
+      const getter=()=>{calls++;return boundary==='catalog-editions'?{[lang]:verified}:
+        boundary==='catalog-translations'?{}:verified;};
+      if (boundary==='catalog-editions') Object.defineProperty(catalog,'editions',{enumerable:true,get:getter});
+      if (boundary==='catalog-translations') Object.defineProperty(catalog,'translations',{enumerable:true,get:getter});
+      if (boundary==='edition-locale') Object.defineProperty(catalog.editions,lang,{enumerable:true,get:getter});
+      if (boundary==='translation-entry') Object.defineProperty(catalog.translations,edition.id,{enumerable:true,get:()=>{
+        calls++;return {id:edition.id,title:'Verified',source:'https://source.example/',license:'Public Domain'};
+      }});
+      const f=fixture({lang,catalog});
+      await f.run();
+      assert.equal(calls,0,`${lang} ${boundary}: rights getter must not execute`);
+      assert.equal(f.result.innerHTML,'',`${lang} ${boundary}: untrusted source must not be displayed`);
+      assert.match(f.status.textContent,/Не вдалося|Не удалось|Could not load/);
+      assert.equal(f.button.disabled,false,'accessible retry remains enabled');
+      assert.equal(f.checked(),2,'both chapter guards remain mandatory');
+    }
+  }
+}));
+
+test('parallel provenance accepts stable own-data maps including null-prototype dictionaries',()=>withForm(async()=>{
+  const editions=Object.create(null);
+  editions.uk={id:'UKRPAN',title:'Куліш',source:'https://source.example/',license:'Public Domain'};
+  const translations=Object.create(null);
+  const fallback=fixture({catalog:{editions,translations}});
+  await fallback.run();
+  assert.match(fallback.result.innerHTML,/На початку/);
+  const translation={id:edition.id,title:'Verified translation',source:'https://source.example/',license:'Public Domain'};
+  translations[edition.id]=translation;
+  const explicit=fixture({catalog:{editions,translations}});
+  await explicit.run();
+  assert.match(explicit.result.innerHTML,/Verified translation/);
+  assert.equal(explicit.checked(),2);
+}));

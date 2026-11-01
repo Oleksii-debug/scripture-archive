@@ -57,7 +57,7 @@ for (const lang of ["uk", "ru", "en"]) {
       assert.deepEqual(h.state.reader, { book: "JHN", chapter: 3 });
       assert.equal(h.notices.length, 1);
       assert.match(h.notices[0], /role="alert"/);
-      assert.match(h.notices[0], /href="\\/reader"/);
+      assert.ok(h.notices[0].includes('href="/reader"'));
     }
   });
 
@@ -89,6 +89,6 @@ test("group route admission runs before chapter attempt and book loading", () =>
   const attempt = source.indexOf('    const attemptState = await attemptRequest("chapter"', start);
   const load = source.indexOf("    book = await getBook(meta.code);", start);
   assert.ok(guard > start && attempt > guard && load > attempt);
-  assert.match(source.slice(guard, attempt), /state\\.currentReader = null/);
+  assert.ok(source.slice(guard, attempt).includes("state.currentReader = null"));
   assert.match(source.slice(guard, attempt), /role="alert"/);
 });

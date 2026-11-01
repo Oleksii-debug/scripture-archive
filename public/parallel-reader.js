@@ -139,7 +139,17 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
       if (finalGuard.invalidated) { lock(); return; }
       // Never show edition A's licensed verses under edition B's selected label.
       if (!requestCurrent()) { announceUnsignalledChange(); return; }
-      const verses=data.chapters[chapter-1];
+      // Imported chapter containers and slots are publisher content too.
+      // Do not execute a getter or inherit another edition's chapter.
+      const chaptersDescriptor=data && typeof data==='object' && !Array.isArray(data)
+        ? Object.getOwnPropertyDescriptor(data,'chapters') : null;
+      if (!chaptersDescriptor || !Object.hasOwn(chaptersDescriptor,'value') ||
+          !Array.isArray(chaptersDescriptor.value))
+        throw Error('invalid edition chapters record');
+      const chapterDescriptor=Object.getOwnPropertyDescriptor(chaptersDescriptor.value,String(chapter-1));
+      if (chapterDescriptor && !Object.hasOwn(chapterDescriptor,'value'))
+        throw Error('invalid edition chapter accessor');
+      const verses=chapterDescriptor?.value;
       if (!Array.isArray(verses)) { status.textContent=copy.unavailable; return; }
       // A corrupt or empty chapter must never be presented as verified Scripture.
       // An indexed loop also rejects sparse arrays (Array#every skips their holes).

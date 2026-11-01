@@ -28,7 +28,7 @@ async function probe(target, contentType, seen = []) {
     if (path === "/community")
       return new Response(SHELL, { headers: { "Content-Type": "text/html" } });
     if (path === "/robots.txt")
-      return new Response("User-agent: *\\nSitemap: " + ORIGIN + "/sitemap.xml");
+      return new Response("User-agent: *\nSitemap: " + ORIGIN + "/sitemap.xml");
     if (path === "/sitemap.xml")
       return new Response("<urlset></urlset>");
     if (path === "/api/community/dispatch")

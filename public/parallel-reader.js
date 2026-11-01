@@ -178,8 +178,18 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
       const translation=declared ? translationMap[edition.id] : null;
       // A declared but mismatched identity must not borrow another edition's
       // licence and attribute that edition's loaded verses to a false source.
-      const metadata=declared ? (translation?.id === edition.id ? translation : null)
-        : (edition.contentId && fallback?.id === edition.contentId ? fallback : null);
+      // A matching edition ID is part of publisher provenance, not a mere
+      // lookup convenience. Inherited IDs and getters can make another
+      // edition's otherwise well-formed rights record authorize these verses.
+      // Inspect the own data descriptor without executing identity accessors.
+      const ownsVerifiedId = (record, expected) => {
+        if (!record || typeof record !== 'object' || Array.isArray(record)) return false;
+        const descriptor=Object.getOwnPropertyDescriptor(record,'id');
+        return Boolean(descriptor && Object.hasOwn(descriptor,'value') &&
+          descriptor.value === expected);
+      };
+      const metadata=declared ? (ownsVerifiedId(translation,edition.id) ? translation : null)
+        : (edition.contentId && ownsVerifiedId(fallback,edition.contentId) ? fallback : null);
       // Keep a comparison inaccessible if its own source or terms are missing.
       // Never borrow rights metadata from another Bible edition.
       // Damaged or hostile manifests must not turn one comparison into an

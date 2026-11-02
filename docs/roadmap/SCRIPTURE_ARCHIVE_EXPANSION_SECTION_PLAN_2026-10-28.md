@@ -1,3 +1,11 @@
+## 2026-11-02 — SA-EXT-07 / ACADEMY_LESSON_WEBLOCK_SINGLE_FLIGHT — scoped source terminal
+
+**Завершено лише захист від повторного натискання кнопки заняття Академії під час очікування Web Lock, НЕ весь SA-EXT-07.** Подвійна активація могла поставити дві операції в чергу й одразу скасувати першу позначку. Тепер чинний обробник має per-button single-flight, тимчасово вимикає кнопку, відновлює її після успіху/відмови, повертає клавіатурний фокус лише для актуального екрана без перехоплення фокусу. [RED CI #41522496510](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41522496510): 4522 Node PASS / 1 очікуваний FAIL / 1 SKIP. [PR #1236](https://github.com/Oleksii-debug/scripture-archive/pull/1236) **SQUASH MERGED** `main@533a17a19120c9e2802cd426d94f7e481fe21738`; [exact-head green CI #41522807785](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41522807785): 4523 Node PASS / 1 SKIP / 0 FAIL, 37/37 disposable Worker/D1 PASS, 2/2 Python PASS, TS/lint/build PASS (13 warnings, 0 errors). [Акт](SA_EXT_07_ACADEMY_LESSON_WEBLOCK_SINGLE_FLIGHT_SCOPED_TERMINAL_20261102.md).
+
+`remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` **лише для цієї підфункції**. **SA-EXT-01/02/05/06/07 parent OPEN; 03/04 source-terminal.** Ширші курси/медіа/редакція, незалежні права, фізичний Windows/Chrome/NVDA, live Sites/D1/backup/release **NOT_VERIFIED**. Без повного локального checkout, без production, 82 мов, платежів, synthetic users, масової пошти, dating чи секретів.
+
+---
+
 ## 2026-11-02 — SA-EXT-07 / ACADEMY_CATALOG_ARRAY_METHOD_ACCESSORS — scoped source terminal
 
 **Тільки один реальний дефект доступу до `map` у перевіреному каталозі Академії закрито, НЕ SA-EXT-07 parent.** `academyMarkup` після успішного `validateDossierGraph` викликав `catalog.books[lang].map`, тому власний/успадкований getter видавничого масиву міг виконатися або зірвати відображення. Замість цього використано `Array.prototype.map.call` — той самий канонічний допуск, що в досьє. Усі 13 занять, 3 мови, посилання на першоджерела, read-only приватність та відмова від getter-backed title перевірені.

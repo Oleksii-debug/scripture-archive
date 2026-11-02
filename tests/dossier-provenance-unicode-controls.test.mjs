@@ -13,6 +13,8 @@ const esc=value=>String(value).replace(/[&<>"']/g,ch=>({
 const invisible=[
   ['soft hyphen','\u00ad'],
   ['combining grapheme joiner','\u034f'],
+  ['text variation selector','\uFE00'],
+  ['emoji variation selector','\uFE0F'],
   ['Hangul choseong filler','\u115f'],
   ['Hangul jungseong filler','\u1160'],
   ['Mongolian vowel separator','\u180e'],

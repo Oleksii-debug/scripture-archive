@@ -164,6 +164,18 @@ export function validateDossierGraph(catalog) {
         item.prompts[lang].every(nonblank)))) return false;
   const known = new Map(nodes.map(item=>[item.id,item]));
   if (known.size !== nodes.length) return false;
+  // A dossier link is only usable when the canonical reader accepts the
+  // surrounding catalogue envelope. Do not treat a damaged schema or
+  // publisher edition identity as sufficient authority for source links.
+  const editions=ownData(catalog,'editions');
+  if(ownData(catalog,'schemaVersion')!==1 || !editions ||
+      typeof editions!=='object' || Array.isArray(editions) ||
+      LANGS.some(lang=>{
+        const edition=ownData(editions,lang);
+        return !edition || typeof edition!=='object' || Array.isArray(edition) ||
+          !hasOwnData(edition,'id') || typeof edition.id!=='string' ||
+          !edition.id.trim();
+      })) return false;
   // Only own, published catalogue records may authorize reader source labels.
   // Prototype-inherited language lists or book fields can otherwise spoof a
   // source name in the dossier, atlas and accessible citation links.
@@ -180,19 +192,35 @@ export function validateDossierGraph(catalog) {
   // Catalogue arrays may carry own/inherited method accessors in memory.
   // Invoke native array algorithms directly: reading books.keys/some/map
   // could execute arbitrary getters before the source/ARIA guard completes.
-  if(catalogs.some((books,langIndex)=>books.length===0 || books.length>200 ||
+  // The primary reader rejects partial, reordered and misclassified
+  // 66-book inventories. Dossier/atlas source links must not claim those
+  // rejected catalogues are usable, including when an optional alternate
+  // edition is damaged. Reuse the received primary order as a parity check;
+  // the reader's independent fixed-code admission remains authoritative.
+  const alternateDescriptor=Object.getOwnPropertyDescriptor(catalog,'editionBooks');
+  let alternateLists=[];
+  if(alternateDescriptor){
+    const alternate=ownData(catalog,'editionBooks');
+    if(!alternate || typeof alternate!=='object' || Array.isArray(alternate))
+      return false;
+    for(const key in alternate) if(!Object.hasOwn(alternate,key))return false;
+    alternateLists=Object.keys(alternate).map(key=>ownData(alternate,key));
+    if(alternateLists.some(books=>!Array.isArray(books)))return false;
+  }
+  const allLists=[...catalogs,...alternateLists];
+  if(allLists.some((books,langIndex)=>books.length!==66 ||
       Array.from(Array.prototype.keys.call(books)).some(index=>!hasOwnData(books,index)) ||
-      Array.prototype.some.call(books,book=>!book || typeof book!=='object' || Array.isArray(book) ||
-      !['code','title','chapters'].every(key=>hasOwnData(book,key)) || !safeBookCode(book.code) ||
-      !safeBookTitle(book.title) ||
+      Array.prototype.some.call(books,(book,index)=>!book || typeof book!=='object' || Array.isArray(book) ||
+      !['code','title','chapters','testament'].every(key=>hasOwnData(book,key)) ||
+      !safeBookCode(book.code) || !safeBookTitle(book.title) ||
+      book.testament!==(index<39?'OT':'NT') ||
       !Number.isSafeInteger(book.chapters) || book.chapters<1 || book.chapters>200) ||
       new Set(Array.prototype.map.call(books,book=>book.code)).size!==books.length ||
-      // The exact-title search resolves publisher labels back to book codes.
-      // Two codes with the same visible title after the same NFC/case/trim
-      // normalization would make a source label ambiguous to sighted users
-      // and screen readers. Reject the catalogue before emitting links.
       new Set(Array.prototype.map.call(books,book=>
-        book.title.normalize('NFC').trim().toLocaleLowerCase(LANGS[langIndex]))).size!==books.length)) return false;
+        book.title.normalize('NFC').trim().toLocaleLowerCase(LANGS[langIndex]||'uk'))).size!==books.length)) return false;
+  const primaryCodes=Array.prototype.map.call(catalogs[0],book=>book.code);
+  if(allLists.some(books=>Array.prototype.some.call(books,
+      (book,index)=>book.code!==primaryCodes[index])))return false;
   const bookMaps = catalogs.map(books=>new Map(Array.prototype.map.call(books,book=>[book.code,book.chapters])));
   const validRef = source => source && safeBookCode(source.book) && Number.isSafeInteger(source.first) && source.first>0 && source.first<=256 &&
     Number.isSafeInteger(source.last) && source.last>=source.first && source.last<=256 &&

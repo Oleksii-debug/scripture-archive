@@ -71,7 +71,14 @@ test('standalone public search cannot discover fabricated inherited book titles'
 
 test('own properties on null-prototype catalogues remain valid; no false denial', () => {
   const ownBooks=Object.assign(Object.create(null),catalog.books);
-  const ownRoot=Object.assign(Object.create(null),{books:ownBooks});
+  // A source-only books map is no longer a reader-admitted catalogue.
+  // Keep the null-prototype positive test, with its required own envelope.
+  const ownRoot=Object.assign(Object.create(null),{
+    schemaVersion:catalog.schemaVersion,
+    editions:Object.assign(Object.create(null),catalog.editions),
+    books:ownBooks,
+    editionBooks:Object.assign(Object.create(null),catalog.editionBooks),
+  });
   assert.equal(validateDossierGraph(ownRoot),true);
   assert.match(dossierMarkup(ownRoot,'en','abraham',esc), /\/reader\/GEN\/12/);
 });

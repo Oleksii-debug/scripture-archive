@@ -1,3 +1,13 @@
+## 2026-11-02 — SA-EXT-05 / BMP_VARIATION_SELECTOR_GET_ADMISSION — scoped source terminal
+
+**Закрито тільки відмову для невидимих BMP variation selectors U+FE00–U+FE0F у GET-пошуку досьє/атласу, НЕ батьківський розділ.** Раніше `validDossierSearchQuery` відхиляв supplementary U+E0100–U+E01EF, але пропускав BMP; прихований символ у `q` міг бути прийнятий і відображений у формі. Тепер чинний валідатор відхиляє обидва діапазони до HTML; локалізоване `role="alert"` без form/reader/dossier links. Негативні перевірки: 16 символів × uk/ru/en, обидва UI; позитивні `GEN 12` і порожній GET збережено.
+
+[PR #1227](https://github.com/Oleksii-debug/scripture-archive/pull/1227) **SQUASH MERGED** `main@aa585400ce42b5cfbc8ecccbb3b154c3fead006c`, qualified head `161124a9dbd0710ded555990e7de26d8e75b99d7`; [exact-head CI #41494540928](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41494540928) **SUCCESS**: 4499 native Node PASS / 1 SKIP / 0 FAIL; 37/37 disposable Worker/D1 PASS; 2/2 Python PASS; TypeScript/lint/build PASS (13 warnings, 0 errors). Test-only CI #41494387921 **CANCELLED**, не RED PASS/FAIL. [Акт](roadmap/SA_EXT_05_BMP_VARIATION_SELECTOR_GET_ADMISSION_SCOPED_TERMINAL_20261102.md).
+
+`remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` **лише для цієї підфункції**. **SA-EXT-01/02/05/06/07 parent OPEN; 03/04 source-terminal.** Незалежні видавничі права/редакція, фізичний Windows/Chrome/NVDA, live Sites/D1/backup/release **NOT_VERIFIED**. Жодного production, 82 мов, платежів, synthetic users, масової пошти, dating чи секретів.
+
+---
+
 ## 2026-11-02 — SA-EXT-01/05 / DOSSIER_PUBLISHER_RIGHTS_ADMISSION_PARITY — scoped source terminal
 
 **Закрито тільки узгодження видавничих прав досьє/атласу з чинним допуском основної читальні, НЕ батьківські розділи.** Раніше досьє могло створити джерельне посилання для edition з відсутньою/порожньою ліцензією, небезпечним source URL, невидимим/надмірним title або accessor-backed rights, які читальня відхиляє. Тепер спільний `validateDossierGraph` повторно використовує канонічні `validEditionRightsMetadata` і `validEditionRightsText`; ID обмежений, без пробілів. Негативні перевірки: 3 мови × 8 дефектів, обидва UI `role="alert"` без reader links, throwing getter не виконується; чинні джерела збережено.

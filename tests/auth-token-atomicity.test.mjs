@@ -510,3 +510,29 @@ test("R0.2: the exact legal maximum email remains a valid registration input", a
     assert.equal(f.emails(), 1);
   } finally { f.db.close(); }
 });
+
+test("R0.2: verification refuses duplicate or unrelated URL parameters before consuming a one-time token", async () => {
+  // Security mail accepts only action=verify&token=...; the consuming GET must
+  // enforce the same unambiguous shape even for manually altered URLs.
+  for (const query of [
+    "action=verify&token=code&token=other",
+    "action=verify&token=other&token=code",
+    "action=verify&action=verify&token=code",
+    "action=verify&action=reset&token=code",
+    "action=verify&token=code&next=%2Fcommunity",
+    "action=verify&token=code&%74oken=other",
+    "action=verify&token=code&empty=",
+  ]) {
+    const f = fixture();
+    f.db.prepare("INSERT INTO auth_tokens(token_hash,user_id,purpose,expires_at) VALUES ('hash-code','alice','verify','2099-01-01')").run();
+    const response = await f.handler.GET(new Request("https://example.invalid/api/auth?" + query));
+    assert.equal(response.status, 400, query);
+    assert.equal(response.headers.get("location"), null, query);
+    assert.equal(f.db.prepare("SELECT email_verified_at FROM accounts WHERE id='alice'").get().email_verified_at, null, query);
+    assert.equal(f.db.prepare("SELECT used_at FROM auth_tokens WHERE token_hash='hash-code'").get().used_at, null, query);
+    // Recovery: rejection does not consume the genuine single-use link.
+    assert.equal((await f.handler.GET(new Request("https://example.invalid/api/auth?action=verify&token=code"))).status, 303);
+    assert.equal((await f.handler.GET(new Request("https://example.invalid/api/auth?action=verify&token=code"))).status, 400);
+    f.db.close();
+  }
+});

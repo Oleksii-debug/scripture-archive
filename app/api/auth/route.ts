@@ -119,6 +119,13 @@ export async function GET(request: Request) {
   if (!env.DB) return json({ error: "database_unavailable" }, 503);
   const url = new URL(request.url), action = url.searchParams.get("action");
   if (action !== "verify") return json({ error: "unknown_action" }, 400);
+  // The security-email sender only emits one action and one token parameter.
+  // URLSearchParams.get() silently selects the first duplicate: do not consume
+  // a one-time token from an ambiguous or augmented verification URL.
+  if (url.searchParams.size !== 2 ||
+      url.searchParams.getAll("action").length !== 1 ||
+      url.searchParams.getAll("token").length !== 1)
+    return json({ error: "invalid_token" }, 400);
   const token = clean(url.searchParams.get("token"), 200);
   if (!token) return json({ error: "invalid_token" }, 400);
   try {

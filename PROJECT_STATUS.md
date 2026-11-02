@@ -1,3 +1,13 @@
+## 2026-11-02 — SA-EXT-07 / ACADEMY_RESET_WEBLOCK_SINGLE_FLIGHT — scoped source terminal
+
+**Закрито лише повторне очищення локальних позначок Академії під час очікування Web Lock, НЕ батьківський SA-EXT-07.** Повторна активація раніше могла поставити кілька видалень у чергу; друге відкладене видалення загрожувало новим позначкам після першого очищення. Тепер чинний reset-обробник має `resetPending` single-flight, знімає блокування після успіху/помилки й зберігає підтвердження, ізоляцію користувача та NVDA-фокус. Це source-level race, не підтверджений production-інцидент.
+
+[PR #1242](https://github.com/Oleksii-debug/scripture-archive/pull/1242) **SQUASH MERGED** `main@6e010d8db2c388126ef8e60621d745cbc483c1d9`, exact head `e4f080909f7eac13b7e24539e2f89b4492ca71b8`; [CI #41539838856](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41539838856) **SUCCESS**: 4539 native Node PASS / 1 SKIP / 0 FAIL, 37/37 disposable Worker/D1 PASS, 2/2 Python PASS, TS/lint/build PASS (13 warnings, 0 errors). [Акт](docs/roadmap/SA_EXT_07_ACADEMY_RESET_WEBLOCK_SINGLE_FLIGHT_SCOPED_TERMINAL_20261102.md).
+
+`remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` **лише для цієї підфункції**. SA-EXT-01/02/05/06/07 **OPEN**, 03/04 source-terminal. Повний локальний checkout, права/редакція, фізичний Windows/Chrome/NVDA, live Sites/D1/backup/release **NOT_VERIFIED**. Без production, 82 мов, платежів, synthetic users, масової пошти, dating чи секретів.
+
+---
+
 ## 2026-11-02 — SA-EXT-06 / ATLAS_EMPTY_SEARCH_RECOVERY — scoped source terminal
 
 **Закрито лише доступне відновлення після порожнього GET-пошуку в чинному текстовому атласі, НЕ батьківський SA-EXT-06.** Раніше порожній атлас називав себе «Каталог досьє» та не мав власного посилання очищення пошуку. Тепер використано вже локалізований заголовок атласу і посилання на чинний `/dossiers` для uk/ru/en, без чужих джерельних посилань. Пошук з результатами, порожній пошук, пошкоджений каталог і недопустимий Unicode-запит зберегли попередню поведінку.

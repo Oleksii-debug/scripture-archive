@@ -41,7 +41,7 @@ async function providerAccepted(response: Response | null): Promise<boolean> {
 // public-origin declaration must never turn a Host-derived fallback into an
 // outbound link to an unrelated domain. This checks configuration and URL only;
 // it is not a live DNS/TLS or provider-delivery attestation.
-function trustedSecurityLink(url: string): boolean {
+function trustedSecurityLink(url: string, purpose: Purpose): boolean {
   const declared = env.APP_BASE_URL;
   if (typeof declared !== "string") return false;
   try {
@@ -54,8 +54,19 @@ function trustedSecurityLink(url: string): boolean {
     // a visually ambiguous spelling that another mail client may reinterpret.
     if (url !== target.href || url.includes("#") ||
         url !== url.trim() || /[\u0000-\u001f\u007f]/u.test(url)) return false;
-    return target.protocol === "https:" && target.origin === base.origin &&
-      !target.username && !target.password;
+    if (target.protocol !== "https:" || target.origin !== base.origin ||
+        target.username || target.password) return false;
+    // Only the two existing auth routes may receive one-time tokens. A
+    // canonical same-origin URL is not sufficient: wrong-purpose, duplicate
+    // token keys and extra redirect/query parameters are not a valid security
+    // mail action. This is source contract validation, not delivery evidence.
+    const query = target.searchParams;
+    if (purpose === "verify") {
+      return target.pathname === "/api/auth" && query.size === 2 &&
+        query.get("action") === "verify" && Boolean(query.get("token"));
+    }
+    return target.pathname === "/account" && query.size === 1 &&
+      Boolean(query.get("reset"));
   } catch { return false; }
 }
 
@@ -63,7 +74,7 @@ export async function sendSecurityEmail(email: string, localeValue: string, purp
   const locale: Locale = localeValue === "ru" || localeValue === "en" ? localeValue : "uk";
   const copy = COPY[locale][purpose];
   if (!env.EMAIL_API_KEY || !env.EMAIL_FROM) return { delivered: false, reason: "email_not_configured" };
-  if (!trustedSecurityLink(url)) return { delivered: false, reason: "security_link_origin_unverified" };
+  if (!trustedSecurityLink(url, purpose)) return { delivered: false, reason: "security_link_origin_unverified" };
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     signal: AbortSignal.timeout(10_000),

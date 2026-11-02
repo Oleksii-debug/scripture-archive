@@ -375,7 +375,15 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
     // Recheck active assessments immediately before a clipboard disclosure.
     let guard;
     try { guard=await check(book,chapter); }
-    catch { if (panel.isConnected && current() && citation===record && selected()) failClosed(); return; }
+    catch {
+      if (panel.isConnected && current() && citation===record) {
+        // A rejected guard must also retire an unannounced publisher change.
+        // Otherwise the old chapter remains visible after the failed check.
+        if (!selected()) retireUnsignalledSelection();
+        else failClosed();
+      }
+      return;
+    }
     if (!panel.isConnected || !current() || citation!==record || !selected()) {
       retireUnsignalledSelection();
       return;

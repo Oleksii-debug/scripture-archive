@@ -1,3 +1,9 @@
+## 2026-11-02 — SA-EXT-07 / ACADEMY_RESET_WEBLOCK_SINGLE_FLIGHT — scoped terminal
+
+**Завершено лише одноразовість підтвердженого reset локальних позначок Академії під час очікування Web Lock, не весь SA-EXT-07.** Повторні активації більше не ставлять друге видалення в чергу; після відмови Web Lock можна повторити дію. [PR #1242](https://github.com/Oleksii-debug/scripture-archive/pull/1242) SQUASH MERGED `main@6e010d8db2c388126ef8e60621d745cbc483c1d9`; [CI #41539838856](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41539838856) SUCCESS: 4539 Node PASS/1 SKIP, 37/37 Worker/D1, 2/2 Python, TS/lint/build. [Акт](roadmap/SA_EXT_07_ACADEMY_RESET_WEBLOCK_SINGLE_FLIGHT_SCOPED_TERMINAL_20261102.md). `remaining_scoped_implementation=0` тільки для цієї межі; SA-EXT-01/02/05/06/07 OPEN, 03/04 source-terminal. Права, NVDA, production Sites/D1 і реліз NOT_VERIFIED; заборонених запусків немає.
+
+---
+
 ## 2026-11-02 — SA-EXT-06 / ATLAS_EMPTY_SEARCH_RECOVERY — scoped terminal
 
 **Підфункція порожнього GET-пошуку текстового атласу закрита в source, не весь SA-EXT-06.** [PR #1239](https://github.com/Oleksii-debug/scripture-archive/pull/1239) SQUASH MERGED `main@5ef2e8c65c5a1f82bbaf1fa51878891829514ac6`; [exact-head CI #41531517417](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41531517417) SUCCESS (4531 Node PASS/1 SKIP, 37/37 Worker/D1, 2/2 Python, TS/lint/build). Порожній атлас має правильний заголовок і локалізоване очищення GET-фільтра uk/ru/en, без чужих джерел. [Акт](roadmap/SA_EXT_06_ATLAS_EMPTY_SEARCH_RECOVERY_SCOPED_TERMINAL_20261102.md). **Батьківські SA-EXT-01/02/05/06/07 OPEN; 03/04 source-terminal**. Live/physical/editorial/rights/release NOT_VERIFIED; production/deploy/82 мов/платежі/розсилки/dating не запускалися.

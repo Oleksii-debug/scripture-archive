@@ -310,6 +310,17 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
         if(resetStatus)resetStatus.textContent=w.lockUnavailable;
         return;
       }
+      // Bind the confirmation to the exact device record visible at click.
+      // A later tab may write new markers before this Web Lock is granted;
+      // that later state must not be erased by an obsolete queued reset.
+      let expectedRecord;
+      try {
+        if(!storage || typeof storage.getItem!=='function')throw Error('storage unavailable');
+        expectedRecord=storage.getItem(key);
+      } catch {
+        if(resetStatus)resetStatus.textContent=reset.uncertain;
+        return;
+      }
       const hadFocus=document?.activeElement===resetButton;
       resetPending=true;
       resetButton.disabled=true;
@@ -317,6 +328,9 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
         if(!currentView() || !resetConfirm.checked)return;
         try{
           if(!storage || typeof storage.removeItem!=='function' || typeof storage.getItem!=='function')throw Error('storage unavailable');
+          // Recheck under the principal's exclusive lock. A new record is a
+          // new user intent, not part of the earlier confirmed reset.
+          if(storage.getItem(key)!==expectedRecord)throw Error('stale reset confirmation');
           storage.removeItem(key);
           if(storage.getItem(key)!==null)throw Error('unconfirmed removal');
         }catch{

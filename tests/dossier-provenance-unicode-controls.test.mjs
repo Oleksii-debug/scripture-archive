@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {
-  dossierMarkup, dossierAtlasMarkup, scriptureDossiers, validateDossierGraph
+  dossierMarkup, dossierAtlasMarkup, searchScriptureDossiers, scriptureDossiers, validateDossierGraph
 } from '../public/scripture-dossiers.js';
 
 const catalog=JSON.parse(readFileSync(new URL('../public/data/catalog.json',import.meta.url),'utf8'));
@@ -15,6 +15,8 @@ const invisible=[
   ['combining grapheme joiner','\u034f'],
   ['text variation selector','\uFE00'],
   ['emoji variation selector','\uFE0F'],
+  ['supplementary variation selector first','\u{E0100}'],
+  ['supplementary variation selector last','\u{E01EF}'],
   ['Hangul choseong filler','\u115f'],
   ['Hangul jungseong filler','\u1160'],
   ['Mongolian vowel separator','\u180e'],
@@ -72,3 +74,23 @@ for(const [reason,character] of invisible){
     }
   }
 }
+
+test('SA-EXT-05 supplementary variation selectors in native GET search fail closed',()=>{
+  for(const character of ['\u{E0100}','\u{E01EF}']){
+    const query='Abra'+character+'ham';
+    for(const lang of ['uk','ru','en']){
+      assert.deepEqual(searchScriptureDossiers(lang,query,catalog),[],
+        'unsafe GET query must not return source dossiers');
+      for(const html of [
+        dossierMarkup(catalog,lang,null,esc,query),
+        dossierAtlasMarkup(catalog,lang,esc,query)
+      ]){
+        assert.match(html,/role="alert"/,lang+' invalid GET search announced');
+        assert.doesNotMatch(html,/href="\/reader\//,lang+' invalid GET search cannot expose sources');
+        assert.doesNotMatch(html,/href="\/dossiers\?/,lang+' invalid GET search cannot expose dossier links');
+      }
+    }
+  }
+  assert.equal(validateDossierGraph(catalog),true,'normal publisher catalog remains valid');
+  assert.match(dossierMarkup(catalog,'en','abraham',esc),/href="\/reader\//);
+});

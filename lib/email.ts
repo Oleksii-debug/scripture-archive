@@ -64,13 +64,12 @@ function trustedSecurityLink(url: string, purpose: Purpose): boolean {
     // token keys and extra redirect/query parameters are not a valid security
     // mail action. This is source contract validation, not delivery evidence.
     const query = target.searchParams;
-    // URLSearchParams decodes %0A, +, %00 and invisible Unicode after the
-    // literal URL has passed canonicalization. Never mail an unusable or
-    // ambiguous one-time token. Generated tokens are ASCII base64url; keep
-    // printable encoded token values accepted for existing callers/tests.
+    // The receiving verification/reset handlers require exact base64url
+    // tokens. A printable URL token containing '/', '+', '=' or punctuation
+    // passes URL parsing but is unusable at the account endpoint. Align
+    // outbound security links with that existing receiver contract.
     const validToken = (value: string | null) =>
-      typeof value === "string" && value.length > 0 && value.length <= 200 &&
-      /^[\x21-\x7e]+$/.test(value);
+      typeof value === "string" && /^[A-Za-z0-9_-]{1,200}$/.test(value);
     if (purpose === "verify") {
       return target.pathname === "/api/auth" && query.size === 2 &&
         query.get("action") === "verify" && validToken(query.get("token"));

@@ -50,7 +50,7 @@ for (const [lang, heading, changed] of [
   ['en', 'Compare editions', 'The selected edition changed'],
 ]) {
   test('existing supported locale retains its translated controls: ' + lang, () => {
-    const html = parallelControls([{ id: 'uk-kulish', title: '<source>' }], lang, esc);
+    const html = parallelControls([{ id: 'uk-kulish', title: '<source>', local: true }], lang, esc);
     assert.ok(html.includes(heading));
     assert.ok(!html.includes('<source>'));
     assert.ok(html.includes('&lt;source&gt;'));

@@ -22,7 +22,7 @@ function fixture(overrides={}) {
 async function withForm(callback){const original=globalThis.FormData;globalThis.FormData=class{get(){return edition.id;}};try{return await callback();}finally{globalThis.FormData=original;}}
 
 test('comparison is a labelled native form with escaped edition names',()=>{
-  const html=parallelControls([{id:'x"',title:'<img>'}],'uk',esc);
+  const html=parallelControls([{id:'x"',title:'<img>',local:true}],'uk',esc);
   assert.match(html,/<details/);assert.match(html,/<label/);assert.match(html,/<select name="edition">/);assert.match(html,/role="status"/);
   assert.ok(!html.includes('<img>'));assert.ok(html.includes('&lt;img&gt;'));
 });
@@ -550,3 +550,31 @@ test('parallel provenance accepts stable own-data maps including null-prototype 
   assert.match(explicit.result.innerHTML,/Verified translation/);
   assert.equal(explicit.checked(),2);
 }));
+
+
+test('comparison selector offers only local editions accepted by submit',()=>{
+  const html=parallelControls([
+    {id:'local-edition',title:'Local edition',local:true,contentId:'LOCAL'},
+    {id:'remote-edition',title:'Remote edition',local:false,contentId:'REMOTE'},
+    {id:'missing-local',title:'Missing local flag',contentId:'MISSING'},
+    {id:'null-local',title:'Null local flag',local:null,contentId:'NULL'},
+  ],'en',esc);
+  assert.match(html,/value="local-edition"/);
+  assert.doesNotMatch(html,/value="remote-edition"|value="missing-local"|value="null-local"/);
+  assert.doesNotMatch(html,/Remote edition|Missing local flag|Null local flag/);
+});
+
+test('comparison selector does not execute local accessors or inherit local authority',()=>{
+  let reads=0;
+  const accessor={id:'dynamic-local',title:'Dynamic edition',contentId:'DYNAMIC'};
+  Object.defineProperty(accessor,'local',{get(){reads++;return true;}});
+  const inherited=Object.assign(Object.create({local:true}),{
+    id:'inherited-local',title:'Inherited edition',contentId:'INHERITED',
+  });
+  const html=parallelControls([accessor,inherited,
+    {id:'real-local',title:'Real local edition',local:true,contentId:'REAL'},
+  ],'uk',esc);
+  assert.equal(reads,0,'the imported manifest getter must not execute');
+  assert.match(html,/value="real-local"/);
+  assert.doesNotMatch(html,/dynamic-local|inherited-local|Dynamic edition|Inherited edition/);
+});

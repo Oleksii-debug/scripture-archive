@@ -83,3 +83,48 @@ test('account deletion explains the actual per-browser Academy retention',()=>{
   assert.match(app,/Локальные отметки Академии в браузерах не удаляются автоматически/);
   assert.match(app,/Local Academy markers in browsers are not removed automatically/);
 });
+
+test('repeated reset activation while a Web Lock is queued cannot erase a later marker',async()=>{
+  const store=storage({[alice]:record});
+  let requests=0,release;
+  const locks={request:(_name,_options,callback)=>{
+    requests++;
+    return new Promise(resolve=>{release=()=>resolve(callback());});
+  }};
+  const ui=mount(store,{locks});
+  ui.confirm.checked=true;
+  ui.click();
+  assert.equal(ui.reset.disabled,true);
+  // Simulate two queued keyboard/assistive activations, even if the native
+  // disabled control suppresses the second physical click.
+  ui.click();
+  assert.equal(requests,1,'one user intent must enqueue only one removal');
+  release();
+  await flush();
+  assert.equal(store.getItem(alice),null);
+  assert.equal(ui.reset.disabled,false);
+  store.setItem(alice,record);
+  await flush();
+  assert.equal(store.getItem(alice),record,'no stale second reset may delete new progress');
+});
+
+test('rejected reset Web Lock releases the single-flight guard for explicit retry',async()=>{
+  const store=storage({[alice]:record});
+  let requests=0;
+  const locks={request:(_name,_options,callback)=>{
+    requests++;
+    return requests===1?Promise.reject(Error('lock unavailable')):Promise.resolve(callback());
+  }};
+  const ui=mount(store,{locks});
+  ui.confirm.checked=true;
+  ui.click();
+  await flush();
+  assert.equal(ui.reset.disabled,false);
+  assert.equal(store.getItem(alice),record);
+  assert.match(ui.output.textContent,/cross-tab saving is unavailable/);
+  ui.click();
+  await flush();
+  assert.equal(requests,2);
+  assert.equal(store.getItem(alice),null);
+  assert.equal(ui.reset.disabled,false);
+});

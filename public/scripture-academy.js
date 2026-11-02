@@ -72,7 +72,12 @@ export function readAcademyProgress(storage,key){
     // resume, storage event or cross-tab edit. Never rewrite the evidence.
     if(typeof raw!=='string' || raw.length>4096)throw Error('oversized saved progress');
     const record=JSON.parse(raw);
-    if(!record || record.version!==1 || !Array.isArray(record.completed) ||
+    // Persisted markers use the same exact two-field v1 envelope as the
+    // writer. Unknown account/token/provenance fields must not be silently
+    // accepted as verified progress; preserve raw bytes for explicit recovery.
+    if(!record || typeof record!=='object' || Array.isArray(record) ||
+       Object.keys(record).sort().join(',')!=='completed,version' ||
+       record.version!==1 || !Array.isArray(record.completed) ||
        record.completed.length>academyAllLessonIds.length ||
        record.completed.some(id=>typeof id!=='string'||!academyAllLessonIds.includes(id)) ||
        new Set(record.completed).size!==record.completed.length)throw Error('invalid saved progress');

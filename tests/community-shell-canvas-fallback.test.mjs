@@ -42,6 +42,7 @@ for (const [name, html] of [
   ["main in canvas, link visible", page(`<canvas><main id="main"></main></canvas><a href="/community" data-route="community">Community</a>`)],
   ["link in canvas, main visible", page(`<main id="main"></main><canvas><a href="/community" data-route="community">Community</a></canvas>`)],
   ["nested canvas fallback", page(`<section><canvas><div>${MARKERS}</div></canvas></section>`)],
+  ["nested canvas closing does not expose outer fallback", page(`<canvas><canvas>${MARKERS}</canvas>${MARKERS}</canvas>`)],
 ]) {
   test("P0 R0.4: canvas fallback cannot certify a visible SSR shell: " + name, async () => {
     assert.equal(await ready(html), false);

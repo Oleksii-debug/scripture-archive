@@ -1,3 +1,13 @@
+## 2026-11-02 — SA-EXT-07 / ACADEMY_CATALOG_ARRAY_METHOD_ACCESSORS — scoped source terminal
+
+**Закрито лише захист читальних назв Академії від accessor-backed `map` у видавничому каталозі, НЕ весь SA-EXT-07.** Чинний `validateDossierGraph` приймав коректний 66-книжний масив із власним/успадкованим getter `map`, не викликаючи його, але `academyMarkup` виконував цей getter після перевірки. Тепер Академія повторно використовує нативний `Array.prototype.map.call`. Перевірено uk/ru/en, own/inherited getter, редагований/read-only курс, усі 13 занять, source links та відмову від пошкодженого title.
+
+[Test-only RED CI #41513854753](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41513854753): **4508 Node PASS / 1 очікуваний FAIL / 1 SKIP**, фактичний виклик getter у `scripture-academy.js:106`. [Функціональний PR #1233](https://github.com/Oleksii-debug/scripture-archive/pull/1233) **SQUASH MERGED** `main@ff85eba2b6f7795b3d8c467bf118f40e3c7739e1`, exact qualified head `7913a9314799aec9f06fc66cd0cb9d442c5e8736`; [green CI #41514089177](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41514089177): **4509 Node PASS / 1 SKIP / 0 FAIL, 37/37 disposable Worker/D1 PASS, 2/2 Python PASS, TS/lint/build PASS**. [Акт](docs/roadmap/SA_EXT_07_ACADEMY_CATALOG_ARRAY_METHOD_ACCESSORS_SCOPED_TERMINAL_20261102.md).
+
+`remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` **тільки для цього дефекту**. **SA-EXT-01/02/05/06/07 parent OPEN; 03/04 source-terminal.** Права/редакція, ширші курси/медіа, фізичний NVDA/Chrome/Windows, live Sites/D1/backup/release **NOT_VERIFIED**. Повного локального checkout не було; PASS лише з exact-head GitHub Actions. Без production, 82 мов, платежів, synthetic users, масової пошти, dating чи секретів.
+
+---
+
 ## 2026-11-02 — SA-EXT-07 / ACADEMY_PERSISTED_ENVELOPE_INTEGRITY — scoped source terminal
 
 **Закрито лише точну схему локального запису позначок Академії, НЕ весь SA-EXT-07.** Раніше `readAcademyProgress` приймав JSON із зайвими полями `accountId/accessToken/updatedAt/__proto__/format` як перевірений прогрес; тепер дозволено тільки власні `completed,version`, як у чинному writer. Пошкоджені байти не переписуються; приватні позначки не відображаються, доступний `role="alert"` uk/ru/en, публічні біблійні посилання збережено. Інший principal і коректні guest/account записи працюють.

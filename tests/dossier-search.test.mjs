@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {dossierMarkup,searchScriptureDossiers,scriptureDossiers,validateDossierGraph} from '../public/scripture-dossiers.js';
+import {dossierAtlasMarkup,dossierMarkup,searchScriptureDossiers,scriptureDossiers,validateDossierGraph} from '../public/scripture-dossiers.js';
 
 const catalog=JSON.parse(readFileSync(new URL('../public/data/catalog.json',import.meta.url),'utf8'));
 const esc=v=>String(v).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
@@ -69,6 +69,28 @@ test('search input is escaped in attributes and cannot create script, links or h
   assert.ok(!html.includes('onclick='));
   assert.ok(html.includes('&quot;&gt;&lt;script&gt;'));
   assert.ok(!html.includes('href="/reader/'));
+});
+
+test('SA-EXT-05/06: non-ASCII space separators cannot disguise publisher book titles',()=>{
+  // Search already rejects these invisible or ambiguous GET separators. The
+  // validated source label must obey the same rule before either UI creates
+  // reader links or screen-reader citation names.
+  const separators=['\\u1680','\\u2000','\\u2001','\\u2002','\\u2003','\\u2004','\\u2005',
+    '\\u2006','\\u2007','\\u2008','\\u2009','\\u200a','\\u202f','\\u205f','\\u3000'];
+  for(const lang of ['uk','ru','en']){
+    for(const encoded of separators){
+      const separator=JSON.parse('"' + encoded + '"');
+      const damaged=structuredClone(catalog);
+      damaged.books[lang][0].title='Genesis'+separator+'chapter';
+      assert.equal(validateDossierGraph(damaged),false,lang+' U+'+separator.codePointAt(0).toString(16));
+      for(const html of [dossierMarkup(damaged,lang,null,esc),
+        dossierAtlasMarkup(damaged,lang,esc)]){
+        assert.match(html,/role="alert"/,'invalid provenance must be announced');
+        assert.doesNotMatch(html,/href="\\/reader\\//,'no reader link with ambiguous source title');
+      }
+    }
+  }
+  assert.equal(validateDossierGraph(catalog),true,'ordinary localized publisher titles still work');
 });
 
 test('invalid canonical catalogue fails closed even when the search matches',()=>{

@@ -210,3 +210,35 @@ test("P0 R0.2: one-time email links must match their declared purpose and exact 
   }
   assert.equal(h.calls.length, 2);
 });
+
+
+test("P0 R0.2: decoded invisible or control-only security tokens cannot be sent", async () => {
+  // A syntactically canonical URL can still decode to an unusable one-time
+  // token. The mail helper must not call the provider for such links.
+  const h = harness(accepted({ id: "provider-accepted" }));
+  const invalid = [
+    ["verify", "https://scripture-archive.com/api/auth?action=verify&token=%0A"],
+    ["verify", "https://scripture-archive.com/api/auth?action=verify&token=%00"],
+    ["verify", "https://scripture-archive.com/api/auth?action=verify&token=%E2%80%8B"],
+    ["reset", "https://scripture-archive.com/account?reset=+"],
+    ["reset", "https://scripture-archive.com/account?reset=%09"],
+    ["reset", "https://scripture-archive.com/account?reset=abc%0Ddef"],
+    ["reset", "https://scripture-archive.com/account?reset=%C2%A0"],
+    ["reset", "https://scripture-archive.com/account?reset=abc%7Fdef"],
+  ];
+  for (const [purpose, url] of invalid) {
+    assert.deepEqual(await h.email.sendSecurityEmail("person@example.invalid", "uk", purpose, url),
+      { delivered: false, reason: "security_link_origin_unverified" },
+      "refuse decoded control/whitespace token: " + url);
+  }
+  assert.equal(h.calls.length, 0, "invalid tokens must never reach provider");
+  // Recovery: encoded printable tokens and the real base64url alphabet still work.
+  for (const [purpose, url] of [
+    ["verify", "https://scripture-archive.com/api/auth?action=verify&token=valid%2Ftoken"],
+    ["reset", "https://scripture-archive.com/account?reset=abc_DEF-012"],
+  ]) {
+    assert.deepEqual(await h.email.sendSecurityEmail("person@example.invalid", "en", purpose, url),
+      { delivered: true });
+  }
+  assert.equal(h.calls.length, 2);
+});

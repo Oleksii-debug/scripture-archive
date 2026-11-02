@@ -150,7 +150,7 @@ export function validateDossierGraph(catalog) {
   const nonblank = safeVisibleText;
   // Bound publisher-supplied book titles before repeating them in source
   // links and ARIA labels; escaping alone cannot prevent huge accessible names.
-  const safeBookTitle = value => safeVisibleText(value) && value.length <= 120;
+  const safeBookTitle = value => typeof value === 'string' && value.length <= 120 && safeVisibleText(value);
   // Book codes become internal reader URL segments. Reject unsafe catalogue
   // or dossier provenance before rendering any href (including atlas links).
   const safeBookCode = value => typeof value === 'string' && /^(?:[1-3])?[A-Z]{2,4}$/.test(value);

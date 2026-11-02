@@ -207,7 +207,11 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
     try {
       let guard;
       try { guard=await check(book,chapter); }
-      catch { if(panel.isConnected && current() && requestCurrent()) failClosed(); return; }
+      catch {
+        if (panel.isConnected && current() && requestCurrent()) failClosed();
+        else announceUnsignalledChange();
+        return;
+      }
       if (!panel.isConnected || !current() || !requestCurrent()) { announceUnsignalledChange(); return; }
       if (!guard || typeof guard.invalidated !== 'boolean') { failClosed(); return; }
       if (guard.invalidated) { lock(); return; }
@@ -223,7 +227,11 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
       // Revalidate after that await and before exposing the comparison text.
       let finalGuard;
       try { finalGuard=await check(book,chapter); }
-      catch { if (panel.isConnected && current() && requestCurrent()) failClosed(); return; }
+      catch {
+        if (panel.isConnected && current() && requestCurrent()) failClosed();
+        else announceUnsignalledChange();
+        return;
+      }
       if (!panel.isConnected || !current() || !requestCurrent()) { announceUnsignalledChange(); return; }
       if (!finalGuard || typeof finalGuard.invalidated !== 'boolean') { failClosed(); return; }
       if (finalGuard.invalidated) { lock(); return; }
@@ -338,7 +346,10 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
       result.innerHTML=`<section aria-labelledby="parallel-title"><h3 id="parallel-title">${esc(metadata.title)} — ${esc(bookTitle)} ${chapter}</h3><p>${copy.note}</p><p>${copy.license}: ${esc(metadata.license || '—')}</p>${metadata.attribution?`<p>${esc(metadata.attribution)}</p>`:''}${source?`<p><a href="${esc(source)}" target="_blank" rel="noreferrer">${copy.source}</a></p>`:''}${license?`<p><a href="${esc(license)}" target="_blank" rel="noreferrer">${copy.license}</a></p>`:''}<ol>${verifiedVerses.map((verse,index)=>`<li><span>${esc(verse)}</span> <button type="button" class="parallel-cite" data-parallel-cite="${index+1}" aria-label="${esc(copy.cite)}: ${esc(bookTitle)} ${chapter}:${index+1}">${esc(copy.cite)}</button></li>`).join('')}</ol></section>`;
       citation={ editionId:id, editionStillCurrent, rightsStillCurrent, title:metadata.title, license:metadata.license, attribution:typeof metadata.attribution==='string'?metadata.attribution:'', source, licenseUrl:license, verses:verifiedVerses.slice() };
       status.textContent=copy.ready;
-    } catch { if (panel.isConnected && current() && requestCurrent()) status.textContent=copy.fail; }
+    } catch {
+      if (panel.isConnected && current() && requestCurrent()) status.textContent=copy.fail;
+      else announceUnsignalledChange();
+    }
     finally {
       if (requestRevision === requestId) button.disabled=false;
       if (requestRevision === requestId && hadSubmitFocus && panel.isConnected && typeof document !== 'undefined' &&

@@ -9,7 +9,7 @@ const ROBOTS = "User-agent: *\nAllow: /\nDisallow: /api/\nSitemap: " + ORIGIN + 
 const SITEMAP = '<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>' + ORIGIN + '/community</loc></url></urlset>';
 const SHELL = '<html><body><main id="main">Reader</main><a href="/community" data-route="community">Community</a></body></html>';
 
-async function probe(robots = ROBOTS, sitemap = SITEMAP) {
+async function probe(robots = ROBOTS, sitemap = SITEMAP, types = {}) {
   const methods = [];
   const ready = await communityDeploymentReady(ORIGIN, async (url, options) => {
     methods.push(options.method || "GET");
@@ -19,8 +19,8 @@ async function probe(robots = ROBOTS, sitemap = SITEMAP) {
     if (path === "/api/account") return Response.json(
       { user: null }, { headers: { "Cache-Control": "no-store" } });
     if (path === "/community") return new Response(SHELL, { headers: { "Content-Type": "text/html" } });
-    if (path === "/robots.txt") return new Response(robots, { headers: { "Content-Type": "text/plain" } });
-    if (path === "/sitemap.xml") return new Response(sitemap, { headers: { "Content-Type": "application/xml" } });
+    if (path === "/robots.txt") return new Response(robots, { headers: { "Content-Type": types.robots ?? "text/plain" } });
+    if (path === "/sitemap.xml") return new Response(sitemap, { headers: { "Content-Type": types.sitemap ?? "application/xml" } });
     if (path === "/api/community/dispatch") return new Response(null, { status: 204, headers: {
       "Cache-Control": "no-store", "X-Scripture-Runner-Protocol": "github-oidc-v1",
     } });
@@ -66,4 +66,24 @@ test("R0.4 recovers when wildcard-wide ban becomes a scoped API ban", async () =
   const blocked = "User-agent: *\nDisallow: /*\nSitemap: " + ORIGIN + "/sitemap.xml\n";
   assert.equal(await probe(blocked), false);
   assert.equal(await probe(ROBOTS), true);
+});
+
+// A 200 SEO route served as HTML or JSON is not the canonical robots/sitemap
+// response. This read-only test intentionally does not claim browser, D1 or
+// installed Cloudflare readiness.
+for (const [route, mime] of [
+  ["robots", "text/html"], ["robots", "APPLICATION/JSON"],
+  ["sitemap", "TEXT/HTML; charset=UTF-8"], ["sitemap", "application/json"],
+]) {
+  test("R0.4 rejects explicit non-SEO media type on " + route + ": " + mime, async () => {
+    assert.equal(await probe(ROBOTS, SITEMAP, { [route]: mime }), false);
+  });
+}
+
+test("R0.4 SEO media-type recovery requires a fresh canonical response", async () => {
+  assert.equal(await probe(ROBOTS, SITEMAP, { sitemap: "text/html" }), false);
+  assert.equal(await probe(ROBOTS, SITEMAP, { robots: "text/html" }), false);
+  assert.equal(await probe(ROBOTS, SITEMAP, {
+    robots: "text/plain; charset=utf-8", sitemap: "application/xml; charset=utf-8",
+  }), true);
 });

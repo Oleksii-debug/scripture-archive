@@ -613,3 +613,32 @@ test("P0 R0.2: reset-password refuses ambiguous POST action queries before token
     } finally { f.db.close(); }
   }
 });
+
+test("R0.2: ambiguous change-password action URL cannot mutate credentials or sessions; canonical URL recovers", async () => {
+  const f = fixture();
+  const original = f.db.prepare("SELECT password_hash,session_version FROM accounts WHERE id='alice'").get();
+  const makeRequest = suffix => new Request("https://example.invalid/api/auth?action=change-password" + suffix, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ currentPassword: "correct", newPassword: "new-password-123" }),
+  });
+  try {
+    for (const suffix of [
+      "&action=logout",
+      "&action=change-password",
+      "&source=untrusted",
+      "&%61ction=login",
+    ]) {
+      const rejected = await f.handler.POST(makeRequest(suffix));
+      assert.equal(rejected.status, 400, "reject ambiguous query: " + suffix);
+      assert.equal((await rejected.json()).error, "invalid_password_change");
+      assert.deepEqual(f.db.prepare("SELECT password_hash,session_version FROM accounts WHERE id='alice'").get(), original);
+      assert.equal(f.db.prepare("SELECT revoked_at FROM auth_sessions WHERE token_hash='session'").get().revoked_at, null);
+    }
+    const valid = await f.handler.POST(makeRequest(""));
+    assert.equal(valid.status, 200);
+    assert.equal(f.db.prepare("SELECT password_hash FROM accounts WHERE id='alice'").get().password_hash, "newhash");
+    assert.ok(f.db.prepare("SELECT revoked_at FROM auth_sessions WHERE token_hash='session'").get().revoked_at);
+  } finally {
+    f.db.close();
+  }
+});

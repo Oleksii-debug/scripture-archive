@@ -196,7 +196,13 @@ export async function POST(request: Request) {
   }
   if (!isVerifiedOwner(identity)) return json({ error: "forbidden" }, 403);
   if (action === "lease") {
-    return json(await leaseCommunityAgents(Math.max(1,Math.min(4,Math.trunc(Number(body?.limit)||1)))));
+    try {
+      return json(await leaseCommunityAgents(Math.max(1,Math.min(4,Math.trunc(Number(body?.limit)||1)))));
+    } catch {
+      // A D1 lease may have partially committed before an unavailable read or
+      // acknowledgement. Do not expose an internal error or invent a job.
+      return json({ error: "community_unavailable" }, 503);
+    }
   }
   if (!["start","pause","resume","stop"].includes(action)) return json({error:"invalid_action"},400);
   try {

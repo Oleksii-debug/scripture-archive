@@ -1,3 +1,5 @@
+import {validEditionRightsMetadata, validEditionRightsText} from './parallel-reader.js';
+
 // SA-EXT-05: traceable, reader-linked biblical dossier graph.
 // References are navigation pointers to the platform's existing edition catalog,
 // not copied Bible text, external historical evidence, or licence assertions.
@@ -173,8 +175,9 @@ export function validateDossierGraph(catalog) {
       LANGS.some(lang=>{
         const edition=ownData(editions,lang);
         return !edition || typeof edition!=='object' || Array.isArray(edition) ||
-          !hasOwnData(edition,'id') || typeof edition.id!=='string' ||
-          !edition.id.trim();
+          !hasOwnData(edition,'id') || !validEditionRightsText(edition.id,128) ||
+          !edition.id.trim() || edition.id.trim()!==edition.id ||
+          /\s/u.test(edition.id) || !validEditionRightsMetadata(edition);
       })) return false;
   // Only own, published catalogue records may authorize reader source labels.
   // Prototype-inherited language lists or book fields can otherwise spoof a

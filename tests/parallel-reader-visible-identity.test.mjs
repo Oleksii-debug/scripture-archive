@@ -27,8 +27,8 @@ function fixture(editions, selectedId, lang='en') {
 }
 
 test('SA-EXT-01: invisible, whitespace and unbounded edition IDs never enter selector',()=>{
-  const invalid=['', ' ', 'edition\\nother', 'edition\\tother', 'edition\\u202Eevil',
-    'edition\\u200Bhidden', 'edition\\u2066hidden', 'x'.repeat(129)];
+  const invalid=['', ' ', 'edition\nother', 'edition\tother', 'edition\u202Eevil',
+    'edition\u200Bhidden', 'edition\u2066hidden', 'x'.repeat(129)];
   for(const lang of ['uk','ru','en']) {
     for(const id of invalid) {
       const html=parallelControls([{id,title:'Spoofed edition',local:true}],lang,esc);
@@ -38,7 +38,7 @@ test('SA-EXT-01: invisible, whitespace and unbounded edition IDs never enter sel
 });
 
 test('SA-EXT-01: invalid programmatic identity fails before assessment or file read',async()=>{
-  for(const id of [' ', 'edition\\u202Eevil', 'edition\\u200Bhidden', 'x'.repeat(129)]) {
+  for(const id of [' ', 'edition\u202Eevil', 'edition\u200Bhidden', 'x'.repeat(129)]) {
     const f=fixture([{id,title:'Spoofed edition',local:true}],id);
     try {
       await f.run();
@@ -58,7 +58,7 @@ test('SA-EXT-01: a previously readable edition mutated to invisible identity ret
     await f.run();
     assert.match(f.result.innerHTML,/VISIBLE VERSE/);
     assert.equal(f.reads(),1);
-    edition.id='valid\\u202Eedition';
+    edition.id='valid\u202Eedition';
     await f.run();
     assert.equal(f.result.innerHTML,'','stale licensed text must not remain');
     assert.equal(f.reads(),1);
@@ -68,7 +68,7 @@ test('SA-EXT-01: a previously readable edition mutated to invisible identity ret
 });
 
 test('SA-EXT-01: visually misleading edition titles are not offered as choices',()=>{
-  for(const title of [' ', 'Visible\\u202Ereversed', 'Hidden\\u200Blabel', 'x'.repeat(513)]) {
+  for(const title of [' ', 'Visible\u202Ereversed', 'Hidden\u200Blabel', 'x'.repeat(513)]) {
     const html=parallelControls([{id:'valid-edition',title,local:true}],'en',esc);
     assert.doesNotMatch(html,/<option /);
   }

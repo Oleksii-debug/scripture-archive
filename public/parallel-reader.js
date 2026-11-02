@@ -164,6 +164,20 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
       if (validEditionId(id) && editionIdCounts(items).get(id)===1)
         edition=items.find(item=>verifiedLocalEdition(item,id)) || null;
     } catch { /* Malformed edition descriptors are never selection authority. */ }
+    // A manifest can change without firing a native select event while the
+    // chapter and assessment checks are pending. Keep the exact source/path
+    // identity that was admitted, not just the select's unchanged string ID.
+    const editionSnapshot=edition ? ['folder','contentId','title'].map(key=>ownEditionData(edition,key)) : null;
+    const editionStillCurrent=()=>{
+      if (!editionSnapshot) return false;
+      try {
+        const items=ownEditionItems(editions);
+        return items.includes(edition) && editionIdCounts(items).get(id)===1 &&
+          verifiedLocalEdition(edition,id) &&
+          ['folder','contentId','title'].every((key,index)=>
+            ownEditionData(edition,key)===editionSnapshot[index]);
+      } catch { return false; }
+    };
     const submittedRevision = selectionRevision;
     const selectionCurrent = () => selectionRevision === submittedRevision &&
       String(new FormData(form).get('edition') || '') === id;
@@ -199,6 +213,7 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
       if (guard.invalidated) { lock(); return; }
       // A changed native select must retire this request, even for the same reader/principal.
       if (!requestCurrent()) { announceUnsignalledChange(); return; }
+      if (!editionStillCurrent()) throw Error('edition identity changed before chapter fetch');
       const data=await getBook(book,edition);
       // A change signalled by onchange fully retires the request. An
       // unannounced programmatic selection change preserves the historical
@@ -212,6 +227,7 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
       if (!panel.isConnected || !current() || !requestCurrent()) { announceUnsignalledChange(); return; }
       if (!finalGuard || typeof finalGuard.invalidated !== 'boolean') { failClosed(); return; }
       if (finalGuard.invalidated) { lock(); return; }
+      if (!editionStillCurrent()) throw Error('edition identity changed during chapter fetch');
       // Never show edition A's licensed verses under edition B's selected label.
       if (!requestCurrent()) { announceUnsignalledChange(); return; }
       // Imported chapter containers and slots are publisher content too.
@@ -301,7 +317,7 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
       const source=https(metadata.source);
       const license=metadata.licenseUrl==null?'':https(metadata.licenseUrl);
       result.innerHTML=`<section aria-labelledby="parallel-title"><h3 id="parallel-title">${esc(metadata.title)} — ${esc(bookTitle)} ${chapter}</h3><p>${copy.note}</p><p>${copy.license}: ${esc(metadata.license || '—')}</p>${metadata.attribution?`<p>${esc(metadata.attribution)}</p>`:''}${source?`<p><a href="${esc(source)}" target="_blank" rel="noreferrer">${copy.source}</a></p>`:''}${license?`<p><a href="${esc(license)}" target="_blank" rel="noreferrer">${copy.license}</a></p>`:''}<ol>${verifiedVerses.map((verse,index)=>`<li><span>${esc(verse)}</span> <button type="button" class="parallel-cite" data-parallel-cite="${index+1}" aria-label="${esc(copy.cite)}: ${esc(bookTitle)} ${chapter}:${index+1}">${esc(copy.cite)}</button></li>`).join('')}</ol></section>`;
-      citation={ editionId:id, title:metadata.title, license:metadata.license, attribution:typeof metadata.attribution==='string'?metadata.attribution:'', source, licenseUrl:license, verses:verifiedVerses.slice() };
+      citation={ editionId:id, editionStillCurrent, title:metadata.title, license:metadata.license, attribution:typeof metadata.attribution==='string'?metadata.attribution:'', source, licenseUrl:license, verses:verifiedVerses.slice() };
       status.textContent=copy.ready;
     } catch { if (panel.isConnected && current() && requestCurrent()) status.textContent=copy.fail; }
     finally {
@@ -324,6 +340,9 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
     if (!Number.isSafeInteger(verseNumber) || verseNumber>record.verses.length) return;
     const selected=()=>String(new FormData(form).get('edition') || '')===record.editionId;
     if (!selected()) { status.textContent=copy.changed; return; }
+    if (!record.editionStillCurrent()) {
+      citation=null; result.replaceChildren(); status.textContent=copy.changed; return;
+    }
     // Recheck active assessments immediately before a clipboard disclosure.
     let guard;
     try { guard=await check(book,chapter); }
@@ -331,6 +350,9 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
     if (!panel.isConnected || !current() || citation!==record || !selected()) return;
     if (!guard || typeof guard.invalidated!=='boolean') { failClosed(); return; }
     if (guard.invalidated) { lock(); return; }
+    if (!record.editionStillCurrent()) {
+      citation=null; result.replaceChildren(); status.textContent=copy.changed; return;
+    }
     const citationText=[
       `${bookTitle} ${chapter}:${verseNumber}. ${record.verses[verseNumber-1]}`,
       `${record.title} · ${record.license}`,

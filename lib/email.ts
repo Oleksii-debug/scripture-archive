@@ -27,7 +27,11 @@ function escapeHtml(value: string) {
 // Do not tell callers the message was accepted if the provider returned
 // malformed JSON, an error object, or a bare HTTP success response.
 async function providerAccepted(response: Response | null): Promise<boolean> {
-  if (!response?.ok) return false;
+  // Resend's create-email success is a final 200 receipt (201 Created is
+  // also a definitive creation response). Response.ok alone accepts 202
+  // Accepted, 203 Non-Authoritative and 206 Partial Content; an id in those
+  // payloads cannot certify that the email provider created the message.
+  if (!response?.ok || (response.status !== 200 && response.status !== 201)) return false;
   const receipt: unknown = await response.json().catch(() => null);
   if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) return false;
   // A contradictory 2xx payload is not an acceptance receipt, even when

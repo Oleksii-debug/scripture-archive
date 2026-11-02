@@ -25,11 +25,11 @@ const validDossierSearchQuery = value => typeof value === 'string' &&
   value.length <= 120 &&
   // Only ordinary space/TAB preserve the historical blank GET behavior.
   // Unicode separators, BOM, CR/LF, format controls and visually empty
-  // script fillers and non-ASCII Unicode spaces fail closed, even alone.
+  // script fillers, variation selectors (BMP and supplementary) and non-ASCII Unicode spaces fail closed, even alone.
   // JS trim() removes Zs spaces such as U+202F and U+3000; accepting them
   // would silently expose the unfiltered dossier/atlas source links.
   (/^[ \t]*$/u.test(value) ||
-    !/[\u0000-\u001f\u007f-\u009f\u00a0\u034f\u1680\u2000-\u200a\u202f\u205f\u3000\u061c\u115f\u1160\u200b-\u200f\u2028-\u202e\u2060-\u206f\u2800\u3164\ufeff\ud800-\udfff\uffa0\p{Cf}]/u.test(value));
+    !/[\u0000-\u001f\u007f-\u009f\u00a0\u034f\u{e0100}-\u{e01ef}\u1680\u2000-\u200a\u202f\u205f\u3000\u061c\u115f\u1160\u200b-\u200f\u2028-\u202e\u2060-\u206f\u2800\u3164\ufeff\ud800-\udfff\uffa0\p{Cf}]/u.test(value));
 // Publisher catalogue metadata must be owned data, not executable accessors.
 // Read each descriptor once; never invoke a getter merely to validate a source.
 const ownData=(record,key)=>{
@@ -143,10 +143,10 @@ export function validateDossierGraph(catalog) {
   // HTML escaping does not remove invisible/bidi text or lone surrogates;
   // reject ambiguous source metadata before emitting reader links/ARIA names.
   // Include Unicode format controls, non-ASCII Unicode space separators,
-  // visually empty script fillers and orphan variation selectors (Mn). Canonical dossier labels and reader
-  // links must not conceal source claims.
+  // visually empty script fillers and variation selectors (BMP and supplementary Mn).
+  // Canonical dossier labels and reader links must not conceal source claims.
   const safeVisibleText = value => typeof value === 'string' && value.trim().length > 0 &&
-    !/[\u0000-\u001f\u007f-\u009f\u00a0\u061c\u1680\u2000-\u200f\u2028-\u202f\u205f\u2060-\u206f\u3000\ufe00-\ufe0f\ufeff\ud800-\udfff\u034f\u115f\u1160\u2800\u3164\uffa0\p{Cf}]/u.test(value);
+    !/[\u0000-\u001f\u007f-\u009f\u00a0\u061c\u1680\u2000-\u200f\u2028-\u202f\u205f\u2060-\u206f\u3000\ufe00-\ufe0f\u{e0100}-\u{e01ef}\ufeff\ud800-\udfff\u034f\u115f\u1160\u2800\u3164\uffa0\p{Cf}]/u.test(value);
   const nonblank = safeVisibleText;
   // Bound publisher-supplied book titles before repeating them in source
   // links and ARIA labels; escaping alone cannot prevent huge accessible names.

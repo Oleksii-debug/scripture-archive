@@ -161,6 +161,12 @@ export async function POST(request: Request) {
   if (!sameOrigin(request)) return json({ error: "cross_origin_request" }, 403);
   const actionQuery = new URL(request.url).searchParams;
   const action = actionQuery.get("action") || "";
+  // Registration persists an account and profile, mints a one-time token and
+  // can send verification mail. Never select the first action from a duplicate
+  // or augmented URL before any rate limit, D1 read/write or mail request.
+  if (action === "register" &&
+      (actionQuery.size !== 1 || actionQuery.getAll("action").length !== 1))
+    return json({ error: "invalid_action_query" }, 400);
   // Security-email requests mint fresh one-time tokens and may dispatch mail.
   // Do not select the first of duplicated action keys or accept unrelated
   // query parameters: reject ambiguity before rate limits, D1 or email I/O.

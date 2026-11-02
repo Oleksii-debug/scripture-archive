@@ -134,6 +134,35 @@ test('SA-EXT-05/06: own and inherited catalogue method accessors never execute',
   }
 });
 
+test('SA-EXT-05/06: ambiguous localized publisher book titles fail closed',()=>{
+  // The GET book-name lookup uses NFC, trim and locale-aware lowercase.
+  // Distinct codes with identical visible labels must not produce misleading
+  // dossier/atlas source names or ambiguous screen-reader reader links.
+  for(const lang of ['uk','ru','en']){
+    for(const variant of ['exact','case','nfc']){
+      const damaged=structuredClone(catalog);
+      const books=damaged.books[lang];
+      if(variant==='exact')books[1].title=books[0].title;
+      if(variant==='case')books[1].title=books[0].title.toUpperCase();
+      if(variant==='nfc'){
+        books[0].title='Café';
+        books[1].title='Cafe'+String.fromCharCode(0x0301);
+      }
+      assert.equal(validateDossierGraph(damaged),false,lang+' '+variant);
+      for(const html of [dossierMarkup(damaged,lang,null,esc),
+        dossierAtlasMarkup(damaged,lang,esc)]){
+        assert.match(html,/role="alert"/,'ambiguous publisher label must be announced');
+        assert.ok(!html.includes('href="/reader/'),'no ambiguous source link');
+      }
+      books[0].title=catalog.books[lang][0].title;
+      books[1].title=catalog.books[lang][1].title;
+      assert.equal(validateDossierGraph(damaged),true,'restored distinct publisher titles');
+      assert.ok(dossierMarkup(damaged,lang,null,esc).includes('href="/reader/'));
+      assert.ok(dossierAtlasMarkup(damaged,lang,esc).includes('href="/reader/'));
+    }
+  }
+});
+
 test('invalid canonical catalogue fails closed even when the search matches',()=>{
   const bad=structuredClone(catalog);
   bad.books.en[0].chapters=0;

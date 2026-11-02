@@ -90,6 +90,19 @@ function ownEditionItems(editions) {
   }
   return items;
 }
+// A select value is a publisher/file identity, not an array position. If two
+// records declare the same ID, the visible option label cannot identify which
+// local text and rights record would be used. Refuse both instead of picking
+// whichever one happens to appear first in an imported manifest.
+function editionIdCounts(items) {
+  const counts=new Map();
+  for (const edition of items) {
+    const id=ownEditionData(edition,'id');
+    if (typeof id==='string' && id)
+      counts.set(id,(counts.get(id) || 0)+1);
+  }
+  return counts;
+}
 function verifiedLocalEdition(edition, id) {
   if (!edition || typeof edition !== 'object' || Array.isArray(edition)) return false;
   for (const key of ['id','local','folder','contentId']) {
@@ -102,9 +115,11 @@ function verifiedLocalEdition(edition, id) {
 
 export function parallelControls(editions, lang, esc) {
   const copy = copyForLocale(lang);
-  return `<details class="card parallel-reader"><summary>${copy.title}</summary><p>${copy.note}</p><form class="parallel-form"><label class="account-field"><span>${copy.choose}</span><select name="edition">${ownEditionItems(editions).map(edition=>{
+  const items=ownEditionItems(editions);
+  const idCounts=editionIdCounts(items);
+  return `<details class="card parallel-reader"><summary>${copy.title}</summary><p>${copy.note}</p><form class="parallel-form"><label class="account-field"><span>${copy.choose}</span><select name="edition">${items.map(edition=>{
     const id=ownEditionData(edition,'id'), title=ownEditionData(edition,'title');
-    return typeof id==='string' && id && typeof title==='string'
+    return typeof id==='string' && id && idCounts.get(id)===1 && typeof title==='string'
       ? `<option value="${esc(id)}">${esc(title)}</option>` : '';
   }).join('')}</select></label><button class="button" type="submit">${copy.open}</button><p class="parallel-status" role="status"></p></form><div class="parallel-result"></div></details>`;
 }
@@ -134,8 +149,11 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
     event.preventDefault();
     const button=submitButton, id=String(new FormData(form).get('edition') || '');
     let edition=null;
-    try { edition=ownEditionItems(editions).find(item=>verifiedLocalEdition(item,id)); }
-    catch { /* Malformed edition descriptors are never selection authority. */ }
+    try {
+      const items=ownEditionItems(editions);
+      if (id && editionIdCounts(items).get(id)===1)
+        edition=items.find(item=>verifiedLocalEdition(item,id)) || null;
+    } catch { /* Malformed edition descriptors are never selection authority. */ }
     const submittedRevision = selectionRevision;
     const selectionCurrent = () => selectionRevision === submittedRevision &&
       String(new FormData(form).get('edition') || '') === id;

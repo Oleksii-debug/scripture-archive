@@ -35,8 +35,8 @@ function harness(reply, configured = true, baseOrigin = "https://scripture-archi
   return { email: fixtureModule.exports, calls };
 }
 
-const accepted = payload => ({ ok: true, json: async () => payload });
-const rejected = () => ({ ok: false, json: async () => ({ message: "rejected" }) });
+const accepted = payload => ({ ok: true, status: 200, json: async () => payload });
+const rejected = () => ({ ok: false, status: 400, json: async () => ({ message: "rejected" }) });
 
 test("verification and reset require a real provider message id", async () => {
   const h = harness(accepted({ id: "a12b34cd-11aa-4f40-b123-123456789012" }));
@@ -63,7 +63,7 @@ test("a bare 2xx, error-shaped 2xx or broken provider JSON cannot claim mail acc
     accepted({ id: "x".repeat(201) }), accepted([]),
     accepted({ id: "accepted-looking-id", error: { message: "provider rejected" } }),
     accepted({ id: "accepted-looking-id", errors: [{ message: "invalid sender" }] }),
-    { ok: true, json: async () => { throw Error("invalid JSON"); } },
+    { ok: true, status: 200, json: async () => { throw Error("invalid JSON"); } },
     rejected(), null, new Error("network outage"),
   ]) {
     const h = harness(response);
@@ -308,4 +308,42 @@ test("P0 R0.2: security email rejects tokens the verification/reset receiver can
     ), { delivered: true });
   }
   assert.equal(h.calls.length, 4);
+});
+
+
+test("P0 R0.2: partial, informational and asynchronous HTTP receipts cannot certify provider acceptance", async () => {
+  // The actual Resend create-email success is HTTP 200 with an id. A generic
+  // Response.ok also includes 202/203/206, which are not an unambiguous
+  // completed provider acceptance receipt even if a proxy adds an id field.
+  const support = {
+    requestId: "r-test", email: "sender@example.invalid",
+    subject: "Help", message: "Test", locale: "en", attachments: [],
+  };
+  for (const status of [202, 203, 204, 205, 206, 207, 208, 226]) {
+    const h = harness({
+      ok: true, status,
+      json: async () => ({ id: "a12b34cd-11aa-4f40-b123-123456789012" }),
+    });
+    assert.deepEqual(await h.email.sendSecurityEmail(
+      "person@example.invalid", "en", "reset",
+      "https://scripture-archive.com/account?reset=valid"
+    ), { delivered: false, reason: "email_provider_error" }, "security HTTP " + status);
+    assert.deepEqual(await h.email.sendSupportRequestEmail(support),
+      { delivered: false, reason: "email_provider_error" }, "support HTTP " + status);
+    assert.equal(h.calls.length, 2);
+  }
+  // Recovery: the canonical 200 and a conventional 201 Created response
+  // with a valid provider id remain accepted for both existing mail paths.
+  for (const status of [200, 201]) {
+    const h = harness({
+      ok: true, status,
+      json: async () => ({ id: "a12b34cd-11aa-4f40-b123-123456789012" }),
+    });
+    assert.deepEqual(await h.email.sendSecurityEmail(
+      "person@example.invalid", "uk", "verify",
+      "https://scripture-archive.com/api/auth?action=verify&token=valid"
+    ), { delivered: true });
+    assert.deepEqual(await h.email.sendSupportRequestEmail(support), { delivered: true });
+    assert.equal(h.calls.length, 2);
+  }
 });

@@ -145,8 +145,8 @@ test('SA-EXT-05/06: ambiguous localized publisher book titles fail closed',()=>{
       if(variant==='exact')books[1].title=books[0].title;
       if(variant==='case')books[1].title=books[0].title.toUpperCase();
       if(variant==='nfc'){
-        books[0].title='Caf\\u00e9';
-        books[1].title='Cafe\\u0301';
+        books[0].title='Café';
+        books[1].title='Cafe'+String.fromCharCode(0x0301);
       }
       assert.equal(validateDossierGraph(damaged),false,lang+' '+variant);
       for(const html of [dossierMarkup(damaged,lang,null,esc),

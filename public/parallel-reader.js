@@ -358,7 +358,17 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
     const verseNumber=Number(raw);
     if (!Number.isSafeInteger(verseNumber) || verseNumber>record.verses.length) return;
     const selected=()=>String(new FormData(form).get('edition') || '')===record.editionId;
-    if (!selected()) { status.textContent=copy.changed; return; }
+    // Programmatic changes to a native select do not dispatch change events.
+    // A stale citation must not remain visible or clipboard-ready under a
+    // different selected publisher, even when the user only clicks Cite.
+    const retireUnsignalledSelection = () => {
+      if (panel.isConnected && current() && citation===record && !selected()) {
+        citation=null;
+        result.replaceChildren();
+        status.textContent=copy.changed;
+      }
+    };
+    if (!selected()) { retireUnsignalledSelection(); return; }
     if (!record.editionStillCurrent() || !record.rightsStillCurrent()) {
       citation=null; result.replaceChildren(); status.textContent=copy.changed; return;
     }
@@ -366,7 +376,10 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
     let guard;
     try { guard=await check(book,chapter); }
     catch { if (panel.isConnected && current() && citation===record && selected()) failClosed(); return; }
-    if (!panel.isConnected || !current() || citation!==record || !selected()) return;
+    if (!panel.isConnected || !current() || citation!==record || !selected()) {
+      retireUnsignalledSelection();
+      return;
+    }
     if (!guard || typeof guard.invalidated!=='boolean') { failClosed(); return; }
     if (guard.invalidated) { lock(); return; }
     if (!record.editionStillCurrent() || !record.rightsStillCurrent()) {

@@ -90,6 +90,16 @@ function ownEditionItems(editions) {
   }
   return items;
 }
+// Edition selector identities and visible labels are publisher authority too.
+// Reject blank, invisible, bidi-controlled or unbounded imported identifiers
+// before they can become ambiguous options or select a source/rights record.
+function validEditionId(id) {
+  return validEditionRightsText(id,128) && Boolean(id.trim()) &&
+    !/\s/u.test(id) && id.trim()===id;
+}
+function validEditionOptionTitle(title) {
+  return validEditionRightsText(title,512) && Boolean(title.trim());
+}
 // A select value is a publisher/file identity, not an array position. If two
 // records declare the same ID, the visible option label cannot identify which
 // local text and rights record would be used. Refuse both instead of picking
@@ -98,7 +108,7 @@ function editionIdCounts(items) {
   const counts=new Map();
   for (const edition of items) {
     const id=ownEditionData(edition,'id');
-    if (typeof id==='string' && id)
+    if (validEditionId(id))
       counts.set(id,(counts.get(id) || 0)+1);
   }
   return counts;
@@ -110,7 +120,7 @@ function verifiedLocalEdition(edition, id) {
     if ((descriptor && !Object.hasOwn(descriptor,'value')) ||
         (!descriptor && key in edition)) return false;
   }
-  return ownEditionData(edition,'id')===id && ownEditionData(edition,'local')===true;
+  return validEditionId(id) && ownEditionData(edition,'id')===id && ownEditionData(edition,'local')===true;
 }
 
 export function parallelControls(editions, lang, esc) {
@@ -119,7 +129,7 @@ export function parallelControls(editions, lang, esc) {
   const idCounts=editionIdCounts(items);
   return `<details class="card parallel-reader"><summary>${copy.title}</summary><p>${copy.note}</p><form class="parallel-form"><label class="account-field"><span>${copy.choose}</span><select name="edition">${items.map(edition=>{
     const id=ownEditionData(edition,'id'), title=ownEditionData(edition,'title');
-    return typeof id==='string' && id && idCounts.get(id)===1 && typeof title==='string'
+    return validEditionId(id) && idCounts.get(id)===1 && validEditionOptionTitle(title)
       ? `<option value="${esc(id)}">${esc(title)}</option>` : '';
   }).join('')}</select></label><button class="button" type="submit">${copy.open}</button><p class="parallel-status" role="status"></p></form><div class="parallel-result"></div></details>`;
 }
@@ -151,7 +161,7 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
     let edition=null;
     try {
       const items=ownEditionItems(editions);
-      if (id && editionIdCounts(items).get(id)===1)
+      if (validEditionId(id) && editionIdCounts(items).get(id)===1)
         edition=items.find(item=>verifiedLocalEdition(item,id)) || null;
     } catch { /* Malformed edition descriptors are never selection authority. */ }
     const submittedRevision = selectionRevision;

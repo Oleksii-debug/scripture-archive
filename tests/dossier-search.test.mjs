@@ -86,7 +86,7 @@ test('SA-EXT-05/06: non-ASCII space separators cannot disguise publisher book ti
       for(const html of [dossierMarkup(damaged,lang,null,esc),
         dossierAtlasMarkup(damaged,lang,esc)]){
         assert.match(html,/role="alert"/,'invalid provenance must be announced');
-        assert.doesNotMatch(html,/href="\\/reader\\//,'no reader link with ambiguous source title');
+        assert.ok(!html.includes('href="/reader/'),'no reader link with ambiguous source title');
       }
     }
   }

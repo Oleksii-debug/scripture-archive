@@ -42,7 +42,9 @@ test("verification and reset require a real provider message id", async () => {
   const h = harness(accepted({ id: "a12b34cd-11aa-4f40-b123-123456789012" }));
   for (const purpose of ["verify", "reset"]) {
     const result = await h.email.sendSecurityEmail(
-      "person@example.invalid", "uk", purpose, "https://scripture-archive.com/account?key=test"
+      "person@example.invalid", "uk", purpose, purpose === "verify"
+        ? "https://scripture-archive.com/api/auth?action=verify&token=test"
+        : "https://scripture-archive.com/account?reset=test"
     );
     assert.equal(result.delivered, true);
   }

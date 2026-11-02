@@ -9,9 +9,9 @@ function fixture(lang, delayedCitationGuard=false) {
   const edition={id:'local-edition',title:'Local edition',local:true,contentId:'EDITION_A'};
   const rights={id:'EDITION_A',title:'Verified publisher',license:'Public Domain',
     source:'https://publisher.example/edition'};
-  let selected=edition.id, checks=0, copies=0, releaseGuard;
+  let selected=edition.id, checks=0, copies=0, failures=0, releaseGuard, rejectGuard;
   const guardPromise=delayedCitationGuard
-    ? new Promise(resolve=>{releaseGuard=resolve;}) : null;
+    ? new Promise((resolve,reject)=>{releaseGuard=resolve;rejectGuard=reject;}) : null;
   const submit={disabled:false};
   const status={textContent:''};
   const result={innerHTML:'',replaceChildren(){this.innerHTML='';}};
@@ -25,7 +25,7 @@ function fixture(lang, delayedCitationGuard=false) {
     getBook:async()=>({chapters:[['VERIFIED VERSE']]}),
     check:async()=>{checks++;return delayedCitationGuard && checks===3
       ? guardPromise : {invalidated:false};},
-    current:()=>true,lock:()=>{},failClosed:()=>{},
+    current:()=>true,lock:()=>{},failClosed:()=>{failures++;},
     copyText:async()=>{copies++;},
   });
   const originalFormData=globalThis.FormData;
@@ -38,7 +38,8 @@ function fixture(lang, delayedCitationGuard=false) {
     })}}),
     select:id=>{selected=id;}, // No native change event is dispatched.
     resolve:()=>releaseGuard?.({invalidated:false}),
-    checks:()=>checks,copies:()=>copies,
+    reject:()=>rejectGuard?.(new Error('guard offline')),
+    checks:()=>checks,copies:()=>copies,failures:()=>failures,
     restore:()=>{globalThis.FormData=originalFormData;},
   };
 }
@@ -88,4 +89,34 @@ test('SA-EXT-01: unchanged selected publisher still permits a verified citation'
       assert.match(f.result.innerHTML,/VERIFIED VERSE/);
     } finally {f.restore();}
   }
+});
+
+test('SA-EXT-01: rejected citation guard also retires silently changed publisher',async()=>{
+  for(const lang of ['uk','ru','en']){
+    const f=fixture(lang,true);
+    try {
+      await f.submit();
+      const pending=f.cite();
+      assert.equal(f.checks(),3);
+      f.select('another-edition');
+      f.reject();
+      await pending;
+      assert.equal(f.result.innerHTML,'','rejected guard must not leave stale licensed verses');
+      assert.ok(f.status.textContent,'announce the silent selection change');
+      assert.equal(f.copies(),0);
+      assert.equal(f.failures(),0,'stale publisher must not invoke current-principal failure');
+    } finally {f.restore();}
+  }
+});
+
+test('SA-EXT-01: unchanged publisher retains fail-closed behavior on rejected guard',async()=>{
+  const f=fixture('en',true);
+  try {
+    await f.submit();
+    const pending=f.cite();
+    f.reject();
+    await pending;
+    assert.equal(f.failures(),1,'genuine current-selection guard outage must fail closed');
+    assert.equal(f.copies(),0);
+  } finally {f.restore();}
 });

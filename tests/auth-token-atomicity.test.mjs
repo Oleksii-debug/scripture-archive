@@ -536,3 +536,44 @@ test("R0.2: verification refuses duplicate or unrelated URL parameters before co
     f.db.close();
   }
 });
+
+
+test("P0 R0.2: verification requires the exact one-time token bytes before D1 mutation", async () => {
+  const f = fixture();
+  try {
+    f.db.prepare("INSERT INTO auth_tokens(token_hash,user_id,purpose,expires_at) VALUES ('hash-code','alice','verify','2099-01-01')").run();
+    for (const altered of [" code", "code ", "\tcode", "code\n", "code\u200b", "code/"]) {
+      const url = new URL("https://example.invalid/api/auth?action=verify");
+      url.searchParams.set("token", altered);
+      const response = await f.handler.GET(new Request(url));
+      assert.equal(response.status, 400, "refuse altered verification token " + JSON.stringify(altered));
+      assert.equal((await response.json()).error, "invalid_token");
+      assert.equal(f.db.prepare("SELECT email_verified_at FROM accounts WHERE id='alice'").get().email_verified_at, null);
+      assert.equal(f.db.prepare("SELECT used_at FROM auth_tokens WHERE token_hash='hash-code'").get().used_at, null);
+    }
+    const exact = new Request("https://example.invalid/api/auth?action=verify&token=code");
+    assert.equal((await f.handler.GET(exact)).status, 303, "valid token still works after invalid attempts");
+    assert.equal((await f.handler.GET(exact)).status, 400, "one-time replay is refused");
+  } finally { f.db.close(); }
+});
+
+test("P0 R0.2: password reset refuses decorated tokens without changing password or sessions", async () => {
+  const f = fixture();
+  try {
+    f.db.prepare("INSERT INTO auth_tokens(token_hash,user_id,purpose,expires_at) VALUES ('hash-code','alice','reset','2099-01-01')").run();
+    const request = token => new Request("https://example.invalid/api/auth?action=reset-password", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, password: "new-password-123" }),
+    });
+    for (const altered of [" code", "code ", "\tcode", "code\n", "code\u200b", "code/"]) {
+      const response = await f.handler.POST(request(altered));
+      assert.equal(response.status, 400, "refuse altered reset token " + JSON.stringify(altered));
+      assert.equal((await response.json()).error, "invalid_reset");
+      assert.equal(f.db.prepare("SELECT password_hash FROM accounts WHERE id='alice'").get().password_hash, "oldhash");
+      assert.equal(f.db.prepare("SELECT revoked_at FROM auth_sessions WHERE token_hash='session'").get().revoked_at, null);
+      assert.equal(f.db.prepare("SELECT used_at FROM auth_tokens WHERE token_hash='hash-code'").get().used_at, null);
+    }
+    assert.equal((await f.handler.POST(request("code"))).status, 200, "exact reset token remains usable");
+    assert.equal((await f.handler.POST(request("code"))).status, 400, "reset token cannot be replayed");
+  } finally { f.db.close(); }
+});

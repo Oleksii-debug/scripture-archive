@@ -38,6 +38,12 @@ function json(data: unknown, status = 200, headers: HeadersInit = {}) {
   return Response.json(data, { status, headers: { "Cache-Control": "no-store", ...headers } });
 }
 function clean(value: unknown, max = 160) { return typeof value === "string" ? value.trim().slice(0, max) : ""; }
+ // One-time secrets are not user-authored profile text. Never trim or truncate
+ // a supplied secret into a different valid token before hashing/consumption.
+ // randomToken() generates base64url; preserve the existing bounded token API.
+function exactOneTimeToken(value: unknown): string | null {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{1,200}$/.test(value) ? value : null;
+}
 // Never truncate an identity. Truncating an overlength address into a valid
 // stored prefix could authenticate, recover or send mail for a different input.
 function normalizeEmail(value: unknown) {
@@ -126,7 +132,7 @@ export async function GET(request: Request) {
       url.searchParams.getAll("action").length !== 1 ||
       url.searchParams.getAll("token").length !== 1)
     return json({ error: "invalid_token" }, 400);
-  const token = clean(url.searchParams.get("token"), 200);
+  const token = exactOneTimeToken(url.searchParams.get("token"));
   if (!token) return json({ error: "invalid_token" }, 400);
   try {
   const tokenHash = await sha256(token);
@@ -283,7 +289,7 @@ export async function POST(request: Request) {
   }
 
   if (action === "reset-password") {
-    const token = clean(data.token, 200), password = data.password;
+    const token = exactOneTimeToken(data.token), password = data.password;
     if (!token || !validPassword(password)) return json({ error: "invalid_reset" }, 400);
     let resetAllowed: boolean;
     try { resetAllowed = await rateLimit(`reset:${address}`, 8, 900); }

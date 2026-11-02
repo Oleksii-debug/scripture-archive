@@ -82,8 +82,8 @@ test("P0 R0.2: malformed control-bearing provider ids never certify mail accepta
     requestId: "r-test", email: "sender@example.invalid",
     subject: "Help", message: "Test", locale: "uk", attachments: [],
   };
-  for (const id of ["accepted\\nsecond-line", "accepted\\rsecond-line",
-    "accepted\\u0000suffix", "\\u200b", "accepted\\u007fsuffix"]) {
+  for (const id of ["accepted\nsecond-line", "accepted\rsecond-line",
+    "accepted\u0000suffix", "\u200b", "accepted\u007fsuffix"]) {
     const h = harness(accepted({ id }));
     assert.deepEqual(await h.email.sendSecurityEmail(
       "person@example.invalid", "en", "reset",

@@ -399,7 +399,12 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
       if(error)error.textContent='';
       syncProgress(next);
     };
+    // Match import/reset's single-flight Web Lock admission. Without this,
+    // rapid keyboard activation can queue two callbacks: the second observes
+    // the first callback's updated aria-pressed and silently undoes the mark.
+    let pending=false;
     button.addEventListener('click',()=>{
+      if(pending)return;
       // Recheck before and after lock acquisition (inside update()).
       let active=false;
       try{active=Boolean(isCurrent())&&document?.querySelector('[data-academy-root]')===root;}catch{}
@@ -409,13 +414,22 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
         if(error)error.textContent=w.lockUnavailable;
         return;
       }
+      const hadFocus=document?.activeElement===button;
+      pending=true;
+      button.disabled=true;
+      const finish=()=>{
+        pending=false;
+        button.disabled=false;
+        restoreActionFocus(button,hadFocus);
+      };
       try{
         Promise.resolve(locks.request('sa-academy-progress:'+key,{mode:'exclusive'},()=>update())).catch(()=>{
           let stillCurrent=false;
           try{stillCurrent=Boolean(isCurrent())&&document?.querySelector('[data-academy-root]')===root;}catch{}
           if(stillCurrent&&error)error.textContent=w.lockUnavailable;
-        });
+        }).finally(finish);
       }catch{
+        finish();
         if(error)error.textContent=w.lockUnavailable;
       }
     });

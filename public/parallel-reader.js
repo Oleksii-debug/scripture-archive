@@ -314,10 +314,29 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
       // never truncate authored provenance into a misleading citation.
       if (!validEditionRightsMetadata(metadata))
         throw Error('missing or unsafe edition provenance');
+      // Publisher rights can change after a comparison is rendered without a
+      // select change. A citation must still be authorized by the exact same
+      // catalog map, edition record and own-data rights fields after its guard.
+      const rightsKeys=['id','title','license','source','attribution','licenseUrl'];
+      const rightsSnapshot=rightsKeys.map(key=>ownData(metadata,key));
+      const rightsStillCurrent=()=>{
+        try {
+          const latestEditions=ownMap('editions');
+          const latestTranslations=ownMap('translations');
+          if (latestEditions!==editionMap || latestTranslations!==translationMap ||
+              Boolean(latestTranslations && Object.hasOwn(latestTranslations,id))!==declared)
+            return false;
+          const latest=declared ? ownData(latestTranslations,id) : ownData(latestEditions,lang);
+          return latest===metadata &&
+            ownsVerifiedId(metadata,declared ? id : ownEditionData(edition,'contentId')) &&
+            validEditionRightsMetadata(metadata) &&
+            rightsKeys.every((key,index)=>ownData(metadata,key)===rightsSnapshot[index]);
+        } catch { return false; }
+      };
       const source=https(metadata.source);
       const license=metadata.licenseUrl==null?'':https(metadata.licenseUrl);
       result.innerHTML=`<section aria-labelledby="parallel-title"><h3 id="parallel-title">${esc(metadata.title)} — ${esc(bookTitle)} ${chapter}</h3><p>${copy.note}</p><p>${copy.license}: ${esc(metadata.license || '—')}</p>${metadata.attribution?`<p>${esc(metadata.attribution)}</p>`:''}${source?`<p><a href="${esc(source)}" target="_blank" rel="noreferrer">${copy.source}</a></p>`:''}${license?`<p><a href="${esc(license)}" target="_blank" rel="noreferrer">${copy.license}</a></p>`:''}<ol>${verifiedVerses.map((verse,index)=>`<li><span>${esc(verse)}</span> <button type="button" class="parallel-cite" data-parallel-cite="${index+1}" aria-label="${esc(copy.cite)}: ${esc(bookTitle)} ${chapter}:${index+1}">${esc(copy.cite)}</button></li>`).join('')}</ol></section>`;
-      citation={ editionId:id, editionStillCurrent, title:metadata.title, license:metadata.license, attribution:typeof metadata.attribution==='string'?metadata.attribution:'', source, licenseUrl:license, verses:verifiedVerses.slice() };
+      citation={ editionId:id, editionStillCurrent, rightsStillCurrent, title:metadata.title, license:metadata.license, attribution:typeof metadata.attribution==='string'?metadata.attribution:'', source, licenseUrl:license, verses:verifiedVerses.slice() };
       status.textContent=copy.ready;
     } catch { if (panel.isConnected && current() && requestCurrent()) status.textContent=copy.fail; }
     finally {
@@ -340,7 +359,7 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
     if (!Number.isSafeInteger(verseNumber) || verseNumber>record.verses.length) return;
     const selected=()=>String(new FormData(form).get('edition') || '')===record.editionId;
     if (!selected()) { status.textContent=copy.changed; return; }
-    if (!record.editionStillCurrent()) {
+    if (!record.editionStillCurrent() || !record.rightsStillCurrent()) {
       citation=null; result.replaceChildren(); status.textContent=copy.changed; return;
     }
     // Recheck active assessments immediately before a clipboard disclosure.
@@ -350,7 +369,7 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
     if (!panel.isConnected || !current() || citation!==record || !selected()) return;
     if (!guard || typeof guard.invalidated!=='boolean') { failClosed(); return; }
     if (guard.invalidated) { lock(); return; }
-    if (!record.editionStillCurrent()) {
+    if (!record.editionStillCurrent() || !record.rightsStillCurrent()) {
       citation=null; result.replaceChildren(); status.textContent=copy.changed; return;
     }
     const citationText=[

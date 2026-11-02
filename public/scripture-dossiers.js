@@ -177,13 +177,19 @@ export function validateDossierGraph(catalog) {
   // Catalogue arrays may carry own/inherited method accessors in memory.
   // Invoke native array algorithms directly: reading books.keys/some/map
   // could execute arbitrary getters before the source/ARIA guard completes.
-  if(catalogs.some(books=>books.length===0 || books.length>200 ||
+  if(catalogs.some((books,langIndex)=>books.length===0 || books.length>200 ||
       Array.from(Array.prototype.keys.call(books)).some(index=>!hasOwnData(books,index)) ||
       Array.prototype.some.call(books,book=>!book || typeof book!=='object' || Array.isArray(book) ||
       !['code','title','chapters'].every(key=>hasOwnData(book,key)) || !safeBookCode(book.code) ||
       !safeVisibleText(book.title) ||
       !Number.isSafeInteger(book.chapters) || book.chapters<1 || book.chapters>200) ||
-      new Set(Array.prototype.map.call(books,book=>book.code)).size!==books.length)) return false;
+      new Set(Array.prototype.map.call(books,book=>book.code)).size!==books.length ||
+      // The exact-title search resolves publisher labels back to book codes.
+      // Two codes with the same visible title after the same NFC/case/trim
+      // normalization would make a source label ambiguous to sighted users
+      // and screen readers. Reject the catalogue before emitting links.
+      new Set(Array.prototype.map.call(books,book=>
+        book.title.normalize('NFC').trim().toLocaleLowerCase(LANGS[langIndex]))).size!==books.length)) return false;
   const bookMaps = catalogs.map(books=>new Map(Array.prototype.map.call(books,book=>[book.code,book.chapters])));
   const validRef = source => source && safeBookCode(source.book) && Number.isSafeInteger(source.first) && source.first>0 && source.first<=256 &&
     Number.isSafeInteger(source.last) && source.last>=source.first && source.last<=256 &&

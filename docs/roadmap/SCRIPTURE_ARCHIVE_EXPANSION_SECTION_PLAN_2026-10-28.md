@@ -1,3 +1,13 @@
+## 2026-11-02 — SA-EXT-07 / ACADEMY_CATALOG_ARRAY_METHOD_ACCESSORS — scoped source terminal
+
+**Тільки один реальний дефект доступу до `map` у перевіреному каталозі Академії закрито, НЕ SA-EXT-07 parent.** `academyMarkup` після успішного `validateDossierGraph` викликав `catalog.books[lang].map`, тому власний/успадкований getter видавничого масиву міг виконатися або зірвати відображення. Замість цього використано `Array.prototype.map.call` — той самий канонічний допуск, що в досьє. Усі 13 занять, 3 мови, посилання на першоджерела, read-only приватність та відмова від getter-backed title перевірені.
+
+[RED test-only CI #41513854753](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41513854753) **COMPLETED FAILURE**: 4508 Node PASS, 1 очікуваний FAIL, 1 SKIP — реальний виклик `map` getter. [PR #1233](https://github.com/Oleksii-debug/scripture-archive/pull/1233) **SQUASH MERGED** `main@ff85eba2b6f7795b3d8c467bf118f40e3c7739e1`, exact head `7913a9314799aec9f06fc66cd0cb9d442c5e8736`; [green exact-head CI #41514089177](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41514089177) **SUCCESS**: 4509 Node PASS / 1 SKIP / 0 FAIL, 37/37 disposable Worker/D1 PASS, 2/2 Python PASS, TS/lint/build PASS. [Акт](SA_EXT_07_ACADEMY_CATALOG_ARRAY_METHOD_ACCESSORS_SCOPED_TERMINAL_20261102.md).
+
+`remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` **тільки тут**. **SA-EXT-01/02/05/06/07 parent OPEN; 03/04 source-terminal.** Незалежні права/редакція, повні курси/транскрипти/медіа, фізичний Windows/Chrome/NVDA, live Sites/D1/backup/release **NOT_VERIFIED**. Без локального native checkout; exact-head CI — GitHub Actions. Заборонені production/82 мови/платежі/synthetic users/масова пошта/dating не запускалися.
+
+---
+
 ## 2026-11-02 — SA-EXT-07 / ACADEMY_PERSISTED_ENVELOPE_INTEGRITY — scoped source terminal
 
 **Лише верифікацію схеми локальних позначок Академії завершено, НЕ весь батьківський SA-EXT-07.** Чинний `readAcademyProgress` тепер відмовляє на JSON із додатковими account/token/provenance-полями, вимагаючи рівно `completed,version` відповідно до writer; незмінні пошкоджені байти залишаються для явного recovery. Приватні позначки та badges не оголошуються, `role="alert"` uk/ru/en і публічні reader links збережені; інші principal та guest/account v1 працюють.

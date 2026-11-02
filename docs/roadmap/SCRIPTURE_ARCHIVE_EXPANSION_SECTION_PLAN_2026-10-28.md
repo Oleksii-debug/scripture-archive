@@ -1,3 +1,13 @@
+## 2026-11-02 — SA-EXT-07 / ACADEMY_PERSISTED_ENVELOPE_INTEGRITY — scoped source terminal
+
+**Лише верифікацію схеми локальних позначок Академії завершено, НЕ весь батьківський SA-EXT-07.** Чинний `readAcademyProgress` тепер відмовляє на JSON із додатковими account/token/provenance-полями, вимагаючи рівно `completed,version` відповідно до writer; незмінні пошкоджені байти залишаються для явного recovery. Приватні позначки та badges не оголошуються, `role="alert"` uk/ru/en і публічні reader links збережені; інші principal та guest/account v1 працюють.
+
+[Функціональний PR #1230](https://github.com/Oleksii-debug/scripture-archive/pull/1230) **SQUASH MERGED** `main@97180ce88535800cae36870a74bbdbe36a7ff8c3`, exact qualified head `29b25df110794a821ae39eba2cdea90f4e1d8d9b`; [CI #41503945400](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41503945400) **SUCCESS**: 4506 Node PASS / 1 SKIP / 0 FAIL, 37/37 disposable Worker/D1 PASS, 2/2 Python PASS, TS/lint/build PASS. Test-only CI #41503907856 CANCELLED, не RED. [Акт](SA_EXT_07_ACADEMY_PERSISTED_ENVELOPE_SCOPED_TERMINAL_20261102.md).
+
+`remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` **лише тут**. **SA-EXT-01/02/05/06/07 parent OPEN; 03/04 source-terminal.** Ширші курси/транскрипти/медіа/author-review, незалежні права й редакція, фізичний Windows/Chrome/NVDA, live Sites/D1/backup/release **NOT_VERIFIED**. Нічого забороненого не запускалося.
+
+---
+
 ## 2026-11-02 — SA-EXT-05 / BMP_VARIATION_SELECTOR_GET_ADMISSION — scoped source terminal
 
 **Закрито тільки відмову для невидимих BMP variation selectors U+FE00–U+FE0F у GET-пошуку досьє/атласу, НЕ батьківський розділ.** Раніше `validDossierSearchQuery` відхиляв supplementary U+E0100–U+E01EF, але пропускав BMP; прихований символ у `q` міг бути прийнятий і відображений у формі. Тепер чинний валідатор відхиляє обидва діапазони до HTML; локалізоване `role="alert"` без form/reader/dossier links. Негативні перевірки: 16 символів × uk/ru/en, обидва UI; позитивні `GEN 12` і порожній GET збережено.

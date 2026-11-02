@@ -152,13 +152,13 @@ test('SA-EXT-05/06: ambiguous localized publisher book titles fail closed',()=>{
       for(const html of [dossierMarkup(damaged,lang,null,esc),
         dossierAtlasMarkup(damaged,lang,esc)]){
         assert.match(html,/role="alert"/,'ambiguous publisher label must be announced');
-        assert.doesNotMatch(html,/href="\\/reader\\//,'no ambiguous source link');
+        assert.ok(!html.includes('href="/reader/'),'no ambiguous source link');
       }
       books[0].title=catalog.books[lang][0].title;
       books[1].title=catalog.books[lang][1].title;
       assert.equal(validateDossierGraph(damaged),true,'restored distinct publisher titles');
-      assert.match(dossierMarkup(damaged,lang,null,esc),/href="\\/reader\\//);
-      assert.match(dossierAtlasMarkup(damaged,lang,esc),/href="\\/reader\\//);
+      assert.ok(dossierMarkup(damaged,lang,null,esc).includes('href="/reader/'));
+      assert.ok(dossierAtlasMarkup(damaged,lang,esc).includes('href="/reader/'));
     }
   }
 });

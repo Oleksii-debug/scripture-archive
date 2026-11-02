@@ -1,3 +1,9 @@
+## 2026-11-02 — SA-EXT-07 / ACADEMY_PERSISTED_ENVELOPE_INTEGRITY — scoped source terminal
+
+**Завершено лише точний локальний v1 JSON envelope Академії, НЕ SA-EXT-07 parent.** Відхилення зайвих полів `accountId/accessToken/updatedAt/__proto__/format` до показу приватного прогресу, без перезапису локальних байтів. Існуючий доступний read-only стан, uk/ru/en alert, публічні reader links і коректні guest/account записи збережено. [PR #1230](https://github.com/Oleksii-debug/scripture-archive/pull/1230) **MERGED** `main@97180ce88535800cae36870a74bbdbe36a7ff8c3`; [exact-head CI #41503945400](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41503945400) **SUCCESS**: 4506 Node PASS / 1 SKIP, 37 Worker/D1 PASS, 2 Python PASS, TS/lint/build PASS. [Акт](roadmap/SA_EXT_07_ACADEMY_PERSISTED_ENVELOPE_SCOPED_TERMINAL_20261102.md). `remaining_scoped_implementation=0` лише тут; **SA-EXT-01/02/05/06/07 OPEN**, 03/04 source-terminal. Курси/медіа/права/редакція, реальний NVDA, live Sites/D1/backup/release NOT_VERIFIED; без заборонених запусків.
+
+---
+
 ## 2026-11-02 — SA-EXT-05 / BMP_VARIATION_SELECTOR_GET_ADMISSION — scoped source terminal
 
 **Закрито тільки відмову для невидимих BMP variation selectors U+FE00–U+FE0F у GET-пошуку досьє/атласу, НЕ батьківський розділ.** Раніше `validDossierSearchQuery` відхиляв supplementary U+E0100–U+E01EF, але пропускав BMP; прихований символ у `q` міг бути прийнятий і відображений у формі. Тепер чинний валідатор відхиляє обидва діапазони до HTML; локалізоване `role="alert"` без form/reader/dossier links. Негативні перевірки: 16 символів × uk/ru/en, обидва UI; позитивні `GEN 12` і порожній GET збережено.

@@ -75,6 +75,34 @@ test("a bare 2xx, error-shaped 2xx or broken provider JSON cannot claim mail acc
   }
 });
 
+test("P0 R0.2: malformed control-bearing provider ids never certify mail acceptance", async () => {
+  // A provider's HTTP 2xx is not sufficient if the purported message id is
+  // unfit for a durable receipt. Keep both security and support paths aligned.
+  const support = {
+    requestId: "r-test", email: "sender@example.invalid",
+    subject: "Help", message: "Test", locale: "uk", attachments: [],
+  };
+  for (const id of ["accepted\nsecond-line", "accepted\rsecond-line",
+    "accepted\u0000suffix", "\u200b", "accepted\u007fsuffix"]) {
+    const h = harness(accepted({ id }));
+    assert.deepEqual(await h.email.sendSecurityEmail(
+      "person@example.invalid", "en", "reset",
+      "https://scripture-archive.com/account?reset=valid"
+    ), { delivered: false, reason: "email_provider_error" }, "security receipt " + JSON.stringify(id));
+    assert.deepEqual(await h.email.sendSupportRequestEmail(support),
+      { delivered: false, reason: "email_provider_error" }, "support receipt " + JSON.stringify(id));
+    assert.equal(h.calls.length, 2);
+  }
+  // Recovery: normal provider ids still acknowledge both existing paths.
+  const valid = harness(accepted({ id: "a12b34cd-11aa-4f40-b123-123456789012" }));
+  assert.equal((await valid.email.sendSecurityEmail(
+    "person@example.invalid", "uk", "verify",
+    "https://scripture-archive.com/api/auth?action=verify&token=valid"
+  )).delivered, true);
+  assert.equal((await valid.email.sendSupportRequestEmail(support)).delivered, true);
+  assert.equal(valid.calls.length, 2);
+});
+
 test("support mail follows the same provider acceptance rule without exposing raw HTML", async () => {
   const input = {
     requestId: "r-test", email: "sender@example.invalid",

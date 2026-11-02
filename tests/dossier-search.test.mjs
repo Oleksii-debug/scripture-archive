@@ -454,7 +454,7 @@ test('SA-EXT-01/05: dossier links reject catalogues the primary reader cannot ad
       for(const html of [dossierMarkup(damaged,lang,null,esc),
         dossierAtlasMarkup(damaged,lang,esc)]){
         assert.match(html,/role="alert"/,name+' '+lang+' must announce rejection');
-        assert.doesNotMatch(html,/href="\\/reader\\//,name+' '+lang+' must not link an unavailable reader');
+        assert.doesNotMatch(html,new RegExp('href="/reader/'),name+' '+lang+' must not link an unavailable reader');
       }
     }
   }
@@ -463,8 +463,8 @@ test('SA-EXT-01/05: dossier links reject catalogues the primary reader cannot ad
   delete withoutOptional.editionBooks;
   assert.equal(validateDossierGraph(withoutOptional),true,'reader permits absent optional editions');
   for(const lang of ['uk','ru','en']){
-    assert.match(dossierMarkup(catalog,lang,null,esc),/href="\\/reader\\//);
-    assert.match(dossierAtlasMarkup(catalog,lang,esc),/href="\\/reader\\//);
+    assert.match(dossierMarkup(catalog,lang,null,esc),new RegExp('href="/reader/'));
+    assert.match(dossierAtlasMarkup(catalog,lang,esc),new RegExp('href="/reader/'));
   }
 });
 

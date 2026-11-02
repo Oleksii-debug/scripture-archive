@@ -66,3 +66,29 @@ test("P0 R0.4 recovers only after a fresh enabled link and true main landmark", 
   assert.equal(await probe(MAIN, LINK, seen), true);
   assert.deepEqual(seen, Array(18).fill("GET"));
 });
+
+
+test("P0 R0.4 refuses a route whose ARIA role changes the link into a button or checkbox", async () => {
+  for (const role of ["button", "checkbox", "presentation", "navigation", "&#108;ink"]) {
+    const seen = [];
+    const link = '<a href="/community" data-route="community" role="' + role + '">Community</a>';
+    assert.equal(await probe(MAIN, link, seen), false, role);
+    assert.deepEqual(seen, Array(6).fill("GET"), "no mutation or dispatch");
+  }
+});
+
+test("P0 R0.4 accepts an explicit canonical link role and the native link role", async () => {
+  assert.equal(await probe(MAIN, LINK), true);
+  assert.equal(await probe(MAIN,
+    '<a href="/community" data-route="community" role="link">Community</a>'), true);
+  assert.equal(await probe(MAIN,
+    '<a href="/community" data-route="community" role=" LINK ">Community</a>'), true);
+});
+
+test("P0 R0.4 recovers after an incorrect route role is replaced", async () => {
+  const seen = [];
+  assert.equal(await probe(MAIN,
+    '<a href="/community" data-route="community" role="button">Community</a>', seen), false);
+  assert.equal(await probe(MAIN, LINK, seen), true);
+  assert.deepEqual(seen, Array(12).fill("GET"));
+});

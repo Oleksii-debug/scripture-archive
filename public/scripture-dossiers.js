@@ -174,14 +174,17 @@ export function validateDossierGraph(catalog) {
   const catalogs = LANGS.map(lang=>ownData(inventories,lang));
   // Sparse or oversized arrays must fail closed before Map construction;
   // Array#some skips holes and Map(books.map(...)) otherwise throws.
+  // Catalogue arrays may carry own/inherited method accessors in memory.
+  // Invoke native array algorithms directly: reading books.keys/some/map
+  // could execute arbitrary getters before the source/ARIA guard completes.
   if(catalogs.some(books=>books.length===0 || books.length>200 ||
-      Array.from(books.keys()).some(index=>!hasOwnData(books,index)) ||
-      books.some(book=>!book || typeof book!=='object' || Array.isArray(book) ||
+      Array.from(Array.prototype.keys.call(books)).some(index=>!hasOwnData(books,index)) ||
+      Array.prototype.some.call(books,book=>!book || typeof book!=='object' || Array.isArray(book) ||
       !['code','title','chapters'].every(key=>hasOwnData(book,key)) || !safeBookCode(book.code) ||
       !safeVisibleText(book.title) ||
       !Number.isSafeInteger(book.chapters) || book.chapters<1 || book.chapters>200) ||
-      new Set(books.map(book=>book.code)).size!==books.length)) return false;
-  const bookMaps = catalogs.map(books=>new Map(books.map(book=>[book.code,book.chapters])));
+      new Set(Array.prototype.map.call(books,book=>book.code)).size!==books.length)) return false;
+  const bookMaps = catalogs.map(books=>new Map(Array.prototype.map.call(books,book=>[book.code,book.chapters])));
   const validRef = source => source && safeBookCode(source.book) && Number.isSafeInteger(source.first) && source.first>0 && source.first<=256 &&
     Number.isSafeInteger(source.last) && source.last>=source.first && source.last<=256 &&
     Number.isSafeInteger(source.chapter) && source.chapter>0 && source.chapter<=200 &&
@@ -298,7 +301,7 @@ export function dossierMarkup(catalog,language,requestedId,esc,searchQuery='',co
     : (activeSearch?matches:nodes).find(item=>item.id===requestedId));
   const filteredId=activeSearch && !noMatch && !selected &&
     nodes.some(item=>item.id===requestedId);
-  const bookNames=new Map(catalog.books[lang].map(book=>[book.code,book.title]));
+  const bookNames=new Map(Array.prototype.map.call(ownData(ownData(catalog,'books'),lang),book=>[book.code,book.title]));
   const cite=source=>{
     const label=`${bookNames.get(source.book)} ${source.chapter}:${source.first}–${source.last}`;
     return `<a href="/reader/${source.book}/${source.chapter}?verse=${source.first}" aria-label="${esc(w.read)}: ${esc(label)} — ${esc(w[source.kind])}">${esc(label)}</a>`;
@@ -393,7 +396,7 @@ export function dossierAtlasMarkup(catalog,language,esc,query='') {
   const order=['abraham','sarah','joseph','moses','exodus','david','nativity'];
   const byId=new Map(nodes.map(item=>[item.id,item]));
   if(order.some(id=>!byId.has(id)))return '<p role="alert">'+esc(w.invalid)+'</p>';
-  const bookNames=new Map(catalog.books[lang].map(book=>[book.code,book.title]));
+  const bookNames=new Map(Array.prototype.map.call(ownData(ownData(catalog,'books'),lang),book=>[book.code,book.title]));
   const passage=source=>{
     const label=bookNames.get(source.book)+' '+source.chapter+':'+source.first+'–'+source.last;
     return '<a href="/reader/'+source.book+'/'+source.chapter+'?verse='+source.first+'" aria-label="'+esc(w.read)+': '+esc(label)+' — '+esc(w[source.kind])+'">'+esc(label)+'</a>';

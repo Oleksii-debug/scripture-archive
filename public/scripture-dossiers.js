@@ -31,7 +31,7 @@ const validDossierSearchQuery = value => typeof value === 'string' &&
   // JS trim() removes Zs spaces such as U+202F and U+3000; accepting them
   // would silently expose the unfiltered dossier/atlas source links.
   (/^[ \t]*$/u.test(value) ||
-    !/[\u0000-\u001f\u007f-\u009f\u00a0\u034f\u{e0100}-\u{e01ef}\u1680\u2000-\u200a\u202f\u205f\u3000\u061c\u115f\u1160\u200b-\u200f\u2028-\u202e\u2060-\u206f\u2800\u3164\ufeff\ud800-\udfff\uffa0\p{Cf}]/u.test(value));
+    !/[\u0000-\u001f\u007f-\u009f\u00a0\u034f\ufe00-\ufe0f\u{e0100}-\u{e01ef}\u1680\u2000-\u200a\u202f\u205f\u3000\u061c\u115f\u1160\u200b-\u200f\u2028-\u202e\u2060-\u206f\u2800\u3164\ufeff\ud800-\udfff\uffa0\p{Cf}]/u.test(value));
 // Publisher catalogue metadata must be owned data, not executable accessors.
 // Read each descriptor once; never invoke a getter merely to validate a source.
 const ownData=(record,key)=>{

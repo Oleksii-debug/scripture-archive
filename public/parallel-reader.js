@@ -1,7 +1,7 @@
 const COPY = {
-  uk: { title:'Порівняти видання', choose:'Друге видання', open:'Показати другу версію глави', loading:'Завантаження…', ready:'Другу версію глави завантажено нижче.', fail:'Не вдалося завантажити другу версію. Спробуйте ще раз.', changed:'Вибране видання змінилося. Натисніть кнопку ще раз, щоб порівняти його.', unavailable:'У цьому виданні такої глави немає.', note:'Нумерація віршів у виданнях може відрізнятися. Тексти наведено окремо.', source:'Джерело', license:'Умови використання', cite:'Цитувати вірш', cited:'Цитату з джерелом скопійовано.', citeFail:'Не вдалося скопіювати цитату.' },
-  ru: { title:'Сравнить издания', choose:'Второе издание', open:'Показать вторую версию главы', loading:'Загрузка…', ready:'Вторая версия главы загружена ниже.', fail:'Не удалось загрузить вторую версию. Попробуйте ещё раз.', changed:'Выбранное издание изменилось. Нажмите кнопку ещё раз, чтобы сравнить его.', unavailable:'В этом издании такой главы нет.', note:'Нумерация стихов в изданиях может отличаться. Тексты приведены отдельно.', source:'Источник', license:'Условия использования', cite:'Цитировать стих', cited:'Цитата с источником скопирована.', citeFail:'Не удалось скопировать цитату.' },
-  en: { title:'Compare editions', choose:'Second edition', open:'Show the second chapter text', loading:'Loading…', ready:'The second chapter text is available below.', fail:'Could not load the second text. Please try again.', changed:'The selected edition changed. Submit again to compare the current selection.', unavailable:'This chapter is not available in that edition.', note:'Verse numbering may differ between editions. The texts are presented separately.', source:'Source', license:'Terms of use', cite:'Cite verse', cited:'Verse and source copied.', citeFail:'Could not copy the citation.' },
+  uk: { title:'Порівняти видання', choose:'Друге видання', open:'Показати другу версію глави', none:'Немає доступних локальних видань для порівняння.', loading:'Завантаження…', ready:'Другу версію глави завантажено нижче.', fail:'Не вдалося завантажити другу версію. Спробуйте ще раз.', changed:'Вибране видання змінилося. Натисніть кнопку ще раз, щоб порівняти його.', unavailable:'У цьому виданні такої глави немає.', note:'Нумерація віршів у виданнях може відрізнятися. Тексти наведено окремо.', source:'Джерело', license:'Умови використання', cite:'Цитувати вірш', cited:'Цитату з джерелом скопійовано.', citeFail:'Не вдалося скопіювати цитату.' },
+  ru: { title:'Сравнить издания', choose:'Второе издание', open:'Показать вторую версию главы', none:'Нет доступных локальных изданий для сравнения.', loading:'Загрузка…', ready:'Вторая версия главы загружена ниже.', fail:'Не удалось загрузить вторую версию. Попробуйте ещё раз.', changed:'Выбранное издание изменилось. Нажмите кнопку ещё раз, чтобы сравнить его.', unavailable:'В этом издании такой главы нет.', note:'Нумерация стихов в изданиях может отличаться. Тексты приведены отдельно.', source:'Источник', license:'Условия использования', cite:'Цитировать стих', cited:'Цитата с источником скопирована.', citeFail:'Не удалось скопировать цитату.' },
+  en: { title:'Compare editions', choose:'Second edition', open:'Show the second chapter text', none:'No local editions are available for comparison.', loading:'Loading…', ready:'The second chapter text is available below.', fail:'Could not load the second text. Please try again.', changed:'The selected edition changed. Submit again to compare the current selection.', unavailable:'This chapter is not available in that edition.', note:'Verse numbering may differ between editions. The texts are presented separately.', source:'Source', license:'Terms of use', cite:'Cite verse', cited:'Verse and source copied.', citeFail:'Could not copy the citation.' },
 };
 // Provenance URL admission must inspect the *raw* string first: WHATWG URL
 // silently strips tabs/newlines and empty user-info delimiters; it also
@@ -127,13 +127,18 @@ export function parallelControls(editions, lang, esc) {
   const copy = copyForLocale(lang);
   const items=ownEditionItems(editions);
   const idCounts=editionIdCounts(items);
-  return `<details class="card parallel-reader"><summary>${copy.title}</summary><p>${copy.note}</p><form class="parallel-form"><label class="account-field"><span>${copy.choose}</span><select name="edition">${items.map(edition=>{
+  const options=items.map(edition=>{
     // Display only editions that the submit handler can actually admit.
     // Non-local and accessor-backed records are not usable second texts.
     const id=ownEditionData(edition,'id'), title=ownEditionData(edition,'title');
     return verifiedLocalEdition(edition,id) && idCounts.get(id)===1 && validEditionOptionTitle(title)
       ? `<option value="${esc(id)}">${esc(title)}</option>` : '';
-  }).join('')}</select></label><button class="button" type="submit">${copy.open}</button><p class="parallel-status" role="status"></p></form><div class="parallel-result"></div></details>`;
+  }).join('');
+  // Imported manifests can contain entries but no admissible local editions.
+  // Do not expose a keyboard dead-end: announce the absence of a comparison
+  // and disable controls until the parent reader renders a usable list.
+  const unavailable=!options;
+  return `<details class="card parallel-reader"><summary>${copy.title}</summary><p>${copy.note}</p><form class="parallel-form"><label class="account-field"><span>${copy.choose}</span><select name="edition"${unavailable?' disabled':''}>${options}</select></label><button class="button" type="submit"${unavailable?' disabled':''}>${copy.open}</button><p class="parallel-status" role="status">${unavailable?copy.none:''}</p></form><div class="parallel-result"></div></details>`;
 }
 
 // The same chapter guard as the reader runs again before loading another text.

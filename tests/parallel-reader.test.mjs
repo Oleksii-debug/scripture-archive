@@ -578,3 +578,51 @@ test('comparison selector does not execute local accessors or inherit local auth
   assert.match(html,/value="real-local"/);
   assert.doesNotMatch(html,/dynamic-local|inherited-local|Dynamic edition|Inherited edition/);
 });
+
+
+test('empty parallel edition choices disable native controls with a localized live status',()=>{
+  for (const [lang,notice] of [
+    ['uk','Немає доступних локальних видань'],
+    ['ru','Нет доступных локальных изданий'],
+    ['en','No local editions are available'],
+  ]) {
+    const html=parallelControls([],lang,esc);
+    assert.match(html,/<select name="edition" disabled><\/select>/);
+    assert.match(html,/<button class="button" type="submit" disabled>/);
+    assert.match(html,/<p class="parallel-status" role="status">/);
+    assert.ok(html.includes(notice), 'localized status is readable without submitting');
+    assert.doesNotMatch(html,/<option /);
+  }
+});
+
+test('unusable imported editions never leave an enabled empty comparison form',()=>{
+  const invalid=[
+    {id:'remote',title:'Remote',local:false},
+    {id:'missing',title:'Missing local flag'},
+    {id:'duplicated',title:'First',local:true},
+    {id:'duplicated',title:'Second',local:true},
+  ];
+  const html=parallelControls(invalid,'en',esc);
+  assert.match(html,/<select name="edition" disabled>/);
+  assert.match(html,/<button class="button" type="submit" disabled>/);
+  assert.match(html,/No local editions are available for comparison/);
+  assert.doesNotMatch(html,/<option /);
+});
+
+test('a valid local edition retains enabled comparison controls and an empty live status',()=>{
+  const html=parallelControls([{id:'local',title:'Local',local:true}],'en',esc);
+  assert.match(html,/<select name="edition"><option value="local">Local<\/option><\/select>/);
+  assert.match(html,/<button class="button" type="submit">/);
+  assert.match(html,/<p class="parallel-status" role="status"><\/p>/);
+  assert.doesNotMatch(html,/type="submit" disabled|No local editions are available/);
+});
+
+test('empty-state rendering does not invoke imported edition getters',()=>{
+  let invoked=0;
+  const unsafe={id:'accessor',title:'Getter title',local:true};
+  Object.defineProperty(unsafe,'id',{get(){invoked++;return 'accessor';}});
+  const html=parallelControls([unsafe],'uk',esc);
+  assert.equal(invoked,0);
+  assert.match(html,/<select name="edition" disabled>/);
+  assert.match(html,/Немає доступних локальних видань/);
+});

@@ -41,7 +41,8 @@ test('SA-EXT-01: duplicate publisher IDs never create misleading comparison opti
       const html=parallelControls(records,lang,esc);
       assert.doesNotMatch(html,/value="edition-a"/,'ambiguous edition ID cannot be selected');
       assert.doesNotMatch(html,/First local edition|Conflicting edition/);
-      assert.match(html,/<select name="edition">/);
+      assert.match(html,/<select name="edition" disabled>/);
+    assert.match(html,/<button class="button" type="submit" disabled>/);
     }
   }
 });

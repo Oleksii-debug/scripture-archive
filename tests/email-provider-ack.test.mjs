@@ -194,9 +194,9 @@ test("P0 R0.2: normalized-away security-link syntax cannot carry one-time tokens
     );
   }
   assert.equal(h.calls.length, 0, "no provider request for rejected token-bearing links");
-  // Recovery and legitimate encoded query parameters remain operational.
+  // Recovery and legitimate base64url query parameters remain operational.
   for (const [purpose, link] of [
-    ["reset", "https://scripture-archive.com/account?reset=valid%2Ftoken"],
+    ["reset", "https://scripture-archive.com/account?reset=valid_token"],
     ["verify", "https://scripture-archive.com/api/auth?action=verify&token=valid"],
   ]) {
     assert.equal((await h.email.sendSecurityEmail("person@example.invalid", "uk", purpose, link)).delivered, true);
@@ -230,8 +230,8 @@ test("P0 R0.2: one-time email links must match their declared purpose and exact 
   assert.equal(h.calls.length, 0, "no provider request may contain an invalid token route");
   // Recovery: valid production verify/reset routes still deliver after refusals.
   for (const [purpose, link] of [
-    ["verify", "https://scripture-archive.com/api/auth?action=verify&token=valid%2Ftoken"],
-    ["reset", "https://scripture-archive.com/account?reset=valid%2Ftoken"],
+    ["verify", "https://scripture-archive.com/api/auth?action=verify&token=valid_token"],
+    ["reset", "https://scripture-archive.com/account?reset=valid_token"],
   ]) {
     assert.deepEqual(await h.email.sendSecurityEmail("person@example.invalid", "en", purpose, link),
       { delivered: true });
@@ -260,13 +260,52 @@ test("P0 R0.2: decoded invisible or control-only security tokens cannot be sent"
       "refuse decoded control/whitespace token: " + url);
   }
   assert.equal(h.calls.length, 0, "invalid tokens must never reach provider");
-  // Recovery: encoded printable tokens and the real base64url alphabet still work.
+  // Recovery: exact base64url tokens still work.
   for (const [purpose, url] of [
-    ["verify", "https://scripture-archive.com/api/auth?action=verify&token=valid%2Ftoken"],
+    ["verify", "https://scripture-archive.com/api/auth?action=verify&token=valid_token"],
     ["reset", "https://scripture-archive.com/account?reset=abc_DEF-012"],
   ]) {
     assert.deepEqual(await h.email.sendSecurityEmail("person@example.invalid", "en", purpose, url),
       { delivered: true });
   }
   assert.equal(h.calls.length, 2);
+});
+
+test("P0 R0.2: security email rejects tokens the verification/reset receiver cannot consume", async () => {
+  // Both auth endpoints accept only 1..200 base64url bytes. The older sender
+  // accepted printable punctuation, so a provider could accept a broken link.
+  // This is a local mocked-provider contract test, not a delivery claim.
+  const h = harness(accepted({ id: "provider-accepted" }));
+  const badTokens = [
+    "abc%2Fdef", "abc%2Bdef", "abc%3D", "abc%3Fdef",
+    "abc%26def", "abc.def", "abc%3Adef", "abc%25def",
+    "abc%5Cdef", "abc%7Edef", "x".repeat(201),
+  ];
+  for (const purpose of ["verify", "reset"]) {
+    for (const token of badTokens) {
+      const link = purpose === "verify"
+        ? "https://scripture-archive.com/api/auth?action=verify&token=" + token
+        : "https://scripture-archive.com/account?reset=" + token;
+      assert.deepEqual(await h.email.sendSecurityEmail(
+        "person@example.invalid", "en", purpose, link
+      ), { delivered: false, reason: "security_link_origin_unverified" },
+      "receiver-incompatible token: " + purpose + " " + token);
+    }
+  }
+  assert.equal(h.calls.length, 0, "no unusable token reaches the provider");
+
+  // Recovery: a rejected link does not poison subsequent valid delivery.
+  // Percent-encoded underscore decodes to a byte the receiver accepts.
+  for (const [purpose, token] of [
+    ["verify", "abc_DEF-012"], ["reset", "abc%5FDEF-012"],
+    ["verify", "x".repeat(200)], ["reset", "A"],
+  ]) {
+    const link = purpose === "verify"
+      ? "https://scripture-archive.com/api/auth?action=verify&token=" + token
+      : "https://scripture-archive.com/account?reset=" + token;
+    assert.deepEqual(await h.email.sendSecurityEmail(
+      "person@example.invalid", "uk", purpose, link
+    ), { delivered: true });
+  }
+  assert.equal(h.calls.length, 4);
 });

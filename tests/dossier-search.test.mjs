@@ -485,3 +485,40 @@ test('SA-EXT-01/05: catalogue envelope accessors are never invoked during dossie
     assert.equal(invoked,0,field+' must never execute an accessor');
   }
 });
+
+
+test('SA-EXT-01/05: dossier and atlas reject editions the reader rights gate refuses',()=>{
+  assert.equal(validateDossierGraph(catalog),true,'canonical publisher metadata remains admissible');
+  const cases=[
+    ['missing license',edition=>{delete edition.license;}],
+    ['blank license',edition=>{edition.license='  ';}],
+    ['insecure source',edition=>{edition.source='http://example.org/edition';}],
+    ['credential-bearing source',edition=>{edition.source='https://user@example.org/edition';}],
+    ['invisible title',edition=>{edition.title='Edition\u200b';}],
+    ['oversized title',edition=>{edition.title='E'.repeat(513);}],
+    ['whitespace edition identity',edition=>{edition.id='EDITION ID';}],
+    ['accessor-backed license',edition=>{
+      Object.defineProperty(edition,'license',{
+        configurable:true,enumerable:true,get(){throw Error('untrusted license getter');}
+      });
+    }]
+  ];
+  for(const lang of ['uk','ru','en']){
+    for(const [label,damage] of cases){
+      const damaged=structuredClone(catalog);
+      damage(damaged.editions[lang]);
+      const context=lang+' / '+label;
+      assert.doesNotThrow(()=>validateDossierGraph(damaged),context);
+      assert.equal(validateDossierGraph(damaged),false,context);
+      for(const html of [
+        dossierMarkup(damaged,lang,'abraham',esc),
+        dossierAtlasMarkup(damaged,lang,esc)
+      ]){
+        assert.match(html,/role="alert"/,context);
+        assert.ok(!html.includes('href="/reader/'),context+' must not issue a source link');
+      }
+    }
+  }
+  assert.match(dossierMarkup(catalog,'en','abraham',esc),/href="\/reader\/GEN\/12\?verse=1"/);
+  assert.match(dossierAtlasMarkup(catalog,'en',esc),/href="\/reader\//);
+});

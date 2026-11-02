@@ -174,15 +174,15 @@ test('SA-EXT-05/06: oversized publisher book titles cannot flood reader and NVDA
       for(const html of [dossierMarkup(damaged,lang,null,esc),
         dossierAtlasMarkup(damaged,lang,esc)]){
         assert.match(html,/role="alert"/,'oversized source label must be announced');
-        assert.doesNotMatch(html,/href="\\/reader\\//,'no oversized reader or ARIA source links');
+        assert.ok(!html.includes('href="/reader/'),'no oversized reader or ARIA source links');
         assert.ok(html.length<1000,'rejected label must not be echoed');
       }
     }
     const boundary=structuredClone(catalog);
     boundary.books[lang][0].title='T'.repeat(120);
     assert.equal(validateDossierGraph(boundary),true,'bounded nonambiguous title accepted');
-    assert.match(dossierMarkup(boundary,lang,null,esc),/href="\\/reader\\//);
-    assert.match(dossierAtlasMarkup(boundary,lang,esc),/href="\\/reader\\//);
+    assert.ok(dossierMarkup(boundary,lang,null,esc).includes('href="/reader/'));
+    assert.ok(dossierAtlasMarkup(boundary,lang,esc).includes('href="/reader/'));
   }
   assert.equal(validateDossierGraph(catalog),true,'canonical localized book titles preserved');
 });

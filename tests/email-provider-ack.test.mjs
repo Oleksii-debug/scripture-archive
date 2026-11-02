@@ -175,3 +175,36 @@ test("P0 R0.2: normalized-away security-link syntax cannot carry one-time tokens
   assert.deepEqual(h.calls.map(call => JSON.parse(call.options.body).to),
     [["person@example.invalid"], ["person@example.invalid"]]);
 });
+
+
+test("P0 R0.2: one-time email links must match their declared purpose and exact endpoint", async () => {
+  const h = harness(accepted({ id: "provider-accepted" }));
+  const invalid = [
+    ["verify", "https://scripture-archive.com/account?reset=token"],
+    ["reset", "https://scripture-archive.com/api/auth?action=verify&token=token"],
+    ["verify", "https://scripture-archive.com/account?verify=token"],
+    ["reset", "https://scripture-archive.com/account?reset="],
+    ["verify", "https://scripture-archive.com/api/auth?action=verify"],
+    ["verify", "https://scripture-archive.com/api/auth?action=reset&token=token"],
+    ["verify", "https://scripture-archive.com/api/auth?action=verify&token=one&token=two"],
+    ["reset", "https://scripture-archive.com/account?reset=one&reset=two"],
+    ["reset", "https://scripture-archive.com/account?reset=token&next=https%3A%2F%2Fother.invalid"],
+    ["verify", "https://scripture-archive.com/api/auth?action=verify&token=token&next=%2Fcommunity"],
+    ["reset", "https://scripture-archive.com/other?reset=token"],
+  ];
+  for (const [purpose, link] of invalid) {
+    assert.deepEqual(await h.email.sendSecurityEmail("person@example.invalid", "uk", purpose, link),
+      { delivered: false, reason: "security_link_origin_unverified" },
+      "refuse mismatched token endpoint: " + purpose + " " + link);
+  }
+  assert.equal(h.calls.length, 0, "no provider request may contain an invalid token route");
+  // Recovery: valid production verify/reset routes still deliver after refusals.
+  for (const [purpose, link] of [
+    ["verify", "https://scripture-archive.com/api/auth?action=verify&token=valid%2Ftoken"],
+    ["reset", "https://scripture-archive.com/account?reset=valid%2Ftoken"],
+  ]) {
+    assert.deepEqual(await h.email.sendSecurityEmail("person@example.invalid", "en", purpose, link),
+      { delivered: true });
+  }
+  assert.equal(h.calls.length, 2);
+});

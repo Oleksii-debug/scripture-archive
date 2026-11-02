@@ -329,6 +329,11 @@ export async function POST(request: Request) {
   }
 
   if (action === "change-password") {
+    // A credential mutation must not select the first of multiple action
+    // parameters or silently accept unrelated query keys. Reject before
+    // authentication, password hashing or any D1 credential/session write.
+    if (actionQuery.size !== 1 || actionQuery.getAll("action").length !== 1)
+      return json({ error: "invalid_password_change" }, 400);
     try {
     const identity = await authenticateRequest(request);
     if (!identity || identity.provider !== "password") return json({ error: "authentication_required" }, 401);

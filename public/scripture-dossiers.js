@@ -143,10 +143,10 @@ export function validateDossierGraph(catalog) {
   // HTML escaping does not remove invisible/bidi text or lone surrogates;
   // reject ambiguous source metadata before emitting reader links/ARIA names.
   // Include Unicode format controls, non-ASCII Unicode space separators,
-  // and visually empty script fillers. Canonical dossier labels and reader
+  // visually empty script fillers and orphan variation selectors (Mn). Canonical dossier labels and reader
   // links must not conceal source claims.
   const safeVisibleText = value => typeof value === 'string' && value.trim().length > 0 &&
-    !/[\u0000-\u001f\u007f-\u009f\u00a0\u061c\u1680\u2000-\u200f\u2028-\u202f\u205f\u2060-\u206f\u3000\ufeff\ud800-\udfff\u034f\u115f\u1160\u2800\u3164\uffa0\p{Cf}]/u.test(value);
+    !/[\u0000-\u001f\u007f-\u009f\u00a0\u061c\u1680\u2000-\u200f\u2028-\u202f\u205f\u2060-\u206f\u3000\ufe00-\ufe0f\ufeff\ud800-\udfff\u034f\u115f\u1160\u2800\u3164\uffa0\p{Cf}]/u.test(value);
   const nonblank = safeVisibleText;
   // Bound publisher-supplied book titles before repeating them in source
   // links and ARIA labels; escaping alone cannot prevent huge accessible names.

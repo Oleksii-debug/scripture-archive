@@ -426,3 +426,62 @@ test('SA-EXT-05: malformed typed q cannot silently open unrelated dossier eviden
     assert.match(dossierMarkup(catalog,lang,null,esc,'A'.repeat(121)),/role="alert"/);
   }
 });
+
+test('SA-EXT-01/05: dossier links reject catalogues the primary reader cannot admit',()=>{
+  const alternateKey=Object.keys(catalog.editionBooks)[0];
+  assert.ok(alternateKey,'real alternate edition fixture');
+  const cases=[
+    ['schema version',c=>{c.schemaVersion=2;}],
+    ['missing publisher edition',c=>{delete c.editions.en;}],
+    ['blank publisher edition id',c=>{c.editions.en.id='  ';}],
+    ['partial primary inventory',c=>{c.books.en.splice(30,1);}],
+    ['reordered localized inventory',c=>{[c.books.ru[30],c.books.ru[31]]=[c.books.ru[31],c.books.ru[30]];}],
+    ['wrong testament',c=>{c.books.uk[0].testament='NT';}],
+    ['partial alternate edition',c=>{c.editionBooks[alternateKey].splice(30,1);}],
+    ['reordered alternate edition',c=>{
+      const books=c.editionBooks[alternateKey];
+      [books[30],books[31]]=[books[31],books[30]];
+    }],
+    ['inherited alternate edition',c=>{
+      Object.setPrototypeOf(c.editionBooks,{shadow:[]});
+    }],
+  ];
+  for(const [name,mutate] of cases){
+    const damaged=structuredClone(catalog);
+    mutate(damaged);
+    assert.equal(validateDossierGraph(damaged),false,name);
+    for(const lang of ['uk','ru','en']){
+      for(const html of [dossierMarkup(damaged,lang,null,esc),
+        dossierAtlasMarkup(damaged,lang,esc)]){
+        assert.match(html,/role="alert"/,name+' '+lang+' must announce rejection');
+        assert.doesNotMatch(html,/href="\\/reader\\//,name+' '+lang+' must not link an unavailable reader');
+      }
+    }
+  }
+  assert.equal(validateDossierGraph(catalog),true,'published primary and alternate inventories remain valid');
+  const withoutOptional=structuredClone(catalog);
+  delete withoutOptional.editionBooks;
+  assert.equal(validateDossierGraph(withoutOptional),true,'reader permits absent optional editions');
+  for(const lang of ['uk','ru','en']){
+    assert.match(dossierMarkup(catalog,lang,null,esc),/href="\\/reader\\//);
+    assert.match(dossierAtlasMarkup(catalog,lang,esc),/href="\\/reader\\//);
+  }
+});
+
+test('SA-EXT-01/05: catalogue envelope accessors are never invoked during dossier source checks',()=>{
+  for(const field of ['edition id','optional edition map','schema version']){
+    const damaged=structuredClone(catalog);
+    let invoked=0;
+    const getter=()=>{invoked++;throw Error('untrusted catalogue accessor');};
+    if(field==='edition id')Object.defineProperty(damaged.editions.en,'id',{get:getter,enumerable:true});
+    if(field==='optional edition map')Object.defineProperty(damaged,'editionBooks',{get:getter,enumerable:true});
+    if(field==='schema version')Object.defineProperty(damaged,'schemaVersion',{get:getter,enumerable:true});
+    assert.doesNotThrow(()=>validateDossierGraph(damaged),field);
+    assert.equal(validateDossierGraph(damaged),false,field);
+    for(const lang of ['uk','ru','en']){
+      assert.match(dossierMarkup(damaged,lang,null,esc),/role="alert"/);
+      assert.match(dossierAtlasMarkup(damaged,lang,esc),/role="alert"/);
+    }
+    assert.equal(invoked,0,field+' must never execute an accessor');
+  }
+});

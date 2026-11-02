@@ -21,3 +21,11 @@
 `remaining_scoped_implementation=0` and `necessary_unmerged_scoped_PRs=0` **only for PARALLEL_SILENT_CITATION_SELECTION**. Parent SA-EXT-01/02/05/06/07 **OPEN**; SA-EXT-03/04 source-terminal by current owner order. Existing conflicted draft #325 was not modified or merged. Continue with other unclosed approved UI/API/DB requirements and independent end-to-end acceptance.
 
 No 82-language expansion, release publication, production migration, payments, synthetic users, bulk mail or dating product was launched.
+
+## Additional rejected-guard recovery closure (same scoped feature)
+
+A negative review found a second route through the same stale-citation defect: if the asynchronous citation chapter guard **rejects** while the selected edition has changed without an event, the earlier error handler returned without retiring the old verse DOM. The existing guard error branch now retires the stale text and announces the publisher change; a genuine guard outage for an unchanged edition still invokes fail-closed. Two new regression groups exercise the changed edition in uk/ru/en and unchanged-edition outage.
+
+- [PR #1191](https://github.com/Oleksii-debug/scripture-archive/pull/1191) **SQUASH MERGED** `main@603b186c2ead1231343fd30dfc8c57fa3115ca36`.
+- [Exact-head CI #41390591726](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41390591726) **COMPLETED SUCCESS**: 4404 Node PASS / 1 SKIP / 0 FAIL; 37/37 disposable Worker/D1 PASS; 2/2 Python PASS; TypeScript/lint/build PASS (13 lint warnings, 0 errors).
+- Same scope and remaining parent obligations as above. No new production, publisher rights or physical NVDA acceptance.

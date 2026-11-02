@@ -14,7 +14,7 @@ The accepted selector already excludes non-local, duplicate-ID and getter/inheri
 - Final exact-head [CI #41409817655](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41409817655) **COMPLETED SUCCESS**: 4424 native Node PASS / 0 FAIL / 1 SKIP; 37/37 disposable Worker/D1 PASS; 2/2 Python PASS; TypeScript, lint and build PASS (ESLint 0 errors, 13 warnings).
 - Added four groups of regression checks for three localized empty states, all-invalid/duplicate manifest, normal valid local edition, and non-execution of an imported getter. Three legacy regression fixtures were updated without weakening the security guard.
 - Merged main source blob: `public/parallel-reader.js@add67f41efa431cb836202b575928e8959a31c27`; regression blobs: `tests/parallel-reader.test.mjs@96395e35698ae5218055b26e6b6c5b04c4458831`, `tests/parallel-reader-duplicate-identity.test.mjs@d56d8a11ba2c5cddd12d1fbe38077046a145a424`, `tests/parallel-reader-edition-array-slots.test.mjs@ed86887c281d4b104ccaf39a25c68675ffc190f3`, `tests/parallel-reader-edition-descriptors.test.mjs@c31603289c7c09268d7fb6879517857b22afae07`.
-- Post-merge source-quality run [#41410054896](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41410054896): **PENDING verification when this document was drafted**; do not infer PASS until confirmed.
+- Post-merge main [CI #41410054896](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41410054896) **COMPLETED SUCCESS** at exact merged code SHA `7dbe033245727bbc8b776d8aa37ec73c52bd1c9e`: 4424 native Node PASS / 0 FAIL / 1 SKIP; 37/37 disposable Worker/D1 PASS; 2/2 Python PASS; TypeScript, lint and build PASS (0 lint errors, 13 warnings).
 
 ## Closure boundary and remaining work
 

@@ -1,3 +1,13 @@
+## 2026-11-02 — SA-EXT-07 / ACADEMY_RESET_WEBLOCK_SINGLE_FLIGHT — scoped source terminal
+
+**Тільки одноразовість підтвердженого очищення локальних позначок Академії під Web Lock завершено; SA-EXT-07 parent НЕ закрито.** `resetPending` у чинному обробнику не дозволяє повторній активації поставити друге видалення в чергу; guard звільняється після успіху/відмови. Збережено account scope, confirmation, readback, stale-view та keyboard/NVDA focus behavior. Два нові регресійні тести, без нового API/DB/сервісу.
+
+[PR #1242](https://github.com/Oleksii-debug/scripture-archive/pull/1242) **SQUASH MERGED** `main@6e010d8db2c388126ef8e60621d745cbc483c1d9`, exact head `e4f080909f7eac13b7e24539e2f89b4492ca71b8`; [exact-head CI #41539838856](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41539838856) **SUCCESS**: 4539 Node PASS / 1 SKIP / 0 FAIL, 37/37 disposable Worker/D1 PASS, 2/2 Python PASS, TS/lint/build PASS (13 lint warnings). [Акт](SA_EXT_07_ACADEMY_RESET_WEBLOCK_SINGLE_FLIGHT_SCOPED_TERMINAL_20261102.md).
+
+`remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` **лише тут**. SA-EXT-01/02/05/06/07 **OPEN**, 03/04 source-terminal. Права/редакція, повні курси/медіа, фізичний Windows/NVDA, live Sites/D1/backup/release **NOT_VERIFIED**. Нічого забороненого не запускалося.
+
+---
+
 ## 2026-11-02 — SA-EXT-06 / ATLAS_EMPTY_SEARCH_RECOVERY — scoped source terminal
 
 **Лише порожній фільтр текстового атласу виправлено; батьківський SA-EXT-06 НЕ закрито.** Замість хибного заголовка «Каталог досьє» атлас показує власний локалізований заголовок і доступне посилання «Очистити пошук» на чинний `/dossiers`; чужі джерельні посилання при нульових результатах не створюються. Збережено uk/ru/en, позитивні фільтри та відмову для пошкодженого каталогу/Unicode.

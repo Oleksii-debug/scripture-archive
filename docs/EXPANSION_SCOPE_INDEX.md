@@ -1,3 +1,9 @@
+## 2026-11-02 — SA-EXT-05/06 / VISIBLE_BOOK_TITLE_IDENTITY — scoped terminal
+
+**Закрито тільки захист видимих назв біблійних книг від колізій у досьє/атласі, НЕ батьківські розділи.** [Код і тести PR #1209](https://github.com/Oleksii-debug/scripture-archive/pull/1209) **MERGED** `main@677d7b554b14963219a0db73a35d0d080b6b65f7`; [exact-head CI #41431911488](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41431911488) **SUCCESS**: 4429 Node PASS / 1 SKIP / 0 FAIL, 37 Worker/D1 PASS, 2 Python PASS, TS/lint/build PASS. Дев'ять негативних exact/case/NFC колізій uk/ru/en, `role="alert"`, без оманливих reader links, позитивне відновлення. [Акт](roadmap/SA_EXT_05_06_VISIBLE_BOOK_TITLE_IDENTITY_SCOPED_TERMINAL_20261102.md). `remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` лише тут; **SA-EXT-01/02/05/06/07 parent OPEN, 03/04 source-terminal**. Rights/editorial, фізичний Windows/Chrome/NVDA, Sites/D1/backup/release NOT_VERIFIED. Без production, 82 мов, платежів, synthetic users, масової пошти чи dating.
+
+---
+
 ## 2026-11-02 — SA-EXT-05/06 / DOSSIER_ARRAY_METHOD_ACCESSORS — scoped source terminal
 
 **Лише захист від getter-backed `keys/some/map` масивів каталогу, НЕ батьківські SA-EXT-05/06.** [Код/18 регресій PR #1206](https://github.com/Oleksii-debug/scripture-archive/pull/1206) **SQUASH MERGED** `main@14d4f3ae2e4a929d5fd93989292aae678168b57b`; [CI #41423525121](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41423525121) **SUCCESS**: 4427 Node PASS, 1 SKIP, 37 Worker/D1, 2 Python, TS/lint/build. [Акт](roadmap/SA_EXT_05_06_DOSSIER_ARRAY_METHOD_ACCESSORS_SCOPED_TERMINAL_20261102.md). `remaining_scoped_implementation=0` тільки тут; SA-EXT-01/02/05/06/07 OPEN, 03/04 source-terminal. Права/редакція, реальний браузер/NVDA, live Sites/D1/release NOT_VERIFIED; без заборонених запусків.

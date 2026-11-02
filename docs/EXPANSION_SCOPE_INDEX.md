@@ -1,3 +1,9 @@
+## 2026-11-02 — SA-EXT-05/06 / DOSSIER_ARRAY_METHOD_ACCESSORS — scoped source terminal
+
+**Лише захист від getter-backed `keys/some/map` масивів каталогу, НЕ батьківські SA-EXT-05/06.** [Код/18 регресій PR #1206](https://github.com/Oleksii-debug/scripture-archive/pull/1206) **SQUASH MERGED** `main@14d4f3ae2e4a929d5fd93989292aae678168b57b`; [CI #41423525121](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41423525121) **SUCCESS**: 4427 Node PASS, 1 SKIP, 37 Worker/D1, 2 Python, TS/lint/build. [Акт](roadmap/SA_EXT_05_06_DOSSIER_ARRAY_METHOD_ACCESSORS_SCOPED_TERMINAL_20261102.md). `remaining_scoped_implementation=0` тільки тут; SA-EXT-01/02/05/06/07 OPEN, 03/04 source-terminal. Права/редакція, реальний браузер/NVDA, live Sites/D1/release NOT_VERIFIED; без заборонених запусків.
+
+---
+
 ## 2026-11-02 — SA-EXT-05/06 / DOSSIER_SOURCE_LABEL_UNICODE_ZS — scoped source terminal
 
 **Закрито тільки захист видавничих назв книг від неоднозначних Unicode Zs пробілів у спільному досьє/атласі, НЕ батьківські SA-EXT-05/06.** Раніше канонічний GET-пошук відхиляв 15 non-ASCII Zs separators, але `validateDossierGraph` допускав їх у назвах біблійних книг, які потрапляють до видимих посилань і доступних ARIA-підписів. Тепер ті самі 15 символів відхиляються до формування джерельних посилань, без нової бази чи сервісу. Регресія: 15 Unicode кодів × uk/ru/en, обидва чинні UI (досьє й текстовий атлас), `role="alert"`, жодного `/reader/` посилання при пошкодженому каталозі; нормальний каталог збережено.

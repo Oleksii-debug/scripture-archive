@@ -128,8 +128,10 @@ export function parallelControls(editions, lang, esc) {
   const items=ownEditionItems(editions);
   const idCounts=editionIdCounts(items);
   return `<details class="card parallel-reader"><summary>${copy.title}</summary><p>${copy.note}</p><form class="parallel-form"><label class="account-field"><span>${copy.choose}</span><select name="edition">${items.map(edition=>{
+    // Display only editions that the submit handler can actually admit.
+    // Non-local and accessor-backed records are not usable second texts.
     const id=ownEditionData(edition,'id'), title=ownEditionData(edition,'title');
-    return validEditionId(id) && idCounts.get(id)===1 && validEditionOptionTitle(title)
+    return verifiedLocalEdition(edition,id) && idCounts.get(id)===1 && validEditionOptionTitle(title)
       ? `<option value="${esc(id)}">${esc(title)}</option>` : '';
   }).join('')}</select></label><button class="button" type="submit">${copy.open}</button><p class="parallel-status" role="status"></p></form><div class="parallel-result"></div></details>`;
 }

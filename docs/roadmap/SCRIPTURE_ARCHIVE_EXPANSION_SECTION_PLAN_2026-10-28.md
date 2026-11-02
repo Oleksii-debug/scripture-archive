@@ -1,3 +1,13 @@
+## 2026-11-02 — SA-EXT-06 / ATLAS_EMPTY_SEARCH_RECOVERY — scoped source terminal
+
+**Лише порожній фільтр текстового атласу виправлено; батьківський SA-EXT-06 НЕ закрито.** Замість хибного заголовка «Каталог досьє» атлас показує власний локалізований заголовок і доступне посилання «Очистити пошук» на чинний `/dossiers`; чужі джерельні посилання при нульових результатах не створюються. Збережено uk/ru/en, позитивні фільтри та відмову для пошкодженого каталогу/Unicode.
+
+[PR #1239](https://github.com/Oleksii-debug/scripture-archive/pull/1239) **SQUASH MERGED** `main@5ef2e8c65c5a1f82bbaf1fa51878891829514ac6`; exact head `b1dec0c4472024af7c30eee465864ec8a6309930`. [CI #41531517417](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41531517417) **SUCCESS**: 4531 Node PASS / 1 SKIP, 37 Worker/D1 PASS, 2 Python PASS, TS/lint/build PASS. Test-only CI **CANCELLED**, не RED. [Акт](SA_EXT_06_ATLAS_EMPTY_SEARCH_RECOVERY_SCOPED_TERMINAL_20261102.md).
+
+`remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` **тільки для ATLAS_EMPTY_SEARCH_RECOVERY**. SA-EXT-01/02/05/06/07 **OPEN**, 03/04 source-terminal. Незалежні права/редакція, фізичний NVDA/Windows/Chrome, live Sites/D1/backup/release **NOT_VERIFIED**. Production, 82 мови, платежі, synthetic users, масова пошта та dating не запускалися.
+
+---
+
 ## 2026-11-02 — SA-EXT-07 / ACADEMY_LESSON_WEBLOCK_SINGLE_FLIGHT — scoped source terminal
 
 **Завершено лише захист від повторного натискання кнопки заняття Академії під час очікування Web Lock, НЕ весь SA-EXT-07.** Подвійна активація могла поставити дві операції в чергу й одразу скасувати першу позначку. Тепер чинний обробник має per-button single-flight, тимчасово вимикає кнопку, відновлює її після успіху/відмови, повертає клавіатурний фокус лише для актуального екрана без перехоплення фокусу. [RED CI #41522496510](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41522496510): 4522 Node PASS / 1 очікуваний FAIL / 1 SKIP. [PR #1236](https://github.com/Oleksii-debug/scripture-archive/pull/1236) **SQUASH MERGED** `main@533a17a19120c9e2802cd426d94f7e481fe21738`; [exact-head green CI #41522807785](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41522807785): 4523 Node PASS / 1 SKIP / 0 FAIL, 37/37 disposable Worker/D1 PASS, 2/2 Python PASS, TS/lint/build PASS (13 warnings, 0 errors). [Акт](SA_EXT_07_ACADEMY_LESSON_WEBLOCK_SINGLE_FLIGHT_SCOPED_TERMINAL_20261102.md).

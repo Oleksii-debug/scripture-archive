@@ -1,3 +1,13 @@
+## 2026-11-02 — SA-EXT-07 / ACADEMY_PERSISTED_ENVELOPE_INTEGRITY — scoped source terminal
+
+**Закрито лише точну схему локального запису позначок Академії, НЕ весь SA-EXT-07.** Раніше `readAcademyProgress` приймав JSON із зайвими полями `accountId/accessToken/updatedAt/__proto__/format` як перевірений прогрес; тепер дозволено тільки власні `completed,version`, як у чинному writer. Пошкоджені байти не переписуються; приватні позначки не відображаються, доступний `role="alert"` uk/ru/en, публічні біблійні посилання збережено. Інший principal і коректні guest/account записи працюють.
+
+[PR #1230](https://github.com/Oleksii-debug/scripture-archive/pull/1230) **SQUASH MERGED** `main@97180ce88535800cae36870a74bbdbe36a7ff8c3`, qualified head `29b25df110794a821ae39eba2cdea90f4e1d8d9b`; [exact-head CI #41503945400](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41503945400) **SUCCESS**: 4506 native Node PASS / 1 SKIP / 0 FAIL; 37/37 disposable Worker/D1 PASS; 2/2 Python PASS; TS/lint/build PASS. Test-only CI #41503907856 **CANCELLED**, не заявлено RED. [Акт](docs/roadmap/SA_EXT_07_ACADEMY_PERSISTED_ENVELOPE_SCOPED_TERMINAL_20261102.md).
+
+`remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` **лише для цього дефекту**. **SA-EXT-01/02/05/06/07 parent OPEN; 03/04 source-terminal.** Ширші курси/медіа, права/редакція, реальний Chrome/Windows/NVDA, live Sites/D1/backup/release **NOT_VERIFIED**. Без production, 82 мов, платежів, synthetic users, масової пошти, dating чи секретів.
+
+---
+
 ## 2026-11-02 — SA-EXT-05 / BMP_VARIATION_SELECTOR_GET_ADMISSION — scoped source terminal
 
 **Закрито тільки відмову для невидимих BMP variation selectors U+FE00–U+FE0F у GET-пошуку досьє/атласу, НЕ батьківський розділ.** Раніше `validDossierSearchQuery` відхиляв supplementary U+E0100–U+E01EF, але пропускав BMP; прихований символ у `q` міг бути прийнятий і відображений у формі. Тепер чинний валідатор відхиляє обидва діапазони до HTML; локалізоване `role="alert"` без form/reader/dossier links. Негативні перевірки: 16 символів × uk/ru/en, обидва UI; позитивні `GEN 12` і порожній GET збережено.

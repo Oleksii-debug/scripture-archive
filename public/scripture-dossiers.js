@@ -148,6 +148,9 @@ export function validateDossierGraph(catalog) {
   const safeVisibleText = value => typeof value === 'string' && value.trim().length > 0 &&
     !/[\u0000-\u001f\u007f-\u009f\u00a0\u061c\u1680\u2000-\u200f\u2028-\u202f\u205f\u2060-\u206f\u3000\ufeff\ud800-\udfff\u034f\u115f\u1160\u2800\u3164\uffa0\p{Cf}]/u.test(value);
   const nonblank = safeVisibleText;
+  // Bound publisher-supplied book titles before repeating them in source
+  // links and ARIA labels; escaping alone cannot prevent huge accessible names.
+  const safeBookTitle = value => safeVisibleText(value) && value.length <= 120;
   // Book codes become internal reader URL segments. Reject unsafe catalogue
   // or dossier provenance before rendering any href (including atlas links).
   const safeBookCode = value => typeof value === 'string' && /^(?:[1-3])?[A-Z]{2,4}$/.test(value);
@@ -181,7 +184,7 @@ export function validateDossierGraph(catalog) {
       Array.from(Array.prototype.keys.call(books)).some(index=>!hasOwnData(books,index)) ||
       Array.prototype.some.call(books,book=>!book || typeof book!=='object' || Array.isArray(book) ||
       !['code','title','chapters'].every(key=>hasOwnData(book,key)) || !safeBookCode(book.code) ||
-      !safeVisibleText(book.title) ||
+      !safeBookTitle(book.title) ||
       !Number.isSafeInteger(book.chapters) || book.chapters<1 || book.chapters>200) ||
       new Set(Array.prototype.map.call(books,book=>book.code)).size!==books.length ||
       // The exact-title search resolves publisher labels back to book codes.

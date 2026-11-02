@@ -1,3 +1,13 @@
+## 2026-11-03 — SA-EXT-07 / ACADEMY_RESET_STALE_WEBLOCK_RECORD — scoped source terminal
+
+**Завершено лише захист від застарілого підтвердження очищення Академії під час очікування Web Lock, НЕ батьківський SA-EXT-07.** Якщо інша вкладка зберегла нові позначки після натискання «очистити», старий запланований reset раніше міг їх видалити. Тепер наявний обробник зчитує точні байти запису під час підтвердження і звіряє їх **під тим самим ексклюзивним Web Lock** безпосередньо перед видаленням. За розбіжності або неможливості початкового читання — відмова без видалення й без неправдивого успіху; підтвердження залишається, щоб користувач міг повторити дію свідомо.
+
+[PR #1245](https://github.com/Oleksii-debug/scripture-archive/pull/1245) **SQUASH MERGED** `main@01a24dbc51ac9e9ecd73a8075da7e13d09fd9c26`, exact qualified head `8b9861f6197e03f126081bd9b375ccc5aa1b5448`; [exact-head CI #41548270079](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41548270079) **SUCCESS**: 4553 native Node PASS / 1 SKIP / 0 FAIL; 37/37 disposable Worker/D1 PASS; 2/2 Python PASS; TypeScript, lint, build PASS (13 lint warnings, 0 errors). [Акт](docs/roadmap/SA_EXT_07_ACADEMY_RESET_STALE_WEBLOCK_RECORD_SCOPED_TERMINAL_20261103.md).
+
+`remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` **тільки для цього race**. **SA-EXT-01/02/05/06/07 parent OPEN; 03/04 source-terminal.** Повний локальний checkout, незалежні права/редакція, фізичний Windows/Chrome/NVDA, live Sites/D1/backup/release **NOT_VERIFIED**. Без production, 82 мов, платежів, synthetic users, масової пошти, dating чи секретів.
+
+---
+
 ## 2026-11-02 — SA-EXT-07 / ACADEMY_RESET_WEBLOCK_SINGLE_FLIGHT — scoped terminal
 
 **Завершено лише одноразовість підтвердженого reset локальних позначок Академії під час очікування Web Lock, не весь SA-EXT-07.** Повторні активації більше не ставлять друге видалення в чергу; після відмови Web Lock можна повторити дію. [PR #1242](https://github.com/Oleksii-debug/scripture-archive/pull/1242) SQUASH MERGED `main@6e010d8db2c388126ef8e60621d745cbc483c1d9`; [CI #41539838856](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41539838856) SUCCESS: 4539 Node PASS/1 SKIP, 37/37 Worker/D1, 2/2 Python, TS/lint/build. [Акт](roadmap/SA_EXT_07_ACADEMY_RESET_WEBLOCK_SINGLE_FLIGHT_SCOPED_TERMINAL_20261102.md). `remaining_scoped_implementation=0` тільки для цієї межі; SA-EXT-01/02/05/06/07 OPEN, 03/04 source-terminal. Права, NVDA, production Sites/D1 і реліз NOT_VERIFIED; заборонених запусків немає.

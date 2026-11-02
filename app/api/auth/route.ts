@@ -159,7 +159,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   if (!env.DB) return json({ error: "database_unavailable" }, 503);
   if (!sameOrigin(request)) return json({ error: "cross_origin_request" }, 403);
-  const action = new URL(request.url).searchParams.get("action") || "";
+  const actionQuery = new URL(request.url).searchParams;
+  const action = actionQuery.get("action") || "";
   const data = await body(request);
   if (!data) return json({ error: "invalid_json" }, 400);
   const address = requestAddress(request);
@@ -289,6 +290,11 @@ export async function POST(request: Request) {
   }
 
   if (action === "reset-password") {
+    // Reset is a one-time credential mutation: do not select the first action
+    // from a duplicated or augmented query string. The verification GET has
+    // the same fail-closed URL contract. Reject before reading/using D1 tokens.
+    if (actionQuery.size !== 1 || actionQuery.getAll("action").length !== 1)
+      return json({ error: "invalid_reset" }, 400);
     const token = exactOneTimeToken(data.token), password = data.password;
     if (!token || !validPassword(password)) return json({ error: "invalid_reset" }, 400);
     let resetAllowed: boolean;

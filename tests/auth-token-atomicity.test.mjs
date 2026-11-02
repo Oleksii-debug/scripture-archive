@@ -577,3 +577,39 @@ test("P0 R0.2: password reset refuses decorated tokens without changing password
     assert.equal((await f.handler.POST(request("code"))).status, 400, "reset token cannot be replayed");
   } finally { f.db.close(); }
 });
+
+
+test("P0 R0.2: reset-password refuses ambiguous POST action queries before token consumption", async () => {
+  // Unlike a profile field, a one-time reset token must not be consumed from
+  // a URL with duplicate/augmented action semantics. This exercises the real
+  // auth handler and SQLite transaction, not a mock query predicate.
+  for (const query of [
+    "action=reset-password&action=login",
+    "action=reset-password&action=reset-password",
+    "action=reset-password&action=",
+    "action=reset-password&next=%2Faccount",
+    "action=reset-password&token=code",
+    "action=reset-password&debug=1",
+    "%61ction=reset-password&action=logout",
+  ]) {
+    const f = fixture();
+    try {
+      f.db.prepare("INSERT INTO auth_tokens(token_hash,user_id,purpose,expires_at) VALUES ('hash-code','alice','reset','2099-01-01')").run();
+      const request = q => new Request("https://example.invalid/api/auth?" + q, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: "code", password: "new-password-123" }),
+      });
+      const rejected = await f.handler.POST(request(query));
+      assert.equal(rejected.status, 400, "reject ambiguous reset action: " + query);
+      assert.equal((await rejected.json()).error, "invalid_reset");
+      assert.equal(f.db.prepare("SELECT password_hash FROM accounts WHERE id='alice'").get().password_hash, "oldhash");
+      assert.equal(f.db.prepare("SELECT session_version FROM accounts WHERE id='alice'").get().session_version, 1);
+      assert.equal(f.db.prepare("SELECT revoked_at FROM auth_sessions WHERE token_hash='session'").get().revoked_at, null);
+      assert.equal(f.db.prepare("SELECT used_at FROM auth_tokens WHERE token_hash='hash-code'").get().used_at, null);
+      assert.equal(f.emails(), 0);
+      // Recovery: the exact existing endpoint remains usable and single-use.
+      assert.equal((await f.handler.POST(request("action=reset-password"))).status, 200);
+      assert.equal((await f.handler.POST(request("action=reset-password"))).status, 400);
+    } finally { f.db.close(); }
+  }
+});

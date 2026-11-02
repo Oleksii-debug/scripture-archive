@@ -426,13 +426,16 @@ export function dossierAtlasMarkup(catalog,language,esc,query='') {
   const visibleIds=filtered?new Set(searchScriptureDossiers(lang,query,catalog).map(item=>item.id)):null;
   const visible=item=>Boolean(item)&&(!visibleIds||visibleIds.has(item.id));
   const resultCount=filtered?visibleIds.size:0;
-  if(filtered&&resultCount===0)return '<section class="card dossier-atlas" aria-labelledby="dossier-atlas-heading"><h2 id="dossier-atlas-heading">'+esc(COPY[lang].index)+'</h2><p role="status">'+esc(SEARCH_COPY[lang].empty)+'</p></section>';
   const filterStatus=filtered?'<p role="status">'+esc(SEARCH_COPY[lang].results)+': '+resultCount+'</p>':'';
   const terms={
     uk:{title:'Біблійний атлас: текстова лабораторія',intro:'Орієнтовна послідовність оповідей для читання. Це не датування історичних подій і не незалежне археологічне підтвердження.',order:'Порядок читання',subject:'Тема',passage:'Біблійний уривок',places:'Згадані місця',extra:'Інші теми дослідження (не хронологічний порядок)',uncertainty:'Сучасні координати, маршрути й археологічні локалізації тут не встановлені; використовуйте першоджерела, а не припущення на карті.'},
     ru:{title:'Библейский атлас: текстовая лаборатория',intro:'Ориентировочная последовательность повествований для чтения. Это не датировка исторических событий и не независимое археологическое подтверждение.',order:'Порядок чтения',subject:'Тема',passage:'Библейский отрывок',places:'Упомянутые места',extra:'Другие темы исследования (без хронологического порядка)',uncertainty:'Современные координаты, маршруты и археологические локализации здесь не установлены; используйте первоисточники, а не предположения на карте.'},
     en:{title:'Scripture atlas: text-first research',intro:'An approximate narrative reading sequence, not a historical date assignment or independent archaeological verification.',order:'Reading order',subject:'Subject',passage:'Scripture passage',places:'Places mentioned',extra:'Other research subjects (not chronologically ordered)',uncertainty:'Modern coordinates, routes and archaeological identifications are not established here; use source passages rather than guessed map locations.'}
   }[lang];
+  // A filtered atlas with no witnesses is still the atlas, not a second
+  // dossier catalogue. Give keyboard/NVDA users a direct way back to the
+  // existing unfiltered GET route without showing unrelated source links.
+  if(filtered&&resultCount===0)return '<section class="card dossier-atlas" aria-labelledby="dossier-atlas-heading"><h2 id="dossier-atlas-heading">'+esc(terms.title)+'</h2><p role="status">'+esc(SEARCH_COPY[lang].empty)+'</p><p><a href="/dossiers">'+esc(SEARCH_COPY[lang].clear)+'</a></p></section>';
   const order=['abraham','sarah','joseph','moses','exodus','david','nativity'];
   const byId=new Map(nodes.map(item=>[item.id,item]));
   if(order.some(id=>!byId.has(id)))return '<p role="alert">'+esc(w.invalid)+'</p>';

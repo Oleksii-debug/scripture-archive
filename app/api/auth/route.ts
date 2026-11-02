@@ -161,6 +161,12 @@ export async function POST(request: Request) {
   if (!sameOrigin(request)) return json({ error: "cross_origin_request" }, 403);
   const actionQuery = new URL(request.url).searchParams;
   const action = actionQuery.get("action") || "";
+  // Security-email requests mint fresh one-time tokens and may dispatch mail.
+  // Do not select the first of duplicated action keys or accept unrelated
+  // query parameters: reject ambiguity before rate limits, D1 or email I/O.
+  if ((action === "resend-verification" || action === "forgot-password") &&
+      (actionQuery.size !== 1 || actionQuery.getAll("action").length !== 1))
+    return json({ error: "invalid_action_query" }, 400);
   const data = await body(request);
   if (!data) return json({ error: "invalid_json" }, 400);
   const address = requestAddress(request);

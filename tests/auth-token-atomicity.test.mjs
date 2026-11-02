@@ -642,3 +642,45 @@ test("R0.2: ambiguous change-password action URL cannot mutate credentials or se
     f.db.close();
   }
 });
+
+ 
+// R0.2: these actions mint fresh single-use security tokens and dispatch email.
+// URLSearchParams.get('action') selects the first of duplicate keys. An
+// ambiguous or augmented action URL must never create a token or send mail.
+// This exercises the actual auth route and disposable SQLite fixture.
+for (const action of ["resend-verification", "forgot-password"]) {
+  for (const suffix of [
+    "&action=login",
+    "&action=",
+    "&action=" + action,
+    "&%61ction=logout",
+    "&next=%2Faccount",
+  ]) {
+    test("P0 R0.2: " + action + " rejects ambiguous security-mail action " + suffix, async () => {
+      const f = fixture();
+      try {
+        if (action === "forgot-password")
+          f.db.prepare("UPDATE accounts SET email_verified_at=CURRENT_TIMESTAMP WHERE id='alice'").run();
+        const makeRequest = querySuffix => new Request(
+          "https://example.invalid/api/auth?action=" + action + querySuffix,
+          { method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: "alice@example.invalid" }) },
+        );
+        const rejected = await f.handler.POST(makeRequest(suffix));
+        assert.equal(rejected.status, 400, "ambiguous action must fail before D1 token writes");
+        assert.equal((await rejected.json()).error, "invalid_action_query");
+        assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM auth_tokens").get().n, 0);
+        assert.equal(f.emails(), 0, "no outbound email on ambiguous action");
+        assert.equal(rejected.headers.get("set-cookie"), null);
+
+        // Recovery: a canonical request can still issue one token and one
+        // mocked email. No real provider or production database is contacted.
+        const recovered = await f.handler.POST(makeRequest(""));
+        assert.equal(recovered.status, 200);
+        assert.deepEqual(await recovered.json(), { ok: true });
+        assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM auth_tokens").get().n, 1);
+        assert.equal(f.emails(), 1);
+      } finally { f.db.close(); }
+    });
+  }
+}

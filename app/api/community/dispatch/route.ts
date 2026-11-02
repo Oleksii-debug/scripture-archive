@@ -15,6 +15,10 @@ export function GET(){
 
 export async function POST(request:Request){
   if(!env.DB)return json({error:"database_unavailable"},503);
+  // The signed runner depends on D1 rate-limit, OIDC/JWKS verification and
+  // owner-controlled state. A rejected dependency must never escape as an
+  // unhandled HTML/500 or be mistaken for a successful job lease.
+  try {
   if(!await rateLimit(`community-dispatch:${requestAddress(request)}`,30,60))return json({error:"too_many_requests"},429);
   const bearer=request.headers.get("authorization")||"";
   if(!bearer.startsWith("Bearer ")||!await verifyCommunityRunner(bearer.slice(7)))return json({error:"forbidden"},403);
@@ -27,4 +31,9 @@ export async function POST(request:Request){
     await controlCommunity("start");
   }
   return json(await leaseCommunityAgents(2));
+  } catch {
+    // A prior D1 statement may already have committed. Do not claim rollback
+    // or success; return a private retryable error with no jobs in the body.
+    return json({error:"community_unavailable"},503);
+  }
 }

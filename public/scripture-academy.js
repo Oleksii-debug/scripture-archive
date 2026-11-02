@@ -103,7 +103,9 @@ export function academyMarkup(catalog,language,esc,progress) {
     return '<section class="card" role="alert">'+esc(w.invalid)+'</section>';
   const byId=new Map(scriptureDossiers.map(item=>[item.id,item]));
   if(academyAllLessonIds.some(id=>!byId.has(id)))return '<section role="alert">'+esc(w.invalid)+'</section>';
-  const titles=new Map(catalog.books[lang].map(book=>[book.code,book.title]));
+  // The dossier admission guard accepts canonical arrays even when publisher data
+  // shadows map with an accessor. Never invoke a catalogue-owned method getter.
+  const titles=new Map(Array.prototype.map.call(catalog.books[lang],book=>[book.code,book.title]));
   const selected=new Set(readOnly?[]:progress.completed);
   const lessons=(ids,headingLevel)=>ids.map((id,index)=>{
     const node=byId.get(id),name=esc(node.names[lang]);

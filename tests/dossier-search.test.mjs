@@ -93,6 +93,42 @@ test('SA-EXT-05/06: non-ASCII space separators cannot disguise publisher book ti
   assert.equal(validateDossierGraph(catalog),true,'ordinary localized publisher titles still work');
 });
 
+test('SA-EXT-05/06: accessor-backed catalogue array methods never execute in dossier or atlas',()=>{
+  // In-memory catalogue arrays may shadow native methods with getters. Their
+  // source labels must be checked without invoking code from that catalogue.
+  for(const lang of ['uk','ru','en']){
+    for(const method of ['keys','some','map']){
+      const damaged=structuredClone(catalog);
+      const books=damaged.books[lang];
+      let invoked=0;
+      Object.defineProperty(books,method,{configurable:true,get(){
+        invoked++;
+        throw new Error('unsafe catalogue method '+method);
+      }});
+      assert.doesNotThrow(()=>validateDossierGraph(damaged),lang+' '+method);
+      assert.equal(validateDossierGraph(damaged),true,'valid own book records remain usable');
+      for(const html of [dossierMarkup(damaged,lang,null,esc),
+        dossierAtlasMarkup(damaged,lang,esc)]){
+        assert.match(html,/href="\/reader\//,'canonical source navigation survives method shadowing');
+      }
+      assert.equal(invoked,0,'must not execute '+lang+' '+method+' accessor');
+
+      // Invalid chapter metadata must still fail closed, with no reader links.
+      books[0].chapters=0;
+      assert.equal(validateDossierGraph(damaged),false);
+      for(const html of [dossierMarkup(damaged,lang,null,esc),
+        dossierAtlasMarkup(damaged,lang,esc)]){
+        assert.match(html,/role="alert"/);
+        assert.doesNotMatch(html,/href="\/reader\//);
+      }
+      assert.equal(invoked,0,'rejection must not execute '+lang+' '+method);
+      delete books[method];
+      books[0].chapters=catalog.books[lang][0].chapters;
+      assert.equal(validateDossierGraph(damaged),true,'recovered canonical catalogue');
+    }
+  }
+});
+
 test('invalid canonical catalogue fails closed even when the search matches',()=>{
   const bad=structuredClone(catalog);
   bad.books.en[0].chapters=0;

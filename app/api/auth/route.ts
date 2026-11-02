@@ -161,6 +161,13 @@ export async function POST(request: Request) {
   if (!sameOrigin(request)) return json({ error: "cross_origin_request" }, 403);
   const actionQuery = new URL(request.url).searchParams;
   const action = actionQuery.get("action") || "";
+  // Login issues a session cookie; logout revokes a durable session. Reject
+  // duplicate or augmented action URLs before parsing the body, rate limiting,
+  // reading D1, creating a session or revoking an existing one. The same
+  // canonical single-action contract protects other credential transitions.
+  if ((action === "login" || action === "logout") &&
+      (actionQuery.size !== 1 || actionQuery.getAll("action").length !== 1))
+    return json({ error: "invalid_action_query" }, 400);
   // Registration persists an account and profile, mints a one-time token and
   // can send verification mail. Never select the first action from a duplicate
   // or augmented URL before any rate limit, D1 read/write or mail request.

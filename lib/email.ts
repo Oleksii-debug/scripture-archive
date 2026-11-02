@@ -34,7 +34,10 @@ async function providerAccepted(response: Response | null): Promise<boolean> {
   // it also contains an id. Do not report delivery on provider error shapes.
   if (Object.hasOwn(receipt, "error") || Object.hasOwn(receipt, "errors")) return false;
   const id = (receipt as { id?: unknown }).id;
-  return typeof id === "string" && id.trim().length > 0 && id.length <= 200;
+  // An HTTP 2xx with a control/invisible/whitespace-bearing id is not a
+  // reliable acceptance receipt. Resend message ids are printable ASCII;
+  // keep the existing 200-character cap and fail closed on malformed ids.
+  return typeof id === "string" && /^[\x21-\x7e]{1,200}$/.test(id);
 }
 
 // Security links contain single-use account tokens. A missing or malformed

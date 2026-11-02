@@ -163,6 +163,30 @@ test('SA-EXT-05/06: ambiguous localized publisher book titles fail closed',()=>{
   }
 });
 
+test('SA-EXT-05/06: oversized publisher book titles cannot flood reader and NVDA labels',()=>{
+  // The source catalogue is not trusted merely because its book title is a
+  // nonempty string. HTML escaping cannot bound the size of an ARIA name.
+  for(const lang of ['uk','ru','en']){
+    for(const length of [121,4096]){
+      const damaged=structuredClone(catalog);
+      damaged.books[lang][0].title='T'.repeat(length);
+      assert.equal(validateDossierGraph(damaged),false,lang+' '+length);
+      for(const html of [dossierMarkup(damaged,lang,null,esc),
+        dossierAtlasMarkup(damaged,lang,esc)]){
+        assert.match(html,/role="alert"/,'oversized source label must be announced');
+        assert.ok(!html.includes('href="/reader/'),'no oversized reader or ARIA source links');
+        assert.ok(html.length<1000,'rejected label must not be echoed');
+      }
+    }
+    const boundary=structuredClone(catalog);
+    boundary.books[lang][0].title='T'.repeat(120);
+    assert.equal(validateDossierGraph(boundary),true,'bounded nonambiguous title accepted');
+    assert.ok(dossierMarkup(boundary,lang,null,esc).includes('href="/reader/'));
+    assert.ok(dossierAtlasMarkup(boundary,lang,esc).includes('href="/reader/'));
+  }
+  assert.equal(validateDossierGraph(catalog),true,'canonical localized book titles preserved');
+});
+
 test('invalid canonical catalogue fails closed even when the search matches',()=>{
   const bad=structuredClone(catalog);
   bad.books.en[0].chapters=0;

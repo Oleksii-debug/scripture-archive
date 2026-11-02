@@ -1,3 +1,13 @@
+## 2026-11-02 — SA-EXT-01/05 / DOSSIER_PUBLISHER_RIGHTS_ADMISSION_PARITY — scoped source terminal
+
+**Закрито тільки узгодження видавничих прав досьє/атласу з чинним допуском основної читальні, НЕ батьківські розділи.** Раніше досьє могло створити джерельне посилання для edition з відсутньою/порожньою ліцензією, небезпечним source URL, невидимим/надмірним title або accessor-backed rights, які читальня відхиляє. Тепер спільний `validateDossierGraph` повторно використовує канонічні `validEditionRightsMetadata` і `validEditionRightsText`; ID обмежений, без пробілів. Негативні перевірки: 3 мови × 8 дефектів, обидва UI `role="alert"` без reader links, throwing getter не виконується; чинні джерела збережено.
+
+[Код і тести PR #1224](https://github.com/Oleksii-debug/scripture-archive/pull/1224) **SQUASH MERGED** `main@3d6358a7bbaeadd98c9264ea35cf13c963e0821e`, exact head `884dd3a666bdc3d14701fb1a94b4be5ff05fd0cf`; [exact-head CI #41485528737](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41485528737) **SUCCESS**: 4488 Node PASS / 1 SKIP / 0 FAIL; 37/37 disposable Worker/D1 PASS; 2/2 Python PASS; TS/lint/build PASS (13 lint warnings, 0 errors). [Акт](SA_EXT_01_05_DOSSIER_PUBLISHER_RIGHTS_PARITY_SCOPED_TERMINAL_20261102.md).
+
+`remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` **лише для цього дефекту**. **SA-EXT-01/02/05/06/07 parent OPEN; 03/04 source-terminal.** Незалежні права/редакція, фізичний Windows/Chrome/NVDA, live Sites/D1/backup/release **NOT_VERIFIED**. Без production, 82 мов, платежів, synthetic users, масової пошти, dating чи секретів.
+
+---
+
 ## 2026-11-02 — SA-EXT-05 / SUPPLEMENTARY_VARIATION_SELECTOR_SOURCE_LABELS — scoped source terminal
 
 **Лише невидимі Unicode variation selectors U+E0100–U+E01EF у досьє, атласі та GET-пошуку виправлено; батьківський розділ НЕ закрито.** Чинний валідатор відхиляв U+FE00–U+FE0F, але пропускав supplementary Mn у видавничих назвах книг, досьє й ARIA-цитатах. Обидва наявні допуски `safeVisibleText` та `validDossierSearchQuery` тепер відхиляють цей діапазон до створення джерельних посилань, з локалізованим `role="alert"` та без reader links. [PR #1222](https://github.com/Oleksii-debug/scripture-archive/pull/1222) **SQUASH MERGED** `main@77f0be6903fbd5e723e688fe559cbcc5c8bb84f0` (exact head `42352eeb824012910e8b73f04f9cbbb17331d9c2`); [CI #41475148169](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41475148169) **SUCCESS**: 4487 Node PASS / 1 SKIP / 0 FAIL; 37/37 disposable Worker/D1 PASS; 2/2 Python PASS; TS/lint/build PASS (13 warnings, 0 errors). [Акт](SA_EXT_05_SUPPLEMENTARY_VARIATION_SELECTORS_SCOPED_TERMINAL_20261102.md).

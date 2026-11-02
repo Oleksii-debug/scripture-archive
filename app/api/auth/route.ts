@@ -167,6 +167,12 @@ export async function POST(request: Request) {
   if ((action === "resend-verification" || action === "forgot-password") &&
       (actionQuery.size !== 1 || actionQuery.getAll("action").length !== 1))
     return json({ error: "invalid_action_query" }, 400);
+  // Account deletion is irreversible. URLSearchParams.get() picks the first
+  // action in a duplicated query; never erase an account through an ambiguous
+  // or augmented URL. Reject before body parsing, auth or any D1 operation.
+  if (action === "delete-account" &&
+      (actionQuery.size !== 1 || actionQuery.getAll("action").length !== 1))
+    return json({ error: "invalid_deletion_request" }, 400);
   const data = await body(request);
   if (!data) return json({ error: "invalid_json" }, 400);
   const address = requestAddress(request);

@@ -296,9 +296,13 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
       finally {importing=false;importButton.disabled=false;restoreActionFocus(importButton,hadFocus);}
     });
   }
+  // A queued Web Lock must represent exactly one confirmed reset intent.
+  // Duplicate assistive/keyboard activations must not schedule a later removal
+  // that can erase progress saved after the first reset completed.
+  let resetPending=false;
   if(resetButton && typeof resetButton.addEventListener==='function' && resetConfirm){
     resetButton.addEventListener('click',()=>{
-      if(!currentView())return;
+      if(resetPending || !currentView())return;
       if(!resetConfirm.checked){if(resetStatus)resetStatus.textContent=reset.confirmFirst;return;}
       // This is the same origin-wide principal lock used by lesson updates.
       // It never clears the guest or another account as a fallback.
@@ -307,6 +311,7 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
         return;
       }
       const hadFocus=document?.activeElement===resetButton;
+      resetPending=true;
       resetButton.disabled=true;
       const remove=()=>{
         if(!currentView() || !resetConfirm.checked)return;
@@ -327,7 +332,7 @@ export function attachAcademy(document,storage,language,user,progress,isCurrent=
         if(unavailable)unavailable.textContent='';
         if(resetStatus)resetStatus.textContent=reset.done;
       };
-      const finish=()=>{resetButton.disabled=false;restoreActionFocus(resetButton,hadFocus);};
+      const finish=()=>{resetPending=false;resetButton.disabled=false;restoreActionFocus(resetButton,hadFocus);};
       if(nonBrowserFixture){try{remove();}finally{finish();}return;}
       try{
         Promise.resolve(locks.request('sa-academy-progress:'+key,{mode:'exclusive'},remove))

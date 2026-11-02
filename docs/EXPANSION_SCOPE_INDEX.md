@@ -1,3 +1,11 @@
+## 2026-11-02 — SA-EXT-05 / VARIATION_SELECTOR_SOURCE_LABELS — scoped source terminal
+
+**Закрито лише захист джерельних назв і досьє від невидимих Unicode variation selectors U+FE00–U+FE0F, НЕ батьківський розділ.** Наявний `safeVisibleText` пропускав ці `Mn` символи (не `Cf`), тому назви книг та ARIA-цитати могли бути візуально неоднозначними. Спільний валідатор досьє/атласу тепер відмовляє до створення посилань, з локалізованим `role="alert"`; 24 нові негативні регресії для uk/ru/en, чинний каталог збережено. [PR #1219](https://github.com/Oleksii-debug/scripture-archive/pull/1219) **SQUASH MERGED** `main@394113d62473104033c2574d17bcc43f6f44916e`, exact head `0e7ab56b2df2cf7814bf1a883fd731c97aaa79c7`; [exact-head CI #41465782558](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41465782558) **SUCCESS**: 4461 Node PASS / 1 SKIP / 0 FAIL, 37/37 disposable Worker/D1 PASS, 2/2 Python PASS, TS/lint/build PASS. Test-only CI #41465632637 був **CANCELLED**, не RED PASS/FAIL. [Акт](roadmap/SA_EXT_05_VARIATION_SELECTOR_SOURCE_LABELS_SCOPED_TERMINAL_20261102.md).
+
+`remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` **лише тут**. **SA-EXT-01/02/05/06/07 parent OPEN, 03/04 source-terminal.** Права/редакція, фізичний Windows/Chrome/NVDA, live Sites/D1/backup/release **NOT_VERIFIED**. Без production, 82 мов, платежів, synthetic users, масової пошти, dating і секретів.
+
+---
+
 ## 2026-11-02 — SA-EXT-01/05 / DOSSIER_READER_CATALOG_ADMISSION_PARITY — scoped source terminal
 
 **Закрито тільки невідповідність допуску каталогу між чинними досьє/атласом і основною читальнею, НЕ батьківські розділи.** Досьє раніше могло створювати посилання й ARIA-цитати за пошкодженого schema/edition ID, неповного або переставленого 66-книжного каталогу, хибного OT/NT чи пошкодженого альтернативного видання, хоча читальня відхиляла такий каталог. Спільний `validateDossierGraph` тепер відмовляє до HTML із локалізованим `role="alert"`, без `/reader/` посилань; власні null-prototype дані й нормальні каталоги збережено. Статичний канонічний список кодів залишається лише в читальні; **повної еквівалентності не заявлено**.

@@ -128,3 +128,44 @@ test('rejected reset Web Lock releases the single-flight guard for explicit retr
   assert.equal(store.getItem(alice),null);
   assert.equal(ui.reset.disabled,false);
 });
+
+test('queued reset cannot erase a newer cross-tab record or newly created markers',async()=>{
+  for(const original of [record,null]){
+    const newer=JSON.stringify({version:1,completed:['abraham','sarah']});
+    const store=storage(original===null?{}:{[alice]:original});
+    let release,requests=0;
+    const locks={request:(_name,_options,callback)=>{
+      requests++;
+      return new Promise(resolve=>{release=()=>resolve(callback());});
+    }};
+    const ui=mount(store,{locks});
+    ui.confirm.checked=true;
+    ui.click();
+    assert.equal(requests,1);
+    assert.equal(ui.reset.disabled,true);
+    // Simulate a different tab completing a newer write while the reset is
+    // queued; the reset must compare exact bytes after acquiring the lock.
+    store.setItem(alice,newer);
+    release();
+    await flush();
+    assert.equal(store.getItem(alice),newer,'newer markers must survive a stale reset');
+    assert.match(ui.output.textContent,/Could not confirm removal/);
+    assert.equal(ui.confirm.checked,true,'user must reconfirm a new reset');
+    assert.equal(ui.reset.disabled,false);
+    assert.equal(ui.lesson.attrs['aria-pressed'],'true','no fabricated local reset');
+  }
+});
+
+test('reset refuses to queue when its initial storage snapshot cannot be read',async()=>{
+  const store=storage({[alice]:record});
+  store.getItem=()=>{throw Error('device storage denied')};
+  let requests=0;
+  const ui=mount(store,{locks:{request:()=>{requests++;throw Error('unexpected lock')}}});
+  ui.confirm.checked=true;
+  ui.click();
+  await flush();
+  assert.equal(requests,0);
+  assert.match(ui.output.textContent,/Could not confirm removal/);
+  assert.equal(ui.reset.disabled,false);
+  assert.equal(ui.confirm.checked,true);
+});

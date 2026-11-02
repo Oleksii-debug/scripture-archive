@@ -54,3 +54,16 @@ test("R0.4 recovers only after unsafe SEO declarations are repaired", async () =
   assert.equal(await probe(ROBOTS.replace(ORIGIN, "https://unrelated.invalid")), false);
   assert.equal(await probe(), true);
 });
+
+for (const rule of ["Disallow: /*", "Disallow: /**", "Disallow: /*$"]) {
+  test("R0.4 rejects wildcard robots-wide crawl ban: " + rule, async () => {
+    const robots = "User-agent: *\n" + rule + "\nSitemap: " + ORIGIN + "/sitemap.xml\n";
+    assert.equal(await probe(robots), false);
+  });
+}
+
+test("R0.4 recovers when wildcard-wide ban becomes a scoped API ban", async () => {
+  const blocked = "User-agent: *\nDisallow: /*\nSitemap: " + ORIGIN + "/sitemap.xml\n";
+  assert.equal(await probe(blocked), false);
+  assert.equal(await probe(ROBOTS), true);
+});

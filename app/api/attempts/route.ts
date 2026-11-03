@@ -383,7 +383,15 @@ export async function POST(request: Request) {
   if (!sameOrigin(request)) return json({ error: "cross_origin_request" }, 403);
   // Guard every D1-dependent actor lookup and preflight, not only finalization.
   try {
-  const action = new URL(request.url).searchParams.get("action") || "start";
+  const actionQuery = new URL(request.url).searchParams;
+  // Chapter-open invalidates an active assessment and consumes reading receipts.
+  // URLSearchParams.get() selects the first duplicate; reject all ambiguous
+  // action URLs before parsing JSON, looking up an actor, or touching D1.
+  // The historical no-query POST still means "start".
+  if (actionQuery.size > 0 &&
+      (actionQuery.size !== 1 || actionQuery.getAll("action").length !== 1))
+    return json({ error: "invalid_action_query" }, 400);
+  const action = actionQuery.get("action") || "start";
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   if (!body) return json({ error: "invalid_json" }, 400);
 

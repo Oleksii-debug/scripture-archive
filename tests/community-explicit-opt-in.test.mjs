@@ -58,3 +58,16 @@ test('account UI makes community publication separate, candid and available in e
   assert.match(app,/community:form\.has\("community"\)/);
   assert.match(app,/communityVisibility\.disabled=!hasName;if\(!hasName\)communityVisibility\.checked=false/);
 });
+
+test('public community copy distinguishes directory consent and private progress in every existing locale',()=>{
+  for(const text of [
+    'окремо дозволили показувати свій профіль у спільноті',
+    'отдельно разрешили показывать свой профиль в сообществе',
+    'separately chose to show their profile in the community',
+    'Навчальний поступ приватний',
+    'Учебный прогресс скрыт',
+    'Learning progress is private',
+  ])assert.ok(app.includes(text),text);
+  assert.match(app,/member\.progressShared\?`<dl>/);
+  assert.match(app,/`<p>\$\{copy\.progressPrivate\}<\/p>`/);
+});

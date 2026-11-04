@@ -15,7 +15,7 @@ function directoryInteger(raw: string | null, fallback: number, min: number, max
   const number = Number(raw);
   return Number.isSafeInteger(number) ? Math.max(min, Math.min(max, number)) : fallback;
 }
-type RealRow = { id: string; display_name: string; locale: string; joined_at: string; last_active_at: string | null; reading_data: string | null; mission_count: number };
+type RealRow = { id: string; display_name: string; locale: string; joined_at: string; last_active_at: string | null; reading_data: string | null; mission_count: number; progress_shared: number };
 
 // Derive passage limits from the same authoritative catalogue as the private
 // READING account endpoint. Local editions may have different chapter divisions.
@@ -77,7 +77,7 @@ export async function GET(request: Request) {
     env.DB!.prepare("SELECT COUNT(DISTINCT s.user_id) total FROM usage_sessions s JOIN accounts a ON a.id=s.user_id AND a.deleted_at IS NULL WHERE s.last_seen_at>=datetime('now','-5 minutes')"),
     env.DB!.prepare(`SELECT a.id,
         trim(CASE WHEN p.public_first_name=1 THEN p.first_name ELSE '' END || ' ' || CASE WHEN p.public_last_name=1 THEN p.last_name ELSE '' END) display_name,
-        p.locale,a.created_at joined_at,MAX(s.last_seen_at) last_active_at,
+        p.locale,p.public_progress progress_shared,a.created_at joined_at,MAX(s.last_seen_at) last_active_at,
         CASE WHEN p.public_progress=1 THEN MAX(CASE WHEN pr.mission_id='READING' THEN pr.data END) END reading_data,
         CASE WHEN p.public_progress=1 THEN COUNT(DISTINCT CASE WHEN pr.mission_id LIKE 'OT-AB-01:%' THEN pr.mission_id END) ELSE 0 END mission_count
       FROM accounts a JOIN profiles p ON p.user_id=a.id
@@ -103,15 +103,21 @@ export async function GET(request: Request) {
     // missing counts or NaN into plausible public progress statistics.
     if (!row || !Number.isSafeInteger(row.mission_count) || row.mission_count < 0)
       throw Error("invalid_public_mission_count");
+    if (row.progress_shared !== 0 && row.progress_shared !== 1)
+      throw Error("invalid_public_progress_consent");
     const online = Boolean(row.last_active_at && new Date(`${row.last_active_at.replace(" ", "T")}Z`).getTime() >= now.getTime() - 300_000);
+    const progressShared = row.progress_shared === 1;
     return { id: row.id, displayName: row.display_name, locale: row.locale, countryCode: null, joinedAt: row.joined_at, online,
-      activity: online ? "exploring" : "away", chaptersRead: progressCount(row.reading_data), missionsCompleted: row.mission_count };
+      activity: online ? "exploring" : "away", progressShared,
+      chaptersRead: progressShared ? progressCount(row.reading_data) : null,
+      missionsCompleted: progressShared ? row.mission_count : null };
   });
   let members = real;
   if (query) members = members.filter(member => member.displayName.toLocaleLowerCase().includes(query));
   members.sort((a, b) => sort === "name" ? a.displayName.localeCompare(b.displayName)
     : sort === "active" ? Number(b.online) - Number(a.online) || b.joinedAt.localeCompare(a.joinedAt)
-      : sort === "progress" ? b.chaptersRead - a.chaptersRead || b.missionsCompleted - a.missionsCompleted
+      : sort === "progress" ? Number(b.progressShared) - Number(a.progressShared) ||
+          (b.chaptersRead ?? 0) - (a.chaptersRead ?? 0) || (b.missionsCompleted ?? 0) - (a.missionsCompleted ?? 0)
         : b.joinedAt.localeCompare(a.joinedAt));
   const totalVisible = members.length, offset = (page - 1) * pageSize;
   return json({

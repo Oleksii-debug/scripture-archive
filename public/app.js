@@ -2779,6 +2779,7 @@ const ATTEMPT_COPY = {
     mastered: "Засвоєні уривки",
     mistakes: "Що варто переглянути",
     noMistakes: "Усі відповіді правильні.",
+    reviewSource: "Відкрити уривок для повторення",
     reopen: "Знову відкрити текст",
     readRequired: "Спочатку завершіть читання цієї глави.",
     retryLoad: "Повторити завантаження",
@@ -2802,6 +2803,7 @@ const ATTEMPT_COPY = {
     mastered: "Освоенные отрывки",
     mistakes: "Что стоит повторить",
     noMistakes: "Все ответы правильные.",
+    reviewSource: "Открыть отрывок для повторения",
     reopen: "Снова открыть текст",
     readRequired: "Сначала завершите чтение этой главы.",
     retryLoad: "Повторить загрузку",
@@ -2825,6 +2827,7 @@ const ATTEMPT_COPY = {
     mastered: "Passages understood",
     mistakes: "Review these points",
     noMistakes: "Every answer was correct.",
+    reviewSource: "Open the passage for review",
     reopen: "Open the text again",
     readRequired: "Finish reading this chapter first.",
     retryLoad: "Retry loading",
@@ -3837,12 +3840,28 @@ async function renderGroup(groupId) {
     };
 }
 
+function attemptReviewHref(reference, book, chapter) {
+  if (typeof reference !== "string" || typeof book !== "string" ||
+      !Number.isSafeInteger(chapter)) return null;
+  const match = /^([1-3]?[A-Z]{2,3}) ([1-9][0-9]{0,2}):([1-9][0-9]{0,2})(?:–([1-9][0-9]{0,2}))?$/.exec(reference);
+  if (!match || match[1] !== book || Number(match[2]) !== chapter) return null;
+  const first = Number(match[3]), last = Number(match[4] || match[3]);
+  if (chapter > 151 || first > 256 || last < first || last > 256) return null;
+  return `/reader/${encodeURIComponent(book)}/${chapter}?verse=${first}`;
+}
+
 function renderAttemptResult(result, book, chapter, groupId = "", groupRecorded) {
   if(state.user)void syncProgress();
   const copy = ATTEMPT_COPY[state.lang];
   const mastered = result.mastered?.length ? `<ul>${result.mastered.map(item => `<li>${esc(item)}</li>`).join("")}</ul>` : `<p>—</p>`;
   const mistakes = result.mistakes?.length
-    ? result.mistakes.map(item => `<article class="result-review"><h3>${esc(item.reference)}</h3><p>${esc(item.explanation)}</p><p><strong>${state.lang === "uk" ? "Правильна відповідь" : state.lang === "ru" ? "Правильный ответ" : "Correct answer"}:</strong> ${item.correctAnswers.map(esc).join("; ")}</p></article>`).join("")
+    ? result.mistakes.map(item => {
+      const href = attemptReviewHref(item.reference, book, chapter);
+      const heading = href
+        ? `<h3><a href="${href}" aria-label="${esc(copy.reviewSource)}: ${esc(item.reference)}">${esc(item.reference)}</a></h3>`
+        : `<h3>${esc(item.reference)}</h3>`;
+      return `<article class="result-review">${heading}<p>${esc(item.explanation)}</p><p><strong>${state.lang === "uk" ? "Правильна відповідь" : state.lang === "ru" ? "Правильный ответ" : "Correct answer"}:</strong> ${item.correctAnswers.map(esc).join("; ")}</p></article>`;
+    }).join("")
     : `<div class="notice success">${copy.noMistakes}</div>`;
   shell(`<article class="prose attempt-results"><p class="eyebrow">Scripture Archive</p><h1>${copy.completed}</h1><p class="score-line"><strong>${result.score}</strong> ${copy.score} ${result.total}</p>${groupRecorded===false?`<p class="notice info">${copy.groupNotRecorded}</p>`:''}<h2>${copy.mastered}</h2>${mastered}<h2>${copy.mistakes}</h2>${mistakes}<div class="action-row"><a class="button primary" href="/reader/${book}/${chapter}">${copy.reopen}</a>${groupId&&groupRecorded!==false?`<a class="button" href="/groups/${encodeURIComponent(groupId)}">${t("groups")}</a>`:""}</div></article>`);
   window.saAnalytics?.track("quiz_complete",{score:Number(result.score),total:Number(result.total),language:state.lang,mode:groupId?"group":"personal"});

@@ -390,6 +390,7 @@ test('SA-EXT-02 completed result refuses forged JSON or mismatched D1 scores and
     const canonical=f.db.prepare("SELECT score,total,result_json FROM mission_attempts WHERE id='completed-alice'").get();
     assert.equal((await f.get('current','completed-alice')).status,200);
     const legitimate=JSON.parse(canonical.result_json);
+    const changedDetail={...legitimate.details[0],explanation:'Forged explanation'};
     for(const payload of [
       'null','[]','"pretend"', '{}','not-json',
       JSON.stringify({score:'1',total:canonical.total}),
@@ -397,6 +398,11 @@ test('SA-EXT-02 completed result refuses forged JSON or mismatched D1 scores and
       JSON.stringify({...legitimate,total:0}),
       JSON.stringify({...legitimate,score:-1}),
       JSON.stringify({...legitimate,total:1.5}),
+      JSON.stringify({...legitimate,mastered:[]}),
+      JSON.stringify({...legitimate,mistakes:[legitimate.details[0]]}),
+      JSON.stringify({...legitimate,details:[changedDetail,...legitimate.details.slice(1)]}),
+      JSON.stringify({...legitimate,completionVersion:2}),
+      JSON.stringify({...legitimate,unverifiedAchievement:true}),
     ]) {
       f.db.prepare("UPDATE mission_attempts SET result_json=? WHERE id='completed-alice'").run(payload);
       const count=f.db.prepare('SELECT total_changes() AS n').get().n;
@@ -424,6 +430,21 @@ test('SA-EXT-02 completed result refuses forged JSON or mismatched D1 scores and
     assert.equal(restored.data.completed,true);
     assert.equal(restored.data.result.score,canonical.score);
   }finally{f.db.close();}
+});
+
+test('SA-EXT-02 completed result is invalid when durable answers no longer support its review detail',async()=>{
+  const f=fixture();
+  try {
+    f.seed('completed-alice');
+    assert.equal((await f.post('finalize',{attemptId:'completed-alice'})).status,200);
+    const taskId=chapter[0].id;
+    f.db.prepare('UPDATE mission_attempt_answers SET selected_json=?,is_correct=0 WHERE attempt_id=? AND task_id=?')
+      .run(JSON.stringify([(chapter[0].correct[0]+1)%chapter[0].options.en.length]),'completed-alice',taskId);
+    const damaged=await f.get('current','completed-alice');
+    assert.equal(damaged.status,503);
+    assert.equal(damaged.data.error,'attempt_state_invalid');
+    assert.equal(Object.hasOwn(damaged.data,'completed'),false);
+  } finally {f.db.close();}
 });
 
 test('SA-EXT-02 completed history never invents a perfect score above saved/canonical task count',async()=>{

@@ -189,30 +189,77 @@ function resultFor(tasks: MissionTask[], answers: Array<Record<string, unknown>>
   };
 }
 
+function canonicalAnswerRows(tasks: MissionTask[], rows: Array<Record<string, unknown>>, selectedLocale: Locale): boolean {
+  if (rows.length !== tasks.length) return false;
+  const byId = new Map(rows.map(row => [row.task_id, row]));
+  if (byId.size !== tasks.length) return false;
+  for (const task of tasks) {
+    const row = byId.get(task.id);
+    if (!row || (row.is_correct !== 0 && row.is_correct !== 1)) return false;
+    let selected: unknown;
+    try { selected = JSON.parse(String(row.selected_json)); }
+    catch { return false; }
+    if (!Array.isArray(selected) || !selected.length ||
+        selected.some(i => !Number.isInteger(i) || i < 0 || i >= task.options[selectedLocale].length) ||
+        new Set(selected).size !== selected.length) return false;
+    const expected = [...task.correct].sort((a, b) => a - b);
+    const actual = [...selected].sort((a, b) => a - b);
+    if (Number(JSON.stringify(actual) === JSON.stringify(expected)) !== row.is_correct) return false;
+  }
+  return true;
+}
+
+function sameJsonValue(left: unknown, right: unknown): boolean {
+  if (left === right) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left) && Array.isArray(right) && left.length === right.length &&
+      Array.from(left.keys()).every(index => Object.hasOwn(left, index) && Object.hasOwn(right, index) &&
+        sameJsonValue(left[index], right[index]));
+  }
+  if (!left || !right || typeof left !== "object" || typeof right !== "object") return false;
+  const leftRecord = left as Record<string, unknown>, rightRecord = right as Record<string, unknown>;
+  const leftKeys = Object.keys(leftRecord).sort(), rightKeys = Object.keys(rightRecord).sort();
+  return leftKeys.length === rightKeys.length && leftKeys.every((key, index) =>
+    key === rightKeys[index] && sameJsonValue(leftRecord[key], rightRecord[key]));
+}
+
+async function verifiedStoredResult(attempt: Attempt): Promise<Record<string, unknown> | null> {
+  if (attempt.mission_id !== MISSION_ID || !storedLocale(attempt.locale) ||
+      !Number.isSafeInteger(attempt.task_limit) || attempt.task_limit < 1 ||
+      !Number.isSafeInteger(attempt.current_index) || attempt.current_index !== attempt.task_limit)
+    return null;
+  const available = tasksFor(attempt.book_id, attempt.chapter);
+  if (attempt.task_limit > available.length) return null;
+  const tasks = available.slice(0, attempt.task_limit);
+  if (!attempt.result_json) return null;
+  let parsed: unknown;
+  try { parsed = JSON.parse(attempt.result_json); }
+  catch { return null; }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  const stored = parsed as Record<string, unknown>;
+  const version = stored.completionVersion;
+  if (version !== undefined && version !== 1) return null;
+  const core = Object.fromEntries(Object.entries(stored).filter(([key]) => key !== "completionVersion"));
+  const response = await env.DB!.prepare("SELECT task_id,selected_json,is_correct FROM mission_attempt_answers WHERE attempt_id=?")
+    .bind(attempt.id).all();
+  if (!response.success || !Array.isArray(response.results)) return null;
+  const rows = response.results as Array<Record<string, unknown>>;
+  if (!canonicalAnswerRows(tasks, rows, attempt.locale)) return null;
+  const expected = resultFor(tasks, rows, attempt.locale);
+  if (!sameJsonValue(core, expected) || attempt.score !== expected.score || attempt.total !== expected.total)
+    return null;
+  return stored;
+}
+
 // A result may be read repeatedly after a network failure. For results made by
 // this version, report whether the group record still exists; older results do
 // not carry a link to their randomly generated group-session IDs.
 async function completedResponse(attempt: Attempt, accepted = false) {
   try {
-    // A corrupt or legacy D1 row must never present another mission as completed.
-    if (attempt.mission_id !== MISSION_ID) return json({ error: "attempt_state_invalid" }, 503);
-    if (!attempt.result_json) return json({ error: "attempt_state_invalid" }, 503);
-    // D1 can contain a legacy or damaged completed row. JSON.parse succeeds
-    // for arrays, strings and forged score objects; none is a legitimate
-    // assessment result. Never announce completed:true with inconsistent
-    // persisted score/total, even on a retry after a network interruption.
-    let parsed: unknown;
-    try { parsed = JSON.parse(attempt.result_json); }
-    catch { return json({ error: "attempt_state_invalid" }, 503); }
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
-      return json({ error: "attempt_state_invalid" }, 503);
-    const result = parsed as Record<string, unknown>;
-    if (typeof result.score !== "number" || typeof result.total !== "number" ||
-        !Number.isSafeInteger(result.score) || !Number.isSafeInteger(result.total) ||
-        result.total < 1 || result.score < 0 || result.score > result.total ||
-        !Number.isSafeInteger(attempt.score) || !Number.isSafeInteger(attempt.total) ||
-        attempt.score !== result.score || attempt.total !== result.total)
-      return json({ error: "attempt_state_invalid" }, 503);
+    // A saved summary is not self-authenticating. Rebuild the canonical result
+    // from the durable answers before disclosing explanations or achievements.
+    const result = await verifiedStoredResult(attempt);
+    if (!result) return json({ error: "attempt_state_invalid" }, 503);
     let groupRecorded: boolean | undefined;
     if (attempt.group_id && result.completionVersion === 1) {
       const session = await env.DB!.prepare("SELECT id FROM group_sessions WHERE id=? AND group_id=?")
@@ -240,17 +287,7 @@ async function finishAttempt(attempt: Attempt, actorId: string, guest: boolean, 
     if (!response.success || !Array.isArray(response.results) || response.results.length !== tasks.length)
       return json({ error: "attempt_state_invalid" }, 503);
     const rows = response.results as Array<Record<string, unknown>>;
-    const byId = new Map(rows.map(row => [row.task_id, row]));
-    for (const task of tasks) {
-      const row = byId.get(task.id);
-      if (!row || (row.is_correct !== 0 && row.is_correct !== 1)) return json({ error: "attempt_state_invalid" }, 503);
-      const selected: unknown = JSON.parse(String(row.selected_json));
-      if (!Array.isArray(selected) || !selected.length || selected.some(i => !Number.isInteger(i) || i < 0 || i >= task.options[attempt.locale].length) || new Set(selected).size !== selected.length)
-        return json({ error: "attempt_state_invalid" }, 503);
-      const expected = [...task.correct].sort((a, b) => a - b);
-      const actual = [...selected].sort((a, b) => a - b);
-      if (Number(JSON.stringify(actual) === JSON.stringify(expected)) !== row.is_correct) return json({ error: "attempt_state_invalid" }, 503);
-    }
+    if (!canonicalAnswerRows(tasks, rows, attempt.locale)) return json({ error: "attempt_state_invalid" }, 503);
     const result = { ...resultFor(tasks, rows, attempt.locale), completionVersion: 1 }, encoded = JSON.stringify(result);
     const statements = [];
     // An older stalled attempt can be recovered after a newer one has already

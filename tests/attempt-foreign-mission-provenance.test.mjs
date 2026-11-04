@@ -25,11 +25,18 @@ function fixture({ mission_id = 'OT-AB-01', status = 'completed' } = {}) {
     id: 'attempt-1', actor_id: 'alice', mission_id,
     book_id: 'GEN', chapter: 12, group_id: null, locale: 'uk',
     task_limit: 1, current_index: 1, status, expires_at: '2099-01-01',
-    result_json: JSON.stringify({ score: 1, total: 1 }), score: 1, total: 1,
+    result_json: JSON.stringify({
+      score:1,total:1,mastered:['GEN 12:1'],mistakes:[],
+      details:[{taskId:'GEN12-1',correct:true,reference:'GEN 12:1',explanation:'Explanation',selected:['A'],correctAnswers:['A']}],
+    }), score: 1, total: 1,
   };
   const DB = {
     prepare(sql) {
       reads += 1;
+      if (sql.startsWith('SELECT task_id,selected_json,is_correct')) return {
+        bind(id) { assert.equal(id,'attempt-1'); return this; },
+        async all() { return {success:true,results:[{task_id:'GEN12-1',selected_json:'[0]',is_correct:1}]}; },
+      };
       assert.match(sql, /mission_attempts/);
       return {
         bind(id, actor) {
@@ -94,7 +101,7 @@ for (const [method, action] of [['GET', 'current'], ['POST', 'finalize'], ['POST
     assert.equal(result.payload.completed, true);
     assert.deepEqual([result.payload.result.score, result.payload.result.total], [1, 1]);
     assert.match(result.cache, /no-store/);
-    assert.deepEqual(f.counters(), { reads: 1, writes: 0 });
+    assert.deepEqual(f.counters(), { reads: 2, writes: 0 });
   });
 }
 

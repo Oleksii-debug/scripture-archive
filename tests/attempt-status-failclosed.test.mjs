@@ -25,14 +25,21 @@ function fixture(status='active',{expires_at='2099-01-01',owned=true,dbAvailable
   const attempt={
     id:'attempt-1',actor_id:'alice',mission_id:'OT-AB-01',
     book_id:'GEN',chapter:12,group_id:null,locale,
-    task_limit:1,current_index:0,status,expires_at,
+    task_limit:1,current_index:status==='completed'?1:0,status,expires_at,
     // Completed mock must model the canonical persisted score/total columns.
     score:1,total:1,
-    result_json:JSON.stringify({score:1,total:1}),
+    result_json:JSON.stringify({
+      score:1,total:1,mastered:['GEN 12:1'],mistakes:[],
+      details:[{taskId:'first',correct:true,reference:'GEN 12:1',explanation:'Explanation',selected:['A'],correctAnswers:['A']}],
+    }),
   };
   const DB={
     prepare(sql){
       lookups++;
+      if(sql.startsWith('SELECT task_id,selected_json,is_correct'))return {
+        bind(id){assert.equal(id,'attempt-1');return this;},
+        async all(){return {success:true,results:[{task_id:'first',selected_json:'[0]',is_correct:1}]};},
+      };
       assert.match(sql,/mission_attempts/);
       return {
         bind(...args){assert.equal(args[0],'attempt-1');assert.equal(args[1],'alice');return this;},
@@ -153,7 +160,10 @@ test('completed stays a final result, not next task',async()=>{
   const result=await fixture('completed').get();
   assert.equal(result.status,200);
   assert.equal(result.body.completed,true);
-  assert.deepEqual({...result.body.result},{score:1,total:1});
+  assert.equal(result.body.result.score,1);
+  assert.equal(result.body.result.total,1);
+  assert.deepEqual(Array.from(result.body.result.mastered),['GEN 12:1']);
+  assert.equal(result.body.result.details[0].taskId,'first');
   assert.ok(!('task' in result.body));
 });
 

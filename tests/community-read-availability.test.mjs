@@ -19,7 +19,7 @@ const validReceipts = () => [
   { success: true, results: [{
     id: "volunteer-a", display_name: "Public Volunteer", locale: "uk",
     joined_at: "2026-10-01 00:00:00", last_active_at: null,
-    reading_data: null, mission_count: 0,
+    reading_data: null, mission_count: 0, progress_shared: 1,
   }] },
 ];
 
@@ -82,7 +82,46 @@ test("confirmed community D1 snapshots preserve the actual public directory", as
   assert.equal(response.body.summary.online, 1);
   assert.equal(response.body.summary.visible, 1);
   assert.equal(response.body.members[0].displayName, "Public Volunteer");
+  assert.equal(response.body.members[0].progressShared, true);
+  assert.equal(response.body.members[0].chaptersRead, 0);
+  assert.equal(response.body.members[0].missionsCompleted, 0);
   assert.deepEqual(f.calls, { advance: 0, batch: 1, auth: 0 });
+});
+
+test("private progress is disclosed as private instead of fabricated zero statistics", async () => {
+  const receipts = validReceipts();
+  receipts[2].results[0].progress_shared = 0;
+  receipts[2].results[0].reading_data = "{private-corrupt-data-that-must-not-be-read";
+  receipts[2].results[0].mission_count = 0;
+  const response = await fixture({ receipts }).get();
+  assert.equal(response.status, 200);
+  assert.equal(response.body.members[0].progressShared, false);
+  assert.equal(response.body.members[0].chaptersRead, null);
+  assert.equal(response.body.members[0].missionsCompleted, null);
+});
+
+for (const value of [undefined, null, false, "0", -1, 2, 1.5]) {
+  test("malformed public-progress consent is never published: " + String(value), async () => {
+    const receipts = validReceipts();
+    receipts[2].results[0].progress_shared = value;
+    const response = await fixture({ receipts }).get();
+    assert.equal(response.status, 503);
+    assert.equal(response.body.error, "community_unavailable");
+    assert.equal(Object.hasOwn(response.body, "members"), false);
+  });
+}
+
+test("progress sorting keeps shared results ahead without turning private progress into zero", async () => {
+  const receipts = validReceipts();
+  receipts[2].results = [
+    { ...receipts[2].results[0], id: "private", display_name: "Private Progress", progress_shared: 0 },
+    { ...receipts[2].results[0], id: "shared", display_name: "Shared Progress", progress_shared: 1 },
+  ];
+  const response = await fixture({ receipts }).get(undefined, false, { sort: "progress" });
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.body.members.map(member => [member.id, member.chaptersRead]), [
+    ["shared", 0], ["private", null],
+  ]);
 });
 
 test("failed first count receipt is unavailable, never a fabricated zero-success summary", async () => {

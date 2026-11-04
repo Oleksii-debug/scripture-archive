@@ -138,6 +138,32 @@ const nodes=[
 ];
 export const scriptureDossiers=nodes;
 
+// SA-EXT-06: ordered, text-only itineraries derived from the cited narrative.
+// These are reader navigation aids, not modern coordinates, measured routes,
+// archaeological identifications or independent historical reconstructions.
+export const scriptureAtlasJourneys=[
+  {id:'abram-genesis-12-13',dossierIds:['abraham','egypt'],
+    names:{uk:'Подорож Аврама в Бутті 12–13',ru:'Путешествие Аврама в Бытии 12–13',en:'Abram’s journey in Genesis 12–13'},
+    descriptions:{uk:'Послідовність місць наведено лише за оповіддю Буття.',ru:'Последовательность мест приведена только по повествованию Бытия.',en:'The order of places follows the Genesis narrative only.'},
+    stops:[
+      {names:{uk:'Харан',ru:'Харран',en:'Haran'},source:ref('GEN',12,4,5)},
+      {names:{uk:'Сихем і дуб Море',ru:'Сихем и дуб Море',en:'Shechem and the oak of Moreh'},source:ref('GEN',12,6,7)},
+      {names:{uk:'Гірська місцевість на схід від Бет-Елу, між Бет-Елом та Аєм',ru:'Горная местность к востоку от Вефиля, между Вефилем и Гаем',en:'Hill country east of Bethel, between Bethel and Ai'},source:ref('GEN',12,8,8)},
+      {names:{uk:'Негев',ru:'Негев',en:'Negev'},source:ref('GEN',12,9,9)},
+      {names:{uk:'Єгипет',ru:'Египет',en:'Egypt'},source:ref('GEN',12,10,20)},
+      {names:{uk:'Негев і місце між Бет-Елом та Аєм',ru:'Негев и место между Вефилем и Гаем',en:'Negev and the place between Bethel and Ai'},source:ref('GEN',13,1,4)},
+    ]},
+  {id:'exodus-departure-and-sea',dossierIds:['moses','exodus','egypt'],
+    names:{uk:'Вихід з Єгипту: від Рамесеса до переходу через море',ru:'Исход из Египта: от Раамсеса до перехода через море',en:'Exodus from Egypt: from Rameses to the sea crossing'},
+    descriptions:{uk:'Зупинки подано в порядку уривків Виходу 12–14 без сучасної локалізації.',ru:'Остановки даны в порядке отрывков Исхода 12–14 без современной локализации.',en:'Stops follow Exodus 12–14 without assigning modern locations.'},
+    stops:[
+      {names:{uk:'Рамесес і Суккот',ru:'Раамсес и Сокхоф',en:'Rameses and Succoth'},source:ref('EXO',12,37,42)},
+      {names:{uk:'Суккот і Етам',ru:'Сокхоф и Ефам',en:'Succoth and Etham'},source:ref('EXO',13,20,22)},
+      {names:{uk:'Місце біля Пі-Гахірота, Мігдола та моря',ru:'Место у Пи-Гахирофа, Мигдола и моря',en:'The place by Pi-hahiroth, Migdol, and the sea'},source:ref('EXO',14,1,4)},
+      {names:{uk:'Перехід через море',ru:'Переход через море',en:'Passage through the sea'},source:ref('EXO',14,21,31)},
+    ]},
+];
+
 export function validateDossierGraph(catalog) {
   // Dossier IDs become internal links; authoring damage must never turn them
   // into markup/URL attributes or present blank text as validated Scripture.
@@ -230,7 +256,19 @@ export function validateDossierGraph(catalog) {
     Number.isSafeInteger(source.chapter) && source.chapter>0 && source.chapter<=200 &&
     ['narrative','interpretive'].includes(source.kind) &&
     bookMaps.every(books=>books.has(source.book) && source.chapter<=books.get(source.book));
-  return nodes.every(item=>item.sources.every(validRef) &&
+  const validJourneys=scriptureAtlasJourneys.length>0 &&
+    new Set(scriptureAtlasJourneys.map(journey=>journey?.id)).size===scriptureAtlasJourneys.length &&
+    scriptureAtlasJourneys.every(journey=>journey && safeId(journey.id) &&
+      Array.isArray(journey.dossierIds) && journey.dossierIds.length>0 && journey.dossierIds.length<=4 &&
+      new Set(journey.dossierIds).size===journey.dossierIds.length &&
+      journey.dossierIds.every(id=>safeId(id)&&known.has(id)) &&
+      LANGS.every(lang=>nonblank(journey.names?.[lang])&&nonblank(journey.descriptions?.[lang])) &&
+      Array.isArray(journey.stops) && journey.stops.length>=2 && journey.stops.length<=12 &&
+      new Set(journey.stops.map(stop=>stop?.source &&
+        `${stop.source.book}:${stop.source.chapter}:${stop.source.first}-${stop.source.last}`)).size===journey.stops.length &&
+      journey.stops.every(stop=>stop && LANGS.every(lang=>nonblank(stop.names?.[lang])) &&
+        validRef(stop.source) && stop.source.kind==='narrative'));
+  return validJourneys && nodes.every(item=>item.sources.every(validRef) &&
     item.related.every(link=>link && known.has(link.to) && link.to!==item.id && validRef(link.via)));
 }
 
@@ -428,9 +466,9 @@ export function dossierAtlasMarkup(catalog,language,esc,query='') {
   const resultCount=filtered?visibleIds.size:0;
   const filterStatus=filtered?'<p role="status">'+esc(SEARCH_COPY[lang].results)+': '+resultCount+'</p>':'';
   const terms={
-    uk:{title:'Біблійний атлас: текстова лабораторія',intro:'Орієнтовна послідовність оповідей для читання. Це не датування історичних подій і не незалежне археологічне підтвердження.',order:'Порядок читання',subject:'Тема',passage:'Біблійний уривок',places:'Згадані місця',extra:'Інші теми дослідження (не хронологічний порядок)',uncertainty:'Сучасні координати, маршрути й археологічні локалізації тут не встановлені; використовуйте першоджерела, а не припущення на карті.'},
-    ru:{title:'Библейский атлас: текстовая лаборатория',intro:'Ориентировочная последовательность повествований для чтения. Это не датировка исторических событий и не независимое археологическое подтверждение.',order:'Порядок чтения',subject:'Тема',passage:'Библейский отрывок',places:'Упомянутые места',extra:'Другие темы исследования (без хронологического порядка)',uncertainty:'Современные координаты, маршруты и археологические локализации здесь не установлены; используйте первоисточники, а не предположения на карте.'},
-    en:{title:'Scripture atlas: text-first research',intro:'An approximate narrative reading sequence, not a historical date assignment or independent archaeological verification.',order:'Reading order',subject:'Subject',passage:'Scripture passage',places:'Places mentioned',extra:'Other research subjects (not chronologically ordered)',uncertainty:'Modern coordinates, routes and archaeological identifications are not established here; use source passages rather than guessed map locations.'}
+    uk:{title:'Біблійний атлас: текстова лабораторія',intro:'Орієнтовна послідовність оповідей для читання. Це не датування історичних подій і не незалежне археологічне підтвердження.',order:'Порядок читання',subject:'Тема',passage:'Біблійний уривок',places:'Згадані місця',routes:'Текстові маршрути оповідей',routeScope:'Порядок зупинок походить лише з наведених біблійних уривків. Він не визначає відстані, сучасні координати, археологічну локалізацію чи незалежну історичну реконструкцію.',extra:'Інші теми дослідження (не хронологічний порядок)',uncertainty:'Сучасні координати, маршрути й археологічні локалізації тут не встановлені; використовуйте першоджерела, а не припущення на карті.'},
+    ru:{title:'Библейский атлас: текстовая лаборатория',intro:'Ориентировочная последовательность повествований для чтения. Это не датировка исторических событий и не независимое археологическое подтверждение.',order:'Порядок чтения',subject:'Тема',passage:'Библейский отрывок',places:'Упомянутые места',routes:'Текстовые маршруты повествований',routeScope:'Порядок остановок взят только из приведённых библейских отрывков. Он не устанавливает расстояния, современные координаты, археологическую локализацию или независимую историческую реконструкцию.',extra:'Другие темы исследования (без хронологического порядка)',uncertainty:'Современные координаты, маршруты и археологические локализации здесь не установлены; используйте первоисточники, а не предположения на карте.'},
+    en:{title:'Scripture atlas: text-first research',intro:'An approximate narrative reading sequence, not a historical date assignment or independent archaeological verification.',order:'Reading order',subject:'Subject',passage:'Scripture passage',places:'Places mentioned',routes:'Text itineraries from the narratives',routeScope:'Stop order comes only from the cited Scripture passages. It does not establish distance, modern coordinates, archaeological identification, or an independent historical reconstruction.',extra:'Other research subjects (not chronologically ordered)',uncertainty:'Modern coordinates, routes and archaeological identifications are not established here; use source passages rather than guessed map locations.'}
   }[lang];
   // A filtered atlas with no witnesses is still the atlas, not a second
   // dossier catalogue. Give keyboard/NVDA users a direct way back to the
@@ -469,6 +507,12 @@ export function dossierAtlasMarkup(catalog,language,esc,query='') {
     '<tr><th scope="row">'+subject(item)+'</th><td><ol>'+
     item.sources.map(source=>'<li>'+passage(source)+' — '+esc(w[source.kind])+'</li>').join('')+
     '</ol></td></tr>').join('');
+  const visibleJourneys=scriptureAtlasJourneys.filter(journey=>!filtered ||
+    journey.dossierIds.some(id=>visibleIds.has(id)));
+  const journeys=visibleJourneys.length?'<section aria-labelledby="dossier-atlas-routes-heading"><h3 id="dossier-atlas-routes-heading">'+esc(terms.routes)+'</h3><p>'+esc(terms.routeScope)+'</p>'+
+    visibleJourneys.map(journey=>'<article><h4>'+esc(journey.names[lang])+'</h4><p>'+esc(journey.descriptions[lang])+'</p><ol>'+
+      journey.stops.map(stop=>'<li><strong>'+esc(stop.names[lang])+'</strong><p>'+passage(stop.source)+' — '+esc(w.narrative)+'</p></li>').join('')+
+      '</ol></article>').join('')+'</section>':'';
   // The dated-reading sample above is deliberately bounded. Do not hide
   // other approved person/event dossiers from the text atlas or falsely place
   // them in a historical chronology without independent dated evidence.
@@ -491,5 +535,5 @@ export function dossierAtlasMarkup(catalog,language,esc,query='') {
         '<dt>'+subject(item)+' → '+subject(byId.get(link.to))+'</dt><dd>'+
         passage(link.via)+' — '+esc(w[link.via.kind])+'</dd>').join('')+
     '</dl></section>':'';
-  return '<section class="card dossier-atlas" aria-labelledby="dossier-atlas-heading"><h2 id="dossier-atlas-heading">'+esc(terms.title)+'</h2><p>'+esc(terms.intro)+'</p>'+filterStatus+'<table><caption>'+esc(terms.order)+'</caption><thead><tr><th scope="col">№</th><th scope="col">'+esc(terms.subject)+'</th><th scope="col">'+esc(terms.passage)+'</th></tr></thead><tbody>'+history+'</tbody></table><table><caption>'+esc(terms.places)+'</caption><thead><tr><th scope="col">'+esc(terms.subject)+'</th><th scope="col">'+esc(terms.passage)+'</th></tr></thead><tbody>'+places+'</tbody></table>'+additional+relatedWitnesses+'<p>'+esc(terms.uncertainty)+'</p></section>';
+  return '<section class="card dossier-atlas" aria-labelledby="dossier-atlas-heading"><h2 id="dossier-atlas-heading">'+esc(terms.title)+'</h2><p>'+esc(terms.intro)+'</p>'+filterStatus+'<table><caption>'+esc(terms.order)+'</caption><thead><tr><th scope="col">№</th><th scope="col">'+esc(terms.subject)+'</th><th scope="col">'+esc(terms.passage)+'</th></tr></thead><tbody>'+history+'</tbody></table><table><caption>'+esc(terms.places)+'</caption><thead><tr><th scope="col">'+esc(terms.subject)+'</th><th scope="col">'+esc(terms.passage)+'</th></tr></thead><tbody>'+places+'</tbody></table>'+journeys+additional+relatedWitnesses+'<p>'+esc(terms.uncertainty)+'</p></section>';
 }

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {scriptureDossiers,validateDossierGraph,dossierMarkup,dossierAtlasMarkup} from '../public/scripture-dossiers.js';
+import {scriptureAtlasJourneys,scriptureDossiers,validateDossierGraph,dossierMarkup,dossierAtlasMarkup} from '../public/scripture-dossiers.js';
 
 const catalog=JSON.parse(readFileSync(new URL('../public/data/catalog.json',import.meta.url),'utf8'));
 const esc=value=>String(value).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
@@ -32,11 +32,12 @@ test('each dossier citation and relationship witness retains evidence class in t
 test('atlas preserves every approved source and relationship with spoken source classification',()=>{
   const refs=scriptureDossiers.flatMap(node=>node.sources);
   const relations=scriptureDossiers.flatMap(node=>node.related.map(edge=>edge.via));
+  const journeyStops=scriptureAtlasJourneys.flatMap(journey=>journey.stops.map(stop=>stop.source));
   assert.equal(relations.length,17,'approved relationship witnesses must all remain');
   for(const lang of ['uk','ru','en']){
     const markup=dossierAtlasMarkup(catalog,lang,esc);
     const found=links(markup);
-    assert.equal(found.length,refs.length+relations.length,lang+' full atlas source coverage');
+    assert.equal(found.length,refs.length+relations.length+journeyStops.length,lang+' full atlas source coverage');
     for(const label of found){
       assert.ok(label.endsWith(' — '+esc(words[lang].narrative))||
                 label.endsWith(' — '+esc(words[lang].interpretive)),

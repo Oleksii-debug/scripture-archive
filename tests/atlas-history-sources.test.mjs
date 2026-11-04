@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {dossierAtlasMarkup,dossierMarkup,scriptureDossiers,searchScriptureDossiers,validateDossierGraph} from '../public/scripture-dossiers.js';
+import {dossierAtlasMarkup,dossierMarkup,scriptureAtlasJourneys,scriptureDossiers,searchScriptureDossiers,validateDossierGraph} from '../public/scripture-dossiers.js';
 const catalog=JSON.parse(readFileSync(new URL('../public/data/catalog.json',import.meta.url),'utf8'));
 const esc=v=>String(v).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const order=['abraham','sarah','joseph','moses','exodus','david','nativity'];
@@ -48,6 +48,68 @@ test('the atlas retains explicit evidence/uncertainty boundaries and accessible 
     assert.ok(!html.includes('onclick='));
     assert.ok(!html.includes('href="http://'));
   }
+});
+
+test('SA-EXT-06 text itineraries expose every ordered stop through the canonical reader',()=>{
+  assert.equal(validateDossierGraph(catalog),true);
+  assert.deepEqual(scriptureAtlasJourneys.map(journey=>[journey.id,journey.stops.length]),[
+    ['abram-genesis-12-13',6],
+    ['exodus-departure-and-sea',4],
+  ]);
+  for(const [lang,boundary] of [
+    ['uk','Порядок зупинок походить лише з наведених біблійних уривків'],
+    ['ru','Порядок остановок взят только из приведённых библейских отрывков'],
+    ['en','Stop order comes only from the cited Scripture passages'],
+  ]){
+    const html=dossierAtlasMarkup(catalog,lang,esc);
+    const start=html.indexOf('<section aria-labelledby="dossier-atlas-routes-heading">');
+    assert.ok(start>=0,lang+' semantic itinerary section');
+    const end=html.indexOf('</section>',start);
+    const routes=html.slice(start,end);
+    assert.ok(routes.includes(esc(boundary)),lang+' explicit evidence boundary');
+    assert.equal((routes.match(/<article>/g)||[]).length,scriptureAtlasJourneys.length);
+    assert.equal((routes.match(/<li>/g)||[]).length,10);
+    for(const journey of scriptureAtlasJourneys){
+      assert.ok(routes.includes('<h4>'+esc(journey.names[lang])+'</h4>'),lang+' '+journey.id+' name');
+      assert.ok(routes.includes('<p>'+esc(journey.descriptions[lang])+'</p>'),lang+' '+journey.id+' scope');
+      for(const stop of journey.stops){
+        const href='href="/reader/'+stop.source.book+'/'+stop.source.chapter+'?verse='+stop.source.first+'"';
+        assert.ok(routes.includes('<strong>'+esc(stop.names[lang])+'</strong>'),lang+' '+stop.names[lang]);
+        assert.ok(routes.includes(href),lang+' '+journey.id+' '+href);
+        assert.ok(routes.includes(' — '+esc(kind[lang].narrative)+'</p>'),lang+' narrative classification');
+      }
+    }
+    assert.ok(!routes.includes('<iframe')&&!routes.includes('onclick=')&&!routes.includes('href="http'),lang+' native links only');
+  }
+});
+
+test('SA-EXT-06 itinerary filtering reuses the dossier result set without unrelated routes',()=>{
+  for(const [lang,query,shown,hidden] of [
+    ['en','Abraham','Abram’s journey in Genesis 12–13','Exodus from Egypt: from Rameses to the sea crossing'],
+    ['uk','Мойсей','Вихід з Єгипту: від Рамесеса до переходу через море','Подорож Аврама в Бутті 12–13'],
+    ['ru','Моисей','Исход из Египта: от Раамсеса до перехода через море','Путешествие Аврама в Бытии 12–13'],
+  ]){
+    const html=dossierAtlasMarkup(catalog,lang,esc,query);
+    assert.ok(html.includes('<h4>'+esc(shown)+'</h4>'),lang+' matching route remains');
+    assert.ok(!html.includes('<h4>'+esc(hidden)+'</h4>'),lang+' unrelated route omitted');
+    assert.match(html,/href="\/reader\//,lang+' matching sources remain readable');
+  }
+  const unrelated=dossierAtlasMarkup(catalog,'en',esc,'David');
+  assert.ok(!unrelated.includes('dossier-atlas-routes-heading'),'unrelated filter does not invent a route');
+});
+
+test('invalid itinerary source fails closed before publishing any atlas citation',()=>{
+  const original=scriptureAtlasJourneys[0].stops[0].source;
+  try{
+    scriptureAtlasJourneys[0].stops[0].source={...original,chapter:999};
+    assert.equal(validateDossierGraph(catalog),false);
+    const html=dossierAtlasMarkup(catalog,'en',esc);
+    assert.match(html,/role="alert"/);
+    assert.ok(!html.includes('href="/reader/'));
+  }finally{
+    scriptureAtlasJourneys[0].stops[0].source=original;
+  }
+  assert.equal(validateDossierGraph(catalog),true);
 });
 
 test('invalid published Scripture catalogue still fails closed without atlas references',()=>{

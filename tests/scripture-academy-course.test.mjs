@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { academyLessonIds,academyPlaceLessonIds,academyAllLessonIds,academyProgressKey,readAcademyProgress,academyMarkup,attachAcademy } from '../public/scripture-academy.js';
+import { academyLessonIds,academyPlaceLessonIds,academyWitnessLessonIds,academyAllLessonIds,academyProgressKey,readAcademyProgress,academyMarkup,attachAcademy } from '../public/scripture-academy.js';
 import { scriptureDossiers } from '../public/scripture-dossiers.js';
 
 const catalog=JSON.parse(readFileSync(new URL('../public/data/catalog.json',import.meta.url),'utf8'));
@@ -13,8 +13,9 @@ test('the real campaigns route opens a canonical, trilingual and source-validate
   assert.equal(academyLessonIds.length,7);
   assert.equal(new Set(academyLessonIds).size,7);
   assert.equal(academyPlaceLessonIds.length,6);
-  assert.equal(academyAllLessonIds.length,13);
-  assert.equal(new Set(academyAllLessonIds).size,13);
+  assert.equal(academyWitnessLessonIds.length,4);
+  assert.equal(academyAllLessonIds.length,17);
+  assert.equal(new Set(academyAllLessonIds).size,17);
   assert.ok(workspace.includes("from './scripture-academy.js'"));
   assert.ok(workspace.includes('academyMarkup(catalog,state.lang,esc,courseProgress)'));
   assert.ok(workspace.includes('attachAcademy(globalThis.document,storage,state.lang,state.user,courseProgress,'), 'Academy must mount a current-principal callback');
@@ -25,8 +26,8 @@ test('the real campaigns route opens a canonical, trilingual and source-validate
     assert.ok(html.includes('role="status"'));
     assert.ok(html.includes('role="alert"'));
     assert.ok(html.includes('<progress '));
-    assert.equal((html.match(/data-academy-lesson=/g)||[]).length,13);
-    assert.equal((html.match(/aria-pressed="false"/g)||[]).length,13);
+    assert.equal((html.match(/data-academy-lesson=/g)||[]).length,17);
+    assert.equal((html.match(/aria-pressed="false"/g)||[]).length,17);
     assert.ok(html.includes('aria-live="polite"'));
     assert.ok(!html.includes('onclick=')&&!html.includes('href="http://'));
     for(const id of academyLessonIds){
@@ -42,6 +43,12 @@ test('the real campaigns route opens a canonical, trilingual and source-validate
     for(const id of academyPlaceLessonIds){
       const dossier=scriptureDossiers.find(x=>x.id===id);
       assert.equal(dossier?.type,'place','the second track reuses only validated place dossiers');
+      assert.ok(html.includes('href="/dossiers?id='+id+'"'));
+      for(const ref of dossier.sources)assert.ok(html.includes('href="/reader/'+ref.book+'/'+ref.chapter+'?verse='+ref.first+'"'));
+    }
+    for(const id of academyWitnessLessonIds){
+      const dossier=scriptureDossiers.find(x=>x.id===id);
+      assert.equal(dossier?.type,'person','the additional track reuses only validated person dossiers');
       assert.ok(html.includes('href="/dossiers?id='+id+'"'));
       for(const ref of dossier.sources)assert.ok(html.includes('href="/reader/'+ref.book+'/'+ref.chapter+'?verse='+ref.first+'"'));
     }

@@ -139,10 +139,30 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const publicChurches=await (await fetch(`${base}/api/churches`)).json();
   assert.equal(publicChurches.items.length,1);assert.equal(publicChurches.items[0].name,churchClaim.name);
   assert.equal('claimantEmail' in publicChurches.items[0],false);assert.equal('verificationEvidence' in publicChurches.items[0],false);
+  // The verified representative can publish an event without giving this
+  // catalogue any attendee, payment, or registration records.
+  const eventPost = async body => {
+    const response=await fetch(`${base}/api/events`,{method:'POST',headers:{Origin:base,Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify(body)});
+    return {response,data:await response.json()};
+  };
+  const eventFixture={action:'submit',churchId, title:'Disposable Integration Conference',summary:'A local route and migration fixture.',city:'Test City',countryCode:'UA',locale:'en',startsOn:'2099-05-10',endsOn:'2099-05-11',accessibilityDetails:'Step-free venue and captions.',programmeUrl:'',registrationUrl:'',organizerAuthorityAttested:true,publicationConsent:true};
+  const createdEvent=await eventPost(eventFixture);assert.equal(createdEvent.response.status,201);
+  let publicEvents=await (await fetch(`${base}/api/events`)).json();assert.equal(publicEvents.items.length,1);
+  assert.equal(publicEvents.items[0].title,eventFixture.title);assert.equal('organizer_user_id' in publicEvents.items[0],false);
   assert.equal((await churchPost({...churchClaim,city:'Corrected Test City'})).response.status,201);
   assert.equal((await (await fetch(`${base}/api/churches`)).json()).items.length,0,'a correction must be reviewed again');
+  assert.equal((await (await fetch(`${base}/api/events`)).json()).items.length,0,'church correction must immediately hide its events');
   const correctedChurch=(await (await fetch(`${base}/api/churches?view=mine`,{headers:{Cookie:cookie}})).json()).items[0];
   assert.notEqual(correctedChurch.id,churchId);
+  assert.equal((await churchPost({action:'review',id:correctedChurch.id,decision:'approve',verificationEvidence:'Disposable corrected authority fixture',note:''},ownerCookie)).response.status,200);
+  const ownedEventsAfterReview=await (await fetch(`${base}/api/events?view=mine`,{headers:{Cookie:cookie}})).json();
+  publicEvents=await (await fetch(`${base}/api/events`)).json();assert.equal(publicEvents.items.length,0,`a representative-claim revision does not silently republish an older event: public=${JSON.stringify(publicEvents)} mine=${JSON.stringify(ownedEventsAfterReview)}`);
+  const republishedEvent=await eventPost({...eventFixture,churchId:correctedChurch.id,title:'Republished Integration Conference'});
+  assert.equal(republishedEvent.response.status,201);
+  const correctedEvent=await eventPost({...eventFixture,id:republishedEvent.data.id,churchId:correctedChurch.id,title:'Corrected Integration Conference'});
+  assert.equal(correctedEvent.response.status,201);assert.equal((await (await fetch(`${base}/api/events`)).json()).items[0].title,'Corrected Integration Conference');
+  assert.equal((await eventPost({action:'withdraw',id:republishedEvent.data.id})).response.status,200);
+  assert.equal((await (await fetch(`${base}/api/events`)).json()).items.length,0);
   assert.equal((await churchPost({action:'withdraw',id:correctedChurch.id})).response.status,200);
   const mark = { edition: "en-web", book: "GEN", chapter: 12 };
   // The disposable Wrangler proxy can abort a following request when an

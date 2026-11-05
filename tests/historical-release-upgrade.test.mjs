@@ -23,12 +23,12 @@ const folder=new URL('../drizzle/',import.meta.url);
 const sql=name=>readFileSync(new URL(name,folder),'utf8');
 const normalizedHash=text=>createHash('sha256').update(text.replace(/[\r\n]+$/,'')+'\n').digest('hex');
 
-test('historical v8 source upgrades representative saved records through v17',()=>{
+test('historical v8 source upgrades representative saved records through v18',()=>{
   const files=readdirSync(folder).filter(x=>/^\d{4}_.+\.sql$/.test(x)).sort();
   const baseline=files.filter(x=>Number(x.slice(0,4))<=8);
   const upgrade=files.filter(x=>Number(x.slice(0,4))>=9);
   assert.deepEqual(baseline,Object.keys(historical));
-  assert.deepEqual(upgrade.map(x=>x.slice(0,4)),['0009','0010','0011','0012','0013','0014','0015','0016','0017']);
+  assert.deepEqual(upgrade.map(x=>x.slice(0,4)),['0009','0010','0011','0012','0013','0014','0015','0016','0017','0018']);
   for(const name of baseline)assert.equal(normalizedHash(sql(name)),historical[name],`${name} differs from the historical source`);
   const db=new DatabaseSync(':memory:');
   try {
@@ -182,6 +182,13 @@ test('historical v8 source upgrades representative saved records through v17',()
     const churchClaim=db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='church_directory_claims'").get();
     assert.match(churchClaim?.sql||'',/claimant_user_id TEXT NOT NULL UNIQUE REFERENCES accounts/);
     assert.match(churchClaim.sql,/verification_evidence TEXT NOT NULL/);
+    // 0018 adds no event fixture during upgrade. An event remains subordinate
+    // to the separately approved representative claim and account lifecycle.
+    assert.equal(db.prepare('SELECT count(*) count FROM church_events').get().count,0);
+    const eventTable=db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='church_events'").get();
+    assert.match(eventTable?.sql||'',/church_claim_id TEXT NOT NULL/);
+    assert.doesNotMatch(eventTable.sql,/church_claim_id TEXT NOT NULL REFERENCES/);
+    assert.match(eventTable.sql,/REFERENCES accounts\(id\) ON DELETE CASCADE/);
     assert.equal(db.prepare('PRAGMA foreign_key_check').all().length,0);
   } finally {db.close();}
 });

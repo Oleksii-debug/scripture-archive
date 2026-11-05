@@ -4607,6 +4607,7 @@ function renderPrivacy() {
       "Приватність і облікові записи",
       "Scripture Archive підтверджує електронну адресу одноразовим посиланням і зберігає пароль лише як стійкий криптографічний хеш. Захищені серверні сесії дають змогу синхронізувати профіль і прогрес між пристроями.",
       "Конфесія, конкретна церква, сімейний стан і стать є необов’язковими приватними даними. Вони не впливають на оцінювання. У спільноті ім’я, прізвище та навчальний поступ реального користувача показуються лише після окремої згоди; електронна адреса не публікується.",
+      "Для заявки представника церкви зберігаються публічні відомості про громаду, зв’язок з обліковим записом заявника, його підтверджена адреса, засвідчення повноважень і згоди, а також приватні докази й рішення перевірки. Публікуються тільки схвалені відомості про громаду — не особа чи адреса заявника. Виправлення знімає запис з публікації до нової перевірки; заявник може відкликати його, а видалення облікового запису видаляє заявку.",
       "Аналітика вмикається лише після згоди на аналітичні cookie. Вона фіксує переглянуті розділи, тип пристрою, приблизну країну, виконані дії та активний час. Паролі, відповіді, назви груп і вміст профілю до аналітики не передаються; згоду можна скасувати нижче.",
       "Дані профілю можна виправити в обліковому записі, а обліковий запис і пов’язані особисті дані — видалити там само. Для додаткового звернення: dordiaioleksii1@gmail.com.",
     ],
@@ -4614,6 +4615,7 @@ function renderPrivacy() {
       "Приватность и учётные записи",
       "Scripture Archive подтверждает электронный адрес одноразовой ссылкой и хранит пароль только как стойкий криптографический хеш. Защищённые серверные сессии синхронизируют профиль и прогресс между устройствами.",
       "Конфессия, конкретная церковь, семейное положение и пол — необязательные приватные данные. Они не влияют на оценивание. В сообществе имя, фамилия и учебный прогресс реального пользователя показываются только после отдельного согласия; электронная почта не публикуется.",
+      "Для заявки представителя церкви сохраняются публичные сведения об общине, связь с учётной записью заявителя, его подтверждённый адрес, подтверждения полномочий и согласия, а также приватные доказательства и решение проверки. Публикуются только одобренные сведения об общине — не личность или адрес заявителя. Исправление снимает запись с публикации до новой проверки; заявитель может отозвать её, а удаление учётной записи удаляет заявку.",
       "Аналитика включается только после согласия на аналитические cookie. Она фиксирует просмотренные разделы, тип устройства, примерную страну, выполненные действия и активное время. Пароли, ответы, названия групп и содержимое профиля в аналитику не передаются; согласие можно отменить ниже.",
       "Данные профиля можно исправить в учётной записи, а учётную запись и связанные личные данные — удалить там же. Для дополнительного обращения: dordiaioleksii1@gmail.com.",
     ],
@@ -4621,6 +4623,7 @@ function renderPrivacy() {
       "Privacy and accounts",
       "Scripture Archive verifies an email address with a one-time link and stores the password only as a strong cryptographic hash. Secure server sessions synchronize the profile and progress across devices.",
       "Christian tradition, specific church, marital status, and gender are optional private data and never affect grading. A real member’s first name, last name, and learning progress appear in the community only after separate consent; email addresses are never published.",
+      "A church representative claim stores public organization fields, its link to the claimant account, the verified claimant email, authority and publication attestations, and private verification evidence and review decisions. Only approved organization fields are published—not the claimant’s identity or email. A correction unpublishes the record until a fresh review; the claimant may withdraw it, and account deletion removes the claim.",
       "Analytics runs only after consent to analytics cookies. It records sections viewed, device type, approximate country, actions, and active time. Passwords, answers, group names, and profile content are never sent; consent can be withdrawn below.",
       "You can correct profile data in your account and delete the account and its associated personal data there. For an additional request, email dordiaioleksii1@gmail.com.",
     ],
@@ -4703,7 +4706,7 @@ async function route() {
     else if (name === "groups" && parts[1]) await renderGroup(parts[1]);
     else if (name === "groups") await renderGroups();
     else if (name === "community") await renderCommunity(Number(new URLSearchParams(location.search).get("page"))||1,new URLSearchParams(location.search).get("q")||"",new URLSearchParams(location.search).get("sort")||"recent");
-    else if (["home-groups", "live", "campaigns", "dossiers", "library", "builder", "progress", "about"].includes(name)) {
+    else if (["home-groups", "live", "campaigns", "dossiers", "library", "churches", "builder", "progress", "about"].includes(name)) {
       if(name==="progress"&&state.user)await syncProgress();
       await renderWorkspace(name==='home-groups'?'live':name,{state,t,esc,shell,getMission,getCatalog,setActiveNav,loadJSON,announce,play});
     }
@@ -4826,10 +4829,10 @@ window.addEventListener("pagehide", () => {
   // Profile, progress, Academy, owner and author pages all hold
   // principal-sensitive data. Clear even an unmounted private route (e.g.
   // pending sign-in or course source request) before BFCache can preserve it.
-  const mounted=main.querySelector(".builder-layout, .editor-grid, .progress-stat, .resume-card, .account-dashboard, .profile-card, .auth-grid, .auth-card, .academy-reading");
+  const mounted=main.querySelector(".builder-layout, .editor-grid, .progress-stat, .resume-card, .account-dashboard, .profile-card, .auth-grid, .auth-card, .academy-reading, .church-directory");
   const wasReauthorizing=editorialAwaitingSession;
   editorialAwaitingSession=false;
-  if(!mounted && !["builder","editor","progress","account","campaigns"].includes(currentRoute) && !wasReauthorizing)return;
+  if(!mounted && !["builder","editor","progress","account","campaigns","churches"].includes(currentRoute) && !wasReauthorizing)return;
   editorialPrivateNeedsReauthorization=true;
   editorViewEpoch++;
   retirePrivateWorkspaceOnPageHide();

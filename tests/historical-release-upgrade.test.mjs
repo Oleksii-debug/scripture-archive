@@ -23,12 +23,12 @@ const folder=new URL('../drizzle/',import.meta.url);
 const sql=name=>readFileSync(new URL(name,folder),'utf8');
 const normalizedHash=text=>createHash('sha256').update(text.replace(/[\r\n]+$/,'')+'\n').digest('hex');
 
-test('historical v8 source upgrades representative saved records through v16',()=>{
+test('historical v8 source upgrades representative saved records through v17',()=>{
   const files=readdirSync(folder).filter(x=>/^\d{4}_.+\.sql$/.test(x)).sort();
   const baseline=files.filter(x=>Number(x.slice(0,4))<=8);
   const upgrade=files.filter(x=>Number(x.slice(0,4))>=9);
   assert.deepEqual(baseline,Object.keys(historical));
-  assert.deepEqual(upgrade.map(x=>x.slice(0,4)),['0009','0010','0011','0012','0013','0014','0015','0016']);
+  assert.deepEqual(upgrade.map(x=>x.slice(0,4)),['0009','0010','0011','0012','0013','0014','0015','0016','0017']);
   for(const name of baseline)assert.equal(normalizedHash(sql(name)),historical[name],`${name} differs from the historical source`);
   const db=new DatabaseSync(':memory:');
   try {
@@ -176,6 +176,12 @@ test('historical v8 source upgrades representative saved records through v16',()
     const recoveredCommunity=db.prepare("SELECT public_first_name,public_community FROM profiles WHERE user_id='fixture-user'").get();
     assert.equal(recoveredCommunity.public_first_name,0);
     assert.equal(recoveredCommunity.public_community,0);
+    // 0017 creates a separate representative-claim workflow. A legacy
+    // profile church value must never be treated as a verified organization.
+    assert.equal(db.prepare('SELECT count(*) count FROM church_directory_claims').get().count,0);
+    const churchClaim=db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='church_directory_claims'").get();
+    assert.match(churchClaim?.sql||'',/claimant_user_id TEXT NOT NULL UNIQUE REFERENCES accounts/);
+    assert.match(churchClaim.sql,/verification_evidence TEXT NOT NULL/);
     assert.equal(db.prepare('PRAGMA foreign_key_check').all().length,0);
   } finally {db.close();}
 });

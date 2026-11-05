@@ -274,9 +274,9 @@ export async function renderPublicMaterials(root, w, esc, isCurrent = () => true
 }
 
 const LIBRARY_SEARCH = {
-  uk: {label:'Пошук матеріалів', hint:'Шукайте за назвою, запитанням, біблійним посиланням або джерелом.', submit:'Шукати', more:'Продовжити пошук', heading:'Результати пошуку', loading:'Пошук матеріалів…', empty:'Збігів не знайдено.', end:'Більше збігів немає.', batchEmpty:'У цій частині збігів немає. Продовжте пошук.', moreHint:'Пошук можна продовжити.', found:n=>`Знайдено в цій частині: ${n}.`},
-  ru: {label:'Поиск материалов', hint:'Ищите по названию, вопросу, библейской ссылке или источнику.', submit:'Искать', more:'Продолжить поиск', heading:'Результаты поиска', loading:'Поиск материалов…', empty:'Совпадений не найдено.', end:'Больше совпадений нет.', batchEmpty:'В этой части совпадений нет. Продолжите поиск.', moreHint:'Поиск можно продолжить.', found:n=>`Найдено в этой части: ${n}.`},
-  en: {label:'Search materials', hint:'Search by title, question, Bible reference, or source.', submit:'Search', more:'Continue search', heading:'Search results', loading:'Searching materials…', empty:'No matches found.', end:'No more matches.', batchEmpty:'No matches in this part. Continue searching.', moreHint:'You can continue searching.', found:n=>`Found in this part: ${n}.`},
+  uk: {label:'Пошук матеріалів', locale:'Мова матеріалу', allLocales:'Усі доступні мови', languageNames:{uk:'Українська',ru:'Російська',en:'Англійська'}, hint:'Шукайте за назвою, запитанням, біблійним посиланням або джерелом. Мовний фільтр використовує перевірену мову матеріалу.', submit:'Шукати', more:'Продовжити пошук', heading:'Результати пошуку', loading:'Пошук матеріалів…', empty:'Збігів не знайдено.', end:'Більше збігів немає.', batchEmpty:'У цій частині збігів немає. Продовжте пошук.', moreHint:'Пошук можна продовжити.', found:n=>`Знайдено в цій частині: ${n}.`},
+  ru: {label:'Поиск материалов', locale:'Язык материала', allLocales:'Все доступные языки', languageNames:{uk:'Украинский',ru:'Русский',en:'Английский'}, hint:'Ищите по названию, вопросу, библейской ссылке или источнику. Языковой фильтр использует проверенный язык материала.', submit:'Искать', more:'Продолжить поиск', heading:'Результаты поиска', loading:'Поиск материалов…', empty:'Совпадений не найдено.', end:'Больше совпадений нет.', batchEmpty:'В этой части совпадений нет. Продолжите поиск.', moreHint:'Поиск можно продолжить.', found:n=>`Найдено в этой части: ${n}.`},
+  en: {label:'Search materials', locale:'Material language', allLocales:'All available languages', languageNames:{uk:'Ukrainian',ru:'Russian',en:'English'}, hint:'Search by title, question, Bible reference, or source. The language filter uses the reviewed material language.', submit:'Search', more:'Continue search', heading:'Search results', loading:'Searching materials…', empty:'No matches found.', end:'No more matches.', batchEmpty:'No matches in this part. Continue searching.', moreHint:'You can continue searching.', found:n=>`Found in this part: ${n}.`},
 };
 
 // The public library uses the reviewed-material authority, not a separate
@@ -285,21 +285,21 @@ export async function renderReviewedLibrary(root, w, lang, esc, isCurrent = () =
   const copy=ownLocaleCopy(LIBRARY_SEARCH,lang);
   const active=()=>{ try { return root?.isConnected !== false && isCurrent() === true; } catch { return false; } };
   if (!active()) return;
-  root.innerHTML=`<form class="library-search"><label class="account-field"><span>${copy.label}</span><input name="query" type="search" maxlength="100" aria-describedby="library-search-help"></label><p id="library-search-help">${copy.hint}</p><button class="button" type="submit">${copy.submit}</button></form><p class="library-search-status" role="status"></p><div class="library-search-results"></div><button class="button library-search-more" type="button" hidden>${copy.more}</button>`;
-  const form=root.querySelector('.library-search'), input=form?.querySelector('input'), submit=form?.querySelector('button');
+  root.innerHTML=`<form class="library-search"><label class="account-field"><span>${copy.label}</span><input name="query" type="search" maxlength="100" aria-describedby="library-search-help"></label><label class="account-field"><span>${copy.locale}</span><select name="locale" aria-describedby="library-search-help"><option value="">${copy.allLocales}</option>${['uk','ru','en'].map(locale=>`<option value="${locale}">${copy.languageNames[locale]}</option>`).join('')}</select></label><p id="library-search-help">${copy.hint}</p><button class="button" type="submit">${copy.submit}</button></form><p class="library-search-status" role="status"></p><div class="library-search-results"></div><button class="button library-search-more" type="button" hidden>${copy.more}</button>`;
+  const form=root.querySelector('.library-search'), input=form?.querySelector('input'), localeSelect=form?.querySelector('select'), submit=form?.querySelector('button');
   const status=root.querySelector('.library-search-status'), results=root.querySelector('.library-search-results'), more=root.querySelector('.library-search-more');
-  if (!form || !input || !status || !results || !more) return;
-  let requestEpoch=0, searchEpoch=0, nextCursor=null, currentQuery='', page=0, loading=false;
+  if (!form || !input || !localeSelect || !status || !results || !more) return;
+  let requestEpoch=0, searchEpoch=0, nextCursor=null, currentQuery='', currentLocale=null, page=0, loading=false;
   // Cursor IDs are opaque but a repeated pair can never advance pagination.
   const seenCursors=new Set();
-  async function load(query, cursor, trigger) {
+  async function load(query, locale, cursor, trigger) {
     if (!active()) return;
     const request=++requestEpoch, search=searchEpoch;
     const doc=root.ownerDocument, hadFocus=Boolean(trigger && doc?.activeElement===trigger);
     loading=true;
     status.textContent=copy.loading;
     try {
-      const data=await post({action:'librarySearch',query,cursor});
+      const data=await post({action:'librarySearch',query,locale,cursor});
       if (!active() || request!==requestEpoch || search!==searchEpoch) return;
       const validCursor=data?.nextCursor===null || (data?.nextCursor &&
         typeof data.nextCursor.id==='string' && data.nextCursor.id.length>0 && data.nextCursor.id.length<=100 &&
@@ -311,6 +311,7 @@ export async function renderReviewedLibrary(root, w, lang, esc, isCurrent = () =
       nextCursor=data.nextCursor;
       if(nextCursor)seenCursors.add(JSON.stringify([nextCursor.id,nextCursor.submittedAt]));
       currentQuery=query;
+      currentLocale=locale;
       page++;
       const headingId=`library-search-page-${page}`;
       const message=data.items.length ? `${copy.found(data.items.length)} ${nextCursor ? copy.moreHint : ''}` :
@@ -337,13 +338,14 @@ export async function renderReviewedLibrary(root, w, lang, esc, isCurrent = () =
     event.preventDefault();
     if (!active()) return;
     searchEpoch++; page=0; nextCursor=null; seenCursors.clear(); more.hidden=true; results.innerHTML='';
-    void load(input.value.trim(),null,submit);
+    const selected=['uk','ru','en'].includes(localeSelect.value)?localeSelect.value:null;
+    void load(input.value.trim(),selected,null,submit);
   };
   more.onclick=()=>{
     if (!active() || loading || !nextCursor) return;
-    void load(currentQuery,nextCursor,more);
+    void load(currentQuery,currentLocale,nextCursor,more);
   };
-  await load('',null,null);
+  await load('',null,null,null);
 }
 const EDITOR_SEARCH_COPY = {
   uk:{title:'Пошук опублікованих матеріалів',label:'Назва, уривок або джерело',submit:'Знайти',more:'Показати наступні результати',found:n=>'Знайдено в цій частині: '+n,empty:'У цій частині збігів немає.',continuation:'Можна продовжити пошук.',error:'Не вдалося виконати пошук. Спробуйте ще раз.',page:'Результати, частина'},

@@ -32,6 +32,13 @@ test('validated import accepts canonical place-study markers without changing an
   assert.deepEqual(JSON.parse(f.values.get(f.bob)),{version:1,completed:['sarah']});
   assert.match(f.status.textContent,/were added/);
 });
+test('validated import accepts canonical additional-person markers without changing another account',async()=>{
+  const f=mount({raw:payload(['ruth','peter'])});
+  await f.click();
+  assert.deepEqual(JSON.parse(f.values.get(f.alice)),{version:1,completed:['abraham','ruth','peter']});
+  assert.deepEqual(JSON.parse(f.values.get(f.bob)),{version:1,completed:['sarah']});
+  assert.match(f.status.textContent,/were added/);
+});
 test('invalid, duplicated, oversized, or foreign data cannot overwrite markers',async()=>{
   for(const raw of ['bad',payload(['david','david']),payload(['unknown']),JSON.stringify({format:'scripture-archive-academy-markers',version:1,completed:[],extra:'x'}),'x'.repeat(4097)]){
     const f=mount({raw});const original=f.values.get(f.alice);await f.click();assert.equal(f.values.get(f.alice),original);assert.match(f.status.textContent,/invalid/);

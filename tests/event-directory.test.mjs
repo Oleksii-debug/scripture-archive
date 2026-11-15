@@ -157,7 +157,9 @@ test('the event directory continues a submitted search after an empty page and r
     input.value='Ivano';nodes['.event-search'].onsubmit({preventDefault(){}});await tick();
     assert.equal(more.hidden,false);
     assert.match(publicRoot.innerHTML,/You can continue searching/);
-    input.value='unsubmitted';doc.activeElement=more;more.onclick();await tick();
+    input.value='unsubmitted';doc.activeElement=more;more.onclick();more.onclick();
+    assert.equal(more.disabled,false,'pending pagination keeps the native button focusable');
+    await tick();
     assert.deepEqual(calls,[['',null],['Ivano',null],['Ivano','event-199']]);
     assert.match(publicRoot.innerHTML,/Results, page 2/);
     assert.equal(more.hidden,true);

@@ -39,14 +39,16 @@ export async function renderEventDirectory(root,lang,esc,user,isCurrent=()=>true
   root.innerHTML=`<section class="event-directory" aria-labelledby="event-directory-title"><div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1 id="event-directory-title">${esc(w.title)}</h1></div></div><p class="lead">${esc(w.lead)}</p><p>${esc(w.honesty)}</p><form class="event-search"><label class="account-field"><span>${esc(w.search)}</span><input name="query" type="search" maxlength="80"></label><button class="button" type="submit">${esc(w.find)}</button></form><p class="event-status" role="status"></p><div class="event-public"></div><button class="button event-more" type="button" hidden>${esc(pages.more)}</button><div class="event-private">${canOrganize?'':`<p><a href="/account">${esc(w.signin)}</a></p>`}</div></section>`;
   const search=root.querySelector('.event-search'),query=search?.querySelector('input'),publicRoot=root.querySelector('.event-public'),privateRoot=root.querySelector('.event-private'),status=root.querySelector('.event-status');
   const more = root.querySelector('.event-more'), seenCursors = new Set(), listed = new Set();
-  let epoch=0, owned=[], nextCursor=null, activeQuery='', page=0;
+  let epoch=0, owned=[], nextCursor=null, activeQuery='', page=0, loading=false;
   function cursorKey(cursor) {
     return JSON.stringify([cursor.startsOn, cursor.title, cursor.id]);
   }
   async function publicLoad(text=activeQuery, cursor=null) {
     const token=++epoch;
     const hadFocus = Boolean(cursor && more && root.ownerDocument?.activeElement===more);
-    if (more) more.disabled=true;
+    // Keep the button focusable during the read. Disabling a focused native
+    // button can move focus to the document body before results arrive.
+    loading=true;
     status.textContent='';
     if (!cursor) {
       activeQuery=text;
@@ -92,11 +94,11 @@ export async function renderEventDirectory(root,lang,esc,user,isCurrent=()=>true
     } catch {
       if (active() && token===epoch) status.textContent=w.error;
     } finally {
-      if (active() && token===epoch && more) more.disabled=false;
+      if (token===epoch) loading=false;
     }
   }
   if (more) more.onclick=()=>{
-    if (active() && !more.disabled && nextCursor) void publicLoad(activeQuery,nextCursor);
+    if (active() && !loading && nextCursor) void publicLoad(activeQuery,nextCursor);
   };
   async function privateLoad(){if(!canOrganize||!active())return;try{const [churches,events]=await Promise.all([api('/api/churches?view=mine'),api('/api/events?view=mine')]);if(!active()||!Array.isArray(churches.items)||churches.items.length>1||!Array.isArray(events.items)||events.items.length>200||!events.items.every(item=>valid(item,true)))throw Error('invalid private events');owned=events.items;const church=churches.items.find(item=>item?.status==='approved');const organizer=church?eventForm(church,w,esc):`<p><a href="/churches">${esc(w.churchRequired)}</a></p>`;privateRoot.innerHTML=organizer+mine(owned,w,esc,Boolean(church));attach(church);}catch{if(active())privateRoot.innerHTML=`<p role="alert">${esc(w.error)}</p>`;}}
   function attach(church){const form=root.querySelector('.event-form');if(form)form.onsubmit=async event=>{event.preventDefault();if(!active())return;const data=new FormData(form),button=form.querySelector('button[type="submit"]'),feedback=form.querySelector('[role="status"]');button.disabled=true;try{await post({action:'submit',id:data.get('id'),churchId:church.id,title:data.get('title'),summary:data.get('summary'),city:data.get('city'),countryCode:String(data.get('countryCode')||'').toUpperCase(),locale:data.get('locale'),startsOn:data.get('startsOn'),endsOn:data.get('endsOn'),accessibilityDetails:data.get('accessibilityDetails'),programmeUrl:data.get('programmeUrl'),registrationUrl:data.get('registrationUrl'),organizerAuthorityAttested:data.has('authority'),publicationConsent:data.has('consent')});if(!active())return;feedback.textContent=w.saved;await Promise.all([publicLoad(),privateLoad()]);}catch{if(active()){feedback.textContent=w.error;button.disabled=false;}}};

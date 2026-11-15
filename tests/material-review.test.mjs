@@ -565,6 +565,9 @@ test('library search rejects malformed cursors and surfaces unavailable storage,
       {action:'librarySearch',query:'',locale:'de',cursor:null},
       {action:'librarySearch',query:'',locale:'',cursor:null},
       {action:'librarySearch',query:'',locale:42,cursor:null},
+      {action:'librarySearch',query:'',rightsBasis:'',cursor:null},
+      {action:'librarySearch',query:'',rightsBasis:'OPEN_LICENSE',cursor:null},
+      {action:'librarySearch',query:'',rightsBasis:['open_license'],cursor:null},
     ]) assert.equal((await f.post(body,'')).status,400);
     assert.equal((await f.post({action:'librarySearch',query:'',cursor:null},'','https://other.invalid')).status,403);
     f.setReadFailure(true);
@@ -608,6 +611,28 @@ test('locale filtering preserves bounded continuation across earlier pages in ot
     assert.deepEqual(second.data.items.map(item=>item.id),['library-0229']);
     assert.deepEqual(second.data.items.map(item=>item.locale),['en']);
     assert.equal(second.data.nextCursor,null);
+  }finally{f.db.close();}
+});
+
+test('publication basis filters reviewed rights and keeps bounded continuation past legacy rows',async()=>{
+  const f=fixture();try {
+    seedLibrary(f,230);
+    const setBasis=f.db.prepare('UPDATE material_submissions SET rights_holder=?,rights_basis=?,license_url=? WHERE id=?');
+    setBasis.run('Source Editor','permission',null,'library-0001');
+    setBasis.run('Source Editor','open_license','https://example.org/license','library-0229');
+    const search={action:'librarySearch',query:'',locale:'uk',rightsBasis:'open_license'};
+    const first=await f.post({...search,cursor:null},'');
+    assert.equal(first.status,200);
+    assert.deepEqual(first.data.items,[]);
+    assert.deepEqual(first.data.nextCursor,{id:'library-0199',submittedAt:'2026-01-01'});
+    const next=await f.post({...search,cursor:first.data.nextCursor},'');
+    assert.deepEqual(next.data.items.map(item=>[item.id,item.rights.basis]),[['library-0229','open_license']]);
+    assert.equal(next.data.nextCursor,null);
+    const wrongLocale=await f.post({...search,locale:'en',cursor:first.data.nextCursor},'');
+    assert.deepEqual(wrongLocale.data.items,[]);
+    const all=await f.post({...search,rightsBasis:null,cursor:null},'');
+    assert.ok(all.data.items.some(item=>item.rights===null));
+    assert.ok(all.data.items.some(item=>item.rights?.basis==='permission'));
   }finally{f.db.close();}
 });
 

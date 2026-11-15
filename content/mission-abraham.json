@@ -5,7 +5,7 @@
   "sourceStatus": "DEVELOPER_SOURCE_AUDITED / INDEPENDENT_AUDIT_PENDING",
   "canonicalRevision": "R06_D4_STAGE05_READABLE",
   "taskCountCanonical": 30,
-  "taskCountPublished": 5,
+  "taskCountPublished": 8,
   "title": {
     "uk": "Авраам: покликання, земля і віра",
     "ru": "Авраам: призвание, земля и вера",
@@ -246,6 +246,149 @@
         "uk": "Господь поєднує обіцянку землі з наказом оглянути її й пройти нею. Ці дії названо в самому уривку.",
         "ru": "Господь соединяет обещание земли с повелением осмотреть её и пройти по ней. Эти действия названы в самом отрывке.",
         "en": "The LORD connects the promise of the land with instructions to look over it and walk through it. Both actions appear in the passage."
+      }
+    },
+    {
+      "id": "OTAB01-GEN14-01",
+      "evidenceId": "GEN.14.14-16",
+      "reference": "Genesis 14:14–16",
+      "book": "GEN",
+      "chapter": 14,
+      "verses": [
+        14,
+        15,
+        16
+      ],
+      "type": "single",
+      "confidence": "T1",
+      "correct": [
+        2
+      ],
+      "question": {
+        "uk": "Що Аврам повернув після переслідування нападників?",
+        "ru": "Кого и что вернул Аврам после преследования нападавших?",
+        "en": "Whom and what did Abram bring back after the pursuit?"
+      },
+      "options": {
+        "uk": [
+          "Лише майно Лота, а Лот залишився в полоні.",
+          "Тільки Лота, без інших людей і майна.",
+          "Лота, інших полонених і захоплене майно.",
+          "Лише захоплене майно, без людей."
+        ],
+        "ru": [
+          "Только имущество Лота, а Лот остался в плену.",
+          "Только Лота, без остальных людей и имущества.",
+          "Лота, других пленников и захваченное имущество.",
+          "Только захваченное имущество, без людей."
+        ],
+        "en": [
+          "Only Lot’s goods, while Lot remained captive.",
+          "Only Lot, without the other people or the goods.",
+          "Lot, the other captives, and the seized goods.",
+          "Only the seized goods, without any of the people."
+        ]
+      },
+      "success": {
+        "uk": "Буття 14:16 окремо називає повернене майно, Лота, жінок та інших людей.",
+        "ru": "В Бытии 14:16 отдельно названы возвращённое имущество, Лот, женщины и остальные люди.",
+        "en": "Genesis 14:16 lists the recovered goods, Lot, the women, and the other people."
+      }
+    },
+    {
+      "id": "OTAB01-GEN14-02",
+      "evidenceId": "GEN.14.18-20",
+      "reference": "Genesis 14:18–20",
+      "book": "GEN",
+      "chapter": 14,
+      "verses": [
+        18,
+        19,
+        20
+      ],
+      "type": "multi",
+      "confidence": "T1",
+      "correct": [
+        0,
+        2
+      ],
+      "question": {
+        "uk": "Які дві дії Мелхиседека описує уривок?",
+        "ru": "Какие два действия Мелхиседека описаны в отрывке?",
+        "en": "Which two actions of Melchizedek does the passage describe?"
+      },
+      "options": {
+        "uk": [
+          "Він виніс хліб і вино.",
+          "Він наказав Аврамові переслідувати нападників до Дану.",
+          "Він благословив Аврама.",
+          "Він попросив, щоб Аврам залишив собі все майно."
+        ],
+        "ru": [
+          "Он вынес хлеб и вино.",
+          "Он приказал Авраму преследовать нападавших до Дана.",
+          "Он благословил Аврама.",
+          "Он попросил Аврама оставить себе всё имущество."
+        ],
+        "en": [
+          "He brought out bread and wine.",
+          "He commanded Abram to pursue the attackers as far as Dan.",
+          "He blessed Abram.",
+          "He asked Abram to keep all the goods."
+        ]
+      },
+      "success": {
+        "uk": "Мелхиседек, цар Салиму і священник Бога Всевишнього, приносить хліб і вино та благословляє Аврама.",
+        "ru": "Мелхиседек, царь Салима и священник Бога Всевышнего, приносит хлеб и вино и благословляет Аврама.",
+        "en": "Melchizedek, king of Salem and priest of God Most High, brings bread and wine and blesses Abram."
+      }
+    },
+    {
+      "id": "OTAB01-GEN14-03",
+      "evidenceId": "GEN.14.21-24",
+      "reference": "Genesis 14:21–24",
+      "book": "GEN",
+      "chapter": 14,
+      "verses": [
+        21,
+        22,
+        23,
+        24
+      ],
+      "type": "single",
+      "confidence": "T1",
+      "correct": [
+        1
+      ],
+      "question": {
+        "uk": "Чому Аврам відмовився взяти майно для себе?",
+        "ru": "Почему Аврам отказался взять имущество для себя?",
+        "en": "Why did Abram refuse to take the goods for himself?"
+      },
+      "options": {
+        "uk": [
+          "Він уже пообіцяв усе майно Лотові.",
+          "Він не хотів, щоб цар Содому приписав собі його збагачення.",
+          "Він вважав, що цар Содому нічого йому не запропонував.",
+          "Він вимагав замість майна землі біля Содому."
+        ],
+        "ru": [
+          "Он уже обещал всё имущество Лоту.",
+          "Он не хотел, чтобы царь Содома приписал себе его обогащение.",
+          "Он считал, что царь Содома ничего ему не предложил.",
+          "Он потребовал вместо имущества землю около Содома."
+        ],
+        "en": [
+          "He had already promised all the goods to Lot.",
+          "He did not want the king of Sodom to take credit for making him rich.",
+          "He believed the king of Sodom had offered him nothing.",
+          "He demanded land near Sodom in place of the goods."
+        ]
+      },
+      "success": {
+        "uk": "Аврам відмовляється від особистої здобичі. Він згадує вже спожиту їжу й залишає частку своїм супутникам.",
+        "ru": "Аврам отказывается от личной добычи. Он упоминает уже съеденную пищу и оставляет долю своим спутникам.",
+        "en": "Abram declines a personal share. He makes exceptions for what the men have eaten and for his companions’ shares."
       }
     }
   ]

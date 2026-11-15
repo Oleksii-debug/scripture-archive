@@ -5,10 +5,35 @@ import test from "node:test";
 const read = path => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("public mission data contains metadata only", async () => {
-  const mission = JSON.parse(await read("public/data/mission-abraham.json"));
-  assert.equal(mission.taskCount, 5);
+  const [mission, server] = await Promise.all([
+    read("public/data/mission-abraham.json"), read("content/mission-abraham.json"),
+  ]).then(files => files.map(file => JSON.parse(file)));
+  assert.equal(mission.taskCount, server.tasks.length);
+  assert.equal(server.taskCountPublished, server.tasks.length);
+  const chapters = new Map(server.tasks.map(({book, chapter}) => [`${book}:${chapter}`, {book, chapter}]));
+  assert.deepEqual(mission.chapters, [...chapters.values()]);
   assert.equal("tasks" in mission, false);
   assert.doesNotMatch(JSON.stringify(mission), /correct|options|question|hint|success/i);
+});
+
+test("Genesis 14 activities cite available verses in every bundled edition and have complete translations", async () => {
+  const mission = JSON.parse(await read("content/mission-abraham.json"));
+  const tasks = mission.tasks.filter(task => task.book === "GEN" && task.chapter === 14);
+  assert.equal(tasks.length, 3);
+  assert.equal(new Set(mission.tasks.map(task => task.id)).size, mission.tasks.length);
+  assert.deepEqual(tasks.map(task => task.verses), [[14,15,16],[18,19,20],[21,22,23,24]]);
+  const books = await Promise.all(["uk", "uk-ohiienko", "ru", "en"].map(async edition =>
+    JSON.parse(await read(`public/data/bible/${edition}/GEN.json`))));
+  for (const task of tasks) {
+    for (const book of books)
+      for (const verse of task.verses) assert.ok(book.chapters[13][verse - 1]?.trim(), `${book.editionId} GEN 14:${verse}`);
+    for (const locale of ["uk", "ru", "en"]) {
+      assert.ok(task.question[locale].trim());
+      assert.ok(task.success[locale].trim());
+      assert.equal(new Set(task.options[locale]).size, 4);
+      for (const index of task.correct) assert.ok(task.options[locale][index].trim());
+    }
+  }
 });
 
 test("server mission has no hint fields", async () => {

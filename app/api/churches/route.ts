@@ -77,20 +77,39 @@ export async function GET(request: Request) {
       const query = url.searchParams.get("q") || "";
       if (query.length > 80 || query.trim() !== query ||
           /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/u.test(query)) return json({ error: "invalid_search" }, 400);
+      const locale = url.searchParams.get("locale") || "";
+      const tradition = url.searchParams.get("tradition") || "";
+      const afterName = url.searchParams.get("afterName"), afterCity = url.searchParams.get("afterCity"),
+        afterId = url.searchParams.get("afterId");
+      const hasCursor = afterName !== null || afterCity !== null || afterId !== null;
+      if (["q", "locale", "tradition", "afterName", "afterCity", "afterId"].some(field => url.searchParams.getAll(field).length > 1) ||
+          (locale && !LOCALES.has(locale)) || (tradition && !TRADITIONS.has(tradition)) ||
+          (hasCursor && (!visible(afterName, 3, 160) || !visible(afterCity, 2, 120) || !validId(afterId))))
+        return json({ error: "invalid_search" }, 400);
+      const parameters: string[] = [];
+      if (locale) parameters.push(locale);
+      if (tradition) parameters.push(tradition);
+      if (hasCursor) parameters.push(afterName!, afterCity!, afterId!);
       const rows = await env.DB.prepare(`SELECT c.id,c.name,c.city,c.country_code,c.locale,c.tradition,c.website_url,c.status,c.submitted_at,c.reviewed_at
         FROM church_directory_claims c JOIN accounts a ON a.id=c.claimant_user_id
         WHERE c.status='approved' AND a.deleted_at IS NULL AND a.email_verified_at IS NOT NULL
-        ORDER BY c.name,c.city,c.id LIMIT 200`).all<ClaimRow>();
+          ${locale ? "AND c.locale=?" : ""} ${tradition ? "AND c.tradition=?" : ""}
+          ${hasCursor ? "AND (c.name,c.city,c.id) > (?,?,?)" : ""}
+        ORDER BY c.name,c.city,c.id LIMIT 201`).bind(...parameters).all<ClaimRow>();
       if (!rows.success || !Array.isArray(rows.results)) return json({ error: "churches_unavailable" }, 503);
-      const normalized = query.normalize("NFKC").toLocaleLowerCase();
-      const items = [];
-      for (const row of rows.results) {
-        const item = publicClaim(row);
+      const normalized = query.normalize("NFKC").toLocaleLowerCase(), items = [];
+      let nextCursor: { name: string; city: string; id: string } | null = null;
+      for (let i = 0; i < Math.min(rows.results.length, 200); i++) {
+        const item = publicClaim(rows.results[i]);
         if (!item) return json({ error: "churches_unavailable" }, 503);
         if (!normalized || [item.name, item.city, item.countryCode, item.tradition]
           .some(value => value.normalize("NFKC").toLocaleLowerCase().includes(normalized))) items.push(item);
+        if (items.length === 24 || i === 199) {
+          if (i + 1 < rows.results.length) nextCursor = { name: item.name, city: item.city, id: item.id };
+          break;
+        }
       }
-      return json({ items });
+      return json({ items, nextCursor });
     }
     const actor = await identity(request);
     if (!actor) return json({ error: "authentication_required" }, 401);

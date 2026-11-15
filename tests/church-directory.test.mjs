@@ -39,8 +39,8 @@ function fixture() {
     const response=await exports.POST(new Request('https://local.invalid/api/churches',{method:'POST',headers:{origin,'content-type':'application/json',...(user?{'x-user':user}:{})},body:JSON.stringify(body)}));
     return {status:response.status,data:await response.json()};
   }
-  async function get(view='public',user='',query=''){
-    const search=view==='public'?`q=${encodeURIComponent(query)}`:`view=${view}`;
+  async function get(view='public',user='',query='',parameters={}){
+    const search=view==='public'?new URLSearchParams({q:query,...parameters}):`view=${view}`;
     const response=await exports.GET(new Request(`https://local.invalid/api/churches?${search}`,{headers:user?{'x-user':user}:{}}));
     return {status:response.status,data:await response.json()};
   }
@@ -187,4 +187,65 @@ test('church directory is discoverable as a public workspace without creating se
   assert.match(route,/"churches"/);assert.match(sitemap,/\["\/churches"/);
   assert.match(app,/"churches"/);assert.match(workspace,/renderChurchDirectory/);
   assert.doesNotMatch(readFileSync(new URL('../drizzle/0017_verified_church_claims.sql',import.meta.url),'utf8'),/INSERT INTO church_directory_claims/i);
+});
+
+
+test('church search reaches rows after the scan bound, traverses ties and combines verified filters',async()=>{
+  const f=fixture();
+  try {
+    const account=f.db.prepare("INSERT INTO accounts VALUES (?, ?, CURRENT_TIMESTAMP, NULL)");
+    const insert=f.db.prepare(`INSERT INTO church_directory_claims
+      (id,claimant_user_id,name,city,country_code,locale,tradition,representation_attested,website_consent,status,reviewed_at,reviewed_by,verification_evidence)
+      VALUES (?,?,'Grace Community','Kyiv',?, ?, ?,1,1,'approved',CURRENT_TIMESTAMP,'owner','Authority fixture')`);
+    for(let i=0;i<230;i++) {
+      const id=`church-${String(i).padStart(3,'0')}`;
+      account.run(id,`${id}@example.invalid`);
+      insert.run(id,id,i===229?'SK':'UA',i===229?'uk':'en',i===229?'adventist':'other');
+    }
+    const cursor=({name,city,id})=>({afterName:name,afterCity:city,afterId:id});
+    const first=(await f.get('public','','SK')).data;
+    assert.deepEqual(first.items,[]);assert.equal(first.nextCursor.id,'church-199');
+    const last=(await f.get('public','','SK',cursor(first.nextCursor))).data;
+    assert.deepEqual(last.items.map(item=>item.id),['church-229']);assert.equal(last.nextCursor,null);
+    let page=(await f.get()).data;
+    const ids=[];
+    for(let i=0;i<20;i++) {
+      assert.ok(page.items.length<=24);ids.push(...page.items.map(item=>item.id));
+      if(!page.nextCursor)break;
+      page=(await f.get('public','','',cursor(page.nextCursor))).data;
+    }
+    assert.equal(ids.length,230);assert.equal(new Set(ids).size,230);
+    const filtered=(await f.get('public','','grace',{locale:'uk',tradition:'adventist'})).data;
+    assert.deepEqual(filtered.items.map(item=>item.id),['church-229']);assert.equal(filtered.nextCursor,null);
+    assert.deepEqual((await f.get('public','','',{locale:'en',tradition:'adventist'})).data.items,[]);
+    for(const parameters of [{afterId:'church-001'},{afterName:'Grace Community',afterCity:'K',afterId:'x'},{locale:'xx'},{tradition:'unknown'},{locale:['en','uk']}])
+      assert.equal((await f.get('public','','',parameters)).status,400);
+    f.db.prepare("UPDATE accounts SET deleted_at=CURRENT_TIMESTAMP WHERE id='church-229'").run();
+    assert.deepEqual((await f.get('public','','',{locale:'uk',tradition:'adventist'})).data.items,[]);
+  }finally{f.db.close();}
+});
+
+test('church pagination retains submitted filters, earlier pages and native keyboard focus',async()=>{
+  const originalFetch=globalThis.fetch,calls=[],input={value:''},locale={value:''},tradition={value:''},more={hidden:true,disabled:false};
+  const doc={activeElement:null},heading={focus(){doc.activeElement=this;}};
+  const publicRoot={innerHTML:'',insertAdjacentHTML(_where,html){this.innerHTML+=html;},querySelector:()=>heading};
+  const nodes={'.church-directory-search':{querySelector:selector=>({'input':input,'[name=locale]':locale,'[name=tradition]':tradition})[selector]},'.church-directory-public':publicRoot,'.church-directory-private':{innerHTML:''},'.church-directory-status':{textContent:''},'.church-directory-more':more};
+  const root={isConnected:true,innerHTML:'',ownerDocument:doc,querySelector:selector=>nodes[selector]??null,querySelectorAll:()=>[]};
+  globalThis.fetch=async url=>{
+    const params=new URL(url,'https://local.invalid').searchParams;
+    calls.push([params.get('q'),params.get('locale'),params.get('tradition'),params.get('afterId')]);
+    return Response.json({items:[],nextCursor:params.get('q')&&!params.has('afterId')?{name:'Grace Community',city:'Kyiv',id:'church-199'}:null});
+  };
+  const tick=()=>new Promise(resolve=>setImmediate(resolve));
+  try {
+    await renderChurchDirectory(root,'en',String,null);
+    input.value='Grace';locale.value='uk';tradition.value='adventist';
+    nodes['.church-directory-search'].onsubmit({preventDefault(){}});await tick();
+    assert.equal(more.hidden,false);assert.match(publicRoot.innerHTML,/You can continue searching/);
+    input.value='unsubmitted';locale.value='en';tradition.value='other';doc.activeElement=more;
+    more.onclick();more.onclick();assert.equal(more.disabled,false);await tick();
+    assert.deepEqual(calls,[['','','',null],['Grace','uk','adventist',null],['Grace','uk','adventist','church-199']]);
+    assert.match(publicRoot.innerHTML,/Results, page 1/);assert.match(publicRoot.innerHTML,/Results, page 2/);
+    assert.equal(more.hidden,true);assert.equal(doc.activeElement,heading);
+  }finally{globalThis.fetch=originalFetch;}
 });

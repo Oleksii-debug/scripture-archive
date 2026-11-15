@@ -4,6 +4,11 @@ const COPY={
   en:{title:'Verified church and community directory',lead:'Only records submitted by a verified representative and separately approved by the Scripture Archive owner after an authority check appear here.',honesty:'An empty directory means that there are no verified claims yet. Church names from personal profiles are never added automatically.',search:'Search by name, city, country, or tradition',find:'Search',empty:'No verified records were found.',website:'Official website',reviewed:'Verified',claim:'Submit or correct a representative claim',claimHelp:'A new or corrected record stays unpublished until it is verified again. The claimant’s personal details are not displayed.',name:'Church or community name',city:'City',country:'Country code (2 letters)',locale:'Primary language',tradition:'Tradition',optionalWebsite:'Public HTTPS website (optional)',represent:'I confirm that I am authorized to represent this community.',consent:'I consent to publication of the supplied fields and website after verification.',submit:'Send for verification',saved:'The claim was sent for verification.',mine:'My claim',pending:'Awaiting verification',approved:'Published',rejected:'Changes required',withdrawn:'Withdrawn',withdraw:'Withdraw claim',queue:'Claims awaiting verification',claimant:'Claimant contact (verification only)',evidence:'Private evidence of representative authority',note:'Note to claimant',approve:'Approve',reject:'Reject',updated:'The decision was saved.',error:'The action could not be completed. Check the details and try again.',signin:'Sign in with a verified account to submit a claim.',languages:{uk:'Ukrainian',ru:'Russian',en:'English'},traditions:{orthodox:'Orthodox',catholic:'Catholic',protestant:'Protestant',adventist:'Adventist',other:'Other'}},
 };
 const copy=lang=>typeof lang==='string'&&Object.hasOwn(COPY,lang)?COPY[lang]:COPY.uk;
+const PAGE_COPY = {
+  uk: { all: 'Усі', more: 'Продовжити пошук', emptyPage: 'У цій частині збігів немає. Пошук можна продовжити.', end: 'Більше збігів немає.', heading: 'Результати, сторінка', found: n => `Громад на цій сторінці: ${n}.` },
+  ru: { all: 'Все', more: 'Продолжить поиск', emptyPage: 'В этой части совпадений нет. Поиск можно продолжить.', end: 'Больше совпадений нет.', heading: 'Результаты, страница', found: n => `Общин на этой странице: ${n}.` },
+  en: { all: 'All', more: 'Continue search', emptyPage: 'No matches in this part. You can continue searching.', end: 'No more matches.', heading: 'Results, page', found: n => `Communities on this page: ${n}.` },
+};
 const canonicalHttps=value=>{try{if(typeof value!=='string'||value.length<9||value.length>500||value.trim()!==value||!/^(https):\/\//i.test(value)||/[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}\s]/u.test(value))return null;const authority=value.slice(value.indexOf('://')+3).split(/[/?#]/u,1)[0];if(!authority||authority.includes('@'))return null;const url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password?url.href:null;}catch{return null;}};
 const visible=(value,min,max)=>typeof value==='string'&&value.trim()===value&&value.length>=min&&value.length<=max&&!/[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}\u00a0\u034f\u115f\u1160\u2800\u3164\uffa0]/u.test(value);
 const validId=value=>typeof value==='string'&&value.length>0&&value.length<=100;
@@ -17,7 +22,7 @@ async function api(path,options){const response=await fetch(path,options);const 
 const post=body=>api('/api/churches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
 
 function publicMarkup(items,w,esc){
-  return items.length?`<div class="card-grid church-directory-results">${items.map(item=>`<article class="card"><h2>${esc(item.name)}</h2><p>${esc(item.city)}, ${esc(item.countryCode)}</p><dl><dt>${esc(w.locale)}</dt><dd>${esc(w.languages[item.locale])}</dd><dt>${esc(w.tradition)}</dt><dd>${esc(w.traditions[item.tradition])}</dd><dt>${esc(w.reviewed)}</dt><dd><time datetime="${esc(item.reviewedAt)}">${esc(item.reviewedAt)} UTC</time></dd></dl>${item.websiteUrl?`<p><a href="${esc(canonicalHttps(item.websiteUrl))}" rel="noreferrer">${esc(w.website)}</a></p>`:''}</article>`).join('')}</div>`:`<p>${esc(w.empty)}</p>`;
+  return items.length?`<div class="card-grid church-directory-results">${items.map(item=>`<article class="card"><h3 lang="${esc(item.locale)}">${esc(item.name)}</h3><p>${esc(item.city)}, ${esc(item.countryCode)}</p><dl><dt>${esc(w.locale)}</dt><dd>${esc(w.languages[item.locale])}</dd><dt>${esc(w.tradition)}</dt><dd>${esc(w.traditions[item.tradition])}</dd><dt>${esc(w.reviewed)}</dt><dd><time datetime="${esc(item.reviewedAt)}">${esc(item.reviewedAt)} UTC</time></dd></dl>${item.websiteUrl?`<p><a href="${esc(canonicalHttps(item.websiteUrl))}" rel="noreferrer">${esc(w.website)}</a></p>`:''}</article>`).join('')}</div>`:`<p>${esc(w.empty)}</p>`;
 }
 function claimForm(w,esc){
   const languages=['uk','ru','en'].map(value=>`<option value="${value}">${esc(w.languages[value])}</option>`).join('');
@@ -29,16 +34,73 @@ function queueMarkup(items,w,esc){return `<section class="card church-claim-queu
 
 export async function renderChurchDirectory(root,lang,esc,user,isOwner=false,isCurrent=()=>true){
   const w=copy(lang),principal=user?.id??null,canClaim=user?.emailVerified===true&&user?.authProvider!=='agent';
+  const pages=typeof lang==='string'&&Object.hasOwn(PAGE_COPY,lang)?PAGE_COPY[lang]:PAGE_COPY.uk;
   const active=()=>{try{return root?.isConnected!==false&&isCurrent()===true&&(user?.id??null)===principal;}catch{return false;}};
   if(!active())return;
-  root.innerHTML=`<section class="church-directory" aria-labelledby="church-directory-title"><div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1 id="church-directory-title">${esc(w.title)}</h1></div></div><p class="lead">${esc(w.lead)}</p><p>${esc(w.honesty)}</p><form class="church-directory-search"><label class="account-field"><span>${esc(w.search)}</span><input name="query" type="search" maxlength="80"></label><button class="button" type="submit">${esc(w.find)}</button></form><p class="church-directory-status" role="status"></p><div class="church-directory-public"></div>${canClaim?claimForm(w,esc):`<p><a href="/account">${esc(w.signin)}</a></p>`}<div class="church-directory-private"></div>${isOwner?'<div class="church-directory-owner"></div>':''}</section>`;
+  root.innerHTML=`<section class="church-directory" aria-labelledby="church-directory-title"><div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1 id="church-directory-title">${esc(w.title)}</h1></div></div><p class="lead">${esc(w.lead)}</p><p>${esc(w.honesty)}</p><form class="church-directory-search"><label class="account-field"><span>${esc(w.search)}</span><input name="query" type="search" maxlength="80"></label><label class="account-field"><span>${esc(w.locale)}</span><select name="locale"><option value="">${esc(pages.all)}</option>${Object.entries(w.languages).map(([id,title])=>`<option value="${id}">${esc(title)}</option>`).join('')}</select></label><label class="account-field"><span>${esc(w.tradition)}</span><select name="tradition"><option value="">${esc(pages.all)}</option>${Object.entries(w.traditions).map(([id,title])=>`<option value="${id}">${esc(title)}</option>`).join('')}</select></label><button class="button" type="submit">${esc(w.find)}</button></form><p class="church-directory-status" role="status"></p><div class="church-directory-public"></div><button class="button church-directory-more" type="button" hidden>${esc(pages.more)}</button>${canClaim?claimForm(w,esc):`<p><a href="/account">${esc(w.signin)}</a></p>`}<div class="church-directory-private"></div>${isOwner?'<div class="church-directory-owner"></div>':''}</section>`;
   const search=root.querySelector('.church-directory-search'),query=search?.querySelector('input'),publicRoot=root.querySelector('.church-directory-public'),status=root.querySelector('.church-directory-status'),privateRoot=root.querySelector('.church-directory-private'),ownerRoot=root.querySelector('.church-directory-owner');
-  let epoch=0;
-  async function publicLoad(text=''){
-    const request=++epoch;status.textContent='';
-    try{const data=await api('/api/churches?q='+encodeURIComponent(text));if(!active()||request!==epoch)return;if(!Array.isArray(data?.items)||data.items.length>200||!data.items.every(validPublic))throw Error('invalid directory');publicRoot.innerHTML=publicMarkup(data.items,w,esc);}
-    catch{if(active()&&request===epoch){publicRoot.innerHTML='';status.textContent=w.error;}}
+  const more = root.querySelector('.church-directory-more'), seenCursors = new Set(), listed = new Set();
+  let epoch=0, nextCursor=null, activeQuery={q:'',locale:'',tradition:''}, page=0, loading=false;
+  function cursorKey(cursor) {
+    return JSON.stringify([cursor.name, cursor.city, cursor.id]);
   }
+  async function publicLoad(text=activeQuery, cursor=null) {
+    const token=++epoch;
+    const hadFocus = Boolean(cursor && more && root.ownerDocument?.activeElement===more);
+    // Keep the button focusable during the read. Disabling a focused native
+    // button can move focus to the document body before results arrive.
+    loading=true;
+    status.textContent='';
+    if (!cursor) {
+      activeQuery=text;
+      nextCursor=null;
+      page=0;
+      seenCursors.clear();
+      listed.clear();
+      publicRoot.innerHTML='';
+      if (more) more.hidden=true;
+    }
+    const parameters=new URLSearchParams(text);
+    if (cursor) {
+      parameters.set('afterName',cursor.name);
+      parameters.set('afterCity',cursor.city);
+      parameters.set('afterId',cursor.id);
+    }
+    try {
+      const data=await api('/api/churches?'+parameters);
+      if (!active() || token!==epoch) return;
+      const continuation=data.nextCursor??null;
+      if (!Array.isArray(data.items) || data.items.length>200 || !data.items.every(validPublic) ||
+          (continuation!==null && (!visible(continuation.name,3,160) || !visible(continuation.city,2,120) ||
+            typeof continuation.id!=='string' || !continuation.id || continuation.id.length>100 ||
+            seenCursors.has(cursorKey(continuation))))) throw Error('invalid churches');
+      nextCursor=continuation;
+      if (nextCursor) seenCursors.add(cursorKey(nextCursor));
+      const entries=data.items.filter(item=>{
+        if (listed.has(item.id)) return false;
+        listed.add(item.id);
+        return true;
+      });
+      page++;
+      const headingId=`church-page-${page}`;
+      const emptyMessage=nextCursor ? pages.emptyPage : page===1 ? w.empty : pages.end;
+      const content=entries.length ? publicMarkup(entries,w,esc) : `<p>${esc(emptyMessage)}</p>`;
+      const section=`<section aria-labelledby="${headingId}"><h2 id="${headingId}" tabindex="-1">${esc(pages.heading)} ${page}</h2>${content}</section>`;
+      if (!cursor) publicRoot.innerHTML=section;
+      else publicRoot.insertAdjacentHTML('beforeend',section);
+      status.textContent=entries.length ? pages.found(entries.length) : emptyMessage;
+      const restoreFocus=hadFocus && root.ownerDocument?.activeElement===more;
+      if (more) more.hidden=!nextCursor;
+      if (restoreFocus) publicRoot.querySelector(`#${headingId}`)?.focus();
+    } catch {
+      if (active() && token===epoch) status.textContent=w.error;
+    } finally {
+      if (token===epoch) loading=false;
+    }
+  }
+  if (more) more.onclick=()=>{
+    if (active() && !loading && nextCursor) void publicLoad(activeQuery,nextCursor);
+  };
   async function privateLoad(){
     if(!canClaim||!active())return;
     try{const [mine,queue]=await Promise.all([api('/api/churches?view=mine'),isOwner?api('/api/churches?view=queue'):Promise.resolve({items:[]})]);if(!active()||!Array.isArray(mine.items)||mine.items.length>1||!mine.items.every(validMine)||!Array.isArray(queue.items)||queue.items.length>200||!queue.items.every(validQueue))throw Error('invalid private claims');privateRoot.innerHTML=mineMarkup(mine.items,w,esc);if(ownerRoot)ownerRoot.innerHTML=queueMarkup(queue.items,w,esc);attach();}
@@ -50,7 +112,7 @@ export async function renderChurchDirectory(root,lang,esc,user,isOwner=false,isC
     root.querySelectorAll('.church-claim-withdraw').forEach(button=>button.onclick=async()=>{if(!active()||button.disabled)return;button.disabled=true;try{await post({action:'withdraw',id:button.dataset.id});if(active())await Promise.all([publicLoad(),privateLoad()]);}catch{if(active()){button.disabled=false;privateRoot.querySelector('[role="status"]').textContent=w.error;}}});
     root.querySelectorAll('.church-claim-review').forEach(form=>form.querySelectorAll('[data-decision]').forEach(button=>button.onclick=async()=>{if(!active())return;const data=new FormData(form),feedback=form.querySelector('[role="status"]'),decision=button.dataset.decision;form.querySelectorAll('button').forEach(item=>item.disabled=true);try{await post({action:'review',id:form.dataset.id,decision,verificationEvidence:data.get('evidence'),note:data.get('note')});if(!active())return;feedback.textContent=w.updated;await Promise.all([publicLoad(),privateLoad()]);}catch{if(active()){feedback.textContent=w.error;form.querySelectorAll('button').forEach(item=>item.disabled=false);}}}));
   }
-  if(search)search.onsubmit=event=>{event.preventDefault();if(active())void publicLoad(query.value.trim());};
+  if(search)search.onsubmit=event=>{event.preventDefault();if(active())void publicLoad({q:query.value.trim(),locale:search.querySelector('[name=locale]')?.value||'',tradition:search.querySelector('[name=tradition]')?.value||''});};
   attach();
   await Promise.all([publicLoad(),privateLoad()]);
 }

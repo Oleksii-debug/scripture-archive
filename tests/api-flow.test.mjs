@@ -138,6 +138,13 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal((await churchPost({action:'review',id:churchId,decision:'approve',verificationEvidence:'Disposable integration authority fixture',note:''},ownerCookie)).response.status,200);
   const publicChurches=await (await fetch(`${base}/api/churches`)).json();
   assert.equal(publicChurches.items.length,1);assert.equal(publicChurches.items[0].name,churchClaim.name);
+  assert.equal(publicChurches.nextCursor,null);
+  const filteredChurches=await (await fetch(`${base}/api/churches?locale=en&tradition=other&q=Integration`)).json();
+  assert.equal(filteredChurches.items.length,1);
+  assert.equal((await (await fetch(`${base}/api/churches?locale=uk`)).json()).items.length,0);
+  assert.equal((await fetch(`${base}/api/churches?afterId=partial`)).status,400);
+  assert.equal((await fetch(`${base}/api/churches?locale=en&locale=uk`)).status,400);
+
   assert.equal('claimantEmail' in publicChurches.items[0],false);assert.equal('verificationEvidence' in publicChurches.items[0],false);
   // The verified representative can publish an event without giving this
   // catalogue any attendee, payment, or registration records.

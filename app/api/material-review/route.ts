@@ -125,6 +125,10 @@ export async function POST(request: Request) {
         ? body.locale
         : undefined;
     if (locale === undefined) return json({ error: "invalid_search" }, 400);
+    const rightsBasis = body.rightsBasis;
+    if (rightsBasis != null &&
+        (typeof rightsBasis !== "string" || !RIGHTS_BASES.has(rightsBasis as RightsBasis)))
+      return json({ error: "invalid_search" }, 400);
     const cursor = body.cursor;
     if (cursor !== null && cursor !== undefined &&
       (!cursor || typeof cursor !== "object" || Array.isArray(cursor) ||
@@ -157,7 +161,7 @@ export async function POST(request: Request) {
           typeof row.submitted_at !== "string" || !row.submitted_at.length || row.submitted_at.length > 100 ||
           typeof row.reviewed_at !== "string" || !row.reviewed_at.length || row.reviewed_at.length > 100 || rights === undefined)
           return json({ error: "materials_unavailable" }, 503);
-        if ((!locale || item.locale === locale) && (!query ||
+        if ((!locale || item.locale === locale) && (rightsBasis == null || rights?.basis === rightsBasis) && (!query ||
           [item.title, item.data.reference, item.data.prompt, row.provenance, rights?.holder || "", rights?.basis || "", rights?.licenseUrl || ""]
             .some(value => normalize(value).includes(query)))) {
           items.push({ id: row.id, title: item.title, locale: item.locale, reference: item.data.reference,

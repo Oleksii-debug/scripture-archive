@@ -19,6 +19,7 @@ export default function Home() {
           <a href="/dossiers" data-route="dossiers" data-workspace="dossiers">Дослідницькі досьє</a>
           <a href="/library" data-route="library" data-workspace="library">Бібліотека</a>
           <a href="/churches" data-route="churches" data-workspace="churches">Перевірені церкви</a>
+          <a href="/events" data-route="events" data-workspace="events">Події</a>
           <a href="/builder" data-route="builder" data-workspace="builder">Конструктор</a>
           <a href="/progress" data-route="progress" data-workspace="progress">Мій прогрес</a>
           <a href="/groups" data-route="groups" data-i18n="groups">Домашні групи</a>

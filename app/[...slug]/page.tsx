@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Home from "../page";
 
-const PUBLIC_ROUTES = new Set(["reader", "campaigns", "missions", "groups", "community", "support", "help", "about", "privacy", "atlas", "dossiers", "library", "churches", "builder"]);
+const PUBLIC_ROUTES = new Set(["reader", "campaigns", "missions", "groups", "community", "support", "help", "about", "privacy", "atlas", "dossiers", "library", "churches", "events", "builder"]);
 const PRIVATE_ROUTES = new Set(["account", "mission", "progress", "editor"]);
 const ROUTE_METADATA: Record<string, { title: string; description: string }> = {
   reader: { title: "Біблійна читальня", description: "Читайте доступні біблійні тексти з чітким зазначенням видання, джерела та умов використання." },
@@ -18,6 +18,7 @@ const ROUTE_METADATA: Record<string, { title: string; description: string }> = {
   dossiers: { title: "Дослідницькі досьє", description: "Матеріали для зіставлення свідчень, джерел і висновків." },
   library: { title: "Бібліотека перевірених матеріалів", description: "Публічно затверджені навчальні матеріали для дослідження Святого Писання та самоперевірки." },
   churches: { title: "Каталог перевірених церков", description: "Каталог громад, опублікованих лише після заявки підтвердженого представника та перевірки повноважень." },
+  events: { title: "Перевірені події та конференції", description: "Майбутні події, опубліковані підтвердженими представниками перевірених церков і громад." },
   builder: { title: "Конструктор", description: "Інструменти підготовки структурованих навчальних матеріалів." },
 };
 

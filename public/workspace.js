@@ -3,6 +3,7 @@ import { dossierMarkup, dossierAtlasMarkup } from './scripture-dossiers.js';
 import { academyMarkup, academyProgressKey, readAcademyProgress, attachAcademy } from './scripture-academy.js';
 import { safeProvenanceHttpsUrl, validEditionRightsText } from './parallel-reader.js';
 import { renderChurchDirectory } from './church-directory.js';
+import { renderEventDirectory } from './event-directory.js';
 
 // The local reading cache is user/device-controlled JSON, not a trusted Bible
 // chapter receipt. Never let a malformed item break the progress route or
@@ -72,7 +73,7 @@ const LIBRARY_COPY = {
 
 const COPY = {
   uk: {
-    home:'Головна', campaigns:'Кампанії', library:'Бібліотека', churches:'Перевірені церкви', dossiers:'Дослідницькі досьє', builder:'Конструктор', progress:'Мій прогрес',
+    home:'Головна', campaigns:'Кампанії', library:'Бібліотека', churches:'Перевірені церкви', events:'Події', dossiers:'Дослідницькі досьє', builder:'Конструктор', progress:'Мій прогрес',
     campaignLead:'Оберіть історію або тему. У кожній кампанії матеріали зібрано в послідовні місії.',
     campaignNames:['Євангельські свідчення','Діяння та перші громади','Постаті Старого Завіту','Хронологія та послідовність','Майстерня дослідника','Люди й милосердя'],
     campaignDescriptions:['Події, притчі й образи чотирьох Євангелій.','Люди, подорожі та життя перших християнських громад.','Покликання, рішення й віра в оповідях Старого Завіту.','Події Писання в послідовності та історичному контексті.','Уважне читання, порівняння джерел і обґрунтовані висновки.','Біблійні розповіді про допомогу, відповідальність і турботу.'],
@@ -84,11 +85,11 @@ const COPY = {
     progressLead:'Ваші відповіді, прочитані глави й наступний крок.',progressSyncUnavailable:'Не вдалося перевірити прогрес на сервері. Показані дані можуть бути застарілими. Спробуйте відкрити сторінку ще раз.',progressSyncPartial:'Частина збережених результатів пошкоджена. Показано тільки перевірені результати; загальний поступ може бути неповним.',tasks:'Правильних відповідей у місії',chapters:'Глав позначено прочитаними',status:'Стан маршруту',finished:'Завершено',inProgress:'У процесі',notStarted:'Ще не розпочато',continue:'Продовжити',readingHistory:'Історія читання',markRead:'Позначити прочитаним',readMarked:'Главу позначено прочитаною',nothingRead:'Позначайте прочитані глави в читальні, щоб повертатися до них.',liveTitle:'Домашні групи',liveLead:'Спільне читання Біблії у вашій церкві, вдома чи під час онлайн-зустрічі.',liveSteps:[['Оберіть уривок','Ведучий відкриває книгу та главу. Учасники читають на платформі або у власній Біблії.'],['Обговоріть запитання','Знайдіть слова, на яких тримається відповідь, і вислухайте думки учасників.'],['Збережіть поступ','Ведучий записує опрацьовану главу, відповіді й підсумок зустрічі.']],openGroups:'Відкрити домашні групи',marathons:'Марафони',marathonText:'За бажанням група долучається до спільного маршруту. Групи з однаковим тижневим планом і режимом надолуження бачать поступ одна одної.',normalText:'Звичайні групи читають у своєму темпі. Відкритий каталог показує їхній загальний поступ і точність відповідей.',check:'Перевірити',correct:'Правильно',retry:'Спробуйте ще раз',back:'Повернутися',export:'Завантажити матеріали',import:'Імпортувати матеріали',
   },
   ru: {
-    churches:'Проверенные церкви',
+    churches:'Проверенные церкви',events:'События',
     home:'Главная',campaigns:'Кампании',library:'Библиотека',dossiers:'Исследовательские досье',builder:'Конструктор',progress:'Мой прогресс',campaignLead:'Выберите историю или тему. В каждой кампании материалы объединены в последовательные миссии.',campaignNames:['Евангельские свидетельства','Деяния и первые общины','Люди Ветхого Завета','Хронология и последовательность','Мастерская исследователя','Люди и милосердие'],campaignDescriptions:['События, притчи и образы четырёх Евангелий.','Люди, путешествия и жизнь первых христианских общин.','Призвание, решения и вера в рассказах Ветхого Завета.','События Писания в последовательности и историческом контексте.','Внимательное чтение, сравнение источников и обоснованные выводы.','Библейские рассказы о помощи, ответственности и заботе.'],dossierLead:'Отрывки, вопросы и заметки, собранные вокруг одной истории.',dossierTitle:'Авраам: от призвания к обещанию',dossierText:'Прочитайте Бытие 12:1–3, затем Бытие 15:1–6. В первом отрывке обратите внимание на повеление отправиться в путь и Божьи обещания. Во втором проследите разговор о наследнике и потомках.',dossierQuestions:['Что Бог просит Аврама сделать?','Какие обещания содержит первый отрывок?','О чём спрашивает Аврам во втором отрывке?','Какие слова самого текста подтверждают ваш вывод?'],guiding:'Вопросы для обсуждения',read:'Читать отрывок',mission:'Перейти к миссии',builderLead:'Подготовьте свой вопрос для личного изучения или встречи группы.',myMaterials:'Мои материалы',newMaterial:'Новый вопрос',title:'Название',prompt:'Вопрос',reference:'Библейская ссылка',options:'Варианты ответа, каждый с новой строки',answer:'Правильный ответ',explanation:'Объяснение',save:'Сохранить',edit:'Редактировать',test:'Попробовать',publish:'Опубликовать для посетителей',private:'Личный материал',public:'Опубликовано',empty:'Здесь появятся ваши материалы.',saved:'Материал сохранён.',error:'Не удалось сохранить. Проверьте поля и попробуйте снова.',signIn:'Зарегистрироваться или войти',accountNeeded:'Зарегистрируйтесь или войдите, чтобы сохранять свои материалы между устройствами.',progressLead:'Ваши ответы, прочитанные главы и следующий шаг.',progressSyncUnavailable:'Не удалось проверить прогресс на сервере. Показанные данные могут быть устаревшими. Откройте страницу повторно.',progressSyncPartial:'Часть сохранённых результатов повреждена. Показаны только проверенные результаты; общий прогресс может быть неполным.',tasks:'Правильных ответов в миссии',chapters:'Глав отмечено прочитанными',status:'Состояние маршрута',finished:'Завершён',inProgress:'В процессе',notStarted:'Ещё не начат',continue:'Продолжить',readingHistory:'История чтения',markRead:'Отметить прочитанным',readMarked:'Глава отмечена прочитанной',nothingRead:'Отмечайте прочитанные главы в читальне, чтобы возвращаться к ним.',liveTitle:'Домашние группы',liveLead:'Совместное чтение Библии в вашей церкви, дома или во время онлайн-встречи.',liveSteps:[['Выберите отрывок','Ведущий открывает книгу и главу. Участники читают на платформе или в своей Библии.'],['Обсудите вопросы','Найдите слова, на которых основан ответ, и выслушайте участников.'],['Сохраните прогресс','Ведущий записывает изученную главу, ответы и итог встречи.']],openGroups:'Открыть домашние группы',marathons:'Марафоны',marathonText:'По желанию группа присоединяется к общему маршруту. Группы с одинаковым недельным планом и правилом наверстывания видят прогресс друг друга.',normalText:'Обычные группы читают в своём темпе. Открытый каталог показывает их общий прогресс и точность ответов.',check:'Проверить',correct:'Правильно',retry:'Попробуйте ещё раз',back:'Вернуться',export:'Скачать материалы',import:'Импортировать материалы',
   },
   en: {
-    churches:'Verified churches',
+    churches:'Verified churches',events:'Events',
     home:'Home',campaigns:'Campaigns',library:'Library',dossiers:'Research dossiers',builder:'Builder',progress:'My progress',campaignLead:'Choose a story or theme. Each campaign brings its material together in connected missions.',campaignNames:['Gospel accounts','Acts and the first communities','People of the Old Testament','Chronology and sequence','Research workshop','People and mercy'],campaignDescriptions:['Events, parables, and imagery in the four Gospels.','People, journeys, and the life of the first Christian communities.','Calling, choices, and faith in Old Testament narratives.','Scripture events in sequence and historical context.','Attentive reading, source comparison, and supported conclusions.','Bible stories about help, responsibility, and care.'],dossierLead:'Passages, questions, and notes gathered around one story.',dossierTitle:'Abraham: from calling to promise',dossierText:'Read Genesis 12:1–3, then Genesis 15:1–6. In the first passage, notice the command to leave and God’s promises. In the second, follow the conversation about an heir and descendants.',dossierQuestions:['What does God ask Abram to do?','What promises appear in the first passage?','What does Abram ask in the second passage?','Which words in the text support your conclusion?'],guiding:'Questions for discussion',read:'Read passage',mission:'Open mission',builderLead:'Prepare a question for personal study or a group gathering.',myMaterials:'My materials',newMaterial:'New question',title:'Title',prompt:'Question',reference:'Bible reference',options:'Answer options, one per line',answer:'Correct answer',explanation:'Explanation',save:'Save',edit:'Edit',test:'Try it',publish:'Publish for visitors',private:'Personal material',public:'Published',empty:'Your materials will appear here.',saved:'Material saved.',error:'Could not save. Check the fields and try again.',signIn:'Register or sign in',accountNeeded:'Register or sign in to keep your materials across devices.',progressLead:'Your answers, completed chapters, and next step.',progressSyncUnavailable:'Could not verify progress with the server. These results may be out of date. Try opening the page again.',progressSyncPartial:'Some saved results are damaged. Only verified results are shown; your overall progress may be incomplete.',tasks:'Correct mission answers',chapters:'Chapters marked as read',status:'Study path status',finished:'Completed',inProgress:'In progress',notStarted:'Not started',continue:'Continue',readingHistory:'Reading history',markRead:'Mark as read',readMarked:'Chapter marked as read',nothingRead:'Mark completed chapters in the reader to return to them later.',liveTitle:'Home groups',liveLead:'Read the Bible together in your church, at home, or during an online gathering.',liveSteps:[['Choose a passage','The facilitator opens a book and chapter. Participants read on the platform or in their own Bible.'],['Discuss the questions','Find the words that support the answer and hear each participant’s thoughts.'],['Save your progress','The facilitator records the chapter, answers, and a short discussion summary.']],openGroups:'Open home groups',marathons:'Marathons',marathonText:'Groups may join a shared study route. Those following the same weekly plan and catch-up rule can see one another’s progress.',normalText:'Regular groups read at their own pace. The open directory shows their overall progress and answer accuracy.',check:'Check answer',correct:'Correct',retry:'Try again',back:'Back',export:'Download materials',import:'Import materials',
   }
 };
@@ -326,7 +327,7 @@ export function resumePrivateWorkspaceAfterSession() {
 }
 
 export async function renderWorkspace(name,c) {
-  if((name==='builder' || name==='progress' || name==='campaigns' || name==='churches') && privateWorkspaceSuspended)return;
+  if((name==='builder' || name==='progress' || name==='campaigns' || name==='churches' || name==='events') && privateWorkspaceSuspended)return;
   const {state,t,esc,shell,getMission,setActiveNav}=c, w=workspaceCopy(state.lang);
   const epoch=++workspaceRenderEpoch, principal=state.user;
   const path=globalThis.location?.pathname, search=globalThis.location?.search, hash=globalThis.location?.hash;
@@ -336,7 +337,7 @@ export async function renderWorkspace(name,c) {
     globalThis.location?.pathname===path && globalThis.location?.search===search &&
     globalThis.location?.hash===hash;
   const stillCurrent=()=>epoch===workspaceRenderEpoch && samePrincipalRoute() &&
-    !((name==='builder' || name==='progress' || name==='campaigns' || name==='churches') && privateWorkspaceSuspended);
+    !((name==='builder' || name==='progress' || name==='campaigns' || name==='churches' || name==='events') && privateWorkspaceSuspended);
   setActiveNav(name);
   if(name==='about') {
     const catalog=await c.getCatalog();
@@ -359,6 +360,14 @@ export async function renderWorkspace(name,c) {
     const churchPrincipal=state.user?.id??null;
     if(root)await renderChurchDirectory(root,state.lang,esc,state.user,state.user?.isOwner===true,
       ()=>stillCurrent()&&(state.user?.id??null)===churchPrincipal);
+    return;
+  }
+  if(name==='events') {
+    shell('<div id="event-directory-root"></div>');
+    const root=globalThis.document?.querySelector('#event-directory-root');
+    const eventPrincipal=state.user?.id??null;
+    if(root)await renderEventDirectory(root,state.lang,esc,state.user,
+      ()=>stillCurrent()&&(state.user?.id??null)===eventPrincipal);
     return;
   }
   if(name==='campaigns') {

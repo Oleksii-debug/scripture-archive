@@ -713,6 +713,31 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.ok(finalState.log.some(event=>event.event_type==="agent_session_completed"));
   assert.equal((await fetch(`${base}/api/community?action=owner`)).status,403);
 
+  const chapter14 = mission.tasks.filter(task => task.book === "GEN" && task.chapter === 14);
+  result = await request("/api/attempts?action=manifest");
+  assert.equal(result.data.taskCount, mission.tasks.length);
+  assert.ok(result.data.chapters.some(chapter => chapter.book === "GEN" && chapter.chapter === 14));
+  assert.equal((await request("/api/attempts?action=read", {method:"POST",body:{book:"GEN",chapter:14}})).response.status,201);
+  result = await request("/api/attempts?action=start", {
+    method:"POST",body:{missionId:"OT-AB-01",book:"GEN",chapter:14,locale:"uk"},
+  });
+  assert.equal(result.response.status,201);
+  assert.equal(result.data.task.question,chapter14[0].question.uk);
+  const chapter14Attempt = result.data.attemptId;
+  for (const [index, task] of chapter14.entries()) {
+    const selected = index===chapter14.length-1 ? [0] : task.correct;
+    result = await request("/api/attempts?action=answer", {
+      method:"POST",body:{attemptId:chapter14Attempt,taskIndex:index+1,selected},
+    });
+    assert.equal(result.response.status,200);
+    if (index < chapter14.length-1) assert.equal("result" in result.data,false);
+  }
+  assert.equal(result.data.completed,true);
+  assert.equal(result.data.result.score,2);
+  assert.deepEqual(result.data.result.mistakes.map(({reference,explanation})=>({reference,explanation})),[
+    {reference:"GEN 14:21–24",explanation:chapter14[2].success.uk},
+  ]);
+
   result = await request("/api/auth?action=forgot-password", { method: "POST", body: { email } });
   assert.ok(result.data.testToken);
   const resetToken = result.data.testToken;

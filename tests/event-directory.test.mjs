@@ -25,7 +25,7 @@ function fixture(){
     throw Error('unexpected import '+id);
   }});
   const post=async(body,user='alice',origin='https://local.invalid')=>{const response=await exports.POST(new Request('https://local.invalid/api/events',{method:'POST',headers:{origin,'content-type':'application/json',...(user?{'x-user':user}:{})},body:JSON.stringify(body)}));return {status:response.status,data:await response.json()};};
-  const get=async(view='public',user='',query='')=>{const search=view==='public'?`q=${encodeURIComponent(query)}`:`view=${view}`;const response=await exports.GET(new Request(`https://local.invalid/api/events?${search}`,{headers:user?{'x-user':user}:{}}));return {status:response.status,data:await response.json()};};
+  const get=async(view='public',user='',query='',cursor={})=>{const search=view==='public'?new URLSearchParams({q:query,...cursor}):`view=${view}`;const response=await exports.GET(new Request(`https://local.invalid/api/events?${search}`,{headers:user?{'x-user':user}:{}}));return {status:response.status,data:await response.json()};};
   return {db,post,get};
 }
 
@@ -72,6 +72,31 @@ test('migration contains no synthetic events and the public workspace is discove
   assert.match(page,/href="\/events"[^>]+data-workspace="events"/);assert.match(route,/"events"/);assert.match(sitemap,/\["\/events"/);assert.match(workspace,/renderEventDirectory/);
 });
 
+test('public search continues past 200 matching-date rows and preserves ties on consecutive pages',async()=>{
+  const f=fixture();
+  try {
+    const insert=f.db.prepare(`INSERT INTO church_events
+      (id,church_claim_id,organizer_user_id,title,summary,city,country_code,locale,starts_on,ends_on,
+        accessibility_details,organizer_authority_attested,publication_consent,status)
+      VALUES (?,'church','alice','Monthly Bible Conference','Conference summary',?,'UA','en','2099-05-10','2099-05-11','Venue accessibility',1,1,'active')`);
+    for(let i=0;i<230;i++)insert.run(`event-${String(i).padStart(3,'0')}`,i===229?'Ivano-Frankivsk':'Kyiv');
+    const toQuery=({startsOn,title,id})=>({afterDate:startsOn,afterTitle:title,afterId:id});
+    const first=(await f.get('public','','ivano')).data;
+    assert.deepEqual(first.items,[]);
+    assert.equal(first.nextCursor.id,'event-199');
+    const last=(await f.get('public','','ivano',toQuery(first.nextCursor))).data;
+    assert.deepEqual(last.items.map(item=>item.id),['event-229']);
+    assert.equal(last.nextCursor,null);
+    const all=(await f.get()).data;
+    assert.equal(all.items.length,24);
+    const next=(await f.get('public','','',toQuery(all.nextCursor))).data;
+    assert.equal(all.items.at(-1).id,'event-023');
+    assert.equal(next.items[0].id,'event-024');
+    for(const params of [{afterId:'event-001'}, {...toQuery(all.nextCursor),afterDate:'2099-02-31'}])
+      assert.equal((await f.get('public','','',params)).status,400);
+  }finally{f.db.close();}
+});
+
 test('anonymous event UI states its data boundary and rejects malformed public payloads',async()=>{
   const prior=globalThis.fetch,publicRoot={innerHTML:''},privateRoot={innerHTML:''},status={textContent:''},input={value:''},search={querySelector:()=>input,onsubmit:null};
   const root={isConnected:true,innerHTML:'',querySelector(selector){return {'.event-search':search,'.event-public':publicRoot,'.event-private':privateRoot,'.event-status':status}[selector]??null;},querySelectorAll(){return [];}};
@@ -109,5 +134,35 @@ test('a hidden event offers explicit republication after approval and can be wit
     await render();
     assert.match(privateRoot.innerHTML,/Review and republish/);
     assert.match(privateRoot.innerHTML,/event-form/);
+  }finally{globalThis.fetch=originalFetch;}
+});
+
+test('the event directory continues a submitted search after an empty page and restores keyboard focus',async()=>{
+  const originalFetch=globalThis.fetch, calls=[];
+  const input={value:''}, more={hidden:true,disabled:false};
+  const heading={focus(){doc.activeElement=this;}}, doc={activeElement:null};
+  const publicRoot={innerHTML:'',insertAdjacentHTML(_where,html){this.innerHTML+=html;},querySelector:()=>heading};
+  const nodes={'.event-search':{querySelector:()=>input},'.event-public':publicRoot,'.event-private':{innerHTML:''},
+    '.event-status':{textContent:''},'.event-more':more};
+  const root={isConnected:true,innerHTML:'',ownerDocument:doc,querySelector:selector=>nodes[selector]??null};
+  globalThis.fetch=async url=>{
+    const params=new URL(url,'https://local.invalid').searchParams;
+    calls.push([params.get('q'),params.get('afterId')]);
+    return Response.json({items:[],nextCursor:params.get('q') && !params.has('afterId')
+      ? {startsOn:'2099-05-10',title:'Next event',id:'event-199'} : null});
+  };
+  const tick=()=>new Promise(resolve=>setImmediate(resolve));
+  try {
+    await renderEventDirectory(root,'en',String,null);
+    input.value='Ivano';nodes['.event-search'].onsubmit({preventDefault(){}});await tick();
+    assert.equal(more.hidden,false);
+    assert.match(publicRoot.innerHTML,/You can continue searching/);
+    input.value='unsubmitted';doc.activeElement=more;more.onclick();more.onclick();
+    assert.equal(more.disabled,false,'pending pagination keeps the native button focusable');
+    await tick();
+    assert.deepEqual(calls,[['',null],['Ivano',null],['Ivano','event-199']]);
+    assert.match(publicRoot.innerHTML,/Results, page 2/);
+    assert.equal(more.hidden,true);
+    assert.equal(doc.activeElement,heading);
   }finally{globalThis.fetch=originalFetch;}
 });

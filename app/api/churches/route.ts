@@ -77,8 +77,10 @@ export async function GET(request: Request) {
       const query = url.searchParams.get("q") || "";
       if (query.length > 80 || query.trim() !== query ||
           /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/u.test(query)) return json({ error: "invalid_search" }, 400);
-      const rows = await env.DB.prepare(`SELECT id,name,city,country_code,locale,tradition,website_url,status,submitted_at,reviewed_at
-        FROM church_directory_claims WHERE status='approved' ORDER BY name,city,id LIMIT 200`).all<ClaimRow>();
+      const rows = await env.DB.prepare(`SELECT c.id,c.name,c.city,c.country_code,c.locale,c.tradition,c.website_url,c.status,c.submitted_at,c.reviewed_at
+        FROM church_directory_claims c JOIN accounts a ON a.id=c.claimant_user_id
+        WHERE c.status='approved' AND a.deleted_at IS NULL AND a.email_verified_at IS NOT NULL
+        ORDER BY c.name,c.city,c.id LIMIT 200`).all<ClaimRow>();
       if (!rows.success || !Array.isArray(rows.results)) return json({ error: "churches_unavailable" }, 503);
       const normalized = query.normalize("NFKC").toLocaleLowerCase();
       const items = [];

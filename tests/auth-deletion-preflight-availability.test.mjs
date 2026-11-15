@@ -69,6 +69,37 @@ function request(password = "current-password") {
     body: JSON.stringify({ password }),
   });
 }
+// Deletion is irreversible and must never choose the first of multiple URL
+// action keys. Test the real transpiled POST route with a disposable D1 stub;
+// a malformed URL must not even read the account or start its deletion batch.
+for (const query of [
+  "action=delete-account&action=logout",
+  "action=delete-account&action=delete-account",
+  "%61ction=delete-account&action=login",
+  "action=delete-account&action=",
+  "action=delete-account&next=%2Faccount",
+  "action=delete-account&token=unrelated",
+]) {
+  test("P0 R0.2: ambiguous account-deletion action cannot read or erase a principal: " + query, async () => {
+    const f = fixture();
+    const makeRequest = suffix => new Request("https://example.invalid/api/auth?" + suffix, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: "current-password" }),
+    });
+    const rejected = await f.handler(makeRequest(query));
+    assert.equal(rejected.status, 400, "reject ambiguous destructive URL");
+    assert.equal(rejected.headers.get("set-cookie"), null);
+    assert.equal(rejected.headers.get("cache-control"), "no-store");
+    assert.equal(f.calls.prepared.length, 0, "no D1 account read on malformed URL");
+    assert.equal(f.calls.batches, 0, "no deletion batch on malformed URL");
+    // Recovery: a subsequent canonical request must still be accepted.
+    const valid = await f.handler(makeRequest("action=delete-account"));
+    assert.equal(valid.status, 200);
+    assert.equal((await valid.json()).ok, true);
+    assert.equal(f.calls.batches, 1);
+  });
+}
+
 test("successful deletion still executes canonical 20-statement D1 transaction", async () => {
   const f = fixture();
   const res = await f.handler(request());

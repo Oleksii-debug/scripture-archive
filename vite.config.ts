@@ -11,8 +11,10 @@ const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
 
 const { d1, r2 } = hostingConfig;
 
-// macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
-const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
+// Poll when the development filesystem cannot emit native change events.
+const useWatchPolling = process.env.CHOKIDAR_USEPOLLING === "1" ||
+  Object.entries(process.env).some(([name, value]) =>
+    name.endsWith("_SANDBOX") && value === "seatbelt");
 const managedLinux = readExecutionProfile() === "managed-linux";
 
 const localBindingConfig = {
@@ -49,7 +51,7 @@ export default defineConfig(async ({ command }) => {
       ...(managedLinux
         ? { host: "0.0.0.0", allowedHosts: ["terminal.local"] }
         : {}),
-      ...(isCodexSeatbeltSandbox
+      ...(useWatchPolling
         ? { watch: { useFsEvents: false, usePolling: true } }
         : {}),
     },

@@ -7,6 +7,7 @@ import {
   academyMarkup,
   academyPlaceLessonIds,
   academyProgressKey,
+  academyWitnessLessonIds,
   attachAcademy,
   readAcademyProgress,
 } from '../public/scripture-academy.js';
@@ -40,15 +41,16 @@ test('Academy exposes a distinct non-chronological source-linked place track',()
   assert.match(academyMarkup(catalog,'en',esc,{available:true,completed:[]}),/not a historical chronology or a claim about modern locations/);
 });
 
-test('existing v1 marker records preserve both original and place lessons in canonical order',()=>{
+test('existing v1 marker records preserve every track in canonical order',()=>{
   const key=academyProgressKey({id:'alice'}),values=new Map([[key,JSON.stringify({
-    version:1,completed:['galilee','abraham','jerusalem'],
+    version:1,completed:['peter','galilee','abraham','jerusalem'],
   })]]);
   const storage={getItem:name=>values.get(name)??null};
   assert.deepEqual(readAcademyProgress(storage,key),{
-    available:true,completed:['abraham','jerusalem','galilee'],
+    available:true,completed:['abraham','jerusalem','galilee','peter'],
   });
-  assert.equal(academyAllLessonIds.length,13);
+  assert.equal(academyAllLessonIds.length,17);
+  assert.equal(academyWitnessLessonIds.length,4);
 });
 
 test('marking the final place study updates only its separate honest completion badge',()=>{
@@ -74,7 +76,7 @@ test('marking the final place study updates only its separate honest completion 
   const document={querySelector:selector=>selector==='[data-academy-root]'?root:null};
   attachAcademy(document,storage,'en',user,{available:true,completed:before});
   click();
-  assert.deepEqual(readAcademyProgress(storage,key).completed,academyAllLessonIds);
+  assert.deepEqual(readAcademyProgress(storage,key).completed,[...academyLessonIds,...academyPlaceLessonIds]);
   assert.equal(foundationMeter.value,7);
   assert.equal(foundationStatus.textContent,'Studied: 7/7');
   assert.equal(placeMeter.value,6);

@@ -40,7 +40,7 @@ test('Academy rejects non-string storage adapter values and excess marker arrays
   }
 });
 
-test('Academy preserves all 13 legitimate markers, guest empty state, and unavailable storage', () => {
+test('Academy preserves all 17 legitimate markers, guest empty state, and unavailable storage', () => {
   const reversed=[...academyAllLessonIds].reverse();
   const storage=storageWith({[alice]:saved(reversed)});
   assert.deepEqual(readAcademyProgress(storage,alice),{

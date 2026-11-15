@@ -1,3 +1,143 @@
+## 2026-11-03 — SA-EXT-07 / ACADEMY_RESET_STALE_WEBLOCK_RECORD — scoped source terminal
+
+**Завершено лише захист від застарілого підтвердження очищення Академії під час очікування Web Lock, НЕ батьківський SA-EXT-07.** Якщо інша вкладка зберегла нові позначки після натискання «очистити», старий запланований reset раніше міг їх видалити. Тепер наявний обробник зчитує точні байти запису під час підтвердження і звіряє їх **під тим самим ексклюзивним Web Lock** безпосередньо перед видаленням. За розбіжності або неможливості початкового читання — відмова без видалення й без неправдивого успіху; підтвердження залишається, щоб користувач міг повторити дію свідомо.
+
+[PR #1245](https://github.com/Oleksii-debug/scripture-archive/pull/1245) **SQUASH MERGED** `main@01a24dbc51ac9e9ecd73a8075da7e13d09fd9c26`, exact qualified head `8b9861f6197e03f126081bd9b375ccc5aa1b5448`; [exact-head CI #41548270079](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41548270079) **SUCCESS**: 4553 native Node PASS / 1 SKIP / 0 FAIL; 37/37 disposable Worker/D1 PASS; 2/2 Python PASS; TypeScript, lint, build PASS (13 lint warnings, 0 errors). [Акт](SA_EXT_07_ACADEMY_RESET_STALE_WEBLOCK_RECORD_SCOPED_TERMINAL_20261103.md).
+
+`remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` **тільки для цього race**. **SA-EXT-01/02/05/06/07 parent OPEN; 03/04 source-terminal.** Повний локальний checkout, незалежні права/редакція, фізичний Windows/Chrome/NVDA, live Sites/D1/backup/release **NOT_VERIFIED**. Без production, 82 мов, платежів, synthetic users, масової пошти, dating чи секретів.
+
+---
+
+## 2026-11-02 — SA-EXT-07 / ACADEMY_RESET_WEBLOCK_SINGLE_FLIGHT — scoped source terminal
+
+**Тільки одноразовість підтвердженого очищення локальних позначок Академії під Web Lock завершено; SA-EXT-07 parent НЕ закрито.** `resetPending` у чинному обробнику не дозволяє повторній активації поставити друге видалення в чергу; guard звільняється після успіху/відмови. Збережено account scope, confirmation, readback, stale-view та keyboard/NVDA focus behavior. Два нові регресійні тести, без нового API/DB/сервісу.
+
+[PR #1242](https://github.com/Oleksii-debug/scripture-archive/pull/1242) **SQUASH MERGED** `main@6e010d8db2c388126ef8e60621d745cbc483c1d9`, exact head `e4f080909f7eac13b7e24539e2f89b4492ca71b8`; [exact-head CI #41539838856](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41539838856) **SUCCESS**: 4539 Node PASS / 1 SKIP / 0 FAIL, 37/37 disposable Worker/D1 PASS, 2/2 Python PASS, TS/lint/build PASS (13 lint warnings). [Акт](SA_EXT_07_ACADEMY_RESET_WEBLOCK_SINGLE_FLIGHT_SCOPED_TERMINAL_20261102.md).
+
+`remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` **лише тут**. SA-EXT-01/02/05/06/07 **OPEN**, 03/04 source-terminal. Права/редакція, повні курси/медіа, фізичний Windows/NVDA, live Sites/D1/backup/release **NOT_VERIFIED**. Нічого забороненого не запускалося.
+
+---
+
+## 2026-11-02 — SA-EXT-06 / ATLAS_EMPTY_SEARCH_RECOVERY — scoped source terminal
+
+**Лише порожній фільтр текстового атласу виправлено; батьківський SA-EXT-06 НЕ закрито.** Замість хибного заголовка «Каталог досьє» атлас показує власний локалізований заголовок і доступне посилання «Очистити пошук» на чинний `/dossiers`; чужі джерельні посилання при нульових результатах не створюються. Збережено uk/ru/en, позитивні фільтри та відмову для пошкодженого каталогу/Unicode.
+
+[PR #1239](https://github.com/Oleksii-debug/scripture-archive/pull/1239) **SQUASH MERGED** `main@5ef2e8c65c5a1f82bbaf1fa51878891829514ac6`; exact head `b1dec0c4472024af7c30eee465864ec8a6309930`. [CI #41531517417](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41531517417) **SUCCESS**: 4531 Node PASS / 1 SKIP, 37 Worker/D1 PASS, 2 Python PASS, TS/lint/build PASS. Test-only CI **CANCELLED**, не RED. [Акт](SA_EXT_06_ATLAS_EMPTY_SEARCH_RECOVERY_SCOPED_TERMINAL_20261102.md).
+
+`remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` **тільки для ATLAS_EMPTY_SEARCH_RECOVERY**. SA-EXT-01/02/05/06/07 **OPEN**, 03/04 source-terminal. Незалежні права/редакція, фізичний NVDA/Windows/Chrome, live Sites/D1/backup/release **NOT_VERIFIED**. Production, 82 мови, платежі, synthetic users, масова пошта та dating не запускалися.
+
+---
+
+## 2026-11-02 — SA-EXT-07 / ACADEMY_LESSON_WEBLOCK_SINGLE_FLIGHT — scoped source terminal
+
+**Завершено лише захист від повторного натискання кнопки заняття Академії під час очікування Web Lock, НЕ весь SA-EXT-07.** Подвійна активація могла поставити дві операції в чергу й одразу скасувати першу позначку. Тепер чинний обробник має per-button single-flight, тимчасово вимикає кнопку, відновлює її після успіху/відмови, повертає клавіатурний фокус лише для актуального екрана без перехоплення фокусу. [RED CI #41522496510](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41522496510): 4522 Node PASS / 1 очікуваний FAIL / 1 SKIP. [PR #1236](https://github.com/Oleksii-debug/scripture-archive/pull/1236) **SQUASH MERGED** `main@533a17a19120c9e2802cd426d94f7e481fe21738`; [exact-head green CI #41522807785](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41522807785): 4523 Node PASS / 1 SKIP / 0 FAIL, 37/37 disposable Worker/D1 PASS, 2/2 Python PASS, TS/lint/build PASS (13 warnings, 0 errors). [Акт](SA_EXT_07_ACADEMY_LESSON_WEBLOCK_SINGLE_FLIGHT_SCOPED_TERMINAL_20261102.md).
+
+`remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` **лише для цієї підфункції**. **SA-EXT-01/02/05/06/07 parent OPEN; 03/04 source-terminal.** Ширші курси/медіа/редакція, незалежні права, фізичний Windows/Chrome/NVDA, live Sites/D1/backup/release **NOT_VERIFIED**. Без повного локального checkout, без production, 82 мов, платежів, synthetic users, масової пошти, dating чи секретів.
+
+---
+
+## 2026-11-02 — SA-EXT-07 / ACADEMY_CATALOG_ARRAY_METHOD_ACCESSORS — scoped source terminal
+
+**Тільки один реальний дефект доступу до `map` у перевіреному каталозі Академії закрито, НЕ SA-EXT-07 parent.** `academyMarkup` після успішного `validateDossierGraph` викликав `catalog.books[lang].map`, тому власний/успадкований getter видавничого масиву міг виконатися або зірвати відображення. Замість цього використано `Array.prototype.map.call` — той самий канонічний допуск, що в досьє. Усі 13 занять, 3 мови, посилання на першоджерела, read-only приватність та відмова від getter-backed title перевірені.
+
+[RED test-only CI #41513854753](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41513854753) **COMPLETED FAILURE**: 4508 Node PASS, 1 очікуваний FAIL, 1 SKIP — реальний виклик `map` getter. [PR #1233](https://github.com/Oleksii-debug/scripture-archive/pull/1233) **SQUASH MERGED** `main@ff85eba2b6f7795b3d8c467bf118f40e3c7739e1`, exact head `7913a9314799aec9f06fc66cd0cb9d442c5e8736`; [green exact-head CI #41514089177](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41514089177) **SUCCESS**: 4509 Node PASS / 1 SKIP / 0 FAIL, 37/37 disposable Worker/D1 PASS, 2/2 Python PASS, TS/lint/build PASS. [Акт](SA_EXT_07_ACADEMY_CATALOG_ARRAY_METHOD_ACCESSORS_SCOPED_TERMINAL_20261102.md).
+
+`remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` **тільки тут**. **SA-EXT-01/02/05/06/07 parent OPEN; 03/04 source-terminal.** Незалежні права/редакція, повні курси/транскрипти/медіа, фізичний Windows/Chrome/NVDA, live Sites/D1/backup/release **NOT_VERIFIED**. Без локального native checkout; exact-head CI — GitHub Actions. Заборонені production/82 мови/платежі/synthetic users/масова пошта/dating не запускалися.
+
+---
+
+## 2026-11-02 — SA-EXT-07 / ACADEMY_PERSISTED_ENVELOPE_INTEGRITY — scoped source terminal
+
+**Лише верифікацію схеми локальних позначок Академії завершено, НЕ весь батьківський SA-EXT-07.** Чинний `readAcademyProgress` тепер відмовляє на JSON із додатковими account/token/provenance-полями, вимагаючи рівно `completed,version` відповідно до writer; незмінні пошкоджені байти залишаються для явного recovery. Приватні позначки та badges не оголошуються, `role="alert"` uk/ru/en і публічні reader links збережені; інші principal та guest/account v1 працюють.
+
+[Функціональний PR #1230](https://github.com/Oleksii-debug/scripture-archive/pull/1230) **SQUASH MERGED** `main@97180ce88535800cae36870a74bbdbe36a7ff8c3`, exact qualified head `29b25df110794a821ae39eba2cdea90f4e1d8d9b`; [CI #41503945400](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41503945400) **SUCCESS**: 4506 Node PASS / 1 SKIP / 0 FAIL, 37/37 disposable Worker/D1 PASS, 2/2 Python PASS, TS/lint/build PASS. Test-only CI #41503907856 CANCELLED, не RED. [Акт](SA_EXT_07_ACADEMY_PERSISTED_ENVELOPE_SCOPED_TERMINAL_20261102.md).
+
+`remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` **лише тут**. **SA-EXT-01/02/05/06/07 parent OPEN; 03/04 source-terminal.** Ширші курси/транскрипти/медіа/author-review, незалежні права й редакція, фізичний Windows/Chrome/NVDA, live Sites/D1/backup/release **NOT_VERIFIED**. Нічого забороненого не запускалося.
+
+---
+
+## 2026-11-02 — SA-EXT-05 / BMP_VARIATION_SELECTOR_GET_ADMISSION — scoped source terminal
+
+**Закрито тільки відмову для невидимих BMP variation selectors U+FE00–U+FE0F у GET-пошуку досьє/атласу, НЕ батьківський розділ.** Раніше `validDossierSearchQuery` відхиляв supplementary U+E0100–U+E01EF, але пропускав BMP; прихований символ у `q` міг бути прийнятий і відображений у формі. Тепер чинний валідатор відхиляє обидва діапазони до HTML; локалізоване `role="alert"` без form/reader/dossier links. Негативні перевірки: 16 символів × uk/ru/en, обидва UI; позитивні `GEN 12` і порожній GET збережено.
+
+[PR #1227](https://github.com/Oleksii-debug/scripture-archive/pull/1227) **SQUASH MERGED** `main@aa585400ce42b5cfbc8ecccbb3b154c3fead006c`, qualified head `161124a9dbd0710ded555990e7de26d8e75b99d7`; [exact-head CI #41494540928](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41494540928) **SUCCESS**: 4499 native Node PASS / 1 SKIP / 0 FAIL; 37/37 disposable Worker/D1 PASS; 2/2 Python PASS; TypeScript/lint/build PASS (13 warnings, 0 errors). Test-only CI #41494387921 **CANCELLED**, не RED PASS/FAIL. [Акт](SA_EXT_05_BMP_VARIATION_SELECTOR_GET_ADMISSION_SCOPED_TERMINAL_20261102.md).
+
+`remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` **лише для цієї підфункції**. **SA-EXT-01/02/05/06/07 parent OPEN; 03/04 source-terminal.** Незалежні видавничі права/редакція, фізичний Windows/Chrome/NVDA, live Sites/D1/backup/release **NOT_VERIFIED**. Жодного production, 82 мов, платежів, synthetic users, масової пошти, dating чи секретів.
+
+---
+
+## 2026-11-02 — SA-EXT-01/05 / DOSSIER_PUBLISHER_RIGHTS_ADMISSION_PARITY — scoped source terminal
+
+**Закрито тільки узгодження видавничих прав досьє/атласу з чинним допуском основної читальні, НЕ батьківські розділи.** Раніше досьє могло створити джерельне посилання для edition з відсутньою/порожньою ліцензією, небезпечним source URL, невидимим/надмірним title або accessor-backed rights, які читальня відхиляє. Тепер спільний `validateDossierGraph` повторно використовує канонічні `validEditionRightsMetadata` і `validEditionRightsText`; ID обмежений, без пробілів. Негативні перевірки: 3 мови × 8 дефектів, обидва UI `role="alert"` без reader links, throwing getter не виконується; чинні джерела збережено.
+
+[Код і тести PR #1224](https://github.com/Oleksii-debug/scripture-archive/pull/1224) **SQUASH MERGED** `main@3d6358a7bbaeadd98c9264ea35cf13c963e0821e`, exact head `884dd3a666bdc3d14701fb1a94b4be5ff05fd0cf`; [exact-head CI #41485528737](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41485528737) **SUCCESS**: 4488 Node PASS / 1 SKIP / 0 FAIL; 37/37 disposable Worker/D1 PASS; 2/2 Python PASS; TS/lint/build PASS (13 lint warnings, 0 errors). [Акт](SA_EXT_01_05_DOSSIER_PUBLISHER_RIGHTS_PARITY_SCOPED_TERMINAL_20261102.md).
+
+`remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` **лише для цього дефекту**. **SA-EXT-01/02/05/06/07 parent OPEN; 03/04 source-terminal.** Незалежні права/редакція, фізичний Windows/Chrome/NVDA, live Sites/D1/backup/release **NOT_VERIFIED**. Без production, 82 мов, платежів, synthetic users, масової пошти, dating чи секретів.
+
+---
+
+## 2026-11-02 — SA-EXT-05 / SUPPLEMENTARY_VARIATION_SELECTOR_SOURCE_LABELS — scoped source terminal
+
+**Лише невидимі Unicode variation selectors U+E0100–U+E01EF у досьє, атласі та GET-пошуку виправлено; батьківський розділ НЕ закрито.** Чинний валідатор відхиляв U+FE00–U+FE0F, але пропускав supplementary Mn у видавничих назвах книг, досьє й ARIA-цитатах. Обидва наявні допуски `safeVisibleText` та `validDossierSearchQuery` тепер відхиляють цей діапазон до створення джерельних посилань, з локалізованим `role="alert"` та без reader links. [PR #1222](https://github.com/Oleksii-debug/scripture-archive/pull/1222) **SQUASH MERGED** `main@77f0be6903fbd5e723e688fe559cbcc5c8bb84f0` (exact head `42352eeb824012910e8b73f04f9cbbb17331d9c2`); [CI #41475148169](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41475148169) **SUCCESS**: 4487 Node PASS / 1 SKIP / 0 FAIL; 37/37 disposable Worker/D1 PASS; 2/2 Python PASS; TS/lint/build PASS (13 warnings, 0 errors). [Акт](SA_EXT_05_SUPPLEMENTARY_VARIATION_SELECTORS_SCOPED_TERMINAL_20261102.md).
+
+`remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` **тільки для цього дефекту**. **SA-EXT-01/02/05/06/07 parent OPEN; 03/04 source-terminal.** Незалежні права/редакція, фізичний Windows/Chrome/NVDA, live Sites/D1/backup/release **NOT_VERIFIED**. Без production, 82 мов, платежів, synthetic users, масової пошти, dating чи секретів.
+
+---
+
+## 2026-11-02 — SA-EXT-05 / VARIATION_SELECTOR_SOURCE_LABELS — scoped source terminal
+
+**Закрито лише захист джерельних назв і досьє від невидимих Unicode variation selectors U+FE00–U+FE0F, НЕ батьківський розділ.** Наявний `safeVisibleText` пропускав ці `Mn` символи (не `Cf`), тому назви книг та ARIA-цитати могли бути візуально неоднозначними. Спільний валідатор досьє/атласу тепер відмовляє до створення посилань, з локалізованим `role="alert"`; 24 нові негативні регресії для uk/ru/en, чинний каталог збережено. [PR #1219](https://github.com/Oleksii-debug/scripture-archive/pull/1219) **SQUASH MERGED** `main@394113d62473104033c2574d17bcc43f6f44916e`, exact head `0e7ab56b2df2cf7814bf1a883fd731c97aaa79c7`; [exact-head CI #41465782558](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41465782558) **SUCCESS**: 4461 Node PASS / 1 SKIP / 0 FAIL, 37/37 disposable Worker/D1 PASS, 2/2 Python PASS, TS/lint/build PASS. Test-only CI #41465632637 був **CANCELLED**, не RED PASS/FAIL. [Акт](SA_EXT_05_VARIATION_SELECTOR_SOURCE_LABELS_SCOPED_TERMINAL_20261102.md).
+
+`remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` **лише тут**. **SA-EXT-01/02/05/06/07 parent OPEN, 03/04 source-terminal.** Права/редакція, фізичний Windows/Chrome/NVDA, live Sites/D1/backup/release **NOT_VERIFIED**. Без production, 82 мов, платежів, synthetic users, масової пошти, dating і секретів.
+
+---
+
+## 2026-11-02 — SA-EXT-01/05 / DOSSIER_READER_CATALOG_ADMISSION_PARITY — scoped source terminal
+
+**Закрито тільки невідповідність допуску каталогу між чинними досьє/атласом і основною читальнею, НЕ батьківські розділи.** Досьє раніше могло створювати посилання й ARIA-цитати за пошкодженого schema/edition ID, неповного або переставленого 66-книжного каталогу, хибного OT/NT чи пошкодженого альтернативного видання, хоча читальня відхиляла такий каталог. Спільний `validateDossierGraph` тепер відмовляє до HTML із локалізованим `role="alert"`, без `/reader/` посилань; власні null-prototype дані й нормальні каталоги збережено. Статичний канонічний список кодів залишається лише в читальні; **повної еквівалентності не заявлено**.
+
+[Код і чотири тестовані файли PR #1215](https://github.com/Oleksii-debug/scripture-archive/pull/1215) **SQUASH MERGED** `main@8961f7a1f04dda6859c5b061897d6b7f9fcda803`, exact head `bd8221ff083a3fef6485282f5d9ab4ff748a342b`; [exact-head CI #41447503899](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41447503899) **SUCCESS**: 4435 Node PASS / 1 SKIP / 0 FAIL, 37/37 disposable Worker/D1 PASS, 2/2 Python PASS, TS/lint/build PASS (13 lint warnings, 0 errors). Початковий CI #41447345336 FAIL на двох позитивних null-prototype fixtures без потрібного envelope; їх виправлено без послаблення захисту. [Акт](SA_EXT_01_05_DOSSIER_READER_CATALOG_PARITY_SCOPED_TERMINAL_20261102.md).
+
+`remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` **тільки для цієї межі**. **SA-EXT-01/02/05/06/07 parent OPEN; 03/04 source-terminal.** Права/редакція, фізичний Windows/Chrome/NVDA, live Sites/D1/backup/release **NOT_VERIFIED**. Без production, 82 мов, платежів, synthetic users, масової пошти, dating чи секретів.
+
+---
+
+## 2026-11-02 — SA-EXT-05/06 / BOUNDED_PUBLISHER_BOOK_TITLES — scoped source terminal
+
+**Закрито тільки межу довжини видавничих назв біблійних книг у чинних досьє й атласі, НЕ батьківські розділи.** `validateDossierGraph` раніше приймав необмежено довгі непорожні назви, які повторювалися в видимих посиланнях та ARIA-мітках. Тепер назви понад 120 UTF-16 одиниць відхиляються до сканування й відображення; обидва UI показують `role="alert"` без оманливих reader links. Негативні 121/4096 для uk/ru/en, позитивна межа 120 та незмінний справжній каталог. [Код і тести PR #1212](https://github.com/Oleksii-debug/scripture-archive/pull/1212) **SQUASH MERGED** `main@54dc8c8429fb28ac1814a3065c49dcf86a8acde5`, exact head `691a11bc4ffc66412ba84b563e119d3687411cd7`; [exact-head CI #41439301249](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41439301249) **SUCCESS**: 4431 Node PASS / 1 SKIP / 0 FAIL, 37/37 disposable Worker/D1 PASS, 2/2 Python PASS, TS/lint/build PASS (13 warnings, 0 errors). Початковий CI #41438978978 FAIL через синтаксис нового тесту; виправлено до green CI. [Акт](SA_EXT_05_06_BOUNDED_PUBLISHER_BOOK_TITLES_SCOPED_TERMINAL_20261102.md).
+
+`remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` **лише для цієї межі**. SA-EXT-01/02/05/06/07 parent **OPEN**, 03/04 source-terminal. Rights/editorial, фізичний Windows/Chrome/NVDA, live Sites/D1/backup/release **NOT_VERIFIED**. Без production, 82 мов, платежів, synthetic users, масової пошти чи dating.
+
+---
+
+## 2026-11-02 — SA-EXT-05/06 / VISIBLE_BOOK_TITLE_IDENTITY — scoped source terminal
+
+**Лише неоднозначність назв книг у локалізованих видавничих каталогах усунено, НЕ повний SA-EXT-05/06.** `validateDossierGraph` тепер відхиляє два різні book codes із тією самою назвою після NFC/trim/locale lowercase у uk/ru/en. Пошук за назвою не повинен непомітно посилатися на різні біблійні книги; обидва наявні UI відмовляють доступним `role="alert"` і без `/reader/` links. Дев'ять негативних варіантів (3 мови × exact/case/NFC), позитивне відновлення, 66/66 справжніх назв без колізій. [PR #1209](https://github.com/Oleksii-debug/scripture-archive/pull/1209) **SQUASH MERGED** `main@677d7b554b14963219a0db73a35d0d080b6b65f7`; [exact-head CI #41431911488](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41431911488) **SUCCESS**: 4429 Node PASS / 1 SKIP / 0 FAIL; 37/37 disposable Worker/D1 PASS; 2/2 Python PASS; TS/lint/build PASS (13 warnings, 0 errors). [Акт](SA_EXT_05_06_VISIBLE_BOOK_TITLE_IDENTITY_SCOPED_TERMINAL_20261102.md). `remaining_scoped_implementation=0` тільки тут. Батьківські SA-EXT-01/02/05/06/07 OPEN; 03/04 source-terminal. Незалежні права, редакція, фізичний NVDA/Chrome/Windows, Sites/D1/backup/release NOT_VERIFIED; заборонених запусків немає.
+
+---
+
+## 2026-11-02 — SA-EXT-05/06 / DOSSIER_ARRAY_METHOD_ACCESSORS — scoped source terminal
+
+**Лише дефект виконання accessor-backed методів масивів видавничого каталогу виправлено, НЕ весь SA-EXT-05/06.** Канонічні досьє та текстовий атлас тепер обходять власні/успадковані `keys/some/map` через native Array.prototype; 18 негативних/позитивних/recovery комбінацій (3 мови × 3 методи × 2 походження). [PR #1206](https://github.com/Oleksii-debug/scripture-archive/pull/1206) **SQUASH MERGED** `main@14d4f3ae2e4a929d5fd93989292aae678168b57b`, exact head `517c1cdf6d45f8206c1823b2244de48cf3b7512a`; [exact-head CI #41423525121](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41423525121) **SUCCESS**: 4427 Node PASS / 1 SKIP / 0 FAIL, 37 Worker/D1 PASS, 2 Python PASS, TS/lint/build PASS. [Акт](SA_EXT_05_06_DOSSIER_ARRAY_METHOD_ACCESSORS_SCOPED_TERMINAL_20261102.md). `remaining_scoped_implementation=0` лише тут. Батьківські SA-EXT-01/02/05/06/07 OPEN, 03/04 source-terminal; rights/editorial, фізичний Windows/Chrome/NVDA, live Sites/D1/backup/release NOT_VERIFIED. Заборонених запусків немає.
+
+---
+
+## 2026-11-02 — SA-EXT-05/06 / DOSSIER_SOURCE_LABEL_UNICODE_ZS — scoped source terminal
+
+**Закрито тільки захист видавничих назв книг від неоднозначних Unicode Zs пробілів у спільному досьє/атласі, НЕ батьківські SA-EXT-05/06.** Раніше канонічний GET-пошук відхиляв 15 non-ASCII Zs separators, але `validateDossierGraph` допускав їх у назвах біблійних книг, які потрапляють до видимих посилань і доступних ARIA-підписів. Тепер ті самі 15 символів відхиляються до формування джерельних посилань, без нової бази чи сервісу. Регресія: 15 Unicode кодів × uk/ru/en, обидва чинні UI (досьє й текстовий атлас), `role="alert"`, жодного `/reader/` посилання при пошкодженому каталозі; нормальний каталог збережено.
+
+[Код і тести PR #1203](https://github.com/Oleksii-debug/scripture-archive/pull/1203) **SQUASH MERGED** `main@e503cff684e63db204b57a9f1387b6ebd9d16c6c` (exact PR head `ec7fc9c0c7cbb967f8c52608effc9299c2f4e1e5`); [exact-head CI #41416028380](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41416028380) **SUCCESS**: 4425 Node PASS / 1 SKIP / 0 FAIL, 37/37 disposable Worker/D1 PASS, 2/2 Python PASS, TypeScript/lint/build PASS (13 warnings, 0 errors). Source blob `b5e4de3fcb953111cad03c5a28c652fceb8a593e`, test blob `ed2e63cfe7e720f51d0d8fb3777bf2ae5540e96d`. [Акт](SA_EXT_05_06_DOSSIER_SOURCE_LABEL_UNICODE_ZS_SCOPED_TERMINAL_20261102.md)
+
+`remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` **лише для цього Unicode source-label boundary**. SA-EXT-01/02/05/06/07 parent **OPEN**, 03/04 source-terminal. Видавничі права/редакція, фізичний Windows/Chrome/NVDA, production Sites/D1/backup/release **NOT_VERIFIED**. Без 82-мовного запуску, production міграції, нового релізу, платежів, synthetic users, масової пошти чи dating.
+
+---
+
+## 2026-11-02 — SA-EXT-01 / PARALLEL_NO_LOCAL_OPTIONS — scoped source closure
+
+**Лише доступний порожній стан паралельної читальні закрито, НЕ батьківський SA-EXT-01.** Коли всі записи другого видання відхилено чинними правилами local/ID/getter, інтерфейс більше не показує активні порожній список і кнопку: native select/submit disabled, видиме `role="status"` українською, російською й англійською пояснює відсутність доступного локального видання. Для чинних локальних видань клавіатурне порівняння збережено. [Код+регресії PR #1201](https://github.com/Oleksii-debug/scripture-archive/pull/1201) **SQUASH MERGED** `main@7dbe033245727bbc8b776d8aa37ec73c52bd1c9e`, exact head `db1ea31f4264097f0e929667740adf67624860b7`. Початковий [CI #41409669695](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41409669695) **FAIL** на трьох застарілих assertions для порожнього select; тести узгоджено без послаблення відмови. [Фінальний exact-head CI #41409817655](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41409817655) **SUCCESS**: 4424 Node PASS / 1 SKIP / 0 FAIL, 37/37 disposable Worker/D1 PASS, 2/2 Python PASS, TS/lint/build PASS (13 lint warnings, 0 errors). [Post-merge CI #41410054896](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41410054896) **SUCCESS** на `main@7dbe033245727bbc8b776d8aa37ec73c52bd1c9e` з тими самими 4424/37/2 PASS і TS/lint/build. [Акт](SA_EXT_01_PARALLEL_NO_LOCAL_OPTIONS_SCOPED_TERMINAL_20261102.md). `remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` **лише для цієї підфункції**. SA-EXT-01/02/05/06/07 parent OPEN, 03/04 source-terminal. Права/редакція, реальний Chrome/Windows/NVDA, live Sites/D1/backup/release NOT_VERIFIED; draft #325 не змінено, заборонених запусків немає.
+
+---
+
 ## 2026-11-02 — SA-EXT-01 / PARALLEL_LOCAL_OPTION_ADMISSION — scoped source terminal
 
 **Лише відсутність непридатних опцій другого видання виправлено, НЕ батьківський SA-EXT-01.** Канонічний selector тепер показує тільки записи, які наявний submit приймає через `verifiedLocalEdition`: non-local, відсутні/null, inherited/getter `local` не пропонуються; коректні локальні видання й Unicode-escaped назви збережені. [PR #1197](https://github.com/Oleksii-debug/scripture-archive/pull/1197) **SQUASH MERGED** `main@a3cb39de917635a3aa38a562648baf861864de22`; [CI #41402124309](https://github.com/Oleksii-debug/scripture-archive/actions/runs/41402124309) **SUCCESS**: 4419 Node PASS/0 FAIL/1 SKIP, 37/37 disposable Worker/D1, 2/2 Python, TS/lint/build PASS. [Акт](SA_EXT_01_PARALLEL_LOCAL_OPTION_ADMISSION_SCOPED_TERMINAL_20261102.md). `remaining_scoped_implementation=0`, `necessary_unmerged_scoped_PRs=0` лише тут. SA-EXT-01/02/05/06/07 OPEN; 03/04 source-terminal. Видавничі права/редакція, фізичний NVDA/Chrome/Windows, Sites/D1/backup/release NOT_VERIFIED. Без заборонених запусків.
@@ -1602,6 +1742,8 @@
 ### SA-EXT-01. Біблійні видання й паралельний читач
 **Статус:** EXISTING_SOURCE + PLANNED_EXPANSION. Біблійні книги/глави, пошук, вибір видань; розширення до різних перекладів за ліцензією, порівняння, цитування, закладки. **Приймання:** перевірені тексти й права, правильна навігація, пошук, provenance, клавіатура/NVDA.
 
+Міжмовне порівняння локальних видань, мова віршів для синтезатора та цитування з правами другого видання інтегровані. [PR #1256](https://github.com/Oleksii-debug/scripture-archive/pull/1256).
+
 ### SA-EXT-02. Навчальні місії, пам'ять і рівні складності
 **Статус:** EXISTING_SOURCE + PLANNED_EXPANSION. Наявна місія Авраама та захищене оцінювання; ширший навчальний каталог, повторення, індивідуальні прогрес і пояснення. **Приймання:** тестова й реальна історія, нуль прихованих правильних відповідей, коректні переклади й джерела.
 
@@ -1626,6 +1768,8 @@
 
 ### SA-EXT-08. Цифрова християнська бібліотека
 **Статус:** PLANNED_NEW. Книги, дослідження, проповіді, записи конференцій, музичні матеріали та аудіокниги. **Приймання:** каталог прав/джерел, пошук і видалення на вимогу правовласника, доступні медіа.
+
+Пошук у публічному каталозі перевірених матеріалів підтримує спільний фільтр за мовою і підставою публікації з посторінковим продовженням. [PR #1257](https://github.com/Oleksii-debug/scripture-archive/pull/1257).
 
 ### SA-EXT-09. Каталог церков і місцевих громад
 **Статус:** PLANNED_NEW із reuse від Home Groups. Верифіковані сторінки громади, мова/місто/традиція/контакти за згодою, заходи. **Приймання:** підтвердження прав представника, community ownership, права на виправлення/видалення.

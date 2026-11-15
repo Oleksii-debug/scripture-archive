@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { runInNewContext } from 'node:vm';
 import { parallelControls, mountParallelReader } from '../public/parallel-reader.js';
+import { EDITIONS, selectedEdition } from '../public/editions.js';
 
 const esc = value => String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
 const edition={id:'uk-kulish',contentId:'UKRPAN',title:'Куліш',local:true};
@@ -19,7 +21,46 @@ function fixture(overrides={}) {
   mountParallelReader(panel,options);
   return {panel,form,status,result,button,copied,run:()=>form.onsubmit({preventDefault(){}}),cite:number=>result.onclick({target:{closest:()=>({dataset:{parallelCite:String(number)}})}}),move:()=>{isCurrent=false;},reads:()=>reads,checked:()=>checked,locked:()=>locked,failed:()=>failed};
 }
-async function withForm(callback){const original=globalThis.FormData;globalThis.FormData=class{get(){return edition.id;}};try{return await callback();}finally{globalThis.FormData=original;}}
+async function withForm(callback, id=edition.id){const original=globalThis.FormData;globalThis.FormData=class{get(){return id;}};try{return await callback();}finally{globalThis.FormData=original;}}
+
+test('cross-language comparisons load the real edition and cite that edition’s rights', async () => {
+  const source = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+  const bookLoader = source.slice(source.indexOf('async function getBook('), source.indexOf('function localEditionMetadata('));
+  const catalog = JSON.parse(readFileSync(new URL('../public/data/catalog.json', import.meta.url), 'utf8'));
+  const cases = [
+    { interfaceLocale: 'uk', chosen: EDITIONS.en[0], path: 'en', rights: catalog.editions.en },
+    { interfaceLocale: 'en', chosen: EDITIONS.ru[0], path: 'ru', rights: catalog.editions.ru },
+    { interfaceLocale: 'ru', chosen: EDITIONS.uk[0], path: 'uk-ohiienko', rights: catalog.translations['uk-ohiienko'] },
+  ];
+  for (const { interfaceLocale, chosen, path, rights } of cases) {
+    const state = { lang: interfaceLocale, catalog, bookCache: new Map() };
+    const requests = [];
+    const expectedPath = `/data/bible/${path}/GEN.json`;
+    const book = JSON.parse(readFileSync(new URL(`../public${expectedPath}`, import.meta.url), 'utf8'));
+    const getBook = runInNewContext(`${bookLoader}\ngetBook`, {
+      state, EDITIONS, selectedEdition,
+      fetch: async url => {
+        requests.push(url);
+        assert.equal(url, expectedPath);
+        return { ok: true, json: async () => book };
+      },
+    });
+    const controls = parallelControls([chosen], interfaceLocale, esc);
+    assert.ok(controls.includes(`value="${chosen.id}" lang="${chosen.locale}"`));
+    const comparison = fixture({ editions: [chosen], catalog, lang: interfaceLocale, getBook });
+    await withForm(async () => {
+      await comparison.run();
+      assert.ok(comparison.result.innerHTML.includes(`<span lang="${chosen.locale}">${esc(book.chapters[0][0])}</span>`));
+      await comparison.cite(1);
+      assert.equal(comparison.copied.length, 1);
+      assert.ok(comparison.copied[0].includes(book.chapters[0][0]));
+      assert.ok(comparison.copied[0].includes(`${rights.title} · ${rights.license}`));
+      assert.ok(comparison.copied[0].includes(new URL(rights.source).href));
+    }, chosen.id);
+    assert.deepEqual(requests, [expectedPath]);
+    assert.equal(state.lang, interfaceLocale);
+  }
+});
 
 test('comparison is a labelled native form with escaped edition names',()=>{
   const html=parallelControls([{id:'x"',title:'<img>',local:true}],'uk',esc);
@@ -577,4 +618,52 @@ test('comparison selector does not execute local accessors or inherit local auth
   assert.equal(reads,0,'the imported manifest getter must not execute');
   assert.match(html,/value="real-local"/);
   assert.doesNotMatch(html,/dynamic-local|inherited-local|Dynamic edition|Inherited edition/);
+});
+
+
+test('empty parallel edition choices disable native controls with a localized live status',()=>{
+  for (const [lang,notice] of [
+    ['uk','Немає доступних локальних видань'],
+    ['ru','Нет доступных локальных изданий'],
+    ['en','No local editions are available'],
+  ]) {
+    const html=parallelControls([],lang,esc);
+    assert.match(html,/<select name="edition" disabled><\/select>/);
+    assert.match(html,/<button class="button" type="submit" disabled>/);
+    assert.match(html,/<p class="parallel-status" role="status">/);
+    assert.ok(html.includes(notice), 'localized status is readable without submitting');
+    assert.doesNotMatch(html,/<option /);
+  }
+});
+
+test('unusable imported editions never leave an enabled empty comparison form',()=>{
+  const invalid=[
+    {id:'remote',title:'Remote',local:false},
+    {id:'missing',title:'Missing local flag'},
+    {id:'duplicated',title:'First',local:true},
+    {id:'duplicated',title:'Second',local:true},
+  ];
+  const html=parallelControls(invalid,'en',esc);
+  assert.match(html,/<select name="edition" disabled>/);
+  assert.match(html,/<button class="button" type="submit" disabled>/);
+  assert.match(html,/No local editions are available for comparison/);
+  assert.doesNotMatch(html,/<option /);
+});
+
+test('a valid local edition retains enabled comparison controls and an empty live status',()=>{
+  const html=parallelControls([{id:'local',title:'Local',local:true}],'en',esc);
+  assert.match(html,/<select name="edition"><option value="local">Local<\/option><\/select>/);
+  assert.match(html,/<button class="button" type="submit">/);
+  assert.match(html,/<p class="parallel-status" role="status"><\/p>/);
+  assert.doesNotMatch(html,/type="submit" disabled|No local editions are available/);
+});
+
+test('empty-state rendering does not invoke imported edition getters',()=>{
+  let invoked=0;
+  const unsafe={id:'accessor',title:'Getter title',local:true};
+  Object.defineProperty(unsafe,'id',{get(){invoked++;return 'accessor';}});
+  const html=parallelControls([unsafe],'uk',esc);
+  assert.equal(invoked,0);
+  assert.match(html,/<select name="edition" disabled>/);
+  assert.match(html,/Немає доступних локальних видань/);
 });

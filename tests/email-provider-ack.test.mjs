@@ -35,14 +35,16 @@ function harness(reply, configured = true, baseOrigin = "https://scripture-archi
   return { email: fixtureModule.exports, calls };
 }
 
-const accepted = payload => ({ ok: true, json: async () => payload });
-const rejected = () => ({ ok: false, json: async () => ({ message: "rejected" }) });
+const accepted = payload => ({ ok: true, status: 200, json: async () => payload });
+const rejected = () => ({ ok: false, status: 400, json: async () => ({ message: "rejected" }) });
 
 test("verification and reset require a real provider message id", async () => {
   const h = harness(accepted({ id: "a12b34cd-11aa-4f40-b123-123456789012" }));
   for (const purpose of ["verify", "reset"]) {
     const result = await h.email.sendSecurityEmail(
-      "person@example.invalid", "uk", purpose, "https://scripture-archive.com/account?key=test"
+      "person@example.invalid", "uk", purpose, purpose === "verify"
+        ? "https://scripture-archive.com/api/auth?action=verify&token=test"
+        : "https://scripture-archive.com/account?reset=test"
     );
     assert.equal(result.delivered, true);
   }
@@ -61,7 +63,7 @@ test("a bare 2xx, error-shaped 2xx or broken provider JSON cannot claim mail acc
     accepted({ id: "x".repeat(201) }), accepted([]),
     accepted({ id: "accepted-looking-id", error: { message: "provider rejected" } }),
     accepted({ id: "accepted-looking-id", errors: [{ message: "invalid sender" }] }),
-    { ok: true, json: async () => { throw Error("invalid JSON"); } },
+    { ok: true, status: 200, json: async () => { throw Error("invalid JSON"); } },
     rejected(), null, new Error("network outage"),
   ]) {
     const h = harness(response);
@@ -71,6 +73,34 @@ test("a bare 2xx, error-shaped 2xx or broken provider JSON cannot claim mail acc
     assert.deepEqual(result, { delivered: false, reason: "email_provider_error" });
     assert.equal(h.calls.length, 1);
   }
+});
+
+test("P0 R0.2: malformed control-bearing provider ids never certify mail acceptance", async () => {
+  // A provider's HTTP 2xx is not sufficient if the purported message id is
+  // unfit for a durable receipt. Keep both security and support paths aligned.
+  const support = {
+    requestId: "r-test", email: "sender@example.invalid",
+    subject: "Help", message: "Test", locale: "uk", attachments: [],
+  };
+  for (const id of ["accepted\nsecond-line", "accepted\rsecond-line",
+    "accepted\u0000suffix", "\u200b", "accepted\u007fsuffix"]) {
+    const h = harness(accepted({ id }));
+    assert.deepEqual(await h.email.sendSecurityEmail(
+      "person@example.invalid", "en", "reset",
+      "https://scripture-archive.com/account?reset=valid"
+    ), { delivered: false, reason: "email_provider_error" }, "security receipt " + JSON.stringify(id));
+    assert.deepEqual(await h.email.sendSupportRequestEmail(support),
+      { delivered: false, reason: "email_provider_error" }, "support receipt " + JSON.stringify(id));
+    assert.equal(h.calls.length, 2);
+  }
+  // Recovery: normal provider ids still acknowledge both existing paths.
+  const valid = harness(accepted({ id: "a12b34cd-11aa-4f40-b123-123456789012" }));
+  assert.equal((await valid.email.sendSecurityEmail(
+    "person@example.invalid", "uk", "verify",
+    "https://scripture-archive.com/api/auth?action=verify&token=valid"
+  )).delivered, true);
+  assert.equal((await valid.email.sendSupportRequestEmail(support)).delivered, true);
+  assert.equal(valid.calls.length, 2);
 });
 
 test("support mail follows the same provider acceptance rule without exposing raw HTML", async () => {
@@ -164,9 +194,9 @@ test("P0 R0.2: normalized-away security-link syntax cannot carry one-time tokens
     );
   }
   assert.equal(h.calls.length, 0, "no provider request for rejected token-bearing links");
-  // Recovery and legitimate encoded query parameters remain operational.
+  // Recovery and legitimate base64url query parameters remain operational.
   for (const [purpose, link] of [
-    ["reset", "https://scripture-archive.com/account?reset=valid%2Ftoken"],
+    ["reset", "https://scripture-archive.com/account?reset=valid_token"],
     ["verify", "https://scripture-archive.com/api/auth?action=verify&token=valid"],
   ]) {
     assert.equal((await h.email.sendSecurityEmail("person@example.invalid", "uk", purpose, link)).delivered, true);
@@ -174,4 +204,146 @@ test("P0 R0.2: normalized-away security-link syntax cannot carry one-time tokens
   assert.equal(h.calls.length, 2);
   assert.deepEqual(h.calls.map(call => JSON.parse(call.options.body).to),
     [["person@example.invalid"], ["person@example.invalid"]]);
+});
+
+
+test("P0 R0.2: one-time email links must match their declared purpose and exact endpoint", async () => {
+  const h = harness(accepted({ id: "provider-accepted" }));
+  const invalid = [
+    ["verify", "https://scripture-archive.com/account?reset=token"],
+    ["reset", "https://scripture-archive.com/api/auth?action=verify&token=token"],
+    ["verify", "https://scripture-archive.com/account?verify=token"],
+    ["reset", "https://scripture-archive.com/account?reset="],
+    ["verify", "https://scripture-archive.com/api/auth?action=verify"],
+    ["verify", "https://scripture-archive.com/api/auth?action=reset&token=token"],
+    ["verify", "https://scripture-archive.com/api/auth?action=verify&token=one&token=two"],
+    ["reset", "https://scripture-archive.com/account?reset=one&reset=two"],
+    ["reset", "https://scripture-archive.com/account?reset=token&next=https%3A%2F%2Fother.invalid"],
+    ["verify", "https://scripture-archive.com/api/auth?action=verify&token=token&next=%2Fcommunity"],
+    ["reset", "https://scripture-archive.com/other?reset=token"],
+  ];
+  for (const [purpose, link] of invalid) {
+    assert.deepEqual(await h.email.sendSecurityEmail("person@example.invalid", "uk", purpose, link),
+      { delivered: false, reason: "security_link_origin_unverified" },
+      "refuse mismatched token endpoint: " + purpose + " " + link);
+  }
+  assert.equal(h.calls.length, 0, "no provider request may contain an invalid token route");
+  // Recovery: valid production verify/reset routes still deliver after refusals.
+  for (const [purpose, link] of [
+    ["verify", "https://scripture-archive.com/api/auth?action=verify&token=valid_token"],
+    ["reset", "https://scripture-archive.com/account?reset=valid_token"],
+  ]) {
+    assert.deepEqual(await h.email.sendSecurityEmail("person@example.invalid", "en", purpose, link),
+      { delivered: true });
+  }
+  assert.equal(h.calls.length, 2);
+});
+
+
+test("P0 R0.2: decoded invisible or control-only security tokens cannot be sent", async () => {
+  // A syntactically canonical URL can still decode to an unusable one-time
+  // token. The mail helper must not call the provider for such links.
+  const h = harness(accepted({ id: "provider-accepted" }));
+  const invalid = [
+    ["verify", "https://scripture-archive.com/api/auth?action=verify&token=%0A"],
+    ["verify", "https://scripture-archive.com/api/auth?action=verify&token=%00"],
+    ["verify", "https://scripture-archive.com/api/auth?action=verify&token=%E2%80%8B"],
+    ["reset", "https://scripture-archive.com/account?reset=+"],
+    ["reset", "https://scripture-archive.com/account?reset=%09"],
+    ["reset", "https://scripture-archive.com/account?reset=abc%0Ddef"],
+    ["reset", "https://scripture-archive.com/account?reset=%C2%A0"],
+    ["reset", "https://scripture-archive.com/account?reset=abc%7Fdef"],
+  ];
+  for (const [purpose, url] of invalid) {
+    assert.deepEqual(await h.email.sendSecurityEmail("person@example.invalid", "uk", purpose, url),
+      { delivered: false, reason: "security_link_origin_unverified" },
+      "refuse decoded control/whitespace token: " + url);
+  }
+  assert.equal(h.calls.length, 0, "invalid tokens must never reach provider");
+  // Recovery: exact base64url tokens still work.
+  for (const [purpose, url] of [
+    ["verify", "https://scripture-archive.com/api/auth?action=verify&token=valid_token"],
+    ["reset", "https://scripture-archive.com/account?reset=abc_DEF-012"],
+  ]) {
+    assert.deepEqual(await h.email.sendSecurityEmail("person@example.invalid", "en", purpose, url),
+      { delivered: true });
+  }
+  assert.equal(h.calls.length, 2);
+});
+
+test("P0 R0.2: security email rejects tokens the verification/reset receiver cannot consume", async () => {
+  // Both auth endpoints accept only 1..200 base64url bytes. The older sender
+  // accepted printable punctuation, so a provider could accept a broken link.
+  // This is a local mocked-provider contract test, not a delivery claim.
+  const h = harness(accepted({ id: "provider-accepted" }));
+  const badTokens = [
+    "abc%2Fdef", "abc%2Bdef", "abc%3D", "abc%3Fdef",
+    "abc%26def", "abc.def", "abc%3Adef", "abc%25def",
+    "abc%5Cdef", "abc%7Edef", "x".repeat(201),
+  ];
+  for (const purpose of ["verify", "reset"]) {
+    for (const token of badTokens) {
+      const link = purpose === "verify"
+        ? "https://scripture-archive.com/api/auth?action=verify&token=" + token
+        : "https://scripture-archive.com/account?reset=" + token;
+      assert.deepEqual(await h.email.sendSecurityEmail(
+        "person@example.invalid", "en", purpose, link
+      ), { delivered: false, reason: "security_link_origin_unverified" },
+      "receiver-incompatible token: " + purpose + " " + token);
+    }
+  }
+  assert.equal(h.calls.length, 0, "no unusable token reaches the provider");
+
+  // Recovery: a rejected link does not poison subsequent valid delivery.
+  // Percent-encoded underscore decodes to a byte the receiver accepts.
+  for (const [purpose, token] of [
+    ["verify", "abc_DEF-012"], ["reset", "abc%5FDEF-012"],
+    ["verify", "x".repeat(200)], ["reset", "A"],
+  ]) {
+    const link = purpose === "verify"
+      ? "https://scripture-archive.com/api/auth?action=verify&token=" + token
+      : "https://scripture-archive.com/account?reset=" + token;
+    assert.deepEqual(await h.email.sendSecurityEmail(
+      "person@example.invalid", "uk", purpose, link
+    ), { delivered: true });
+  }
+  assert.equal(h.calls.length, 4);
+});
+
+
+test("P0 R0.2: partial, informational and asynchronous HTTP receipts cannot certify provider acceptance", async () => {
+  // The actual Resend create-email success is HTTP 200 with an id. A generic
+  // Response.ok also includes 202/203/206, which are not an unambiguous
+  // completed provider acceptance receipt even if a proxy adds an id field.
+  const support = {
+    requestId: "r-test", email: "sender@example.invalid",
+    subject: "Help", message: "Test", locale: "en", attachments: [],
+  };
+  for (const status of [202, 203, 204, 205, 206, 207, 208, 226]) {
+    const h = harness({
+      ok: true, status,
+      json: async () => ({ id: "a12b34cd-11aa-4f40-b123-123456789012" }),
+    });
+    assert.deepEqual(await h.email.sendSecurityEmail(
+      "person@example.invalid", "en", "reset",
+      "https://scripture-archive.com/account?reset=valid"
+    ), { delivered: false, reason: "email_provider_error" }, "security HTTP " + status);
+    assert.deepEqual(await h.email.sendSupportRequestEmail(support),
+      { delivered: false, reason: "email_provider_error" }, "support HTTP " + status);
+    assert.equal(h.calls.length, 2);
+  }
+  // Recovery: the canonical 200 and a conventional 201 Created response
+  // with a valid provider id remain accepted for both existing mail paths.
+  for (const status of [200, 201]) {
+    const h = harness({
+      ok: true, status,
+      json: async () => ({ id: "a12b34cd-11aa-4f40-b123-123456789012" }),
+    });
+    assert.deepEqual(await h.email.sendSecurityEmail(
+      "person@example.invalid", "uk", "verify",
+      "https://scripture-archive.com/api/auth?action=verify&token=valid"
+    ), { delivered: true });
+    assert.deepEqual(await h.email.sendSupportRequestEmail(support), { delivered: true });
+    assert.equal(h.calls.length, 2);
+  }
 });

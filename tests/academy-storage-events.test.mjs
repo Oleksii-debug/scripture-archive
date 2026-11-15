@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {attachAcademy,academyProgressKey,academyLessonIds,academyPlaceLessonIds,academyAllLessonIds} from '../public/scripture-academy.js';
+import {attachAcademy,academyProgressKey,academyLessonIds,academyPlaceLessonIds,academyWitnessLessonIds,academyAllLessonIds} from '../public/scripture-academy.js';
 
 function setup(){
   const key=academyProgressKey({id:'alice'}),map=new Map(),listeners=new Set(),writes=[];
@@ -9,14 +9,16 @@ function setup(){
   const buttons=academyAllLessonIds.map(id=>({attrs:{'data-academy-lesson':id,'aria-pressed':'false'},textContent:'',getAttribute(k){return this.attrs[k]},setAttribute(k,v){this.attrs[k]=v},addEventListener(){}}));
   const status={textContent:''},meter={value:0},badge={textContent:''},error={textContent:''};
   const placeStatus={textContent:''},placeMeter={value:0},placeBadge={textContent:''};
+  const witnessStatus={textContent:''},witnessMeter={value:0},witnessBadge={textContent:''};
   const nodes={'#academy-reading-status':status,'#academy-reading-progress':meter,'#academy-reading-badge':badge,'#academy-reading-error':error,
-    '#academy-place-status':placeStatus,'#academy-place-progress':placeMeter,'#academy-place-badge':placeBadge};
+    '#academy-place-status':placeStatus,'#academy-place-progress':placeMeter,'#academy-place-badge':placeBadge,
+    '#academy-witness-status':witnessStatus,'#academy-witness-progress':witnessMeter,'#academy-witness-badge':witnessBadge};
   const root={querySelectorAll:()=>buttons,querySelector:s=>nodes[s]??null};
   const document={current:root,querySelector:()=>document.current};
   let active=true;
   const mount=()=>attachAcademy(document,storage,'en',{id:'alice'},{available:true,completed:[]},()=>active,null,events);
   mount();
-  return {key,map,listeners,writes,storage,events,buttons,status,meter,badge,placeStatus,placeMeter,placeBadge,error,document,mount,setActive:v=>{active=v}};
+  return {key,map,listeners,writes,storage,events,buttons,status,meter,badge,placeStatus,placeMeter,placeBadge,witnessStatus,witnessMeter,witnessBadge,error,document,mount,setActive:v=>{active=v}};
 }
 const record=completed=>JSON.stringify({version:1,completed});
 test('another tab updates current lesson buttons, progress, and non-accredited completion',()=>{
@@ -81,6 +83,23 @@ test('a formerly completed place track is redacted on unreadable cross-tab stora
   assert.equal(h.placeMeter.value,academyPlaceLessonIds.length);
   assert.match(h.placeBadge.textContent,/no certificate/);
   assert.equal(h.buttons.at(-1).disabled,false);
+});
+test('a completed additional-person track is redacted on corrupt cross-tab storage and restored only by verified data',()=>{
+  const h=setup();
+  h.map.set(h.key,record(academyWitnessLessonIds));
+  h.events.emit({key:h.key,storageArea:h.storage});
+  assert.equal(h.witnessMeter.value,academyWitnessLessonIds.length);
+  assert.match(h.witnessBadge.textContent,/no certificate/);
+  h.map.set(h.key,'{"version":1,"completed":["peter","peter"]}');
+  h.events.emit({key:h.key,storageArea:h.storage});
+  assert.equal(h.witnessMeter.value,0);
+  assert.equal(h.witnessBadge.textContent,'');
+  assert.match(h.witnessStatus.textContent,/Could not read the updated markers/);
+  assert.deepEqual(h.writes,[]);
+  h.map.set(h.key,record(academyWitnessLessonIds));
+  h.events.emit({key:h.key,storageArea:h.storage});
+  assert.equal(h.witnessMeter.value,academyWitnessLessonIds.length);
+  assert.match(h.witnessBadge.textContent,/no certificate/);
 });
 test('remount replaces the old event listener',()=>{
   const h=setup();assert.equal(h.listeners.size,1);h.mount();assert.equal(h.listeners.size,1);

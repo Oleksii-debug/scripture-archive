@@ -9,7 +9,8 @@ const escapeText=value=>String(value).replaceAll('&','&amp;').replaceAll('<','&l
 
 function scenario(lang='en') {
   const prior={fetch:globalThis.fetch,document:globalThis.document,location:globalThis.location};
-  const input={value:''},submit={},form={querySelector:selector=>selector==='input'?input:selector==='button'?submit:null};
+  const input={value:''},select={value:''},rights={value:''},submit={};
+  const form={querySelector:selector=>({input,'select[name="locale"]':select,'select[name="rightsBasis"]':rights,button:submit}[selector]??null)};
   const status={textContent:''},more={hidden:true},results={innerHTML:'',isConnected:true,
     insertAdjacentHTML(_where,html){this.innerHTML+=html;},querySelectorAll(){return[];},querySelector(){return null;}};
   const list={isConnected:true,innerHTML:'',querySelector:selector=>({'.library-search':form,
@@ -22,7 +23,7 @@ function scenario(lang='en') {
   results.ownerDocument=document; list.ownerDocument=document;
   globalThis.document=document;
   const context={state,t:key=>key,esc:escapeText,setActiveNav:name=>nav.push(name),shell:html=>shells.push(html)};
-  return {list,results,form,input,submit,status,more,document,heading,nav,shells,state,context,restore() {
+  return {list,results,form,input,select,rights,submit,status,more,document,heading,nav,shells,state,context,restore() {
     for(const key of ['fetch','document','location']) {
       if(prior[key]===undefined)delete globalThis[key];
       else globalThis[key]=prior[key];
@@ -53,7 +54,7 @@ test('all three library languages show only actual editor-approved public API it
         calls++;
         assert.equal(url,'/api/material-review');
         assert.equal(options.method,'POST');
-        assert.deepEqual(JSON.parse(options.body),{action:'librarySearch',query:'',cursor:null});
+        assert.deepEqual(JSON.parse(options.body),{action:'librarySearch',query:'',locale:null,cursor:null});
         return Response.json({items:[{
           id:'approval-1',title:'Approved <study>',reference:'GEN 12:1–3',
         provenance:'https://example.org/source',prompt:'Which promise is recorded?',locale:'en',reviewedAt:'2026-10-31 10:00:00',rights:{holder:'Example Publisher',basis:'open_license',licenseUrl:'https://example.org/license'},
@@ -171,8 +172,10 @@ test('library searches and continues through bounded pages without replacing ear
     };
     await renderWorkspace('library',f.context);
     assert.match(f.list.innerHTML,/type="search"/);
+    assert.match(f.list.innerHTML,/select name="locale"/);
+    assert.match(f.list.innerHTML,/All available languages/);
     assert.match(f.list.innerHTML,/aria-describedby="library-search-help"/);
-    f.input.value=' церкви ';
+    f.input.value=' церкви ';f.select.value='uk';
     f.form.onsubmit({preventDefault(){}});
     await tick();
     assert.equal(f.more.hidden,false);
@@ -180,8 +183,8 @@ test('library searches and continues through bounded pages without replacing ear
     f.more.onclick();
     await tick();
     assert.deepEqual(calls.slice(1),[
-      {action:'librarySearch',query:'церкви',cursor:null},
-      {action:'librarySearch',query:'церкви',cursor:{id:'last-200',submittedAt:'2026-01-01'}}
+      {action:'librarySearch',query:'церкви',locale:'uk',cursor:null},
+      {action:'librarySearch',query:'церкви',locale:'uk',cursor:{id:'last-200',submittedAt:'2026-01-01'}}
     ]);
     assert.match(f.results.innerHTML,/Found &lt;source&gt;/);
     assert.equal(f.more.hidden,true);
@@ -206,6 +209,52 @@ test('an older search cannot repaint newer results or announce an obsolete error
     assert.match(f.results.innerHTML,/New result/);
     assert.doesNotMatch(f.results.innerHTML,/Old result/);
     assert.match(f.status.textContent,/Found in this part: 1/);
+  }finally{f.restore();}
+});
+
+test('library combines publication basis with locale and keeps the submitted basis across pages',async()=>{
+  const f=scenario(), calls=[];
+  try {
+    globalThis.fetch=async (_url,options)=>{
+      const body=JSON.parse(options.body);calls.push(body);
+      const nextCursor=body.rightsBasis==='open_license' && !body.cursor ? {id:'page-one',submittedAt:'2026-01-01'} : null;
+      return Response.json({items:[],nextCursor});
+    };
+    await renderWorkspace('library',f.context);
+    assert.match(f.list.innerHTML,/Publication basis<\/span><select name="rightsBasis">/);
+    assert.match(f.list.innerHTML,/<option value="open_license">Open licence<\/option>/);
+    f.select.value='en';f.rights.value='open_license';
+    f.form.onsubmit({preventDefault(){}});await tick();
+    f.rights.value='permission';
+    f.more.onclick();await tick();
+    assert.deepEqual(calls.slice(1).map(({locale,rightsBasis,cursor})=>[locale,rightsBasis,cursor?.id??null]),[
+      ['en','open_license',null],['en','open_license','page-one'],
+    ]);
+    f.form.onsubmit({preventDefault(){}});await tick();
+    assert.equal(calls.at(-1).rightsBasis,'permission');
+    f.rights.value='';
+    f.form.onsubmit({preventDefault(){}});await tick();
+    assert.equal(Object.hasOwn(calls.at(-1),'rightsBasis'),false);
+  }finally{f.restore();}
+});
+
+test('changing the exact material-language filter retires old pages and continues with the same locale',async()=>{
+  const f=scenario('en'),calls=[];
+  try {
+    globalThis.fetch=async (_url,options)=>{
+      const body=JSON.parse(options.body);calls.push(body);
+      if(body.locale==='uk')return Response.json({items:[libraryItem('uk-one','Ukrainian item')],nextCursor:{id:'uk-one',submittedAt:'2026-01-01'}});
+      if(body.locale==='en')return Response.json({items:[libraryItem('en-one','English item')],nextCursor:null});
+      return Response.json({items:[],nextCursor:null});
+    };
+    await renderWorkspace('library',f.context);
+    f.select.value='uk';f.form.onsubmit({preventDefault(){}});await tick();
+    assert.match(f.results.innerHTML,/Ukrainian item/);
+    f.select.value='en';f.form.onsubmit({preventDefault(){}});await tick();
+    assert.doesNotMatch(f.results.innerHTML,/Ukrainian item/);
+    assert.match(f.results.innerHTML,/English item/);
+    assert.deepEqual(calls.slice(-2).map(call=>call.locale),['uk','en']);
+    assert.equal(f.more.hidden,true);
   }finally{f.restore();}
 });
 
@@ -341,7 +390,7 @@ test('library locale uses own dictionary keys and preserves accessible Ukrainian
     try {
       globalThis.fetch=async (url,options)=>{
         assert.equal(url,'/api/material-review');
-        assert.deepEqual(JSON.parse(options.body),{action:'librarySearch',query:'',cursor:null});
+        assert.deepEqual(JSON.parse(options.body),{action:'librarySearch',query:'',locale:null,cursor:null});
         return Response.json({items:[],nextCursor:null});
       };
       await renderReviewedLibrary(f.list,reviewText('uk'),lang,escapeText);

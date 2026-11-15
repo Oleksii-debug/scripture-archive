@@ -121,6 +121,29 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.ok(roleAudit.events.every(event=>event.subject_user_id===ownAccount.user.id && event.actor_user_id));
   assert.equal((await (await fetch(`${base}/api/editor-roles?view=me`,{headers:{Cookie:cookie}})).json()).editor,false);
   assert.equal((await fetch(`${base}/api/material-review?view=queue`,{headers:{Cookie:cookie}})).status,403);
+  // Exercise the representative-claim boundary through the real Worker and
+  // disposable D1. This local fixture is never published as a real church.
+  const churchPost = async (body, principal = cookie) => {
+    const response = await fetch(`${base}/api/churches`, { method:'POST', headers:{Origin:base,Cookie:principal,'Content-Type':'application/json'}, body:JSON.stringify(body) });
+    return {response,data:await response.json()};
+  };
+  const churchClaim = {action:'submit',name:'Integration Fixture Community',city:'Test City',countryCode:'UA',locale:'en',tradition:'other',websiteUrl:'',representationAttested:true,websiteConsent:true};
+  assert.equal((await churchPost(churchClaim)).response.status,201);
+  assert.equal((await (await fetch(`${base}/api/churches`)).json()).items.length,0);
+  const churchQueueResponse=await fetch(`${base}/api/churches?view=queue`,{headers:{Cookie:ownerCookie}});
+  assert.equal(churchQueueResponse.status,200);
+  const churchQueue=await churchQueueResponse.json();
+  assert.equal(churchQueue.items.length,1);assert.equal(churchQueue.items[0].claimantEmail,email);
+  const churchId=churchQueue.items[0].id;
+  assert.equal((await churchPost({action:'review',id:churchId,decision:'approve',verificationEvidence:'Disposable integration authority fixture',note:''},ownerCookie)).response.status,200);
+  const publicChurches=await (await fetch(`${base}/api/churches`)).json();
+  assert.equal(publicChurches.items.length,1);assert.equal(publicChurches.items[0].name,churchClaim.name);
+  assert.equal('claimantEmail' in publicChurches.items[0],false);assert.equal('verificationEvidence' in publicChurches.items[0],false);
+  assert.equal((await churchPost({...churchClaim,city:'Corrected Test City'})).response.status,201);
+  assert.equal((await (await fetch(`${base}/api/churches`)).json()).items.length,0,'a correction must be reviewed again');
+  const correctedChurch=(await (await fetch(`${base}/api/churches?view=mine`,{headers:{Cookie:cookie}})).json()).items[0];
+  assert.notEqual(correctedChurch.id,churchId);
+  assert.equal((await churchPost({action:'withdraw',id:correctedChurch.id})).response.status,200);
   const mark = { edition: "en-web", book: "GEN", chapter: 12 };
   // The disposable Wrangler proxy can abort a following request when an
   // early Origin-rejected PUT carries an unread request body. This probe tests

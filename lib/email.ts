@@ -27,21 +27,28 @@ function escapeHtml(value: string) {
 // Do not tell callers the message was accepted if the provider returned
 // malformed JSON, an error object, or a bare HTTP success response.
 async function providerAccepted(response: Response | null): Promise<boolean> {
-  if (!response?.ok) return false;
+  // Resend's create-email success is a final 200 receipt (201 Created is
+  // also a definitive creation response). Response.ok alone accepts 202
+  // Accepted, 203 Non-Authoritative and 206 Partial Content; an id in those
+  // payloads cannot certify that the email provider created the message.
+  if (!response?.ok || (response.status !== 200 && response.status !== 201)) return false;
   const receipt: unknown = await response.json().catch(() => null);
   if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) return false;
   // A contradictory 2xx payload is not an acceptance receipt, even when
   // it also contains an id. Do not report delivery on provider error shapes.
   if (Object.hasOwn(receipt, "error") || Object.hasOwn(receipt, "errors")) return false;
   const id = (receipt as { id?: unknown }).id;
-  return typeof id === "string" && id.trim().length > 0 && id.length <= 200;
+  // An HTTP 2xx with a control/invisible/whitespace-bearing id is not a
+  // reliable acceptance receipt. Resend message ids are printable ASCII;
+  // keep the existing 200-character cap and fail closed on malformed ids.
+  return typeof id === "string" && /^[\x21-\x7e]{1,200}$/.test(id);
 }
 
 // Security links contain single-use account tokens. A missing or malformed
 // public-origin declaration must never turn a Host-derived fallback into an
 // outbound link to an unrelated domain. This checks configuration and URL only;
 // it is not a live DNS/TLS or provider-delivery attestation.
-function trustedSecurityLink(url: string): boolean {
+function trustedSecurityLink(url: string, purpose: Purpose): boolean {
   const declared = env.APP_BASE_URL;
   if (typeof declared !== "string") return false;
   try {
@@ -54,8 +61,25 @@ function trustedSecurityLink(url: string): boolean {
     // a visually ambiguous spelling that another mail client may reinterpret.
     if (url !== target.href || url.includes("#") ||
         url !== url.trim() || /[\u0000-\u001f\u007f]/u.test(url)) return false;
-    return target.protocol === "https:" && target.origin === base.origin &&
-      !target.username && !target.password;
+    if (target.protocol !== "https:" || target.origin !== base.origin ||
+        target.username || target.password) return false;
+    // Only the two existing auth routes may receive one-time tokens. A
+    // canonical same-origin URL is not sufficient: wrong-purpose, duplicate
+    // token keys and extra redirect/query parameters are not a valid security
+    // mail action. This is source contract validation, not delivery evidence.
+    const query = target.searchParams;
+    // The receiving verification/reset handlers require exact base64url
+    // tokens. A printable URL token containing '/', '+', '=' or punctuation
+    // passes URL parsing but is unusable at the account endpoint. Align
+    // outbound security links with that existing receiver contract.
+    const validToken = (value: string | null) =>
+      typeof value === "string" && /^[A-Za-z0-9_-]{1,200}$/.test(value);
+    if (purpose === "verify") {
+      return target.pathname === "/api/auth" && query.size === 2 &&
+        query.get("action") === "verify" && validToken(query.get("token"));
+    }
+    return target.pathname === "/account" && query.size === 1 &&
+      validToken(query.get("reset"));
   } catch { return false; }
 }
 
@@ -63,7 +87,7 @@ export async function sendSecurityEmail(email: string, localeValue: string, purp
   const locale: Locale = localeValue === "ru" || localeValue === "en" ? localeValue : "uk";
   const copy = COPY[locale][purpose];
   if (!env.EMAIL_API_KEY || !env.EMAIL_FROM) return { delivered: false, reason: "email_not_configured" };
-  if (!trustedSecurityLink(url)) return { delivered: false, reason: "security_link_origin_unverified" };
+  if (!trustedSecurityLink(url, purpose)) return { delivered: false, reason: "security_link_origin_unverified" };
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     signal: AbortSignal.timeout(10_000),

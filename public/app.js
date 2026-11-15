@@ -2444,9 +2444,10 @@ async function getSession() {
   return state.user;
 }
 async function getBook(code, explicitEdition = null) {
-  const requestLocale = state.lang;
+  const requestLocale = explicitEdition?.locale ?? state.lang;
   const selected = explicitEdition || selectedEdition(requestLocale);
-  if (explicitEdition && (!explicitEdition.local || !EDITIONS[requestLocale].includes(explicitEdition))) throw Error("Invalid local edition");
+  if (explicitEdition && (!explicitEdition.local || !Object.hasOwn(EDITIONS, requestLocale) ||
+      !EDITIONS[requestLocale].includes(explicitEdition))) throw Error("Invalid local edition");
   const edition = selected.local ? selected : EDITIONS[requestLocale].find(e => e.local);
   const folder = edition.folder || requestLocale;
   const key = `${folder}:${code}`;
@@ -2600,9 +2601,9 @@ async function renderHome() {
 }
 
 const COMMUNITY_COPY={
-  uk:{eye:"Люди Scripture Archive",title:"Спільнота навколо Писання",lead:"Відкритий огляд учасників, які дозволили показувати своє ім’я, та їхнього доступного навчального поступу.",members:"Користувачів платформи",online:"У мережі",visible:"Відкритих профілів",search:"Знайти учасника",placeholder:"Ім’я або прізвище",sort:"Упорядкувати",recent:"Нещодавно долучилися",active:"Спочатку активні",progress:"За поступом",name:"За іменем",reading:"Читає Писання",mission:"Виконує завдання",groups:"Працює з домашньою групою",exploring:"Переглядає платформу",away:"Не в мережі",onlineNow:"У мережі",chapters:"прочитано глав",missions:"завершено місій",joined:"Долучився",previous:"Попередня сторінка",next:"Наступна сторінка",empty:"Учасників за цим запитом не знайдено.",page:"Сторінка"},
-  ru:{eye:"Люди Scripture Archive",title:"Сообщество вокруг Писания",lead:"Открытый обзор участников, разрешивших показывать имя, и доступного учебного прогресса.",members:"Пользователей платформы",online:"В сети",visible:"Открытых профилей",search:"Найти участника",placeholder:"Имя или фамилия",sort:"Упорядочить",recent:"Недавно присоединились",active:"Сначала активные",progress:"По прогрессу",name:"По имени",reading:"Читает Писание",mission:"Выполняет задание",groups:"Работает с домашней группой",exploring:"Просматривает платформу",away:"Не в сети",onlineNow:"В сети",chapters:"прочитано глав",missions:"завершено миссий",joined:"Присоединился",previous:"Предыдущая страница",next:"Следующая страница",empty:"Участников по этому запросу не найдено.",page:"Страница"},
-  en:{eye:"People of Scripture Archive",title:"A community around Scripture",lead:"A public view of members who chose to share their name and their available learning progress.",members:"Platform members",online:"Online",visible:"Public profiles",search:"Find a member",placeholder:"First or last name",sort:"Sort",recent:"Recently joined",active:"Active first",progress:"By progress",name:"By name",reading:"Reading Scripture",mission:"Working on an assessment",groups:"Studying with a home group",exploring:"Exploring the platform",away:"Offline",onlineNow:"Online",chapters:"chapters read",missions:"missions completed",joined:"Joined",previous:"Previous page",next:"Next page",empty:"No members match this search.",page:"Page"}
+  uk:{eye:"Люди Scripture Archive",title:"Спільнота навколо Писання",lead:"Відкритий огляд лише тих учасників, які окремо дозволили показувати свій профіль у спільноті.",members:"Користувачів платформи",online:"У мережі",visible:"Відкритих профілів",search:"Знайти учасника",placeholder:"Ім’я або прізвище",sort:"Упорядкувати",recent:"Нещодавно долучилися",active:"Спочатку активні",progress:"За поступом",name:"За іменем",reading:"Читає Писання",mission:"Виконує завдання",groups:"Працює з домашньою групою",exploring:"Переглядає платформу",away:"Не в мережі",onlineNow:"У мережі",chapters:"прочитано глав",missions:"завершено місій",progressPrivate:"Навчальний поступ приватний",joined:"Долучився",previous:"Попередня сторінка",next:"Наступна сторінка",empty:"Учасників за цим запитом не знайдено.",page:"Сторінка"},
+  ru:{eye:"Люди Scripture Archive",title:"Сообщество вокруг Писания",lead:"Открытый обзор только тех участников, которые отдельно разрешили показывать свой профиль в сообществе.",members:"Пользователей платформы",online:"В сети",visible:"Открытых профилей",search:"Найти участника",placeholder:"Имя или фамилия",sort:"Упорядочить",recent:"Недавно присоединились",active:"Сначала активные",progress:"По прогрессу",name:"По имени",reading:"Читает Писание",mission:"Выполняет задание",groups:"Работает с домашней группой",exploring:"Просматривает платформу",away:"Не в сети",onlineNow:"В сети",chapters:"прочитано глав",missions:"завершено миссий",progressPrivate:"Учебный прогресс скрыт",joined:"Присоединился",previous:"Предыдущая страница",next:"Следующая страница",empty:"Участников по этому запросу не найдено.",page:"Страница"},
+  en:{eye:"People of Scripture Archive",title:"A community around Scripture",lead:"A public view only of members who separately chose to show their profile in the community.",members:"Platform members",online:"Online",visible:"Public profiles",search:"Find a member",placeholder:"First or last name",sort:"Sort",recent:"Recently joined",active:"Active first",progress:"By progress",name:"By name",reading:"Reading Scripture",mission:"Working on an assessment",groups:"Studying with a home group",exploring:"Exploring the platform",away:"Offline",onlineNow:"Online",chapters:"chapters read",missions:"missions completed",progressPrivate:"Learning progress is private",joined:"Joined",previous:"Previous page",next:"Next page",empty:"No members match this search.",page:"Page"}
 };
 
 async function renderCommunity(page=1,query="",sort="recent"){
@@ -2613,7 +2614,7 @@ async function renderCommunity(page=1,query="",sort="recent"){
   if(!response.ok)throw Error(String(response.status));
   const data=await response.json(),number=value=>new Intl.NumberFormat(state.lang).format(Number(value)||0);
   const activity=member=>copy[member.activity]||copy.away;
-  shell(`<section class="community-hero"><p class="eyebrow">${copy.eye}</p><h1>${copy.title}</h1><p class="lead">${copy.lead}</p><div class="community-metrics" aria-label="${copy.title}"><article><strong>${number(data.summary.registered)}</strong><span>${copy.members}</span></article><article><strong>${number(data.summary.online)}</strong><span>${copy.online}</span></article><article><strong>${number(data.summary.visible)}</strong><span>${copy.visible}</span></article></div></section><form id="community-filter" class="community-filter" role="search"><label><span>${copy.search}</span><input name="q" type="search" value="${esc(query)}" placeholder="${copy.placeholder}" maxlength="60"></label><label><span>${copy.sort}</span><select name="sort"><option value="recent" ${sort==="recent"?"selected":""}>${copy.recent}</option><option value="active" ${sort==="active"?"selected":""}>${copy.active}</option><option value="progress" ${sort==="progress"?"selected":""}>${copy.progress}</option><option value="name" ${sort==="name"?"selected":""}>${copy.name}</option></select></label><button class="button" type="submit">${copy.search}</button></form><div class="community-list">${data.members.length?data.members.map(member=>`<article class="community-member"><div class="member-heading"><div class="member-monogram" aria-hidden="true">${esc(member.displayName.trim().slice(0,1))}</div><div><h2>${esc(member.displayName)}</h2><p class="member-status ${member.online?"online":""}"><span aria-hidden="true"></span>${member.online?copy.onlineNow:activity(member)}</p></div></div><p>${activity(member)}</p><dl><div><dt>${copy.chapters}</dt><dd>${number(member.chaptersRead)}</dd></div><div><dt>${copy.missions}</dt><dd>${number(member.missionsCompleted)}</dd></div></dl><small>${copy.joined}: ${new Intl.DateTimeFormat(state.lang,{dateStyle:"medium"}).format(new Date(`${member.joinedAt.replace(" ","T")}Z`))}</small></article>`).join(""):`<p class="notice">${copy.empty}</p>`}</div><nav class="community-pagination" aria-label="${copy.page}"><button class="button" data-community-page="${data.page-1}" ${data.page<=1?"disabled":""}>← ${copy.previous}</button><span>${copy.page} ${data.page} / ${data.totalPages}</span><button class="button" data-community-page="${data.page+1}" ${data.page>=data.totalPages?"disabled":""}>${copy.next} →</button></nav>`);
+  shell(`<section class="community-hero"><p class="eyebrow">${copy.eye}</p><h1>${copy.title}</h1><p class="lead">${copy.lead}</p><div class="community-metrics" aria-label="${copy.title}"><article><strong>${number(data.summary.registered)}</strong><span>${copy.members}</span></article><article><strong>${number(data.summary.online)}</strong><span>${copy.online}</span></article><article><strong>${number(data.summary.visible)}</strong><span>${copy.visible}</span></article></div></section><form id="community-filter" class="community-filter" role="search"><label><span>${copy.search}</span><input name="q" type="search" value="${esc(query)}" placeholder="${copy.placeholder}" maxlength="60"></label><label><span>${copy.sort}</span><select name="sort"><option value="recent" ${sort==="recent"?"selected":""}>${copy.recent}</option><option value="active" ${sort==="active"?"selected":""}>${copy.active}</option><option value="progress" ${sort==="progress"?"selected":""}>${copy.progress}</option><option value="name" ${sort==="name"?"selected":""}>${copy.name}</option></select></label><button class="button" type="submit">${copy.search}</button></form><div class="community-list">${data.members.length?data.members.map(member=>`<article class="community-member"><div class="member-heading"><div class="member-monogram" aria-hidden="true">${esc(member.displayName.trim().slice(0,1))}</div><div><h2>${esc(member.displayName)}</h2><p class="member-status ${member.online?"online":""}"><span aria-hidden="true"></span>${member.online?copy.onlineNow:activity(member)}</p></div></div><p>${activity(member)}</p>${member.progressShared?`<dl><div><dt>${copy.chapters}</dt><dd>${number(member.chaptersRead)}</dd></div><div><dt>${copy.missions}</dt><dd>${number(member.missionsCompleted)}</dd></div></dl>`:`<p>${copy.progressPrivate}</p>`}<small>${copy.joined}: ${new Intl.DateTimeFormat(state.lang,{dateStyle:"medium"}).format(new Date(`${member.joinedAt.replace(" ","T")}Z`))}</small></article>`).join(""):`<p class="notice">${copy.empty}</p>`}</div><nav class="community-pagination" aria-label="${copy.page}"><button class="button" data-community-page="${data.page-1}" ${data.page<=1?"disabled":""}>← ${copy.previous}</button><span>${copy.page} ${data.page} / ${data.totalPages}</span><button class="button" data-community-page="${data.page+1}" ${data.page>=data.totalPages?"disabled":""}>${copy.next} →</button></nav>`);
   document.querySelector("#community-filter").onsubmit=event=>{event.preventDefault();const form=new FormData(event.currentTarget);renderCommunity(1,String(form.get("q")||""),String(form.get("sort")||"recent"))};
   document.querySelectorAll("[data-community-page]").forEach(button=>button.onclick=()=>renderCommunity(Number(button.dataset.communityPage),query,sort));
 }
@@ -2779,6 +2780,7 @@ const ATTEMPT_COPY = {
     mastered: "Засвоєні уривки",
     mistakes: "Що варто переглянути",
     noMistakes: "Усі відповіді правильні.",
+    reviewSource: "Відкрити уривок для повторення",
     reopen: "Знову відкрити текст",
     readRequired: "Спочатку завершіть читання цієї глави.",
     retryLoad: "Повторити завантаження",
@@ -2802,6 +2804,7 @@ const ATTEMPT_COPY = {
     mastered: "Освоенные отрывки",
     mistakes: "Что стоит повторить",
     noMistakes: "Все ответы правильные.",
+    reviewSource: "Открыть отрывок для повторения",
     reopen: "Снова открыть текст",
     readRequired: "Сначала завершите чтение этой главы.",
     retryLoad: "Повторить загрузку",
@@ -2825,6 +2828,7 @@ const ATTEMPT_COPY = {
     mastered: "Passages understood",
     mistakes: "Review these points",
     noMistakes: "Every answer was correct.",
+    reviewSource: "Open the passage for review",
     reopen: "Open the text again",
     readRequired: "Finish reading this chapter first.",
     retryLoad: "Retry loading",
@@ -3246,7 +3250,9 @@ async function renderReader(parts) {
   });
   document.querySelector(".reader-aside")?.insertAdjacentHTML("beforeend", '<section class="card" id="reader-bookmarks" aria-live="polite"></section>');
   void mountReaderBookmarks(meta, chapter, chosenEdition, books);
-  const parallelEditions = chosenEdition.local ? EDITIONS[state.lang].filter(item => item.local && item.id !== chosenEdition.id) : [];
+  const parallelEditions = chosenEdition.local
+    ? Object.values(EDITIONS).flat().filter(item => item.local && item.id !== chosenEdition.id)
+    : [];
   if (parallelEditions.length) {
     const aside = document.querySelector('.reader-aside');
     aside.insertAdjacentHTML('beforeend', parallelControls(parallelEditions, state.lang, esc));
@@ -3837,12 +3843,28 @@ async function renderGroup(groupId) {
     };
 }
 
+function attemptReviewHref(reference, book, chapter) {
+  if (typeof reference !== "string" || typeof book !== "string" ||
+      !Number.isSafeInteger(chapter)) return null;
+  const match = /^([1-3]?[A-Z]{2,3}) ([1-9][0-9]{0,2}):([1-9][0-9]{0,2})(?:–([1-9][0-9]{0,2}))?$/.exec(reference);
+  if (!match || match[1] !== book || Number(match[2]) !== chapter) return null;
+  const first = Number(match[3]), last = Number(match[4] || match[3]);
+  if (chapter > 151 || first > 256 || last < first || last > 256) return null;
+  return `/reader/${encodeURIComponent(book)}/${chapter}?verse=${first}`;
+}
+
 function renderAttemptResult(result, book, chapter, groupId = "", groupRecorded) {
   if(state.user)void syncProgress();
   const copy = ATTEMPT_COPY[state.lang];
   const mastered = result.mastered?.length ? `<ul>${result.mastered.map(item => `<li>${esc(item)}</li>`).join("")}</ul>` : `<p>—</p>`;
   const mistakes = result.mistakes?.length
-    ? result.mistakes.map(item => `<article class="result-review"><h3>${esc(item.reference)}</h3><p>${esc(item.explanation)}</p><p><strong>${state.lang === "uk" ? "Правильна відповідь" : state.lang === "ru" ? "Правильный ответ" : "Correct answer"}:</strong> ${item.correctAnswers.map(esc).join("; ")}</p></article>`).join("")
+    ? result.mistakes.map(item => {
+      const href = attemptReviewHref(item.reference, book, chapter);
+      const heading = href
+        ? `<h3><a href="${href}" aria-label="${esc(copy.reviewSource)}: ${esc(item.reference)}">${esc(item.reference)}</a></h3>`
+        : `<h3>${esc(item.reference)}</h3>`;
+      return `<article class="result-review">${heading}<p>${esc(item.explanation)}</p><p><strong>${state.lang === "uk" ? "Правильна відповідь" : state.lang === "ru" ? "Правильный ответ" : "Correct answer"}:</strong> ${item.correctAnswers.map(esc).join("; ")}</p></article>`;
+    }).join("")
     : `<div class="notice success">${copy.noMistakes}</div>`;
   shell(`<article class="prose attempt-results"><p class="eyebrow">Scripture Archive</p><h1>${copy.completed}</h1><p class="score-line"><strong>${result.score}</strong> ${copy.score} ${result.total}</p>${groupRecorded===false?`<p class="notice info">${copy.groupNotRecorded}</p>`:''}<h2>${copy.mastered}</h2>${mastered}<h2>${copy.mistakes}</h2>${mistakes}<div class="action-row"><a class="button primary" href="/reader/${book}/${chapter}">${copy.reopen}</a>${groupId&&groupRecorded!==false?`<a class="button" href="/groups/${encodeURIComponent(groupId)}">${t("groups")}</a>`:""}</div></article>`);
   window.saAnalytics?.track("quiz_complete",{score:Number(result.score),total:Number(result.total),language:state.lang,mode:groupId?"group":"personal"});
@@ -4588,6 +4610,7 @@ function renderPrivacy() {
       "Приватність і облікові записи",
       "Scripture Archive підтверджує електронну адресу одноразовим посиланням і зберігає пароль лише як стійкий криптографічний хеш. Захищені серверні сесії дають змогу синхронізувати профіль і прогрес між пристроями.",
       "Конфесія, конкретна церква, сімейний стан і стать є необов’язковими приватними даними. Вони не впливають на оцінювання. У спільноті ім’я, прізвище та навчальний поступ реального користувача показуються лише після окремої згоди; електронна адреса не публікується.",
+      "Для заявки представника церкви зберігаються публічні відомості про громаду, зв’язок з обліковим записом заявника, його підтверджена адреса, засвідчення повноважень і згоди, а також приватні докази й рішення перевірки. Публікуються тільки схвалені відомості про громаду — не особа чи адреса заявника. Виправлення знімає запис з публікації до нової перевірки; заявник може відкликати його, а видалення облікового запису видаляє заявку.",
       "Аналітика вмикається лише після згоди на аналітичні cookie. Вона фіксує переглянуті розділи, тип пристрою, приблизну країну, виконані дії та активний час. Паролі, відповіді, назви груп і вміст профілю до аналітики не передаються; згоду можна скасувати нижче.",
       "Дані профілю можна виправити в обліковому записі, а обліковий запис і пов’язані особисті дані — видалити там само. Для додаткового звернення: dordiaioleksii1@gmail.com.",
     ],
@@ -4595,6 +4618,7 @@ function renderPrivacy() {
       "Приватность и учётные записи",
       "Scripture Archive подтверждает электронный адрес одноразовой ссылкой и хранит пароль только как стойкий криптографический хеш. Защищённые серверные сессии синхронизируют профиль и прогресс между устройствами.",
       "Конфессия, конкретная церковь, семейное положение и пол — необязательные приватные данные. Они не влияют на оценивание. В сообществе имя, фамилия и учебный прогресс реального пользователя показываются только после отдельного согласия; электронная почта не публикуется.",
+      "Для заявки представителя церкви сохраняются публичные сведения об общине, связь с учётной записью заявителя, его подтверждённый адрес, подтверждения полномочий и согласия, а также приватные доказательства и решение проверки. Публикуются только одобренные сведения об общине — не личность или адрес заявителя. Исправление снимает запись с публикации до новой проверки; заявитель может отозвать её, а удаление учётной записи удаляет заявку.",
       "Аналитика включается только после согласия на аналитические cookie. Она фиксирует просмотренные разделы, тип устройства, примерную страну, выполненные действия и активное время. Пароли, ответы, названия групп и содержимое профиля в аналитику не передаются; согласие можно отменить ниже.",
       "Данные профиля можно исправить в учётной записи, а учётную запись и связанные личные данные — удалить там же. Для дополнительного обращения: dordiaioleksii1@gmail.com.",
     ],
@@ -4602,6 +4626,7 @@ function renderPrivacy() {
       "Privacy and accounts",
       "Scripture Archive verifies an email address with a one-time link and stores the password only as a strong cryptographic hash. Secure server sessions synchronize the profile and progress across devices.",
       "Christian tradition, specific church, marital status, and gender are optional private data and never affect grading. A real member’s first name, last name, and learning progress appear in the community only after separate consent; email addresses are never published.",
+      "A church representative claim stores public organization fields, its link to the claimant account, the verified claimant email, authority and publication attestations, and private verification evidence and review decisions. Only approved organization fields are published—not the claimant’s identity or email. A correction unpublishes the record until a fresh review; the claimant may withdraw it, and account deletion removes the claim.",
       "Analytics runs only after consent to analytics cookies. It records sections viewed, device type, approximate country, actions, and active time. Passwords, answers, group names, and profile content are never sent; consent can be withdrawn below.",
       "You can correct profile data in your account and delete the account and its associated personal data there. For an additional request, email dordiaioleksii1@gmail.com.",
     ],
@@ -4684,7 +4709,7 @@ async function route() {
     else if (name === "groups" && parts[1]) await renderGroup(parts[1]);
     else if (name === "groups") await renderGroups();
     else if (name === "community") await renderCommunity(Number(new URLSearchParams(location.search).get("page"))||1,new URLSearchParams(location.search).get("q")||"",new URLSearchParams(location.search).get("sort")||"recent");
-    else if (["home-groups", "live", "campaigns", "dossiers", "library", "builder", "progress", "about"].includes(name)) {
+    else if (["home-groups", "live", "campaigns", "dossiers", "library", "churches", "builder", "progress", "about"].includes(name)) {
       if(name==="progress"&&state.user)await syncProgress();
       await renderWorkspace(name==='home-groups'?'live':name,{state,t,esc,shell,getMission,getCatalog,setActiveNav,loadJSON,announce,play});
     }
@@ -4807,10 +4832,10 @@ window.addEventListener("pagehide", () => {
   // Profile, progress, Academy, owner and author pages all hold
   // principal-sensitive data. Clear even an unmounted private route (e.g.
   // pending sign-in or course source request) before BFCache can preserve it.
-  const mounted=main.querySelector(".builder-layout, .editor-grid, .progress-stat, .resume-card, .account-dashboard, .profile-card, .auth-grid, .auth-card, .academy-reading");
+  const mounted=main.querySelector(".builder-layout, .editor-grid, .progress-stat, .resume-card, .account-dashboard, .profile-card, .auth-grid, .auth-card, .academy-reading, .church-directory");
   const wasReauthorizing=editorialAwaitingSession;
   editorialAwaitingSession=false;
-  if(!mounted && !["builder","editor","progress","account","campaigns"].includes(currentRoute) && !wasReauthorizing)return;
+  if(!mounted && !["builder","editor","progress","account","campaigns","churches"].includes(currentRoute) && !wasReauthorizing)return;
   editorialPrivateNeedsReauthorization=true;
   editorViewEpoch++;
   retirePrivateWorkspaceOnPageHide();

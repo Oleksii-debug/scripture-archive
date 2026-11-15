@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {dossierMarkup,searchScriptureDossiers,scriptureDossiers,validateDossierGraph} from '../public/scripture-dossiers.js';
+import {dossierAtlasMarkup,dossierMarkup,searchScriptureDossiers,scriptureDossiers,validateDossierGraph} from '../public/scripture-dossiers.js';
 
 const catalog=JSON.parse(readFileSync(new URL('../public/data/catalog.json',import.meta.url),'utf8'));
 const esc=v=>String(v).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
@@ -69,6 +69,122 @@ test('search input is escaped in attributes and cannot create script, links or h
   assert.ok(!html.includes('onclick='));
   assert.ok(html.includes('&quot;&gt;&lt;script&gt;'));
   assert.ok(!html.includes('href="/reader/'));
+});
+
+test('SA-EXT-05/06: non-ASCII space separators cannot disguise publisher book titles',()=>{
+  // Search already rejects these invisible or ambiguous GET separators. The
+  // validated source label must obey the same rule before either UI creates
+  // reader links or screen-reader citation names.
+  const separators=['\\u1680','\\u2000','\\u2001','\\u2002','\\u2003','\\u2004','\\u2005',
+    '\\u2006','\\u2007','\\u2008','\\u2009','\\u200a','\\u202f','\\u205f','\\u3000'];
+  for(const lang of ['uk','ru','en']){
+    for(const encoded of separators){
+      const separator=JSON.parse('"' + encoded + '"');
+      const damaged=structuredClone(catalog);
+      damaged.books[lang][0].title='Genesis'+separator+'chapter';
+      assert.equal(validateDossierGraph(damaged),false,lang+' U+'+separator.codePointAt(0).toString(16));
+      for(const html of [dossierMarkup(damaged,lang,null,esc),
+        dossierAtlasMarkup(damaged,lang,esc)]){
+        assert.match(html,/role="alert"/,'invalid provenance must be announced');
+        assert.ok(!html.includes('href="/reader/'),'no reader link with ambiguous source title');
+      }
+    }
+  }
+  assert.equal(validateDossierGraph(catalog),true,'ordinary localized publisher titles still work');
+});
+
+test('SA-EXT-05/06: own and inherited catalogue method accessors never execute',()=>{
+  // A valid in-memory catalogue can shadow array methods through own fields
+  // or its prototype. Neither source validation nor either UI may invoke them.
+  for(const lang of ['uk','ru','en']){
+    for(const method of ['keys','some','map']){
+      for(const origin of ['own','inherited']){
+        const damaged=structuredClone(catalog);
+        const books=damaged.books[lang];
+        let invoked=0;
+        const receiver=origin==='own'?books:Object.create(Array.prototype);
+        Object.defineProperty(receiver,method,{configurable:true,get(){
+          invoked++;
+          throw new Error('unsafe catalogue method '+method);
+        }});
+        if(origin==='inherited')Object.setPrototypeOf(books,receiver);
+        assert.doesNotThrow(()=>validateDossierGraph(damaged),lang+' '+method+' '+origin);
+        assert.equal(validateDossierGraph(damaged),true,'valid own book records remain usable');
+        for(const html of [dossierMarkup(damaged,lang,null,esc),
+          dossierAtlasMarkup(damaged,lang,esc)]){
+          assert.match(html,/href="\/reader\//,'canonical source navigation survives method shadowing');
+        }
+        assert.equal(invoked,0,'must not execute '+lang+' '+method+' '+origin+' accessor');
+
+        // Invalid chapter metadata must still fail closed, with no reader links.
+        books[0].chapters=0;
+        assert.equal(validateDossierGraph(damaged),false);
+        for(const html of [dossierMarkup(damaged,lang,null,esc),
+          dossierAtlasMarkup(damaged,lang,esc)]){
+          assert.match(html,/role="alert"/);
+          assert.doesNotMatch(html,/href="\/reader\//);
+        }
+        assert.equal(invoked,0,'rejection must not execute '+lang+' '+method+' '+origin);
+        if(origin==='own')delete books[method];
+        else Object.setPrototypeOf(books,Array.prototype);
+        books[0].chapters=catalog.books[lang][0].chapters;
+        assert.equal(validateDossierGraph(damaged),true,'recovered canonical catalogue');
+      }
+    }
+  }
+});
+
+test('SA-EXT-05/06: ambiguous localized publisher book titles fail closed',()=>{
+  // The GET book-name lookup uses NFC, trim and locale-aware lowercase.
+  // Distinct codes with identical visible labels must not produce misleading
+  // dossier/atlas source names or ambiguous screen-reader reader links.
+  for(const lang of ['uk','ru','en']){
+    for(const variant of ['exact','case','nfc']){
+      const damaged=structuredClone(catalog);
+      const books=damaged.books[lang];
+      if(variant==='exact')books[1].title=books[0].title;
+      if(variant==='case')books[1].title=books[0].title.toUpperCase();
+      if(variant==='nfc'){
+        books[0].title='Café';
+        books[1].title='Cafe'+String.fromCharCode(0x0301);
+      }
+      assert.equal(validateDossierGraph(damaged),false,lang+' '+variant);
+      for(const html of [dossierMarkup(damaged,lang,null,esc),
+        dossierAtlasMarkup(damaged,lang,esc)]){
+        assert.match(html,/role="alert"/,'ambiguous publisher label must be announced');
+        assert.ok(!html.includes('href="/reader/'),'no ambiguous source link');
+      }
+      books[0].title=catalog.books[lang][0].title;
+      books[1].title=catalog.books[lang][1].title;
+      assert.equal(validateDossierGraph(damaged),true,'restored distinct publisher titles');
+      assert.ok(dossierMarkup(damaged,lang,null,esc).includes('href="/reader/'));
+      assert.ok(dossierAtlasMarkup(damaged,lang,esc).includes('href="/reader/'));
+    }
+  }
+});
+
+test('SA-EXT-05/06: oversized publisher book titles cannot flood reader and NVDA labels',()=>{
+  // The source catalogue is not trusted merely because its book title is a
+  // nonempty string. HTML escaping cannot bound the size of an ARIA name.
+  for(const lang of ['uk','ru','en']){
+    for(const length of [121,4096]){
+      const damaged=structuredClone(catalog);
+      damaged.books[lang][0].title='T'.repeat(length);
+      assert.equal(validateDossierGraph(damaged),false,lang+' '+length);
+      for(const html of [dossierMarkup(damaged,lang,null,esc),
+        dossierAtlasMarkup(damaged,lang,esc)]){
+        assert.match(html,/role="alert"/,'oversized source label must be announced');
+        assert.ok(!html.includes('href="/reader/'),'no oversized reader or ARIA source links');
+        assert.ok(html.length<1000,'rejected label must not be echoed');
+      }
+    }
+    const boundary=structuredClone(catalog);
+    boundary.books[lang][0].title='T'.repeat(120);
+    assert.equal(validateDossierGraph(boundary),true,'bounded nonambiguous title accepted');
+    assert.ok(dossierMarkup(boundary,lang,null,esc).includes('href="/reader/'));
+    assert.ok(dossierAtlasMarkup(boundary,lang,esc).includes('href="/reader/'));
+  }
+  assert.equal(validateDossierGraph(catalog),true,'canonical localized book titles preserved');
 });
 
 test('invalid canonical catalogue fails closed even when the search matches',()=>{
@@ -309,4 +425,100 @@ test('SA-EXT-05: malformed typed q cannot silently open unrelated dossier eviden
     assert.match(dossierMarkup(catalog,lang,null,esc,'GEN'),/role="search"/);
     assert.match(dossierMarkup(catalog,lang,null,esc,'A'.repeat(121)),/role="alert"/);
   }
+});
+
+test('SA-EXT-01/05: dossier links reject catalogues the primary reader cannot admit',()=>{
+  const alternateKey=Object.keys(catalog.editionBooks)[0];
+  assert.ok(alternateKey,'real alternate edition fixture');
+  const cases=[
+    ['schema version',c=>{c.schemaVersion=2;}],
+    ['missing publisher edition',c=>{delete c.editions.en;}],
+    ['blank publisher edition id',c=>{c.editions.en.id='  ';}],
+    ['partial primary inventory',c=>{c.books.en.splice(30,1);}],
+    ['reordered localized inventory',c=>{[c.books.ru[30],c.books.ru[31]]=[c.books.ru[31],c.books.ru[30]];}],
+    ['wrong testament',c=>{c.books.uk[0].testament='NT';}],
+    ['partial alternate edition',c=>{c.editionBooks[alternateKey].splice(30,1);}],
+    ['reordered alternate edition',c=>{
+      const books=c.editionBooks[alternateKey];
+      [books[30],books[31]]=[books[31],books[30]];
+    }],
+    ['inherited alternate edition',c=>{
+      Object.setPrototypeOf(c.editionBooks,{shadow:[]});
+    }],
+  ];
+  for(const [name,mutate] of cases){
+    const damaged=structuredClone(catalog);
+    mutate(damaged);
+    assert.equal(validateDossierGraph(damaged),false,name);
+    for(const lang of ['uk','ru','en']){
+      for(const html of [dossierMarkup(damaged,lang,null,esc),
+        dossierAtlasMarkup(damaged,lang,esc)]){
+        assert.match(html,/role="alert"/,name+' '+lang+' must announce rejection');
+        assert.doesNotMatch(html,new RegExp('href="/reader/'),name+' '+lang+' must not link an unavailable reader');
+      }
+    }
+  }
+  assert.equal(validateDossierGraph(catalog),true,'published primary and alternate inventories remain valid');
+  const withoutOptional=structuredClone(catalog);
+  delete withoutOptional.editionBooks;
+  assert.equal(validateDossierGraph(withoutOptional),true,'reader permits absent optional editions');
+  for(const lang of ['uk','ru','en']){
+    assert.match(dossierMarkup(catalog,lang,null,esc),new RegExp('href="/reader/'));
+    assert.match(dossierAtlasMarkup(catalog,lang,esc),new RegExp('href="/reader/'));
+  }
+});
+
+test('SA-EXT-01/05: catalogue envelope accessors are never invoked during dossier source checks',()=>{
+  for(const field of ['edition id','optional edition map','schema version']){
+    const damaged=structuredClone(catalog);
+    let invoked=0;
+    const getter=()=>{invoked++;throw Error('untrusted catalogue accessor');};
+    if(field==='edition id')Object.defineProperty(damaged.editions.en,'id',{get:getter,enumerable:true});
+    if(field==='optional edition map')Object.defineProperty(damaged,'editionBooks',{get:getter,enumerable:true});
+    if(field==='schema version')Object.defineProperty(damaged,'schemaVersion',{get:getter,enumerable:true});
+    assert.doesNotThrow(()=>validateDossierGraph(damaged),field);
+    assert.equal(validateDossierGraph(damaged),false,field);
+    for(const lang of ['uk','ru','en']){
+      assert.match(dossierMarkup(damaged,lang,null,esc),/role="alert"/);
+      assert.match(dossierAtlasMarkup(damaged,lang,esc),/role="alert"/);
+    }
+    assert.equal(invoked,0,field+' must never execute an accessor');
+  }
+});
+
+
+test('SA-EXT-01/05: dossier and atlas reject editions the reader rights gate refuses',()=>{
+  assert.equal(validateDossierGraph(catalog),true,'canonical publisher metadata remains admissible');
+  const cases=[
+    ['missing license',edition=>{delete edition.license;}],
+    ['blank license',edition=>{edition.license='  ';}],
+    ['insecure source',edition=>{edition.source='http://example.org/edition';}],
+    ['credential-bearing source',edition=>{edition.source='https://user@example.org/edition';}],
+    ['invisible title',edition=>{edition.title='Edition\u200b';}],
+    ['oversized title',edition=>{edition.title='E'.repeat(513);}],
+    ['whitespace edition identity',edition=>{edition.id='EDITION ID';}],
+    ['accessor-backed license',edition=>{
+      Object.defineProperty(edition,'license',{
+        configurable:true,enumerable:true,get(){throw Error('untrusted license getter');}
+      });
+    }]
+  ];
+  for(const lang of ['uk','ru','en']){
+    for(const [label,damage] of cases){
+      const damaged=structuredClone(catalog);
+      damage(damaged.editions[lang]);
+      const context=lang+' / '+label;
+      assert.doesNotThrow(()=>validateDossierGraph(damaged),context);
+      assert.equal(validateDossierGraph(damaged),false,context);
+      for(const html of [
+        dossierMarkup(damaged,lang,'abraham',esc),
+        dossierAtlasMarkup(damaged,lang,esc)
+      ]){
+        assert.match(html,/role="alert"/,context);
+        assert.ok(!html.includes('href="/reader/'),context+' must not issue a source link');
+      }
+    }
+  }
+  assert.match(dossierMarkup(catalog,'en','abraham',esc),/href="\/reader\/GEN\/12\?verse=1"/);
+  assert.match(dossierAtlasMarkup(catalog,'en',esc),/href="\/reader\//);
 });

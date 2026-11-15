@@ -22,7 +22,7 @@ function lifecycleFixture({path='/builder',mounted=true,request=()=>Promise.reso
   let visible=mounted;
   const main={
     querySelector(selector){
-      if(selector==='.builder-layout, .editor-grid, .progress-stat, .resume-card, .account-dashboard, .profile-card, .auth-grid, .auth-card, .academy-reading')return visible?{}:null;
+      if(selector==='.builder-layout, .editor-grid, .progress-stat, .resume-card, .account-dashboard, .profile-card, .auth-grid, .auth-card, .academy-reading, .church-directory')return visible?{}:null;
       return null;
     },
     replaceChildren(){visible=false;events.clear++;},
@@ -201,6 +201,14 @@ test('personal progress DOM is retired before browser saves a BFCache snapshot',
   assert.equal(f.events.clear,1);
   assert.equal(f.events.retire,1);
   assert.equal(f.controller.needs(),true);
+});
+test('church claimant and owner queue DOM is retired before a BFCache snapshot',async()=>{
+  const f=lifecycleFixture({path:'/churches',mounted:false});
+  f.pagehide();f.pageshow();await tick();
+  assert.equal(f.events.clear,1);
+  assert.equal(f.events.retire,1);
+  assert.equal(f.events.auth,1);
+  assert.equal(f.events.route,1);
 });
 test('unmounted in-flight progress route is also reauthenticated after pageshow',async()=>{
   const f=lifecycleFixture({path:'/progress',mounted:false});

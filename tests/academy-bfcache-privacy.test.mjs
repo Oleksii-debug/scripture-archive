@@ -26,7 +26,7 @@ function browserFixture({mounted=true,reauth=()=>Promise.resolve({user:{id:'alic
   let visible=mounted;
   const main={
     querySelector(selector){
-      return selector==='.builder-layout, .editor-grid, .progress-stat, .resume-card, .account-dashboard, .profile-card, .auth-grid, .auth-card, .academy-reading'&&visible?{}:null;
+      return selector==='.builder-layout, .editor-grid, .progress-stat, .resume-card, .account-dashboard, .profile-card, .auth-grid, .auth-card, .academy-reading, .church-directory'&&visible?{}:null;
     },
     replaceChildren(){visible=false;events.clear++;},
   };

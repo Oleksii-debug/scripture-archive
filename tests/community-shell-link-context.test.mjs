@@ -21,7 +21,7 @@ async function probe(link, seen = []) {
       case "/api/account":
         return Response.json({ user: null }, { headers: { "Cache-Control": "no-store" } });
       case "/robots.txt":
-        return new Response("User-agent: *\\nSitemap: " + ORIGIN + "/sitemap.xml\\n");
+        return new Response(`User-agent: *\nSitemap: ${ORIGIN}/sitemap.xml\n`);
       case "/sitemap.xml":
         return new Response("<urlset></urlset>");
       case "/api/community/dispatch":
@@ -40,15 +40,16 @@ async function probe(link, seen = []) {
 
 test("R0.4 refuses community links opening a new or named browsing context", async () => {
   for (const target of ['target="_blank"', 'target="new-window"', 'target="_parent"',
-    'target="_top"', 'target="&#95;self"']) {
+    'target="_top"', 'target="&#95;self"', 'target=" _SELF "']) {
     assert.equal(await probe('<a href="/community" data-route="community" ' + target + '>Community</a>'),
       false, target);
   }
 });
 
-test("R0.4 refuses inline click handlers whose behavior is not source-verifiable", async () => {
+test("R0.4 refuses inline handlers whose behavior is not source-verifiable", async () => {
   for (const handler of ['onclick="return false"', 'onClick="event.preventDefault()"',
-    'onclick="navigateSomewhereElse()"', 'onclick="&#114;eturn false"']) {
+    'onclick="navigateSomewhereElse()"', 'onclick="&#114;eturn false"',
+    'onkeydown="return false"', 'onfocus="this.blur()"']) {
     assert.equal(await probe('<a href="/community" data-route="community" ' + handler + '>Community</a>'),
       false, handler);
   }
@@ -57,7 +58,7 @@ test("R0.4 refuses inline click handlers whose behavior is not source-verifiable
 test("R0.4 retains native and explicitly same-tab navigation", async () => {
   assert.equal(await probe(LINK), true);
   assert.equal(await probe('<a href="/community" data-route="community" target="_self">Community</a>'), true);
-  assert.equal(await probe('<a href="/community" data-route="community" target=" _SELF ">Community</a>'), true);
+  assert.equal(await probe('<a href="/community" data-route="community" target="_SELF" data-onclick="tracking-label">Community</a>'), true);
 });
 
 test("R0.4 recovers only when the new-context or inline-handler link is replaced", async () => {

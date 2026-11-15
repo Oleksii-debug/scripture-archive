@@ -105,7 +105,8 @@ test('SA-EXT-01: comparison selector does not execute edition title or ID getter
     assert.equal(invoked,0);
     assert.doesNotMatch(html,/Kulish/);
     assert.doesNotMatch(html,/uk-kulish/);
-    assert.match(html,/<select name="edition">/);
+    assert.match(html,/<select name="edition" disabled>/);
+    assert.match(html,/<button class="button" type="submit" disabled>/);
   }
   assert.match(parallelControls([base],'en',esc),/Kulish/);
 });

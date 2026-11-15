@@ -1,3 +1,5 @@
+import {validEditionRightsMetadata, validEditionRightsText} from './parallel-reader.js';
+
 // SA-EXT-05: traceable, reader-linked biblical dossier graph.
 // References are navigation pointers to the platform's existing edition catalog,
 // not copied Bible text, external historical evidence, or licence assertions.
@@ -25,11 +27,11 @@ const validDossierSearchQuery = value => typeof value === 'string' &&
   value.length <= 120 &&
   // Only ordinary space/TAB preserve the historical blank GET behavior.
   // Unicode separators, BOM, CR/LF, format controls and visually empty
-  // script fillers and non-ASCII Unicode spaces fail closed, even alone.
+  // script fillers, variation selectors (BMP and supplementary) and non-ASCII Unicode spaces fail closed, even alone.
   // JS trim() removes Zs spaces such as U+202F and U+3000; accepting them
   // would silently expose the unfiltered dossier/atlas source links.
   (/^[ \t]*$/u.test(value) ||
-    !/[\u0000-\u001f\u007f-\u009f\u00a0\u034f\u1680\u2000-\u200a\u202f\u205f\u3000\u061c\u115f\u1160\u200b-\u200f\u2028-\u202e\u2060-\u206f\u2800\u3164\ufeff\ud800-\udfff\uffa0\p{Cf}]/u.test(value));
+    !/[\u0000-\u001f\u007f-\u009f\u00a0\u034f\ufe00-\ufe0f\u{e0100}-\u{e01ef}\u1680\u2000-\u200a\u202f\u205f\u3000\u061c\u115f\u1160\u200b-\u200f\u2028-\u202e\u2060-\u206f\u2800\u3164\ufeff\ud800-\udfff\uffa0\p{Cf}]/u.test(value));
 // Publisher catalogue metadata must be owned data, not executable accessors.
 // Read each descriptor once; never invoke a getter merely to validate a source.
 const ownData=(record,key)=>{
@@ -136,17 +138,47 @@ const nodes=[
 ];
 export const scriptureDossiers=nodes;
 
+// SA-EXT-06: ordered, text-only itineraries derived from the cited narrative.
+// These are reader navigation aids, not modern coordinates, measured routes,
+// archaeological identifications or independent historical reconstructions.
+export const scriptureAtlasJourneys=[
+  {id:'abram-genesis-12-13',dossierIds:['abraham','egypt'],
+    names:{uk:'Подорож Аврама в Бутті 12–13',ru:'Путешествие Аврама в Бытии 12–13',en:'Abram’s journey in Genesis 12–13'},
+    descriptions:{uk:'Послідовність місць наведено лише за оповіддю Буття.',ru:'Последовательность мест приведена только по повествованию Бытия.',en:'The order of places follows the Genesis narrative only.'},
+    stops:[
+      {names:{uk:'Харан',ru:'Харран',en:'Haran'},source:ref('GEN',12,4,5)},
+      {names:{uk:'Сихем і дуб Море',ru:'Сихем и дуб Море',en:'Shechem and the oak of Moreh'},source:ref('GEN',12,6,7)},
+      {names:{uk:'Гірська місцевість на схід від Бет-Елу, між Бет-Елом та Аєм',ru:'Горная местность к востоку от Вефиля, между Вефилем и Гаем',en:'Hill country east of Bethel, between Bethel and Ai'},source:ref('GEN',12,8,8)},
+      {names:{uk:'Негев',ru:'Негев',en:'Negev'},source:ref('GEN',12,9,9)},
+      {names:{uk:'Єгипет',ru:'Египет',en:'Egypt'},source:ref('GEN',12,10,20)},
+      {names:{uk:'Негев і місце між Бет-Елом та Аєм',ru:'Негев и место между Вефилем и Гаем',en:'Negev and the place between Bethel and Ai'},source:ref('GEN',13,1,4)},
+    ]},
+  {id:'exodus-departure-and-sea',dossierIds:['moses','exodus','egypt'],
+    names:{uk:'Вихід з Єгипту: від Рамесеса до переходу через море',ru:'Исход из Египта: от Раамсеса до перехода через море',en:'Exodus from Egypt: from Rameses to the sea crossing'},
+    descriptions:{uk:'Зупинки подано в порядку уривків Виходу 12–14 без сучасної локалізації.',ru:'Остановки даны в порядке отрывков Исхода 12–14 без современной локализации.',en:'Stops follow Exodus 12–14 without assigning modern locations.'},
+    stops:[
+      {names:{uk:'Рамесес і Суккот',ru:'Раамсес и Сокхоф',en:'Rameses and Succoth'},source:ref('EXO',12,37,42)},
+      {names:{uk:'Суккот і Етам',ru:'Сокхоф и Ефам',en:'Succoth and Etham'},source:ref('EXO',13,20,22)},
+      {names:{uk:'Місце біля Пі-Гахірота, Мігдола та моря',ru:'Место у Пи-Гахирофа, Мигдола и моря',en:'The place by Pi-hahiroth, Migdol, and the sea'},source:ref('EXO',14,1,4)},
+      {names:{uk:'Перехід через море',ru:'Переход через море',en:'Passage through the sea'},source:ref('EXO',14,21,31)},
+    ]},
+];
+
 export function validateDossierGraph(catalog) {
   // Dossier IDs become internal links; authoring damage must never turn them
   // into markup/URL attributes or present blank text as validated Scripture.
   const safeId = value => typeof value === 'string' && /^[a-z][a-z0-9-]*$/.test(value);
   // HTML escaping does not remove invisible/bidi text or lone surrogates;
   // reject ambiguous source metadata before emitting reader links/ARIA names.
-  // Include Unicode format controls and visually empty script fillers;
-  // canonical dossier labels and reader links must not conceal source claims.
+  // Include Unicode format controls, non-ASCII Unicode space separators,
+  // visually empty script fillers and variation selectors (BMP and supplementary Mn).
+  // Canonical dossier labels and reader links must not conceal source claims.
   const safeVisibleText = value => typeof value === 'string' && value.trim().length > 0 &&
-    !/[\u0000-\u001f\u007f-\u009f\u00a0\u061c\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\ud800-\udfff\u034f\u115f\u1160\u2800\u3164\uffa0\p{Cf}]/u.test(value);
+    !/[\u0000-\u001f\u007f-\u009f\u00a0\u061c\u1680\u2000-\u200f\u2028-\u202f\u205f\u2060-\u206f\u3000\ufe00-\ufe0f\u{e0100}-\u{e01ef}\ufeff\ud800-\udfff\u034f\u115f\u1160\u2800\u3164\uffa0\p{Cf}]/u.test(value);
   const nonblank = safeVisibleText;
+  // Bound publisher-supplied book titles before repeating them in source
+  // links and ARIA labels; escaping alone cannot prevent huge accessible names.
+  const safeBookTitle = value => typeof value === 'string' && value.length <= 120 && safeVisibleText(value);
   // Book codes become internal reader URL segments. Reject unsafe catalogue
   // or dossier provenance before rendering any href (including atlas links).
   const safeBookCode = value => typeof value === 'string' && /^(?:[1-3])?[A-Z]{2,4}$/.test(value);
@@ -160,6 +192,19 @@ export function validateDossierGraph(catalog) {
         item.prompts[lang].every(nonblank)))) return false;
   const known = new Map(nodes.map(item=>[item.id,item]));
   if (known.size !== nodes.length) return false;
+  // A dossier link is only usable when the canonical reader accepts the
+  // surrounding catalogue envelope. Do not treat a damaged schema or
+  // publisher edition identity as sufficient authority for source links.
+  const editions=ownData(catalog,'editions');
+  if(ownData(catalog,'schemaVersion')!==1 || !editions ||
+      typeof editions!=='object' || Array.isArray(editions) ||
+      LANGS.some(lang=>{
+        const edition=ownData(editions,lang);
+        return !edition || typeof edition!=='object' || Array.isArray(edition) ||
+          !hasOwnData(edition,'id') || !validEditionRightsText(edition.id,128) ||
+          !edition.id.trim() || edition.id.trim()!==edition.id ||
+          /\s/u.test(edition.id) || !validEditionRightsMetadata(edition);
+      })) return false;
   // Only own, published catalogue records may authorize reader source labels.
   // Prototype-inherited language lists or book fields can otherwise spoof a
   // source name in the dossier, atlas and accessible citation links.
@@ -173,20 +218,57 @@ export function validateDossierGraph(catalog) {
   const catalogs = LANGS.map(lang=>ownData(inventories,lang));
   // Sparse or oversized arrays must fail closed before Map construction;
   // Array#some skips holes and Map(books.map(...)) otherwise throws.
-  if(catalogs.some(books=>books.length===0 || books.length>200 ||
-      Array.from(books.keys()).some(index=>!hasOwnData(books,index)) ||
-      books.some(book=>!book || typeof book!=='object' || Array.isArray(book) ||
-      !['code','title','chapters'].every(key=>hasOwnData(book,key)) || !safeBookCode(book.code) ||
-      !safeVisibleText(book.title) ||
+  // Catalogue arrays may carry own/inherited method accessors in memory.
+  // Invoke native array algorithms directly: reading books.keys/some/map
+  // could execute arbitrary getters before the source/ARIA guard completes.
+  // The primary reader rejects partial, reordered and misclassified
+  // 66-book inventories. Dossier/atlas source links must not claim those
+  // rejected catalogues are usable, including when an optional alternate
+  // edition is damaged. Reuse the received primary order as a parity check;
+  // the reader's independent fixed-code admission remains authoritative.
+  const alternateDescriptor=Object.getOwnPropertyDescriptor(catalog,'editionBooks');
+  let alternateLists=[];
+  if(alternateDescriptor){
+    const alternate=ownData(catalog,'editionBooks');
+    if(!alternate || typeof alternate!=='object' || Array.isArray(alternate))
+      return false;
+    for(const key in alternate) if(!Object.hasOwn(alternate,key))return false;
+    alternateLists=Object.keys(alternate).map(key=>ownData(alternate,key));
+    if(alternateLists.some(books=>!Array.isArray(books)))return false;
+  }
+  const allLists=[...catalogs,...alternateLists];
+  if(allLists.some((books,langIndex)=>books.length!==66 ||
+      Array.from(Array.prototype.keys.call(books)).some(index=>!hasOwnData(books,index)) ||
+      Array.prototype.some.call(books,(book,index)=>!book || typeof book!=='object' || Array.isArray(book) ||
+      !['code','title','chapters','testament'].every(key=>hasOwnData(book,key)) ||
+      !safeBookCode(book.code) || !safeBookTitle(book.title) ||
+      book.testament!==(index<39?'OT':'NT') ||
       !Number.isSafeInteger(book.chapters) || book.chapters<1 || book.chapters>200) ||
-      new Set(books.map(book=>book.code)).size!==books.length)) return false;
-  const bookMaps = catalogs.map(books=>new Map(books.map(book=>[book.code,book.chapters])));
+      new Set(Array.prototype.map.call(books,book=>book.code)).size!==books.length ||
+      new Set(Array.prototype.map.call(books,book=>
+        book.title.normalize('NFC').trim().toLocaleLowerCase(LANGS[langIndex]||'uk'))).size!==books.length)) return false;
+  const primaryCodes=Array.prototype.map.call(catalogs[0],book=>book.code);
+  if(allLists.some(books=>Array.prototype.some.call(books,
+      (book,index)=>book.code!==primaryCodes[index])))return false;
+  const bookMaps = catalogs.map(books=>new Map(Array.prototype.map.call(books,book=>[book.code,book.chapters])));
   const validRef = source => source && safeBookCode(source.book) && Number.isSafeInteger(source.first) && source.first>0 && source.first<=256 &&
     Number.isSafeInteger(source.last) && source.last>=source.first && source.last<=256 &&
     Number.isSafeInteger(source.chapter) && source.chapter>0 && source.chapter<=200 &&
     ['narrative','interpretive'].includes(source.kind) &&
     bookMaps.every(books=>books.has(source.book) && source.chapter<=books.get(source.book));
-  return nodes.every(item=>item.sources.every(validRef) &&
+  const validJourneys=scriptureAtlasJourneys.length>0 &&
+    new Set(scriptureAtlasJourneys.map(journey=>journey?.id)).size===scriptureAtlasJourneys.length &&
+    scriptureAtlasJourneys.every(journey=>journey && safeId(journey.id) &&
+      Array.isArray(journey.dossierIds) && journey.dossierIds.length>0 && journey.dossierIds.length<=4 &&
+      new Set(journey.dossierIds).size===journey.dossierIds.length &&
+      journey.dossierIds.every(id=>safeId(id)&&known.has(id)) &&
+      LANGS.every(lang=>nonblank(journey.names?.[lang])&&nonblank(journey.descriptions?.[lang])) &&
+      Array.isArray(journey.stops) && journey.stops.length>=2 && journey.stops.length<=12 &&
+      new Set(journey.stops.map(stop=>stop?.source &&
+        `${stop.source.book}:${stop.source.chapter}:${stop.source.first}-${stop.source.last}`)).size===journey.stops.length &&
+      journey.stops.every(stop=>stop && LANGS.every(lang=>nonblank(stop.names?.[lang])) &&
+        validRef(stop.source) && stop.source.kind==='narrative'));
+  return validJourneys && nodes.every(item=>item.sources.every(validRef) &&
     item.related.every(link=>link && known.has(link.to) && link.to!==item.id && validRef(link.via)));
 }
 
@@ -297,7 +379,7 @@ export function dossierMarkup(catalog,language,requestedId,esc,searchQuery='',co
     : (activeSearch?matches:nodes).find(item=>item.id===requestedId));
   const filteredId=activeSearch && !noMatch && !selected &&
     nodes.some(item=>item.id===requestedId);
-  const bookNames=new Map(catalog.books[lang].map(book=>[book.code,book.title]));
+  const bookNames=new Map(Array.prototype.map.call(ownData(ownData(catalog,'books'),lang),book=>[book.code,book.title]));
   const cite=source=>{
     const label=`${bookNames.get(source.book)} ${source.chapter}:${source.first}–${source.last}`;
     return `<a href="/reader/${source.book}/${source.chapter}?verse=${source.first}" aria-label="${esc(w.read)}: ${esc(label)} — ${esc(w[source.kind])}">${esc(label)}</a>`;
@@ -382,17 +464,20 @@ export function dossierAtlasMarkup(catalog,language,esc,query='') {
   const visibleIds=filtered?new Set(searchScriptureDossiers(lang,query,catalog).map(item=>item.id)):null;
   const visible=item=>Boolean(item)&&(!visibleIds||visibleIds.has(item.id));
   const resultCount=filtered?visibleIds.size:0;
-  if(filtered&&resultCount===0)return '<section class="card dossier-atlas" aria-labelledby="dossier-atlas-heading"><h2 id="dossier-atlas-heading">'+esc(COPY[lang].index)+'</h2><p role="status">'+esc(SEARCH_COPY[lang].empty)+'</p></section>';
   const filterStatus=filtered?'<p role="status">'+esc(SEARCH_COPY[lang].results)+': '+resultCount+'</p>':'';
   const terms={
-    uk:{title:'Біблійний атлас: текстова лабораторія',intro:'Орієнтовна послідовність оповідей для читання. Це не датування історичних подій і не незалежне археологічне підтвердження.',order:'Порядок читання',subject:'Тема',passage:'Біблійний уривок',places:'Згадані місця',extra:'Інші теми дослідження (не хронологічний порядок)',uncertainty:'Сучасні координати, маршрути й археологічні локалізації тут не встановлені; використовуйте першоджерела, а не припущення на карті.'},
-    ru:{title:'Библейский атлас: текстовая лаборатория',intro:'Ориентировочная последовательность повествований для чтения. Это не датировка исторических событий и не независимое археологическое подтверждение.',order:'Порядок чтения',subject:'Тема',passage:'Библейский отрывок',places:'Упомянутые места',extra:'Другие темы исследования (без хронологического порядка)',uncertainty:'Современные координаты, маршруты и археологические локализации здесь не установлены; используйте первоисточники, а не предположения на карте.'},
-    en:{title:'Scripture atlas: text-first research',intro:'An approximate narrative reading sequence, not a historical date assignment or independent archaeological verification.',order:'Reading order',subject:'Subject',passage:'Scripture passage',places:'Places mentioned',extra:'Other research subjects (not chronologically ordered)',uncertainty:'Modern coordinates, routes and archaeological identifications are not established here; use source passages rather than guessed map locations.'}
+    uk:{title:'Біблійний атлас: текстова лабораторія',intro:'Орієнтовна послідовність оповідей для читання. Це не датування історичних подій і не незалежне археологічне підтвердження.',order:'Порядок читання',subject:'Тема',passage:'Біблійний уривок',places:'Згадані місця',routes:'Текстові маршрути оповідей',routeScope:'Порядок зупинок походить лише з наведених біблійних уривків. Він не визначає відстані, сучасні координати, археологічну локалізацію чи незалежну історичну реконструкцію.',extra:'Інші теми дослідження (не хронологічний порядок)',uncertainty:'Сучасні координати, маршрути й археологічні локалізації тут не встановлені; використовуйте першоджерела, а не припущення на карті.'},
+    ru:{title:'Библейский атлас: текстовая лаборатория',intro:'Ориентировочная последовательность повествований для чтения. Это не датировка исторических событий и не независимое археологическое подтверждение.',order:'Порядок чтения',subject:'Тема',passage:'Библейский отрывок',places:'Упомянутые места',routes:'Текстовые маршруты повествований',routeScope:'Порядок остановок взят только из приведённых библейских отрывков. Он не устанавливает расстояния, современные координаты, археологическую локализацию или независимую историческую реконструкцию.',extra:'Другие темы исследования (без хронологического порядка)',uncertainty:'Современные координаты, маршруты и археологические локализации здесь не установлены; используйте первоисточники, а не предположения на карте.'},
+    en:{title:'Scripture atlas: text-first research',intro:'An approximate narrative reading sequence, not a historical date assignment or independent archaeological verification.',order:'Reading order',subject:'Subject',passage:'Scripture passage',places:'Places mentioned',routes:'Text itineraries from the narratives',routeScope:'Stop order comes only from the cited Scripture passages. It does not establish distance, modern coordinates, archaeological identification, or an independent historical reconstruction.',extra:'Other research subjects (not chronologically ordered)',uncertainty:'Modern coordinates, routes and archaeological identifications are not established here; use source passages rather than guessed map locations.'}
   }[lang];
+  // A filtered atlas with no witnesses is still the atlas, not a second
+  // dossier catalogue. Give keyboard/NVDA users a direct way back to the
+  // existing unfiltered GET route without showing unrelated source links.
+  if(filtered&&resultCount===0)return '<section class="card dossier-atlas" aria-labelledby="dossier-atlas-heading"><h2 id="dossier-atlas-heading">'+esc(terms.title)+'</h2><p role="status">'+esc(SEARCH_COPY[lang].empty)+'</p><p><a href="/dossiers">'+esc(SEARCH_COPY[lang].clear)+'</a></p></section>';
   const order=['abraham','sarah','joseph','moses','exodus','david','nativity'];
   const byId=new Map(nodes.map(item=>[item.id,item]));
   if(order.some(id=>!byId.has(id)))return '<p role="alert">'+esc(w.invalid)+'</p>';
-  const bookNames=new Map(catalog.books[lang].map(book=>[book.code,book.title]));
+  const bookNames=new Map(Array.prototype.map.call(ownData(ownData(catalog,'books'),lang),book=>[book.code,book.title]));
   const passage=source=>{
     const label=bookNames.get(source.book)+' '+source.chapter+':'+source.first+'–'+source.last;
     return '<a href="/reader/'+source.book+'/'+source.chapter+'?verse='+source.first+'" aria-label="'+esc(w.read)+': '+esc(label)+' — '+esc(w[source.kind])+'">'+esc(label)+'</a>';
@@ -422,6 +507,12 @@ export function dossierAtlasMarkup(catalog,language,esc,query='') {
     '<tr><th scope="row">'+subject(item)+'</th><td><ol>'+
     item.sources.map(source=>'<li>'+passage(source)+' — '+esc(w[source.kind])+'</li>').join('')+
     '</ol></td></tr>').join('');
+  const visibleJourneys=scriptureAtlasJourneys.filter(journey=>!filtered ||
+    journey.dossierIds.some(id=>visibleIds.has(id)));
+  const journeys=visibleJourneys.length?'<section aria-labelledby="dossier-atlas-routes-heading"><h3 id="dossier-atlas-routes-heading">'+esc(terms.routes)+'</h3><p>'+esc(terms.routeScope)+'</p>'+
+    visibleJourneys.map(journey=>'<article><h4>'+esc(journey.names[lang])+'</h4><p>'+esc(journey.descriptions[lang])+'</p><ol>'+
+      journey.stops.map(stop=>'<li><strong>'+esc(stop.names[lang])+'</strong><p>'+passage(stop.source)+' — '+esc(w.narrative)+'</p></li>').join('')+
+      '</ol></article>').join('')+'</section>':'';
   // The dated-reading sample above is deliberately bounded. Do not hide
   // other approved person/event dossiers from the text atlas or falsely place
   // them in a historical chronology without independent dated evidence.
@@ -444,5 +535,5 @@ export function dossierAtlasMarkup(catalog,language,esc,query='') {
         '<dt>'+subject(item)+' → '+subject(byId.get(link.to))+'</dt><dd>'+
         passage(link.via)+' — '+esc(w[link.via.kind])+'</dd>').join('')+
     '</dl></section>':'';
-  return '<section class="card dossier-atlas" aria-labelledby="dossier-atlas-heading"><h2 id="dossier-atlas-heading">'+esc(terms.title)+'</h2><p>'+esc(terms.intro)+'</p>'+filterStatus+'<table><caption>'+esc(terms.order)+'</caption><thead><tr><th scope="col">№</th><th scope="col">'+esc(terms.subject)+'</th><th scope="col">'+esc(terms.passage)+'</th></tr></thead><tbody>'+history+'</tbody></table><table><caption>'+esc(terms.places)+'</caption><thead><tr><th scope="col">'+esc(terms.subject)+'</th><th scope="col">'+esc(terms.passage)+'</th></tr></thead><tbody>'+places+'</tbody></table>'+additional+relatedWitnesses+'<p>'+esc(terms.uncertainty)+'</p></section>';
+  return '<section class="card dossier-atlas" aria-labelledby="dossier-atlas-heading"><h2 id="dossier-atlas-heading">'+esc(terms.title)+'</h2><p>'+esc(terms.intro)+'</p>'+filterStatus+'<table><caption>'+esc(terms.order)+'</caption><thead><tr><th scope="col">№</th><th scope="col">'+esc(terms.subject)+'</th><th scope="col">'+esc(terms.passage)+'</th></tr></thead><tbody>'+history+'</tbody></table><table><caption>'+esc(terms.places)+'</caption><thead><tr><th scope="col">'+esc(terms.subject)+'</th><th scope="col">'+esc(terms.passage)+'</th></tr></thead><tbody>'+places+'</tbody></table>'+journeys+additional+relatedWitnesses+'<p>'+esc(terms.uncertainty)+'</p></section>';
 }

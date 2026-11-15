@@ -460,8 +460,12 @@ test('SA-EXT-04 public group discovery survives session storage outage without p
 test('valid stored marathon registration retains a real facilitator session and mission start',async()=>{
   const f=fixture();
   try {
-    f.db.prepare("INSERT INTO group_marathon_registrations(id,group_id,weekly_goal,catchup_mode,cohort_key,status,start_date) VALUES('m','g',3,'steady','cohort','active','2026-10-27')").run();
-    const session=await f.post('session',{bookId:'GEN',chapter:12,meetingDate:'2026-10-28',answersCorrect:1,answersTotal:2},'carol');
+    // A hard-coded 2026-10-27 cohort advances to week 1 on 2026-11-03,
+    // making GEN 12 (week-0 passage) ineligible and breaking CI by calendar
+    // drift. Use a real, canonical UTC date in the current first week.
+    const firstWeekDate = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    f.db.prepare("INSERT INTO group_marathon_registrations(id,group_id,weekly_goal,catchup_mode,cohort_key,status,start_date) VALUES('m','g',3,'steady','cohort','active',?)").run(firstWeekDate);
+    const session=await f.post('session',{bookId:'GEN',chapter:12,meetingDate:firstWeekDate,answersCorrect:1,answersTotal:2},'carol');
     assert.equal(session.status,200,JSON.stringify(session.data));
     const read=await f.attempt('read',{},'carol');
     assert.equal(read.status,201,JSON.stringify(read.data));

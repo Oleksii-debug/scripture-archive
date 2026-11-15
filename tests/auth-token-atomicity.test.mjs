@@ -510,3 +510,177 @@ test("R0.2: the exact legal maximum email remains a valid registration input", a
     assert.equal(f.emails(), 1);
   } finally { f.db.close(); }
 });
+
+test("R0.2: verification refuses duplicate or unrelated URL parameters before consuming a one-time token", async () => {
+  // Security mail accepts only action=verify&token=...; the consuming GET must
+  // enforce the same unambiguous shape even for manually altered URLs.
+  for (const query of [
+    "action=verify&token=code&token=other",
+    "action=verify&token=other&token=code",
+    "action=verify&action=verify&token=code",
+    "action=verify&action=reset&token=code",
+    "action=verify&token=code&next=%2Fcommunity",
+    "action=verify&token=code&%74oken=other",
+    "action=verify&token=code&empty=",
+  ]) {
+    const f = fixture();
+    f.db.prepare("INSERT INTO auth_tokens(token_hash,user_id,purpose,expires_at) VALUES ('hash-code','alice','verify','2099-01-01')").run();
+    const response = await f.handler.GET(new Request("https://example.invalid/api/auth?" + query));
+    assert.equal(response.status, 400, query);
+    assert.equal(response.headers.get("location"), null, query);
+    assert.equal(f.db.prepare("SELECT email_verified_at FROM accounts WHERE id='alice'").get().email_verified_at, null, query);
+    assert.equal(f.db.prepare("SELECT used_at FROM auth_tokens WHERE token_hash='hash-code'").get().used_at, null, query);
+    // Recovery: rejection does not consume the genuine single-use link.
+    assert.equal((await f.handler.GET(new Request("https://example.invalid/api/auth?action=verify&token=code"))).status, 303);
+    assert.equal((await f.handler.GET(new Request("https://example.invalid/api/auth?action=verify&token=code"))).status, 400);
+    f.db.close();
+  }
+});
+
+
+test("P0 R0.2: verification requires the exact one-time token bytes before D1 mutation", async () => {
+  const f = fixture();
+  try {
+    f.db.prepare("INSERT INTO auth_tokens(token_hash,user_id,purpose,expires_at) VALUES ('hash-code','alice','verify','2099-01-01')").run();
+    for (const altered of [" code", "code ", "\tcode", "code\n", "code\u200b", "code/"]) {
+      const url = new URL("https://example.invalid/api/auth?action=verify");
+      url.searchParams.set("token", altered);
+      const response = await f.handler.GET(new Request(url));
+      assert.equal(response.status, 400, "refuse altered verification token " + JSON.stringify(altered));
+      assert.equal((await response.json()).error, "invalid_token");
+      assert.equal(f.db.prepare("SELECT email_verified_at FROM accounts WHERE id='alice'").get().email_verified_at, null);
+      assert.equal(f.db.prepare("SELECT used_at FROM auth_tokens WHERE token_hash='hash-code'").get().used_at, null);
+    }
+    const exact = new Request("https://example.invalid/api/auth?action=verify&token=code");
+    assert.equal((await f.handler.GET(exact)).status, 303, "valid token still works after invalid attempts");
+    assert.equal((await f.handler.GET(exact)).status, 400, "one-time replay is refused");
+  } finally { f.db.close(); }
+});
+
+test("P0 R0.2: password reset refuses decorated tokens without changing password or sessions", async () => {
+  const f = fixture();
+  try {
+    f.db.prepare("INSERT INTO auth_tokens(token_hash,user_id,purpose,expires_at) VALUES ('hash-code','alice','reset','2099-01-01')").run();
+    const request = token => new Request("https://example.invalid/api/auth?action=reset-password", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, password: "new-password-123" }),
+    });
+    for (const altered of [" code", "code ", "\tcode", "code\n", "code\u200b", "code/"]) {
+      const response = await f.handler.POST(request(altered));
+      assert.equal(response.status, 400, "refuse altered reset token " + JSON.stringify(altered));
+      assert.equal((await response.json()).error, "invalid_reset");
+      assert.equal(f.db.prepare("SELECT password_hash FROM accounts WHERE id='alice'").get().password_hash, "oldhash");
+      assert.equal(f.db.prepare("SELECT revoked_at FROM auth_sessions WHERE token_hash='session'").get().revoked_at, null);
+      assert.equal(f.db.prepare("SELECT used_at FROM auth_tokens WHERE token_hash='hash-code'").get().used_at, null);
+    }
+    assert.equal((await f.handler.POST(request("code"))).status, 200, "exact reset token remains usable");
+    assert.equal((await f.handler.POST(request("code"))).status, 400, "reset token cannot be replayed");
+  } finally { f.db.close(); }
+});
+
+
+test("P0 R0.2: reset-password refuses ambiguous POST action queries before token consumption", async () => {
+  // Unlike a profile field, a one-time reset token must not be consumed from
+  // a URL with duplicate/augmented action semantics. This exercises the real
+  // auth handler and SQLite transaction, not a mock query predicate.
+  for (const query of [
+    "action=reset-password&action=login",
+    "action=reset-password&action=reset-password",
+    "action=reset-password&action=",
+    "action=reset-password&next=%2Faccount",
+    "action=reset-password&token=code",
+    "action=reset-password&debug=1",
+    "%61ction=reset-password&action=logout",
+  ]) {
+    const f = fixture();
+    try {
+      f.db.prepare("INSERT INTO auth_tokens(token_hash,user_id,purpose,expires_at) VALUES ('hash-code','alice','reset','2099-01-01')").run();
+      const request = q => new Request("https://example.invalid/api/auth?" + q, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: "code", password: "new-password-123" }),
+      });
+      const rejected = await f.handler.POST(request(query));
+      assert.equal(rejected.status, 400, "reject ambiguous reset action: " + query);
+      assert.equal((await rejected.json()).error, "invalid_reset");
+      assert.equal(f.db.prepare("SELECT password_hash FROM accounts WHERE id='alice'").get().password_hash, "oldhash");
+      assert.equal(f.db.prepare("SELECT session_version FROM accounts WHERE id='alice'").get().session_version, 1);
+      assert.equal(f.db.prepare("SELECT revoked_at FROM auth_sessions WHERE token_hash='session'").get().revoked_at, null);
+      assert.equal(f.db.prepare("SELECT used_at FROM auth_tokens WHERE token_hash='hash-code'").get().used_at, null);
+      assert.equal(f.emails(), 0);
+      // Recovery: the exact existing endpoint remains usable and single-use.
+      assert.equal((await f.handler.POST(request("action=reset-password"))).status, 200);
+      assert.equal((await f.handler.POST(request("action=reset-password"))).status, 400);
+    } finally { f.db.close(); }
+  }
+});
+
+test("R0.2: ambiguous change-password action URL cannot mutate credentials or sessions; canonical URL recovers", async () => {
+  const f = fixture();
+  const original = f.db.prepare("SELECT password_hash,session_version FROM accounts WHERE id='alice'").get();
+  const makeRequest = suffix => new Request("https://example.invalid/api/auth?action=change-password" + suffix, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ currentPassword: "correct", newPassword: "new-password-123" }),
+  });
+  try {
+    for (const suffix of [
+      "&action=logout",
+      "&action=change-password",
+      "&source=untrusted",
+      "&%61ction=login",
+    ]) {
+      const rejected = await f.handler.POST(makeRequest(suffix));
+      assert.equal(rejected.status, 400, "reject ambiguous query: " + suffix);
+      assert.equal((await rejected.json()).error, "invalid_password_change");
+      assert.deepEqual(f.db.prepare("SELECT password_hash,session_version FROM accounts WHERE id='alice'").get(), original);
+      assert.equal(f.db.prepare("SELECT revoked_at FROM auth_sessions WHERE token_hash='session'").get().revoked_at, null);
+    }
+    const valid = await f.handler.POST(makeRequest(""));
+    assert.equal(valid.status, 200);
+    assert.equal(f.db.prepare("SELECT password_hash FROM accounts WHERE id='alice'").get().password_hash, "newhash");
+    assert.ok(f.db.prepare("SELECT revoked_at FROM auth_sessions WHERE token_hash='session'").get().revoked_at);
+  } finally {
+    f.db.close();
+  }
+});
+
+ 
+// R0.2: these actions mint fresh single-use security tokens and dispatch email.
+// URLSearchParams.get('action') selects the first of duplicate keys. An
+// ambiguous or augmented action URL must never create a token or send mail.
+// This exercises the actual auth route and disposable SQLite fixture.
+for (const action of ["resend-verification", "forgot-password"]) {
+  for (const suffix of [
+    "&action=login",
+    "&action=",
+    "&action=" + action,
+    "&%61ction=logout",
+    "&next=%2Faccount",
+  ]) {
+    test("P0 R0.2: " + action + " rejects ambiguous security-mail action " + suffix, async () => {
+      const f = fixture();
+      try {
+        if (action === "forgot-password")
+          f.db.prepare("UPDATE accounts SET email_verified_at=CURRENT_TIMESTAMP WHERE id='alice'").run();
+        const makeRequest = querySuffix => new Request(
+          "https://example.invalid/api/auth?action=" + action + querySuffix,
+          { method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: "alice@example.invalid" }) },
+        );
+        const rejected = await f.handler.POST(makeRequest(suffix));
+        assert.equal(rejected.status, 400, "ambiguous action must fail before D1 token writes");
+        assert.equal((await rejected.json()).error, "invalid_action_query");
+        assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM auth_tokens").get().n, 0);
+        assert.equal(f.emails(), 0, "no outbound email on ambiguous action");
+        assert.equal(rejected.headers.get("set-cookie"), null);
+
+        // Recovery: a canonical request can still issue one token and one
+        // mocked email. No real provider or production database is contacted.
+        const recovered = await f.handler.POST(makeRequest(""));
+        assert.equal(recovered.status, 200);
+        assert.deepEqual(await recovered.json(), { ok: true });
+        assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM auth_tokens").get().n, 1);
+        assert.equal(f.emails(), 1);
+      } finally { f.db.close(); }
+    });
+  }
+}

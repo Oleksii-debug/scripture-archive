@@ -562,12 +562,77 @@ test('library search rejects malformed cursors and surfaces unavailable storage,
       {action:'librarySearch',query:'',cursor:{id:'x',submittedAt:'t',extra:'x'}},
       {action:'librarySearch',query:'',cursor:{id:'x',submittedAt:''}},
       {action:'librarySearch',query:'',cursor:{id:'',submittedAt:'t'}},
+      {action:'librarySearch',query:'',locale:'de',cursor:null},
+      {action:'librarySearch',query:'',locale:'',cursor:null},
+      {action:'librarySearch',query:'',locale:42,cursor:null},
+      {action:'librarySearch',query:'',rightsBasis:'',cursor:null},
+      {action:'librarySearch',query:'',rightsBasis:'OPEN_LICENSE',cursor:null},
+      {action:'librarySearch',query:'',rightsBasis:['open_license'],cursor:null},
     ]) assert.equal((await f.post(body,'')).status,400);
     assert.equal((await f.post({action:'librarySearch',query:'',cursor:null},'','https://other.invalid')).status,403);
     f.setReadFailure(true);
     assert.equal((await f.post({action:'librarySearch',query:'',cursor:null},'')).status,503);
     f.setReadFailure(false);f.setReadThrow(true);
     assert.equal((await f.post({action:'librarySearch',query:'',cursor:null},'')).status,503);
+  }finally{f.db.close();}
+});
+
+test('public library search applies an exact reviewed locale without exposing another language',async()=>{
+  const f=fixture();try {
+    const uk=(await f.post(submission)).data.id;
+    assert.equal((await f.post(approve(uk),'editor')).status,200);
+    const enSubmission={...submission,materialId:'m2',rightsHolder:'Bob Author'};
+    const en=(await f.post(enSubmission,'bob')).data.id;
+    assert.equal((await f.post(approve(en),'editor')).status,200);
+    const all=await f.post({action:'librarySearch',query:'',locale:null,cursor:null},'');
+    assert.deepEqual(new Set(all.data.items.map(item=>item.locale)),new Set(['uk','en']));
+    const ukrainian=await f.post({action:'librarySearch',query:'',locale:'uk',cursor:null},'');
+    assert.deepEqual(ukrainian.data.items.map(item=>item.locale),['uk']);
+    assert.deepEqual(ukrainian.data.items.map(item=>item.id),[uk]);
+    const english=await f.post({action:'librarySearch',query:'',locale:'en',cursor:null},'');
+    assert.deepEqual(english.data.items.map(item=>item.locale),['en']);
+    assert.deepEqual(english.data.items.map(item=>item.id),[en]);
+    const russian=await f.post({action:'librarySearch',query:'',locale:'ru',cursor:null},'');
+    assert.deepEqual(russian.data.items,[]);
+    assert.equal(russian.data.nextCursor,null);
+  }finally{f.db.close();}
+});
+
+test('locale filtering preserves bounded continuation across earlier pages in other languages',async()=>{
+  const f=fixture();try {
+    seedLibrary(f,230);
+    const row=f.db.prepare("SELECT snapshot FROM material_submissions WHERE id='library-0229'").get();
+    const snapshot=JSON.parse(row.snapshot);snapshot.locale='en';
+    f.db.prepare("UPDATE material_submissions SET snapshot=? WHERE id='library-0229'").run(JSON.stringify(snapshot));
+    const first=await f.post({action:'librarySearch',query:'',locale:'en',cursor:null},'');
+    assert.deepEqual(first.data.items,[]);
+    assert.deepEqual(first.data.nextCursor,{id:'library-0199',submittedAt:'2026-01-01'});
+    const second=await f.post({action:'librarySearch',query:'',locale:'en',cursor:first.data.nextCursor},'');
+    assert.deepEqual(second.data.items.map(item=>item.id),['library-0229']);
+    assert.deepEqual(second.data.items.map(item=>item.locale),['en']);
+    assert.equal(second.data.nextCursor,null);
+  }finally{f.db.close();}
+});
+
+test('publication basis filters reviewed rights and keeps bounded continuation past legacy rows',async()=>{
+  const f=fixture();try {
+    seedLibrary(f,230);
+    const setBasis=f.db.prepare('UPDATE material_submissions SET rights_holder=?,rights_basis=?,license_url=? WHERE id=?');
+    setBasis.run('Source Editor','permission',null,'library-0001');
+    setBasis.run('Source Editor','open_license','https://example.org/license','library-0229');
+    const search={action:'librarySearch',query:'',locale:'uk',rightsBasis:'open_license'};
+    const first=await f.post({...search,cursor:null},'');
+    assert.equal(first.status,200);
+    assert.deepEqual(first.data.items,[]);
+    assert.deepEqual(first.data.nextCursor,{id:'library-0199',submittedAt:'2026-01-01'});
+    const next=await f.post({...search,cursor:first.data.nextCursor},'');
+    assert.deepEqual(next.data.items.map(item=>[item.id,item.rights.basis]),[['library-0229','open_license']]);
+    assert.equal(next.data.nextCursor,null);
+    const wrongLocale=await f.post({...search,locale:'en',cursor:first.data.nextCursor},'');
+    assert.deepEqual(wrongLocale.data.items,[]);
+    const all=await f.post({...search,rightsBasis:null,cursor:null},'');
+    assert.ok(all.data.items.some(item=>item.rights===null));
+    assert.ok(all.data.items.some(item=>item.rights?.basis==='permission'));
   }finally{f.db.close();}
 });
 

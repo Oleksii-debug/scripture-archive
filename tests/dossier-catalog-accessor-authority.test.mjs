@@ -49,8 +49,13 @@ test('SA-EXT-05/06: accessor-backed Bible catalogue provenance fails closed with
 });
 
 test('SA-EXT-05/06: own data and null-prototype catalogue still expose legitimate reader links and search', () => {
+  // Preserve the complete reader-admitted catalogue envelope while proving
+  // null-prototype records with own data are accepted without getters.
   const own = Object.assign(Object.create(null), {
+    schemaVersion: canonical.schemaVersion,
+    editions: Object.assign(Object.create(null), canonical.editions),
     books: Object.assign(Object.create(null), canonical.books),
+    editionBooks: Object.assign(Object.create(null), canonical.editionBooks),
   });
   assert.equal(validateDossierGraph(own), true);
   const title = canonical.books.en.find(book => book.code === 'GEN').title;

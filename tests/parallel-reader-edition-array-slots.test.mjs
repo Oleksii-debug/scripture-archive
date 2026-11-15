@@ -41,7 +41,8 @@ test('SA-EXT-01: comparison options never execute own edition-array slot getters
   const html=parallelControls(list,'uk',esc);
   assert.equal(calls(),0);
   assert.doesNotMatch(html,/Verified edition/);
-  assert.match(html,/<select name="edition">/);
+  assert.match(html,/<select name="edition" disabled>/);
+    assert.match(html,/<button class="button" type="submit" disabled>/);
   assert.match(parallelControls([edition],'uk',esc),/Verified edition/);
 });
 

@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { runInNewContext } from 'node:vm';
 import { parallelControls, mountParallelReader } from '../public/parallel-reader.js';
+import { EDITIONS, selectedEdition } from '../public/editions.js';
 
 const esc = value => String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
 const edition={id:'uk-kulish',contentId:'UKRPAN',title:'Куліш',local:true};
@@ -19,7 +21,46 @@ function fixture(overrides={}) {
   mountParallelReader(panel,options);
   return {panel,form,status,result,button,copied,run:()=>form.onsubmit({preventDefault(){}}),cite:number=>result.onclick({target:{closest:()=>({dataset:{parallelCite:String(number)}})}}),move:()=>{isCurrent=false;},reads:()=>reads,checked:()=>checked,locked:()=>locked,failed:()=>failed};
 }
-async function withForm(callback){const original=globalThis.FormData;globalThis.FormData=class{get(){return edition.id;}};try{return await callback();}finally{globalThis.FormData=original;}}
+async function withForm(callback, id=edition.id){const original=globalThis.FormData;globalThis.FormData=class{get(){return id;}};try{return await callback();}finally{globalThis.FormData=original;}}
+
+test('cross-language comparisons load the real edition and cite that edition’s rights', async () => {
+  const source = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+  const bookLoader = source.slice(source.indexOf('async function getBook('), source.indexOf('function localEditionMetadata('));
+  const catalog = JSON.parse(readFileSync(new URL('../public/data/catalog.json', import.meta.url), 'utf8'));
+  const cases = [
+    { interfaceLocale: 'uk', chosen: EDITIONS.en[0], path: 'en', rights: catalog.editions.en },
+    { interfaceLocale: 'en', chosen: EDITIONS.ru[0], path: 'ru', rights: catalog.editions.ru },
+    { interfaceLocale: 'ru', chosen: EDITIONS.uk[0], path: 'uk-ohiienko', rights: catalog.translations['uk-ohiienko'] },
+  ];
+  for (const { interfaceLocale, chosen, path, rights } of cases) {
+    const state = { lang: interfaceLocale, catalog, bookCache: new Map() };
+    const requests = [];
+    const expectedPath = `/data/bible/${path}/GEN.json`;
+    const book = JSON.parse(readFileSync(new URL(`../public${expectedPath}`, import.meta.url), 'utf8'));
+    const getBook = runInNewContext(`${bookLoader}\ngetBook`, {
+      state, EDITIONS, selectedEdition,
+      fetch: async url => {
+        requests.push(url);
+        assert.equal(url, expectedPath);
+        return { ok: true, json: async () => book };
+      },
+    });
+    const controls = parallelControls([chosen], interfaceLocale, esc);
+    assert.ok(controls.includes(`value="${chosen.id}" lang="${chosen.locale}"`));
+    const comparison = fixture({ editions: [chosen], catalog, lang: interfaceLocale, getBook });
+    await withForm(async () => {
+      await comparison.run();
+      assert.ok(comparison.result.innerHTML.includes(`<span lang="${chosen.locale}">${esc(book.chapters[0][0])}</span>`));
+      await comparison.cite(1);
+      assert.equal(comparison.copied.length, 1);
+      assert.ok(comparison.copied[0].includes(book.chapters[0][0]));
+      assert.ok(comparison.copied[0].includes(`${rights.title} · ${rights.license}`));
+      assert.ok(comparison.copied[0].includes(new URL(rights.source).href));
+    }, chosen.id);
+    assert.deepEqual(requests, [expectedPath]);
+    assert.equal(state.lang, interfaceLocale);
+  }
+});
 
 test('comparison is a labelled native form with escaped edition names',()=>{
   const html=parallelControls([{id:'x"',title:'<img>',local:true}],'uk',esc);

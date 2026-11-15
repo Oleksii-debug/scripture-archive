@@ -9,7 +9,8 @@ const escapeText=value=>String(value).replaceAll('&','&amp;').replaceAll('<','&l
 
 function scenario(lang='en') {
   const prior={fetch:globalThis.fetch,document:globalThis.document,location:globalThis.location};
-  const input={value:''},select={value:''},submit={},form={querySelector:selector=>selector==='input'?input:selector==='select'?select:selector==='button'?submit:null};
+  const input={value:''},select={value:''},rights={value:''},submit={};
+  const form={querySelector:selector=>({input,'select[name="locale"]':select,'select[name="rightsBasis"]':rights,button:submit}[selector]??null)};
   const status={textContent:''},more={hidden:true},results={innerHTML:'',isConnected:true,
     insertAdjacentHTML(_where,html){this.innerHTML+=html;},querySelectorAll(){return[];},querySelector(){return null;}};
   const list={isConnected:true,innerHTML:'',querySelector:selector=>({'.library-search':form,
@@ -22,7 +23,7 @@ function scenario(lang='en') {
   results.ownerDocument=document; list.ownerDocument=document;
   globalThis.document=document;
   const context={state,t:key=>key,esc:escapeText,setActiveNav:name=>nav.push(name),shell:html=>shells.push(html)};
-  return {list,results,form,input,select,submit,status,more,document,heading,nav,shells,state,context,restore() {
+  return {list,results,form,input,select,rights,submit,status,more,document,heading,nav,shells,state,context,restore() {
     for(const key of ['fetch','document','location']) {
       if(prior[key]===undefined)delete globalThis[key];
       else globalThis[key]=prior[key];
@@ -208,6 +209,32 @@ test('an older search cannot repaint newer results or announce an obsolete error
     assert.match(f.results.innerHTML,/New result/);
     assert.doesNotMatch(f.results.innerHTML,/Old result/);
     assert.match(f.status.textContent,/Found in this part: 1/);
+  }finally{f.restore();}
+});
+
+test('library combines publication basis with locale and keeps the submitted basis across pages',async()=>{
+  const f=scenario(), calls=[];
+  try {
+    globalThis.fetch=async (_url,options)=>{
+      const body=JSON.parse(options.body);calls.push(body);
+      const nextCursor=body.rightsBasis==='open_license' && !body.cursor ? {id:'page-one',submittedAt:'2026-01-01'} : null;
+      return Response.json({items:[],nextCursor});
+    };
+    await renderWorkspace('library',f.context);
+    assert.match(f.list.innerHTML,/Publication basis<\/span><select name="rightsBasis">/);
+    assert.match(f.list.innerHTML,/<option value="open_license">Open licence<\/option>/);
+    f.select.value='en';f.rights.value='open_license';
+    f.form.onsubmit({preventDefault(){}});await tick();
+    f.rights.value='permission';
+    f.more.onclick();await tick();
+    assert.deepEqual(calls.slice(1).map(({locale,rightsBasis,cursor})=>[locale,rightsBasis,cursor?.id??null]),[
+      ['en','open_license',null],['en','open_license','page-one'],
+    ]);
+    f.form.onsubmit({preventDefault(){}});await tick();
+    assert.equal(calls.at(-1).rightsBasis,'permission');
+    f.rights.value='';
+    f.form.onsubmit({preventDefault(){}});await tick();
+    assert.equal(Object.hasOwn(calls.at(-1),'rightsBasis'),false);
   }finally{f.restore();}
 });
 

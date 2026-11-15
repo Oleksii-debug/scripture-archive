@@ -17,7 +17,7 @@ Date: 2026-10-31. This receipt closes only the verified, bounded **canonical Bib
 - Regression file: `tests/reader-cache.test.mjs`, Git blob `4d3938a8f12131992996b42478facbbc69ae3f11`.
 - Changed-head workflow: https://github.com/Oleksii-debug/scripture-archive/actions/runs/41239949088, head `780347525012357611033fc60d4c312b49ca3cc0`, **COMPLETED SUCCESS**. Executed native Node regression suite, TypeScript contracts, lint, source build, disposable Worker/D1 integration, and canonical Python validators; all steps reported successful.
 - Post-merge GitHub readback: `main` exactly `a564f9eb804fdf5d0ebfa54af9b2f1414232b015`, both production/test blobs match above, compare merge SHA..main identical, PR merged=true.
-- Native full checkout tests were performed by **GitHub Actions**, not in this ChatGPT runtime. Neither the actual public website nor production D1, keyboard browser, Windows/WebView2 or physical NVDA was tested in this run.
+- **GitHub Actions** ran the native full-checkout tests. The public website, production D1, browser keyboard navigation, Windows/WebView2 and physical NVDA remained unverified during this run.
 
 ## Terminal scope
 

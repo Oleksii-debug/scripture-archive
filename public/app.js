@@ -2444,9 +2444,10 @@ async function getSession() {
   return state.user;
 }
 async function getBook(code, explicitEdition = null) {
-  const requestLocale = state.lang;
+  const requestLocale = explicitEdition?.locale ?? state.lang;
   const selected = explicitEdition || selectedEdition(requestLocale);
-  if (explicitEdition && (!explicitEdition.local || !EDITIONS[requestLocale].includes(explicitEdition))) throw Error("Invalid local edition");
+  if (explicitEdition && (!explicitEdition.local || !Object.hasOwn(EDITIONS, requestLocale) ||
+      !EDITIONS[requestLocale].includes(explicitEdition))) throw Error("Invalid local edition");
   const edition = selected.local ? selected : EDITIONS[requestLocale].find(e => e.local);
   const folder = edition.folder || requestLocale;
   const key = `${folder}:${code}`;
@@ -3249,7 +3250,9 @@ async function renderReader(parts) {
   });
   document.querySelector(".reader-aside")?.insertAdjacentHTML("beforeend", '<section class="card" id="reader-bookmarks" aria-live="polite"></section>');
   void mountReaderBookmarks(meta, chapter, chosenEdition, books);
-  const parallelEditions = chosenEdition.local ? EDITIONS[state.lang].filter(item => item.local && item.id !== chosenEdition.id) : [];
+  const parallelEditions = chosenEdition.local
+    ? Object.values(EDITIONS).flat().filter(item => item.local && item.id !== chosenEdition.id)
+    : [];
   if (parallelEditions.length) {
     const aside = document.querySelector('.reader-aside');
     aside.insertAdjacentHTML('beforeend', parallelControls(parallelEditions, state.lang, esc));

@@ -45,8 +45,8 @@ function project(row: EventRow, mine = false) {
       !/^[A-Z]{2}$/.test(row.country_code) || !LOCALES.has(row.locale) || !date(row.starts_on) ||
       !date(row.ends_on) || row.ends_on < row.starts_on || !visible(row.accessibility_details, 3, 500) ||
       (row.programme_url !== null && !programmeUrl) || (row.registration_url !== null && !registrationUrl) ||
-      !timestamp(row.created_at) || !timestamp(row.updated_at) || !new Set(["active", "withdrawn"]).has(row.status) ||
-      (!mine && row.status !== "active")) return null;
+      !timestamp(row.created_at) || !timestamp(row.updated_at) ||
+      (row.status !== "active" && (!mine || (row.status !== "hidden" && row.status !== "withdrawn")))) return null;
   return { id: row.id, churchId: row.church_claim_id, churchName: row.church_name, title: row.title,
     summary: row.summary, city: row.city, countryCode: row.country_code, locale: row.locale,
     startsOn: row.starts_on, endsOn: row.ends_on, accessibilityDetails: row.accessibility_details,
@@ -63,9 +63,9 @@ export async function GET(request: Request) {
         return json({ error: "invalid_search" }, 400);
       const rows = await env.DB.prepare(`SELECT e.id,c.id AS church_claim_id,c.name AS church_name,e.title,e.summary,e.city,e.country_code,
           e.locale,e.starts_on,e.ends_on,e.accessibility_details,e.programme_url,e.registration_url,e.status,e.created_at,e.updated_at
-        FROM church_events e JOIN church_directory_claims c ON c.claimant_user_id=e.organizer_user_id
+        FROM church_events e JOIN church_directory_claims c ON c.id=e.church_claim_id AND c.claimant_user_id=e.organizer_user_id
         JOIN accounts a ON a.id=c.claimant_user_id
-        WHERE e.status='active' AND c.status='approved' AND c.claimant_user_id=e.organizer_user_id
+        WHERE e.status='active' AND c.status='approved'
           AND a.deleted_at IS NULL AND a.email_verified_at IS NOT NULL AND e.ends_on>=date('now')
         ORDER BY e.starts_on,e.title,e.id LIMIT 200`).all<EventRow>();
       if (!rows.success || !Array.isArray(rows.results)) return json({ error: "events_unavailable" }, 503);
@@ -83,7 +83,9 @@ export async function GET(request: Request) {
     if (actor.provider === "agent") return json({ error: "forbidden" }, 403);
     if (view !== "mine") return json({ error: "forbidden" }, 403);
     const rows = await env.DB.prepare(`SELECT e.id,c.id AS church_claim_id,c.name AS church_name,e.title,e.summary,e.city,e.country_code,
-        e.locale,e.starts_on,e.ends_on,e.accessibility_details,e.programme_url,e.registration_url,e.status,e.created_at,e.updated_at
+        e.locale,e.starts_on,e.ends_on,e.accessibility_details,e.programme_url,e.registration_url,
+        CASE WHEN e.status='active' AND (c.status<>'approved' OR c.id<>e.church_claim_id) THEN 'hidden' ELSE e.status END AS status,
+        e.created_at,e.updated_at
       FROM church_events e JOIN church_directory_claims c ON c.claimant_user_id=e.organizer_user_id
       WHERE e.organizer_user_id=? ORDER BY e.starts_on,e.id LIMIT 200`).bind(actor.userId).all<EventRow>();
     if (!rows.success || !Array.isArray(rows.results)) return json({ error: "events_unavailable" }, 503);

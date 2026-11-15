@@ -156,9 +156,13 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.notEqual(correctedChurch.id,churchId);
   assert.equal((await churchPost({action:'review',id:correctedChurch.id,decision:'approve',verificationEvidence:'Disposable corrected authority fixture',note:''},ownerCookie)).response.status,200);
   const ownedEventsAfterReview=await (await fetch(`${base}/api/events?view=mine`,{headers:{Cookie:cookie}})).json();
-  publicEvents=await (await fetch(`${base}/api/events`)).json();assert.equal(publicEvents.items.length,0,`a representative-claim revision does not silently republish an older event: public=${JSON.stringify(publicEvents)} mine=${JSON.stringify(ownedEventsAfterReview)}`);
-  const republishedEvent=await eventPost({...eventFixture,churchId:correctedChurch.id,title:'Republished Integration Conference'});
+  publicEvents=await (await fetch(`${base}/api/events`)).json();
+  assert.equal(publicEvents.items.length,0,'a representative-claim revision does not silently republish an older event');
+  assert.deepEqual(ownedEventsAfterReview.items.map(({id,status})=>({id,status})),[{id:createdEvent.data.id,status:'hidden'}]);
+  const republishedEvent=await eventPost({...eventFixture,id:createdEvent.data.id,churchId:correctedChurch.id,title:'Republished Integration Conference'});
   assert.equal(republishedEvent.response.status,201);
+  assert.equal(republishedEvent.data.id,createdEvent.data.id);
+  assert.deepEqual((await (await fetch(`${base}/api/events`)).json()).items.map(({id,churchId})=>({id,churchId})),[{id:createdEvent.data.id,churchId:correctedChurch.id}]);
   const correctedEvent=await eventPost({...eventFixture,id:republishedEvent.data.id,churchId:correctedChurch.id,title:'Corrected Integration Conference'});
   assert.equal(correctedEvent.response.status,201);assert.equal((await (await fetch(`${base}/api/events`)).json()).items[0].title,'Corrected Integration Conference');
   assert.equal((await eventPost({action:'withdraw',id:republishedEvent.data.id})).response.status,200);

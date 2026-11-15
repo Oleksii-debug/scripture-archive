@@ -52,7 +52,16 @@ test('the representative can correct or withdraw an event and church approval re
   assert.equal((await f.get()).data.items.length,0,'event disappears when the representative claim is no longer approved');
   assert.equal((await f.post({...event,id},'alice')).status,409);
   f.db.prepare("UPDATE church_directory_claims SET status='approved' WHERE id='church2'").run();
-  assert.equal((await f.get()).data.items.length,1);
+  assert.equal((await f.get()).data.items.length,0,'a new approved claim leaves the old event hidden');
+  const [hidden]=(await f.get('mine','alice')).data.items;
+  assert.equal(hidden.id,id);
+  assert.equal(hidden.status,'hidden');
+  assert.equal((await f.post({...event,id,churchId:'church2',publicationConsent:false})).status,400);
+  assert.equal((await f.get()).data.items.length,0);
+  assert.equal((await f.post({...event,id,churchId:'church2'})).data.id,id);
+  const [republished]=(await f.get()).data.items;
+  assert.equal(republished.id,id);
+  assert.equal(republished.churchId,'church2');
   assert.equal((await f.post({action:'withdraw',id},'bob')).status,409);assert.equal((await f.post({action:'withdraw',id})).status,200);assert.equal((await f.get()).data.items.length,0);
 }finally{f.db.close();}});
 
@@ -73,4 +82,32 @@ test('anonymous event UI states its data boundary and rejects malformed public p
     globalThis.fetch=async()=>new Response(JSON.stringify({items:[{id:'e',churchId:'c',churchName:'Fake Church',title:'Fake Event',summary:'Summary',city:'City',countryCode:'UA',locale:'en',startsOn:'2099-01-01',endsOn:'2099-01-02',accessibilityDetails:'Access',programmeUrl:null,registrationUrl:null,status:'active',createdAt:null,updatedAt:null}]}));
     await renderEventDirectory(root,'en',esc,null);assert.equal(publicRoot.innerHTML,'');assert.match(status.textContent,/could not be completed/i);
   }finally{globalThis.fetch=prior;}
+});
+
+test('a hidden event offers explicit republication after approval and can be withdrawn while review is pending',async()=>{
+  const originalFetch=globalThis.fetch;
+  const item={id:'saved-event',churchId:'corrected',churchName:'Grace Community',title:event.title,
+    summary:event.summary,city:event.city,countryCode:event.countryCode,locale:event.locale,
+    startsOn:event.startsOn,endsOn:event.endsOn,accessibilityDetails:event.accessibilityDetails,
+    programmeUrl:event.programmeUrl,registrationUrl:event.registrationUrl,status:'hidden',
+    createdAt:'2026-01-01 00:00:00',updatedAt:'2026-01-01 00:00:00'};
+  const privateRoot={innerHTML:''};
+  const nodes={'.event-search':{querySelector:()=>({value:''})},'.event-public':{innerHTML:''},
+    '.event-private':privateRoot,'.event-status':{textContent:''}};
+  const root={isConnected:true,innerHTML:'',querySelector:selector=>nodes[selector]??null,querySelectorAll:()=>[]};
+  let status='pending';
+  globalThis.fetch=async url=>Response.json({items:url==='/api/churches?view=mine'
+    ? [{id:'corrected',name:'Grace Community',status}]
+    : url==='/api/events?view=mine' ? [item] : []});
+  try {
+    const render=()=>renderEventDirectory(root,'en',String,{id:'alice',emailVerified:true});
+    await render();
+    assert.match(privateRoot.innerHTML,/Hidden after the representative claim changed/);
+    assert.match(privateRoot.innerHTML,/event-withdraw/);
+    assert.doesNotMatch(privateRoot.innerHTML,/event-edit/);
+    status='approved';
+    await render();
+    assert.match(privateRoot.innerHTML,/Review and republish/);
+    assert.match(privateRoot.innerHTML,/event-form/);
+  }finally{globalThis.fetch=originalFetch;}
 });

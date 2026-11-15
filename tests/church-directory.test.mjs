@@ -119,6 +119,23 @@ test('corrections immediately unpublish, rejection is explained, and claimant ca
   }finally{f.db.close();}
 });
 
+test('an approved church leaves public search when its representative is deleted or loses verification',async()=>{
+  const f=fixture();
+  try {
+    assert.equal((await f.post(claim,'alice')).status,201);
+    assert.equal((await f.post({...claim,name:'Hope Community'},'bob')).status,201);
+    for (const {id} of (await f.get('queue','owner')).data.items)
+      assert.equal((await f.post({action:'review',id,decision:'approve',verificationEvidence:'Authority confirmed',note:''},'owner')).status,200);
+    assert.equal((await f.get()).data.items.length,2);
+    f.db.prepare("UPDATE accounts SET deleted_at=CURRENT_TIMESTAMP WHERE id='alice'").run();
+    f.db.prepare("UPDATE accounts SET email_verified_at=NULL WHERE id='bob'").run();
+    assert.deepEqual((await f.get()).data.items,[]);
+    assert.deepEqual((await f.get('public','','grace')).data.items,[]);
+    f.db.prepare("UPDATE accounts SET email_verified_at=CURRENT_TIMESTAMP WHERE id='bob'").run();
+    assert.deepEqual((await f.get()).data.items.map(item=>item.name),['Hope Community']);
+  }finally{f.db.close();}
+});
+
 test('directory reads and authentication fail closed for damaged or unavailable private state',async()=>{
   const f=fixture();try{
     await f.post(claim);

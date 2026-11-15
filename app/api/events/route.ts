@@ -61,22 +61,39 @@ export async function GET(request: Request) {
       const query = url.searchParams.get("q") || "";
       if (query.length > 80 || query.trim() !== query || /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/u.test(query))
         return json({ error: "invalid_search" }, 400);
-      const rows = await env.DB.prepare(`SELECT e.id,c.id AS church_claim_id,c.name AS church_name,e.title,e.summary,e.city,e.country_code,
+      const afterDate = url.searchParams.get("afterDate");
+      const afterTitle = url.searchParams.get("afterTitle");
+      const afterId = url.searchParams.get("afterId");
+      const hasCursor = afterDate !== null || afterTitle !== null || afterId !== null;
+      if (["q", "afterDate", "afterTitle", "afterId"].some(field => url.searchParams.getAll(field).length > 1) ||
+          (hasCursor && (!date(afterDate) || !visible(afterTitle, 3, 160) || !validId(afterId))))
+        return json({ error: "invalid_search" }, 400);
+      const statement = env.DB.prepare(`SELECT e.id,c.id AS church_claim_id,c.name AS church_name,e.title,e.summary,e.city,e.country_code,
           e.locale,e.starts_on,e.ends_on,e.accessibility_details,e.programme_url,e.registration_url,e.status,e.created_at,e.updated_at
         FROM church_events e JOIN church_directory_claims c ON c.id=e.church_claim_id AND c.claimant_user_id=e.organizer_user_id
         JOIN accounts a ON a.id=c.claimant_user_id
         WHERE e.status='active' AND c.status='approved'
           AND a.deleted_at IS NULL AND a.email_verified_at IS NOT NULL AND e.ends_on>=date('now')
-        ORDER BY e.starts_on,e.title,e.id LIMIT 200`).all<EventRow>();
+          ${hasCursor ? "AND (e.starts_on,e.title,e.id) > (?,?,?)" : ""}
+        ORDER BY e.starts_on,e.title,e.id LIMIT 201`);
+      const rows = await (hasCursor ? statement.bind(afterDate, afterTitle, afterId) : statement).all<EventRow>();
       if (!rows.success || !Array.isArray(rows.results)) return json({ error: "events_unavailable" }, 503);
       const normalized = query.normalize("NFKC").toLocaleLowerCase(), items = [];
-      for (const row of rows.results) {
+      let nextCursor: { startsOn: string; title: string; id: string } | null = null;
+      // The cursor advances by the last row examined, even on a page where
+      // none of the bounded scan matches the user's search.
+      for (let i = 0; i < Math.min(rows.results.length, 200); i++) {
+        const row = rows.results[i];
         const item = project(row);
         if (!item) return json({ error: "events_unavailable" }, 503);
         if (!normalized || [item.title, item.churchName, item.city, item.countryCode]
           .some(value => value.normalize("NFKC").toLocaleLowerCase().includes(normalized))) items.push(item);
+        if (items.length === 24 || i === 199) {
+          if (i + 1 < rows.results.length) nextCursor = { startsOn: item.startsOn, title: item.title, id: item.id };
+          break;
+        }
       }
-      return json({ items });
+      return json({ items, nextCursor });
     }
     const actor = await authenticateRequest(request);
     if (!actor) return json({ error: "authentication_required" }, 401);

@@ -1,7 +1,7 @@
 const COPY = {
-  uk: { title:'Порівняти видання', choose:'Друге видання', open:'Показати другу версію глави', none:'Немає доступних локальних видань для порівняння.', loading:'Завантаження…', ready:'Другу версію глави завантажено нижче.', fail:'Не вдалося завантажити другу версію. Спробуйте ще раз.', changed:'Вибране видання змінилося. Натисніть кнопку ще раз, щоб порівняти його.', unavailable:'У цьому виданні такої глави немає.', note:'Нумерація віршів у виданнях може відрізнятися. Тексти наведено окремо.', source:'Джерело', license:'Умови використання', cite:'Цитувати вірш', cited:'Цитату з джерелом скопійовано.', citeFail:'Не вдалося скопіювати цитату.' },
-  ru: { title:'Сравнить издания', choose:'Второе издание', open:'Показать вторую версию главы', none:'Нет доступных локальных изданий для сравнения.', loading:'Загрузка…', ready:'Вторая версия главы загружена ниже.', fail:'Не удалось загрузить вторую версию. Попробуйте ещё раз.', changed:'Выбранное издание изменилось. Нажмите кнопку ещё раз, чтобы сравнить его.', unavailable:'В этом издании такой главы нет.', note:'Нумерация стихов в изданиях может отличаться. Тексты приведены отдельно.', source:'Источник', license:'Условия использования', cite:'Цитировать стих', cited:'Цитата с источником скопирована.', citeFail:'Не удалось скопировать цитату.' },
-  en: { title:'Compare editions', choose:'Second edition', open:'Show the second chapter text', none:'No local editions are available for comparison.', loading:'Loading…', ready:'The second chapter text is available below.', fail:'Could not load the second text. Please try again.', changed:'The selected edition changed. Submit again to compare the current selection.', unavailable:'This chapter is not available in that edition.', note:'Verse numbering may differ between editions. The texts are presented separately.', source:'Source', license:'Terms of use', cite:'Cite verse', cited:'Verse and source copied.', citeFail:'Could not copy the citation.' },
+  uk: { title:'Порівняти видання', choose:'Друге видання', open:'Показати другу версію глави', none:'Немає доступних локальних видань для порівняння.', loading:'Завантаження…', ready:'Другу версію глави завантажено нижче.', fail:'Не вдалося завантажити другу версію. Спробуйте ще раз.', changed:'Вибране видання змінилося. Натисніть кнопку ще раз, щоб порівняти його.', unavailable:'У цьому виданні такої глави немає.', note:'У виданнях можуть відрізнятися номери глав і віршів. Тексти наведено окремо за нумерацією кожного видання.', source:'Джерело', license:'Умови використання', cite:'Цитувати вірш', cited:'Цитату з джерелом скопійовано.', citeFail:'Не вдалося скопіювати цитату.' },
+  ru: { title:'Сравнить издания', choose:'Второе издание', open:'Показать вторую версию главы', none:'Нет доступных локальных изданий для сравнения.', loading:'Загрузка…', ready:'Вторая версия главы загружена ниже.', fail:'Не удалось загрузить вторую версию. Попробуйте ещё раз.', changed:'Выбранное издание изменилось. Нажмите кнопку ещё раз, чтобы сравнить его.', unavailable:'В этом издании такой главы нет.', note:'Нумерация глав и стихов может различаться. Тексты приведены отдельно по нумерации каждого издания.', source:'Источник', license:'Условия использования', cite:'Цитировать стих', cited:'Цитата с источником скопирована.', citeFail:'Не удалось скопировать цитату.' },
+  en: { title:'Compare editions', choose:'Second edition', open:'Show the second chapter text', none:'No local editions are available for comparison.', loading:'Loading…', ready:'The second chapter text is available below.', fail:'Could not load the second text. Please try again.', changed:'The selected edition changed. Submit again to compare the current selection.', unavailable:'This chapter is not available in that edition.', note:'Chapter and verse numbering may differ. Each text uses its own edition’s numbering.', source:'Source', license:'Terms of use', cite:'Cite verse', cited:'Verse and source copied.', citeFail:'Could not copy the citation.' },
 };
 // Provenance URL admission must inspect the *raw* string first: WHATWG URL
 // silently strips tabs/newlines and empty user-info delimiters; it also
@@ -115,12 +115,17 @@ function editionIdCounts(items) {
 }
 function verifiedLocalEdition(edition, id) {
   if (!edition || typeof edition !== 'object' || Array.isArray(edition)) return false;
-  for (const key of ['id','local','folder','contentId']) {
+  for (const key of ['id','local','folder','contentId','locale']) {
     const descriptor=Object.getOwnPropertyDescriptor(edition,key);
     if ((descriptor && !Object.hasOwn(descriptor,'value')) ||
         (!descriptor && key in edition)) return false;
   }
+  if (Object.hasOwn(edition, 'locale') && !validEditionLocale(ownEditionData(edition, 'locale'))) return false;
   return validEditionId(id) && ownEditionData(edition,'id')===id && ownEditionData(edition,'local')===true;
+}
+
+function validEditionLocale(locale) {
+  return typeof locale === 'string' && Object.hasOwn(COPY, locale);
 }
 
 export function parallelControls(editions, lang, esc) {
@@ -131,8 +136,9 @@ export function parallelControls(editions, lang, esc) {
     // Display only editions that the submit handler can actually admit.
     // Non-local and accessor-backed records are not usable second texts.
     const id=ownEditionData(edition,'id'), title=ownEditionData(edition,'title');
+    const locale=ownEditionData(edition,'locale');
     return verifiedLocalEdition(edition,id) && idCounts.get(id)===1 && validEditionOptionTitle(title)
-      ? `<option value="${esc(id)}">${esc(title)}</option>` : '';
+      ? `<option value="${esc(id)}"${locale ? ` lang="${locale}"` : ''}>${esc(title)}</option>` : '';
   }).join('');
   // Imported manifests can contain entries but no admissible local editions.
   // Do not expose a keyboard dead-end: announce the absence of a comparison
@@ -174,14 +180,15 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
     // A manifest can change without firing a native select event while the
     // chapter and assessment checks are pending. Keep the exact source/path
     // identity that was admitted, not just the select's unchanged string ID.
-    const editionSnapshot=edition ? ['folder','contentId','title'].map(key=>ownEditionData(edition,key)) : null;
+    const editionKeys=['folder','contentId','title','locale'];
+    const editionSnapshot=edition ? editionKeys.map(key=>ownEditionData(edition,key)) : null;
     const editionStillCurrent=()=>{
       if (!editionSnapshot) return false;
       try {
         const items=ownEditionItems(editions);
         return items.includes(edition) && editionIdCounts(items).get(id)===1 &&
           verifiedLocalEdition(edition,id) &&
-          ['folder','contentId','title'].every((key,index)=>
+          editionKeys.every((key,index)=>
             ownEditionData(edition,key)===editionSnapshot[index]);
       } catch { return false; }
     };
@@ -305,7 +312,9 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
       };
       const editionMap=ownMap('editions');
       const translationMap=ownMap('translations');
-      const fallback=ownData(editionMap,lang);
+      const editionLocale=ownEditionData(edition,'locale');
+      const rightsLocale=editionLocale ?? lang;
+      const fallback=ownData(editionMap,rightsLocale);
       const declared=Boolean(translationMap && Object.hasOwn(translationMap,id));
       const translation=declared ? ownData(translationMap,id) : null;
       // A declared but mismatched identity must not borrow another edition's
@@ -341,7 +350,7 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
           if (latestEditions!==editionMap || latestTranslations!==translationMap ||
               Boolean(latestTranslations && Object.hasOwn(latestTranslations,id))!==declared)
             return false;
-          const latest=declared ? ownData(latestTranslations,id) : ownData(latestEditions,lang);
+          const latest=declared ? ownData(latestTranslations,id) : ownData(latestEditions,rightsLocale);
           return latest===metadata &&
             ownsVerifiedId(metadata,declared ? id : ownEditionData(edition,'contentId')) &&
             validEditionRightsMetadata(metadata) &&
@@ -350,7 +359,9 @@ export function mountParallelReader(panel, { editions, catalog, lang, book, book
       };
       const source=https(metadata.source);
       const license=metadata.licenseUrl==null?'':https(metadata.licenseUrl);
-      result.innerHTML=`<section aria-labelledby="parallel-title"><h3 id="parallel-title">${esc(metadata.title)} — ${esc(bookTitle)} ${chapter}</h3><p>${copy.note}</p><p>${copy.license}: ${esc(metadata.license || '—')}</p>${metadata.attribution?`<p>${esc(metadata.attribution)}</p>`:''}${source?`<p><a href="${esc(source)}" target="_blank" rel="noreferrer">${copy.source}</a></p>`:''}${license?`<p><a href="${esc(license)}" target="_blank" rel="noreferrer">${copy.license}</a></p>`:''}<ol>${verifiedVerses.map((verse,index)=>`<li><span>${esc(verse)}</span> <button type="button" class="parallel-cite" data-parallel-cite="${index+1}" aria-label="${esc(copy.cite)}: ${esc(bookTitle)} ${chapter}:${index+1}">${esc(copy.cite)}</button></li>`).join('')}</ol></section>`;
+      const textLanguage=editionLocale ? ` lang="${editionLocale}"` : '';
+      const editionTitle=editionLocale ? `<span${textLanguage}>${esc(metadata.title)}</span>` : esc(metadata.title);
+      result.innerHTML=`<section aria-labelledby="parallel-title"><h3 id="parallel-title">${editionTitle} — ${esc(bookTitle)} ${chapter}</h3><p>${copy.note}</p><p>${copy.license}: ${esc(metadata.license || '—')}</p>${metadata.attribution?`<p>${esc(metadata.attribution)}</p>`:''}${source?`<p><a href="${esc(source)}" target="_blank" rel="noreferrer">${copy.source}</a></p>`:''}${license?`<p><a href="${esc(license)}" target="_blank" rel="noreferrer">${copy.license}</a></p>`:''}<ol>${verifiedVerses.map((verse,index)=>`<li><span${textLanguage}>${esc(verse)}</span> <button type="button" class="parallel-cite" data-parallel-cite="${index+1}" aria-label="${esc(copy.cite)}: ${esc(bookTitle)} ${chapter}:${index+1}">${esc(copy.cite)}</button></li>`).join('')}</ol></section>`;
       citation={ editionId:id, editionStillCurrent, rightsStillCurrent, title:metadata.title, license:metadata.license, attribution:typeof metadata.attribution==='string'?metadata.attribution:'', source, licenseUrl:license, verses:verifiedVerses.slice() };
       status.textContent=copy.ready;
     } catch {

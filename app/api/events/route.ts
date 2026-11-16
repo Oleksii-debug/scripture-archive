@@ -1,6 +1,8 @@
 import { env } from "cloudflare:workers";
 import { authenticateRequest, sameOrigin } from "../../../lib/auth";
 
+import { validateProgramme } from "../../../public/event-programme.js";
+
 export const dynamic = "force-dynamic";
 const json = (data: unknown, status = 200) => Response.json(data, {
   status, headers: { "Cache-Control": "private, no-store" },
@@ -34,10 +36,17 @@ type EventRow = {
   id: string; church_claim_id: string; church_name: string; title: string; summary: string;
   city: string; country_code: string; locale: string; starts_on: string; ends_on: string;
   accessibility_details: string; programme_url: string | null; registration_url: string | null;
+  programme_json: string; programme_timezone: string;
   status: string; created_at: string; updated_at: string;
 };
 
 function project(row: EventRow, mine = false) {
+  let programme;
+  try {
+    if (typeof row.programme_json !== "string" || row.programme_json.length > 24000) return null;
+    programme = validateProgramme(JSON.parse(row.programme_json), row.programme_timezone, row.starts_on, row.ends_on);
+  } catch { return null; }
+  if (!programme) return null;
   const programmeUrl = row.programme_url === null ? null : httpsUrl(row.programme_url);
   const registrationUrl = row.registration_url === null ? null : httpsUrl(row.registration_url);
   if (!validId(row.id) || !validId(row.church_claim_id) || !visible(row.church_name, 3, 160) ||
@@ -50,7 +59,7 @@ function project(row: EventRow, mine = false) {
   return { id: row.id, churchId: row.church_claim_id, churchName: row.church_name, title: row.title,
     summary: row.summary, city: row.city, countryCode: row.country_code, locale: row.locale,
     startsOn: row.starts_on, endsOn: row.ends_on, accessibilityDetails: row.accessibility_details,
-    programmeUrl, registrationUrl, status: row.status, createdAt: row.created_at, updatedAt: row.updated_at };
+    programme: programme.sessions, timeZone: programme.timeZone, programmeUrl, registrationUrl, status: row.status, createdAt: row.created_at, updatedAt: row.updated_at };
 }
 
 export async function GET(request: Request) {
@@ -69,7 +78,7 @@ export async function GET(request: Request) {
           (hasCursor && (!date(afterDate) || !visible(afterTitle, 3, 160) || !validId(afterId))))
         return json({ error: "invalid_search" }, 400);
       const statement = env.DB.prepare(`SELECT e.id,c.id AS church_claim_id,c.name AS church_name,e.title,e.summary,e.city,e.country_code,
-          e.locale,e.starts_on,e.ends_on,e.accessibility_details,e.programme_url,e.registration_url,e.status,e.created_at,e.updated_at
+          e.locale,e.starts_on,e.ends_on,e.accessibility_details,e.programme_url,e.registration_url,e.programme_json,e.programme_timezone,e.status,e.created_at,e.updated_at
         FROM church_events e JOIN church_directory_claims c ON c.id=e.church_claim_id AND c.claimant_user_id=e.organizer_user_id
         JOIN accounts a ON a.id=c.claimant_user_id
         WHERE e.status='active' AND c.status='approved'
@@ -100,7 +109,7 @@ export async function GET(request: Request) {
     if (actor.provider === "agent") return json({ error: "forbidden" }, 403);
     if (view !== "mine") return json({ error: "forbidden" }, 403);
     const rows = await env.DB.prepare(`SELECT e.id,c.id AS church_claim_id,c.name AS church_name,e.title,e.summary,e.city,e.country_code,
-        e.locale,e.starts_on,e.ends_on,e.accessibility_details,e.programme_url,e.registration_url,
+        e.locale,e.starts_on,e.ends_on,e.accessibility_details,e.programme_url,e.registration_url,e.programme_json,e.programme_timezone,
         CASE WHEN e.status='active' AND (c.status<>'approved' OR c.id<>e.church_claim_id) THEN 'hidden' ELSE e.status END AS status,
         e.created_at,e.updated_at
       FROM church_events e JOIN church_directory_claims c ON c.claimant_user_id=e.organizer_user_id
@@ -132,6 +141,11 @@ export async function POST(request: Request) {
       ? null : httpsUrl(body.programmeUrl);
     const registrationUrl = body.registrationUrl === "" || body.registrationUrl === null || body.registrationUrl === undefined
       ? null : httpsUrl(body.registrationUrl);
+    const hasProgramme = Object.hasOwn(body, "programme") || Object.hasOwn(body, "timeZone");
+    const programme = validateProgramme(hasProgramme ? body.programme : [], hasProgramme ? body.timeZone : "", body.startsOn, body.endsOn);
+    if (!programme) return json({ error: "invalid_programme" }, 400);
+    const programmeJSON = JSON.stringify(programme.sessions);
+    if (programmeJSON.length > 24000) return json({ error: "invalid_programme" }, 400);
     const id = body.id === undefined || body.id === null || body.id === "" ? crypto.randomUUID() : body.id;
     if (!validId(id) || !validId(body.churchId) || !visible(body.title, 3, 160) ||
         !visible(body.summary, 3, 500) || !visible(body.city, 2, 120) ||
@@ -146,19 +160,20 @@ export async function POST(request: Request) {
       const existingId = body.id === undefined || body.id === null || body.id === "" ? "" : id;
       const result = await env.DB.prepare(`INSERT INTO church_events
         (id,church_claim_id,organizer_user_id,title,summary,city,country_code,locale,starts_on,ends_on,
-          accessibility_details,programme_url,registration_url,organizer_authority_attested,publication_consent,status)
-        SELECT ?,c.id,c.claimant_user_id,?,?,?,?,?,?,?,?,?,?,1,1,'active' FROM church_directory_claims c
+          accessibility_details,programme_url,registration_url,programme_json,programme_timezone,organizer_authority_attested,publication_consent,status)
+        SELECT ?,c.id,c.claimant_user_id,?,?,?,?,?,?,?,?,?,?,?,?,1,1,'active' FROM church_directory_claims c
         JOIN accounts a ON a.id=c.claimant_user_id
         WHERE c.id=? AND c.claimant_user_id=? AND c.status='approved' AND a.deleted_at IS NULL AND a.email_verified_at IS NOT NULL
           AND (?='' OR EXISTS(SELECT 1 FROM church_events old WHERE old.id=? AND old.organizer_user_id=?))
         ON CONFLICT(id) DO UPDATE SET church_claim_id=excluded.church_claim_id,title=excluded.title,summary=excluded.summary,
           city=excluded.city,country_code=excluded.country_code,locale=excluded.locale,starts_on=excluded.starts_on,
           ends_on=excluded.ends_on,accessibility_details=excluded.accessibility_details,programme_url=excluded.programme_url,
-          registration_url=excluded.registration_url,organizer_authority_attested=1,publication_consent=1,status='active',
-          updated_at=CURRENT_TIMESTAMP WHERE church_events.organizer_user_id=excluded.organizer_user_id`)
+          registration_url=excluded.registration_url,programme_json=excluded.programme_json,programme_timezone=excluded.programme_timezone,organizer_authority_attested=1,publication_consent=1,status='active',
+          updated_at=CURRENT_TIMESTAMP WHERE church_events.organizer_user_id=excluded.organizer_user_id
+          AND (?=1 OR church_events.programme_json='[]')`)
         .bind(id, body.title, body.summary, body.city, body.countryCode, body.locale, body.startsOn, body.endsOn,
-          body.accessibilityDetails, programmeUrl, registrationUrl, body.churchId, actor.userId,
-          existingId, existingId, actor.userId).run();
+          body.accessibilityDetails, programmeUrl, registrationUrl, programmeJSON, programme.timeZone, body.churchId, actor.userId,
+          existingId, existingId, actor.userId, hasProgramme ? 1 : 0).run();
       const changes = result.meta?.changes;
       if (!result.success || !Number.isSafeInteger(changes) || changes < 0 || changes > 1)
         return json({ error: "event_failed" }, 503);

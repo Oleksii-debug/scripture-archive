@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import ts from 'typescript';
 import vm from 'node:vm';
+import { validateProgramme } from '../public/event-programme.js';
 import { renderEventDirectory } from '../public/event-directory.js';
 
 function fixture(){
@@ -12,6 +13,7 @@ function fixture(){
   db.exec("INSERT INTO accounts VALUES ('alice','alice@example.invalid',CURRENT_TIMESTAMP,NULL),('bob','bob@example.invalid',CURRENT_TIMESTAMP,NULL),('unverified','unverified@example.invalid',NULL,NULL),('owner','dordiaioleksii1@gmail.com',CURRENT_TIMESTAMP,NULL)");
   db.exec(readFileSync(new URL('../drizzle/0017_verified_church_claims.sql',import.meta.url),'utf8'));
   db.exec(readFileSync(new URL('../drizzle/0018_verified_church_events.sql',import.meta.url),'utf8'));
+  db.exec(readFileSync(new URL('../drizzle/0019_event_programmes.sql',import.meta.url),'utf8'));
   db.prepare(`INSERT INTO church_directory_claims
     (id,claimant_user_id,name,city,country_code,locale,tradition,website_url,representation_attested,website_consent,status,reviewed_at,reviewed_by,verification_evidence)
     VALUES ('church','alice','Grace Community','Kyiv','UA','uk','protestant',NULL,1,1,'approved',CURRENT_TIMESTAMP,'owner','Authority confirmed')`).run();
@@ -20,6 +22,7 @@ function fixture(){
   const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022},reportDiagnostics:true});
   assert.equal(compiled.diagnostics?.length??0,0);const exports={};
   vm.runInNewContext(compiled.outputText,{exports,Request,Response,URL,crypto,Set,Date,Number,require(id){
+    if(id.endsWith('/event-programme.js'))return {validateProgramme};
     if(id==='cloudflare:workers')return {env:{DB:D1}};
     if(id.endsWith('/auth'))return {sameOrigin:r=>r.headers.get('origin')==='https://local.invalid',authenticateRequest:async r=>{const userId=r.headers.get('x-user');if(!userId)return null;return {userId,email:`${userId}@example.invalid`,emailVerified:userId!=='unverified',provider:userId==='agent'?'agent':'password'};}};
     throw Error('unexpected import '+id);
@@ -165,4 +168,52 @@ test('the event directory continues a submitted search after an empty page and r
     assert.equal(more.hidden,true);
     assert.equal(doc.activeElement,heading);
   }finally{globalThis.fetch=originalFetch;}
+});
+
+
+test('programme sessions persist atomically, sort chronologically and remain under event ownership and visibility',async()=>{
+  const f=fixture();
+  const late={date:'2099-05-11',startsAt:'14:00',endsAt:'15:00',title:'Closing discussion',details:'Captions and text notes.'};
+  const early={date:'2099-05-10',startsAt:'09:00',endsAt:'10:30',title:'Opening session',details:''};
+  try {
+    const created=await f.post({...event,programme:[late,early],timeZone:'Europe/Kyiv'});
+    assert.equal(created.status,201);const id=created.data.id;
+    const published=(await f.get()).data.items[0];
+    assert.deepEqual(published.programme,[early,late]);assert.equal(published.timeZone,'Europe/Kyiv');
+    assert.deepEqual((await f.get('mine','alice')).data.items[0].programme,[early,late]);
+    assert.equal((await f.post({...event,id,programme:[],timeZone:''},'bob')).status,409);
+    assert.equal((await f.post({...event,id})).status,409,'an older client cannot erase a saved programme by omitting it');
+    for(const fields of [
+      {programme:[early],timeZone:'Invalid/Zone'},
+      {programme:[{...early,date:'2099-05-09'}],timeZone:'UTC'},
+      {programme:[{...early,date:'2099-05-12'}],timeZone:'UTC'},
+      {programme:[{...early,date:'2099-02-31'}],timeZone:'UTC'},
+      {programme:[{...early,startsAt:'24:00'}],timeZone:'UTC'},
+      {programme:[{...early,endsAt:'09:00'}],timeZone:'UTC'},
+      {programme:[{...early,details:'Hidden\u202e'}],timeZone:'UTC'},
+      {programme:[{...early,privateEmail:'private@example.invalid'}],timeZone:'UTC'},
+      {programme:Array.from({length:31},()=>early),timeZone:'UTC'},
+      {programme:[early]}, {programme:[],timeZone:'UTC'},
+    ]) {
+      assert.equal((await f.post({...event,id,...fields})).status,400);
+      assert.deepEqual((await f.get()).data.items[0].programme,[early,late],'invalid update is non-destructive');
+    }
+    f.db.prepare("UPDATE church_directory_claims SET status='pending' WHERE id='church'").run();
+    assert.deepEqual((await f.get()).data.items,[]);
+    assert.deepEqual((await f.get('mine','alice')).data.items[0].programme,[early,late]);
+    f.db.prepare("UPDATE church_directory_claims SET status='approved' WHERE id='church'").run();
+    assert.equal((await f.post({...event,id,programme:[],timeZone:''})).status,201);
+    assert.deepEqual((await f.get()).data.items[0].programme,[]);
+    assert.equal((await f.post({action:'withdraw',id})).status,200);
+    assert.deepEqual((await f.get()).data.items,[]);
+  }finally{f.db.close();}
+});
+
+test('a damaged stored event programme fails closed and never becomes rendered content',async()=>{
+  const f=fixture();try{
+    const created=await f.post(event);
+    f.db.prepare("UPDATE church_events SET programme_json='[{}]' WHERE id=?").run(created.data.id);
+    assert.equal((await f.get()).status,503);assert.equal((await f.get('mine','alice')).status,503);
+    assert.throws(()=>f.db.prepare("UPDATE church_events SET programme_json='not json'").run());
+  }finally{f.db.close();}
 });

@@ -44,6 +44,8 @@ test('only current verified organizer with a private owned group can connect a t
     assert.equal((await f.post({...connect,groupId:'foreign'})).status,409);
     assert.equal((await f.post(connect)).status,200);
     const own=await f.get(manage);assert.match(own.cache,/no-store/);assert.equal(own.data.team.id,'team');assert.ok(own.data.revision);
+    for(const action of [['clear'],['set'],null,{},true])assert.equal((await f.post({...connect,action,expectedRevision:own.data.revision})).status,400);
+    assert.equal((await f.get(manage)).data.team.id,'team','malformed actions cannot disconnect the saved team');
     assert.equal((await f.get({},'')).status,401);assert.equal((await f.get(manage,'other')).status,404);
     assert.deepEqual((await f.get({eventId:'event'},'other')).data,{team:null});
     const member=(await f.get({eventId:'event'},'member')).data;

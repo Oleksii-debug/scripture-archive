@@ -62,7 +62,7 @@ export async function POST(request: Request) {
   if(!env.DB)return json({error:"database_unavailable"},503);
   if(!sameOrigin(request))return json({error:"cross_origin_request"},403);
   const body=await request.json().catch(()=>null) as Record<string,unknown>|null;
-  if(!body||!validId(body.eventId)||!['set','clear'].includes(String(body.action))||
+  if(!body||!validId(body.eventId)||typeof body.action!=='string'||!['set','clear'].includes(body.action)||
       (body.expectedRevision!==null&&!validId(body.expectedRevision))||
       (body.action==='set'&&(!validId(body.groupId)||body.confirm!==true)))return json({error:"invalid_team"},400);
   try {

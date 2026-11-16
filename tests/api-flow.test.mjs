@@ -152,9 +152,11 @@ integration("account, progress, attempts, groups, marathon limit and password re
     const response=await fetch(`${base}/api/events`,{method:'POST',headers:{Origin:base,Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify(body)});
     return {response,data:await response.json()};
   };
-  const eventFixture={action:'submit',churchId, title:'Disposable Integration Conference',summary:'A local route and migration fixture.',city:'Test City',countryCode:'UA',locale:'en',startsOn:'2099-05-10',endsOn:'2099-05-11',accessibilityDetails:'Step-free venue and captions.',programmeUrl:'',registrationUrl:'',organizerAuthorityAttested:true,publicationConsent:true};
+  const eventFixture={action:'submit',churchId, title:'Disposable Integration Conference',summary:'A local route and migration fixture.',city:'Test City',countryCode:'UA',locale:'en',startsOn:'2099-05-10',endsOn:'2099-05-11',accessibilityDetails:'Step-free venue and captions.',programmeUrl:'',registrationUrl:'',programme:[{date:'2099-05-10',startsAt:'09:00',endsAt:'10:00',title:'Opening study',details:'Accessible text notes.'}],timeZone:'Europe/Kyiv',organizerAuthorityAttested:true,publicationConsent:true};
   const createdEvent=await eventPost(eventFixture);assert.equal(createdEvent.response.status,201);
   let publicEvents=await (await fetch(`${base}/api/events`)).json();assert.equal(publicEvents.items.length,1);
+  assert.deepEqual(publicEvents.items[0].programme,eventFixture.programme);assert.equal(publicEvents.items[0].timeZone,'Europe/Kyiv');
+  assert.equal((await eventPost({...eventFixture,id:createdEvent.data.id,programme:[{...eventFixture.programme[0],endsAt:'08:00'}]})).response.status,400);
   assert.equal(publicEvents.items[0].title,eventFixture.title);assert.equal('organizer_user_id' in publicEvents.items[0],false);
   assert.equal((await churchPost({...churchClaim,city:'Corrected Test City'})).response.status,201);
   assert.equal((await (await fetch(`${base}/api/churches`)).json()).items.length,0,'a correction must be reviewed again');

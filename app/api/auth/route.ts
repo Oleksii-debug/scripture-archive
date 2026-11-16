@@ -407,6 +407,8 @@ export async function POST(request: Request) {
       env.DB.prepare("UPDATE accounts SET email=?,first_name='',last_name='',deleted_at=CURRENT_TIMESTAMP,session_version=session_version+1,password_hash='',password_salt='' WHERE id=? AND deleted_at IS NULL AND session_version=? AND password_hash=? AND password_salt=? AND password_iterations=?")
         .bind(`deleted-${identity.userId}@invalid.local`, identity.userId, account.session_version,
           account.password_hash, account.password_salt, account.password_iterations),
+      env.DB.prepare(`DELETE FROM event_registrations WHERE (user_id=? OR event_id IN
+        (SELECT id FROM church_events WHERE organizer_user_id=?)) AND ${deletionGuard}`).bind(identity.userId, identity.userId),
       env.DB.prepare(`DELETE FROM progress WHERE user_id=? AND ${deletionGuard}`).bind(identity.userId),
       env.DB.prepare(`DELETE FROM reader_bookmarks WHERE user_id=? AND ${deletionGuard}`).bind(identity.userId),
       env.DB.prepare(`DELETE FROM mission_attempt_answers WHERE attempt_id IN (SELECT id FROM mission_attempts WHERE actor_id=?) AND ${deletionGuard}`).bind(identity.userId),
@@ -428,9 +430,9 @@ export async function POST(request: Request) {
       env.DB.prepare(`UPDATE usage_events SET user_id=NULL WHERE user_id=? AND ${deletionGuard}`).bind(identity.userId),
       env.DB.prepare(`DELETE FROM auth_sessions WHERE user_id=? AND ${deletionGuard}`).bind(identity.userId),
     ]);
-    // All 21 statements, including shared-meeting/editor redactions and final
+    // All 22 statements, including shared-meeting/editor redactions and final
     // account update, must be acknowledged. Empty unrelated DELETEs may change 0 rows.
-    if (!batchAcknowledged(receipts, 21) || receipts[0].meta.changes !== 1)
+    if (!batchAcknowledged(receipts, 22) || receipts[0].meta.changes !== 1)
       throw Error("deletion_batch_unconfirmed");
     } catch {
       // D1 batch rejects atomically; do not pretend the account was erased.

@@ -14,10 +14,12 @@ function fixture(){
   db.exec(readFileSync(new URL('../drizzle/0017_verified_church_claims.sql',import.meta.url),'utf8'));
   db.exec(readFileSync(new URL('../drizzle/0018_verified_church_events.sql',import.meta.url),'utf8'));
   db.exec(readFileSync(new URL('../drizzle/0019_event_programmes.sql',import.meta.url),'utf8'));
+  db.exec(readFileSync(new URL('../drizzle/0020_event_registrations.sql',import.meta.url),'utf8'));
   db.prepare(`INSERT INTO church_directory_claims
     (id,claimant_user_id,name,city,country_code,locale,tradition,website_url,representation_attested,website_consent,status,reviewed_at,reviewed_by,verification_evidence)
     VALUES ('church','alice','Grace Community','Kyiv','UA','uk','protestant',NULL,1,1,'approved',CURRENT_TIMESTAMP,'owner','Authority confirmed')`).run();
   const D1={prepare(sql){return {bind(...args){return {all:async()=>({success:true,results:db.prepare(sql).all(...args)}),run:async()=>{const result=db.prepare(sql).run(...args);return {success:true,meta:{changes:Number(result.changes)}};}};},all:async()=>({success:true,results:db.prepare(sql).all()})};}};
+  D1.batch=async statements=>{db.exec('BEGIN');try{const receipts=[];for(const statement of statements)receipts.push(await statement.run());db.exec('COMMIT');return receipts;}catch(error){db.exec('ROLLBACK');throw error;}};
   const source=readFileSync(new URL('../app/api/events/route.ts',import.meta.url),'utf8');
   const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022},reportDiagnostics:true});
   assert.equal(compiled.diagnostics?.length??0,0);const exports={};
@@ -106,7 +108,7 @@ test('anonymous event UI states its data boundary and rejects malformed public p
   const esc=value=>String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
   try{
     globalThis.fetch=async()=>new Response(JSON.stringify({items:[]}));await renderEventDirectory(root,'en',esc,null);
-    assert.match(root.innerHTML,/does not collect registrations, attendee lists, or payments/);assert.match(root.innerHTML,/Sign in with a verified account/);assert.match(publicRoot.innerHTML,/No upcoming verified events/);
+    assert.match(root.innerHTML,/Registration is voluntary/);assert.match(root.innerHTML,/Sign in with a verified account/);assert.match(publicRoot.innerHTML,/No upcoming verified events/);
     globalThis.fetch=async()=>new Response(JSON.stringify({items:[{id:'e',churchId:'c',churchName:'Fake Church',title:'Fake Event',summary:'Summary',city:'City',countryCode:'UA',locale:'en',startsOn:'2099-01-01',endsOn:'2099-01-02',accessibilityDetails:'Access',programmeUrl:null,registrationUrl:null,status:'active',createdAt:null,updatedAt:null}]}));
     await renderEventDirectory(root,'en',esc,null);assert.equal(publicRoot.innerHTML,'');assert.match(status.textContent,/could not be completed/i);
   }finally{globalThis.fetch=prior;}

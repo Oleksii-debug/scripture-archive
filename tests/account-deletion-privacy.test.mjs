@@ -8,7 +8,7 @@ import vm from 'node:vm';
 test('account deletion clears personal records while preserving other users', async () => {
   const db = new DatabaseSync(':memory:');
   db.exec('PRAGMA foreign_keys=ON');
-  for (const name of readdirSync(new URL('../drizzle/', import.meta.url)).filter(n => /^00(?:0[0-9]|1[0-4])_.*\.sql$/.test(n)).sort())
+  for (const name of readdirSync(new URL('../drizzle/', import.meta.url)).filter(n => /^00(?:[01][0-9]|20)_.*\.sql$/.test(n)).sort())
     db.exec(readFileSync(new URL('../drizzle/' + name, import.meta.url), 'utf8'));
   for (const id of ['alice', 'bob']) {
     db.prepare("INSERT INTO accounts (id,email,password_hash,password_salt,password_iterations,first_name,last_name) VALUES (?,?,?,?,?,?,?)").run(id, `${id}@example.invalid`, 'hash', 'salt', 1, 'First', 'Last');
@@ -49,6 +49,13 @@ test('account deletion clears personal records while preserving other users', as
   db.prepare("INSERT INTO group_sessions(id,group_id,created_by,book_id,chapter,meeting_date,reflection,answers_correct,answers_total) VALUES ('alice-meeting','bob-group','alice','GEN',12,'2026-10-27','Alice private reflection',2,3)").run();
   db.prepare("INSERT INTO group_sessions(id,group_id,created_by,book_id,chapter,meeting_date,reflection,answers_correct,answers_total) VALUES ('bob-meeting','bob-group','bob','GEN',13,'2026-10-28','Bob authored text',3,3)").run();
   db.prepare("INSERT INTO group_sessions(id,group_id,created_by,book_id,chapter,meeting_date,reflection) VALUES ('owned-meeting','alice-group','alice','GEN',14,'2026-10-28','Owner text')").run();
+  // Registration names are private both as a participant and as an organizer.
+  for (const owner of ['alice','bob']) {
+    db.prepare(`INSERT INTO church_events (id,church_claim_id,organizer_user_id,title,summary,city,country_code,locale,starts_on,ends_on,accessibility_details,organizer_authority_attested,publication_consent,status)
+      VALUES (?, 'claim',?,'Study event','Study description','City','UA','en','2099-01-01','2099-01-02','Accessible',1,1,'active')`).run('event-'+owner,owner);
+  }
+  for(const [event,user] of [['alice','bob'],['bob','alice'],['bob','bob']])
+    db.prepare("INSERT INTO event_registrations (id,event_id,user_id,attendee_name,consent_version) VALUES (?,?,?,?,1)").run(event+'-'+user,'event-'+event,user,'Private alias '+user);
   let failAfter = -1, unconfirmedBatch = false;
   const D1 = {
     prepare(sql) { return { bind(...args) { return {
@@ -95,7 +102,7 @@ test('account deletion clears personal records while preserving other users', as
   assert.equal(db.prepare("SELECT deleted_at FROM accounts WHERE id='alice'").get().deleted_at, null);
   // Fail after BOTH shared-session and reviewed-by anonymization but before
   // group membership deletion, to prove atomic rollback of both redactions.
-  failAfter = 13;
+  failAfter = 15;
   const refusedAfterRedaction = await exports.POST(request('correct'));
   assert.equal(refusedAfterRedaction.status, 503);
   assert.equal((await refusedAfterRedaction.json()).error, 'deletion_failed');
@@ -103,6 +110,7 @@ test('account deletion clears personal records while preserving other users', as
   assert.deepEqual({...db.prepare("SELECT reviewed_by,status FROM material_submissions WHERE id='reviewed-by-alice'").get()},
     {reviewed_by:'alice',status:'approved'},'failed deletion rolls back shared editorial anonymization');
   assert.equal(db.prepare("SELECT count(*) AS n FROM home_group_members WHERE group_id='bob-group'").get().n, 2);
+  assert.equal(db.prepare('SELECT count(*) n FROM event_registrations').get().n,3,'failed account erasure restores registration names');
   failAfter = -1;
   unconfirmedBatch = true;
   const unconfirmed = await exports.POST(request('correct'));
@@ -112,6 +120,7 @@ test('account deletion clears personal records while preserving other users', as
   assert.equal(db.prepare("SELECT count(*) n FROM progress WHERE user_id='alice'").get().n, 1);
   unconfirmedBatch = false;
   assert.equal((await exports.POST(request('correct'))).status, 200);
+  assert.deepEqual(db.prepare('SELECT id FROM event_registrations ORDER BY id').all().map(row=>row.id),['bob-bob']);
   const alice = db.prepare("SELECT email,first_name,last_name,password_hash,password_salt,deleted_at FROM accounts WHERE id='alice'").get();
   assert.equal(alice.first_name, ''); assert.equal(alice.last_name, ''); assert.equal(alice.password_hash, ''); assert.equal(alice.password_salt, ''); assert.ok(alice.deleted_at); assert.equal(alice.email, 'deleted-alice@invalid.local');
   for (const [table,column] of [['progress','user_id'],['reader_bookmarks','user_id'],['auth_tokens','user_id'],['auth_sessions','user_id'],['editorial_roles','user_id'],['mission_attempts','actor_id'],['chapter_read_receipts','actor_id'],['support_requests','user_id']]) {

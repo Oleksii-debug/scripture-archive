@@ -152,15 +152,37 @@ integration("account, progress, attempts, groups, marathon limit and password re
     const response=await fetch(`${base}/api/events`,{method:'POST',headers:{Origin:base,Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify(body)});
     return {response,data:await response.json()};
   };
-  const eventFixture={action:'submit',churchId, title:'Disposable Integration Conference',summary:'A local route and migration fixture.',city:'Test City',countryCode:'UA',locale:'en',startsOn:'2099-05-10',endsOn:'2099-05-11',accessibilityDetails:'Step-free venue and captions.',programmeUrl:'',registrationUrl:'',programme:[{date:'2099-05-10',startsAt:'09:00',endsAt:'10:00',title:'Opening study',details:'Accessible text notes.'}],timeZone:'Europe/Kyiv',organizerAuthorityAttested:true,publicationConsent:true};
+  const eventFixture={action:'submit',registrationEnabled:true,churchId, title:'Disposable Integration Conference',summary:'A local route and migration fixture.',city:'Test City',countryCode:'UA',locale:'en',startsOn:'2099-05-10',endsOn:'2099-05-11',accessibilityDetails:'Step-free venue and captions.',programmeUrl:'',registrationUrl:'',programme:[{date:'2099-05-10',startsAt:'09:00',endsAt:'10:00',title:'Opening study',details:'Accessible text notes.'}],timeZone:'Europe/Kyiv',organizerAuthorityAttested:true,publicationConsent:true};
   const createdEvent=await eventPost(eventFixture);assert.equal(createdEvent.response.status,201);
   let publicEvents=await (await fetch(`${base}/api/events`)).json();assert.equal(publicEvents.items.length,1);
   assert.deepEqual(publicEvents.items[0].programme,eventFixture.programme);assert.equal(publicEvents.items[0].timeZone,'Europe/Kyiv');
+  assert.equal(publicEvents.items[0].registrationEnabled,true);
+  const attendance=async(body,principal=ownerCookie)=>{
+    const response=await fetch(`${base}/api/event-registrations`,{method:'POST',headers:{Origin:base,Cookie:principal,'Content-Type':'application/json'},body:JSON.stringify(body)});
+    return {status:response.status,data:await response.json()};
+  };
+  const signup={action:'register',eventId:createdEvent.data.id,attendeeName:'Disposable Reader Alias',sharingConsent:true};
+  assert.equal((await attendance({...signup,sharingConsent:false})).status,400);
+  assert.equal((await attendance(signup)).status,201);
+  assert.equal((await attendance(signup)).status,201);
+  const readAttendance=async(principal,query='view=mine')=>fetch(`${base}/api/event-registrations?${query}`,{headers:{Cookie:principal}});
+  const myRegistration=await (await readAttendance(ownerCookie)).json();assert.equal(myRegistration.items.length,1);
+  assert.equal(myRegistration.items[0].attendeeName,signup.attendeeName);
+  assert.equal((await readAttendance(ownerCookie,`view=roster&eventId=${createdEvent.data.id}`)).status,404);
+  let roster=await (await readAttendance(cookie,`view=roster&eventId=${createdEvent.data.id}`)).json();
+  assert.equal(roster.items.length,1);assert.equal('email' in roster.items[0],false);assert.equal('userId' in roster.items[0],false);
+  assert.equal((await attendance({action:'cancel',eventId:createdEvent.data.id})).status,200);
+  assert.equal((await (await readAttendance(ownerCookie)).json()).items.length,0);
+  assert.equal((await attendance(signup)).status,201);
+
   assert.equal((await eventPost({...eventFixture,id:createdEvent.data.id,programme:[{...eventFixture.programme[0],endsAt:'08:00'}]})).response.status,400);
   assert.equal(publicEvents.items[0].title,eventFixture.title);assert.equal('organizer_user_id' in publicEvents.items[0],false);
   assert.equal((await churchPost({...churchClaim,city:'Corrected Test City'})).response.status,201);
   assert.equal((await (await fetch(`${base}/api/churches`)).json()).items.length,0,'a correction must be reviewed again');
   assert.equal((await (await fetch(`${base}/api/events`)).json()).items.length,0,'church correction must immediately hide its events');
+  assert.equal((await readAttendance(cookie,`view=roster&eventId=${createdEvent.data.id}`)).status,404);
+  assert.equal((await (await readAttendance(ownerCookie)).json()).items[0].available,false);
+
   const correctedChurch=(await (await fetch(`${base}/api/churches?view=mine`,{headers:{Cookie:cookie}})).json()).items[0];
   assert.notEqual(correctedChurch.id,churchId);
   assert.equal((await churchPost({action:'review',id:correctedChurch.id,decision:'approve',verificationEvidence:'Disposable corrected authority fixture',note:''},ownerCookie)).response.status,200);
@@ -176,6 +198,7 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal(correctedEvent.response.status,201);assert.equal((await (await fetch(`${base}/api/events`)).json()).items[0].title,'Corrected Integration Conference');
   assert.equal((await eventPost({action:'withdraw',id:republishedEvent.data.id})).response.status,200);
   assert.equal((await (await fetch(`${base}/api/events`)).json()).items.length,0);
+  assert.equal((await (await readAttendance(ownerCookie)).json()).items.length,0,'withdrawing an event erases its attendee list');
   assert.equal((await churchPost({action:'withdraw',id:correctedChurch.id})).response.status,200);
   const mark = { edition: "en-web", book: "GEN", chapter: 12 };
   // The disposable Wrangler proxy can abort a following request when an

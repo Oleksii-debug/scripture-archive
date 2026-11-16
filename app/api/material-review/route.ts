@@ -114,6 +114,45 @@ export async function POST(request: Request) {
   if (!sameOrigin(request)) return json({ error: "cross_origin_request" }, 403);
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   if (!body) return json({ error: "invalid_json" }, 400);
+  if (body.action === "eventMaterials") {
+    if (!validId(body.eventId) || (body.view !== undefined && body.view !== "public" && body.view !== "mine"))
+      return json({ error: "invalid_event" }, 400);
+    try {
+      const mine = body.view === "mine";
+      const identity = mine ? await authenticateRequest(request) : null;
+      if (mine && (!identity || identity.provider === "agent" || !identity.emailVerified))
+        return json({ error: "forbidden" }, 403);
+      const visibility = mine ? "e.organizer_user_id=?" :
+        "e.status='active' AND c.id=e.church_claim_id AND c.status='approved' AND e.ends_on>=date('now')";
+      const rows = await env.DB.prepare(`SELECT m.submission_id AS id,s.status,s.snapshot,s.provenance,s.reviewed_at,
+          s.rights_holder,s.rights_basis,s.license_url
+        FROM event_materials m JOIN church_events e ON e.id=m.event_id
+        JOIN accounts a ON a.id=e.organizer_user_id
+        JOIN church_directory_claims c ON c.claimant_user_id=e.organizer_user_id
+        JOIN material_submissions s ON s.id=m.submission_id
+        WHERE e.id=? AND a.deleted_at IS NULL AND a.email_verified_at IS NOT NULL AND ${visibility}
+        ORDER BY m.attached_at,m.submission_id LIMIT 21`)
+        .bind(body.eventId, ...(mine ? [identity!.userId] : [])).all<{
+          id:string;status:string;snapshot:string;provenance:string;reviewed_at:string
+        } & RightsRow>();
+      if (!rows.success || !Array.isArray(rows.results) || rows.results.length > 20)
+        return json({ error: "materials_unavailable" }, 503);
+      const items = [], unavailableIds = [];
+      for (const row of rows.results) {
+        if (!validId(row.id)) return json({ error: "materials_unavailable" }, 503);
+        // A withdrawal, replacement or takedown removes the snapshot from this
+        // surface immediately; only its opaque link can be removed by the owner.
+        if (row.status !== "approved") { if (mine) unavailableIds.push(row.id); continue; }
+        const item = readSnapshot(row.snapshot), rights = readRights(row);
+        if (!item || rights === undefined || typeof row.provenance !== "string" || row.provenance.length > 1000 ||
+            typeof row.reviewed_at !== "string" || !row.reviewed_at || row.reviewed_at.length > 100)
+          return json({ error: "materials_unavailable" }, 503);
+        items.push({ id: row.id, title: item.title, locale: item.locale, reference: item.data.reference,
+          prompt: item.data.prompt, options: item.data.options, provenance: row.provenance, reviewedAt: row.reviewed_at, rights });
+      }
+      return json({ items, ...(mine ? { unavailableIds } : {}) });
+    } catch { return json({ error: "materials_unavailable" }, 503); }
+  }
   if (body.action === "librarySearch") {
     // Match only fields already visible in the public catalogue. Searching the
     // entire snapshot would turn private answer/explanation text into an oracle.
@@ -193,6 +232,34 @@ export async function POST(request: Request) {
   let identity: Awaited<ReturnType<typeof authenticateRequest>>;
   try { identity = await authenticateRequest(request); }
   catch { return json({ error: "materials_unavailable" }, 503); }
+  if (body.action === "attachEventMaterial" || body.action === "detachEventMaterial") {
+    if (!identity) return json({ error: "authentication_required" }, 401);
+    if (identity.provider === "agent" || !identity.emailVerified) return json({ error: "forbidden" }, 403);
+    if (!validId(body.eventId) || !validId(body.submissionId) ||
+        (body.action === "attachEventMaterial" && body.publicationConsent !== true))
+      return json({ error: "invalid_event_material" }, 400);
+    try {
+      const result = body.action === "attachEventMaterial"
+        ? await env.DB.prepare(`INSERT INTO event_materials(event_id,submission_id)
+          SELECT e.id,s.id FROM church_events e
+          JOIN church_directory_claims c ON c.id=e.church_claim_id AND c.claimant_user_id=e.organizer_user_id
+          JOIN accounts a ON a.id=e.organizer_user_id JOIN material_submissions s ON s.id=?
+          WHERE e.id=? AND e.organizer_user_id=? AND e.status='active' AND c.status='approved'
+            AND a.deleted_at IS NULL AND a.email_verified_at IS NOT NULL AND s.status='approved'
+            AND (EXISTS(SELECT 1 FROM event_materials WHERE event_id=e.id AND submission_id=s.id)
+              OR (SELECT count(*) FROM event_materials WHERE event_id=e.id)<20)
+          ON CONFLICT(event_id,submission_id) DO UPDATE SET submission_id=excluded.submission_id`)
+          .bind(body.submissionId,body.eventId,identity.userId).run()
+        : await env.DB.prepare(`DELETE FROM event_materials WHERE event_id=? AND submission_id=? AND EXISTS
+          (SELECT 1 FROM church_events e JOIN accounts a ON a.id=e.organizer_user_id
+            WHERE e.id=event_materials.event_id AND e.organizer_user_id=?
+              AND a.deleted_at IS NULL AND a.email_verified_at IS NOT NULL)`)
+          .bind(body.eventId,body.submissionId,identity.userId).run();
+      if (!result.success || !Number.isSafeInteger(result.meta?.changes) || result.meta.changes < 0 || result.meta.changes > 1)
+        return json({ error: "event_material_failed" }, 503);
+      return result.meta.changes === 1 ? json({ ok: true }) : json({ error: "event_material_unavailable" }, 409);
+    } catch { return json({ error: "event_material_failed" }, 503); }
+  }
   if (!identity || identity.provider === "agent") return json({ error: "authentication_required" }, 401);
   if (body.action === "submit") {
     const provenance = typeof body.provenance === "string" ? body.provenance.trim() : "";

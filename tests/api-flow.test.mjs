@@ -649,6 +649,21 @@ integration("account, progress, attempts, groups, marathon limit and password re
     return fetch(`${base}/api/groups?action=${action}`, {method:'POST',headers:{Cookie:ownerCookie,Origin:base,'Content-Type':'application/json'},body:JSON.stringify(body)});
   }
   assert.equal((await managerGroup('join',{inviteCode:lifecycleInvite})).status,200);
+  // A volunteer team is an explicit association with this existing private group.
+  assert.equal((await churchPost(churchClaim)).response.status,201);
+  const teamChurch=(await (await fetch(`${base}/api/churches?view=mine`,{headers:{Cookie:cookie}})).json()).items[0];
+  assert.equal((await churchPost({action:'review',id:teamChurch.id,decision:'approve',verificationEvidence:'Disposable team authority',note:''},ownerCookie)).response.status,200);
+  const teamEvent=await eventPost({...eventFixture,churchId:teamChurch.id});assert.equal(teamEvent.response.status,201);
+  const teamParams=new URLSearchParams({eventId:teamEvent.data.id});
+  assert.equal((await fetch(`${base}/api/event-teams?${teamParams}`)).status,401);
+  const teamOptions=await request('/api/event-teams?view=options');assert.ok(teamOptions.data.items.some(item=>item.id===lifecycleId));
+  const connectTeam={action:'set',eventId:teamEvent.data.id,groupId:lifecycleId,expectedRevision:null,confirm:true};
+  result=await request('/api/event-teams',{method:'POST',body:connectTeam});assert.equal(result.response.status,200);
+  result=await request(`/api/event-teams?${teamParams}&view=manage`);const teamRevision=result.data.revision;assert.equal(result.data.team.id,lifecycleId);
+  const volunteerTeam=await (await fetch(`${base}/api/event-teams?${teamParams}`,{headers:{Cookie:ownerCookie}})).json();
+  assert.deepEqual(volunteerTeam,{team:{id:lifecycleId,name:'Membership lifecycle'}});
+  result=await request('/api/event-teams',{method:'POST',body:connectTeam});assert.equal(result.response.status,409,'stale tab cannot replace a newer association');
+
   const editedSettings={...lifecycleSettings,name:'Updated group',description:'Full description\nSecond line',visibility:'public',rosterVisibility:'names',city:'Kyiv'};
   assert.equal((await managerGroup('settings',{groupId:lifecycleId,expected:lifecycleSettings,settings:editedSettings})).status,409);
   result=await request('/api/groups?action=settings',{method:'POST',body:{groupId:lifecycleId,expected:lifecycleSettings,settings:editedSettings}});
@@ -656,6 +671,11 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const visitorSettings=await (await fetch(`${base}/api/groups?groupId=${lifecycleId}`)).json();
   assert.equal(visitorSettings.group.name,'Updated group');assert.equal(visitorSettings.group.description,editedSettings.description);
   assert.equal(visitorSettings.members.length,0);
+  assert.deepEqual((await (await fetch(`${base}/api/event-teams?${teamParams}`,{headers:{Cookie:ownerCookie}})).json()).team,null,'public group settings revoke private team association');
+  result=await request('/api/event-teams',{method:'POST',body:{action:'clear',eventId:teamEvent.data.id,expectedRevision:teamRevision}});assert.equal(result.response.status,200);
+  assert.equal((await eventPost({action:'withdraw',id:teamEvent.data.id})).response.status,200);
+  assert.equal((await churchPost({action:'withdraw',id:teamChurch.id})).response.status,200);
+
   const memberNameChoice=await (await fetch(`${base}/api/groups?action=name-visibility&groupId=${lifecycleId}`,{headers:{Cookie:ownerCookie}})).json();
   assert.equal(memberNameChoice.publicName,false);
   assert.equal((await managerGroup('name-visibility',{groupId:lifecycleId,publicName:true,expectedPublicName:false})).status,200);

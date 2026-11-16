@@ -9,6 +9,11 @@ const PAGE_COPY = {
   ru: { all: 'Все', more: 'Продолжить поиск', emptyPage: 'В этой части совпадений нет. Поиск можно продолжить.', end: 'Больше совпадений нет.', heading: 'Результаты, страница', found: n => `Общин на этой странице: ${n}.` },
   en: { all: 'All', more: 'Continue search', emptyPage: 'No matches in this part. You can continue searching.', end: 'No more matches.', heading: 'Results, page', found: n => `Communities on this page: ${n}.` },
 };
+const ACTION_COPY = {
+  uk: { edit: 'Виправити цю заявку', loaded: 'Дані завантажено у форму. Перевірте зміни й знову підтвердьте повноваження та згоду.', withdrawn: 'Заявку відкликано.', refreshError: 'Дію збережено, але оновити список не вдалося. Перезавантажте сторінку.' },
+  ru: { edit: 'Исправить эту заявку', loaded: 'Данные загружены в форму. Проверьте изменения и снова подтвердите полномочия и согласие.', withdrawn: 'Заявка отозвана.', refreshError: 'Действие сохранено, но список обновить не удалось. Перезагрузите страницу.' },
+  en: { edit: 'Correct this claim', loaded: 'The saved fields are in the form. Check your changes and confirm authority and consent again.', withdrawn: 'The claim was withdrawn.', refreshError: 'The change was saved, but the list could not be refreshed. Reload the page.' },
+};
 const canonicalHttps=value=>{try{if(typeof value!=='string'||value.length<9||value.length>500||value.trim()!==value||!/^(https):\/\//i.test(value)||/[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}\s]/u.test(value))return null;const authority=value.slice(value.indexOf('://')+3).split(/[/?#]/u,1)[0];if(!authority||authority.includes('@'))return null;const url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password?url.href:null;}catch{return null;}};
 const visible=(value,min,max)=>typeof value==='string'&&value.trim()===value&&value.length>=min&&value.length<=max&&!/[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}\u00a0\u034f\u115f\u1160\u2800\u3164\uffa0]/u.test(value);
 const validId=value=>typeof value==='string'&&value.length>0&&value.length<=100;
@@ -19,7 +24,7 @@ const validSubmitted=item=>validTimestamp(item.submittedAt);
 const validMine=item=>validCore(item)&&validSubmitted(item)&&['pending','approved','rejected','withdrawn'].includes(item.status)&&(item.reviewedAt===null||validTimestamp(item.reviewedAt))&&typeof item.reviewNote==='string'&&item.reviewNote.length<=2000;
 const validQueue=item=>validCore(item)&&validSubmitted(item)&&validId(item.claimantId)&&typeof item.claimantEmail==='string'&&item.claimantEmail.length>=3&&item.claimantEmail.length<=320&&item.claimantEmail.trim()===item.claimantEmail&&item.claimantEmail.includes('@')&&!/[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}\s]/u.test(item.claimantEmail)&&item.status==='pending';
 async function api(path,options){const response=await fetch(path,options);const data=await response.json().catch(()=>({}));if(!response.ok)throw Error(data.error||String(response.status));return data;}
-const post=body=>api('/api/churches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+const post=async body=>{const data=await api('/api/churches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(data?.ok!==true)throw Error('unconfirmed change');return data;};
 
 function publicMarkup(items,w,esc){
   return items.length?`<div class="card-grid church-directory-results">${items.map(item=>`<article class="card"><h3 lang="${esc(item.locale)}">${esc(item.name)}</h3><p>${esc(item.city)}, ${esc(item.countryCode)}</p><dl><dt>${esc(w.locale)}</dt><dd>${esc(w.languages[item.locale])}</dd><dt>${esc(w.tradition)}</dt><dd>${esc(w.traditions[item.tradition])}</dd><dt>${esc(w.reviewed)}</dt><dd><time datetime="${esc(item.reviewedAt)}">${esc(item.reviewedAt)} UTC</time></dd></dl>${item.websiteUrl?`<p><a href="${esc(canonicalHttps(item.websiteUrl))}" rel="noreferrer">${esc(w.website)}</a></p>`:''}</article>`).join('')}</div>`:`<p>${esc(w.empty)}</p>`;
@@ -29,15 +34,16 @@ function claimForm(w,esc){
   const traditions=['orthodox','catholic','protestant','adventist','other'].map(value=>`<option value="${value}">${esc(w.traditions[value])}</option>`).join('');
   return `<section class="card"><h2>${esc(w.claim)}</h2><p>${esc(w.claimHelp)}</p><form class="church-claim"><label class="account-field"><span>${esc(w.name)}</span><input name="name" minlength="3" maxlength="160" required></label><label class="account-field"><span>${esc(w.city)}</span><input name="city" minlength="2" maxlength="120" required></label><label class="account-field"><span>${esc(w.country)}</span><input name="countryCode" minlength="2" maxlength="2" pattern="[A-Za-z]{2}" required></label><label class="account-field"><span>${esc(w.locale)}</span><select name="locale">${languages}</select></label><label class="account-field"><span>${esc(w.tradition)}</span><select name="tradition">${traditions}</select></label><label class="account-field"><span>${esc(w.optionalWebsite)}</span><input name="websiteUrl" type="url" maxlength="500" inputmode="url" placeholder="https://"></label><label class="account-check"><input name="represent" type="checkbox" required><span>${esc(w.represent)}</span></label><label class="account-check"><input name="consent" type="checkbox" required><span>${esc(w.consent)}</span></label><button class="button" type="submit">${esc(w.submit)}</button><p role="status"></p></form></section>`;
 }
-function mineMarkup(items,w,esc){return items.length?`<section class="card church-claim-mine"><h2>${esc(w.mine)}</h2>${items.map(item=>`<article><h3>${esc(item.name)}</h3><p>${esc(item.city)}, ${esc(item.countryCode)} — ${esc(w[item.status]||item.status)}</p>${item.reviewNote?`<p>${esc(item.reviewNote)}</p>`:''}${['pending','approved'].includes(item.status)?`<button class="button church-claim-withdraw" data-id="${esc(item.id)}" type="button">${esc(w.withdraw)}</button>`:''}</article>`).join('')}<p role="status"></p></section>`:'';}
+function mineMarkup(items,w,esc,actions){return items.length?`<section class="card church-claim-mine"><h2>${esc(w.mine)}</h2>${items.map(item=>`<article><h3>${esc(item.name)}</h3><p>${esc(item.city)}, ${esc(item.countryCode)} — ${esc(w[item.status]||item.status)}</p>${item.reviewNote?`<p>${esc(item.reviewNote)}</p>`:''}<button class="button church-claim-edit" data-id="${esc(item.id)}" type="button">${esc(actions.edit)}</button>${['pending','approved'].includes(item.status)?`<button class="button church-claim-withdraw" data-id="${esc(item.id)}" type="button">${esc(w.withdraw)}</button>`:''}</article>`).join('')}<p role="status"></p></section>`:'';}
 function queueMarkup(items,w,esc){return `<section class="card church-claim-queue"><h2>${esc(w.queue)}</h2>${items.length?items.map(item=>`<article><h3>${esc(item.name)}</h3><p>${esc(item.city)}, ${esc(item.countryCode)} · ${esc(w.languages[item.locale])} · ${esc(w.traditions[item.tradition])}</p><p>${esc(w.claimant)}: <a href="mailto:${esc(item.claimantEmail)}">${esc(item.claimantEmail)}</a></p>${item.websiteUrl?`<p><a href="${esc(canonicalHttps(item.websiteUrl))}" rel="noreferrer">${esc(w.website)}</a></p>`:''}<form class="church-claim-review" data-id="${esc(item.id)}"><label class="account-field"><span>${esc(w.evidence)}</span><textarea name="evidence" minlength="3" maxlength="1000"></textarea></label><label class="account-field"><span>${esc(w.note)}</span><textarea name="note" maxlength="2000"></textarea></label><button class="button" type="button" data-decision="approve">${esc(w.approve)}</button><button class="button" type="button" data-decision="reject">${esc(w.reject)}</button><p role="status"></p></form></article>`).join(''):`<p>${esc(w.empty)}</p>`}</section>`;}
 
 export async function renderChurchDirectory(root,lang,esc,user,isOwner=false,isCurrent=()=>true){
   const w=copy(lang),principal=user?.id??null,canClaim=user?.emailVerified===true&&user?.authProvider!=='agent';
+  const actions=typeof lang==='string'&&Object.hasOwn(ACTION_COPY,lang)?ACTION_COPY[lang]:ACTION_COPY.uk;
   const pages=typeof lang==='string'&&Object.hasOwn(PAGE_COPY,lang)?PAGE_COPY[lang]:PAGE_COPY.uk;
   const active=()=>{try{return root?.isConnected!==false&&isCurrent()===true&&(user?.id??null)===principal;}catch{return false;}};
   if(!active())return;
-  root.innerHTML=`<section class="church-directory" aria-labelledby="church-directory-title"><div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1 id="church-directory-title">${esc(w.title)}</h1></div></div><p class="lead">${esc(w.lead)}</p><p>${esc(w.honesty)}</p><form class="church-directory-search"><label class="account-field"><span>${esc(w.search)}</span><input name="query" type="search" maxlength="80"></label><label class="account-field"><span>${esc(w.locale)}</span><select name="locale"><option value="">${esc(pages.all)}</option>${Object.entries(w.languages).map(([id,title])=>`<option value="${id}">${esc(title)}</option>`).join('')}</select></label><label class="account-field"><span>${esc(w.tradition)}</span><select name="tradition"><option value="">${esc(pages.all)}</option>${Object.entries(w.traditions).map(([id,title])=>`<option value="${id}">${esc(title)}</option>`).join('')}</select></label><button class="button" type="submit">${esc(w.find)}</button></form><p class="church-directory-status" role="status"></p><div class="church-directory-public"></div><button class="button church-directory-more" type="button" hidden>${esc(pages.more)}</button>${canClaim?claimForm(w,esc):`<p><a href="/account">${esc(w.signin)}</a></p>`}<div class="church-directory-private"></div>${isOwner?'<div class="church-directory-owner"></div>':''}</section>`;
+  root.innerHTML=`<section class="church-directory" aria-labelledby="church-directory-title"><div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1 id="church-directory-title">${esc(w.title)}</h1></div></div><p class="lead">${esc(w.lead)}</p><p>${esc(w.honesty)}</p><form class="church-directory-search"><label class="account-field"><span>${esc(w.search)}</span><input name="query" type="search" maxlength="80"></label><label class="account-field"><span>${esc(w.locale)}</span><select name="locale"><option value="">${esc(pages.all)}</option>${Object.entries(w.languages).map(([id,title])=>`<option value="${id}">${esc(title)}</option>`).join('')}</select></label><label class="account-field"><span>${esc(w.tradition)}</span><select name="tradition"><option value="">${esc(pages.all)}</option>${Object.entries(w.traditions).map(([id,title])=>`<option value="${id}">${esc(title)}</option>`).join('')}</select></label><button class="button" type="submit">${esc(w.find)}</button></form><p class="church-directory-status" role="status"></p><div class="church-directory-public"></div><button class="button church-directory-more" type="button" hidden>${esc(pages.more)}</button>${canClaim?claimForm(w,esc):`<p><a href="/account">${esc(w.signin)}</a></p>`}<p class="church-claim-feedback" role="status" tabindex="-1"></p><div class="church-directory-private"></div>${isOwner?'<div class="church-directory-owner"></div>':''}</section>`;
   const search=root.querySelector('.church-directory-search'),query=search?.querySelector('input'),publicRoot=root.querySelector('.church-directory-public'),status=root.querySelector('.church-directory-status'),privateRoot=root.querySelector('.church-directory-private'),ownerRoot=root.querySelector('.church-directory-owner');
   const more = root.querySelector('.church-directory-more'), seenCursors = new Set(), listed = new Set();
   let epoch=0, nextCursor=null, activeQuery={q:'',locale:'',tradition:''}, page=0, loading=false;
@@ -101,16 +107,84 @@ export async function renderChurchDirectory(root,lang,esc,user,isOwner=false,isC
   if (more) more.onclick=()=>{
     if (active() && !loading && nextCursor) void publicLoad(activeQuery,nextCursor);
   };
+  let privateEpoch=0, savedClaims=[], mutationPending=false;
+  const feedback=root.querySelector('.church-claim-feedback');
+  function announce(message, focus=false) {
+    if (!active() || !feedback) return;
+    feedback.textContent=message;
+    if (focus) feedback.focus();
+  }
   async function privateLoad(){
-    if(!canClaim||!active())return;
-    try{const [mine,queue]=await Promise.all([api('/api/churches?view=mine'),isOwner?api('/api/churches?view=queue'):Promise.resolve({items:[]})]);if(!active()||!Array.isArray(mine.items)||mine.items.length>1||!mine.items.every(validMine)||!Array.isArray(queue.items)||queue.items.length>200||!queue.items.every(validQueue))throw Error('invalid private claims');privateRoot.innerHTML=mineMarkup(mine.items,w,esc);if(ownerRoot)ownerRoot.innerHTML=queueMarkup(queue.items,w,esc);attach();}
-    catch{if(active()){privateRoot.innerHTML=`<p role="alert">${esc(w.error)}</p>`;if(ownerRoot)ownerRoot.innerHTML='';}}
+    if(!canClaim||!active())return false;
+    const token=++privateEpoch;
+    try {
+      const [mine,queue]=await Promise.all([api('/api/churches?view=mine'),isOwner?api('/api/churches?view=queue'):Promise.resolve({items:[]})]);
+      if(!active()||token!==privateEpoch)return false;
+      if(!Array.isArray(mine.items)||mine.items.length>1||!mine.items.every(validMine)||!Array.isArray(queue.items)||queue.items.length>200||!queue.items.every(validQueue))throw Error('invalid private claims');
+      savedClaims=mine.items;
+      privateRoot.innerHTML=mineMarkup(mine.items,w,esc,actions);
+      if(ownerRoot)ownerRoot.innerHTML=queueMarkup(queue.items,w,esc);
+      attach();
+      return true;
+    } catch {
+      if(active()&&token===privateEpoch){savedClaims=[];privateRoot.innerHTML=`<p role="alert">${esc(w.error)}</p>`;if(ownerRoot)ownerRoot.innerHTML='';}
+      return false;
+    }
+  }
+  async function mutate(body,message,resetConsent=false) {
+    if(!active()||mutationPending)return;
+    mutationPending=true;
+    // Retire a private read started before this write, so it cannot restore
+    // a withdrawn or superseded claim while the current state is loading.
+    privateEpoch++;
+    const controls=[...root.querySelectorAll('.church-claim button, .church-claim-withdraw, .church-claim-edit, .church-claim-review button')];
+    controls.forEach(button=>{button.disabled=true;});
+    const focused=root.ownerDocument?.activeElement;
+    const hadFocus=controls.includes(focused);
+    announce('');
+    try {
+      await post(body);
+      if(!active())return;
+      if(resetConsent){
+        const form=root.querySelector('.church-claim');
+        for(const name of ['represent','consent']) { const field=form?.querySelector(`[name=${name}]`);if(field)field.checked=false; }
+      }
+      const [,refreshed]=await Promise.all([publicLoad(),privateLoad()]);
+      const current=root.ownerDocument?.activeElement;
+      const restoreFocus=hadFocus&&(current===focused||current===root.ownerDocument?.body);
+      announce(refreshed?message:actions.refreshError,restoreFocus);
+    } catch {
+      const current=root.ownerDocument?.activeElement;
+      announce(w.error,hadFocus&&(current===focused||current===root.ownerDocument?.body));
+    } finally {
+      mutationPending=false;
+      if(active())controls.forEach(button=>{button.disabled=false;});
+    }
   }
   function attach(){
     const form=root.querySelector('.church-claim');
-    if(form)form.onsubmit=async event=>{event.preventDefault();if(!active())return;const data=new FormData(form),button=form.querySelector('button'),feedback=form.querySelector('[role="status"]');button.disabled=true;try{await post({action:'submit',name:data.get('name'),city:data.get('city'),countryCode:String(data.get('countryCode')||'').toUpperCase(),locale:data.get('locale'),tradition:data.get('tradition'),websiteUrl:data.get('websiteUrl'),representationAttested:data.has('represent'),websiteConsent:data.has('consent')});if(!active())return;feedback.textContent=w.saved;await Promise.all([publicLoad(),privateLoad()]);}catch{if(active()){feedback.textContent=w.error;button.disabled=false;}}};
-    root.querySelectorAll('.church-claim-withdraw').forEach(button=>button.onclick=async()=>{if(!active()||button.disabled)return;button.disabled=true;try{await post({action:'withdraw',id:button.dataset.id});if(active())await Promise.all([publicLoad(),privateLoad()]);}catch{if(active()){button.disabled=false;privateRoot.querySelector('[role="status"]').textContent=w.error;}}});
-    root.querySelectorAll('.church-claim-review').forEach(form=>form.querySelectorAll('[data-decision]').forEach(button=>button.onclick=async()=>{if(!active())return;const data=new FormData(form),feedback=form.querySelector('[role="status"]'),decision=button.dataset.decision;form.querySelectorAll('button').forEach(item=>item.disabled=true);try{await post({action:'review',id:form.dataset.id,decision,verificationEvidence:data.get('evidence'),note:data.get('note')});if(!active())return;feedback.textContent=w.updated;await Promise.all([publicLoad(),privateLoad()]);}catch{if(active()){feedback.textContent=w.error;form.querySelectorAll('button').forEach(item=>item.disabled=false);}}}));
+    if(form)form.onsubmit=async event=>{
+      event.preventDefault();if(!active()||mutationPending)return;
+      const data=new FormData(form);
+      await mutate({action:'submit',name:data.get('name'),city:data.get('city'),countryCode:String(data.get('countryCode')||'').toUpperCase(),locale:data.get('locale'),tradition:data.get('tradition'),websiteUrl:data.get('websiteUrl'),representationAttested:data.has('represent'),websiteConsent:data.has('consent')},w.saved,true);
+    };
+    root.querySelectorAll('.church-claim-edit').forEach(button=>button.onclick=()=>{
+      if(!active()||mutationPending||!form)return;
+      const item=savedClaims.find(claim=>claim.id===button.dataset.id);
+      if(!item)return;
+      for(const name of ['name','city','countryCode','locale','tradition','websiteUrl']) {
+        const field=form.querySelector(`[name=${name}]`);if(field)field.value=item[name]??'';
+      }
+      for(const name of ['represent','consent']) { const field=form.querySelector(`[name=${name}]`);if(field)field.checked=false; }
+      announce(actions.loaded);
+      form.querySelector('[name=name]')?.focus();
+    });
+    root.querySelectorAll('.church-claim-withdraw').forEach(button=>button.onclick=()=>mutate({action:'withdraw',id:button.dataset.id},actions.withdrawn));
+    root.querySelectorAll('.church-claim-review').forEach(form=>form.querySelectorAll('[data-decision]').forEach(button=>button.onclick=()=>{
+      if(!active()||mutationPending)return;
+      const data=new FormData(form);
+      return mutate({action:'review',id:form.dataset.id,decision:button.dataset.decision,verificationEvidence:data.get('evidence'),note:data.get('note')},w.updated);
+    }));
   }
   if(search)search.onsubmit=event=>{event.preventDefault();if(active())void publicLoad({q:query.value.trim(),locale:search.querySelector('[name=locale]')?.value||'',tradition:search.querySelector('[name=tradition]')?.value||''});};
   attach();

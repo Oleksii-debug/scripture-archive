@@ -149,7 +149,7 @@ test('the event directory continues a submitted search after an empty page and r
   const publicRoot={innerHTML:'',insertAdjacentHTML(_where,html){this.innerHTML+=html;},querySelector:()=>heading};
   const nodes={'.event-search':{querySelector:()=>input},'.event-public':publicRoot,'.event-private':{innerHTML:''},
     '.event-status':{textContent:''},'.event-more':more};
-  const root={isConnected:true,innerHTML:'',ownerDocument:doc,querySelector:selector=>nodes[selector]??null};
+  const root={isConnected:true,innerHTML:'',ownerDocument:doc,querySelectorAll:()=>[],querySelector:selector=>nodes[selector]??null};
   globalThis.fetch=async url=>{
     const params=new URL(url,'https://local.invalid').searchParams;
     calls.push([params.get('q'),params.get('afterId')]);

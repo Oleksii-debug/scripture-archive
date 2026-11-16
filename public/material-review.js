@@ -79,7 +79,7 @@ function rightsMetadataMarkup(item,w,esc) {
   const license=item.rights.licenseUrl?`<dt>${esc(w.licenseUrl)}</dt><dd><a href="${esc(canonicalPublicHttps(item.rights.licenseUrl))}" rel="noreferrer">${esc(w.licenseLink)}</a></dd>`:'';
   return `<dl class="material-rights">${context}<dt>${esc(w.rightsHolder)}</dt><dd>${esc(item.rights.holder)}</dd><dt>${esc(w.rightsBasis)}</dt><dd>${esc(w[item.rights.basis])}</dd>${license}</dl>`;
 }
-function validPublicMaterial(item) {
+export function validPublicMaterial(item) {
   return item && ['id','title','locale','reference','prompt','provenance','reviewedAt'].every(key=>typeof item[key]==='string') &&
     item.id.length>0 && item.id.length<=100 && item.title.length>0 && item.title.length<=160 &&
     ['uk','ru','en'].includes(item.locale) && item.reference.length>0 && item.reference.length<=200 &&
@@ -166,6 +166,14 @@ export function attachReviewControls(root, w, refresh, announce, isCurrent = () 
 }
 function publicMaterialMarkup(items, w, esc) {
   return items.map(item=>`<article class="card"><h3>${esc(item.title)}</h3><p>${esc(item.reference)}</p><p>${esc(item.provenance)}</p>${rightsMetadataMarkup(item,w,esc)}<p class="material-rights-request"><a href="${esc(rightsRequestUrl(item))}">${esc(w.rightsConcern)}</a></p><form class="public-material" data-id="${esc(item.id)}"><fieldset><legend>${esc(item.prompt)}</legend>${item.options.map((option,index)=>`<label class="option"><input type="radio" name="choice" value="${index}" required><span>${esc(option)}</span></label>`).join('')}</fieldset><button class="button" type="submit">${w.check}</button><p role="status"></p></form></article>`).join('');
+}
+// Shared by event attachments: preserve the same rights, answer-disclosure and
+// keyboard contract as the canonical reviewed library.
+export function renderMaterialItems(root, items, w, esc, active) {
+  if (!Array.isArray(items) || items.length > 20 || !items.every(validPublicMaterial)) throw Error('invalid materials');
+  if (!active()) return;
+  root.innerHTML = publicMaterialMarkup(items,w,esc);
+  attachPublicMaterialAnswers(root,w,active);
 }
 // Concurrent reads for one mounted public-material panel must be ordered by
 // the request that STARTED last, not whichever fetch happens to finish last.

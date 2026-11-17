@@ -71,11 +71,13 @@ export async function GET(request: Request) {
       const query = url.searchParams.get("q") || "";
       if (query.length > 80 || query.trim() !== query || /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/u.test(query))
         return json({ error: "invalid_search" }, 400);
+      const churchId = url.searchParams.get("churchId");
+      if (churchId !== null && !/^[A-Za-z0-9_-]{1,100}$/.test(churchId)) return json({ error: "invalid_search" }, 400);
       const afterDate = url.searchParams.get("afterDate");
       const afterTitle = url.searchParams.get("afterTitle");
       const afterId = url.searchParams.get("afterId");
       const hasCursor = afterDate !== null || afterTitle !== null || afterId !== null;
-      if (["q", "afterDate", "afterTitle", "afterId"].some(field => url.searchParams.getAll(field).length > 1) ||
+      if (["q", "churchId", "afterDate", "afterTitle", "afterId"].some(field => url.searchParams.getAll(field).length > 1) ||
           (hasCursor && (!date(afterDate) || !visible(afterTitle, 3, 160) || !validId(afterId))))
         return json({ error: "invalid_search" }, 400);
       const statement = env.DB.prepare(`SELECT e.id,c.id AS church_claim_id,c.name AS church_name,e.title,e.summary,e.city,e.country_code,
@@ -84,9 +86,13 @@ export async function GET(request: Request) {
         JOIN accounts a ON a.id=c.claimant_user_id
         WHERE e.status='active' AND c.status='approved'
           AND a.deleted_at IS NULL AND a.email_verified_at IS NOT NULL AND e.ends_on>=date('now')
+          ${churchId !== null ? "AND c.id=?" : ""}
           ${hasCursor ? "AND (e.starts_on,e.title,e.id) > (?,?,?)" : ""}
         ORDER BY e.starts_on,e.title,e.id LIMIT 201`);
-      const rows = await (hasCursor ? statement.bind(afterDate, afterTitle, afterId) : statement).all<EventRow>();
+      const parameters: string[] = [];
+      if (churchId !== null) parameters.push(churchId);
+      if (hasCursor) parameters.push(afterDate!, afterTitle!, afterId!);
+      const rows = await statement.bind(...parameters).all<EventRow>();
       if (!rows.success || !Array.isArray(rows.results)) return json({ error: "events_unavailable" }, 503);
       const normalized = query.normalize("NFKC").toLocaleLowerCase(), items = [];
       let nextCursor: { startsOn: string; title: string; id: string } | null = null;

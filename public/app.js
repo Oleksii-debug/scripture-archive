@@ -1,3 +1,4 @@
+import {churchRouteId} from './church-directory.js';
 import {meetingHistoryCopy,meetingHistoryMarkup,meetingRowsMarkup,mountMeetingHistory} from './group-meeting-history.js';
 import { parallelControls, mountParallelReader, safeProvenanceHttpsUrl, validEditionRightsMetadata } from './parallel-reader.js';
 import {routeSourceFromLocation, legacyRouteHashChanged} from './route-location.js';
@@ -2028,7 +2029,8 @@ function navigateTo(path, replace = false) {
 function updatePageMetadata(name) {
   const title = PAGE_TITLES[state.lang]?.[name] || PAGE_TITLES[state.lang]?.home || "Scripture Archive";
   document.title = title === "Scripture Archive" ? title : `${title} · Scripture Archive`;
-  const canonicalPath = PRIVATE_ROUTES.has(name) || name === "home" ? "/" : `/${name}`;
+  const churchId = name === "churches" ? churchRouteId(routeSourceFromLocation(location)) : null;
+  const canonicalPath = churchId ? `/churches/${churchId}` : PRIVATE_ROUTES.has(name) || name === "home" ? "/" : `/${name}`;
   let canonical = document.querySelector('link[rel="canonical"]');
   if (!canonical) {
     canonical = document.createElement("link");
@@ -4714,7 +4716,7 @@ async function route() {
     else if (name === "community") await renderCommunity(Number(new URLSearchParams(location.search).get("page"))||1,new URLSearchParams(location.search).get("q")||"",new URLSearchParams(location.search).get("sort")||"recent");
     else if (["home-groups", "live", "campaigns", "dossiers", "library", "churches", "events", "builder", "progress", "about"].includes(name)) {
       if(name==="progress"&&state.user)await syncProgress();
-      await renderWorkspace(name==='home-groups'?'live':name,{state,t,esc,shell,getMission,getCatalog,setActiveNav,loadJSON,announce,play});
+      await renderWorkspace(name==='home-groups'?'live':name,{state,t,esc,shell,getMission,getCatalog,setActiveNav,loadJSON,announce,play,routePath:sourceRoute});
     }
     else if (name === "atlas") renderAtlas();
     else if (name === "support") renderSupport();

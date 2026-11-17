@@ -73,6 +73,19 @@ export async function GET(request: Request) {
   if (!env.DB) return json({ error: "database_unavailable" }, 503);
   const url = new URL(request.url), view = url.searchParams.get("view") || "public";
   try {
+    if (view === "detail") {
+      const id = url.searchParams.get("id");
+      if (url.searchParams.getAll("view").length !== 1 || url.searchParams.getAll("id").length !== 1 ||
+          typeof id !== "string" || !/^[A-Za-z0-9_-]{1,100}$/.test(id))
+        return json({ error: "invalid_church" }, 400);
+      const rows = await env.DB.prepare(`SELECT c.id,c.name,c.city,c.country_code,c.locale,c.tradition,c.website_url,c.status,c.submitted_at,c.reviewed_at
+        FROM church_directory_claims c JOIN accounts a ON a.id=c.claimant_user_id
+        WHERE c.id=? AND c.status='approved' AND a.deleted_at IS NULL AND a.email_verified_at IS NOT NULL LIMIT 1`).bind(id).all<ClaimRow>();
+      if (!rows.success || !Array.isArray(rows.results)) return json({ error: "churches_unavailable" }, 503);
+      if (!rows.results.length) return json({ error: "church_not_found" }, 404);
+      const item = publicClaim(rows.results[0]);
+      return item ? json({ item }) : json({ error: "churches_unavailable" }, 503);
+    }
     if (view === "public") {
       const query = url.searchParams.get("q") || "";
       if (query.length > 80 || query.trim() !== query ||

@@ -10,9 +10,9 @@ const PAGE_COPY = {
   en: { all: 'All', more: 'Continue search', emptyPage: 'No matches in this part. You can continue searching.', end: 'No more matches.', heading: 'Results, page', found: n => `Communities on this page: ${n}.` },
 };
 const ACTION_COPY = {
-  uk: { edit: 'Виправити цю заявку', loaded: 'Дані завантажено у форму. Перевірте зміни й знову підтвердьте повноваження та згоду.', withdrawn: 'Заявку відкликано.', refreshError: 'Дію збережено, але оновити список не вдалося. Перезавантажте сторінку.' },
-  ru: { edit: 'Исправить эту заявку', loaded: 'Данные загружены в форму. Проверьте изменения и снова подтвердите полномочия и согласие.', withdrawn: 'Заявка отозвана.', refreshError: 'Действие сохранено, но список обновить не удалось. Перезагрузите страницу.' },
-  en: { edit: 'Correct this claim', loaded: 'The saved fields are in the form. Check your changes and confirm authority and consent again.', withdrawn: 'The claim was withdrawn.', refreshError: 'The change was saved, but the list could not be refreshed. Reload the page.' },
+  uk: { queueMore: 'Наступні заявки', queuePage: 'Заявки, сторінка', queueFound: n => `Заявок на цій сторінці: ${n}.`, edit: 'Виправити цю заявку', loaded: 'Дані завантажено у форму. Перевірте зміни й знову підтвердьте повноваження та згоду.', withdrawn: 'Заявку відкликано.', refreshError: 'Дію збережено, але оновити список не вдалося. Перезавантажте сторінку.' },
+  ru: { queueMore: 'Следующие заявки', queuePage: 'Заявки, страница', queueFound: n => `Заявок на этой странице: ${n}.`, edit: 'Исправить эту заявку', loaded: 'Данные загружены в форму. Проверьте изменения и снова подтвердите полномочия и согласие.', withdrawn: 'Заявка отозвана.', refreshError: 'Действие сохранено, но список обновить не удалось. Перезагрузите страницу.' },
+  en: { queueMore: 'Next claims', queuePage: 'Claims, page', queueFound: n => `Claims on this page: ${n}.`, edit: 'Correct this claim', loaded: 'The saved fields are in the form. Check your changes and confirm authority and consent again.', withdrawn: 'The claim was withdrawn.', refreshError: 'The change was saved, but the list could not be refreshed. Reload the page.' },
 };
 const canonicalHttps=value=>{try{if(typeof value!=='string'||value.length<9||value.length>500||value.trim()!==value||!/^(https):\/\//i.test(value)||/[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}\s]/u.test(value))return null;const authority=value.slice(value.indexOf('://')+3).split(/[/?#]/u,1)[0];if(!authority||authority.includes('@'))return null;const url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password?url.href:null;}catch{return null;}};
 const visible=(value,min,max)=>typeof value==='string'&&value.trim()===value&&value.length>=min&&value.length<=max&&!/[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}\u00a0\u034f\u115f\u1160\u2800\u3164\uffa0]/u.test(value);
@@ -35,7 +35,11 @@ function claimForm(w,esc){
   return `<section class="card"><h2>${esc(w.claim)}</h2><p>${esc(w.claimHelp)}</p><form class="church-claim"><label class="account-field"><span>${esc(w.name)}</span><input name="name" minlength="3" maxlength="160" required></label><label class="account-field"><span>${esc(w.city)}</span><input name="city" minlength="2" maxlength="120" required></label><label class="account-field"><span>${esc(w.country)}</span><input name="countryCode" minlength="2" maxlength="2" pattern="[A-Za-z]{2}" required></label><label class="account-field"><span>${esc(w.locale)}</span><select name="locale">${languages}</select></label><label class="account-field"><span>${esc(w.tradition)}</span><select name="tradition">${traditions}</select></label><label class="account-field"><span>${esc(w.optionalWebsite)}</span><input name="websiteUrl" type="url" maxlength="500" inputmode="url" placeholder="https://"></label><label class="account-check"><input name="represent" type="checkbox" required><span>${esc(w.represent)}</span></label><label class="account-check"><input name="consent" type="checkbox" required><span>${esc(w.consent)}</span></label><button class="button" type="submit">${esc(w.submit)}</button><p role="status"></p></form></section>`;
 }
 function mineMarkup(items,w,esc,actions){return items.length?`<section class="card church-claim-mine"><h2>${esc(w.mine)}</h2>${items.map(item=>`<article><h3>${esc(item.name)}</h3><p>${esc(item.city)}, ${esc(item.countryCode)} — ${esc(w[item.status]||item.status)}</p>${item.reviewNote?`<p>${esc(item.reviewNote)}</p>`:''}<button class="button church-claim-edit" data-id="${esc(item.id)}" type="button">${esc(actions.edit)}</button>${['pending','approved'].includes(item.status)?`<button class="button church-claim-withdraw" data-id="${esc(item.id)}" type="button">${esc(w.withdraw)}</button>`:''}</article>`).join('')}<p role="status"></p></section>`:'';}
-function queueMarkup(items,w,esc){return `<section class="card church-claim-queue"><h2>${esc(w.queue)}</h2>${items.length?items.map(item=>`<article><h3>${esc(item.name)}</h3><p>${esc(item.city)}, ${esc(item.countryCode)} · ${esc(w.languages[item.locale])} · ${esc(w.traditions[item.tradition])}</p><p>${esc(w.claimant)}: <a href="mailto:${esc(item.claimantEmail)}">${esc(item.claimantEmail)}</a></p>${item.websiteUrl?`<p><a href="${esc(canonicalHttps(item.websiteUrl))}" rel="noreferrer">${esc(w.website)}</a></p>`:''}<form class="church-claim-review" data-id="${esc(item.id)}"><label class="account-field"><span>${esc(w.evidence)}</span><textarea name="evidence" minlength="3" maxlength="1000"></textarea></label><label class="account-field"><span>${esc(w.note)}</span><textarea name="note" maxlength="2000"></textarea></label><button class="button" type="button" data-decision="approve">${esc(w.approve)}</button><button class="button" type="button" data-decision="reject">${esc(w.reject)}</button><p role="status"></p></form></article>`).join(''):`<p>${esc(w.empty)}</p>`}</section>`;}
+function queueItemsMarkup(items,w,esc){return items.map(item=>`<article><h3>${esc(item.name)}</h3><p>${esc(item.city)}, ${esc(item.countryCode)} · ${esc(w.languages[item.locale])} · ${esc(w.traditions[item.tradition])}</p><p>${esc(w.claimant)}: <a href="mailto:${esc(item.claimantEmail)}">${esc(item.claimantEmail)}</a></p>${item.websiteUrl?`<p><a href="${esc(canonicalHttps(item.websiteUrl))}" rel="noreferrer">${esc(w.website)}</a></p>`:''}<form class="church-claim-review" data-id="${esc(item.id)}"><label class="account-field"><span>${esc(w.evidence)}</span><textarea name="evidence" minlength="3" maxlength="1000"></textarea></label><label class="account-field"><span>${esc(w.note)}</span><textarea name="note" maxlength="2000"></textarea></label><button class="button" type="button" data-decision="approve">${esc(w.approve)}</button><button class="button" type="button" data-decision="reject">${esc(w.reject)}</button><p role="status"></p></form></article>`).join('');}
+function queueMarkup(items,w,esc,actions,nextCursor){return `<section class="card church-claim-queue"><h2>${esc(w.queue)}</h2><div class="church-claim-queue-pages"><section aria-labelledby="church-queue-page-1"><h3 id="church-queue-page-1" tabindex="-1">${esc(actions.queuePage)} 1</h3>${items.length?queueItemsMarkup(items,w,esc):`<p>${esc(w.empty)}</p>`}</section></div><p class="church-claim-queue-status" role="status"></p><button type="button" class="button church-claim-queue-more" ${nextCursor?'':'hidden'}>${esc(actions.queueMore)}</button></section>`;}
+const validQueueCursor=value=>value===null||(value&&typeof value==='object'&&!Array.isArray(value)&&validTimestamp(value.submittedAt)&&validId(value.id));
+const queueCursorKey=value=>JSON.stringify([value.submittedAt,value.id]);
+
 
 export async function renderChurchDirectory(root,lang,esc,user,isOwner=false,isCurrent=()=>true){
   const w=copy(lang),principal=user?.id??null,canClaim=user?.emailVerified===true&&user?.authProvider!=='agent';
@@ -107,7 +111,8 @@ export async function renderChurchDirectory(root,lang,esc,user,isOwner=false,isC
   if (more) more.onclick=()=>{
     if (active() && !loading && nextCursor) void publicLoad(activeQuery,nextCursor);
   };
-  let privateEpoch=0, savedClaims=[], mutationPending=false;
+  let privateEpoch=0, savedClaims=[], mutationPending=false, queueNext=null, queueLoading=false, queuePage=0;
+  const queueCursors=new Set(), queueIds=new Set();
   const feedback=root.querySelector('.church-claim-feedback');
   function announce(message, focus=false) {
     if (!active() || !feedback) return;
@@ -120,16 +125,43 @@ export async function renderChurchDirectory(root,lang,esc,user,isOwner=false,isC
     try {
       const [mine,queue]=await Promise.all([api('/api/churches?view=mine'),isOwner?api('/api/churches?view=queue'):Promise.resolve({items:[]})]);
       if(!active()||token!==privateEpoch)return false;
-      if(!Array.isArray(mine.items)||mine.items.length>1||!mine.items.every(validMine)||!Array.isArray(queue.items)||queue.items.length>200||!queue.items.every(validQueue))throw Error('invalid private claims');
+      const continuation=queue.nextCursor??null;
+      if(!Array.isArray(mine.items)||mine.items.length>1||!mine.items.every(validMine)||!Array.isArray(queue.items)||queue.items.length>50||!queue.items.every(validQueue)||!validQueueCursor(continuation))throw Error('invalid private claims');
+      queueNext=continuation;queuePage=1;queueLoading=false;queueCursors.clear();queueIds.clear();
+      if(queueNext)queueCursors.add(queueCursorKey(queueNext));
+      for(const item of queue.items)queueIds.add(item.id);
       savedClaims=mine.items;
       privateRoot.innerHTML=mineMarkup(mine.items,w,esc,actions);
-      if(ownerRoot)ownerRoot.innerHTML=queueMarkup(queue.items,w,esc);
+      if(ownerRoot)ownerRoot.innerHTML=queueMarkup(queue.items,w,esc,actions,queueNext);
       attach();
       return true;
     } catch {
       if(active()&&token===privateEpoch){savedClaims=[];privateRoot.innerHTML=`<p role="alert">${esc(w.error)}</p>`;if(ownerRoot)ownerRoot.innerHTML='';}
       return false;
     }
+  }
+  async function loadQueuePage(){
+    if(!active()||!isOwner||mutationPending||queueLoading||!queueNext)return;
+    const token=privateEpoch, cursor=queueNext, more=ownerRoot?.querySelector('.church-claim-queue-more');
+    const pageRoot=ownerRoot?.querySelector('.church-claim-queue-pages'), pageStatus=ownerRoot?.querySelector('.church-claim-queue-status');
+    if(!more||!pageRoot||!pageStatus)return;
+    const hadFocus=root.ownerDocument?.activeElement===more;
+    queueLoading=true;pageStatus.textContent='';
+    try {
+      const data=await api('/api/churches?'+new URLSearchParams({view:'queue',afterSubmittedAt:cursor.submittedAt,afterId:cursor.id}));
+      if(!active()||token!==privateEpoch)return;
+      const continuation=data.nextCursor??null;
+      if(!Array.isArray(data.items)||data.items.length>50||!data.items.every(validQueue)||!validQueueCursor(continuation)||
+        (continuation&&queueCursors.has(queueCursorKey(continuation))))throw Error('invalid queue page');
+      const items=data.items.filter(item=>{if(queueIds.has(item.id))return false;queueIds.add(item.id);return true;});
+      queueNext=continuation;if(queueNext)queueCursors.add(queueCursorKey(queueNext));queuePage++;
+      const headingId=`church-queue-page-${queuePage}`;
+      pageRoot.insertAdjacentHTML('beforeend',`<section aria-labelledby="${headingId}"><h3 id="${headingId}" tabindex="-1">${esc(actions.queuePage)} ${queuePage}</h3>${items.length?queueItemsMarkup(items,w,esc):`<p>${esc(w.empty)}</p>`}</section>`);
+      const restoreFocus=hadFocus&&root.ownerDocument?.activeElement===more;
+      more.hidden=!queueNext;pageStatus.textContent=actions.queueFound(items.length);attach();
+      if(restoreFocus)pageRoot.querySelector(`#${headingId}`)?.focus();
+    } catch {if(active()&&token===privateEpoch)pageStatus.textContent=w.error;}
+    finally {if(token===privateEpoch)queueLoading=false;}
   }
   async function mutate(body,message,resetConsent=false) {
     if(!active()||mutationPending)return;
@@ -162,6 +194,8 @@ export async function renderChurchDirectory(root,lang,esc,user,isOwner=false,isC
     }
   }
   function attach(){
+    const more=ownerRoot?.querySelector('.church-claim-queue-more');
+    if(more)more.onclick=loadQueuePage;
     const form=root.querySelector('.church-claim');
     if(form)form.onsubmit=async event=>{
       event.preventDefault();if(!active()||mutationPending)return;

@@ -135,6 +135,13 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const churchQueue=await churchQueueResponse.json();
   assert.equal(churchQueue.items.length,1);assert.equal(churchQueue.items[0].claimantEmail,email);
   const churchId=churchQueue.items[0].id;
+  assert.equal(churchQueue.nextCursor,null);
+  const reviewCursor=new URLSearchParams({view:'queue',afterSubmittedAt:churchQueue.items[0].submittedAt,afterId:churchId});
+  const afterReviewPage=await fetch(`${base}/api/churches?${reviewCursor}`,{headers:{Cookie:ownerCookie}});
+  assert.equal(afterReviewPage.status,200);assert.deepEqual(await afterReviewPage.json(),{items:[],nextCursor:null});
+  assert.equal((await fetch(`${base}/api/churches?view=queue&afterId=partial`,{headers:{Cookie:ownerCookie}})).status,400);
+  assert.equal((await fetch(`${base}/api/churches?${reviewCursor}`,{headers:{Cookie:cookie}})).status,403);
+
   assert.equal((await churchPost({action:'review',id:churchId,decision:'approve',verificationEvidence:'Disposable integration authority fixture',note:''},ownerCookie)).response.status,200);
   const publicChurches=await (await fetch(`${base}/api/churches`)).json();
   assert.equal(publicChurches.items.length,1);assert.equal(publicChurches.items[0].name,churchClaim.name);

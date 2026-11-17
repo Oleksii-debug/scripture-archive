@@ -131,13 +131,19 @@ export async function GET(request: Request) {
       return json({ items });
     }
     if (view !== "queue" || !isVerifiedOwner(actor)) return json({ error: "forbidden" }, 403);
+    const afterSubmittedAt = url.searchParams.get("afterSubmittedAt"), afterId = url.searchParams.get("afterId");
+    const hasCursor = afterSubmittedAt !== null || afterId !== null;
+    if (["view", "afterSubmittedAt", "afterId"].some(field => url.searchParams.getAll(field).length > 1) ||
+        (hasCursor && (!timestamp(afterSubmittedAt) || !validId(afterId))))
+      return json({ error: "invalid_cursor" }, 400);
     const rows = await env.DB.prepare(`SELECT c.id,c.claimant_user_id,a.email AS claimant_email,c.name,c.city,c.country_code,c.locale,c.tradition,c.website_url,c.status,c.submitted_at
       FROM church_directory_claims c JOIN accounts a ON a.id=c.claimant_user_id
       WHERE c.status='pending' AND a.deleted_at IS NULL AND a.email_verified_at IS NOT NULL
-      ORDER BY c.submitted_at,c.id LIMIT 200`).all<ClaimRow>();
+      ${hasCursor ? "AND (c.submitted_at,c.id) > (?,?)" : ""}
+      ORDER BY c.submitted_at,c.id LIMIT 51`).bind(...(hasCursor ? [afterSubmittedAt!, afterId!] : [])).all<ClaimRow>();
     if (!rows.success || !Array.isArray(rows.results)) return json({ error: "churches_unavailable" }, 503);
     const items = [];
-    for (const row of rows.results) {
+    for (const row of rows.results.slice(0, 50)) {
       const base = claimCore(row);
       if (!base || row.status !== "pending" || !validId(row.claimant_user_id) ||
           typeof row.claimant_email !== "string" || row.claimant_email.length < 3 || row.claimant_email.length > 320 ||
@@ -146,7 +152,8 @@ export async function GET(request: Request) {
         return json({ error: "churches_unavailable" }, 503);
       items.push({ ...base, claimantId: row.claimant_user_id, claimantEmail: row.claimant_email, status: row.status });
     }
-    return json({ items });
+    const last = items.at(-1);
+    return json({ items, nextCursor: rows.results.length > 50 && last ? { submittedAt: last.submittedAt, id: last.id } : null });
   } catch { return json({ error: "churches_unavailable" }, 503); }
 }
 

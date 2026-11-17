@@ -40,7 +40,7 @@ function fixture() {
     return {status:response.status,data:await response.json()};
   }
   async function get(view='public',user='',query='',parameters={}){
-    const search=view==='public'?new URLSearchParams({q:query,...parameters}):`view=${view}`;
+    const search=new URLSearchParams(view==='public'?{q:query,...parameters}:{view,...parameters});
     const response=await exports.GET(new Request(`https://local.invalid/api/churches?${search}`,{headers:user?{'x-user':user}:{}}));
     return {status:response.status,data:await response.json()};
   }
@@ -248,4 +248,29 @@ test('church pagination retains submitted filters, earlier pages and native keyb
     assert.match(publicRoot.innerHTML,/Results, page 1/);assert.match(publicRoot.innerHTML,/Results, page 2/);
     assert.equal(more.hidden,true);assert.equal(doc.activeElement,heading);
   }finally{globalThis.fetch=originalFetch;}
+});
+
+
+test('private review queue reaches all 230 claims with stable cursors despite moderation',async()=>{
+  const f=fixture();
+  try {
+    const account=f.db.prepare("INSERT INTO accounts VALUES (?, ?, CURRENT_TIMESTAMP, NULL)");
+    const insert=f.db.prepare(`INSERT INTO church_directory_claims
+      (id,claimant_user_id,name,city,country_code,locale,tradition,representation_attested,website_consent,status,submitted_at)
+      VALUES (?,?,'Grace Community','Kyiv','UA','uk','other',1,1,'pending','2026-11-16 10:00:00')`);
+    for(let i=0;i<230;i++) {const id=`claim-${String(i).padStart(3,'0')}`;account.run(id,`${id}@example.invalid`);insert.run(id,id);}
+    let page=(await f.get('queue','owner')).data;
+    assert.equal(page.items.length,50);assert.equal(page.nextCursor.id,'claim-049');
+    assert.equal((await f.post({action:'review',id:'claim-049',decision:'reject',note:'Duplicate fixture'},'owner')).status,200);
+    const ids=page.items.map(item=>item.id);
+    for(let i=0;page.nextCursor&&i<10;i++) {
+      page=(await f.get('queue','owner','',{afterSubmittedAt:page.nextCursor.submittedAt,afterId:page.nextCursor.id})).data;
+      ids.push(...page.items.map(item=>item.id));
+    }
+    assert.equal(ids.length,230);assert.equal(new Set(ids).size,230);assert.equal(ids.at(-1),'claim-229');assert.equal(page.nextCursor,null);
+    assert.equal((await f.post({action:'review',id:'claim-229',decision:'approve',verificationEvidence:'Authority confirmed'},'owner')).status,200);
+    assert.equal((await f.get()).data.items[0].id,'claim-229');
+    for(const user of ['alice','agent','unverified'])assert.equal((await f.get('queue',user,'',{afterSubmittedAt:'2026-11-16 10:00:00',afterId:'claim-199'})).status,403);
+    for(const parameters of [{afterId:'claim-001'},{afterSubmittedAt:'2026-11-16 10:00:00'},{afterSubmittedAt:'invalid',afterId:'x'}])assert.equal((await f.get('queue','owner','',parameters)).status,400);
+  }finally{f.db.close();}
 });

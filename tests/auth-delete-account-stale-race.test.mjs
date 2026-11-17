@@ -13,8 +13,8 @@ const guard = section.match(/const deletionGuard = ("[^"\n]+");/)?.[1];
 assert.ok(cas && guard, 'extract credential CAS and account tombstone guard from production source');
 const gate = JSON.parse(guard);
 assert.match(cas, /session_version=\? AND password_hash=\? AND password_salt=\? AND password_iterations=\?/);
-assert.equal((section.match(/env\.DB\.prepare\(`[^`]*\$\{deletionGuard\}[^`]*`\)/g) || []).length, 21,
-  'all twenty-one follow-up mutations must be guarded');
+assert.equal((section.match(/env\.DB\.prepare\(`[^`]*\$\{deletionGuard\}[^`]*`\)/g) || []).length, 23,
+  'all twenty-three follow-up mutations must be guarded');
 assert.match(section, /receipts\[0\]\.meta\.changes !== 1/);
 const progress = 'DELETE FROM progress WHERE user_id=? AND ' + gate;
 const sessions = 'DELETE FROM auth_sessions WHERE user_id=? AND ' + gate;

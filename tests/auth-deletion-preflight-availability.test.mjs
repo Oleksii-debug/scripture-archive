@@ -100,7 +100,7 @@ for (const query of [
   });
 }
 
-test("successful deletion still executes canonical 20-statement D1 transaction", async () => {
+test("successful deletion still executes canonical atomic D1 transaction", async () => {
   const f = fixture();
   const res = await f.handler(request());
   assert.equal(res.status, 200);

@@ -10,10 +10,12 @@ function fixture(owner=false){
   const node=()=>({value:'',checked:false,disabled:false,textContent:'',innerHTML:'',focus(){doc.activeElement=this;}});
   const fields=Object.fromEntries(['name','city','countryCode','locale','tradition','websiteUrl','represent','consent'].map(name=>[name,node()]));
   const submit=node(),feedback=node(),searchInput=node(),reviewApprove={...node(),dataset:{decision:'approve'}},reviewReject={...node(),dataset:{decision:'reject'}};
+  const queueMore=node(),queueStatus=node(),queueHeading=node(),queuePages={...node(),insertAdjacentHTML(_where,html){this.innerHTML+=html;},querySelector:()=>queueHeading};
+  const ownerRoot={...node(),querySelector:selector=>({'.church-claim-queue-more':queueMore,'.church-claim-queue-status':queueStatus,'.church-claim-queue-pages':queuePages})[selector]??null};
   const form={fields,querySelector(selector){if(selector==='button')return submit;const name=selector.match(/^\[name=(.*)\]$/)?.[1];return fields[name]??node();}};
   const review={fields:{evidence:{value:'Authority verified'},note:{value:'Please correct the city'}},dataset:{id:'claim-1'},querySelectorAll(){return [reviewApprove,reviewReject];}};
   const privateRoot={html:'',get innerHTML(){return this.html;},set innerHTML(html){this.html=html;editButtons=[];withdrawButtons=[];for(const [css,target] of [['church-claim-edit',editButtons],['church-claim-withdraw',withdrawButtons]])for(const match of html.matchAll(new RegExp(`class="button ${css}" data-id="([^"]+)"`,'g')))target.push({...node(),dataset:{id:match[1]}});}};
-  const nodes={'.church-directory-search':{querySelector:()=>searchInput},'.church-directory-public':node(),'.church-directory-status':node(),'.church-directory-private':privateRoot,'.church-directory-owner':owner?node():null,'.church-claim':form,'.church-claim-feedback':feedback};
+  const nodes={'.church-directory-search':{querySelector:()=>searchInput},'.church-directory-public':node(),'.church-directory-status':node(),'.church-directory-private':privateRoot,'.church-directory-owner':owner?ownerRoot:null,'.church-claim':form,'.church-claim-feedback':feedback};
   const root={isConnected:true,innerHTML:'',ownerDocument:doc,querySelector:selector=>nodes[selector]??null,querySelectorAll(selector){
     if(selector==='.church-claim-edit')return editButtons;
     if(selector==='.church-claim-withdraw')return withdrawButtons;
@@ -21,7 +23,7 @@ function fixture(owner=false){
     if(selector.includes(','))return [submit,...editButtons,...withdrawButtons,...(owner?[reviewApprove,reviewReject]:[])];
     return [];
   }};
-  return {root,fields,submit,feedback,form,doc,privateRoot,reviewApprove,reviewReject,get edit(){return editButtons[0];},get withdraw(){return withdrawButtons[0];},expire(){current=false;},render:()=>renderChurchDirectory(root,'en',esc,{id:'alice',emailVerified:true},owner,()=>current)};
+  return {root,fields,submit,feedback,form,doc,privateRoot,reviewApprove,reviewReject,queueMore,queueStatus,queuePages,queueHeading,ownerRoot,get edit(){return editButtons[0];},get withdraw(){return withdrawButtons[0];},expire(){current=false;},render:()=>renderChurchDirectory(root,'en',esc,{id:'alice',emailVerified:true},owner,()=>current)};
 }
 class FixtureFormData {
   constructor(form){this.fields=form.fields;}
@@ -90,3 +92,40 @@ test('moderation protects repeated decisions, preserves deliberate focus moves a
   assert.equal(f.feedback.textContent,'The decision was saved.');
   const late=f.reviewApprove.onclick();f.expire();release();await late;assert.equal(f.feedback.textContent,'');
 },true));
+
+const queueClaim=id=>({...saved,id,claimantId:'alice',claimantEmail:'alice@example.invalid'});
+test('review pagination preserves existing forms, blocks duplicate reads and retains keyboard focus',async()=>{
+  const previous=globalThis.fetch,f=fixture(true);let pageReads=0,release;
+  globalThis.fetch=async url=>{
+    const params=new URL(url,'https://local.invalid').searchParams;
+    if(params.get('view')==='mine')return Response.json({items:[saved]});
+    if(params.get('view')==='queue') {
+      if(!params.has('afterId'))return Response.json({items:[queueClaim('first')],nextCursor:{submittedAt:saved.submittedAt,id:'first'}});
+      pageReads++;assert.equal(params.get('afterId'),'first');await new Promise(resolve=>release=resolve);
+      return Response.json({items:[queueClaim('last')],nextCursor:null});
+    }
+    return Response.json({items:[]});
+  };
+  try {
+    await f.render();assert.match(f.ownerRoot.innerHTML,/data-id="first"/);
+    f.doc.activeElement=f.queueMore;const pending=f.queueMore.onclick();await f.queueMore.onclick();assert.equal(pageReads,1);
+    release();await pending;assert.match(f.queuePages.innerHTML,/data-id="last"/);assert.equal(f.doc.activeElement,f.queueHeading);
+    assert.equal(f.queueMore.hidden,true);assert.equal(f.queueStatus.textContent,'Claims on this page: 1.');
+    assert.match(f.ownerRoot.innerHTML,/data-id="first"/,'the existing moderation form is not rebuilt');
+  }finally{globalThis.fetch=previous;}
+});
+test('review pagination rejects repeated cursors and ignores private results after account expiry',async()=>{
+  const previous=globalThis.fetch,f=fixture(true);let release,late=false;
+  globalThis.fetch=async url=>{
+    if(url.includes('view=mine'))return Response.json({items:[saved]});
+    if(url.includes('view=queue')){
+      if(url.includes('afterId=')&&late)await new Promise(resolve=>release=resolve);
+      return Response.json({items:[queueClaim(url.includes('afterId=')?'late':'first')],nextCursor:{submittedAt:saved.submittedAt,id:'first'}});
+    }
+    return Response.json({items:[]});
+  };
+  try {
+    await f.render();await f.queueMore.onclick();assert.match(f.queueStatus.textContent,/could not be completed/);assert.equal(f.queuePages.innerHTML,'');
+    late=true;const pending=f.queueMore.onclick();f.expire();release();await pending;assert.equal(f.queuePages.innerHTML,'');
+  }finally{globalThis.fetch=previous;}
+});

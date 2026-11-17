@@ -8,7 +8,7 @@ import vm from 'node:vm';
 test('account deletion clears personal records while preserving other users', async () => {
   const db = new DatabaseSync(':memory:');
   db.exec('PRAGMA foreign_keys=ON');
-  for (const name of readdirSync(new URL('../drizzle/', import.meta.url)).filter(n => /^00(?:[01][0-9]|20)_.*\.sql$/.test(n)).sort())
+  for (const name of readdirSync(new URL('../drizzle/', import.meta.url)).filter(n => /^00(?:[01][0-9]|2[0-2])_.*\.sql$/.test(n)).sort())
     db.exec(readFileSync(new URL('../drizzle/' + name, import.meta.url), 'utf8'));
   for (const id of ['alice', 'bob']) {
     db.prepare("INSERT INTO accounts (id,email,password_hash,password_salt,password_iterations,first_name,last_name) VALUES (?,?,?,?,?,?,?)").run(id, `${id}@example.invalid`, 'hash', 'salt', 1, 'First', 'Last');
@@ -49,6 +49,13 @@ test('account deletion clears personal records while preserving other users', as
   db.prepare("INSERT INTO group_sessions(id,group_id,created_by,book_id,chapter,meeting_date,reflection,answers_correct,answers_total) VALUES ('alice-meeting','bob-group','alice','GEN',12,'2026-10-27','Alice private reflection',2,3)").run();
   db.prepare("INSERT INTO group_sessions(id,group_id,created_by,book_id,chapter,meeting_date,reflection,answers_correct,answers_total) VALUES ('bob-meeting','bob-group','bob','GEN',13,'2026-10-28','Bob authored text',3,3)").run();
   db.prepare("INSERT INTO group_sessions(id,group_id,created_by,book_id,chapter,meeting_date,reflection) VALUES ('owned-meeting','alice-group','alice','GEN',14,'2026-10-28','Owner text')").run();
+  // Claims include private representative evidence; event links must cascade
+  // without deleting independent editorial materials or another owner's team.
+  for(const owner of ['alice','bob']) {
+    db.prepare(`INSERT INTO church_directory_claims
+      (id,claimant_user_id,name,city,country_code,locale,tradition,representation_attested,website_consent,status,reviewed_at,reviewed_by,verification_evidence)
+      VALUES (?,?,'Fixture Church','City','UA','en','other',1,1,'approved',CURRENT_TIMESTAMP,'owner',?)`).run('claim-'+owner,owner,'Private representative evidence '+owner);
+  }
   // Registration names are private both as a participant and as an organizer.
   for (const owner of ['alice','bob']) {
     db.prepare(`INSERT INTO church_events (id,church_claim_id,organizer_user_id,title,summary,city,country_code,locale,starts_on,ends_on,accessibility_details,organizer_authority_attested,publication_consent,status)
@@ -56,7 +63,11 @@ test('account deletion clears personal records while preserving other users', as
   }
   for(const [event,user] of [['alice','bob'],['bob','alice'],['bob','bob']])
     db.prepare("INSERT INTO event_registrations (id,event_id,user_id,attendee_name,consent_version) VALUES (?,?,?,?,1)").run(event+'-'+user,'event-'+event,user,'Private alias '+user);
-  let failAfter = -1, unconfirmedBatch = false;
+  for(const owner of ['alice','bob']) {
+    db.prepare("INSERT INTO event_materials (event_id,submission_id) VALUES (?,'reviewed-by-alice')").run('event-'+owner);
+    db.prepare("INSERT INTO event_teams (event_id,group_id,revision) VALUES (?,?,'initial')").run('event-'+owner,owner+'-group');
+  }
+  let failAfter = -1, unconfirmedBatch = false, racePasswordChange = false;
   const D1 = {
     prepare(sql) { return { bind(...args) { return {
       first: async () => db.prepare(sql).get(...args),
@@ -87,14 +98,20 @@ test('account deletion clears personal records while preserving other users', as
   const exports = {};
   vm.runInNewContext(compiled, {exports, Request, Response, URL, crypto, require(id) {
     if (id === 'cloudflare:workers') return {env:{DB:D1}};
-    if (id.endsWith('lib/auth')) return {sameOrigin: () => true, requestAddress: () => 'test', authenticateRequest: async () => ({userId:'alice',provider:'password'}), verifyPassword: async password => password === 'correct', clearSessionCookie: () => 'sa_session=; Max-Age=0'};
+    if (id.endsWith('lib/auth')) return {sameOrigin: () => true, requestAddress: () => 'test', authenticateRequest: async () => ({userId:'alice',provider:'password'}), verifyPassword: async password => { if(racePasswordChange){db.prepare("UPDATE accounts SET password_hash='changed-during-verification',session_version=session_version+1 WHERE id='alice'").run();racePasswordChange=false;}return password === 'correct';}, clearSessionCookie: () => 'sa_session=; Max-Age=0'};
     if (id.endsWith('lib/email')) return {};
     throw Error('Unexpected dependency');
   }});
   const request = password => new Request('https://example.invalid/api/auth?action=delete-account', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password})});
   assert.equal((await exports.POST(request('wrong'))).status, 401);
   assert.equal(db.prepare('SELECT count(*) n FROM mission_attempts').get().n, 2);
-  failAfter = 3;
+  racePasswordChange=true;
+  assert.equal((await exports.POST(request('correct'))).status,503,'a stale password snapshot cannot authorize erasure');
+  assert.equal(db.prepare("SELECT count(*) n FROM church_directory_claims WHERE claimant_user_id='alice'").get().n,1);
+  assert.equal(db.prepare("SELECT count(*) n FROM church_events WHERE organizer_user_id='alice'").get().n,1);
+  assert.equal(db.prepare('SELECT count(*) n FROM event_materials').get().n,2);
+  assert.equal(db.prepare('SELECT count(*) n FROM event_teams').get().n,2);
+  failAfter = 4;
   const refused = await exports.POST(request('correct'));
   assert.equal(refused.status, 503);
   assert.equal((await refused.json()).error, 'deletion_failed');
@@ -102,7 +119,7 @@ test('account deletion clears personal records while preserving other users', as
   assert.equal(db.prepare("SELECT deleted_at FROM accounts WHERE id='alice'").get().deleted_at, null);
   // Fail after BOTH shared-session and reviewed-by anonymization but before
   // group membership deletion, to prove atomic rollback of both redactions.
-  failAfter = 15;
+  failAfter = 17;
   const refusedAfterRedaction = await exports.POST(request('correct'));
   assert.equal(refusedAfterRedaction.status, 503);
   assert.equal((await refusedAfterRedaction.json()).error, 'deletion_failed');
@@ -111,6 +128,10 @@ test('account deletion clears personal records while preserving other users', as
     {reviewed_by:'alice',status:'approved'},'failed deletion rolls back shared editorial anonymization');
   assert.equal(db.prepare("SELECT count(*) AS n FROM home_group_members WHERE group_id='bob-group'").get().n, 2);
   assert.equal(db.prepare('SELECT count(*) n FROM event_registrations').get().n,3,'failed account erasure restores registration names');
+  assert.equal(db.prepare('SELECT count(*) n FROM church_directory_claims').get().n,2,'rollback restores private representative evidence');
+  assert.equal(db.prepare('SELECT count(*) n FROM church_events').get().n,2);
+  assert.equal(db.prepare('SELECT count(*) n FROM event_materials').get().n,2,'rollback restores cascaded material links');
+  assert.equal(db.prepare('SELECT count(*) n FROM event_teams').get().n,2,'rollback restores cascaded team links');
   failAfter = -1;
   unconfirmedBatch = true;
   const unconfirmed = await exports.POST(request('correct'));
@@ -121,6 +142,10 @@ test('account deletion clears personal records while preserving other users', as
   unconfirmedBatch = false;
   assert.equal((await exports.POST(request('correct'))).status, 200);
   assert.deepEqual(db.prepare('SELECT id FROM event_registrations ORDER BY id').all().map(row=>row.id),['bob-bob']);
+  for(const [table,key] of [['church_directory_claims','id'],['church_events','id'],['event_materials','event_id'],['event_teams','event_id']]) {
+    const expected=table==='church_directory_claims'?'claim-bob':'event-bob';
+    assert.deepEqual(db.prepare(`SELECT ${key} AS id FROM ${table}`).all().map(row=>row.id),[expected],table+' retains only independent Bob records');
+  }
   const alice = db.prepare("SELECT email,first_name,last_name,password_hash,password_salt,deleted_at FROM accounts WHERE id='alice'").get();
   assert.equal(alice.first_name, ''); assert.equal(alice.last_name, ''); assert.equal(alice.password_hash, ''); assert.equal(alice.password_salt, ''); assert.ok(alice.deleted_at); assert.equal(alice.email, 'deleted-alice@invalid.local');
   for (const [table,column] of [['progress','user_id'],['reader_bookmarks','user_id'],['auth_tokens','user_id'],['auth_sessions','user_id'],['editorial_roles','user_id'],['mission_attempts','actor_id'],['chapter_read_receipts','actor_id'],['support_requests','user_id']]) {

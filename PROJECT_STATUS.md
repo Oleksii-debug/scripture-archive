@@ -1,3 +1,13 @@
+## 2026-11-17 — Виправлення заявок і повна черга перевірки громад
+
+**SA-EXT-09, цикл виправлення заявки: DONE (розробка).** [PR #1271](https://github.com/Oleksii-debug/scripture-archive/pull/1271), main `0cf4c47f8b71ea4eb2d7c729d30dad38c250c810`, [CI #43968703553](https://github.com/Oleksii-debug/scripture-archive/actions/runs/43968703553) SUCCESS. Збережені поля повертаються у форму, згода повторна й явна; кнопки доступні після завершення, підтвердження має сталий фокус. 4650 Node PASS / 1 SKIP; 38/38 Worker/D1; Chrome на умовних даних: виправлення, подання, перевірка, відкликання.
+
+**SA-EXT-09, посторінкова приватна черга: DONE (розробка).** [PR #1272](https://github.com/Oleksii-debug/scripture-archive/pull/1272), main `8a605d05f6213a8f3ccccdb7984fe5e62aa6e860`, [CI #44054255240](https://github.com/Oleksii-debug/scripture-archive/actions/runs/44054255240) SUCCESS, head `29b6c441c5fac64d8d2fd0d09a2e2cf1263a5b16`. Власник переглядає всі заявки сторінками по 50; тест SQLite проходить 230 записів, включно з рішенням для останнього та продовженням після обробки граничного запису. Чернетки зауважень не стираються. Chrome підтвердив перехід Enter, збережене зауваження та фокус на заголовку нової сторінки.
+
+Перевірено 4653 Node PASS / 1 SKIP / 0 FAIL, 38/38 Worker/D1, TypeScript, збірку, lint (13 наявних попереджень), два Python-валідатори. Обидві зміни збережені в main. SA-EXT-09 загалом OPEN: триває перевірка очищення даних представника при видаленні акаунта; окремо залишаються повне приймання, production та фізичний Windows/NVDA. Реліз не оновлено.
+
+---
+
 ## 2026-11-16 — Приватні волонтерські команди заходів
 
 **SA-EXT-11, координація через приватну групу: DONE (розробка).** [PR #1269](https://github.com/Oleksii-debug/scripture-archive/pull/1269), main `26d4087e1e7e9acb330c64eff5ac07aab4196c87`, [CI #43967316570](https://github.com/Oleksii-debug/scripture-archive/actions/runs/43967316570) SUCCESS для head `b503296f9dfd6bd7d165aed8d5bd3711fb5d4b43`.

@@ -500,6 +500,10 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const materialExport = await materialExportResponse.json();
   assert.equal(materialExport.materials.find(item => item.id === material.id).title, "Edited draft");
   assert.ok(materialExport.submissions.some(item => item.id === submission && item.status === "superseded"));
+  const exportedSubmission=materialExport.submissions.find(item=>item.id===submission);
+  assert.equal(exportedSubmission.rights_holder,submitReview.rightsHolder);
+  assert.equal(exportedSubmission.rights_basis,submitReview.rightsBasis);
+  assert.equal(exportedSubmission.license_url,null);
   const otherExport = await (await fetch(`${base}/api/materials?mine=1&export=1`, { headers: { Cookie: ownerCookie } })).json();
   assert.equal(otherExport.materials.some(item => item.id === material.id), false);
   const deleteOther = await fetch(`${base}/api/materials?id=${encodeURIComponent(material.id)}`, { method: "DELETE", headers: { Origin: base, Cookie: ownerCookie } });

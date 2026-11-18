@@ -30,8 +30,8 @@ function fixture(){
     throw Error('unexpected import '+id);
   }});
   const post=async(body,user='alice',origin='https://local.invalid')=>{const response=await exports.POST(new Request('https://local.invalid/api/events',{method:'POST',headers:{origin,'content-type':'application/json',...(user?{'x-user':user}:{})},body:JSON.stringify(body)}));return {status:response.status,data:await response.json()};};
-  const get=async(view='public',user='',query='',cursor={})=>{const search=view==='public'?new URLSearchParams({q:query,...cursor}):`view=${view}`;const response=await exports.GET(new Request(`https://local.invalid/api/events?${search}`,{headers:user?{'x-user':user}:{}}));return {status:response.status,data:await response.json()};};
-  const rawGet=async query=>{const response=await exports.GET(new Request('https://local.invalid/api/events?'+query));return {status:response.status,data:await response.json(),headers:response.headers};};
+  const get=async(view='public',user='',query='',cursor={})=>{const search=view==='public'?new URLSearchParams({q:query,...cursor}):new URLSearchParams({view,...cursor});const response=await exports.GET(new Request(`https://local.invalid/api/events?${search}`,{headers:user?{'x-user':user}:{}}));return {status:response.status,data:await response.json()};};
+  const rawGet=async (query,user='')=>{const response=await exports.GET(new Request('https://local.invalid/api/events?'+query,{headers:user?{'x-user':user}:{}}));return {status:response.status,data:await response.json(),headers:response.headers};};
   return {db,post,get,rawGet};
 }
 
@@ -284,4 +284,47 @@ test('organizer UI keeps withdrawal available after deletion of the representati
   const root={isConnected:true,innerHTML:'',querySelector:s=>nodes[s]??null,querySelectorAll:()=>[]};
   globalThis.fetch=async url=>Response.json({items:url==='/api/events?view=mine'?[item]:[]});
   try{await renderEventDirectory(root,'en',String,{id:'alice',emailVerified:true});assert.match(privateRoot.innerHTML,/event-withdraw/);assert.doesNotMatch(privateRoot.innerHTML,/event-edit/);}finally{globalThis.fetch=originalFetch;}
+});
+
+
+test('private event pages traverse 230 tied rows, retain hidden/withdrawn records, and isolate every principal',async()=>{
+  const f=fixture();try{
+    const created=await f.post(event);assert.equal(created.status,201);
+    const insert=f.db.prepare(`INSERT INTO church_events
+      (id,church_claim_id,organizer_user_id,title,summary,city,country_code,locale,starts_on,ends_on,accessibility_details,organizer_authority_attested,publication_consent,status)
+      SELECT ?,church_claim_id,organizer_user_id,title,summary,city,country_code,locale,starts_on,ends_on,accessibility_details,1,1,? FROM church_events WHERE id=?`);
+    for(let i=0;i<230;i++)insert.run(`page-${String(i).padStart(3,'0')}`,i%2?'active':'withdrawn',created.data.id);
+    f.db.prepare('DELETE FROM church_events WHERE id=?').run(created.data.id);
+    f.db.exec("UPDATE church_directory_claims SET status='pending'");
+    let cursor={},ids=[],pages=0;
+    do{
+      const result=await f.get('mine','alice','',cursor);assert.equal(result.status,200);pages++;
+      assert.ok(result.data.items.length<=50);assert.equal(result.data.items.length,pages<5?50:30);
+      for(const item of result.data.items){assert.ok(['hidden','withdrawn'].includes(item.status));assert.equal('organizer_user_id' in item,false);ids.push(item.id);}
+      const next=result.data.nextCursor;
+      if(!next)break;
+      cursor={afterDate:next.startsOn,afterId:next.id};
+      assert.deepEqual((await f.get('mine','bob','',cursor)).data,{items:[],nextCursor:null});
+      assert.equal((await f.get('mine','','',cursor)).status,401);
+      assert.equal((await f.get('mine','agent','',cursor)).status,403);
+      assert.equal((await f.get('mine','unverified','',cursor)).status,403);
+    }while(pages<10);
+    assert.equal(pages,5);assert.equal(ids.length,230);assert.equal(new Set(ids).size,230);
+    assert.equal(ids.at(-1),'page-229');
+    f.db.exec("UPDATE accounts SET deleted_at=CURRENT_TIMESTAMP WHERE id='alice'");
+    assert.deepEqual((await f.get('mine','alice')).data,{items:[],nextCursor:null});
+    f.db.exec("UPDATE accounts SET deleted_at=NULL,email_verified_at=NULL WHERE id='alice'");
+    assert.deepEqual((await f.get('mine','alice')).data,{items:[],nextCursor:null});
+  }finally{f.db.close();}
+});
+
+test('private event cursors reject partial, impossible, duplicate and oversized parameters without public fallback',async()=>{
+  const f=fixture();try{
+    for(const query of ['afterId=x','afterDate=2099-05-10','afterDate=2099-02-30&afterId=x','afterDate=2099-05-10&afterId=',
+      'afterDate=2099-05-10&afterId='+('x'.repeat(101)), 'afterDate=2099-05-10&afterDate=2099-05-11&afterId=x',
+      'afterDate=2099-05-10&afterId=x&afterId=y','view=public','afterTitle=Unexpected']){
+      const response=await f.rawGet('view=mine&'+query,'alice');assert.equal(response.status,400,query);
+      assert.match(response.headers.get('cache-control'),/no-store/);
+    }
+  }finally{f.db.close();}
 });

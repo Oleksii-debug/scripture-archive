@@ -172,6 +172,23 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.deepEqual((await (await fetch(`${base}/api/events?churchId=${churchId}`)).json()).items,publicEvents.items);
   assert.deepEqual((await (await fetch(`${base}/api/events?churchId=absent`)).json()).items,[]);
   assert.equal((await fetch(`${base}/api/events?churchId=${churchId}&churchId=other`)).status,400);
+  // Real Worker/D1 keyset continuation: no organization-wide or owner bypass.
+  for(let index=0;index<51;index++){
+    const extra=await eventPost({...eventFixture,title:`Pagination fixture ${index}`,startsOn:'2099-06-01',endsOn:'2099-06-01',programme:[],timeZone:''});
+    assert.equal(extra.response.status,201);
+  }
+  const ownPage=await (await fetch(`${base}/api/events?view=mine`,{headers:{Cookie:cookie}})).json();
+  assert.equal(ownPage.items.length,50);assert.ok(ownPage.nextCursor);
+  const ownContinuation=new URLSearchParams({view:'mine',afterDate:ownPage.nextCursor.startsOn,afterId:ownPage.nextCursor.id});
+  const ownLast=await (await fetch(`${base}/api/events?${ownContinuation}`,{headers:{Cookie:cookie}})).json();
+  assert.equal(ownLast.items.length,2);assert.equal(ownLast.nextCursor,null);
+  assert.equal(new Set([...ownPage.items,...ownLast.items].map(item=>item.id)).size,52);
+  assert.equal((await fetch(`${base}/api/events?${ownContinuation}`)).status,401);
+  assert.deepEqual((await (await fetch(`${base}/api/events?${ownContinuation}`,{headers:{Cookie:ownerCookie}})).json()).items,[]);
+  assert.equal((await fetch(`${base}/api/events?view=mine&afterId=partial`,{headers:{Cookie:cookie}})).status,400);
+  // Withdraw disposable extras so the remainder of this acceptance flow keeps its single active event.
+  for(const item of [...ownPage.items,...ownLast.items])if(item.id!==createdEvent.data.id)
+    assert.equal((await eventPost({action:'withdraw',id:item.id})).response.status,200);
   const attendance=async(body,principal=ownerCookie)=>{
     const response=await fetch(`${base}/api/event-registrations`,{method:'POST',headers:{Origin:base,Cookie:principal,'Content-Type':'application/json'},body:JSON.stringify(body)});
     return {status:response.status,data:await response.json()};
@@ -207,7 +224,7 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const ownedEventsAfterReview=await (await fetch(`${base}/api/events?view=mine`,{headers:{Cookie:cookie}})).json();
   publicEvents=await (await fetch(`${base}/api/events`)).json();
   assert.equal(publicEvents.items.length,0,'a representative-claim revision does not silently republish an older event');
-  assert.deepEqual(ownedEventsAfterReview.items.map(({id,status})=>({id,status})),[{id:createdEvent.data.id,status:'hidden'}]);
+  assert.deepEqual(ownedEventsAfterReview.items.filter(item=>item.id===createdEvent.data.id).map(({id,status})=>({id,status})),[{id:createdEvent.data.id,status:'hidden'}]);
   const republishedEvent=await eventPost({...eventFixture,id:createdEvent.data.id,churchId:correctedChurch.id,title:'Republished Integration Conference'});
   assert.equal(republishedEvent.response.status,201);
   assert.equal(republishedEvent.data.id,createdEvent.data.id);

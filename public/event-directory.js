@@ -32,7 +32,7 @@ const ACTION_COPY={
 };
 const cards=(items,w,esc,lang,eligible)=>`<div class="card-grid event-directory-results">${items.map(item=>`<article class="card"><h3 lang="${esc(item.locale)}">${esc(item.title)}</h3><p><a href="/churches/${esc(encodeURIComponent(item.churchId))}">${esc(item.churchName)}</a> · ${esc(item.city)}, ${esc(item.countryCode)}</p><p>${esc(item.summary)}</p><dl><dt>${esc(w.dates)}</dt><dd><time datetime="${esc(item.startsOn)}">${esc(item.startsOn)}</time> — <time datetime="${esc(item.endsOn)}">${esc(item.endsOn)}</time></dd><dt>${esc(w.access)}</dt><dd>${esc(item.accessibilityDetails)}</dd></dl>${programmeMarkup(item,lang,esc)}${item.programmeUrl?`<a href="${esc(https(item.programmeUrl))}" rel="noreferrer">${esc(w.programme)}</a>`:''}${item.registrationUrl?` <a href="${esc(https(item.registrationUrl))}" rel="noreferrer">${esc(w.registration)}</a>`:''}${registrationForm(item,lang,esc,eligible)}${eventMaterialsControl(item,lang,esc)}${eligible?eventTeamControl(item,lang,esc):''}</article>`).join('')}</div>`;
 function eventForm(church,w,esc,lang){const languages=['uk','ru','en'].map(value=>`<option value="${value}">${esc(w.languages[value])}</option>`).join('');return `<section class="card event-organizer"><h2>${esc(w.form)}</h2><p>${esc(w.help)}</p><p><strong>${esc(church.name)}</strong></p><form class="event-form"><input type="hidden" name="id"><label class="account-field"><span>${esc(w.titleField)}</span><input name="title" minlength="3" maxlength="160" required></label><label class="account-field"><span>${esc(w.summary)}</span><textarea name="summary" minlength="3" maxlength="500" required></textarea></label><label class="account-field"><span>${esc(w.city)}</span><input name="city" minlength="2" maxlength="120" required></label><label class="account-field"><span>${esc(w.country)}</span><input name="countryCode" minlength="2" maxlength="2" pattern="[A-Za-z]{2}" required></label><label class="account-field"><span>${esc(w.locale)}</span><select name="locale">${languages}</select></label><label class="account-field"><span>${esc(w.start)}</span><input name="startsOn" type="date" required></label><label class="account-field"><span>${esc(w.end)}</span><input name="endsOn" type="date" required></label><label class="account-field"><span>${esc(w.accessDetails)}</span><textarea name="accessibilityDetails" minlength="3" maxlength="500" required></textarea></label><label class="account-field"><span>${esc(w.programmeUrl)}</span><input name="programmeUrl" type="url" maxlength="500" placeholder="https://"></label><label class="account-field"><span>${esc(w.registrationUrl)}</span><input name="registrationUrl" type="url" maxlength="500" placeholder="https://"></label>${programmeEditorMarkup(lang,esc)}${registrationSettings(lang,esc)}<label class="account-check"><input name="authority" type="checkbox" required><span>${esc(w.authority)}</span></label><label class="account-check"><input name="consent" type="checkbox" required><span>${esc(w.consent)}</span></label><button class="button" type="submit">${esc(w.submit)}</button><p class="event-form-status" role="status"></p></form></section>`;}
-function mine(items, w, esc, canEdit, lang) {
+function mine(items, w, esc, canEdit, lang, page=1) {
   if (!items.length) return '';
   const entries = items.map(item => {
     const edit = canEdit
@@ -42,7 +42,7 @@ function mine(items, w, esc, canEdit, lang) {
       : `<button class="button event-withdraw" data-id="${esc(item.id)}" type="button">${esc(w.withdraw)}</button>`;
     return `<article><h3 lang="${esc(item.locale)}">${esc(item.title)}</h3><p>${esc(w[item.status])}</p>${edit}${withdraw}${canEdit?rosterControl(item,lang,esc):''}${eventMaterialsControl(item,lang,esc,true)}${eventTeamControl(item,lang,esc,true)}</article>`;
   }).join('');
-  return `<section class="card event-mine"><h2>${esc(w.mine)}</h2>${entries}<p role="status"></p></section>`;
+  return `<section class="card event-mine" aria-labelledby="event-mine-page-${page}"><h2 id="event-mine-page-${page}" tabindex="-1">${esc(w.mine)} · ${page}</h2>${entries}<p role="status"></p></section>`;
 }
 
 export function churchEventFilter(search=''){
@@ -51,22 +51,30 @@ export function churchEventFilter(search=''){
   const value=parameters.get('churchId');
   return parameters.getAll('churchId').length===1&&/^[A-Za-z0-9_-]{1,100}$/.test(value)?value:null;
 }
+const MINE_COPY={
+  uk:{more:'Показати наступні мої події',end:'Усі власні події завантажено.',found:n=>`Власних подій на цій сторінці: ${n}.`},
+  ru:{more:'Показать следующие мои события',end:'Все собственные события загружены.',found:n=>`Собственных событий на этой странице: ${n}.`},
+  en:{more:'Show my next events',end:'All your events have been loaded.',found:n=>`Your events on this page: ${n}.`},
+};
 const FILTER_COPY={uk:{active:'Події вибраної громади',back:'Сторінка громади',all:'Усі події'},ru:{active:'События выбранной общины',back:'Страница общины',all:'Все события'},en:{active:'Events from the selected community',back:'Community page',all:'All events'}};
 export async function renderEventDirectory(root,lang,esc,user,isCurrent=()=>true,churchId=''){
   const w=copy(lang),principal=user?.id??null,canOrganize=user?.emailVerified===true&&user?.authProvider!=='agent';
   const actions=typeof lang==='string'&&Object.hasOwn(ACTION_COPY,lang)?ACTION_COPY[lang]:ACTION_COPY.uk;
+  const mineCopy=Object.hasOwn(MINE_COPY,lang)?MINE_COPY[lang]:MINE_COPY.uk;
   const pages = typeof lang==='string' && Object.hasOwn(PAGE_COPY,lang) ? PAGE_COPY[lang] : PAGE_COPY.uk;
   const active=()=>{try{return root?.isConnected!==false&&isCurrent()===true&&(user?.id??null)===principal;}catch{return false;}};
   if(!active())return;
   const filterCopy=typeof lang==='string'&&Object.hasOwn(FILTER_COPY,lang)?FILTER_COPY[lang]:FILTER_COPY.uk;
   if(typeof churchId!=='string'||(churchId&&!/^[A-Za-z0-9_-]{1,100}$/.test(churchId))){root.innerHTML=`<h1>${esc(w.title)}</h1><p role="alert">${esc(w.error)}</p><a href="/events">${esc(filterCopy.all)}</a>`;return;}
   const filterMarkup=churchId?`<p>${esc(filterCopy.active)} · <a href="/churches/${esc(churchId)}">${esc(filterCopy.back)}</a> · <a href="/events">${esc(filterCopy.all)}</a></p>`:'';
-  root.innerHTML=`<section class="event-directory" aria-labelledby="event-directory-title"><div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1 id="event-directory-title">${esc(w.title)}</h1></div></div>${filterMarkup}<p class="lead">${esc(w.lead)}</p><p>${esc(w.honesty)}</p><form class="event-search"><label class="account-field"><span>${esc(w.search)}</span><input name="query" type="search" maxlength="80"></label><button class="button" type="submit">${esc(w.find)}</button></form><p class="event-status" role="status" tabindex="-1"></p><div class="event-public"></div><button class="button event-more" type="button" hidden>${esc(pages.more)}</button><div class="event-attendance"></div><p class="event-action-status" role="status" tabindex="-1"></p><div class="event-private">${canOrganize?'':`<p><a href="/account">${esc(w.signin)}</a></p>`}</div></section>`;
+  root.innerHTML=`<section class="event-directory" aria-labelledby="event-directory-title"><div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1 id="event-directory-title">${esc(w.title)}</h1></div></div>${filterMarkup}<p class="lead">${esc(w.lead)}</p><p>${esc(w.honesty)}</p><form class="event-search"><label class="account-field"><span>${esc(w.search)}</span><input name="query" type="search" maxlength="80"></label><button class="button" type="submit">${esc(w.find)}</button></form><p class="event-status" role="status" tabindex="-1"></p><div class="event-public"></div><button class="button event-more" type="button" hidden>${esc(pages.more)}</button><div class="event-attendance"></div><p class="event-action-status" role="status" tabindex="-1"></p><div class="event-private">${canOrganize?'':`<p><a href="/account">${esc(w.signin)}</a></p>`}</div><div class="event-mine-continuation"></div><p class="event-mine-status" role="status" tabindex="-1"></p><button class="button event-mine-more" type="button" hidden>${esc(mineCopy.more)}</button></section>`;
   const search=root.querySelector('.event-search'),query=search?.querySelector('input'),publicRoot=root.querySelector('.event-public'),privateRoot=root.querySelector('.event-private'),status=root.querySelector('.event-status');
   const registrations=createEventRegistrations(root,lang,esc,canOrganize,active);
   const more = root.querySelector('.event-more'), seenCursors = new Set(), listed = new Set();
   const actionStatus=root.querySelector('.event-action-status')||status;
-  let mutationPending=false,privateEpoch=0;
+  const mineMore=root.querySelector('.event-mine-more'),mineContinuation=root.querySelector('.event-mine-continuation');
+  const mineStatus=root.querySelector('.event-mine-status')||actionStatus,privateCursors=new Set();
+  let mutationPending=false,privateEpoch=0,privateLoading=false,privateCursor=null,privatePage=0,organizerChurch=null;
   let epoch=0, owned=[], nextCursor=null, activeQuery='', page=0, loading=false;
   function cursorKey(cursor) {
     return JSON.stringify([cursor.startsOn, cursor.title, cursor.id]);
@@ -133,27 +141,58 @@ export async function renderEventDirectory(root,lang,esc,user,isCurrent=()=>true
   if (more) more.onclick=()=>{
     if (active() && !loading && nextCursor) void publicLoad(activeQuery,nextCursor);
   };
-  async function privateLoad(){
-    if(!canOrganize||!active())return false;
-    const token=++privateEpoch;
+  async function privateLoad(cursor=null){
+    if(!canOrganize||!active()||(cursor&&(privateLoading||mutationPending)))return false;
+    const token=++privateEpoch,hadFocus=Boolean(cursor&&mineMore&&root.ownerDocument?.activeElement===mineMore);
+    privateLoading=true;mineMore?.setAttribute('aria-disabled','true');mineStatus.textContent='';
+    if(!cursor){
+      privateCursor=null;privatePage=0;privateCursors.clear();
+      if(mineMore)mineMore.hidden=true;
+      if(mineContinuation)mineContinuation.innerHTML='';
+    }
+    const parameters=new URLSearchParams({view:'mine'});
+    if(cursor){parameters.set('afterDate',cursor.startsOn);parameters.set('afterId',cursor.id);}
     try{
-      const [churches,events]=await Promise.all([api('/api/churches?view=mine'),api('/api/events?view=mine')]);
+      const [churches,events]=await Promise.all([cursor?null:api('/api/churches?view=mine'),api('/api/events?'+parameters)]);
       if(!active()||token!==privateEpoch)return false;
-      if(!Array.isArray(churches.items)||churches.items.length>1||!Array.isArray(events.items)||events.items.length>200||!events.items.every(item=>valid(item,true)))throw Error('invalid private events');
-      owned=events.items;const church=churches.items.find(item=>item?.status==='approved');
-      const organizer=church?eventForm(church,w,esc,lang):`<p><a href="/churches">${esc(w.churchRequired)}</a></p>`;
-      privateRoot.innerHTML=organizer+mine(owned,w,esc,Boolean(church),lang);
-      attach(church);registrations.attachRosters();mountEventMaterials(root,lang,esc,active);mountEventTeams(root,lang,esc,active);
+      if(!cursor&&(!Array.isArray(churches.items)||churches.items.length>1))throw Error('invalid church');
+      const continuation=events.nextCursor??null,last=events.items?.at?.(-1);
+      if(!Array.isArray(events.items)||events.items.length>50||!events.items.every(item=>valid(item,true))||
+        (continuation!==null&&(!date(continuation.startsOn)||typeof continuation.id!=='string'||!continuation.id||continuation.id.length>100||
+          events.items.length!==50||last.startsOn!==continuation.startsOn||last.id!==continuation.id||
+          privateCursors.has(JSON.stringify([continuation.startsOn,continuation.id])))))throw Error('invalid private events');
+      if(!cursor){owned=[];organizerChurch=churches.items.find(item=>item?.status==='approved');}
+      const ids=new Set(owned.map(item=>item.id)),entries=events.items.filter(item=>{if(ids.has(item.id))return false;ids.add(item.id);return true;});
+      owned.push(...entries);privatePage++;privateCursor=continuation;
+      if(continuation)privateCursors.add(JSON.stringify([continuation.startsOn,continuation.id]));
+      const content=mine(entries,w,esc,Boolean(organizerChurch),lang,privatePage);
+      if(!cursor){
+        const organizer=organizerChurch?eventForm(organizerChurch,w,esc,lang):`<p><a href="/churches">${esc(w.churchRequired)}</a></p>`;
+        privateRoot.innerHTML=organizer+content;
+      }else mineContinuation.insertAdjacentHTML('beforeend',content);
+      attach(organizerChurch);registrations.attachRosters();mountEventMaterials(root,lang,esc,active);mountEventTeams(root,lang,esc,active);
+      mineStatus.textContent=entries.length?mineCopy.found(entries.length):mineCopy.end;
+      if(mineMore)mineMore.hidden=!privateCursor;
+      if(hadFocus&&root.ownerDocument?.activeElement===mineMore)
+        (mineContinuation?.querySelector(`#event-mine-page-${privatePage}`)||mineStatus).focus?.();
       return true;
     }catch{
-      if(active()&&token===privateEpoch){owned=[];privateRoot.innerHTML=`<p role="alert">${esc(w.error)}</p>`;}
+      if(active()&&token===privateEpoch){
+        mineStatus.textContent=w.error;
+        if(!cursor){owned=[];privateRoot.innerHTML=`<p role="alert">${esc(w.error)}</p>`;}
+      }
       return false;
+    }finally{
+      if(token===privateEpoch){privateLoading=false;mineMore?.removeAttribute('aria-disabled');}
     }
   }
+  if(mineMore)mineMore.onclick=()=>{
+    if(active()&&!privateLoading&&!mutationPending&&privateCursor)return privateLoad(privateCursor);
+  };
   async function mutate(body,button,message,formFeedback=null){
     if(!active()||mutationPending)return;
-    mutationPending=true;privateEpoch++;
-    const controls=[...new Set([button,...root.querySelectorAll('.event-form button[type="submit"], .event-edit, .event-withdraw')])];
+    mutationPending=true;privateEpoch++;privateLoading=false;
+    const controls=[...new Set([button,...(mineMore?[mineMore]:[]),...root.querySelectorAll('.event-form button[type="submit"], .event-edit, .event-withdraw')])];
     controls.forEach(control=>control.setAttribute('aria-disabled','true'));
     const focused=root.ownerDocument?.activeElement,hadFocus=focused===button;
     const announce=message=>{

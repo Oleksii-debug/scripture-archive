@@ -172,8 +172,9 @@ export async function renderEventDirectory(root,lang,esc,user,isCurrent=()=>true
       }else mineContinuation.insertAdjacentHTML('beforeend',content);
       attach(organizerChurch);registrations.attachRosters();mountEventMaterials(root,lang,esc,active);mountEventTeams(root,lang,esc,active);
       mineStatus.textContent=entries.length?mineCopy.found(entries.length):mineCopy.end;
+      const restoreFocus=hadFocus&&root.ownerDocument?.activeElement===mineMore;
       if(mineMore)mineMore.hidden=!privateCursor;
-      if(hadFocus&&root.ownerDocument?.activeElement===mineMore)
+      if(restoreFocus)
         (mineContinuation?.querySelector(`#event-mine-page-${privatePage}`)||mineStatus).focus?.();
       return true;
     }catch{

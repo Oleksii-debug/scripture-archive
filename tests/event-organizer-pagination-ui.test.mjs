@@ -8,6 +8,8 @@ function fixture(){
   const doc={body:{},activeElement:null},user={id:'alice',emailVerified:true};let current=true,form=null,buttons=[],edits=[];
   const node=()=>({value:'',checked:false,textContent:'',innerHTML:'',disabled:false,hidden:true,attributes:{},focus(){doc.activeElement=this;},setAttribute(k,v){this.attributes[k]=v;},removeAttribute(k){delete this.attributes[k];}});
   const more=node(),status=node(),feedback=node(),publicRoot=node(),searchInput=node(),search={querySelector:()=>searchInput},headings=new Map();
+  let moreHidden=true;
+  Object.defineProperty(more,'hidden',{get:()=>moreHidden,set(value){moreHidden=value;if(value&&doc.activeElement===more)doc.activeElement=doc.body;}});
   function capture(html){
     for(const [css,target] of [['event-withdraw',buttons],['event-edit',edits]])for(const match of html.matchAll(new RegExp(`class="button ${css}" data-id="([^"]+)"`,'g')))target.push({...node(),dataset:{id:match[1]}});
     for(const match of html.matchAll(/<h2 id="(event-mine-page-\d+)"/g))headings.set('#'+match[1],node());

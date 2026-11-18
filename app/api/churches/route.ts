@@ -209,6 +209,23 @@ export async function POST(request: Request) {
     } catch { return json({ error: "claim_failed" }, 503); }
   }
 
+  if (body.action === "delete") {
+    if (!validId(body.id) || body.confirmDeletion !== true) return json({ error: "invalid_claim_deletion" }, 400);
+    try {
+      // Exact revision + owner predicate: a stale confirmation cannot delete a
+      // newly corrected claim. Events retain their private organizer drafts,
+      // but every public/event roster read requires a current approved claim.
+      const result = await env.DB.prepare(`DELETE FROM church_directory_claims
+        WHERE id=? AND claimant_user_id=?
+        AND EXISTS(SELECT 1 FROM accounts a WHERE a.id=? AND a.deleted_at IS NULL AND a.email_verified_at IS NOT NULL)`)
+        .bind(body.id, actor.userId, actor.userId).run();
+      const changes = result.meta?.changes;
+      if (!result.success || !Number.isSafeInteger(changes) || changes < 0 || changes > 1)
+        return json({ error: "claim_delete_failed" }, 503);
+      return changes === 1 ? json({ ok: true }) : json({ error: "not_found_or_changed" }, 409);
+    } catch { return json({ error: "claim_delete_failed" }, 503); }
+  }
+
   if (body.action === "withdraw") {
     if (!validId(body.id)) return json({ error: "invalid_claim" }, 400);
     try {

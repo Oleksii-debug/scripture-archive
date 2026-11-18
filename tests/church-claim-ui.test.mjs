@@ -5,25 +5,26 @@ import {renderChurchDirectory} from '../public/church-directory.js';
 const saved={id:'claim-1',name:'Grace Community',city:'Kyiv',countryCode:'UA',locale:'uk',tradition:'protestant',websiteUrl:'https://example.invalid/church',submittedAt:'2026-11-16 10:00:00',reviewedAt:null,status:'pending',reviewNote:''};
 const esc=value=>String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
 function fixture(owner=false){
-  let current=true,editButtons=[],withdrawButtons=[];
+  let current=true,editButtons=[],withdrawButtons=[],deleteForms=[];
   const doc={body:{},activeElement:null};
   const node=()=>({value:'',checked:false,disabled:false,textContent:'',innerHTML:'',focus(){doc.activeElement=this;}});
   const fields=Object.fromEntries(['name','city','countryCode','locale','tradition','websiteUrl','represent','consent'].map(name=>[name,node()]));
   const submit=node(),feedback=node(),searchInput=node(),reviewApprove={...node(),dataset:{decision:'approve'}},reviewReject={...node(),dataset:{decision:'reject'}};
   const queueMore=node(),queueStatus=node(),queueHeading=node(),queuePages={...node(),insertAdjacentHTML(_where,html){this.innerHTML+=html;},querySelector:()=>queueHeading};
   const ownerRoot={...node(),querySelector:selector=>({'.church-claim-queue-more':queueMore,'.church-claim-queue-status':queueStatus,'.church-claim-queue-pages':queuePages})[selector]??null};
-  const form={fields,querySelector(selector){if(selector==='button')return submit;const name=selector.match(/^\[name=(.*)\]$/)?.[1];return fields[name]??node();}};
+  const form={fields,reset(){for(const field of Object.values(fields)){field.value="";field.checked=false;}},querySelector(selector){if(selector==='button')return submit;const name=selector.match(/^\[name=(.*)\]$/)?.[1];return fields[name]??node();}};
   const review={fields:{evidence:{value:'Authority verified'},note:{value:'Please correct the city'}},dataset:{id:'claim-1'},querySelectorAll(){return [reviewApprove,reviewReject];}};
-  const privateRoot={html:'',get innerHTML(){return this.html;},set innerHTML(html){this.html=html;editButtons=[];withdrawButtons=[];for(const [css,target] of [['church-claim-edit',editButtons],['church-claim-withdraw',withdrawButtons]])for(const match of html.matchAll(new RegExp(`class="button ${css}" data-id="([^"]+)"`,'g')))target.push({...node(),dataset:{id:match[1]}});}};
+  const privateRoot={html:'',get innerHTML(){return this.html;},set innerHTML(html){this.html=html;editButtons=[];withdrawButtons=[];deleteForms=[];for(const [css,target] of [['church-claim-edit',editButtons],['church-claim-withdraw',withdrawButtons]])for(const match of html.matchAll(new RegExp(`class="button ${css}" data-id="([^"]+)"`,'g')))target.push({...node(),dataset:{id:match[1]}});for(const match of html.matchAll(/class="church-claim-delete" data-id="([^"]+)"/g)){const confirmation=node(),button=node();deleteForms.push({dataset:{id:match[1]},confirmation,button,querySelector:()=>confirmation});}}};
   const nodes={'.church-directory-search':{querySelector:()=>searchInput},'.church-directory-public':node(),'.church-directory-status':node(),'.church-directory-private':privateRoot,'.church-directory-owner':owner?ownerRoot:null,'.church-claim':form,'.church-claim-feedback':feedback};
   const root={isConnected:true,innerHTML:'',ownerDocument:doc,querySelector:selector=>nodes[selector]??null,querySelectorAll(selector){
     if(selector==='.church-claim-edit')return editButtons;
     if(selector==='.church-claim-withdraw')return withdrawButtons;
+    if(selector==='.church-claim-delete')return deleteForms;
     if(selector==='.church-claim-review')return owner?[review]:[];
-    if(selector.includes(','))return [submit,...editButtons,...withdrawButtons,...(owner?[reviewApprove,reviewReject]:[])];
+    if(selector.includes(','))return [submit,...editButtons,...withdrawButtons,...deleteForms.map(form=>form.button),...(owner?[reviewApprove,reviewReject]:[])];
     return [];
   }};
-  return {root,fields,submit,feedback,form,doc,privateRoot,reviewApprove,reviewReject,queueMore,queueStatus,queuePages,queueHeading,ownerRoot,get edit(){return editButtons[0];},get withdraw(){return withdrawButtons[0];},expire(){current=false;},render:()=>renderChurchDirectory(root,'en',esc,{id:'alice',emailVerified:true},owner,()=>current)};
+  return {root,fields,submit,feedback,form,doc,privateRoot,reviewApprove,reviewReject,queueMore,queueStatus,queuePages,queueHeading,ownerRoot,get edit(){return editButtons[0];},get withdraw(){return withdrawButtons[0];},get deletion(){return deleteForms[0];},expire(){current=false;},render:()=>renderChurchDirectory(root,'en',esc,{id:'alice',emailVerified:true},owner,()=>current)};
 }
 class FixtureFormData {
   constructor(form){this.fields=form.fields;}
@@ -35,8 +36,8 @@ async function runFixture(callback,owner=false){
   globalThis.FormData=FixtureFormData;
   const f=fixture(owner);let claim={...saved},writes=[];
   const network=async(url,options)=>{
-    if(options){const body=JSON.parse(options.body);writes.push(body);if(body.action==='submit')claim={...claim,...body,id:'claim-2',status:'pending'};if(body.action==='withdraw')claim={...claim,status:'withdrawn'};return Response.json({ok:true});}
-    if(url.includes('view=mine'))return Response.json({items:[claim]});
+    if(options){const body=JSON.parse(options.body);writes.push(body);if(body.action==='submit')claim={...claim,...body,id:'claim-2',status:'pending'};if(body.action==='withdraw')claim={...claim,status:'withdrawn'};if(body.action==='delete')claim=null;return Response.json({ok:true});}
+    if(url.includes('view=mine'))return Response.json({items:claim?[claim]:[]});
     if(url.includes('view=queue'))return Response.json({items:[]});
     return Response.json({items:[],nextCursor:null});
   };
@@ -129,3 +130,33 @@ test('review pagination rejects repeated cursors and ignores private results aft
     late=true;const pending=f.queueMore.onclick();f.expire();release();await pending;assert.equal(f.queuePages.innerHTML,'');
   }finally{globalThis.fetch=previous;}
 });
+
+test('claim deletion requires a fresh checkbox, is single flight, clears the draft and restores feedback focus',()=>runFixture(async(f,writes,network)=>{
+  const deletion=f.deletion;assert.ok(deletion);assert.equal(deletion.confirmation.checked,false);
+  await deletion.onsubmit({preventDefault(){}});assert.equal(writes.length,0);assert.equal(f.doc.activeElement,deletion.confirmation);
+  assert.match(f.feedback.textContent,/Confirm deletion/);
+  f.fields.name.value=saved.name;f.fields.consent.checked=true;
+  deletion.confirmation.checked=true;f.doc.activeElement=deletion.button;
+  let release;globalThis.fetch=async(url,options)=>{if(options)await new Promise(resolve=>release=resolve);return network(url,options);};
+  const pending=deletion.onsubmit({preventDefault(){}});assert.equal(deletion.button.disabled,true);
+  await deletion.onsubmit({preventDefault(){}});release();await pending;
+  assert.deepEqual(writes,[{action:'delete',id:'claim-1',confirmDeletion:true}]);
+  assert.equal(f.deletion,undefined);assert.equal(f.fields.name.value,'');assert.equal(f.fields.consent.checked,false);
+  assert.equal(f.doc.activeElement,f.feedback);assert.match(f.feedback.textContent,/deleted.*account was preserved/);
+}));
+
+test('failed or unconfirmed claim deletion retains data, permits retry and never claims success',()=>runFixture(async(f,writes,network)=>{
+  const deletion=f.deletion;deletion.confirmation.checked=true;f.fields.name.value=saved.name;
+  for(const response of [()=>Response.json({error:'unavailable'},{status:503}),()=>Response.json({})]){
+    globalThis.fetch=async(url,options)=>options?response():network(url,options);
+    f.doc.activeElement=deletion.button;await deletion.onsubmit({preventDefault(){}});
+    assert.equal(f.deletion,deletion);assert.equal(deletion.button.disabled,false);assert.equal(f.fields.name.value,saved.name);
+    assert.doesNotMatch(f.feedback.textContent,/were deleted/);assert.equal(f.doc.activeElement,f.feedback);
+  }
+  globalThis.fetch=network;await deletion.onsubmit({preventDefault(){}});assert.equal(f.deletion,undefined);
+}));
+
+test('leaving the claim workspace disables a retained deletion handler',()=>runFixture(async(f,writes)=>{
+  const deletion=f.deletion;deletion.confirmation.checked=true;f.expire();
+  await deletion.onsubmit({preventDefault(){}});assert.deepEqual(writes,[]);
+}));

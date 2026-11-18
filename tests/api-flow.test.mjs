@@ -214,10 +214,21 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.deepEqual((await (await fetch(`${base}/api/events`)).json()).items.map(({id,churchId})=>({id,churchId})),[{id:createdEvent.data.id,churchId:correctedChurch.id}]);
   const correctedEvent=await eventPost({...eventFixture,id:republishedEvent.data.id,churchId:correctedChurch.id,title:'Corrected Integration Conference'});
   assert.equal(correctedEvent.response.status,201);assert.equal((await (await fetch(`${base}/api/events`)).json()).items[0].title,'Corrected Integration Conference');
+  assert.equal((await churchPost({action:'delete',id:correctedChurch.id,confirmDeletion:false})).response.status,400);
+  assert.equal((await churchPost({action:'delete',id:correctedChurch.id,confirmDeletion:true},ownerCookie)).response.status,409);
+  assert.equal((await churchPost({action:'delete',id:churchId,confirmDeletion:true})).response.status,409);
+  assert.equal((await churchPost({action:'delete',id:correctedChurch.id,confirmDeletion:true})).response.status,200);
+  assert.deepEqual((await (await fetch(`${base}/api/churches?view=mine`,{headers:{Cookie:cookie}})).json()).items,[]);
+  assert.equal((await fetch(`${base}/api/churches?view=detail&id=${correctedChurch.id}`)).status,404);
+  assert.deepEqual((await (await fetch(`${base}/api/events?churchId=${correctedChurch.id}`)).json()).items,[]);
+  assert.equal((await readAttendance(cookie,`view=roster&eventId=${createdEvent.data.id}`)).status,404);
+  assert.equal((await (await readAttendance(ownerCookie)).json()).items[0].available,false);
+  assert.equal((await (await fetch(`${base}/api/events?view=mine`,{headers:{Cookie:cookie}})).json()).items.find(item=>item.id===createdEvent.data.id).status,'hidden');
+  assert.equal((await (await fetch(`${base}/api/account`,{headers:{Cookie:cookie}})).json()).user.id,ownAccount.user.id);
   assert.equal((await eventPost({action:'withdraw',id:republishedEvent.data.id})).response.status,200);
   assert.equal((await (await fetch(`${base}/api/events`)).json()).items.length,0);
   assert.equal((await (await readAttendance(ownerCookie)).json()).items.length,0,'withdrawing an event erases its attendee list');
-  assert.equal((await churchPost({action:'withdraw',id:correctedChurch.id})).response.status,200);
+  assert.equal((await churchPost({action:'delete',id:correctedChurch.id,confirmDeletion:true})).response.status,409);
   const mark = { edition: "en-web", book: "GEN", chapter: 12 };
   // The disposable Wrangler proxy can abort a following request when an
   // early Origin-rejected PUT carries an unread request body. This probe tests

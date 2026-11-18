@@ -306,3 +306,57 @@ test('a corrupted public detail fails closed instead of publishing damaged conte
     const response=await f.rawGet('view=detail&id='+id);assert.equal(response.status,503);assert.equal('item' in response.data,false);
   }finally{f.db.close();}
 });
+
+test('claim deletion requires explicit consent, current revision and ownership while preserving the account',async()=>{
+  const f=fixture();try{
+    await f.post(claim);let id=(await f.get('mine','alice')).data.items[0].id;
+    const remove=extra=>({action:'delete',id,confirmDeletion:true,...extra});
+    for(const value of [false,null,1,'true',[],{}])assert.equal((await f.post(remove({confirmDeletion:value}))).status,400);
+    assert.equal((await f.post(remove(),'')).status,401);
+    assert.equal((await f.post(remove(),'unverified')).status,403);
+    assert.equal((await f.post(remove(),'agent')).status,403);
+    assert.equal((await f.post(remove(),'alice','https://other.invalid')).status,403);
+    assert.equal((await f.post(remove(),'bob')).status,409);
+    assert.equal((await f.post(remove(),'owner')).status,409,'review authority does not grant ownership');
+    await f.post({...claim,city:'Lviv'});
+    assert.equal((await f.post(remove())).status,409,'confirmation of an older revision must not delete a correction');
+    id=(await f.get('mine','alice')).data.items[0].id;
+    await f.post({action:'review',id,decision:'approve',verificationEvidence:'Private evidence',note:'Private reviewer note'},'owner');
+    assert.equal((await f.post(remove())).status,200);
+    assert.equal((await f.post(remove())).status,409);
+    assert.deepEqual((await f.get('mine','alice')).data.items,[]);
+    assert.equal((await f.rawGet('view=detail&id='+id)).status,404);
+    assert.equal(f.db.prepare('SELECT count(*) AS n FROM church_directory_claims').get().n,0);
+    assert.equal(f.db.prepare("SELECT count(*) AS n FROM accounts WHERE id='alice' AND deleted_at IS NULL").get().n,1);
+    assert.equal((await f.post(claim)).status,201,'the same account can start a fresh claim');
+    assert.equal((await f.get('mine','alice')).data.items[0].status,'pending');
+  }finally{f.db.close();}
+});
+
+test('pending, rejected and withdrawn claims can each be erased without reopening publication',async()=>{
+  for(const state of ['pending','rejected','withdrawn']){
+    const f=fixture();try{
+      await f.post(claim);const id=(await f.get('mine','alice')).data.items[0].id;
+      if(state==='rejected')await f.post({action:'review',id,decision:'reject',note:'Please correct the claim'},'owner');
+      if(state==='withdrawn')await f.post({action:'withdraw',id});
+      assert.equal((await f.post({action:'delete',id,confirmDeletion:true})).status,200);
+      assert.equal(f.db.prepare('SELECT count(*) AS n FROM church_directory_claims').get().n,0);
+      assert.deepEqual((await f.get('queue','owner')).data.items,[]);
+    }finally{f.db.close();}
+  }
+});
+
+test('claim deletion refuses an account that becomes inactive after authentication and fails closed on storage errors',async()=>{
+  const f=fixture();try{
+    await f.post(claim);const id=(await f.get('mine','alice')).data.items[0].id;
+    for(const sql of ["UPDATE accounts SET email_verified_at=NULL WHERE id='alice'","UPDATE accounts SET email_verified_at=CURRENT_TIMESTAMP,deleted_at=CURRENT_TIMESTAMP WHERE id='alice'"]){
+      f.db.exec(sql);assert.equal((await f.post({action:'delete',id,confirmDeletion:true})).status,409);
+      assert.equal(f.db.prepare('SELECT count(*) AS n FROM church_directory_claims').get().n,1);
+    }
+    f.db.exec("UPDATE accounts SET deleted_at=NULL WHERE id='alice'; CREATE TRIGGER reject_claim_delete BEFORE DELETE ON church_directory_claims BEGIN SELECT RAISE(ABORT,'simulated storage failure'); END;");
+    assert.equal((await f.post({action:'delete',id,confirmDeletion:true})).status,503);
+    assert.equal(f.db.prepare('SELECT count(*) AS n FROM church_directory_claims').get().n,1);
+    f.db.exec('DROP TRIGGER reject_claim_delete');
+    assert.equal((await f.post({action:'delete',id,confirmDeletion:true})).status,200);
+  }finally{f.db.close();}
+});

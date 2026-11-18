@@ -255,3 +255,33 @@ test('community event filtering stays exact across search, cursor pages, and rev
     assert.deepEqual((await f.get('public','','',filter)).data.items,[]);
   }finally{f.db.close();}
 });
+
+test('deleted community claims hide public events but preserve private management and require fresh republication',async()=>{
+  const f=fixture();try{
+    const {data:{id}}=await f.post(event);
+    f.db.exec("DELETE FROM church_directory_claims WHERE id='church'");
+    assert.deepEqual((await f.get()).data.items,[]);
+    const hidden=(await f.get('mine','alice')).data.items;
+    assert.equal(hidden.length,1);assert.equal(hidden[0].id,id);assert.equal(hidden[0].status,'hidden');assert.equal(hidden[0].churchName,null);
+    assert.deepEqual((await f.get('mine','bob')).data.items,[]);
+    assert.equal((await f.post({...event,id})).status,409);
+    f.db.exec(`INSERT INTO church_directory_claims (id,claimant_user_id,name,city,country_code,locale,tradition,representation_attested,website_consent,status,reviewed_at,reviewed_by,verification_evidence)
+      VALUES ('replacement','alice','Renewed Community','Kyiv','UA','en','other',1,1,'approved',CURRENT_TIMESTAMP,'owner','New approval evidence')`);
+    assert.deepEqual((await f.get()).data.items,[]);
+    assert.equal((await f.get('mine','alice')).data.items[0].status,'hidden');
+    assert.equal((await f.post({...event,id,churchId:'replacement'})).status,201);
+    assert.equal((await f.get()).data.items[0].churchName,'Renewed Community');
+    f.db.exec("DELETE FROM church_directory_claims WHERE id='replacement'");
+    assert.equal((await f.post({action:'withdraw',id})).status,200);
+    assert.equal((await f.get('mine','alice')).data.items[0].status,'withdrawn');
+  }finally{f.db.close();}
+});
+
+test('organizer UI keeps withdrawal available after deletion of the representative claim',async()=>{
+  const originalFetch=globalThis.fetch;
+  const item={id:'orphaned-event',churchId:'deleted-claim',churchName:null,title:event.title,summary:event.summary,city:event.city,countryCode:event.countryCode,locale:event.locale,startsOn:event.startsOn,endsOn:event.endsOn,accessibilityDetails:event.accessibilityDetails,programmeUrl:null,registrationUrl:null,status:'hidden',createdAt:'2026-11-18 00:00:00',updatedAt:'2026-11-18 00:00:00'};
+  const privateRoot={innerHTML:''},nodes={'.event-search':{querySelector:()=>({value:''})},'.event-public':{innerHTML:''},'.event-private':privateRoot,'.event-status':{textContent:''}};
+  const root={isConnected:true,innerHTML:'',querySelector:s=>nodes[s]??null,querySelectorAll:()=>[]};
+  globalThis.fetch=async url=>Response.json({items:url==='/api/events?view=mine'?[item]:[]});
+  try{await renderEventDirectory(root,'en',String,{id:'alice',emailVerified:true});assert.match(privateRoot.innerHTML,/event-withdraw/);assert.doesNotMatch(privateRoot.innerHTML,/event-edit/);}finally{globalThis.fetch=originalFetch;}
+});

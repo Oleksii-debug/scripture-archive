@@ -9,6 +9,11 @@ const PAGE_COPY = {
   ru: { all: 'Все', more: 'Продолжить поиск', emptyPage: 'В этой части совпадений нет. Поиск можно продолжить.', end: 'Больше совпадений нет.', heading: 'Результаты, страница', found: n => `Общин на этой странице: ${n}.` },
   en: { all: 'All', more: 'Continue search', emptyPage: 'No matches in this part. You can continue searching.', end: 'No more matches.', heading: 'Results, page', found: n => `Communities on this page: ${n}.` },
 };
+const DELETE_COPY = {
+  uk: {button:'Видалити лише цю заявку',confirm:'Підтверджую остаточне видалення цієї заявки й даних її перевірки. Акаунт залишиться. Події стануть непублічними; їхні записи залишаться у моєму керуванні подіями.',done:'Заявку та дані її перевірки видалено. Акаунт збережено.',required:'Позначте підтвердження видалення заявки.'},
+  ru: {button:'Удалить только эту заявку',confirm:'Подтверждаю окончательное удаление этой заявки и данных её проверки. Аккаунт сохранится. События станут непубличными; их записи останутся в моём управлении событиями.',done:'Заявка и данные её проверки удалены. Аккаунт сохранён.',required:'Отметьте подтверждение удаления заявки.'},
+  en: {button:'Delete only this claim',confirm:'I confirm permanent deletion of this claim and its review data. My account will remain. Events will become unpublished; their records will remain in my event management.',done:'The claim and its review data were deleted. Your account was preserved.',required:'Confirm deletion of the claim using the checkbox.'},
+};
 const ACTION_COPY = {
   uk: { queueMore: 'Наступні заявки', queuePage: 'Заявки, сторінка', queueFound: n => `Заявок на цій сторінці: ${n}.`, edit: 'Виправити цю заявку', loaded: 'Дані завантажено у форму. Перевірте зміни й знову підтвердьте повноваження та згоду.', withdrawn: 'Заявку відкликано.', refreshError: 'Дію збережено, але оновити список не вдалося. Перезавантажте сторінку.' },
   ru: { queueMore: 'Следующие заявки', queuePage: 'Заявки, страница', queueFound: n => `Заявок на этой странице: ${n}.`, edit: 'Исправить эту заявку', loaded: 'Данные загружены в форму. Проверьте изменения и снова подтвердите полномочия и согласие.', withdrawn: 'Заявка отозвана.', refreshError: 'Действие сохранено, но список обновить не удалось. Перезагрузите страницу.' },
@@ -34,7 +39,7 @@ function claimForm(w,esc){
   const traditions=['orthodox','catholic','protestant','adventist','other'].map(value=>`<option value="${value}">${esc(w.traditions[value])}</option>`).join('');
   return `<section class="card"><h2>${esc(w.claim)}</h2><p>${esc(w.claimHelp)}</p><form class="church-claim"><label class="account-field"><span>${esc(w.name)}</span><input name="name" minlength="3" maxlength="160" required></label><label class="account-field"><span>${esc(w.city)}</span><input name="city" minlength="2" maxlength="120" required></label><label class="account-field"><span>${esc(w.country)}</span><input name="countryCode" minlength="2" maxlength="2" pattern="[A-Za-z]{2}" required></label><label class="account-field"><span>${esc(w.locale)}</span><select name="locale">${languages}</select></label><label class="account-field"><span>${esc(w.tradition)}</span><select name="tradition">${traditions}</select></label><label class="account-field"><span>${esc(w.optionalWebsite)}</span><input name="websiteUrl" type="url" maxlength="500" inputmode="url" placeholder="https://"></label><label class="account-check"><input name="represent" type="checkbox" required><span>${esc(w.represent)}</span></label><label class="account-check"><input name="consent" type="checkbox" required><span>${esc(w.consent)}</span></label><button class="button" type="submit">${esc(w.submit)}</button><p role="status"></p></form></section>`;
 }
-function mineMarkup(items,w,esc,actions){return items.length?`<section class="card church-claim-mine"><h2>${esc(w.mine)}</h2>${items.map(item=>`<article><h3>${esc(item.name)}</h3><p>${esc(item.city)}, ${esc(item.countryCode)} — ${esc(w[item.status]||item.status)}</p>${item.reviewNote?`<p>${esc(item.reviewNote)}</p>`:''}<button class="button church-claim-edit" data-id="${esc(item.id)}" type="button">${esc(actions.edit)}</button>${['pending','approved'].includes(item.status)?`<button class="button church-claim-withdraw" data-id="${esc(item.id)}" type="button">${esc(w.withdraw)}</button>`:''}</article>`).join('')}<p role="status"></p></section>`:'';}
+function mineMarkup(items,w,esc,actions,deletion){return items.length?`<section class="card church-claim-mine"><h2>${esc(w.mine)}</h2>${items.map(item=>`<article><h3>${esc(item.name)}</h3><p>${esc(item.city)}, ${esc(item.countryCode)} — ${esc(w[item.status]||item.status)}</p>${item.reviewNote?`<p>${esc(item.reviewNote)}</p>`:''}<button class="button church-claim-edit" data-id="${esc(item.id)}" type="button">${esc(actions.edit)}</button>${['pending','approved'].includes(item.status)?`<button class="button church-claim-withdraw" data-id="${esc(item.id)}" type="button">${esc(w.withdraw)}</button>`:''}<form class="church-claim-delete" data-id="${esc(item.id)}"><label class="account-check"><input name="confirmDeletion" type="checkbox" required><span>${esc(deletion.confirm)}</span></label><button type="submit" class="button">${esc(deletion.button)}</button></form></article>`).join('')}<p role="status"></p></section>`:'';}
 function queueItemsMarkup(items,w,esc){return items.map(item=>`<article><h3>${esc(item.name)}</h3><p>${esc(item.city)}, ${esc(item.countryCode)} · ${esc(w.languages[item.locale])} · ${esc(w.traditions[item.tradition])}</p><p>${esc(w.claimant)}: <a href="mailto:${esc(item.claimantEmail)}">${esc(item.claimantEmail)}</a></p>${item.websiteUrl?`<p><a href="${esc(canonicalHttps(item.websiteUrl))}" rel="noreferrer">${esc(w.website)}</a></p>`:''}<form class="church-claim-review" data-id="${esc(item.id)}"><label class="account-field"><span>${esc(w.evidence)}</span><textarea name="evidence" minlength="3" maxlength="1000"></textarea></label><label class="account-field"><span>${esc(w.note)}</span><textarea name="note" maxlength="2000"></textarea></label><button class="button" type="button" data-decision="approve">${esc(w.approve)}</button><button class="button" type="button" data-decision="reject">${esc(w.reject)}</button><p role="status"></p></form></article>`).join('');}
 function queueMarkup(items,w,esc,actions,nextCursor){return `<section class="card church-claim-queue"><h2>${esc(w.queue)}</h2><div class="church-claim-queue-pages"><section aria-labelledby="church-queue-page-1"><h3 id="church-queue-page-1" tabindex="-1">${esc(actions.queuePage)} 1</h3>${items.length?queueItemsMarkup(items,w,esc):`<p>${esc(w.empty)}</p>`}</section></div><p class="church-claim-queue-status" role="status"></p><button type="button" class="button church-claim-queue-more" ${nextCursor?'':'hidden'}>${esc(actions.queueMore)}</button></section>`;}
 const validQueueCursor=value=>value===null||(value&&typeof value==='object'&&!Array.isArray(value)&&validTimestamp(value.submittedAt)&&validId(value.id));
@@ -44,6 +49,7 @@ const queueCursorKey=value=>JSON.stringify([value.submittedAt,value.id]);
 export async function renderChurchDirectory(root,lang,esc,user,isOwner=false,isCurrent=()=>true){
   const w=copy(lang),principal=user?.id??null,canClaim=user?.emailVerified===true&&user?.authProvider!=='agent';
   const actions=typeof lang==='string'&&Object.hasOwn(ACTION_COPY,lang)?ACTION_COPY[lang]:ACTION_COPY.uk;
+  const deletion=typeof lang==='string'&&Object.hasOwn(DELETE_COPY,lang)?DELETE_COPY[lang]:DELETE_COPY.uk;
   const pages=typeof lang==='string'&&Object.hasOwn(PAGE_COPY,lang)?PAGE_COPY[lang]:PAGE_COPY.uk;
   const active=()=>{try{return root?.isConnected!==false&&isCurrent()===true&&(user?.id??null)===principal;}catch{return false;}};
   if(!active())return;
@@ -131,7 +137,7 @@ export async function renderChurchDirectory(root,lang,esc,user,isOwner=false,isC
       if(queueNext)queueCursors.add(queueCursorKey(queueNext));
       for(const item of queue.items)queueIds.add(item.id);
       savedClaims=mine.items;
-      privateRoot.innerHTML=mineMarkup(mine.items,w,esc,actions);
+      privateRoot.innerHTML=mineMarkup(mine.items,w,esc,actions,deletion);
       if(ownerRoot)ownerRoot.innerHTML=queueMarkup(queue.items,w,esc,actions,queueNext);
       attach();
       return true;
@@ -169,7 +175,7 @@ export async function renderChurchDirectory(root,lang,esc,user,isOwner=false,isC
     // Retire a private read started before this write, so it cannot restore
     // a withdrawn or superseded claim while the current state is loading.
     privateEpoch++;
-    const controls=[...root.querySelectorAll('.church-claim button, .church-claim-withdraw, .church-claim-edit, .church-claim-review button')];
+    const controls=[...root.querySelectorAll('.church-claim button, .church-claim-withdraw, .church-claim-edit, .church-claim-review button, .church-claim-delete button')];
     controls.forEach(button=>{button.disabled=true;});
     const focused=root.ownerDocument?.activeElement;
     const hadFocus=controls.includes(focused);
@@ -177,6 +183,7 @@ export async function renderChurchDirectory(root,lang,esc,user,isOwner=false,isC
     try {
       await post(body);
       if(!active())return;
+      if(body.action==='delete')root.querySelector('.church-claim')?.reset?.();
       if(resetConsent){
         const form=root.querySelector('.church-claim');
         for(const name of ['represent','consent']) { const field=form?.querySelector(`[name=${name}]`);if(field)field.checked=false; }
@@ -212,6 +219,13 @@ export async function renderChurchDirectory(root,lang,esc,user,isOwner=false,isC
       for(const name of ['represent','consent']) { const field=form.querySelector(`[name=${name}]`);if(field)field.checked=false; }
       announce(actions.loaded);
       form.querySelector('[name=name]')?.focus();
+    });
+    root.querySelectorAll('.church-claim-delete').forEach(deleteForm=>deleteForm.onsubmit=async event=>{
+      event.preventDefault();if(!active()||mutationPending)return;
+      const confirmation=deleteForm.querySelector('[name=confirmDeletion]');
+      if(confirmation?.checked!==true){announce(deletion.required);confirmation?.focus();return;}
+      if(!savedClaims.some(item=>item.id===deleteForm.dataset.id))return;
+      await mutate({action:'delete',id:deleteForm.dataset.id,confirmDeletion:true},deletion.done,true);
     });
     root.querySelectorAll('.church-claim-withdraw').forEach(button=>button.onclick=()=>mutate({action:'withdraw',id:button.dataset.id},actions.withdrawn));
     root.querySelectorAll('.church-claim-review').forEach(form=>form.querySelectorAll('[data-decision]').forEach(button=>button.onclick=()=>{

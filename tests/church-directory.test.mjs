@@ -44,7 +44,8 @@ function fixture() {
     const response=await exports.GET(new Request(`https://local.invalid/api/churches?${search}`,{headers:user?{'x-user':user}:{}}));
     return {status:response.status,data:await response.json()};
   }
-  return {db,post,get,setAuthFailure:value=>{authFailure=value;}};
+  const rawGet=async query=>{const response=await exports.GET(new Request('https://local.invalid/api/churches?'+query));return {status:response.status,data:await response.json(),headers:response.headers};};
+  return {db,post,get,rawGet,setAuthFailure:value=>{authFailure=value;}};
 }
 
 const claim={action:'submit',name:'Grace Community',city:'Kyiv',countryCode:'UA',locale:'uk',tradition:'protestant',websiteUrl:'https://grace.example/church',representationAttested:true,websiteConsent:true};
@@ -272,5 +273,36 @@ test('private review queue reaches all 230 claims with stable cursors despite mo
     assert.equal((await f.get()).data.items[0].id,'claim-229');
     for(const user of ['alice','agent','unverified'])assert.equal((await f.get('queue',user,'',{afterSubmittedAt:'2026-11-16 10:00:00',afterId:'claim-199'})).status,403);
     for(const parameters of [{afterId:'claim-001'},{afterSubmittedAt:'2026-11-16 10:00:00'},{afterSubmittedAt:'invalid',afterId:'x'}])assert.equal((await f.get('queue','owner','',parameters)).status,400);
+  }finally{f.db.close();}
+});
+
+test('addressed church pages expose only current approved public data and revoke every obsolete URL',async()=>{
+  const f=fixture();try{
+    await f.post(claim);const id=(await f.get('mine','alice')).data.items[0].id;
+    const detail=id=>f.rawGet('view=detail&id='+encodeURIComponent(id));
+    assert.equal((await detail(id)).status,404);
+    for(const query of ['view=detail','view=detail&id=','view=detail&id=a&id=b','view=detail&view=public&id=a','view=detail&id=bad%2Fpath','view=detail&id='+ 'a'.repeat(101)])assert.equal((await f.rawGet(query)).status,400);
+    await f.post({action:'review',id,decision:'approve',verificationEvidence:'Private authority evidence',note:'Private note'},'owner');
+    const page=await detail(id);assert.equal(page.status,200);assert.match(page.headers.get('cache-control'),/no-store/);
+    assert.deepEqual(page.data.item,(await f.get()).data.items[0]);
+    assert.deepEqual(Object.keys(page.data.item).sort(),['id','name','city','countryCode','locale','tradition','websiteUrl','reviewedAt'].sort());
+    f.db.prepare("UPDATE accounts SET email_verified_at=NULL WHERE id='alice'").run();assert.equal((await detail(id)).status,404);
+    f.db.prepare("UPDATE accounts SET email_verified_at=CURRENT_TIMESTAMP,deleted_at=CURRENT_TIMESTAMP WHERE id='alice'").run();assert.equal((await detail(id)).status,404);
+    f.db.prepare("UPDATE accounts SET deleted_at=NULL WHERE id='alice'").run();assert.equal((await detail(id)).status,200);
+    await f.post({...claim,city:'Lviv'});const revised=(await f.get('mine','alice')).data.items[0].id;
+    assert.notEqual(revised,id);assert.equal((await detail(id)).status,404);assert.equal((await detail(revised)).status,404);
+    await f.post({action:'review',id:revised,decision:'approve',verificationEvidence:'Renewed authority',note:''},'owner');
+    assert.equal((await detail(revised)).data.item.city,'Lviv');assert.equal((await detail(id)).status,404);
+    await f.post({action:'withdraw',id:revised});assert.equal((await detail(revised)).status,404);
+    assert.deepEqual((await detail(revised)).data,(await detail('absent')).data);
+  }finally{f.db.close();}
+});
+
+test('a corrupted public detail fails closed instead of publishing damaged content',async()=>{
+  const f=fixture();try{
+    await f.post(claim);const id=(await f.get('mine','alice')).data.items[0].id;
+    await f.post({action:'review',id,decision:'approve',verificationEvidence:'Authority confirmed',note:''},'owner');
+    f.db.prepare('UPDATE church_directory_claims SET name=? WHERE id=?').run('Bad\u202eName',id);
+    const response=await f.rawGet('view=detail&id='+id);assert.equal(response.status,503);assert.equal('item' in response.data,false);
   }finally{f.db.close();}
 });

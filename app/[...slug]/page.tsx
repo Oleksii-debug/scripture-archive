@@ -25,15 +25,17 @@ const ROUTE_METADATA: Record<string, { title: string; description: string }> = {
 export async function generateMetadata({ params }: { params: Promise<{ slug: string[] }> }): Promise<Metadata> {
   const { slug } = await params, route = slug[0] || "";
   const privateRoute = PRIVATE_ROUTES.has(route);
+  const churchDetail = route === "churches" && slug.length === 2 && /^[A-Za-z0-9_-]{1,100}$/.test(slug[1]);
+  const canonicalPath = churchDetail ? `/churches/${slug[1]}` : `/${route}`;
   const details = ROUTE_METADATA[route];
   return {
     title: details ? `${details.title} · Scripture Archive` : "Scripture Archive",
     description: details?.description,
-    alternates: { canonical: privateRoute ? "/" : `/${route}` },
+    alternates: { canonical: privateRoute ? "/" : canonicalPath },
     robots: privateRoute ? { index: false, follow: false } : { index: true, follow: true },
     openGraph: details ? {
       type: "website",
-      url: `/${route}`,
+      url: canonicalPath,
       title: `${details.title} · Scripture Archive`,
       description: details.description,
       images: [{ url: "/scripture-archive-hero-v2.png", width: 1920, height: 820 }],
@@ -44,5 +46,6 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 export default async function PublicRoute({ params }: { params: Promise<{ slug: string[] }> }) {
   const { slug } = await params, route = slug[0] || "";
   if (!PUBLIC_ROUTES.has(route) && !PRIVATE_ROUTES.has(route)) notFound();
+  if (route === "churches" && (slug.length > 2 || (slug.length === 2 && !/^[A-Za-z0-9_-]{1,100}$/.test(slug[1])))) notFound();
   return <Home />;
 }

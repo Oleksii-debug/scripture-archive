@@ -2,8 +2,8 @@ import { reviewText, submissionForm, historyMarkup, queueMarkup, auditMarkup, at
 import { dossierMarkup, dossierAtlasMarkup } from './scripture-dossiers.js';
 import { academyMarkup, academyProgressKey, readAcademyProgress, attachAcademy } from './scripture-academy.js';
 import { safeProvenanceHttpsUrl, validEditionRightsText } from './parallel-reader.js';
-import { renderChurchDirectory } from './church-directory.js';
-import { renderEventDirectory } from './event-directory.js';
+import { renderChurchDirectory, renderChurchDetail, churchRouteId } from './church-directory.js';
+import { renderEventDirectory, churchEventFilter } from './event-directory.js';
 
 // The local reading cache is user/device-controlled JSON, not a trusted Bible
 // chapter receipt. Never let a malformed item break the progress route or
@@ -358,7 +358,9 @@ export async function renderWorkspace(name,c) {
     shell('<div id="church-directory-root"></div>');
     const root=globalThis.document?.querySelector('#church-directory-root');
     const churchPrincipal=state.user?.id??null;
-    if(root)await renderChurchDirectory(root,state.lang,esc,state.user,state.user?.isOwner===true,
+    const id=churchRouteId(c.routePath??'churches');
+    if(root&&id!=='')await renderChurchDetail(root,state.lang,esc,id,stillCurrent);
+    else if(root)await renderChurchDirectory(root,state.lang,esc,state.user,state.user?.isOwner===true,
       ()=>stillCurrent()&&(state.user?.id??null)===churchPrincipal);
     return;
   }
@@ -367,7 +369,7 @@ export async function renderWorkspace(name,c) {
     const root=globalThis.document?.querySelector('#event-directory-root');
     const eventPrincipal=state.user?.id??null;
     if(root)await renderEventDirectory(root,state.lang,esc,state.user,
-      ()=>stillCurrent()&&(state.user?.id??null)===eventPrincipal);
+      ()=>stillCurrent()&&(state.user?.id??null)===eventPrincipal,churchEventFilter(search??''));
     return;
   }
   if(name==='campaigns') {

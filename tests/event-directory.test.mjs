@@ -31,7 +31,8 @@ function fixture(){
   }});
   const post=async(body,user='alice',origin='https://local.invalid')=>{const response=await exports.POST(new Request('https://local.invalid/api/events',{method:'POST',headers:{origin,'content-type':'application/json',...(user?{'x-user':user}:{})},body:JSON.stringify(body)}));return {status:response.status,data:await response.json()};};
   const get=async(view='public',user='',query='',cursor={})=>{const search=view==='public'?new URLSearchParams({q:query,...cursor}):`view=${view}`;const response=await exports.GET(new Request(`https://local.invalid/api/events?${search}`,{headers:user?{'x-user':user}:{}}));return {status:response.status,data:await response.json()};};
-  return {db,post,get};
+  const rawGet=async query=>{const response=await exports.GET(new Request('https://local.invalid/api/events?'+query));return {status:response.status,data:await response.json(),headers:response.headers};};
+  return {db,post,get,rawGet};
 }
 
 const event={action:'submit',churchId:'church',title:'Accessible Bible Conference',summary:'A two-day programme of Scripture study.',city:'Kyiv',countryCode:'UA',locale:'en',startsOn:'2099-05-10',endsOn:'2099-05-11',accessibilityDetails:'Step-free venue, captions, and an accessible transcript.',programmeUrl:'https://events.example/programme',registrationUrl:'https://events.example/register',organizerAuthorityAttested:true,publicationConsent:true};
@@ -152,13 +153,15 @@ test('the event directory continues a submitted search after an empty page and r
   const root={isConnected:true,innerHTML:'',ownerDocument:doc,querySelectorAll:()=>[],querySelector:selector=>nodes[selector]??null};
   globalThis.fetch=async url=>{
     const params=new URL(url,'https://local.invalid').searchParams;
+    assert.equal(params.get('churchId'),'church');
     calls.push([params.get('q'),params.get('afterId')]);
     return Response.json({items:[],nextCursor:params.get('q') && !params.has('afterId')
       ? {startsOn:'2099-05-10',title:'Next event',id:'event-199'} : null});
   };
   const tick=()=>new Promise(resolve=>setImmediate(resolve));
   try {
-    await renderEventDirectory(root,'en',String,null);
+    await renderEventDirectory(root,'en',String,null,()=>true,'church');
+    assert.match(root.innerHTML,/href="\/churches\/church"/);
     input.value='Ivano';nodes['.event-search'].onsubmit({preventDefault(){}});await tick();
     assert.equal(more.hidden,false);
     assert.match(publicRoot.innerHTML,/You can continue searching/);
@@ -217,5 +220,38 @@ test('a damaged stored event programme fails closed and never becomes rendered c
     f.db.prepare("UPDATE church_events SET programme_json='[{}]' WHERE id=?").run(created.data.id);
     assert.equal((await f.get()).status,503);assert.equal((await f.get('mine','alice')).status,503);
     assert.throws(()=>f.db.prepare("UPDATE church_events SET programme_json='not json'").run());
+  }finally{f.db.close();}
+});
+
+test('community event filtering stays exact across search, cursor pages, and revoked approval',async()=>{
+  const f=fixture();try{
+    f.db.exec(`INSERT INTO church_directory_claims (id,claimant_user_id,name,city,country_code,locale,tradition,representation_attested,website_consent,status,reviewed_at,reviewed_by,verification_evidence)
+      VALUES ('church-bob','bob','Hope Community','Kyiv','UA','en','other',1,1,'approved',CURRENT_TIMESTAMP,'owner','Authority confirmed')`);
+    const insert=f.db.prepare(`INSERT INTO church_events (id,church_claim_id,organizer_user_id,title,summary,city,country_code,locale,starts_on,ends_on,accessibility_details,organizer_authority_attested,publication_consent,status)
+      VALUES (?,?,?,'Study meeting','Bible study programme',?,'UA','en','2099-05-10','2099-05-11','Captions available',1,1,'active')`);
+    for(let i=0;i<230;i++)insert.run('a-'+String(i).padStart(3,'0'),'church','alice',i===229?'Lviv':'Kyiv');
+    insert.run('b-000','church-bob','bob','Lviv');
+    const filter={churchId:'church'};
+    let page=(await f.get('public','','',filter)).data;
+    assert.equal(page.items.length,24);
+    const found=[...page.items];let pages=1;
+    while(page.nextCursor){
+      const cursor=page.nextCursor;
+      page=(await f.get('public','','',{...filter,afterDate:cursor.startsOn,afterTitle:cursor.title,afterId:cursor.id})).data;
+      found.push(...page.items);assert.ok(++pages<=10);
+    }
+    assert.equal(pages,10);assert.equal(found.length,230);assert.equal(new Set(found.map(item=>item.id)).size,230);
+    assert.ok(found.every(item=>item.churchId==='church'));
+    const search=(await f.get('public','','Lviv',filter)).data;assert.equal(search.items.length,0);assert.ok(search.nextCursor);
+    const last=(await f.get('public','','Lviv',{...filter,afterDate:search.nextCursor.startsOn,afterTitle:search.nextCursor.title,afterId:search.nextCursor.id})).data;
+    assert.deepEqual(last.items.map(item=>item.id),['a-229']);
+    assert.deepEqual((await f.get('public','','',{churchId:'church-bob'})).data.items.map(item=>item.id),['b-000']);
+    assert.deepEqual((await f.get('public','','',{churchId:'absent'})).data.items,[]);
+    for(const query of ['churchId=','churchId=a&churchId=b','churchId=a%2Fb','churchId='+ 'a'.repeat(101)])assert.equal((await f.rawGet(query)).status,400);
+    f.db.exec("UPDATE church_directory_claims SET status='pending' WHERE id='church'");
+    assert.deepEqual((await f.get('public','','',filter)).data.items,[]);
+    assert.equal((await f.get()).data.items.length,1);
+    f.db.exec("UPDATE church_directory_claims SET status='approved' WHERE id='church'; UPDATE accounts SET deleted_at=CURRENT_TIMESTAMP WHERE id='alice'");
+    assert.deepEqual((await f.get('public','','',filter)).data.items,[]);
   }finally{f.db.close();}
 });

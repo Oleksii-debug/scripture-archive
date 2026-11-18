@@ -27,7 +27,7 @@ async function api(path,options){const response=await fetch(path,options);const 
 const post=async body=>{const data=await api('/api/churches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(data?.ok!==true)throw Error('unconfirmed change');return data;};
 
 function publicMarkup(items,w,esc){
-  return items.length?`<div class="card-grid church-directory-results">${items.map(item=>`<article class="card"><h3 lang="${esc(item.locale)}">${esc(item.name)}</h3><p>${esc(item.city)}, ${esc(item.countryCode)}</p><dl><dt>${esc(w.locale)}</dt><dd>${esc(w.languages[item.locale])}</dd><dt>${esc(w.tradition)}</dt><dd>${esc(w.traditions[item.tradition])}</dd><dt>${esc(w.reviewed)}</dt><dd><time datetime="${esc(item.reviewedAt)}">${esc(item.reviewedAt)} UTC</time></dd></dl>${item.websiteUrl?`<p><a href="${esc(canonicalHttps(item.websiteUrl))}" rel="noreferrer">${esc(w.website)}</a></p>`:''}</article>`).join('')}</div>`:`<p>${esc(w.empty)}</p>`;
+  return items.length?`<div class="card-grid church-directory-results">${items.map(item=>`<article class="card"><h3 lang="${esc(item.locale)}"><a href="/churches/${esc(encodeURIComponent(item.id))}">${esc(item.name)}</a></h3><p>${esc(item.city)}, ${esc(item.countryCode)}</p><dl><dt>${esc(w.locale)}</dt><dd>${esc(w.languages[item.locale])}</dd><dt>${esc(w.tradition)}</dt><dd>${esc(w.traditions[item.tradition])}</dd><dt>${esc(w.reviewed)}</dt><dd><time datetime="${esc(item.reviewedAt)}">${esc(item.reviewedAt)} UTC</time></dd></dl>${item.websiteUrl?`<p><a href="${esc(canonicalHttps(item.websiteUrl))}" rel="noreferrer">${esc(w.website)}</a></p>`:''}</article>`).join('')}</div>`:`<p>${esc(w.empty)}</p>`;
 }
 function claimForm(w,esc){
   const languages=['uk','ru','en'].map(value=>`<option value="${value}">${esc(w.languages[value])}</option>`).join('');
@@ -223,4 +223,37 @@ export async function renderChurchDirectory(root,lang,esc,user,isOwner=false,isC
   if(search)search.onsubmit=event=>{event.preventDefault();if(active())void publicLoad({q:query.value.trim(),locale:search.querySelector('[name=locale]')?.value||'',tradition:search.querySelector('[name=tradition]')?.value||''});};
   attach();
   await Promise.all([publicLoad(),privateLoad()]);
+}
+
+
+const DETAIL_COPY={
+  uk:{back:'До каталогу громад',events:'Події цієї громади',loading:'Завантаження громади…',unavailable:'Ця громада недоступна або її публікацію відкликано.',title:'Перевірена громада'},
+  ru:{back:'К каталогу общин',events:'События этой общины',loading:'Загрузка общины…',unavailable:'Эта община недоступна или её публикация отозвана.',title:'Проверенная община'},
+  en:{back:'Back to the community directory',events:'Events from this community',loading:'Loading community…',unavailable:'This community is unavailable or its publication has been withdrawn.',title:'Verified community'},
+};
+export function churchRouteId(route){
+  if(route==='churches'||route==='churches/')return '';
+  return typeof route==='string'?/^churches\/([A-Za-z0-9_-]{1,100})\/?$/.exec(route)?.[1]??null:null;
+}
+const detailLeases=new WeakMap();
+export async function renderChurchDetail(root,lang,esc,id,isCurrent=()=>true){
+  const w=copy(lang),d=typeof lang==='string'&&Object.hasOwn(DETAIL_COPY,lang)?DETAIL_COPY[lang]:DETAIL_COPY.uk;
+  const token={};detailLeases.set(root,token);
+  const active=()=>{try{return root?.isConnected!==false&&isCurrent()===true&&detailLeases.get(root)===token;}catch{return false;}};
+  if(!active())return;
+  const initialFocus=root.ownerDocument?.activeElement;
+  const show=markup=>{root.innerHTML=markup;if(initialFocus&&root.ownerDocument?.activeElement===initialFocus)root.querySelector?.('h1')?.focus({preventScroll:true});};
+  const back=`<p><a href="/churches">${esc(d.back)}</a></p>`;
+  const failure=message=>`${back}<h1 tabindex="-1">${esc(d.title)}</h1><p role="alert">${esc(message)}</p>`;
+  if(typeof id!=='string'||!/^[A-Za-z0-9_-]{1,100}$/.test(id)){show(failure(d.unavailable));return;}
+  root.innerHTML=`${back}<h1 tabindex="-1">${esc(d.title)}</h1><p role="status">${esc(d.loading)}</p>`;
+  try {
+    const response=await fetch('/api/churches?'+new URLSearchParams({view:'detail',id}));
+    if(!active())return;
+    if(response.status===404){show(failure(d.unavailable));return;}
+    if(!response.ok)throw Error('detail unavailable');
+    const data=await response.json();if(!active())return;
+    const item=data?.item;if(!validPublic(item)||item.id!==id)throw Error('invalid community');
+    show(`${back}<article class="card"><h1 tabindex="-1" lang="${esc(item.locale)}">${esc(item.name)}</h1><p>${esc(item.city)}, ${esc(item.countryCode)}</p><dl><dt>${esc(w.locale)}</dt><dd>${esc(w.languages[item.locale])}</dd><dt>${esc(w.tradition)}</dt><dd>${esc(w.traditions[item.tradition])}</dd><dt>${esc(w.reviewed)}</dt><dd><time datetime="${esc(item.reviewedAt.replace(' ','T')+'Z')}">${esc(item.reviewedAt)} UTC</time></dd></dl>${item.websiteUrl?`<p><a href="${esc(canonicalHttps(item.websiteUrl))}" rel="noreferrer">${esc(w.website)}</a></p>`:''}<p><a href="/events?churchId=${esc(encodeURIComponent(id))}">${esc(d.events)}</a></p></article>`);
+  } catch {if(active())show(failure(w.error));}
 }

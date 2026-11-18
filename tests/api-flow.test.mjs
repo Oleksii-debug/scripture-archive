@@ -135,6 +135,7 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const churchQueue=await churchQueueResponse.json();
   assert.equal(churchQueue.items.length,1);assert.equal(churchQueue.items[0].claimantEmail,email);
   const churchId=churchQueue.items[0].id;
+  assert.equal((await fetch(`${base}/api/churches?view=detail&id=${churchId}`)).status,404);
   assert.equal(churchQueue.nextCursor,null);
   const reviewCursor=new URLSearchParams({view:'queue',afterSubmittedAt:churchQueue.items[0].submittedAt,afterId:churchId});
   const afterReviewPage=await fetch(`${base}/api/churches?${reviewCursor}`,{headers:{Cookie:ownerCookie}});
@@ -146,6 +147,10 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const publicChurches=await (await fetch(`${base}/api/churches`)).json();
   assert.equal(publicChurches.items.length,1);assert.equal(publicChurches.items[0].name,churchClaim.name);
   assert.equal(publicChurches.nextCursor,null);
+  const churchDetail=await fetch(`${base}/api/churches?view=detail&id=${churchId}`);
+  assert.equal(churchDetail.status,200);assert.match(churchDetail.headers.get('cache-control'),/no-store/);
+  assert.deepEqual((await churchDetail.json()).item,publicChurches.items[0]);
+  assert.equal((await fetch(`${base}/api/churches?view=detail&id=${churchId}&id=other`)).status,400);
   const filteredChurches=await (await fetch(`${base}/api/churches?locale=en&tradition=other&q=Integration`)).json();
   assert.equal(filteredChurches.items.length,1);
   assert.equal((await (await fetch(`${base}/api/churches?locale=uk`)).json()).items.length,0);
@@ -164,6 +169,9 @@ integration("account, progress, attempts, groups, marathon limit and password re
   let publicEvents=await (await fetch(`${base}/api/events`)).json();assert.equal(publicEvents.items.length,1);
   assert.deepEqual(publicEvents.items[0].programme,eventFixture.programme);assert.equal(publicEvents.items[0].timeZone,'Europe/Kyiv');
   assert.equal(publicEvents.items[0].registrationEnabled,true);
+  assert.deepEqual((await (await fetch(`${base}/api/events?churchId=${churchId}`)).json()).items,publicEvents.items);
+  assert.deepEqual((await (await fetch(`${base}/api/events?churchId=absent`)).json()).items,[]);
+  assert.equal((await fetch(`${base}/api/events?churchId=${churchId}&churchId=other`)).status,400);
   const attendance=async(body,principal=ownerCookie)=>{
     const response=await fetch(`${base}/api/event-registrations`,{method:'POST',headers:{Origin:base,Cookie:principal,'Content-Type':'application/json'},body:JSON.stringify(body)});
     return {status:response.status,data:await response.json()};
@@ -192,6 +200,9 @@ integration("account, progress, attempts, groups, marathon limit and password re
 
   const correctedChurch=(await (await fetch(`${base}/api/churches?view=mine`,{headers:{Cookie:cookie}})).json()).items[0];
   assert.notEqual(correctedChurch.id,churchId);
+  assert.equal((await fetch(`${base}/api/churches?view=detail&id=${churchId}`)).status,404);
+  assert.equal((await fetch(`${base}/api/churches?view=detail&id=${correctedChurch.id}`)).status,404);
+  assert.deepEqual((await (await fetch(`${base}/api/events?churchId=${churchId}`)).json()).items,[]);
   assert.equal((await churchPost({action:'review',id:correctedChurch.id,decision:'approve',verificationEvidence:'Disposable corrected authority fixture',note:''},ownerCookie)).response.status,200);
   const ownedEventsAfterReview=await (await fetch(`${base}/api/events?view=mine`,{headers:{Cookie:cookie}})).json();
   publicEvents=await (await fetch(`${base}/api/events`)).json();

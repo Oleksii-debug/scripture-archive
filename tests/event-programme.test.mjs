@@ -43,7 +43,7 @@ test('saving an event blocks duplicate submissions and focuses the persistent re
     if(options?.method==='POST'){
       posts++;
       const body=JSON.parse(options.body);assert.deepEqual(body.programme,[]);assert.equal(body.timeZone,'');
-      await new Promise(resolve=>{release=resolve;});return Response.json({ok:true});
+      await new Promise(resolve=>{release=resolve;});return Response.json({ok:true,id:"event-new"});
     }
     return Response.json({items:url.includes('churches')?[{id:'church',name:'Community',status:'approved'}]:[],nextCursor:null});
   };

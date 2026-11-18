@@ -110,6 +110,7 @@ test('acknowledged cancellation keeps its confirmation and focus when refreshing
   globalThis.fetch=async(url,options)=>options?network(url,options):Response.json({error:'offline'},{status:503});
   f.doc.activeElement=f.cancel;await f.cancel.onclick();
   assert.equal(writes.length,1);assert.match(f.mine.innerHTML,/Registration cancelled/);assert.match(f.mine.innerHTML,/role="alert"/);
+  assert.match(f.mine.innerHTML,/list could not be refreshed/);assert.doesNotMatch(f.mine.innerHTML,/action could not be completed/);
   assert.equal(f.doc.activeElement,f.status);assert.equal(f.cancel,null);
 }));
 

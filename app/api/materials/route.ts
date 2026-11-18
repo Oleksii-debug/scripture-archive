@@ -49,7 +49,7 @@ export async function GET(request: Request) {
     try {
       const [drafts, versions] = await env.DB.batch([
         env.DB.prepare("SELECT id,title,locale,data,visibility,created_at,updated_at FROM study_materials WHERE owner_user_id=? ORDER BY created_at,id").bind(userId),
-        env.DB.prepare("SELECT id,material_id,snapshot,provenance,rights_attested,status,submitted_at,reviewed_at,review_note,closed_at FROM material_submissions WHERE author_id=? ORDER BY submitted_at,id").bind(userId),
+        env.DB.prepare("SELECT id,material_id,snapshot,provenance,rights_attested,rights_holder,rights_basis,license_url,status,submitted_at,reviewed_at,review_note,closed_at FROM material_submissions WHERE author_id=? ORDER BY submitted_at,id").bind(userId),
       ]);
       if (!drafts.success || !versions.success || !Array.isArray(drafts.results) || !Array.isArray(versions.results)) throw Error("export failed");
       const items = (drafts.results as Record<string, unknown>[]).map(row => ({ ...row, data: exportRecord(row.data) }));

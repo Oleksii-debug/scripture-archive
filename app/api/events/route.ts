@@ -33,7 +33,7 @@ function httpsUrl(value: unknown): string | null {
 }
 
 type EventRow = {
-  id: string; church_claim_id: string; church_name: string; title: string; summary: string;
+  id: string; church_claim_id: string; church_name: string | null; title: string; summary: string;
   city: string; country_code: string; locale: string; starts_on: string; ends_on: string;
   accessibility_details: string; programme_url: string | null; registration_url: string | null;
   registration_enabled: number;
@@ -50,7 +50,7 @@ function project(row: EventRow, mine = false) {
   if (!programme || (row.registration_enabled !== 0 && row.registration_enabled !== 1)) return null;
   const programmeUrl = row.programme_url === null ? null : httpsUrl(row.programme_url);
   const registrationUrl = row.registration_url === null ? null : httpsUrl(row.registration_url);
-  if (!validId(row.id) || !validId(row.church_claim_id) || !visible(row.church_name, 3, 160) ||
+  if (!validId(row.id) || !validId(row.church_claim_id) || (!(mine && row.church_name === null) && !visible(row.church_name, 3, 160)) ||
       !visible(row.title, 3, 160) || !visible(row.summary, 3, 500) || !visible(row.city, 2, 120) ||
       !/^[A-Z]{2}$/.test(row.country_code) || !LOCALES.has(row.locale) || !date(row.starts_on) ||
       !date(row.ends_on) || row.ends_on < row.starts_on || !visible(row.accessibility_details, 3, 500) ||
@@ -102,7 +102,7 @@ export async function GET(request: Request) {
         const row = rows.results[i];
         const item = project(row);
         if (!item) return json({ error: "events_unavailable" }, 503);
-        if (!normalized || [item.title, item.churchName, item.city, item.countryCode]
+        if (!normalized || [item.title, item.churchName ?? "", item.city, item.countryCode]
           .some(value => value.normalize("NFKC").toLocaleLowerCase().includes(normalized))) items.push(item);
         if (items.length === 24 || i === 199) {
           if (i + 1 < rows.results.length) nextCursor = { startsOn: item.startsOn, title: item.title, id: item.id };
@@ -115,11 +115,11 @@ export async function GET(request: Request) {
     if (!actor) return json({ error: "authentication_required" }, 401);
     if (actor.provider === "agent") return json({ error: "forbidden" }, 403);
     if (view !== "mine") return json({ error: "forbidden" }, 403);
-    const rows = await env.DB.prepare(`SELECT e.id,c.id AS church_claim_id,c.name AS church_name,e.title,e.summary,e.city,e.country_code,
+    const rows = await env.DB.prepare(`SELECT e.id,COALESCE(c.id,e.church_claim_id) AS church_claim_id,c.name AS church_name,e.title,e.summary,e.city,e.country_code,
         e.locale,e.starts_on,e.ends_on,e.accessibility_details,e.programme_url,e.registration_url,e.programme_json,e.programme_timezone,e.registration_enabled,
-        CASE WHEN e.status='active' AND (c.status<>'approved' OR c.id<>e.church_claim_id) THEN 'hidden' ELSE e.status END AS status,
+        CASE WHEN e.status='active' AND (c.id IS NULL OR c.status<>'approved' OR c.id<>e.church_claim_id) THEN 'hidden' ELSE e.status END AS status,
         e.created_at,e.updated_at
-      FROM church_events e JOIN church_directory_claims c ON c.claimant_user_id=e.organizer_user_id
+      FROM church_events e LEFT JOIN church_directory_claims c ON c.claimant_user_id=e.organizer_user_id
       WHERE e.organizer_user_id=? ORDER BY e.starts_on,e.id LIMIT 200`).bind(actor.userId).all<EventRow>();
     if (!rows.success || !Array.isArray(rows.results)) return json({ error: "events_unavailable" }, 503);
     const items = [];

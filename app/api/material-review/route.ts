@@ -1,4 +1,4 @@
-import { validResourceData, resourceFields, type ResourceData } from "../../../public/material-resource.js";
+import { MATERIAL_TYPES, validResourceData, resourceFields, type ResourceData } from "../../../public/material-resource.js";
 import { env } from "cloudflare:workers";
 import { authenticateRequest, isVerifiedOwner, sameOrigin } from "../../../lib/auth";
 
@@ -172,6 +172,9 @@ export async function POST(request: Request) {
         ? body.locale
         : undefined;
     if (locale === undefined) return json({ error: "invalid_search" }, 400);
+    const materialType = body.materialType;
+    if (materialType != null && (typeof materialType !== "string" || !MATERIAL_TYPES.includes(materialType)))
+      return json({ error: "invalid_search" }, 400);
     const rightsBasis = body.rightsBasis;
     if (rightsBasis != null &&
         (typeof rightsBasis !== "string" || !RIGHTS_BASES.has(rightsBasis as RightsBasis)))
@@ -208,7 +211,8 @@ export async function POST(request: Request) {
           typeof row.submitted_at !== "string" || !row.submitted_at.length || row.submitted_at.length > 100 ||
           typeof row.reviewed_at !== "string" || !row.reviewed_at.length || row.reviewed_at.length > 100 || rights === undefined)
           return json({ error: "materials_unavailable" }, 503);
-        if ((!locale || item.locale === locale) && (rightsBasis == null || rights?.basis === rightsBasis) && (!query ||
+        if ((materialType == null || materialType === (item.data.kind === "resource" ? item.data.resourceType : "quiz")) &&
+          (!locale || item.locale === locale) && (rightsBasis == null || rights?.basis === rightsBasis) && (!query ||
           [item.title, item.data.reference, item.data.prompt, ...(item.data.kind === "resource" ? [item.data.resourceType, item.data.accessibility] : []), row.provenance, rights?.holder || "", rights?.basis || "", rights?.licenseUrl || ""]
             .some(value => normalize(value).includes(query)))) {
           items.push({ id: row.id, title: item.title, locale: item.locale, ...publicFields(item.data), provenance: row.provenance,

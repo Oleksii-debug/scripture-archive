@@ -3,6 +3,7 @@ const COPY = {
   ru: { enable: 'Принимать регистрации на этом сайте', ownerHelp: 'Список участников приватный. Отзыв события удаляет его регистрации. Отключение приёма закрывает только новые записи.', title: 'Регистрация на событие', name: 'Имя для организатора (можно псевдоним)', consent: 'Разрешаю организатору этого события видеть указанное имя и дату регистрации. Запись хранится до моей отмены, отзыва события или удаления моей учётной записи либо учётной записи организатора.', submit: 'Зарегистрироваться', saved: 'Регистрация сохранена. Она доступна в разделе «Мои регистрации».', mine: 'Мои регистрации', empty: 'Вы ещё не зарегистрировались на события.', cancel: 'Отменить регистрацию', cancelled: 'Регистрация отменена, имя удалено из списка.', unavailable: 'Событие сейчас скрыто. Регистрацию можно отменить.', export: 'Скачать мои регистрации (JSON)', roster: 'Посмотреть участников', more: 'Следующие участники', rosterTitle: 'Приватный список участников', date: 'Дата согласия (UTC)', none: 'Участников пока нет.', end: 'Все участники показаны.', error: 'Не удалось выполнить действие. Проверьте данные и повторите попытку.', signin: 'Войдите в подтверждённую учётную запись, чтобы зарегистрироваться.', boundary: 'Показываются только добровольно указанные имена. Электронная почта и другие данные профиля организатору не передаются.' },
   en: { enable: 'Accept registrations on this site', ownerHelp: 'The attendee list is private. Withdrawing the event removes its registrations. Disabling registration only closes new entries.', title: 'Event registration', name: 'Name for the organizer (an alias is allowed)', consent: 'I allow this event’s organizer to see the name entered here and my registration date. The record is kept until I cancel, the event is withdrawn, or my account or the organizer’s account is deleted.', submit: 'Register', saved: 'Registration saved. It is available under My registrations.', mine: 'My registrations', empty: 'You have not registered for any events yet.', cancel: 'Cancel registration', cancelled: 'Registration cancelled and the name removed from the list.', unavailable: 'This event is currently hidden. You can cancel your registration.', export: 'Download my registrations (JSON)', roster: 'View attendees', more: 'Next attendees', rosterTitle: 'Private attendee list', date: 'Consent date (UTC)', none: 'No attendees yet.', end: 'All attendees are shown.', error: 'The action could not be completed. Check the details and try again.', signin: 'Sign in with a verified account to register.', boundary: 'Only voluntarily supplied names are shown. Email addresses and other profile details are not shared with the organizer.' },
 };
+const REFRESH_ERROR={uk:'Реєстрацію скасовано, але оновити список не вдалося. Перезавантажте сторінку.',ru:'Регистрация отменена, но список не удалось обновить. Перезагрузите страницу.',en:'Registration was cancelled, but the list could not be refreshed. Reload the page.'};
 const copy = lang => Object.hasOwn(COPY, lang) ? COPY[lang] : COPY.uk;
 const id = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(value);
 const stamp = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value);
@@ -37,11 +38,11 @@ export function registrationExport(items) {
   })) },null,2);
 }
 export function createEventRegistrations(root, lang, esc, eligible, active) {
-  const w=copy(lang), mine=root.querySelector('.event-attendance'), busy=new WeakSet();
-  let epoch=0,rosterEpoch=0;
+  const w=copy(lang), refreshError=Object.hasOwn(REFRESH_ERROR,lang)?REFRESH_ERROR[lang]:REFRESH_ERROR.uk, mine=root.querySelector('.event-attendance'), busy=new WeakSet();
+  let epoch=0,rosterEpoch=0,mutating=false;
   const live=node=>active()&&node?.isConnected!==false;
-  async function loadMine(message='') {
-    if (!eligible || !mine || !active()) return;
+  async function loadMine(message='',afterWrite=false) {
+    if (!eligible || !mine || !active() || (mutating&&!afterWrite)) return;
     const token=++epoch;
     try {
       const data=await api({view:'mine'});
@@ -49,38 +50,40 @@ export function createEventRegistrations(root, lang, esc, eligible, active) {
       if (!Array.isArray(data.items) || data.items.length>100 || !data.items.every(item=>valid(item)&&id(item.eventId)&&visible(item.title,3,160)&&date(item.startsOn)&&date(item.endsOn)&&item.endsOn>=item.startsOn&&typeof item.available==='boolean')) throw Error('invalid records');
       mine.innerHTML=`<section class="card"><h2>${esc(w.mine)}</h2><p class="event-attendance-status" role="status" tabindex="-1">${esc(message)}</p>${data.items.length ? `<ul>${data.items.map(item=>`<li><h3>${esc(item.title)}</h3><p>${esc(item.startsOn)} — ${esc(item.endsOn)}</p><p>${esc(w.name)}: ${esc(item.attendeeName)}</p>${item.available?'':`<p>${esc(w.unavailable)}</p>`}<button class="button event-registration-cancel" type="button" data-event="${esc(item.eventId)}">${esc(w.cancel)}</button></li>`).join('')}</ul><button class="button event-registration-export" type="button">${esc(w.export)}</button>` : `<p>${esc(w.empty)}</p>`}</section>`;
       mine.querySelectorAll('.event-registration-cancel').forEach(button=>button.onclick=async()=>{
-        if (!live(button)||busy.has(button)) return;
+        if (!live(button)||busy.has(button)||mutating) return;
+        mutating=true;epoch++;
         busy.add(button);button.setAttribute('aria-disabled','true');
         try {
           await api(null,{action:'cancel',eventId:button.dataset.event});
           if(!live(button))return;
           const focus=root.ownerDocument?.activeElement===button;
           resetRosters();
-          await loadMine(w.cancelled);
+          await loadMine(w.cancelled,true);
           if(active()&&focus&&root.ownerDocument?.activeElement===root.ownerDocument?.body)mine.querySelector('.event-attendance-status')?.focus();
         }catch{if(live(button))mine.querySelector('.event-attendance-status').textContent=w.error;}
-        finally{busy.delete(button);button.removeAttribute('aria-disabled');}
+        finally{mutating=false;busy.delete(button);button.removeAttribute('aria-disabled');}
       });
       const download=mine.querySelector('.event-registration-export');
       if(download)download.onclick=()=>{
-        if(!live(download))return;
+        if(!live(download)||mutating)return;
         const url=URL.createObjectURL(new Blob([registrationExport(data.items)],{type:'application/json;charset=utf-8'}));
         const link=root.ownerDocument.createElement('a');link.href=url;link.download='scripture-event-registrations.json';link.click();
         setTimeout(()=>URL.revokeObjectURL(url),1000);
       };
-    }catch{if(active()&&token===epoch)mine.innerHTML=`<p role="alert">${esc(w.error)}</p>`;}
+    }catch{if(active()&&token===epoch)mine.innerHTML=`${message?`<p class="event-attendance-status" role="status" tabindex="-1">${esc(message)}</p>`:''}<p role="alert">${esc(message?refreshError:w.error)}</p>`;}
   }
   function attachForms() {
     if(!eligible)return;
     root.querySelectorAll('.event-registration').forEach(form=>form.onsubmit=async event=>{
-      event.preventDefault();if(!live(form)||busy.has(form))return;
+      event.preventDefault();if(!live(form)||busy.has(form)||mutating)return;
       const data=new FormData(form),button=form.querySelector('button'),feedback=form.querySelector('[role="status"]');
+      mutating=true;epoch++;
       busy.add(form);button.setAttribute('aria-disabled','true');
       try {
         await api(null,{action:'register',eventId:form.dataset.event,attendeeName:data.get('attendeeName'),sharingConsent:data.has('sharingConsent')});
-        if(live(form)){feedback.textContent=w.saved;resetRosters();await loadMine();}
+        if(active()){if(live(form))feedback.textContent=w.saved;resetRosters();await loadMine('',true);}
       }catch{if(live(form))feedback.textContent=w.error;}
-      finally{busy.delete(form);button.removeAttribute('aria-disabled');}
+      finally{mutating=false;busy.delete(form);button.removeAttribute('aria-disabled');}
     });
   }
   function resetRosters() {

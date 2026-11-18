@@ -1,3 +1,4 @@
+import * as materialResource from '../public/material-resource.js';
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
@@ -68,7 +69,7 @@ function fixture() {
   const exported = {};
   vm.runInNewContext(compiled.outputText, {
     exports: exported, Request, Response, URL, crypto,
-    require(id) {
+    require(id) {if (id.endsWith("/material-resource.js")) return materialResource;
       if (id === "cloudflare:workers") return { env: { DB: D1 } };
       if (id.endsWith("lib/auth")) return {
         isVerifiedOwner: identity => Boolean(identity && identity.emailVerified && identity.provider !== "agent" &&

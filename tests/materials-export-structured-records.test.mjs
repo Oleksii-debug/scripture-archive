@@ -1,3 +1,4 @@
+import * as materialResource from '../public/material-resource.js';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
@@ -37,7 +38,7 @@ function fixture({draftData=draft.data,snapshot=submission.snapshot,
   const exports={};
   vm.runInNewContext(compiled.outputText,{
     exports,Request,Response,URL,Date,crypto,
-    require(name){
+    require(name){if (name.endsWith("/material-resource.js")) return materialResource;
       if(name==='cloudflare:workers')return {env:{DB:db}};
       if(name==='../../../lib/auth')return {
         authenticateRequest:async()=>identity,

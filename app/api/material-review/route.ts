@@ -1,10 +1,11 @@
+import { validResourceData, resourceFields, type ResourceData } from "../../../public/material-resource.js";
 import { env } from "cloudflare:workers";
 import { authenticateRequest, isVerifiedOwner, sameOrigin } from "../../../lib/auth";
 
 export const dynamic = "force-dynamic";
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { "Cache-Control": "private, no-store" } });
 const validId = (v: unknown): v is string => typeof v === "string" && v.length > 0 && v.length <= 100;
-type Snapshot = { title: string; locale: string; data: { prompt: string; reference: string; options: string[]; answer: string; explanation: string } };
+type Snapshot = { title: string; locale: string; data: ResourceData | { kind?: "quiz"; prompt: string; reference: string; options: string[]; answer: string; explanation: string } };
 type RightsBasis = "original" | "permission" | "open_license" | "public_domain";
 type RightsRow = { rights_holder: string | null; rights_basis: string | null; license_url: string | null };
 type RightsMetadata = { holder: string; basis: RightsBasis; licenseUrl: string | null };
@@ -46,6 +47,11 @@ function readRights(row: RightsRow): RightsMetadata | null | undefined {
 function readSnapshot(raw: string): Snapshot | null {
   try {
     const v = JSON.parse(raw), d = v?.data;
+    if (d?.kind === "resource") {
+      return typeof v.title === "string" && v.title.trim().length >= 3 && v.title.length <= 160 &&
+        ["uk", "ru", "en"].includes(v.locale) && validResourceData(d) ? v as Snapshot : null;
+    }
+    if (d?.kind !== undefined && d.kind !== "quiz") return null;
     // Legacy snapshots must satisfy the same bounded, three-locale contract as
     // the canonical study-material writer before any public/private read.
     if (typeof v?.title !== "string" || v.title.trim().length < 3 || v.title.length > 160 ||
@@ -59,6 +65,9 @@ function readSnapshot(raw: string): Snapshot | null {
       new Set(d.options).size !== d.options.length || !d.options.includes(d.answer)) return null;
     return v as Snapshot;
   } catch { return null; }
+}
+function publicFields(data: Snapshot["data"]) {
+  return data.kind === "resource" ? resourceFields(data) : { prompt: data.prompt, reference: data.reference, options: data.options };
 }
 function owner(identity: Awaited<ReturnType<typeof authenticateRequest>>): boolean {
   return isVerifiedOwner(identity);
@@ -82,7 +91,7 @@ export async function GET(request: Request) {
       const item = readSnapshot(row.snapshot);
       const rights = readRights(row);
       if (!item || rights === undefined || typeof row.reviewed_at !== "string" || !row.reviewed_at || row.reviewed_at.length > 100) return json({ error: "materials_unavailable" }, 503);
-      items.push({ id: row.id, title: item.title, locale: item.locale, reference: item.data.reference, prompt: item.data.prompt, options: item.data.options, provenance: row.provenance, reviewedAt: row.reviewed_at, rights });
+      items.push({ id: row.id, title: item.title, locale: item.locale, ...publicFields(item.data), provenance: row.provenance, reviewedAt: row.reviewed_at, rights });
     }
     return json({ items });
   }
@@ -147,8 +156,7 @@ export async function POST(request: Request) {
         if (!item || rights === undefined || typeof row.provenance !== "string" || row.provenance.length > 1000 ||
             typeof row.reviewed_at !== "string" || !row.reviewed_at || row.reviewed_at.length > 100)
           return json({ error: "materials_unavailable" }, 503);
-        items.push({ id: row.id, title: item.title, locale: item.locale, reference: item.data.reference,
-          prompt: item.data.prompt, options: item.data.options, provenance: row.provenance, reviewedAt: row.reviewed_at, rights });
+        items.push({ id: row.id, title: item.title, locale: item.locale, ...publicFields(item.data), provenance: row.provenance, reviewedAt: row.reviewed_at, rights });
       }
       return json({ items, ...(mine ? { unavailableIds } : {}) });
     } catch { return json({ error: "materials_unavailable" }, 503); }
@@ -201,10 +209,9 @@ export async function POST(request: Request) {
           typeof row.reviewed_at !== "string" || !row.reviewed_at.length || row.reviewed_at.length > 100 || rights === undefined)
           return json({ error: "materials_unavailable" }, 503);
         if ((!locale || item.locale === locale) && (rightsBasis == null || rights?.basis === rightsBasis) && (!query ||
-          [item.title, item.data.reference, item.data.prompt, row.provenance, rights?.holder || "", rights?.basis || "", rights?.licenseUrl || ""]
+          [item.title, item.data.reference, item.data.prompt, ...(item.data.kind === "resource" ? [item.data.resourceType, item.data.accessibility] : []), row.provenance, rights?.holder || "", rights?.basis || "", rights?.licenseUrl || ""]
             .some(value => normalize(value).includes(query)))) {
-          items.push({ id: row.id, title: item.title, locale: item.locale, reference: item.data.reference,
-            prompt: item.data.prompt, options: item.data.options, provenance: row.provenance,
+          items.push({ id: row.id, title: item.title, locale: item.locale, ...publicFields(item.data), provenance: row.provenance,
             reviewedAt: row.reviewed_at, rights });
         }
         if (items.length === 12 || i === 199) {
@@ -222,6 +229,7 @@ export async function POST(request: Request) {
     if (!row) return json({ error: "not_found" }, 404);
     const snapshot = readSnapshot(row.snapshot);
     if (!snapshot) return json({ error: "materials_unavailable" }, 503);
+    if (snapshot.data.kind === "resource") return json({ error: "not_an_exercise" }, 400);
     const index = Number(body.choice);
     if (index >= snapshot.data.options.length) return json({ error: "invalid_answer" }, 400);
     const correct = snapshot.data.options[index] === snapshot.data.answer;

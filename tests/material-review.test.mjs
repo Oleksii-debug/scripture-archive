@@ -1,3 +1,4 @@
+import * as materialResource from '../public/material-resource.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -51,7 +52,7 @@ function fixture() {
   const source=readFileSync(new URL('../app/api/material-review/route.ts',import.meta.url),'utf8');
   const js=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
   const exports={};
-  vm.runInNewContext(js,{exports,Request,Response,URL,crypto,require(id){
+  vm.runInNewContext(js,{exports,Request,Response,URL,crypto,require(id){if (id.endsWith("/material-resource.js")) return materialResource;
     if(id==='cloudflare:workers')return {env:{DB:D1}};
     if(id.endsWith('/auth'))return {isVerifiedOwner:id=>Boolean(id&&id.provider!=='agent'&&id.emailVerified&&id.email?.toLowerCase()==='dordiaioleksii1@gmail.com'),sameOrigin:r=>r.headers.get('origin')==='https://local.invalid',authenticateRequest:async r=>{if(throwAuth)throw Error('private session store failed');const id=r.headers.get('x-user');return id?{userId:id,email:id==='editor'?'dordiaioleksii1@gmail.com':`${id}@example.invalid`,emailVerified:id!=='unverified',provider:id==='agent'?'agent':'password'}:null;}};
     throw Error('unexpected import '+id);

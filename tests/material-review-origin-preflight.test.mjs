@@ -1,3 +1,4 @@
+import * as materialResource from '../public/material-resource.js';
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -23,7 +24,7 @@ test("actual review POST rejects nonempty cross-origin JSON before auth or D1", 
   };
   vm.runInNewContext(compiled.outputText, {
     exports, Request, Response, URL,
-    require(specifier) {
+    require(specifier) {if (specifier.endsWith("/material-resource.js")) return materialResource;
       if (specifier === "cloudflare:workers") return { env: { DB: database } };
       if (specifier === "../../../lib/auth") return {
         sameOrigin: request => request.headers.get("origin") === new URL(request.url).origin,

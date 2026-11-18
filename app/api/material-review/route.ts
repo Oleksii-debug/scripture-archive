@@ -128,7 +128,7 @@ export async function POST(request: Request) {
           s.rights_holder,s.rights_basis,s.license_url
         FROM event_materials m JOIN church_events e ON e.id=m.event_id
         JOIN accounts a ON a.id=e.organizer_user_id
-        JOIN church_directory_claims c ON c.claimant_user_id=e.organizer_user_id
+        LEFT JOIN church_directory_claims c ON c.claimant_user_id=e.organizer_user_id
         JOIN material_submissions s ON s.id=m.submission_id
         WHERE e.id=? AND a.deleted_at IS NULL AND a.email_verified_at IS NOT NULL AND ${visibility}
         ORDER BY m.attached_at,m.submission_id LIMIT 21`)

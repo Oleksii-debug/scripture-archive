@@ -116,3 +116,35 @@ test('event material controls and canonical exercise rendering escape content an
   assert.match(root.innerHTML,/&lt;script>/);assert.match(root.innerHTML,/Author/);assert.doesNotMatch(root.innerHTML,/DO NOT RENDER|PRIVATE/);
   const previous=root.innerHTML;renderMaterialItems(root,[],reviewText('en'),esc,()=>false);assert.equal(root.innerHTML,previous);
 });
+
+test('deleting a representative claim preserves private attachment management without public access or new attachment rights',async()=>{
+  const f=fixture();try{
+    assert.equal((await f.post(attach)).status,200);
+    f.db.exec("DELETE FROM church_directory_claims WHERE id='church'");
+    assert.deepEqual((await f.post(list,'')).data.items,[]);
+    const own=await f.post({...list,view:'mine'});
+    assert.equal(own.status,200);assert.equal(own.data.items[0]?.id,'approved');
+    assert.deepEqual(own.data.unavailableIds,[]);
+    assert.deepEqual((await f.post({...list,view:'mine'},'other')).data.items,[]);
+    assert.equal((await f.post(attach)).status,409);
+    assert.equal((await f.post({...attach,action:'detachEventMaterial'},'other')).status,409);
+    assert.equal((await f.post({...attach,action:'detachEventMaterial'})).status,200);
+    assert.deepEqual((await f.post({...list,view:'mine'})).data,{items:[],unavailableIds:[]});
+  }finally{f.db.close();}
+});
+
+test('orphaned event links remain removable after publication withdrawal, but not with an inactive account',async()=>{
+  const f=fixture();try{
+    await f.post(attach);
+    f.db.exec("DELETE FROM church_directory_claims; UPDATE material_submissions SET status='withdrawn',snapshot='revoked private payload' WHERE id='approved'");
+    const own=await f.post({...list,view:'mine'});
+    assert.deepEqual(own.data,{items:[],unavailableIds:['approved']});
+    for(const accountChange of ["deleted_at=CURRENT_TIMESTAMP","deleted_at=NULL,email_verified_at=NULL"]){
+      f.db.exec("UPDATE accounts SET "+accountChange+" WHERE id='organizer'");
+      assert.deepEqual((await f.post({...list,view:'mine'})).data,{items:[],unavailableIds:[]});
+      assert.equal((await f.post({...attach,action:'detachEventMaterial'})).status,409);
+    }
+    f.db.exec("UPDATE accounts SET email_verified_at=CURRENT_TIMESTAMP WHERE id='organizer'");
+    assert.equal((await f.post({...attach,action:'detachEventMaterial'})).status,200);
+  }finally{f.db.close();}
+});

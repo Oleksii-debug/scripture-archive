@@ -1,3 +1,4 @@
+import * as materialResource from '../public/material-resource.js';
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -26,7 +27,7 @@ function harness({ auth = "throw", dbPresent = true } = {}) {
   const exports = {};
   vm.runInNewContext(transpiled.outputText, {
     exports, Request, Response, URL, crypto,
-    require(specifier) {
+    require(specifier) {if (specifier.endsWith("/material-resource.js")) return materialResource;
       if (specifier === "cloudflare:workers")
         return { env: { DB: dbPresent ? db : undefined } };
       if (specifier === "../../../lib/auth") return {

@@ -87,7 +87,7 @@ function scenario(pathname = '/builder') {
   const newMaterial = {}, form = {}, deleteButton = { dataset: { delete: 'owned' }, disabled: false };
   globalThis.document = {
     querySelector(selector) {
-      return ({ main, '#public-materials': publicMaterials, '#new-material': newMaterial, '#material-form': form })[selector] ?? null;
+      return ({ '#material-type':{value:'quiz'}, '#material-quiz-fields':{}, '#material-resource-fields':{}, main, '#public-materials': publicMaterials, '#new-material': newMaterial, '#material-form': form })[selector] ?? null;
     },
     querySelectorAll: selector => selector === '[data-delete]' ? [deleteButton] : [],
   };
@@ -215,7 +215,7 @@ test('late native builder save never redraws or announces into another account',
     globalThis.FormData=class {
       constructor() {}
       *[Symbol.iterator]() {
-        yield ['title','My draft']; yield ['prompt','Question'];
+        yield ['materialType','quiz'];yield ['title','My draft']; yield ['prompt','Question'];
         yield ['reference','GEN 1']; yield ['options','Yes\\nNo'];
         yield ['answer','Yes']; yield ['explanation','Source-based explanation'];
       }
@@ -257,7 +257,7 @@ test('native builder still announces acknowledged save for its original current 
     await renderWorkspace('builder',f.context);
     globalThis.FormData=class {
       *[Symbol.iterator]() {
-        yield ['title','My draft'];yield ['prompt','Question'];yield ['reference','GEN 1'];
+        yield ['materialType','quiz'];yield ['title','My draft'];yield ['prompt','Question'];yield ['reference','GEN 1'];
         yield ['options','Yes\\nNo'];yield ['answer','Yes'];yield ['explanation','Explanation'];
       }
     };

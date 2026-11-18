@@ -1,3 +1,4 @@
+import * as materialResource from '../public/material-resource.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,readdirSync} from 'node:fs';
@@ -25,7 +26,7 @@ function fixture(){
   let failure=false;
   const D1={prepare(sql){const statement=(args=[])=>({bind:(...values)=>statement(values),all:async()=>{if(failure)throw Error('offline');return {success:true,results:db.prepare(sql).all(...args)};},first:async()=>{if(failure)throw Error('offline');return db.prepare(sql).get(...args);},run:async()=>{if(failure)throw Error('offline');return {success:true,meta:{changes:Number(db.prepare(sql).run(...args).changes)}};}});return statement();}};
   const source=readFileSync(new URL('../app/api/material-review/route.ts',import.meta.url),'utf8'),exports={};
-  vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,Request,Response,URL,crypto,require(name){
+  vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,Request,Response,URL,crypto,require(name){if (name.endsWith("/material-resource.js")) return materialResource;
     if(name==='cloudflare:workers')return {env:{DB:D1}};
     if(name.endsWith('/auth'))return {sameOrigin:r=>r.headers.get('origin')==='https://local.invalid',isVerifiedOwner:()=>false,authenticateRequest:async r=>{const userId=r.headers.get('x-user');return userId?{userId,provider:userId==='agent'?'agent':'password',emailVerified:userId!=='unverified'}:null;}};
     throw Error(name);

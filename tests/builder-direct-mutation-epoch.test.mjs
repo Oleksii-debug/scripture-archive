@@ -18,13 +18,13 @@ function fixture() {
   const main={isConnected:true,querySelectorAll:()=>[]};
   globalThis.document={
     querySelector:key=>({'main':main,'#material-form':form,'#material-status':status,
-      '#new-material':{},'#public-materials':{isConnected:false}}[key]||null),
+      '#material-type':{value:'quiz'},'#material-quiz-fields':{},'#material-resource-fields':{},'#new-material':{},'#public-materials':{isConnected:false}}[key]||null),
     querySelectorAll:key=>key==='[data-delete]'?[remove]:[],
   };
   globalThis.window={confirm:()=>true};
   globalThis.FormData=class {
     *[Symbol.iterator]() {
-      yield ['title','My study']; yield ['prompt','Question'];
+      yield ['materialType','quiz'];yield ['title','My study']; yield ['prompt','Question'];
       yield ['reference','GEN 1']; yield ['options','Yes\nNo'];
       yield ['answer','Yes']; yield ['explanation','Source'];
     }
@@ -66,6 +66,7 @@ for(const operation of ['save','delete']){
         ? f.form.onsubmit({preventDefault(){},currentTarget:f.form})
         : f.remove.onclick();
       await f.roleStarted.promise;
+      if(operation==='save'){await f.form.onsubmit({preventDefault(){},currentTarget:f.form});assert.equal(f.writes(),1,'repeat submit cannot duplicate an in-flight save');}
       // Same authenticated user and URL but newer render supersedes the builder.
       await renderWorkspace('live',f.ctx);
       f.pendingRole.resolve(answer({editor:false,owner:false}));

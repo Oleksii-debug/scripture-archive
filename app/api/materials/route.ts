@@ -1,3 +1,4 @@
+import { validResourceData, resourceFields } from "../../../public/material-resource.js";
 import { env } from "cloudflare:workers";
 import { authenticateRequest, isVerifiedOwner, sameOrigin } from "../../../lib/auth";
 export const dynamic = "force-dynamic";
@@ -22,6 +23,11 @@ function exportRecord(raw: unknown, snapshot = false): Record<string, unknown> {
   if (!data || typeof data !== "object" || Array.isArray(data))
     throw Error("invalid_export_record");
   const d = data as Record<string, unknown>;
+  if (d.kind === "resource") {
+    if (!validResourceData(d)) throw Error("invalid_export_record");
+    return record;
+  }
+  if (d.kind !== undefined && d.kind !== "quiz") throw Error("invalid_export_record");
   const options = d.options;
   if (typeof d.prompt !== "string" || d.prompt.trim().length < 8 || d.prompt.length > 3000 ||
       typeof d.reference !== "string" || d.reference.trim().length < 3 || d.reference.length > 200 ||
@@ -106,7 +112,11 @@ export async function POST(request: Request) {
   // of required text fields previously returned ok:true for a different
   // exercise, including a 501-character answer matching a 500-char option
   // only *after* truncation. Refuse those requests before any D1 interaction.
-  if (([
+  const resource = body.kind === "resource";
+  if (body.kind !== undefined && body.kind !== "quiz" && !resource) return Response.json({ error: "invalid_material" }, { status: 400 });
+  if (typeof body.title !== "string" || body.title.trim().length < 3 || body.title.trim().length > 160 ||
+      (resource && !validResourceData(body as unknown))) return Response.json({ error: "invalid_material" }, { status: 400 });
+  if (!resource && ([
     ["title", 160], ["prompt", 3000], ["reference", 200],
     ["explanation", 2000], ["answer", 500],
   ] as const).some(([key, max]) => {
@@ -121,7 +131,7 @@ export async function POST(request: Request) {
     options = Array.isArray(body.options) && body.options.length >= 2 && body.options.length <= 8 &&
       body.options.every(value => typeof value === "string" && value.trim().length > 0 && value.length <= 500)
       ? body.options.map(value => value.trim()) : [];
-  if (title.length < 3 || prompt.length < 8 || reference.length < 3 || !answer || explanation.length < 8 || options.length < 2 || new Set(options).size !== options.length || !options.includes(answer))
+  if (!resource && (title.length < 3 || prompt.length < 8 || reference.length < 3 || !answer || explanation.length < 8 || options.length < 2 || new Set(options).size !== options.length || !options.includes(answer)))
     return Response.json({ error: "invalid_material" }, { status: 400 });
   // A supplied locale is an authorship and source-review boundary. Never
   // coerce arrays/objects to a language, or silently relabel an explicitly
@@ -153,7 +163,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "material_save_failed" }, { status: 503, headers: { "Cache-Control": "no-store, private" } });
   }
   if (existing && existing.owner_user_id !== userId) return Response.json({ error: "forbidden" }, { status: 403 });
-  const data = JSON.stringify({ prompt, reference, explanation, answer, options });
+  const data = JSON.stringify(resource ? resourceFields(body) : { prompt, reference, explanation, answer, options });
   // The owner constraint must be enforced by the write itself: another user can
   // create this ID after the preflight read but before the UPSERT executes.
   // Preserve owner-conditional UPSERT and acknowledge the actual D1 mutation.

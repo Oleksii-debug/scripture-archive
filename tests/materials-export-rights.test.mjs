@@ -1,3 +1,4 @@
+import * as materialResource from '../public/material-resource.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,readdirSync} from 'node:fs';
@@ -18,7 +19,7 @@ function fixture(){
   let actor='alice';
   const D1={prepare(sql){return {bind(...args){return {sql,args};}};},async batch(statements){return statements.map(({sql,args})=>({success:true,results:db.prepare(sql).all(...args)}));}};
   const exports={};vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../app/api/materials/route.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{
-    exports,Request,Response,URL,crypto,require(name){if(name==='cloudflare:workers')return {env:{DB:D1}};if(name.endsWith('/auth'))return {authenticateRequest:async()=>({userId:actor,provider:'password'}),sameOrigin:()=>true,isVerifiedOwner:()=>false};throw Error(name);}
+    exports,Request,Response,URL,crypto,require(name){if (name.endsWith("/material-resource.js")) return materialResource;if(name==='cloudflare:workers')return {env:{DB:D1}};if(name.endsWith('/auth'))return {authenticateRequest:async()=>({userId:actor,provider:'password'}),sameOrigin:()=>true,isVerifiedOwner:()=>false};throw Error(name);}
   });
   return {db,add,async get(user='alice'){actor=user;const response=await exports.GET(new Request('https://local.invalid/api/materials?mine=1&export=1'));return {status:response.status,headers:response.headers,data:await response.json()};}};
 }

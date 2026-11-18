@@ -113,22 +113,32 @@ export async function GET(request: Request) {
     }
     const actor = await authenticateRequest(request);
     if (!actor) return json({ error: "authentication_required" }, 401);
-    if (actor.provider === "agent") return json({ error: "forbidden" }, 403);
+    if (actor.provider === "agent" || !actor.emailVerified) return json({ error: "forbidden" }, 403);
     if (view !== "mine") return json({ error: "forbidden" }, 403);
+    const afterDate = url.searchParams.get("afterDate"), afterId = url.searchParams.get("afterId");
+    const hasCursor = afterDate !== null || afterId !== null;
+    if (["view", "afterDate", "afterId"].some(field => url.searchParams.getAll(field).length > 1) ||
+        url.searchParams.has("afterTitle") || (hasCursor && (!date(afterDate) || !validId(afterId))))
+      return json({ error: "invalid_cursor" }, 400);
+    const parameters = hasCursor ? [actor.userId, afterDate!, afterId!] : [actor.userId];
     const rows = await env.DB.prepare(`SELECT e.id,COALESCE(c.id,e.church_claim_id) AS church_claim_id,c.name AS church_name,e.title,e.summary,e.city,e.country_code,
         e.locale,e.starts_on,e.ends_on,e.accessibility_details,e.programme_url,e.registration_url,e.programme_json,e.programme_timezone,e.registration_enabled,
         CASE WHEN e.status='active' AND (c.id IS NULL OR c.status<>'approved' OR c.id<>e.church_claim_id) THEN 'hidden' ELSE e.status END AS status,
         e.created_at,e.updated_at
       FROM church_events e LEFT JOIN church_directory_claims c ON c.claimant_user_id=e.organizer_user_id
-      WHERE e.organizer_user_id=? ORDER BY e.starts_on,e.id LIMIT 200`).bind(actor.userId).all<EventRow>();
+      JOIN accounts a ON a.id=e.organizer_user_id
+      WHERE e.organizer_user_id=? AND a.deleted_at IS NULL AND a.email_verified_at IS NOT NULL
+        ${hasCursor ? "AND (e.starts_on,e.id) > (?,?)" : ""}
+      ORDER BY e.starts_on,e.id LIMIT 51`).bind(...parameters).all<EventRow>();
     if (!rows.success || !Array.isArray(rows.results)) return json({ error: "events_unavailable" }, 503);
     const items = [];
-    for (const row of rows.results) {
+    for (const row of rows.results.slice(0, 50)) {
       const item = project(row, true);
       if (!item) return json({ error: "events_unavailable" }, 503);
       items.push(item);
     }
-    return json({ items });
+    const last = items.at(-1);
+    return json({ items, nextCursor: rows.results.length > 50 && last ? { startsOn: last.startsOn, id: last.id } : null });
   } catch { return json({ error: "events_unavailable" }, 503); }
 }
 

@@ -20,7 +20,16 @@ const timestamp=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:
 const https=value=>{try{if(typeof value!=='string'||value.length<9||value.length>500||value.trim()!==value||!/^https:\/\//i.test(value)||/[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}\s]/u.test(value))return null;const authority=value.slice(value.indexOf('://')+3).split(/[/?#]/u,1)[0];if(!authority||authority.includes('@'))return null;const url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password?url.href:null;}catch{return null;}};
 const valid=(item, mine=false)=>item&&typeof item==='object'&&!Array.isArray(item)&&typeof item.id==='string'&&item.id.length>0&&item.id.length<=100&&typeof item.churchId==='string'&&((mine&&item.churchName===null)||visible(item.churchName,3,160))&&visible(item.title,3,160)&&visible(item.summary,3,500)&&visible(item.city,2,120)&&/^[A-Z]{2}$/.test(item.countryCode)&&['uk','ru','en'].includes(item.locale)&&date(item.startsOn)&&date(item.endsOn)&&item.endsOn>=item.startsOn&&visible(item.accessibilityDetails,3,500)&&(item.programmeUrl===null||https(item.programmeUrl))&&(item.registrationUrl===null||https(item.registrationUrl))&&(item.status==='active'||(mine&&['hidden','withdrawn'].includes(item.status)))&&(item.registrationEnabled===undefined||typeof item.registrationEnabled==='boolean')&&timestamp(item.createdAt)&&timestamp(item.updatedAt)&&Boolean((item.programme===undefined&&item.timeZone===undefined)||validateProgramme(item.programme,item.timeZone,item.startsOn,item.endsOn));
 async function api(path,options){const response=await fetch(path,options);const data=await response.json().catch(()=>({}));if(!response.ok)throw Error(data.error||String(response.status));return data;}
-const post=body=>api('/api/events',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+const post=async body=>{
+  const data=await api('/api/events',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(data?.ok!==true || (body.action==='submit' && (typeof data.id!=='string' || !data.id || data.id.length>100 || (body.id && data.id!==body.id))))throw Error('unconfirmed event change');
+  return data;
+};
+const ACTION_COPY={
+  uk:{withdrawn:'Подію відкликано.',refreshError:'Дію збережено, але оновити списки не вдалося. Перезавантажте сторінку.'},
+  ru:{withdrawn:'Событие отозвано.',refreshError:'Действие сохранено, но списки не удалось обновить. Перезагрузите страницу.'},
+  en:{withdrawn:'The event was withdrawn.',refreshError:'The change was saved, but the lists could not be refreshed. Reload the page.'},
+};
 const cards=(items,w,esc,lang,eligible)=>`<div class="card-grid event-directory-results">${items.map(item=>`<article class="card"><h3 lang="${esc(item.locale)}">${esc(item.title)}</h3><p><a href="/churches/${esc(encodeURIComponent(item.churchId))}">${esc(item.churchName)}</a> · ${esc(item.city)}, ${esc(item.countryCode)}</p><p>${esc(item.summary)}</p><dl><dt>${esc(w.dates)}</dt><dd><time datetime="${esc(item.startsOn)}">${esc(item.startsOn)}</time> — <time datetime="${esc(item.endsOn)}">${esc(item.endsOn)}</time></dd><dt>${esc(w.access)}</dt><dd>${esc(item.accessibilityDetails)}</dd></dl>${programmeMarkup(item,lang,esc)}${item.programmeUrl?`<a href="${esc(https(item.programmeUrl))}" rel="noreferrer">${esc(w.programme)}</a>`:''}${item.registrationUrl?` <a href="${esc(https(item.registrationUrl))}" rel="noreferrer">${esc(w.registration)}</a>`:''}${registrationForm(item,lang,esc,eligible)}${eventMaterialsControl(item,lang,esc)}${eligible?eventTeamControl(item,lang,esc):''}</article>`).join('')}</div>`;
 function eventForm(church,w,esc,lang){const languages=['uk','ru','en'].map(value=>`<option value="${value}">${esc(w.languages[value])}</option>`).join('');return `<section class="card event-organizer"><h2>${esc(w.form)}</h2><p>${esc(w.help)}</p><p><strong>${esc(church.name)}</strong></p><form class="event-form"><input type="hidden" name="id"><label class="account-field"><span>${esc(w.titleField)}</span><input name="title" minlength="3" maxlength="160" required></label><label class="account-field"><span>${esc(w.summary)}</span><textarea name="summary" minlength="3" maxlength="500" required></textarea></label><label class="account-field"><span>${esc(w.city)}</span><input name="city" minlength="2" maxlength="120" required></label><label class="account-field"><span>${esc(w.country)}</span><input name="countryCode" minlength="2" maxlength="2" pattern="[A-Za-z]{2}" required></label><label class="account-field"><span>${esc(w.locale)}</span><select name="locale">${languages}</select></label><label class="account-field"><span>${esc(w.start)}</span><input name="startsOn" type="date" required></label><label class="account-field"><span>${esc(w.end)}</span><input name="endsOn" type="date" required></label><label class="account-field"><span>${esc(w.accessDetails)}</span><textarea name="accessibilityDetails" minlength="3" maxlength="500" required></textarea></label><label class="account-field"><span>${esc(w.programmeUrl)}</span><input name="programmeUrl" type="url" maxlength="500" placeholder="https://"></label><label class="account-field"><span>${esc(w.registrationUrl)}</span><input name="registrationUrl" type="url" maxlength="500" placeholder="https://"></label>${programmeEditorMarkup(lang,esc)}${registrationSettings(lang,esc)}<label class="account-check"><input name="authority" type="checkbox" required><span>${esc(w.authority)}</span></label><label class="account-check"><input name="consent" type="checkbox" required><span>${esc(w.consent)}</span></label><button class="button" type="submit">${esc(w.submit)}</button><p class="event-form-status" role="status"></p></form></section>`;}
 function mine(items, w, esc, canEdit, lang) {
@@ -45,16 +54,19 @@ export function churchEventFilter(search=''){
 const FILTER_COPY={uk:{active:'Події вибраної громади',back:'Сторінка громади',all:'Усі події'},ru:{active:'События выбранной общины',back:'Страница общины',all:'Все события'},en:{active:'Events from the selected community',back:'Community page',all:'All events'}};
 export async function renderEventDirectory(root,lang,esc,user,isCurrent=()=>true,churchId=''){
   const w=copy(lang),principal=user?.id??null,canOrganize=user?.emailVerified===true&&user?.authProvider!=='agent';
+  const actions=typeof lang==='string'&&Object.hasOwn(ACTION_COPY,lang)?ACTION_COPY[lang]:ACTION_COPY.uk;
   const pages = typeof lang==='string' && Object.hasOwn(PAGE_COPY,lang) ? PAGE_COPY[lang] : PAGE_COPY.uk;
   const active=()=>{try{return root?.isConnected!==false&&isCurrent()===true&&(user?.id??null)===principal;}catch{return false;}};
   if(!active())return;
   const filterCopy=typeof lang==='string'&&Object.hasOwn(FILTER_COPY,lang)?FILTER_COPY[lang]:FILTER_COPY.uk;
   if(typeof churchId!=='string'||(churchId&&!/^[A-Za-z0-9_-]{1,100}$/.test(churchId))){root.innerHTML=`<h1>${esc(w.title)}</h1><p role="alert">${esc(w.error)}</p><a href="/events">${esc(filterCopy.all)}</a>`;return;}
   const filterMarkup=churchId?`<p>${esc(filterCopy.active)} · <a href="/churches/${esc(churchId)}">${esc(filterCopy.back)}</a> · <a href="/events">${esc(filterCopy.all)}</a></p>`:'';
-  root.innerHTML=`<section class="event-directory" aria-labelledby="event-directory-title"><div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1 id="event-directory-title">${esc(w.title)}</h1></div></div>${filterMarkup}<p class="lead">${esc(w.lead)}</p><p>${esc(w.honesty)}</p><form class="event-search"><label class="account-field"><span>${esc(w.search)}</span><input name="query" type="search" maxlength="80"></label><button class="button" type="submit">${esc(w.find)}</button></form><p class="event-status" role="status" tabindex="-1"></p><div class="event-public"></div><button class="button event-more" type="button" hidden>${esc(pages.more)}</button><div class="event-attendance"></div><div class="event-private">${canOrganize?'':`<p><a href="/account">${esc(w.signin)}</a></p>`}</div></section>`;
+  root.innerHTML=`<section class="event-directory" aria-labelledby="event-directory-title"><div class="section-head"><div><p class="eyebrow">Scripture Archive</p><h1 id="event-directory-title">${esc(w.title)}</h1></div></div>${filterMarkup}<p class="lead">${esc(w.lead)}</p><p>${esc(w.honesty)}</p><form class="event-search"><label class="account-field"><span>${esc(w.search)}</span><input name="query" type="search" maxlength="80"></label><button class="button" type="submit">${esc(w.find)}</button></form><p class="event-status" role="status" tabindex="-1"></p><div class="event-public"></div><button class="button event-more" type="button" hidden>${esc(pages.more)}</button><div class="event-attendance"></div><p class="event-action-status" role="status" tabindex="-1"></p><div class="event-private">${canOrganize?'':`<p><a href="/account">${esc(w.signin)}</a></p>`}</div></section>`;
   const search=root.querySelector('.event-search'),query=search?.querySelector('input'),publicRoot=root.querySelector('.event-public'),privateRoot=root.querySelector('.event-private'),status=root.querySelector('.event-status');
   const registrations=createEventRegistrations(root,lang,esc,canOrganize,active);
   const more = root.querySelector('.event-more'), seenCursors = new Set(), listed = new Set();
+  const actionStatus=root.querySelector('.event-action-status')||status;
+  let mutationPending=false,privateEpoch=0;
   let epoch=0, owned=[], nextCursor=null, activeQuery='', page=0, loading=false;
   function cursorKey(cursor) {
     return JSON.stringify([cursor.startsOn, cursor.title, cursor.id]);
@@ -110,8 +122,10 @@ export async function renderEventDirectory(root,lang,esc,user,isCurrent=()=>true
       const restoreFocus=hadFocus && root.ownerDocument?.activeElement===more;
       if (more) more.hidden=!nextCursor;
       if (restoreFocus) publicRoot.querySelector(`#${headingId}`)?.focus();
+      return true;
     } catch {
       if (active() && token===epoch) status.textContent=w.error;
+      return false;
     } finally {
       if (token===epoch) loading=false;
     }
@@ -119,32 +133,59 @@ export async function renderEventDirectory(root,lang,esc,user,isCurrent=()=>true
   if (more) more.onclick=()=>{
     if (active() && !loading && nextCursor) void publicLoad(activeQuery,nextCursor);
   };
-  async function privateLoad(){if(!canOrganize||!active())return;try{const [churches,events]=await Promise.all([api('/api/churches?view=mine'),api('/api/events?view=mine')]);if(!active()||!Array.isArray(churches.items)||churches.items.length>1||!Array.isArray(events.items)||events.items.length>200||!events.items.every(item=>valid(item,true)))throw Error('invalid private events');owned=events.items;const church=churches.items.find(item=>item?.status==='approved');const organizer=church?eventForm(church,w,esc,lang):`<p><a href="/churches">${esc(w.churchRequired)}</a></p>`;privateRoot.innerHTML=organizer+mine(owned,w,esc,Boolean(church),lang);attach(church);registrations.attachRosters();mountEventMaterials(root,lang,esc,active);mountEventTeams(root,lang,esc,active);}catch{if(active())privateRoot.innerHTML=`<p role="alert">${esc(w.error)}</p>`;}}
+  async function privateLoad(){
+    if(!canOrganize||!active())return false;
+    const token=++privateEpoch;
+    try{
+      const [churches,events]=await Promise.all([api('/api/churches?view=mine'),api('/api/events?view=mine')]);
+      if(!active()||token!==privateEpoch)return false;
+      if(!Array.isArray(churches.items)||churches.items.length>1||!Array.isArray(events.items)||events.items.length>200||!events.items.every(item=>valid(item,true)))throw Error('invalid private events');
+      owned=events.items;const church=churches.items.find(item=>item?.status==='approved');
+      const organizer=church?eventForm(church,w,esc,lang):`<p><a href="/churches">${esc(w.churchRequired)}</a></p>`;
+      privateRoot.innerHTML=organizer+mine(owned,w,esc,Boolean(church),lang);
+      attach(church);registrations.attachRosters();mountEventMaterials(root,lang,esc,active);mountEventTeams(root,lang,esc,active);
+      return true;
+    }catch{
+      if(active()&&token===privateEpoch){owned=[];privateRoot.innerHTML=`<p role="alert">${esc(w.error)}</p>`;}
+      return false;
+    }
+  }
+  async function mutate(body,button,message,formFeedback=null){
+    if(!active()||mutationPending)return;
+    mutationPending=true;privateEpoch++;
+    const controls=[...new Set([button,...root.querySelectorAll('.event-form button[type="submit"], .event-edit, .event-withdraw')])];
+    controls.forEach(control=>control.setAttribute('aria-disabled','true'));
+    const focused=root.ownerDocument?.activeElement,hadFocus=focused===button;
+    const announce=message=>{
+      if(!active())return;
+      actionStatus.textContent=message;
+      const current=root.ownerDocument?.activeElement;
+      if(hadFocus&&(current===focused||current===root.ownerDocument?.body))actionStatus.focus?.();
+    };
+    actionStatus.textContent='';if(formFeedback)formFeedback.textContent='';
+    try{
+      await post(body);if(!active())return;
+      const [publicRefreshed,privateRefreshed]=await Promise.all([publicLoad(),privateLoad(),registrations.loadMine()]);
+      announce(publicRefreshed&&privateRefreshed?message:actions.refreshError);
+    }catch{
+      if(active()&&formFeedback)formFeedback.textContent=w.error;
+      announce(w.error);
+    }finally{
+      mutationPending=false;
+      if(active())controls.forEach(control=>control.removeAttribute('aria-disabled'));
+    }
+  }
   function attach(church){
     const form=root.querySelector('.event-form');
     const programmeEditor=form?mountProgrammeEditor(form,lang,esc,active):null;
-    let saving=false;
     if(form)form.onsubmit=async event=>{
-      event.preventDefault();
-      if(!active()||saving)return;
+      event.preventDefault();if(!active()||mutationPending)return;
       const data=new FormData(form),button=form.querySelector('button[type="submit"]'),feedback=form.querySelector('.event-form-status');
-      saving=true;button.setAttribute('aria-disabled','true');
-      try{
-        await post({action:'submit',registrationEnabled:data.has('registrationEnabled'),...programmeEditor.read(),id:data.get('id'),churchId:church.id,title:data.get('title'),summary:data.get('summary'),city:data.get('city'),countryCode:String(data.get('countryCode')||'').toUpperCase(),locale:data.get('locale'),startsOn:data.get('startsOn'),endsOn:data.get('endsOn'),accessibilityDetails:data.get('accessibilityDetails'),programmeUrl:data.get('programmeUrl'),registrationUrl:data.get('registrationUrl'),organizerAuthorityAttested:data.has('authority'),publicationConsent:data.has('consent')});
-        if(!active())return;
-        const returnFocus=root.ownerDocument?.activeElement===button;
-        await Promise.all([publicLoad(),privateLoad(),registrations.loadMine()]);
-        if(!active())return;
-        status.textContent=w.saved;
-        if(returnFocus&&root.ownerDocument?.activeElement===root.ownerDocument?.body)status.focus();
-      }catch{
-        if(active())feedback.textContent=w.error;
-      }finally{
-        saving=false;button.removeAttribute('aria-disabled');
-      }
+      await mutate({action:'submit',registrationEnabled:data.has('registrationEnabled'),...programmeEditor.read(),id:data.get('id'),churchId:church.id,title:data.get('title'),summary:data.get('summary'),city:data.get('city'),countryCode:String(data.get('countryCode')||'').toUpperCase(),locale:data.get('locale'),startsOn:data.get('startsOn'),endsOn:data.get('endsOn'),accessibilityDetails:data.get('accessibilityDetails'),programmeUrl:data.get('programmeUrl'),registrationUrl:data.get('registrationUrl'),organizerAuthorityAttested:data.has('authority'),publicationConsent:data.has('consent')},button,w.saved,feedback);
     };
-    root.querySelectorAll('.event-edit').forEach(button=>button.onclick=()=>{const item=owned.find(row=>row.id===button.dataset.id);if(!item||!form||!active())return;for(const name of ['id','title','summary','city','countryCode','locale','startsOn','endsOn','accessibilityDetails','programmeUrl','registrationUrl'])form.elements[name].value=item[name]??'';programmeEditor.fill(item);form.elements.registrationEnabled.checked=item.registrationEnabled===true;form.elements.authority.checked=false;form.elements.consent.checked=false;form.elements.title.focus();});
-    root.querySelectorAll('.event-withdraw').forEach(button=>button.onclick=async()=>{if(!active()||button.disabled)return;button.disabled=true;try{await post({action:'withdraw',id:button.dataset.id});if(active())await Promise.all([publicLoad(),privateLoad(),registrations.loadMine()]);}catch{if(active()){button.disabled=false;privateRoot.querySelector('[role="status"]').textContent=w.error;}}});}
+    root.querySelectorAll('.event-edit').forEach(button=>button.onclick=()=>{const item=owned.find(row=>row.id===button.dataset.id);if(!item||!form||!active()||mutationPending)return;for(const name of ['id','title','summary','city','countryCode','locale','startsOn','endsOn','accessibilityDetails','programmeUrl','registrationUrl'])form.elements[name].value=item[name]??'';programmeEditor.fill(item);form.elements.registrationEnabled.checked=item.registrationEnabled===true;form.elements.authority.checked=false;form.elements.consent.checked=false;form.elements.title.focus();});
+    root.querySelectorAll('.event-withdraw').forEach(button=>button.onclick=()=>mutate({action:'withdraw',id:button.dataset.id},button,actions.withdrawn));
+  }
   if(search)search.onsubmit=event=>{event.preventDefault();if(active())void publicLoad(query.value.trim());};
   await Promise.all([publicLoad(),privateLoad(),registrations.loadMine()]);
 }

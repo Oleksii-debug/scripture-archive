@@ -223,7 +223,7 @@ test('late native builder save never redraws or announces into another account',
     const action=f.form.onsubmit({preventDefault(){},currentTarget:f.form});
     await started.promise;
     f.state.user={id:'other'};
-    response.resolve(answer({saved:true}));
+    response.resolve(answer({ok:true,id:'owned'}));
     await action;
     assert.equal(f.shells.length,1,'old builder must not redraw after account swap');
     assert.deepEqual(f.announcements,[],'old submit must not announce into another session');
@@ -263,7 +263,7 @@ test('native builder still announces acknowledged save for its original current 
     };
     const action=f.form.onsubmit({preventDefault(){},currentTarget:f.form});
     await started.promise;
-    response.resolve(answer({saved:true}));
+    response.resolve(answer({ok:true,id:'owned'}));
     await action;
     assert.equal(f.shells.length,2,'valid save still redraws canonical builder');
     assert.deepEqual(f.announcements,['Material saved.']);

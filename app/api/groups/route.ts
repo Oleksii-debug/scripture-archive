@@ -232,9 +232,40 @@ export async function GET(request: Request) {
   }
 }
 
+// Public discovery searches only already public fields. Search terms stay in
+// the request body, and a broken session cannot block this anonymous read.
+async function searchGroupDirectory(request: Request) {
+  const reply=(data:unknown,status=200)=>Response.json(data,{status,headers:{"Cache-Control":"no-store, private"}});
+  const body=await request.json().catch(()=>null) as Row|null;
+  if(!body||typeof body.query!=="string"||body.query.length>100||
+     (body.marathon!=null&&typeof body.marathon!=="boolean")||
+     (body.cursor!=null&&!boundedIdentifier(body.cursor)))return reply({error:"invalid_search"},400);
+  try {
+    const after=body.cursor as string|null|undefined;
+    const sql=`${groupSelect} WHERE g.visibility='public'${after?" AND g.id > ?":""} ORDER BY g.id ASC LIMIT 201`;
+    const statement=env.DB!.prepare(sql);
+    const rows=await checkedGroupRows(await (after?statement.bind(after):statement).all<Row>());
+    const normalize=(value:string)=>value.normalize("NFKC").toLowerCase();
+    const query=normalize(body.query.trim()),groups=[];
+    let nextCursor:string|null=null;
+    for(let i=0;i<Math.min(rows.length,200);i++){
+      const row=rows[i];
+      if(!boundedIdentifier(row.id)||typeof row.name!=="string"||!row.name.trim()||row.name.length>100||
+         [["church",160],["country",80],["city",80],["description",600]].some(([key,max])=>row[key as string]!=null&&(typeof row[key as string]!=="string"||(row[key as string] as string).length>Number(max))))
+        throw Error("invalid_directory_row");
+      const group=publicGroup(row);
+      if((body.marathon==null||group.marathonEnabled===body.marathon)&&
+         (!query||[row.name,row.church,row.country,row.city,row.description].some(value=>typeof value==="string"&&normalize(value).includes(query))))groups.push(group);
+      if(groups.length===12||i===199){if(i+1<rows.length)nextCursor=row.id as string;break;}
+    }
+    return reply({groups,nextCursor});
+  }catch{return reply({error:"groups_unavailable"},503);}
+}
+
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return Response.json({ error: "cross_origin_request" }, { status: 403 });
   if (!env.DB) return unavailableWrite();
+  if(new URL(request.url).searchParams.get("action")==="directorySearch")return searchGroupDirectory(request);
   // Session validation and D1 preflight reads are part of the write boundary.
   try {
   const id = await authenticateRequest(request);

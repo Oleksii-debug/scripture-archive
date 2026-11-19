@@ -679,6 +679,13 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const publicGroup = await fetch(`${base}/api/groups?groupId=${encodeURIComponent(publicGroupId)}`);
   assert.equal(publicGroup.status, 200);
   assert.equal((await publicGroup.json()).sessions[0].reflection, null);
+  const directory=await request('/api/groups?action=directorySearch',{method:'POST',useCookie:false,body:{query:'PUBLIC PRIVACY',marathon:false,cursor:null}});
+  assert.equal(directory.response.status,200);assert.deepEqual(directory.data.groups.map(g=>g.id),[publicGroupId]);
+  assert.equal(directory.data.groups[0].memberCount,null);assert.equal('inviteCode' in directory.data.groups[0],false);
+  assert.doesNotMatch(JSON.stringify(directory.data),/Private group discussion/);
+  assert.deepEqual((await request('/api/groups?action=directorySearch',{method:'POST',useCookie:false,body:{query:'Private group discussion'}})).data.groups,[]);
+  assert.equal((await request('/api/groups?action=directorySearch',{method:'POST',origin:'https://attacker.invalid',body:{query:''}})).response.status,403);
+
   for(let i=0;i<12;i++) {
     result=await request('/api/groups?action=session',{method:'POST',body:{groupId:publicGroupId,bookId:'GEN',chapter:12,answersTotal:0,answersCorrect:0,meetingDate:'2026-10-28',participantCount:4,reflection:'Private earlier meeting'}});
     assert.equal(result.response.status,200);

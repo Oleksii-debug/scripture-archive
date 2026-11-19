@@ -74,3 +74,31 @@ test('resource rendering escapes text, exposes a deliberate external link and tr
   assert.equal(validPublicMaterial({...item,url:'javascript:alert(1)'}),false);
   assert.equal(validPublicMaterial({...item,kind:'unknown',options:['a','b']}),false);
 });
+
+test('catalogue type filter distinguishes exercises and resources, combines rights/language, and paginates exact type matches',async()=>{
+  const f=fixture();try{
+    const quiz={prompt:'Which option is correct?',reference:'GEN 12',options:['one','two'],answer:'one',explanation:'The passage supports this answer.'};
+    let n=0;
+    for(const type of resources.MATERIAL_TYPES)for(const locale of ['uk','ru','en'])for(const basis of ['original','permission']){
+      const id='mixed-'+String(n++).padStart(3,'0'),content=type==='quiz'?quiz:{...data,resourceType:type};
+      f.db.prepare("INSERT INTO study_materials(id,owner_user_id,title,locale,data) VALUES (?,'author','Mixed catalogue',?,?)").run(id,locale,JSON.stringify(content));
+      f.db.prepare("INSERT INTO material_submissions(id,material_id,author_id,snapshot,provenance,rights_attested,status,reviewed_at,reviewed_by,source_checked,rights_checked,rights_holder,rights_basis) VALUES (?,?,'author',?,'Original source',1,'approved',CURRENT_TIMESTAMP,'editor',1,1,'Author',?)").run(id,id,JSON.stringify({title:'Mixed catalogue',locale,data:content}),basis);
+    }
+    for(const materialType of resources.MATERIAL_TYPES){
+      const result=await f.call('material-review',{action:'librarySearch',query:'',materialType,locale:'uk',rightsBasis:'permission'},'');
+      assert.equal(result.status,200);assert.equal(result.data.items.length,1);const item=result.data.items[0];assert.equal(item.locale,'uk');assert.equal(item.rights.basis,'permission');assert.equal(item.kind==='resource'?item.resourceType:'quiz',materialType);
+    }
+    for(const materialType of ['',0,[],{},'unknown','constructor'])assert.equal((await f.call('material-review',{action:'librarySearch',query:'',materialType},'')).status,400);
+    let cursor=null;const ids=[];
+    do{const result=await f.call('material-review',{action:'librarySearch',query:'',cursor},'');assert.equal(result.status,200);ids.push(...result.data.items.map(item=>item.id));cursor=result.data.nextCursor;}while(cursor);
+    assert.equal(ids.length,36);assert.equal(new Set(ids).size,36);
+    // Matching resources beyond the 200-record scan boundary must remain reachable.
+    for(let i=0;i<201;i++){
+      const id='preface-'+String(i).padStart(3,'0');
+      f.db.prepare("INSERT INTO study_materials(id,owner_user_id,title,locale,data) VALUES (?,'author','Preface exercise','en',?)").run(id,JSON.stringify(quiz));
+      f.db.prepare("INSERT INTO material_submissions(id,material_id,author_id,snapshot,provenance,rights_attested,status,submitted_at,reviewed_at,reviewed_by,source_checked,rights_checked,rights_holder,rights_basis) VALUES (?,?,'author',?,'Original source',1,'approved','2099-01-01',CURRENT_TIMESTAMP,'editor',1,1,'Author','original')").run(id,id,JSON.stringify({title:'Preface exercise',locale:'en',data:quiz}));
+    }
+    const first=await f.call('material-review',{action:'librarySearch',query:'',materialType:'video'},'');assert.deepEqual(first.data.items,[]);assert.ok(first.data.nextCursor);
+    const next=await f.call('material-review',{action:'librarySearch',query:'',materialType:'video',cursor:first.data.nextCursor},'');assert.equal(next.data.items.length,6);assert.ok(next.data.items.every(item=>item.resourceType==='video'));
+  }finally{f.db.close();}
+});

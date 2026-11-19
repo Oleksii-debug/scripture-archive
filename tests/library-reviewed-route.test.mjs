@@ -9,8 +9,8 @@ const escapeText=value=>String(value).replaceAll('&','&amp;').replaceAll('<','&l
 
 function scenario(lang='en') {
   const prior={fetch:globalThis.fetch,document:globalThis.document,location:globalThis.location};
-  const input={value:''},select={value:''},rights={value:''},submit={};
-  const form={querySelector:selector=>({input,'select[name="locale"]':select,'select[name="rightsBasis"]':rights,button:submit}[selector]??null)};
+  const input={value:''},select={value:''},rights={value:''},type={value:''},submit={};
+  const form={querySelector:selector=>({input,'select[name="locale"]':select,'select[name="rightsBasis"]':rights,'select[name="materialType"]':type,button:submit}[selector]??null)};
   const status={textContent:''},more={hidden:true},results={innerHTML:'',isConnected:true,
     insertAdjacentHTML(_where,html){this.innerHTML+=html;},querySelectorAll(){return[];},querySelector(){return null;}};
   const list={isConnected:true,innerHTML:'',querySelector:selector=>({'.library-search':form,
@@ -23,7 +23,7 @@ function scenario(lang='en') {
   results.ownerDocument=document; list.ownerDocument=document;
   globalThis.document=document;
   const context={state,t:key=>key,esc:escapeText,setActiveNav:name=>nav.push(name),shell:html=>shells.push(html)};
-  return {list,results,form,input,select,rights,submit,status,more,document,heading,nav,shells,state,context,restore() {
+  return {list,results,form,input,select,rights,type,submit,status,more,document,heading,nav,shells,state,context,restore() {
     for(const key of ['fetch','document','location']) {
       if(prior[key]===undefined)delete globalThis[key];
       else globalThis[key]=prior[key];
@@ -437,4 +437,20 @@ test('canonical library route never renders inherited language copy and remains 
       assert.match(f.status.textContent,/Збігів не знайдено/);
     }finally{f.restore();}
   }
+});
+
+
+test('material type combines with language and rights, remains fixed while paging, and resets only on new search',async()=>{
+  const f=scenario(),calls=[];
+  try{
+    globalThis.fetch=async(_url,options)=>{const body=JSON.parse(options.body);calls.push(body);return Response.json({items:[],nextCursor:body.materialType==='audio'&&!body.cursor?{id:'audio-page',submittedAt:'2026-11-18'}:null});};
+    await renderWorkspace('library',f.context);
+    assert.match(f.list.innerHTML,/Material type<\/span><select name="materialType">/);
+    for(const label of ['All types','Exercise','Text','Document','Audio','Video','Image'])assert.ok(f.list.innerHTML.includes('>'+label+'</option>'));
+    f.type.value='audio';f.select.value='uk';f.rights.value='permission';f.form.onsubmit({preventDefault(){}});await tick();
+    f.type.value='video';f.more.onclick();await tick();
+    assert.deepEqual(calls.slice(1).map(({materialType,locale,rightsBasis,cursor})=>[materialType,locale,rightsBasis,cursor?.id??null]),[['audio','uk','permission',null],['audio','uk','permission','audio-page']]);
+    f.form.onsubmit({preventDefault(){}});await tick();assert.equal(calls.at(-1).materialType,'video');
+    f.type.value='';f.form.onsubmit({preventDefault(){}});await tick();assert.equal(Object.hasOwn(calls.at(-1),'materialType'),false);
+  }finally{f.restore();}
 });

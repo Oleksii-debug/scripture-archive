@@ -441,6 +441,8 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal(publicResource.kind,'resource');assert.equal(publicResource.url,resourceDraft.url);assert.equal(publicResource.accessibility,resourceDraft.accessibility);assert.equal('options' in publicResource,false);
   assert.equal((await reviewPost({action:'answer',id:resourceSubmission.data.id,choice:0},'')).data.error,'not_an_exercise');
   assert.ok((await reviewPost({action:'librarySearch',query:'Abram leaves'},'')).data.items.some(item=>item.id===resourceSubmission.data.id));
+  assert.ok((await reviewPost({action:'librarySearch',query:'',materialType:'audio',locale:'en'},'')).data.items.some(item=>item.id===resourceSubmission.data.id));
+  assert.equal((await reviewPost({action:'librarySearch',query:'',materialType:'quiz'},'')).data.items.some(item=>item.id===resourceSubmission.data.id),false);
   assert.equal((await request('/api/materials',{method:'POST',body:{...resourceDraft,url:'https://publisher.example/new-draft'}})).response.status,200);
   assert.equal((await reviewPost(eventMaterialQuery,'')).data.items.find(item=>item.id===resourceSubmission.data.id).url,resourceDraft.url);
   const resourceExport=(await (await fetch(`${base}/api/materials?mine=1&export=1`,{headers:{Cookie:cookie}})).json()).submissions.find(item=>item.id===resourceSubmission.data.id);

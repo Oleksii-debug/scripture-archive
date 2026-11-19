@@ -1782,6 +1782,8 @@
 
 **DONE (підпункт SA-EXT-03/08/16, 19.11.2026).** Збереження чернетки вимагає точного `ok:true/id`; помилкова відповідь не очищає форму. Підтверджений запис і невдале оновлення списку повідомляються окремо; retry повторює лише читання. Запізніла відповідь не стирає нову відкриту чернетку. [PR #1287](https://github.com/Oleksii-debug/scripture-archive/pull/1287), main `2c0c6cdee779e5340d12d9d9a27b97f0a4096763`, CI #44428607163 SUCCESS. 4707 Node PASS / 1 SKIP, 38/38 Worker/D1; TypeScript/build/lint і Python PASS. Chrome/Enter з умовними відмовами підтвердив повідомлення та фокус.
 
+**DONE (SA-EXT-03/08, 19.11.2026).** Усі власні чернетки доступні сторінками по 50 зі стабільним курсором та індексом 0023; форма не втрачає незбережений текст. [PR #1288](https://github.com/Oleksii-debug/scripture-archive/pull/1288), main `6da4c10eaae444af883439927ec901daba9212ee`, CI #44429704812 SUCCESS. 4714 Node PASS / 1 SKIP; 38/38 Worker/D1; TypeScript/build/lint і Python PASS; Chrome 105 карток із фокусом останньої сторінки.
+
 ### SA-EXT-09. Каталог церков і місцевих громад
 **Статус розробки: DONE** (`CLOSED_FOR_DEVELOPMENT`) — source `main@e37b77ca9ef7e91a15c40364ad95c58797c93ff8`. Верифіковані сторінки, мова/місто/традиція/сайт за згодою, пов’язані події, перевірка представника, належність запису, виправлення, відкликання й окреме видалення реалізовані та перевірені. [Звірка всіх вимог SA-EXT-09](SA_EXT_09_PARENT_CLOSED_FOR_DEVELOPMENT_20261118.md). `remaining_approved_development=0`, `necessary_unmerged_PRs=0`. **Окреме приймання релізу:** production SHA/D1/backup, реальні представники та фізичний Windows/NVDA — NOT_VERIFIED.
 

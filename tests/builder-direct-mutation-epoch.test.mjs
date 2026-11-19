@@ -43,7 +43,7 @@ function fixture() {
       return answer({items:[]});
     if(url.startsWith('/api/materials')&&['POST','DELETE'].includes(options.method)){
       writes++;
-      return answer({acknowledged:true});
+      return answer({ok:true,id:'owned'});
     }
     throw Error('unexpected builder API '+url);
   };

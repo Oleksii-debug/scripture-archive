@@ -444,12 +444,27 @@ export async function renderWorkspace(name,c) {
     const announceBuilder=message=>{if(samePrincipalRoute())c.announce(message);};
     // The next builder render invalidates this one's epoch. Save the new epoch
     // and do not announce after a newer view has superseded that refresh.
-    const refreshMutation=async (message,hadFocus=false)=>{
-      if(!stillCurrent())return;
+    const refreshError=ownLocaleCopy({uk:'Не вдалося оновити список. Повторіть оновлення; матеріал надсилати повторно не потрібно.',ru:'Не удалось обновить список. Повторите обновление; отправлять материал повторно не нужно.',en:'Could not refresh the list. Retry the refresh; you do not need to submit the material again.'},state.lang);
+    const refreshMutation=async (message,hadFocus=false,trigger=null)=>{
+      if(!samePrincipalRoute()||privateWorkspaceSuspended)return;
       const refresh=renderWorkspace('builder',c);
       const refreshedEpoch=workspaceRenderEpoch;
-      await refresh;
-      if(refreshedEpoch===workspaceRenderEpoch){restoreEditorialFocus(document.querySelector('main'),hadFocus);announceBuilder(message);}
+      const currentRefresh=()=>refreshedEpoch===workspaceRenderEpoch&&samePrincipalRoute()&&!privateWorkspaceSuspended;
+      try {await refresh;}
+      catch {
+        if(!currentRefresh())return;
+        const status=document.querySelector('#material-status');
+        if(status){
+          status.innerHTML=`${esc(message)} ${esc(refreshError)} <button type="button" id="material-refresh-retry">${esc(review.retry)}</button>`;
+          status.setAttribute?.('tabindex','-1');
+          const retry=status.querySelector?.('button');
+          if(retry)retry.onclick=()=>{if(!currentRefresh()||retry.disabled)return;const focused=document.activeElement===retry;retry.disabled=true;void refreshMutation(message,focused,retry);};
+          if(hadFocus&&document.activeElement===trigger)status.focus?.();
+          else restoreEditorialFocus(document.querySelector('main'),hadFocus,'#material-status');
+        }
+        announceBuilder(`${message} ${refreshError}`);return;
+      }
+      if(currentRefresh()){restoreEditorialFocus(document.querySelector('main'),hadFocus);announceBuilder(message);}
     };
     function draw() {
       if(!stillCurrent())return;
@@ -479,7 +494,19 @@ export async function renderWorkspace(name,c) {
         delete payload.materialType;payload.locale=editing?.locale||state.lang;if(editing)payload.id=editing.id;
         const formElement=e.currentTarget,button=formElement.querySelector?.('button'),hadFocus=Boolean(formElement.contains?.(document.activeElement));
         saving=true;if(button)button.disabled=true;
-        try{await request('/api/materials',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(!stillCurrent())return;await refreshMutation(w.saved,hadFocus)}catch{if(!stillCurrent())return;document.querySelector('#material-status').textContent=w.error}finally{saving=false;if(button&&formElement.isConnected!==false)button.disabled=false}
+        try{
+          const receipt=await request('/api/materials',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+          if(receipt?.ok!==true||typeof receipt.id!=='string'||!receipt.id.trim()||receipt.id.length>80||receipt.id!==receipt.id.trim()||(payload.id&&receipt.id!==payload.id))throw Error('invalid_material_receipt');
+          if(!stillCurrent())return;
+          // A new draft/editor can replace this form while its save is pending.
+          // Acknowledge the saved material without destroying the newer input.
+          if(formElement.isConnected===false){announceBuilder(w.saved);return;}
+          await refreshMutation(w.saved,hadFocus,button);
+        }catch{
+          if(!stillCurrent())return;
+          if(formElement.isConnected===false){announceBuilder(w.error);return;}
+          document.querySelector('#material-status').textContent=w.error;
+        }finally{saving=false;if(button&&formElement.isConnected!==false)button.disabled=false}
       };
     }
     function test(m) {

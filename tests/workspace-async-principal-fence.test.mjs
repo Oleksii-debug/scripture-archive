@@ -82,7 +82,7 @@ function scenario(pathname = '/builder') {
   };
   const shells = [], announcements = [];
   globalThis.location = { pathname, search: '', hash: '' };
-  const main = { querySelectorAll: () => [] };
+  const main = { querySelectorAll: () => [], querySelector:()=>null };
   const publicMaterials = { isConnected: false };
   const newMaterial = {}, form = {}, deleteButton = { dataset: { delete: 'owned' }, disabled: false };
   globalThis.document = {

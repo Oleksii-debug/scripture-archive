@@ -530,6 +530,20 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const deleteOther = await fetch(`${base}/api/materials?id=${encodeURIComponent(material.id)}`, { method: "DELETE", headers: { Origin: base, Cookie: ownerCookie } });
   assert.equal(deleteOther.status, 200);
   assert.ok((await (await fetch(`${base}/api/materials?mine=1`, { headers: { Cookie: cookie } })).json()).materials.some(item => item.id === material.id), "another user cannot delete a draft");
+  // More than one private page must remain reachable through the real Worker/D1.
+  const olderIds=[];
+  for(let i=0;i<52;i++){
+    const id=`older-draft-${String(i).padStart(3,'0')}`;olderIds.push(id);
+    assert.equal((await request('/api/materials',{method:'POST',body:{...material,id,title:'Older draft '+i}})).response.status,201);
+  }
+  let ownCursor=null;const ownIds=[],ownPageSizes=[];
+  do{
+    const params=new URLSearchParams({mine:'1',...(ownCursor?{afterUpdatedAt:ownCursor.updatedAt,afterId:ownCursor.id}:{})});
+    const page=await request('/api/materials?'+params);assert.equal(page.response.status,200);
+    ownIds.push(...page.data.materials.map(item=>item.id));ownPageSizes.push(page.data.materials.length);ownCursor=page.data.nextCursor;
+  }while(ownCursor);
+  assert.deepEqual(ownPageSizes,[50,4]);assert.equal(new Set(ownIds).size,54);
+  assert.ok(olderIds.every(id=>ownIds.includes(id)));assert.ok(ownIds.includes(material.id));assert.ok(ownIds.includes(resourceDraft.id));
   const analyticsResponse = await fetch(`${base}/api/analytics?days=30`, { headers: { Cookie:ownerCookie } });
   assert.equal(analyticsResponse.status, 200);
   const analytics = await analyticsResponse.json();

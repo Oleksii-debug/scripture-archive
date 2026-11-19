@@ -102,3 +102,25 @@ test('catalogue type filter distinguishes exercises and resources, combines righ
     const next=await f.call('material-review',{action:'librarySearch',query:'',materialType:'video',cursor:first.data.nextCursor},'');assert.equal(next.data.items.length,6);assert.ok(next.data.items.every(item=>item.resourceType==='video'));
   }finally{f.db.close();}
 });
+
+test('private draft pages expose all older materials in stable timestamp/id order without crossing authors',async()=>{
+ const f=fixture();try{
+  for(let i=0;i<231;i++)f.db.prepare("INSERT INTO study_materials(id,owner_user_id,title,locale,data,updated_at) VALUES (?,'author','Owned audio','uk',?,?)").run('draft-'+String(i).padStart(3,'0'),JSON.stringify(data),i<115?'2026-11-18 12:00:00':'2026-11-19 12:00:00');
+  f.db.prepare("INSERT INTO study_materials(id,owner_user_id,title,locale,data) VALUES ('foreign','other','Private foreign title','en',?)").run(JSON.stringify(data));
+  const queryPlan=f.db.prepare("EXPLAIN QUERY PLAN SELECT id FROM study_materials WHERE owner_user_id=? ORDER BY updated_at DESC,id DESC LIMIT 51").all('author').map(row=>row.detail).join(' ');
+  assert.match(queryPlan,/study_materials_owner_page_idx/);assert.doesNotMatch(queryPlan,/TEMP B-TREE/);
+  let cursor=null;const ids=[],sizes=[];
+  do{
+   const params=new URLSearchParams({mine:'1',...(cursor?{afterUpdatedAt:cursor.updatedAt,afterId:cursor.id}:{})});
+   const page=await f.call('materials?'+params);assert.equal(page.status,200);sizes.push(page.data.materials.length);ids.push(...page.data.materials.map(m=>m.id));cursor=page.data.nextCursor;
+  }while(cursor);
+  assert.deepEqual(sizes,[50,50,50,50,31]);assert.equal(new Set(ids).size,231);assert.equal(ids[0],'draft-230');assert.equal(ids.at(-1),'draft-000');assert.equal(ids.includes('foreign'),false);
+  assert.deepEqual((await f.call('materials?mine=1',null,'other')).data.materials.map(m=>m.id),['foreign']);
+  assert.equal((await f.call('materials?mine=1',null,'')).status,401);
+  for(const query of ['mine=1&afterId=known','mine=1&afterUpdatedAt=2026-11-18','mine=1&afterId=x&afterUpdatedAt=invalid','mine=1&afterId=x&afterId=y&afterUpdatedAt=2026-11-18%2012:00:00','afterId=x&afterUpdatedAt=2026-11-18%2012:00:00'])assert.equal((await f.call('materials?'+query)).status,400,query);
+  // Keyset continuation still reaches old records if an earlier row is removed.
+  const first=(await f.call('materials?mine=1')).data;f.db.prepare('DELETE FROM study_materials WHERE id=?').run(first.materials[0].id);
+  const next=(await f.call('materials?'+new URLSearchParams({mine:'1',afterUpdatedAt:first.nextCursor.updatedAt,afterId:first.nextCursor.id}))).data;
+  assert.equal(next.materials[0].id,'draft-180');assert.equal(next.materials.length,50);
+ }finally{f.db.close();}
+});

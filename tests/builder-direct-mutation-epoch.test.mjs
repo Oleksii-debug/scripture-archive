@@ -15,7 +15,7 @@ function fixture() {
   const form={isConnected:true}, remove={dataset:{delete:'owned'},isConnected:true,disabled:false};
   const status={textContent:''};
   globalThis.location={pathname:'/builder',search:'',hash:''};
-  const main={isConnected:true,querySelectorAll:()=>[]};
+  const main={isConnected:true,querySelectorAll:()=>[],querySelector:()=>null};
   globalThis.document={
     querySelector:key=>({'main':main,'#material-form':form,'#material-status':status,
       '#material-type':{value:'quiz'},'#material-quiz-fields':{},'#material-resource-fields':{},'#new-material':{},'#public-materials':{isConnected:false}}[key]||null),

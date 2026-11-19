@@ -124,3 +124,53 @@ test('private draft pages expose all older materials in stable timestamp/id orde
   assert.equal(next.materials[0].id,'draft-180');assert.equal(next.materials.length,50);
  }finally{f.db.close();}
 });
+
+for(const category of resources.LIBRARY_CATEGORIES)test(category+' collection survives review, immutable edits, export and rights takedown',async()=>{
+ const f=fixture();try{
+  const saved=await f.call('materials',{...draft,category});assert.equal(saved.status,201);
+  const submitted=await f.call('material-review',submission(saved.data.id));assert.equal(submitted.status,201);
+  assert.equal((await f.call('material-review?view=queue',null,'editor')).data.items[0].snapshot.data.category,category);
+  assert.equal((await f.call('material-review',approve(submitted.data.id),'editor')).status,200);
+  const search={action:'librarySearch',query:'Abram',category,materialType:'audio',locale:'en',rightsBasis:'original'};
+  const result=await f.call('material-review',search,'');assert.equal(result.data.items.length,1);assert.equal(result.data.items[0].category,category);
+  assert.equal(validPublicMaterial(result.data.items[0]),true);
+  const other=category==='book'?'research':'book';
+  assert.equal((await f.call('materials',{...draft,id:saved.data.id,category:other})).status,200);
+  assert.equal((await f.call('material-review',search,'')).data.items[0].category,category);
+  assert.deepEqual((await f.call('material-review',{...search,category:other},'')).data.items,[]);
+  const exported=await f.call('materials?mine=1&export=1');assert.equal(exported.data.materials[0].data.category,other);assert.equal(exported.data.submissions[0].snapshot.data.category,category);
+  const root={innerHTML:'',querySelectorAll:()=>[]};renderMaterialItems(root,result.data.items,reviewText('uk'),String,()=>true);assert.ok(root.innerHTML.includes(resources.resourceText('uk')[category]));
+  assert.equal((await f.call('material-review',{action:'takedown',id:submitted.data.id,reason:'Rights holder removal request'},'editor')).status,200);
+  assert.deepEqual((await f.call('material-review',search,'')).data.items,[]);
+ }finally{f.db.close();}
+});
+
+test('unknown or malformed collections are rejected, while legacy resources remain unclassified',async()=>{
+ const f=fixture();try{
+  for(const category of [null,'',0,[],{},'constructor','book ', 'unlicensed','x'.repeat(1000)]){
+   assert.equal((await f.call('materials',{...draft,category})).status,400);
+   if(category!==null)assert.equal((await f.call('material-review',{action:'librarySearch',query:'',category},'')).status,400);
+   assert.equal(validPublicMaterial({...data,category,id:'bad',title:'Bad category',locale:'en',provenance:'Source',reviewedAt:'2026-11-19',rights:null}),false);
+  }
+  const saved=await f.call('materials',draft);const submitted=await f.call('material-review',submission(saved.data.id));await f.call('material-review',approve(submitted.data.id),'editor');
+  const all=await f.call('material-review',{action:'librarySearch',query:'',category:null},'');assert.equal(all.data.items.length,1);assert.equal(Object.hasOwn(all.data.items[0],'category'),false);
+  assert.deepEqual((await f.call('material-review',{action:'librarySearch',query:'',category:'other'},'')).data.items,[]);
+  f.db.prepare('UPDATE material_submissions SET snapshot=? WHERE id=?').run(JSON.stringify({title:draft.title,locale:'en',data:{...data,category:'forged'}}),submitted.data.id);
+  assert.equal((await f.call('material-review',{action:'librarySearch',query:''},'')).status,503);
+  assert.equal((await f.call('materials?mine=1&export=1')).status,503);
+ }finally{f.db.close();}
+});
+
+test('collection matches beyond the bounded scan remain reachable without exposing other collections',async()=>{
+ const f=fixture();try{
+  for(let i=0;i<220;i++){
+   const id='collection-'+String(i).padStart(3,'0');const category=i<205?'sermon':'book';
+   const content={...data,category};
+   f.db.prepare("INSERT INTO study_materials(id,owner_user_id,title,locale,data) VALUES (?,'author','Collection reading','en',?)").run(id,JSON.stringify(content));
+   f.db.prepare("INSERT INTO material_submissions(id,material_id,author_id,snapshot,provenance,rights_attested,status,submitted_at,reviewed_at,reviewed_by,source_checked,rights_checked,rights_holder,rights_basis) VALUES (?,?,'author',?,'Original source',1,'approved','2026-11-19 00:00:00',CURRENT_TIMESTAMP,'editor',1,1,'Author','original')").run(id,id,JSON.stringify({title:'Collection reading',locale:'en',data:content}));
+  }
+  let cursor=null;const ids=[],sizes=[];
+  do {const page=await f.call('material-review',{action:'librarySearch',query:'',category:'book',materialType:'audio',locale:'en',rightsBasis:'original',cursor},'');assert.equal(page.status,200);sizes.push(page.data.items.length);assert.ok(page.data.items.every(item=>item.category==='book'));ids.push(...page.data.items.map(item=>item.id));cursor=page.data.nextCursor;}while(cursor);
+  assert.deepEqual(sizes,[0,12,3]);assert.equal(new Set(ids).size,15);assert.equal(ids[0],'collection-205');
+ }finally{f.db.close();}
+});

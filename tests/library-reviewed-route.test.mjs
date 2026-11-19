@@ -9,8 +9,8 @@ const escapeText=value=>String(value).replaceAll('&','&amp;').replaceAll('<','&l
 
 function scenario(lang='en') {
   const prior={fetch:globalThis.fetch,document:globalThis.document,location:globalThis.location};
-  const input={value:''},select={value:''},rights={value:''},type={value:''},submit={};
-  const form={querySelector:selector=>({input,'select[name="locale"]':select,'select[name="rightsBasis"]':rights,'select[name="materialType"]':type,button:submit}[selector]??null)};
+  const input={value:''},select={value:''},rights={value:''},type={value:''},category={value:''},submit={};
+  const form={querySelector:selector=>({input,'select[name="locale"]':select,'select[name="rightsBasis"]':rights,'select[name="materialType"]':type,'select[name="category"]':category,button:submit}[selector]??null)};
   const status={textContent:''},more={hidden:true},results={innerHTML:'',isConnected:true,
     insertAdjacentHTML(_where,html){this.innerHTML+=html;},querySelectorAll(){return[];},querySelector(){return null;}};
   const list={isConnected:true,innerHTML:'',querySelector:selector=>({'.library-search':form,
@@ -23,7 +23,7 @@ function scenario(lang='en') {
   results.ownerDocument=document; list.ownerDocument=document;
   globalThis.document=document;
   const context={state,t:key=>key,esc:escapeText,setActiveNav:name=>nav.push(name),shell:html=>shells.push(html)};
-  return {list,results,form,input,select,rights,type,submit,status,more,document,heading,nav,shells,state,context,restore() {
+  return {list,results,form,input,select,rights,type,category,submit,status,more,document,heading,nav,shells,state,context,restore() {
     for(const key of ['fetch','document','location']) {
       if(prior[key]===undefined)delete globalThis[key];
       else globalThis[key]=prior[key];
@@ -453,4 +453,18 @@ test('material type combines with language and rights, remains fixed while pagin
     f.form.onsubmit({preventDefault(){}});await tick();assert.equal(calls.at(-1).materialType,'video');
     f.type.value='';f.form.onsubmit({preventDefault(){}});await tick();assert.equal(Object.hasOwn(calls.at(-1),'materialType'),false);
   }finally{f.restore();}
+});
+
+test('library collection selection combines all filters and stays attached to its submitted cursor',async()=>{
+ const f=scenario('uk'),calls=[];
+ try{
+  globalThis.fetch=async(_url,options)=>{const body=JSON.parse(options.body);calls.push(body);return Response.json({items:[],nextCursor:body.category==='audiobook'&&!body.cursor?{id:'book-page',submittedAt:'2026-11-19'}:null});};
+  await renderWorkspace('library',f.context);assert.match(f.list.innerHTML,/Розділ бібліотеки<\/span><select name="category">/);
+  for(const label of ['Книги','Дослідження','Проповіді','Записи конференцій','Музичні матеріали','Аудіокниги','Інші матеріали'])assert.ok(f.list.innerHTML.includes('>'+label+'</option>'));
+  f.category.value='audiobook';f.type.value='audio';f.select.value='uk';f.rights.value='permission';f.input.value='Абрам';f.form.onsubmit({preventDefault(){}});await tick();
+  f.category.value='sermon';f.more.onclick();await tick();
+  assert.deepEqual(calls.slice(1).map(({category,materialType,locale,rightsBasis,query,cursor})=>[category,materialType,locale,rightsBasis,query,cursor?.id??null]),[['audiobook','audio','uk','permission','Абрам',null],['audiobook','audio','uk','permission','Абрам','book-page']]);
+  f.form.onsubmit({preventDefault(){}});await tick();assert.equal(calls.at(-1).category,'sermon');
+  f.category.value='';f.form.onsubmit({preventDefault(){}});await tick();assert.equal(Object.hasOwn(calls.at(-1),'category'),false);
+ }finally{f.restore();}
 });

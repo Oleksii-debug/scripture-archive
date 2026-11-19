@@ -430,7 +430,7 @@ integration("account, progress, attempts, groups, marathon limit and password re
   assert.equal('answer' in eventMaterials.data.items[0],false);
   assert.equal('explanation' in eventMaterials.data.items[0],false);
   // Media links share the immutable editorial authority and event lifecycle.
-  const resourceDraft={id:`resource-${Date.now()}`,title:'Reviewed accessible audio',locale:'en',kind:'resource',resourceType:'audio',url:'https://publisher.example/reading.mp3',prompt:'An introduction to the passage.',reference:'GEN 12',accessibility:'Transcript: Abram leaves his country after the call.'};
+  const resourceDraft={id:`resource-${Date.now()}`,title:'Reviewed accessible audio',locale:'en',category:'audiobook',kind:'resource',resourceType:'audio',url:'https://publisher.example/reading.mp3',prompt:'An introduction to the passage.',reference:'GEN 12',accessibility:'Transcript: Abram leaves his country after the call.'};
   assert.equal((await request('/api/materials',{method:'POST',body:resourceDraft})).response.status,201);
   const resourceSubmission=await reviewPost({...submitReview,materialId:resourceDraft.id});
   assert.equal(resourceSubmission.response.status,201);
@@ -438,15 +438,16 @@ integration("account, progress, attempts, groups, marathon limit and password re
   const resourceLink={...attachMaterial,submissionId:resourceSubmission.data.id};
   assert.equal((await reviewPost(resourceLink)).response.status,200);
   const publicResource=(await reviewPost(eventMaterialQuery,'')).data.items.find(item=>item.id===resourceSubmission.data.id);
-  assert.equal(publicResource.kind,'resource');assert.equal(publicResource.url,resourceDraft.url);assert.equal(publicResource.accessibility,resourceDraft.accessibility);assert.equal('options' in publicResource,false);
+  assert.equal(publicResource.category,'audiobook');assert.equal(publicResource.kind,'resource');assert.equal(publicResource.url,resourceDraft.url);assert.equal(publicResource.accessibility,resourceDraft.accessibility);assert.equal('options' in publicResource,false);
   assert.equal((await reviewPost({action:'answer',id:resourceSubmission.data.id,choice:0},'')).data.error,'not_an_exercise');
   assert.ok((await reviewPost({action:'librarySearch',query:'Abram leaves'},'')).data.items.some(item=>item.id===resourceSubmission.data.id));
-  assert.ok((await reviewPost({action:'librarySearch',query:'',materialType:'audio',locale:'en'},'')).data.items.some(item=>item.id===resourceSubmission.data.id));
+  assert.ok((await reviewPost({action:'librarySearch',query:'',category:'audiobook',materialType:'audio',locale:'en'},'')).data.items.some(item=>item.id===resourceSubmission.data.id));
   assert.equal((await reviewPost({action:'librarySearch',query:'',materialType:'quiz'},'')).data.items.some(item=>item.id===resourceSubmission.data.id),false);
-  assert.equal((await request('/api/materials',{method:'POST',body:{...resourceDraft,url:'https://publisher.example/new-draft'}})).response.status,200);
+  assert.equal((await request('/api/materials',{method:'POST',body:{...resourceDraft,category:'sermon',url:'https://publisher.example/new-draft'}})).response.status,200);
   assert.equal((await reviewPost(eventMaterialQuery,'')).data.items.find(item=>item.id===resourceSubmission.data.id).url,resourceDraft.url);
   const resourceExport=(await (await fetch(`${base}/api/materials?mine=1&export=1`,{headers:{Cookie:cookie}})).json()).submissions.find(item=>item.id===resourceSubmission.data.id);
-  assert.equal(resourceExport.snapshot.data.url,resourceDraft.url);
+  assert.equal(resourceExport.snapshot.data.url,resourceDraft.url);assert.equal(resourceExport.snapshot.data.category,'audiobook');
+  assert.equal((await reviewPost({action:'librarySearch',query:'',category:'sermon'},'')).data.items.some(item=>item.id===resourceSubmission.data.id),false);
   assert.equal((await reviewPost({action:'withdraw',id:resourceSubmission.data.id})).response.status,200);
   assert.equal((await reviewPost(eventMaterialQuery,'')).data.items.some(item=>item.id===resourceSubmission.data.id),false);
   assert.equal((await reviewPost({...resourceLink,action:'detachEventMaterial'})).response.status,200);

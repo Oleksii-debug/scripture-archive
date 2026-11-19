@@ -1,3 +1,5 @@
+19.11.2026: SA-EXT-08 DONE / CLOSED_FOR_DEVELOPMENT. Матриця: docs/roadmap/SA_EXT_08_PARENT_CLOSED_FOR_DEVELOPMENT_20261119.md.
+
 19.11.2026: SA-EXT-11 DONE / CLOSED_FOR_DEVELOPMENT. Повна звірка: docs/roadmap/SA_EXT_11_PARENT_CLOSED_FOR_DEVELOPMENT_20261119.md. Production і фізичне приймання окремо NOT_VERIFIED.
 
 АРХІВ ПИСАННЯ — ТОЧКА ПРОДОВЖЕННЯ, ОНОВЛЕНО 19.11.2026
@@ -6,7 +8,7 @@
 Канонічний план: docs/roadmap/SCRIPTURE_ARCHIVE_EXPANSION_SECTION_PLAN_2026-10-28.md
 Журнал: PROJECT_STATUS.md. Цей файл — запис продовження, не другий план.
 
-Функціональний main: 6da4c10eaae444af883439927ec901daba9212ee.
+Функціональний main: ced275d6ac9af741e3d6eb0325f9af8c2dd0f37e.
 DONE / CLOSED_FOR_DEVELOPMENT: SA-EXT-09 «Каталог церков і місцевих громад».
 Повна звірка: docs/roadmap/SA_EXT_09_PARENT_CLOSED_FOR_DEVELOPMENT_20261118.md
 PR 1275 — адресовані сторінки громад і точний фільтр подій — MERGED.
@@ -14,10 +16,10 @@ PR 1276 — позначки DONE і попередня точка продов�
 PR 1277 — видалення лише власної заявки, явне підтвердження, захист редакції, збереження приватного керування подіями — MERGED.
 Попередні PR 1267/1268/1269/1271/1272/1273 також інтегровані; докладні результати у PROJECT_STATUS.md.
 
-Останні перевірки: 4714 Node PASS, 1 SKIP, 0 FAIL; 38/38 disposable Worker/D1; TypeScript/build/lint PASS (14 наявних попереджень); два Python-валідатори PASS. CI 44429704812 SUCCESS для head 2074fba85d91d2ff8e6dfd2e2c4396cee7ca8d84.
+Останні перевірки: 4724 Node PASS, 1 SKIP, 0 FAIL; 38/38 disposable Worker/D1; TypeScript/build/lint PASS (14 наявних попереджень); два Python-валідатори PASS. CI 44517728990 SUCCESS для head fad471fa055775fb7ebf461adcae0069a182aa1a.
 Chrome на умовних даних: каталог, сторінка громади, перехід Enter до подій, пошук, відкликаний запис; видалення заявки з окремою згодою та фокусом повідомлення. Це не фізичний NVDA і не production.
 
-ЗАВЕРШЕНІ ПІДПУНКТИ; ДАЛІ SA-EXT-08:
+ЗАВЕРШЕНІ ПІДПУНКТИ; ДАЛІ SA-EXT-19:
 1. DONE: підтвердження збереження/відкликання, спільний mutation lock, доступне стале повідомлення й відкидання застарілих читань. PR 1279 MERGED, CI 44249738055 SUCCESS; 4675 Node PASS / 1 SKIP, 38/38 Worker/D1; Chrome/Enter PASS на умовних даних.
 2. DONE: повний приватний список організатора, 50 записів на сторінку, збереження чернетки та доступний фокус. PR 1280 MERGED, CI 44250970617 SUCCESS; 4683 Node PASS / 1 SKIP, 38/38 Worker/D1. Chrome підтвердив фокус останньої сторінки.
 DONE: приватне керування старими прив’язками матеріалів після видалення заявки. PR 1281 MERGED; CI 44307582792 SUCCESS; 4685 Node PASS / 1 SKIP, 38/38 Worker/D1.
@@ -33,4 +35,8 @@ Production SHA, backup/rollback D1, реальні представники, ф�
 
 Після відновлення середовища спочатку git fetch і звірка main/PR. Нові зміни зберігати у GitHub завчасно. Не змішувати цей проєкт із Accessible Chess, PGN/CBH або його панеллю.
 
-У РОБОТІ: бібліотечні розділи book/research/sermon/conference/music/audiobook/other у незмінних редакціях, конструкторі та комбінованому пошуку. Без автоматичного переозначення старих матеріалів. 4724 Node PASS / 1 SKIP; 38/38 Worker/D1; TS/build/lint і Python PASS. Chrome/Enter: створення, редагування, перегляд і пошук. Гілка codex/library-completion-checkpoint-20261119.
+DONE: PR 1289 MERGED — бібліотечні розділи book/research/sermon/conference/music/audiobook/other у незмінних редакціях, конструкторі та комбінованому пошуку. Без автоматичного переозначення старих матеріалів. 4724 Node PASS / 1 SKIP; 38/38 Worker/D1; TS/build/lint і Python PASS. Chrome/Enter: створення, редагування, перегляд і пошук. Гілка codex/library-completion-checkpoint-20261119.
+
+У РОБОТІ SA-EXT-19: пошук усіх публічних груп, фільтр марафонів, продовження після 100 записів; приватні групи/коди/імена не індексуються.
+
+Пошук груп готовий до інтеграції: 4732 Node PASS / 1 SKIP, 38/38 Worker/D1 у новому ізольованому стані; TS/build/lint/Python PASS. Chrome 25 марафонів/збережена чернетка/фокус PASS. Перший інтеграційний лог втрачено після відновлення середовища; причина первинної помилки не встановлена.

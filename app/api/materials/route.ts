@@ -63,15 +63,28 @@ export async function GET(request: Request) {
       return new Response(JSON.stringify({ format: "scripture-archive-materials-export", version: 1, exportedAt: new Date().toISOString(), materials: items, submissions: history }, null, 2), { headers: { "Content-Type": "application/json; charset=utf-8", "Content-Disposition": 'attachment; filename="scripture-archive-materials.json"', "Cache-Control": "no-store, private", "X-Content-Type-Options": "nosniff" } });
     } catch { return Response.json({ error: "export_unavailable" }, { status: 503, headers: { "Cache-Control": "no-store, private" } }); }
   }
+  const afterUpdatedAt=url.searchParams.get("afterUpdatedAt"),afterId=url.searchParams.get("afterId");
+  const hasCursor=afterUpdatedAt!==null||afterId!==null;
+  if (hasCursor && (!mine || url.searchParams.getAll("afterUpdatedAt").length!==1 || url.searchParams.getAll("afterId").length!==1 ||
+      !afterUpdatedAt || !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(afterUpdatedAt) ||
+      !afterId || afterId.length>80 || afterId.trim()!==afterId))
+    return Response.json({error:"invalid_cursor"},{status:400,headers:{"Cache-Control":"no-store, private"}});
   // Corrupt legacy JSON, D1 prepare/bind/read errors and invalid receipts
   // fail closed before any private or public study-material data is returned.
   try {
     const query = mine
-      ? env.DB!.prepare("SELECT id,title,locale,data,visibility,updated_at FROM study_materials WHERE owner_user_id=? ORDER BY updated_at DESC LIMIT 100").bind(userId)
+      ? env.DB!.prepare("SELECT id,title,locale,data,visibility,updated_at FROM study_materials WHERE owner_user_id=?"+
+          (hasCursor?" AND (updated_at < ? OR (updated_at = ? AND id < ?))":"")+" ORDER BY updated_at DESC,id DESC LIMIT 51")
+          .bind(userId,...(hasCursor?[afterUpdatedAt,afterUpdatedAt,afterId]:[]))
       : env.DB!.prepare("SELECT id,title,locale,data,visibility,updated_at FROM study_materials WHERE visibility='public' ORDER BY updated_at DESC LIMIT 100");
-    const result = await query.all<{ id: string; data: string }>();
+    const result = await query.all<{ id: string; data: string; updated_at: string }>();
     if (!result.success || !Array.isArray(result.results)) throw Error("materials read failed");
-    const materials = result.results.map(row => {
+    const page=mine?result.results.slice(0,50):result.results;
+    const last=page.at(-1);
+    const nextCursor=mine&&result.results.length>50&&last?{updatedAt:last.updated_at,id:last.id}:null;
+    if(nextCursor && (typeof nextCursor.updatedAt!=="string"||!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(nextCursor.updatedAt)||
+        typeof nextCursor.id!=="string"||!nextCursor.id||nextCursor.id.length>80))throw Error("invalid material cursor");
+    const materials = page.map(row => {
       const data: unknown = JSON.parse(row.data);
       if (!data || typeof data !== "object" || Array.isArray(data))
         throw Error("invalid material payload");
@@ -89,7 +102,7 @@ export async function GET(request: Request) {
         throw Error("invalid public material fields");
       return { ...row, data: { prompt, reference, options } };
     });
-    return Response.json({ materials }, { headers: { "Cache-Control": "no-store" } });
+    return Response.json({ materials, ...(mine?{nextCursor}:{}) }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return Response.json({ error: "materials_unavailable" }, { status: 503, headers: { "Cache-Control": "no-store, private" } });
   }

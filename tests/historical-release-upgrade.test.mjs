@@ -23,12 +23,12 @@ const folder=new URL('../drizzle/',import.meta.url);
 const sql=name=>readFileSync(new URL(name,folder),'utf8');
 const normalizedHash=text=>createHash('sha256').update(text.replace(/[\r\n]+$/,'')+'\n').digest('hex');
 
-test('historical v8 source upgrades representative saved records through v22',()=>{
+test('historical v8 source upgrades representative saved records through v23',()=>{
   const files=readdirSync(folder).filter(x=>/^\d{4}_.+\.sql$/.test(x)).sort();
   const baseline=files.filter(x=>Number(x.slice(0,4))<=8);
   const upgrade=files.filter(x=>Number(x.slice(0,4))>=9);
   assert.deepEqual(baseline,Object.keys(historical));
-  assert.deepEqual(upgrade.map(x=>x.slice(0,4)),['0009','0010','0011','0012','0013','0014','0015','0016','0017','0018','0019','0020','0021','0022']);
+  assert.deepEqual(upgrade.map(x=>x.slice(0,4)),['0009','0010','0011','0012','0013','0014','0015','0016','0017','0018','0019','0020','0021','0022','0023']);
   for(const name of baseline)assert.equal(normalizedHash(sql(name)),historical[name],`${name} differs from the historical source`);
   const db=new DatabaseSync(':memory:');
   try {
